@@ -1,0 +1,14 @@
+{
+  "name": "plot",
+  "private": true,
+  "packageManager": "pnpm@10.32.1",
+  "scripts": {
+    "dev:web": "pnpm --filter @plot/web dev",
+    "build:web": "pnpm --filter @plot/web build",
+    "lint:web": "pnpm --filter @plot/web lint",
+    "dev:api": "cd apps/api && ./gradlew bootRun",
+    "build:api": "cd apps/api && ./gradlew build",
+    "test:api": "cd apps/api && ./gradlew test"
+  }
+}
+
