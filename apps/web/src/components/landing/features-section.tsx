@@ -17,30 +17,30 @@ type CapabilityFeature = {
 const features: CapabilityFeature[] = [
   {
     number: "01",
-    title: "Connected Sources",
+    title: "AI-accelerated Shipping Context",
     description:
-      "Bring in the places where product, customer, and market context already appears: Slack, GitHub, email, Notion, Linear, and more.",
+      "Bring in the places where AI-assisted product work now moves fastest: PRDs, RFCs, GitHub, Linear, Slack decisions, customer feedback, and more.",
     visual: "blocks",
   },
   {
     number: "02",
-    title: "Signal Detection",
+    title: "Docs and Content Lag Detection",
     description:
-      "Plot extracts product changes, decisions, customer pains, questions, quotes, and follow-up seeds from each block.",
+      "Plot spots shipped changes, decisions, tradeoffs, customer pains, docs gaps, and release risks before content quietly falls behind the code.",
     visual: "signals",
   },
   {
     number: "03",
-    title: "Brand Voice Memory",
+    title: "Brand Voice for Product Content",
     description:
-      "Accepted samples become a style profile for cadence, vocabulary, claims you would make, and phrases you avoid.",
+      "Accepted docs, release notes, and launch content become a voice profile so rushed updates still sound like your company, not a generic AI draft.",
     visual: "style",
   },
   {
     number: "04",
     title: "Source-backed Content Packs",
     description:
-      "Generate briefs, LinkedIn posts, newsletter intros, X threads, launch notes, and sales briefs with claim evidence and voice notes attached.",
+      "Generate changelog entries, release notes, docs updates, launch briefs, and sales handoff content that catches up to shipping velocity with evidence and brand voice attached.",
     visual: "pack",
   },
 ];
@@ -197,9 +197,9 @@ function BlocksVisual() {
 
 function SignalsVisual() {
   const signalRows = [
-    { label: "Product Change", score: "91" },
-    { label: "Customer Pain", score: "84" },
-    { label: "Decision", score: "78" },
+    { label: "AI-coded Change", score: "91" },
+    { label: "Docs Gap", score: "84" },
+    { label: "Customer Impact", score: "78" },
   ];
 
   return (
@@ -213,7 +213,7 @@ function SignalsVisual() {
 
         <div className="absolute left-10 top-[82px] w-[160px] rounded-lg border border-foreground/15 bg-foreground p-4 text-background shadow-[0_20px_60px_rgb(18_17_15_/_0.16)]">
           <div className="mb-4 font-mono text-[10px] uppercase text-background/65">
-            Block #482
+            Source #482
           </div>
           <div className="space-y-2">
             <div className="h-1.5 w-full rounded-full bg-background/35" />
@@ -225,7 +225,7 @@ function SignalsVisual() {
         <div className="absolute left-[360px] top-5 w-[178px] rounded-lg border border-foreground/10 bg-background/95 p-3 shadow-sm">
           <div className="mb-2.5 flex items-center justify-between">
             <span className="font-mono text-[10px] uppercase text-muted-foreground">
-              Signal queue
+              Change queue
             </span>
             <span className="rounded-full bg-foreground/5 px-2 py-1 font-mono text-[9px] text-muted-foreground">
               auto
@@ -305,7 +305,7 @@ function StyleMemoryVisual() {
         <div className="absolute left-[210px] top-[36px] h-[178px] w-[150px] overflow-hidden rounded-lg border border-foreground/15 bg-background p-3 shadow-[0_24px_70px_rgb(18_17_15_/_0.08)]">
           <div className="mb-2.5 flex items-center justify-between gap-3">
             <div className="font-mono text-[10px] uppercase text-foreground">
-              Voice profile
+              Brand voice
             </div>
             <div className="rounded-full bg-foreground/5 px-2 py-0.5 font-mono text-[8px] uppercase text-muted-foreground">
               locked
@@ -348,10 +348,10 @@ function StyleMemoryVisual() {
             Voice check
           </div>
           <p className="mb-3 text-[12px] font-medium leading-snug text-foreground">
-            Same point of view, tuned for the channel.
+            Same brand voice, tuned for the output.
           </p>
           <div className="grid grid-cols-3 gap-1">
-            {["Fit", "Tone", "Proof"].map((label, index) => (
+            {["Terms", "Caveat", "Proof"].map((label, index) => (
               <div
                 className="rounded-md border border-foreground/10 bg-foreground/[0.025] px-1 py-1.5 text-center font-mono text-[8px] uppercase text-muted-foreground"
                 key={label}
@@ -368,7 +368,7 @@ function StyleMemoryVisual() {
 }
 
 function PackVisual() {
-  const channels = ["LinkedIn", "Newsletter", "X thread"];
+  const channels = ["Changelog", "Release note", "Help doc"];
 
   return (
     <FeatureShell>
@@ -381,10 +381,10 @@ function PackVisual() {
 
         <div className="absolute left-[42px] top-[70px] w-[190px] rounded-lg border border-foreground/15 bg-background p-4 shadow-[0_18px_54px_rgb(18_17_15_/_0.08)]">
           <div className="mb-3 font-mono text-[10px] uppercase text-muted-foreground">
-            Launch narrative
+            Release narrative
           </div>
           <p className="mb-4 text-sm font-medium leading-snug text-foreground">
-            Source-backed launch story.
+            Source-backed product update.
           </p>
           <div className="flex gap-1.5">
             {["Brief", "3 sources"].map((chip) => (
@@ -401,7 +401,7 @@ function PackVisual() {
         <div className="absolute left-[350px] top-[28px] w-[182px] rounded-lg border border-foreground/10 bg-background/95 p-3 shadow-sm">
           <div className="mb-2.5 flex items-center gap-2 font-mono text-[10px] uppercase text-muted-foreground">
             <Sparkles className="size-3.5 text-foreground" />
-            Content pack
+            Release pack
           </div>
           <div className="space-y-2">
             {channels.map((channel, index) => (
@@ -526,7 +526,7 @@ export function FeaturesSection() {
           >
             From raw context
             <br />
-            <span className="text-muted-foreground">to what to say next.</span>
+            <span className="text-muted-foreground">to content that keeps up.</span>
           </h2>
         </div>
 

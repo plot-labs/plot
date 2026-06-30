@@ -4,19 +4,19 @@ import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 
 const terminalLines = [
-  "$ plot ingest sources --week=24",
-  "github/pr-482       -> Writing Block",
-  "customer/email      -> pain signal",
-  "docs/launch-spec    -> claim source",
+  "$ plot scan ai-coded changes --week=24",
+  "github/pr-482       -> shipped change",
+  "copilot/diff        -> docs gap",
+  "linear/issue-139    -> customer pain",
   "",
-  "$ plot style check",
-  "Style Memory        locked",
-  "voice drift         0%",
-  "claim map           7 sources",
+  "$ plot voice check",
+  "Brand voice         locked",
+  "unknown claims      0",
+  "source map          7 references",
   "",
-  "$ plot draft content-pack",
-  "linkedin            ready",
-  "newsletter          typing...",
+  "$ plot draft release-pack --voice=brand",
+  "changelog           ready",
+  "docs update         typing...",
 ];
 
 function TypedTerminalLines() {
@@ -89,7 +89,7 @@ export function HeroTerminal() {
               <div className="min-w-0">
                 <div className="mb-2 flex items-center gap-2 font-mono text-[8px] uppercase text-[#e8e0c8]/42">
                   <span className="h-px w-5 bg-[#e8e0c8]/25" />
-                  Source backed
+                  Source mapped
                 </div>
                 <TypedTerminalLines />
               </div>

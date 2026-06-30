@@ -5,28 +5,28 @@ import { ArrowRight, Check } from "lucide-react";
 
 const plans = [
   {
-    name: "Creator",
-    description: "For founder-led creators and solo operators",
+    name: "Starter",
+    description: "For product-led founders and small engineering teams",
     price: { monthly: 15, annual: 12 },
     features: [
-      "Weekly creator brief",
-      "Upload, paste, URL, and RSS inputs",
-      "Writing Block library",
-      "LinkedIn, newsletter, and X thread packs",
-      "Manual audience reaction import",
+      "Weekly AI-shipping catch-up brief",
+      "PRD, spec, upload, paste, and URL inputs",
+      "Source block library",
+      "Release note, changelog, and content drafts",
+      "Manual customer feedback import",
     ],
     cta: "Join waitlist",
     popular: false,
   },
   {
     name: "Team",
-    description: "For product marketers, DevRel, and founder-led teams",
+    description: "For product, engineering, and DevRel teams",
     price: { monthly: 20, annual: 16 },
     features: [
-      "Launch and decision-to-content briefs",
-      "GitHub, Docs, and selected source sync",
+      "Decision-to-docs and launch content briefs",
+      "GitHub, Linear, Docs, and selected source sync",
       "Claim evidence and needs-review status",
-      "Founder post, changelog, and sales brief packs",
+      "Release notes, docs updates, and sales handoff content",
       "Workspace memory and agent trace",
     ],
     cta: "Request access",
@@ -34,13 +34,13 @@ const plans = [
   },
   {
     name: "Launch",
-    description: "For teams turning product changes into market narratives",
+    description: "For teams whose docs and GTM content need to keep up with releases",
     price: { monthly: null, annual: null },
     features: [
       "Everything in Team",
       "Custom source review policy",
-      "Launch inbox and evidence map",
-      "Human review workflow",
+      "Launch inbox, docs map, and evidence map",
+      "Product and engineering review workflow",
       "Private onboarding for source setup",
       "Custom contracts",
     ],
@@ -63,11 +63,12 @@ export function PricingSection() {
           <h2 className="font-display text-5xl md:text-6xl lg:text-7xl tracking-tight text-foreground mb-6">
             Built for the
             <br />
-            <span className="text-stroke">writing loop</span>
+            <span className="text-stroke">shipping loop</span>
           </h2>
           <p className="text-lg text-muted-foreground max-w-xl">
-            Start with a creator workspace, then expand into launch workflows
-            when internal decisions and customer signals need to become narrative.
+            Start with a product workspace, then expand into launch workflows
+            when AI coding pushes shipping velocity past docs, release notes,
+            and GTM content.
           </p>
         </div>
 
@@ -169,7 +170,7 @@ export function PricingSection() {
 
         {/* Bottom Note */}
         <p className="mt-12 text-center text-sm text-muted-foreground">
-          All plans keep publishing manual and mark unsupported factual claims for review.{" "}
+          All plans keep publishing manual and mark unsupported product claims for review.{" "}
           <a href="#" className="underline underline-offset-4 hover:text-foreground transition-colors">
             See source policy
           </a>

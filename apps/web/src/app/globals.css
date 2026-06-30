@@ -107,24 +107,6 @@
     -webkit-text-fill-color: transparent;
   }
   
-  .marquee {
-    animation: marquee 30s linear infinite;
-  }
-  
-  .marquee-reverse {
-    animation: marquee-reverse 25s linear infinite;
-  }
-
-  @keyframes marquee {
-    0% { transform: translateX(0); }
-    100% { transform: translateX(-50%); }
-  }
-  
-  @keyframes marquee-reverse {
-    0% { transform: translateX(-50%); }
-    100% { transform: translateX(0); }
-  }
-  
   .line-reveal {
     clip-path: inset(0 100% 0 0);
     animation: line-reveal 0.8s cubic-bezier(0.77, 0, 0.175, 1) forwards;

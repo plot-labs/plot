@@ -2,107 +2,107 @@
 
 [English](README.md) | [한국어](README.ko.md)
 
-**Know what to say next.**
+**Keep docs and content in sync with shipping.**
 
-Plot is an AI CMO for creators and marketing teams focused on one job: knowing what to say next. It turns connected, uploaded, pasted, or forwarded inputs into **Writing Blocks**, detects useful signals from those blocks, and helps users decide what to say next through source-backed briefs, angles, content packs, and follow-ups.
+AI coding is making product and engineering teams ship faster, but docs, release notes, changelogs, launch briefs, and customer-facing content still move at the old speed. Plot turns connected, uploaded, pasted, or forwarded inputs into **Source Blocks**, detects useful product signals from those blocks, and drafts source-backed docs or release content in the team's brand voice.
 
-Plot is not an AI writer. It is a connected writing intelligence system.
+Plot is not a generic AI writer. It is a connected documentation and release-content system for fast-shipping product teams.
 
 ## Product Idea
 
-Creators and marketing teams already have the raw material for strong writing:
+Product and engineering teams already have the raw material for strong docs and release content. AI coding just makes that raw material move faster than the content process:
 
-- saved links
-- product docs
-- GitHub PRs
+- PRDs and product specs
+- RFCs and design docs
+- GitHub PRs and issues
+- Linear or Jira tickets
 - launch specs
-- customer emails
+- customer emails and support threads
 - Slack decisions
-- RSS articles
-- past posts
-- audience replies
-- uploaded PDFs and notes
+- incident notes
+- uploaded PDFs and research notes
 
 The problem is not a blank page. The problem is that the context is scattered.
 
-Plot normalizes that context into Writing Blocks, extracts signals, and turns those signals into a weekly or launch-specific writing plan.
+Plot normalizes that context into Source Blocks, extracts change signals, and turns those signals into a weekly or launch-specific docs and content catch-up plan.
 
 ```txt
 Inputs
-  -> Writing Blocks
+  -> Source Blocks
   -> Signals
   -> Brief
-  -> Angle
-  -> Content Pack
-  -> Learn
-  -> Follow-up
+  -> Catch-up Plan
+  -> Release Pack
+  -> Review
+  -> Follow-up Update
 ```
 
 ## Core Object
 
-The core object in Plot is the **Writing Block**.
+The core object in Plot is the **Source Block**.
 
-A Writing Block is a normalized unit of context that Plot can use for writing and narrative decisions.
+A Source Block is a normalized unit of product or engineering context that Plot can use for docs, release content, brand-voice adaptation, and claim decisions.
 
 Examples:
 
 - GitHub PR block
+- Linear issue block
 - Slack thread block
 - PDF block
 - Google Doc block
-- RSS article block
-- audience comment block
-- past post block
+- RFC block
+- incident note block
+- support thread block
 - customer email block
 - manual note block
 
-Connections, uploads, paste, URLs, and email forwards are all input methods. They all produce Writing Blocks.
+Connections, uploads, paste, URLs, and email forwards are all input methods. They all produce Source Blocks.
 
 ## Product Principles
 
 **Every input becomes a block.**  
-Plot does not treat uploads, connections, URLs, and paste as separate product worlds. They all become Writing Blocks.
+Plot does not treat uploads, connections, URLs, and paste as separate product worlds. They all become Source Blocks.
 
 **Connections are live block factories.**  
-A connected source keeps producing new Writing Blocks over time. Those blocks can trigger autonomous signals.
+A connected source keeps producing new Source Blocks over time. Those blocks can trigger autonomous product and docs signals.
 
-**The Brief is the home screen.**  
-Plot should not start from a blank composer. The primary experience is: "This is what you should talk about next."
+**The Catch-up Brief is the home screen.**  
+Plot should not start from a blank composer. The primary experience is: "This shipped, these sources support it, this content is behind, and this is the brand-voice draft to review."
 
 **Source-backed by default.**  
-Plot should not only generate plausible writing. Important claims should map back to Writing Blocks and Signals.
+Plot should not only generate plausible copy. Important product claims should map back to Source Blocks and Signals.
 
 ## Origin
 
 Plot started as a strategic pivot from [Tyquill](https://github.com/tyquill).
 
-Tyquill focused on collecting sources and generating drafts. Plot keeps the useful insight behind that workflow, but changes the center of the product: from AI writing assistance to connected writing intelligence.
+Tyquill focused on collecting sources and generating drafts. Plot keeps the useful insight behind that workflow, but changes the center of the product: from broad AI writing assistance to connected documentation intelligence for product teams.
 
 The core shift is:
 
 ```txt
 Tyquill: save sources -> generate drafts
-Plot: inputs -> Writing Blocks -> Signals -> Brief -> Angle -> Content Pack -> Learn -> Follow-up
+Plot: inputs -> Source Blocks -> Signals -> Catch-up Brief -> Release Pack -> Review -> Follow-up Update
 ```
 
-Plot is being built from scratch as a new product, with a clearer domain model around Writing Blocks, source-backed claims, briefs, angles, and dynamic agent workflows.
+Plot is being built from scratch as a new product, with a clearer domain model around Source Blocks, source-backed product claims, brand voice, catch-up briefs, release packs, and dynamic agent workflows.
 
 ## Target Users
 
 Initial:
 
-- founder-led creators
-- technical creators
-- B2B SaaS founders
-- AI/devtool founders
-- newsletter and LinkedIn operators
+- product-led founders
+- small product and engineering teams
+- AI/devtool teams
+- DevRel and developer experience teams
+- teams shipping frequent product changes
 
 Expansion:
 
 - product marketers
 - DevRel teams
 - B2B launch teams
-- founder-led marketing teams
+- solutions and sales engineering teams
 
 ## Architecture
 
