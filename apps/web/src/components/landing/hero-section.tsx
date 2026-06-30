@@ -3,12 +3,12 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
-import { AnimatedSphere } from "./animated-sphere";
+import { HeroTerminal } from "./hero-terminal";
 
 const words = ["say", "publish", "launch", "send"];
 
 export function HeroSection() {
-  const [isVisible] = useState(true);
+  const isVisible = true;
   const [wordIndex, setWordIndex] = useState(0);
 
   useEffect(() => {
@@ -20,8 +20,8 @@ export function HeroSection() {
 
   return (
     <section className="relative flex min-h-screen flex-col justify-center overflow-hidden">
-      <div className="pointer-events-none absolute right-0 top-1/2 hidden h-[600px] w-[600px] -translate-y-1/2 opacity-40 lg:block lg:h-[800px] lg:w-[800px]">
-        <AnimatedSphere />
+      <div className="pointer-events-none absolute right-16 top-[45%] hidden h-[440px] w-[530px] -translate-y-1/2 opacity-65 lg:block xl:right-20 xl:h-[500px] xl:w-[600px]">
+        <HeroTerminal />
       </div>
 
       <div className="pointer-events-none absolute inset-0 overflow-hidden opacity-30">
@@ -49,7 +49,8 @@ export function HeroSection() {
         ))}
       </div>
 
-      <div className="relative z-10 mx-auto max-w-[1400px] px-6 py-32 lg:px-12 lg:py-40">
+      <div className="relative z-10 mx-auto w-full max-w-[1400px] px-6 py-32 lg:px-12 lg:py-40">
+        <div className="hero-copy-lock max-w-[920px] text-left">
         <div
           className={`mb-8 transition-all duration-700 ${
             isVisible ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
@@ -70,8 +71,8 @@ export function HeroSection() {
             <span className="block">Know what</span>
             <span className="block">
               to{" "}
-              <span className="relative inline-block">
-                <span className="inline-flex" key={wordIndex}>
+              <span className="relative inline-block align-baseline">
+                <span className="inline-flex whitespace-nowrap" key={wordIndex}>
                   {words[wordIndex].split("").map((char, i) => (
                     <span
                       className="inline-block animate-char-in"
@@ -91,19 +92,18 @@ export function HeroSection() {
           </h1>
         </div>
 
-        <div className="grid items-end gap-12 lg:grid-cols-2 lg:gap-24">
+        <div className="max-w-xl">
           <p
             className={`max-w-xl text-xl leading-relaxed text-muted-foreground transition-all delay-200 duration-700 lg:text-2xl ${
               isVisible ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
             }`}
           >
-            Plot turns connected, uploaded, and pasted inputs into Writing Blocks,
-            then detects signals and creates source-backed briefs, angles, content
-            packs, and follow-ups.
+            Plot turns your product, customer, and market context into source-backed
+            content ideas in your brand voice.
           </p>
 
           <div
-            className={`flex flex-col items-start gap-4 transition-all delay-300 duration-700 sm:flex-row ${
+            className={`mt-9 flex flex-col items-start gap-4 transition-all delay-300 duration-700 sm:flex-row ${
               isVisible ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
             }`}
           >
@@ -122,6 +122,7 @@ export function HeroSection() {
               See how it works
             </Button>
           </div>
+        </div>
         </div>
       </div>
 
@@ -150,8 +151,8 @@ export function HeroSection() {
                   value: "91%",
                 },
                 {
-                  company: "HUMAN REVIEW",
-                  label: "auto-published drafts",
+                  company: "STYLE MEMORY",
+                  label: "brand voice drift",
                   value: "0",
                 },
               ].map((stat) => (

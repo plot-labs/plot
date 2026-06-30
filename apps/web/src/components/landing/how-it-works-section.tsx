@@ -5,42 +5,49 @@ import { useEffect, useRef, useState } from "react";
 const steps = [
   {
     number: "I",
-    title: "Add context",
-    description: "Connect a live source, upload a doc, paste a note, add a URL, or forward an email. Plot turns each input into a Writing Block.",
-    code: `plot.input.create({
-  origin: 'connection',
-  blockType: 'github_pr',
-  source: 'workspace-roles'
-})`,
+    label: "Sources",
+    title: "Start with the work that already exists.",
+    description:
+      "Connect the places where product, customer, and market context already appears. Plot keeps the source and timestamp attached to every Writing Block.",
   },
   {
     number: "II",
-    title: "Detect signals",
-    description: "Plot extracts product changes, decisions, objections, pains, quotes, and follow-up seeds, then scores what is brief-worthy.",
-    code: `plot.signals.extract({
-  blockId: 'block_482',
-  types: [
-    'product_change',
-    'customer_pain',
-    'approved_positioning'
-  ]
-})`,
+    label: "Signals",
+    title: "Separate useful signal from ambient noise.",
+    description:
+      "Product changes, customer pains, decisions, objections, quotes, and follow-up seeds are scored against the writing job they could support.",
   },
   {
     number: "III",
-    title: "Create the pack",
-    description: "Accept an angle and Plot generates channel-native variants with a claim map, source chips, and follow-up opportunities.",
-    code: `plot.contentPack.create({
-  angleId: 'angle_91',
-  channels: [
-    'linkedin',
-    'newsletter',
-    'x_thread'
-  ]
-})
-
-// Claim map attached`,
+    label: "Plan",
+    title: "Ship a writing plan with evidence and voice attached.",
+    description:
+      "The output is not a blank chat response. It is a brief, angle, style note, and channel plan where every factual claim points back to a source.",
   },
+];
+
+const sourceRows = [
+  { name: "PR #482", detail: "Pricing page copy changed", meta: "GitHub" },
+  { name: "Beta call notes", detail: "Setup took longer than expected", meta: "Docs" },
+  { name: "Customer thread", detail: "Asked for migration language", meta: "Email" },
+];
+
+const signalRows = [
+  { name: "Product change", detail: "New onboarding path is live", score: "91" },
+  { name: "Customer pain", detail: "Setup time is the repeated objection", score: "84" },
+  { name: "Positioning decision", detail: "Lead with source-backed launch story", score: "78" },
+];
+
+const planRows = [
+  { name: "Launch brief", detail: "Narrative, claims, and review notes", meta: "7 claims" },
+  { name: "Voice guardrails", detail: "Cadence, vocabulary, and avoid list", meta: "style" },
+  { name: "Newsletter intro", detail: "Channel draft with source chips", meta: "draft" },
+];
+
+const lanes = [
+  { title: "Source ledger", rows: sourceRows },
+  { title: "Signal queue", rows: signalRows },
+  { title: "Writing plan", rows: planRows },
 ];
 
 export function HowItWorksSection() {
@@ -53,7 +60,7 @@ export function HowItWorksSection() {
       ([entry]) => {
         if (entry.isIntersecting) setIsVisible(true);
       },
-      { threshold: 0.1 }
+      { threshold: 0.1 },
     );
 
     if (sectionRef.current) observer.observe(sectionRef.current);
@@ -69,128 +76,131 @@ export function HowItWorksSection() {
 
   return (
     <section
+      className="relative overflow-hidden bg-foreground py-24 text-background lg:py-32"
       id="how-it-works"
       ref={sectionRef}
-      className="relative py-24 lg:py-32 bg-foreground text-background overflow-hidden"
     >
-      {/* Diagonal lines pattern */}
-      <div className="absolute inset-0 opacity-[0.03] pointer-events-none">
-        <div className="absolute inset-0" style={{
-          backgroundImage: `repeating-linear-gradient(
-            -45deg,
-            transparent,
-            transparent 40px,
-            currentColor 40px,
-            currentColor 41px
-          )`
-        }} />
+      <div className="pointer-events-none absolute inset-0 opacity-[0.035]">
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage:
+              "linear-gradient(currentColor 1px, transparent 1px), linear-gradient(90deg, currentColor 1px, transparent 1px)",
+            backgroundSize: "32px 32px",
+          }}
+        />
       </div>
 
-      <div className="relative z-10 max-w-[1400px] mx-auto px-6 lg:px-12">
-        {/* Header */}
-        <div className="mb-16 lg:mb-24">
-          <span className="inline-flex items-center gap-3 text-sm font-mono text-background/50 mb-6">
-            <span className="w-8 h-px bg-background/30" />
+      <div className="relative z-10 mx-auto max-w-[1400px] px-6 lg:px-12">
+        <div className="mb-16 max-w-4xl lg:mb-20">
+          <span className="mb-6 inline-flex items-center gap-3 font-mono text-sm text-background/50">
+            <span className="h-px w-8 bg-background/30" />
             Process
           </span>
           <h2
-            className={`text-4xl lg:text-6xl font-display tracking-tight transition-all duration-700 ${
-              isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
+            className={`font-display text-4xl tracking-tight transition-all duration-700 lg:text-6xl ${
+              isVisible ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
             }`}
           >
-            Three steps.
+            Turn sources into
             <br />
-            <span className="text-background/50">No blank prompt.</span>
+            <span className="text-background/50">a writing plan.</span>
           </h2>
         </div>
 
-        {/* Main content */}
-        <div className="grid lg:grid-cols-2 gap-16 lg:gap-24">
-          {/* Steps */}
+        <div className="grid gap-12 lg:grid-cols-[0.88fr_1.12fr] lg:gap-20">
           <div className="space-y-0">
             {steps.map((step, index) => (
               <button
-                key={step.number}
-                type="button"
-                onClick={() => setActiveStep(index)}
-                className={`w-full text-left py-8 border-b border-background/10 transition-all duration-500 group ${
+                className={`group w-full border-b border-background/10 py-7 text-left transition-all duration-500 ${
                   activeStep === index ? "opacity-100" : "opacity-40 hover:opacity-70"
                 }`}
+                key={step.number}
+                onClick={() => setActiveStep(index)}
+                type="button"
               >
                 <div className="flex items-start gap-6">
-                  <span className="font-display text-3xl text-background/30">{step.number}</span>
-                  <div className="flex-1">
-                    <h3 className="text-2xl lg:text-3xl font-display mb-3 group-hover:translate-x-2 transition-transform duration-300">
+                  <span className="w-10 font-display text-3xl text-background/30">
+                    {step.number}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-3 font-mono text-[10px] uppercase text-background/45">
+                      {step.label}
+                    </div>
+                    <h3 className="mb-3 font-display text-2xl transition-transform duration-300 group-hover:translate-x-1 lg:text-3xl">
                       {step.title}
                     </h3>
-                    <p className="text-background/60 leading-relaxed">
+                    <p className="max-w-2xl leading-relaxed text-background/60">
                       {step.description}
                     </p>
-                    
-                    {/* Progress indicator */}
-                    {activeStep === index && (
-                      <div className="mt-4 h-px bg-background/20 overflow-hidden">
-                        <div 
-                          className="h-full bg-background w-0"
-                          style={{
-                            animation: 'progress 5s linear forwards'
-                          }}
-                        />
+                    {activeStep === index ? (
+                      <div className="mt-4 h-px overflow-hidden bg-background/20">
+                        <div className="h-full w-0 bg-background how-progress" />
                       </div>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               </button>
             ))}
           </div>
 
-          {/* Code display */}
-          <div className="lg:sticky lg:top-32 self-start">
-            <div className="border border-background/10 overflow-hidden">
-              {/* Window header */}
-              <div className="px-6 py-4 border-b border-background/10 flex items-center justify-between">
-                <div className="flex gap-2">
-                  <div className="w-3 h-3 rounded-full bg-background/20" />
-                  <div className="w-3 h-3 rounded-full bg-background/20" />
-                  <div className="w-3 h-3 rounded-full bg-background/20" />
+          <div className="self-start lg:sticky lg:top-32">
+            <div className="border border-background/10 bg-background/[0.02]">
+              <div className="flex items-center justify-between border-b border-background/10 px-5 py-4">
+                <div>
+                  <div className="font-mono text-[10px] uppercase text-background/45">
+                    Workspace
+                  </div>
+                  <div className="mt-1 text-sm text-background/80">
+                    Launch narrative / week 24
+                  </div>
                 </div>
-                <span className="text-xs font-mono text-background/40">workflow.ts</span>
+                  <div className="font-mono text-[10px] uppercase text-background/45">
+                  Source + voice required
+                </div>
               </div>
 
-              {/* Code content */}
-              <div className="p-8 font-mono text-sm min-h-[280px]">
-                <pre className="text-background/70">
-                  {steps[activeStep].code.split('\n').map((line, lineIndex) => (
-                    <div 
-                      key={`${activeStep}-${lineIndex}`} 
-                      className="leading-loose code-line-reveal"
-                      style={{ 
-                        animationDelay: `${lineIndex * 80}ms`,
-                      }}
-                    >
-                      <span className="text-background/20 select-none w-8 inline-block">{lineIndex + 1}</span>
-                      <span className="inline-flex">
-                        {line.split('').map((char, charIndex) => (
-                          <span
-                            key={`${activeStep}-${lineIndex}-${charIndex}`}
-                            className="code-char-reveal"
-                            style={{
-                              animationDelay: `${lineIndex * 80 + charIndex * 15}ms`,
-                            }}
-                          >
-                            {char === ' ' ? '\u00A0' : char}
-                          </span>
-                        ))}
-                      </span>
+              <div className="grid divide-y divide-background/10 lg:grid-cols-3 lg:divide-x lg:divide-y-0">
+                {lanes.map((lane, laneIndex) => (
+                  <div
+                    className={`min-h-[300px] p-4 transition-colors duration-500 ${
+                      activeStep === laneIndex ? "bg-background/[0.055]" : ""
+                    }`}
+                    key={lane.title}
+                  >
+                    <div className="mb-4 flex items-center justify-between">
+                      <div className="font-mono text-[10px] uppercase text-background/45">
+                        {lane.title}
+                      </div>
+                      <div
+                        className={`h-1.5 w-1.5 rounded-full ${
+                          activeStep === laneIndex ? "bg-background" : "bg-background/20"
+                        }`}
+                      />
                     </div>
-                  ))}
-                </pre>
-              </div>
 
-              {/* Status */}
-              <div className="px-6 py-4 border-t border-background/10 flex items-center gap-3">
-                <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                <span className="text-xs font-mono text-background/40">Ready</span>
+                    <div className="space-y-3">
+                      {lane.rows.map((row) => (
+                        <div
+                          className="border border-background/10 bg-foreground/70 p-3"
+                          key={row.name}
+                        >
+                          <div className="mb-2 flex items-center justify-between gap-3">
+                            <div className="font-mono text-[10px] uppercase text-background/72">
+                              {row.name}
+                            </div>
+                            <div className="font-mono text-[9px] uppercase text-background/36">
+                              {"score" in row ? row.score : row.meta}
+                            </div>
+                          </div>
+                          <p className="text-sm leading-snug text-background/62">
+                            {row.detail}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -198,35 +208,17 @@ export function HowItWorksSection() {
       </div>
 
       <style jsx>{`
-        @keyframes progress {
-          from { width: 0%; }
-          to { width: 100%; }
-        }
-        
-        .code-line-reveal {
-          opacity: 0;
-          transform: translateX(-8px);
-          animation: lineReveal 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-        }
-        
-        @keyframes lineReveal {
+        @keyframes howProgress {
+          from {
+            width: 0%;
+          }
           to {
-            opacity: 1;
-            transform: translateX(0);
+            width: 100%;
           }
         }
-        
-        .code-char-reveal {
-          opacity: 0;
-          filter: blur(8px);
-          animation: charReveal 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-        }
-        
-        @keyframes charReveal {
-          to {
-            opacity: 1;
-            filter: blur(0);
-          }
+
+        .how-progress {
+          animation: howProgress 5s linear forwards;
         }
       `}</style>
     </section>
