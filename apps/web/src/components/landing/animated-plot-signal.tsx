@@ -167,8 +167,8 @@ export function AnimatedPlotSignal() {
     const cards = [
       { label: "source", position: [-1.18, 0.64, -0.16], rotation: [-0.12, 0.28, -0.22] },
       { label: "signal", position: [1.12, 0.52, -0.08], rotation: [0.08, -0.34, 0.2] },
-      { label: "voice", position: [-0.96, -0.72, 0.06], rotation: [0.1, 0.2, 0.12] },
-      { label: "brief", position: [0.98, -0.66, -0.02], rotation: [-0.08, -0.18, -0.16] },
+      { label: "docs", position: [-0.96, -0.72, 0.06], rotation: [0.1, 0.2, 0.12] },
+      { label: "release", position: [0.98, -0.66, -0.02], rotation: [-0.08, -0.18, -0.16] },
     ].map((config) => {
       const card = createBlockCard(config.label);
       card.position.set(config.position[0], config.position[1], config.position[2]);

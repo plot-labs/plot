@@ -52,15 +52,16 @@ export function CtaSection() {
               {/* Left content */}
               <div className="flex-1">
                 <h2 className="text-4xl lg:text-7xl font-display tracking-tight mb-8 leading-[0.95]">
-                  Ready to know
+                  AI changed the code.
                   <br />
-                  what to say next?
+                  Plot catches up the story.
                 </h2>
 
                 <p className="text-xl text-muted-foreground mb-12 leading-relaxed max-w-xl">
-                  Add sources, create Writing Blocks, detect the week&apos;s signals,
-                  keep your Style Memory current, and turn one accepted angle into
-                  a content pack.
+                  Add specs, AI-assisted PRs, issues, and customer feedback,
+                  detect what changed faster than the content process, keep brand
+                  voice current, and turn one accepted release brief into
+                  customer-ready docs and content.
                 </p>
 
                 <div className="flex flex-col sm:flex-row items-start gap-4">
@@ -68,7 +69,7 @@ export function CtaSection() {
                     size="lg"
                     className="bg-foreground hover:bg-foreground/90 text-background px-8 h-14 text-base rounded-full group"
                   >
-                    Create your first brief
+                    Create your first catch-up brief
                     <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover:translate-x-1" />
                   </Button>
                   <Button

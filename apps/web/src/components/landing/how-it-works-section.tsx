@@ -6,48 +6,48 @@ const steps = [
   {
     number: "I",
     label: "Sources",
-    title: "Start with the work that already exists.",
+    title: "Start where AI coding is speeding up the work.",
     description:
-      "Connect the places where product, customer, and market context already appears. Plot keeps the source and timestamp attached to every Writing Block.",
+      "Connect PRDs, RFCs, AI-assisted PRs, issues, Slack decisions, support threads, and customer feedback. Plot keeps the source and timestamp attached to every block.",
   },
   {
     number: "II",
     label: "Signals",
-    title: "Separate useful signal from ambient noise.",
+    title: "Find what the docs and content missed.",
     description:
-      "Product changes, customer pains, decisions, objections, quotes, and follow-up seeds are scored against the writing job they could support.",
+      "Shipped changes, customer impact, decisions, objections, docs gaps, and rollout risks are scored against the update your team has not written yet.",
   },
   {
     number: "III",
     label: "Plan",
-    title: "Ship a writing plan with evidence and voice attached.",
+    title: "Draft the catch-up in your brand voice.",
     description:
-      "The output is not a blank chat response. It is a brief, angle, style note, and channel plan where every factual claim points back to a source.",
+      "The output is not a blank chat response. It is a docs brief, release note, changelog plan, and handoff where every factual claim points back to a source and every draft follows your voice.",
   },
 ];
 
 const sourceRows = [
-  { name: "PR #482", detail: "Pricing page copy changed", meta: "GitHub" },
-  { name: "Beta call notes", detail: "Setup took longer than expected", meta: "Docs" },
-  { name: "Customer thread", detail: "Asked for migration language", meta: "Email" },
+  { name: "PR #482", detail: "Onboarding import flow changed", meta: "GitHub" },
+  { name: "RFC notes", detail: "Migration guardrail added", meta: "Docs" },
+  { name: "Customer thread", detail: "Asked for clearer role setup", meta: "Email" },
 ];
 
 const signalRows = [
-  { name: "Product change", detail: "New onboarding path is live", score: "91" },
-  { name: "Customer pain", detail: "Setup time is the repeated objection", score: "84" },
-  { name: "Positioning decision", detail: "Lead with source-backed launch story", score: "78" },
+  { name: "Shipped change", detail: "New onboarding path is live", score: "91" },
+  { name: "Docs gap", detail: "Role setup needs migration language", score: "84" },
+  { name: "Launch decision", detail: "Lead with reduced setup time", score: "78" },
 ];
 
 const planRows = [
-  { name: "Launch brief", detail: "Narrative, claims, and review notes", meta: "7 claims" },
-  { name: "Voice guardrails", detail: "Cadence, vocabulary, and avoid list", meta: "style" },
-  { name: "Newsletter intro", detail: "Channel draft with source chips", meta: "draft" },
+  { name: "Release brief", detail: "Narrative, claims, and review owners", meta: "7 claims" },
+  { name: "Docs update", detail: "Steps, caveats, and linked sources", meta: "help" },
+  { name: "Sales handoff", detail: "Customer impact with source chips", meta: "draft" },
 ];
 
 const lanes = [
   { title: "Source ledger", rows: sourceRows },
-  { title: "Signal queue", rows: signalRows },
-  { title: "Writing plan", rows: planRows },
+  { title: "Change queue", rows: signalRows },
+  { title: "Docs plan", rows: planRows },
 ];
 
 export function HowItWorksSection() {
@@ -102,9 +102,9 @@ export function HowItWorksSection() {
               isVisible ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
             }`}
           >
-            Turn sources into
+            Turn AI-shipped changes into
             <br />
-            <span className="text-background/50">a writing plan.</span>
+            <span className="text-background/50">content that catches up.</span>
           </h2>
         </div>
 
@@ -152,7 +152,7 @@ export function HowItWorksSection() {
                     Workspace
                   </div>
                   <div className="mt-1 text-sm text-background/80">
-                    Launch narrative / week 24
+                    Onboarding release / week 24
                   </div>
                 </div>
                   <div className="font-mono text-[10px] uppercase text-background/45">
