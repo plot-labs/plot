@@ -8,17 +8,13 @@ const footerLinks = {
     { name: "Product", href: "#features" },
     { name: "How it works", href: "#how-it-works" },
     { name: "Pricing", href: "#pricing" },
-    { name: "Inputs", href: "#integrations" },
   ],
-  Agent: [
-    { name: "Runtime", href: "#developers" },
+  Trust: [
     { name: "Tool policy", href: "#security" },
     { name: "Claim map", href: "#security" },
-    { name: "Trace", href: "#developers" },
+    { name: "Security", href: "#security" },
   ],
   Company: [
-    { name: "Origin", href: "#" },
-    { name: "Tyquill pivot", href: "#" },
     { name: "Waitlist", href: "#pricing", badge: "Open" },
     { name: "Contact", href: "mailto:hello@plot.so" },
   ],
@@ -51,7 +47,6 @@ export function FooterSection() {
             <div className="col-span-2">
               <a href="#" className="inline-flex items-center gap-2 mb-6">
                 <span className="text-2xl font-display">Plot</span>
-                <span className="text-xs text-muted-foreground font-mono">TM</span>
               </a>
 
               <p className="text-muted-foreground leading-relaxed mb-8 max-w-xs">
@@ -106,12 +101,6 @@ export function FooterSection() {
             2026 Plot. All rights reserved.
           </p>
 
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <span className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-green-500" />
-              Source-backed by default
-            </span>
-          </div>
         </div>
       </div>
     </footer>
