@@ -19,9 +19,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Plot - Know what to say next",
+  title: "Plot - Keep docs and content in sync with AI shipping",
   description:
-    "Plot turns Writing Blocks into source-backed briefs, angles, content packs, and follow-ups for creators and marketing teams.",
+    "Plot helps product and engineering teams keep docs, release notes, launch content, and customer-facing updates in sync as AI coding accelerates shipping.",
   icons: {
     icon: "/plot-favicon.svg",
   },

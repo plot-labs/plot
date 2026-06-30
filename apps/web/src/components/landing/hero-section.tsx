@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 import { HeroTerminal } from "./hero-terminal";
 
-const words = ["say", "publish", "launch", "send"];
+const words = ["Docs", "Changelogs", "Release notes", "Launch briefs"];
 
 export function HeroSection() {
   const isVisible = true;
@@ -58,36 +58,40 @@ export function HeroSection() {
         >
           <span className="inline-flex items-center gap-3 font-mono text-sm text-muted-foreground">
             <span className="h-px w-8 bg-foreground/30" />
-            AI CMO for creators and marketing teams
+            Brand-voice docs and content for AI-accelerated product teams
           </span>
         </div>
 
         <div className="mb-12">
           <h1
-            className={`text-6xl font-display leading-[0.9] tracking-tight transition-all duration-1000 md:text-8xl lg:text-[10rem] ${
+            className={`text-6xl font-display leading-[0.9] tracking-tight transition-all duration-1000 md:text-8xl lg:text-[8rem] xl:text-[8.75rem] ${
               isVisible ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
             }`}
           >
-            <span className="block">Know what</span>
+            <span className="block">AI made code</span>
+            <span className="block">ship faster.</span>
             <span className="block">
-              to{" "}
               <span className="relative inline-block align-baseline">
                 <span className="inline-flex whitespace-nowrap" key={wordIndex}>
-                  {words[wordIndex].split("").map((char, i) => (
-                    <span
-                      className="inline-block animate-char-in"
-                      key={`${wordIndex}-${i}`}
-                      style={{
-                        animationDelay: `${i * 50}ms`,
-                      }}
-                    >
-                      {char}
-                    </span>
-                  ))}
+                  {words[wordIndex].split("").map((char, i) =>
+                    char === " " ? (
+                      <span aria-hidden="true" className="inline-block w-[0.28em]" key={`${wordIndex}-${i}`} />
+                    ) : (
+                      <span
+                        className="inline-block animate-char-in"
+                        key={`${wordIndex}-${i}`}
+                        style={{
+                          animationDelay: `${i * 40}ms`,
+                        }}
+                      >
+                        {char}
+                      </span>
+                    ),
+                  )}
                 </span>
                 <span className="absolute -bottom-2 left-0 right-0 h-3 bg-foreground/10" />
               </span>{" "}
-              next.
+              lag.
             </span>
           </h1>
         </div>
@@ -98,8 +102,10 @@ export function HeroSection() {
               isVisible ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
             }`}
           >
-            Plot turns your product, customer, and market context into source-backed
-            content ideas in your brand voice.
+            Every AI-assisted PR creates product truth faster than your team can
+            update docs, release notes, launch briefs, and customer-facing
+            content. Plot catches the gap, maps every claim to source, and drafts
+            in your brand voice.
           </p>
 
           <div
@@ -126,55 +132,6 @@ export function HeroSection() {
         </div>
       </div>
 
-      <div
-        className={`absolute bottom-24 left-0 right-0 transition-all delay-500 duration-700 ${
-          isVisible ? "opacity-100" : "opacity-0"
-        }`}
-      >
-        <div className="marquee flex gap-16 whitespace-nowrap">
-          {[...Array(2)].map((_, i) => (
-            <div className="flex gap-16" key={i}>
-              {[
-                {
-                  company: "WRITING BLOCKS",
-                  label: "signals detected",
-                  value: "5+",
-                },
-                {
-                  company: "THIS WEEK'S PLOT",
-                  label: "angles ready",
-                  value: "3",
-                },
-                {
-                  company: "CLAIM MAP",
-                  label: "source-backed claims",
-                  value: "91%",
-                },
-                {
-                  company: "STYLE MEMORY",
-                  label: "brand voice drift",
-                  value: "0",
-                },
-              ].map((stat) => (
-                <div
-                  className="flex items-baseline gap-4"
-                  key={`${stat.company}-${i}`}
-                >
-                  <span className="text-4xl font-display lg:text-5xl">
-                    {stat.value}
-                  </span>
-                  <span className="text-sm text-muted-foreground">
-                    {stat.label}
-                    <span className="mt-1 block font-mono text-xs">
-                      {stat.company}
-                    </span>
-                  </span>
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
-      </div>
     </section>
   );
 }

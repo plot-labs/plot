@@ -11,7 +11,7 @@ const footerLinks = {
   ],
   Trust: [
     { name: "Tool policy", href: "#security" },
-    { name: "Claim map", href: "#security" },
+    { name: "Source map", href: "#security" },
     { name: "Security", href: "#security" },
   ],
   Company: [
@@ -50,8 +50,9 @@ export function FooterSection() {
               </a>
 
               <p className="text-muted-foreground leading-relaxed mb-8 max-w-xs">
-                Know what to say next. Plot turns sources into briefs, angles,
-                content packs, and follow-ups.
+                AI coding made shipping faster than docs and content can follow.
+                Plot turns specs, PRs, decisions, and feedback into source-backed
+                updates in your brand voice.
               </p>
 
               {/* Social Links */}

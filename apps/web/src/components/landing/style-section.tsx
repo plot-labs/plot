@@ -5,38 +5,38 @@ import { useEffect, useRef, useState } from "react";
 
 const styleRules = [
   {
-    label: "Cadence",
-    detail: "Short opening line, then one proof sentence before the ask.",
+    label: "Voice",
+    detail: "Keep the brand's tone intact even when the source is an AI-assisted diff.",
   },
   {
-    label: "Vocabulary",
-    detail: "Use product words the team already uses. Flag borrowed jargon.",
+    label: "Terminology",
+    detail: "Use product words the team already uses. Flag vague or borrowed jargon.",
   },
   {
-    label: "Point of view",
-    detail: "Keep the founder's stance intact across LinkedIn, newsletter, and launch notes.",
+    label: "Tradeoffs",
+    detail: "Keep engineering context visible when a decision affects user expectations.",
   },
   {
-    label: "Do-not-say list",
-    detail: "Avoid claims, hype words, and phrases the brand would not publish.",
+    label: "Do-not-claim list",
+    detail: "Avoid claims, timelines, and guarantees the brand would not stand behind.",
   },
 ];
 
 const channels = [
   {
-    name: "LinkedIn",
-    tone: "direct, founder-led",
-    sample: "We changed the onboarding story because setup time kept showing up in calls.",
+    name: "Release note",
+    tone: "concise, customer-facing",
+    sample: "We removed two setup steps from onboarding and kept migration guidance in the first run.",
   },
   {
-    name: "Newsletter",
-    tone: "slower, more reflective",
-    sample: "This week, the useful signal was not a feature. It was the objection customers repeated.",
+    name: "Help doc",
+    tone: "instructional, precise",
+    sample: "Use the migration checklist before inviting teammates, especially when importing legacy roles.",
   },
   {
-    name: "Launch note",
-    tone: "specific, source-backed",
-    sample: "The new flow removes two setup steps and keeps migration language close to the product proof.",
+    name: "Sales handoff",
+    tone: "context-rich, evidence-backed",
+    sample: "The strongest proof is reduced setup time, backed by beta calls and PR #482.",
   },
 ];
 
@@ -82,24 +82,25 @@ export function StyleSection() {
           >
             <span className="mb-6 inline-flex items-center gap-3 font-mono text-sm text-muted-foreground">
               <span className="h-px w-8 bg-foreground/30" />
-              Style Memory
+              Brand Voice
             </span>
             <h2 className="mb-8 font-display text-4xl tracking-tight lg:text-6xl">
-              Keep one brand voice
+              Keep every product update
               <br />
-              across every draft.
+              in your brand voice.
             </h2>
             <p className="mb-10 max-w-xl text-xl leading-relaxed text-muted-foreground">
-              Plot inherits Tyquill&apos;s writing-style layer: accepted samples,
-              brand rules, and channel history become a reusable voice profile
-              before any content pack is drafted.
+              AI can make code move faster, but it does not know how your company
+              explains change. Accepted docs, release notes, launch pages, and
+              customer-facing content become reusable voice memory before Plot
+              drafts anything from engineering context.
             </p>
 
             <div className="grid gap-px overflow-hidden rounded-xl border border-foreground/10 bg-foreground/10 sm:grid-cols-3">
               {[
-                ["Samples", "accepted posts and notes"],
-                ["Profile", "cadence, vocabulary, POV"],
-                ["Adapters", "channel-specific delivery"],
+                ["Examples", "approved docs and release notes"],
+                ["Voice", "tone, terms, claims"],
+                ["Formats", "docs, launch, handoff"],
               ].map(([label, value]) => (
                 <div className="bg-background p-5" key={label}>
                   <div className="mb-2 font-mono text-[10px] uppercase text-muted-foreground">
@@ -120,10 +121,10 @@ export function StyleSection() {
               <div className="flex flex-col gap-5 border-b border-foreground/10 px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <div className="font-mono text-[10px] uppercase text-muted-foreground">
-                    Voice profile
+                    Brand voice profile
                   </div>
                   <div className="mt-1 font-medium text-foreground">
-                    One style source of truth
+                    One voice source of truth
                   </div>
                 </div>
                 <div className="flex items-center gap-2 font-mono text-[10px] uppercase text-muted-foreground">
@@ -136,7 +137,7 @@ export function StyleSection() {
                 <div className="border-b border-foreground/10 p-5 lg:border-b-0 lg:border-r">
                   <div className="mb-4 flex items-center gap-2 font-mono text-[10px] uppercase text-muted-foreground">
                     <SlidersHorizontal className="size-3.5" />
-                    Brand rules
+                    Voice rules
                   </div>
                   <div className="space-y-3">
                     {styleRules.map((rule) => (
@@ -159,7 +160,7 @@ export function StyleSection() {
                   <div className="mb-4 flex items-center justify-between gap-4">
                     <div className="flex items-center gap-2 font-mono text-[10px] uppercase text-muted-foreground">
                       <MessageSquareText className="size-3.5" />
-                      Channel draft
+                      Output draft
                     </div>
                     <div className="font-mono text-[10px] uppercase text-muted-foreground">
                       {active.tone}
@@ -189,7 +190,7 @@ export function StyleSection() {
                       {active.sample}
                     </p>
                     <div className="space-y-2 border-t border-foreground/10 pt-4">
-                      {["Matches cadence", "Keeps approved vocabulary", "Claims require source"].map(
+                      {["Matches brand voice", "Keeps implementation caveats", "Claims require source"].map(
                         (check) => (
                           <div
                             className="flex items-center justify-between gap-3 text-sm"

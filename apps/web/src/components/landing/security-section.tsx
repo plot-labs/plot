@@ -7,22 +7,22 @@ const securityFeatures = [
   {
     icon: Shield,
     title: "Workspace boundaries",
-    description: "Every block, signal, brief, angle, memory item, and agent run belongs to one workspace.",
+    description: "Every source, change signal, docs brief, release pack, memory item, and agent run belongs to one workspace.",
   },
   {
     icon: Lock,
     title: "Selected-source sync",
-    description: "Plot starts with selected feeds, repos, docs, labels, and uploads instead of broad workspace crawling.",
+    description: "Plot starts with selected repos, issues, docs, labels, and uploads instead of broad workspace crawling.",
   },
   {
     icon: Eye,
     title: "Claim evidence",
-    description: "Factual claims are mapped to Writing Blocks and marked verified, inferred, review-needed, or opinion.",
+    description: "Factual product claims are mapped to source blocks and marked verified, inferred, review-needed, or opinion.",
   },
   {
     icon: FileCheck,
     title: "No auto-publish",
-    description: "Plot creates briefs and content packs for review, copy, and export. It does not publish without a human.",
+    description: "Plot creates docs and release content for review, copy, and export. It does not publish without product or engineering review.",
   },
 ];
 
@@ -59,13 +59,14 @@ export function SecuritySection() {
               Safety
             </span>
             <h2 className="text-4xl lg:text-6xl font-display tracking-tight mb-8">
-              The claim map
+              The source map
               <br />
               is the product.
             </h2>
             <p className="text-xl text-muted-foreground leading-relaxed mb-12">
-              Plot should not create confident fiction. It shows where a claim came
-              from, when it is inferred, and when the team needs to review it.
+              Plot should not create confident product fiction. It shows where a
+              claim came from, when it is inferred, and when product or engineering
+              needs to review it.
             </p>
 
             {/* Certifications */}
