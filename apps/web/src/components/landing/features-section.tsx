@@ -1,16 +1,11 @@
 "use client";
 
+import { icons as logoIcons } from "@iconify-json/logos";
 import { motion } from "framer-motion";
-import {
-  FileText,
-  GitPullRequest,
-  Mail,
-  Radio,
-  Sparkles,
-} from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 
-type CapabilityVisualType = "blocks" | "signals" | "brief" | "pack";
+type CapabilityVisualType = "blocks" | "signals" | "style" | "pack";
 
 type CapabilityFeature = {
   number: string;
@@ -22,9 +17,9 @@ type CapabilityFeature = {
 const features: CapabilityFeature[] = [
   {
     number: "01",
-    title: "Writing Blocks",
+    title: "Connected Sources",
     description:
-      "Every connection, upload, paste, URL, and forwarded email becomes a normalized block Plot can reason with.",
+      "Bring in the places where product, customer, and market context already appears: Slack, GitHub, email, Notion, Linear, and more.",
     visual: "blocks",
   },
   {
@@ -36,16 +31,16 @@ const features: CapabilityFeature[] = [
   },
   {
     number: "03",
-    title: "Brief and Angle Engine",
+    title: "Brand Voice Memory",
     description:
-      "Weekly creator briefs and launch briefs turn scattered context into the next market-facing point of view.",
-    visual: "brief",
+      "Accepted samples become a style profile for cadence, vocabulary, claims you would make, and phrases you avoid.",
+    visual: "style",
   },
   {
     number: "04",
     title: "Source-backed Content Packs",
     description:
-      "Generate LinkedIn posts, newsletter intros, X threads, launch notes, and sales briefs with claim evidence attached.",
+      "Generate briefs, LinkedIn posts, newsletter intros, X threads, launch notes, and sales briefs with claim evidence and voice notes attached.",
     visual: "pack",
   },
 ];
@@ -129,72 +124,72 @@ function FlowPath({
   );
 }
 
+function BrandIcon({
+  icon,
+  name,
+  monochrome,
+}: {
+  icon: string;
+  name: string;
+  monochrome?: boolean;
+}) {
+  const iconData = logoIcons.icons[icon];
+  const width = iconData?.width ?? 256;
+  const height = iconData?.height ?? 256;
+  const body = monochrome
+    ? iconData?.body.replace(/fill="[^"]+"/g, 'fill="currentColor"')
+    : iconData?.body;
+
+  if (!iconData) return null;
+
+  return (
+    <svg
+      aria-label={name}
+      className={`size-8 ${monochrome ? "text-background" : ""}`}
+      role="img"
+      viewBox={`0 0 ${width} ${height}`}
+      dangerouslySetInnerHTML={{ __html: body ?? "" }}
+    />
+  );
+}
+
 function BlocksVisual() {
   const sources = [
-    { label: "GitHub PR", icon: GitPullRequest },
-    { label: "Launch spec", icon: FileText },
-    { label: "Customer email", icon: Mail },
-    { label: "RSS article", icon: Radio },
+    { name: "Gmail", icon: "google-gmail", className: "left-[154px] top-[86px] -rotate-12 z-20" },
+    { name: "GitHub", icon: "github-icon", className: "left-[234px] top-[58px] rotate-4 z-40", monochrome: true },
+    { name: "Slack", icon: "slack-icon", className: "left-[314px] top-[86px] rotate-12 z-20" },
+    { name: "Notion", icon: "notion-icon", className: "left-[194px] top-[126px] rotate-3 z-10" },
+    { name: "Linear", icon: "linear-icon", className: "left-[278px] top-[126px] -rotate-5 z-10", monochrome: true },
   ];
 
   return (
     <FeatureShell>
       <VisualStage>
-        <FlowLayer>
-          <FlowPath d="M204 88 H292 V100 H360" dot={[292, 100]} />
-          <FlowPath d="M204 128 H360" dot={[292, 128]} opacity={0.2} />
-          <FlowPath d="M204 168 H292 V150 H360" dot={[292, 150]} opacity={0.16} />
-          <FlowPath d="M204 208 H292 V168 H360" dot={[292, 168]} opacity={0.12} />
-        </FlowLayer>
-
-        <div className="absolute left-6 top-[34px] w-[180px] rounded-lg border border-foreground/10 bg-background/90 p-3 shadow-sm">
-          <div className="mb-3 font-mono text-[10px] uppercase text-muted-foreground">
-            Input inbox
-          </div>
-          <div className="space-y-2">
-            {sources.map((source, index) => (
-              <motion.div
-                animate={{ opacity: [0.62, 1, 0.62] }}
-                className="flex items-center gap-2 rounded-md border border-foreground/10 bg-background px-3 py-2 text-xs text-foreground/75"
-                key={source.label}
-                transition={{
-                  delay: index * 0.18,
-                  duration: 2,
-                  repeat: Infinity,
-                  ease: "easeInOut",
-                }}
-              >
-                <source.icon className="size-3.5 shrink-0 text-muted-foreground" />
-                <span className="truncate">{source.label}</span>
-              </motion.div>
-            ))}
-          </div>
+        <div className="absolute inset-0">
+          <div className="absolute left-[314px] top-[82px] h-[118px] w-[330px] -translate-x-1/2 rounded-full bg-foreground/[0.05] blur-2xl" />
+          {sources.map((source, index) => (
+            <motion.div
+              animate={{
+                y: [0, index < 3 ? -6 : 4, 0],
+                rotate: index % 2 === 0 ? [-8, -4, -8] : [6, 3, 6],
+              }}
+              className={`absolute grid size-[76px] place-items-center rounded-[18px] border border-white/20 bg-black/80 shadow-[inset_0_1px_1px_rgba(255,255,255,0.25),inset_0_-1px_1px_rgba(0,0,0,0.1),0_8px_24px_rgba(0,0,0,0.12),0_2px_6px_rgba(0,0,0,0.08)] ${source.className}`}
+              key={source.name}
+              transition={{
+                delay: index * 0.14,
+                duration: 3,
+                repeat: Infinity,
+                ease: "easeInOut",
+              }}
+            >
+              <BrandIcon
+                icon={source.icon}
+                name={source.name}
+                monochrome={source.monochrome}
+              />
+            </motion.div>
+          ))}
         </div>
-
-        <motion.div
-          animate={{ y: [0, -4, 0] }}
-          className="absolute left-[360px] top-[60px] w-[176px] rounded-lg border border-foreground/20 bg-background p-4 shadow-[0_24px_70px_rgb(18_17_15_/_0.08)]"
-          transition={{ duration: 3, ease: "easeInOut", repeat: Infinity }}
-        >
-          <div className="mb-3 rounded-md bg-foreground px-3 py-3 text-center font-mono text-[10px] uppercase text-background">
-            Writing Block
-          </div>
-          <div className="space-y-2">
-            <div className="h-1.5 w-full rounded-full bg-foreground/12" />
-            <div className="h-1.5 w-4/5 rounded-full bg-foreground/10" />
-            <div className="h-1.5 w-3/5 rounded-full bg-foreground/10" />
-          </div>
-          <div className="mt-4 flex gap-2">
-            {["ready", "source", "hash"].map((chip) => (
-              <span
-                className="rounded-full border border-foreground/10 px-2 py-1 font-mono text-[9px] uppercase text-muted-foreground"
-                key={chip}
-              >
-                {chip}
-              </span>
-            ))}
-          </div>
-        </motion.div>
       </VisualStage>
     </FeatureShell>
   );
@@ -272,22 +267,28 @@ function SignalsVisual() {
   );
 }
 
-function BriefVisual() {
+function StyleMemoryVisual() {
+  const rules = [
+    { label: "Cadence", score: 82, width: "62%" },
+    { label: "Vocabulary", score: 85, width: "70%" },
+    { label: "Proof", score: 88, width: "78%" },
+  ];
+
   return (
     <FeatureShell>
       <VisualStage>
         <FlowLayer>
-          <FlowPath d="M160 72 H194 V92 H230" dot={[194, 92]} />
-          <FlowPath d="M160 116 H230" dot={[194, 116]} opacity={0.2} />
-          <FlowPath d="M160 160 H194 V146 H230" dot={[194, 146]} opacity={0.14} />
-          <FlowPath d="M356 125 H392" dot={[374, 125]} opacity={0.18} />
+          <FlowPath d="M174 72 H210" opacity={0.18} />
+          <FlowPath d="M174 125 H210" opacity={0.2} />
+          <FlowPath d="M174 178 H192 V145 H210" opacity={0.14} />
+          <FlowPath d="M360 126 H394" opacity={0.2} />
         </FlowLayer>
 
-        <div className="absolute left-6 top-[48px] w-[136px] space-y-3">
-          {["Signals", "Memory", "Audience"].map((label, index) => (
+        <div className="absolute left-8 top-[47px] w-[140px] space-y-3">
+          {["Samples", "Rules", "Channels"].map((label, index) => (
             <motion.div
               animate={{ opacity: [0.55, 0.94, 0.55] }}
-              className="rounded-md border border-foreground/10 bg-background/90 px-3 py-3 text-center font-mono text-[10px] uppercase text-muted-foreground"
+              className="rounded-md border border-foreground/10 bg-background/90 px-3 py-3.5 text-center font-mono text-[10px] uppercase text-muted-foreground"
               key={label}
               transition={{
                 delay: index * 0.18,
@@ -301,23 +302,31 @@ function BriefVisual() {
           ))}
         </div>
 
-        <div className="absolute left-[230px] top-[38px] h-[176px] w-[126px] rounded-lg border border-foreground/15 bg-background p-3.5 shadow-[0_24px_70px_rgb(18_17_15_/_0.08)]">
-          <div className="mb-3 font-mono text-[10px] uppercase text-foreground">
-            Brief
+        <div className="absolute left-[210px] top-[36px] h-[178px] w-[150px] overflow-hidden rounded-lg border border-foreground/15 bg-background p-3 shadow-[0_24px_70px_rgb(18_17_15_/_0.08)]">
+          <div className="mb-2.5 flex items-center justify-between gap-3">
+            <div className="font-mono text-[10px] uppercase text-foreground">
+              Voice profile
+            </div>
+            <div className="rounded-full bg-foreground/5 px-2 py-0.5 font-mono text-[8px] uppercase text-muted-foreground">
+              locked
+            </div>
           </div>
-          <div className="mb-4 space-y-1.5">
-            <div className="h-1.5 w-full rounded-full bg-foreground/35" />
-            <div className="h-1.5 w-4/5 rounded-full bg-foreground/18" />
-            <div className="h-1.5 w-3/5 rounded-full bg-foreground/15" />
-          </div>
-          <div className="space-y-1.5">
-            {[1, 2].map((item) => (
+          <div className="space-y-1">
+            {rules.map((rule) => (
               <div
-                className="rounded-md border border-foreground/10 bg-foreground/[0.025] p-2"
-                key={item}
+                className="rounded-md border border-foreground/10 bg-foreground/[0.025] px-2.5 py-1.5"
+                key={rule.label}
               >
-                <div className="mb-1 h-1.5 w-3/4 rounded-full bg-foreground/12" />
-                <div className="h-1.5 w-1/2 rounded-full bg-foreground/8" />
+                <div className="mb-0.5 flex items-center justify-between gap-2 font-mono text-[8px] uppercase text-muted-foreground">
+                  <span>{rule.label}</span>
+                  <span>{rule.score}</span>
+                </div>
+                <div className="h-1 rounded-full bg-foreground/8">
+                  <div
+                    className="h-full rounded-full bg-foreground/45"
+                    style={{ width: rule.width }}
+                  />
+                </div>
               </div>
             ))}
           </div>
@@ -331,20 +340,20 @@ function BriefVisual() {
               "rgb(18 17 15 / 0.16)",
             ],
           }}
-          className="absolute left-[392px] top-[38px] h-[176px] w-[150px] rounded-lg border border-foreground/15 bg-background/95 p-3.5 shadow-[0_24px_70px_rgb(18_17_15_/_0.08)]"
+          className="absolute left-[394px] top-[42px] h-[166px] w-[144px] rounded-lg border border-foreground/15 bg-background/95 p-3.5 shadow-[0_24px_70px_rgb(18_17_15_/_0.08)]"
           transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
         >
           <div className="mb-2.5 flex items-center gap-2 font-mono text-[10px] uppercase text-muted-foreground">
             <Sparkles className="size-3.5 text-foreground" />
-            Market POV
+            Voice check
           </div>
-          <p className="mb-3 text-[13px] font-medium leading-snug text-foreground">
-            Turn internal decisions into external narratives.
+          <p className="mb-3 text-[12px] font-medium leading-snug text-foreground">
+            Same point of view, tuned for the channel.
           </p>
           <div className="grid grid-cols-3 gap-1">
-            {["Fit", "Proof", "Now"].map((label, index) => (
+            {["Fit", "Tone", "Proof"].map((label, index) => (
               <div
-                className="rounded-md border border-foreground/10 bg-foreground/[0.025] px-2 py-1.5 text-center font-mono text-[8px] uppercase text-muted-foreground"
+                className="rounded-md border border-foreground/10 bg-foreground/[0.025] px-1 py-1.5 text-center font-mono text-[8px] uppercase text-muted-foreground"
                 key={label}
               >
                 <div className="mb-1 text-foreground">{84 - index * 6}</div>
@@ -426,7 +435,7 @@ function PackVisual() {
 function CapabilityVisual({ type }: { type: CapabilityVisualType }) {
   if (type === "blocks") return <BlocksVisual />;
   if (type === "signals") return <SignalsVisual />;
-  if (type === "brief") return <BriefVisual />;
+  if (type === "style") return <StyleMemoryVisual />;
   return <PackVisual />;
 }
 

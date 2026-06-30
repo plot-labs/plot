@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
-import { AnimatedTetrahedron } from "./animated-tetrahedron";
+import { AnimatedPlotSignal } from "./animated-plot-signal";
 
 export function CtaSection() {
   const [isVisible, setIsVisible] = useState(false);
@@ -59,7 +59,8 @@ export function CtaSection() {
 
                 <p className="text-xl text-muted-foreground mb-12 leading-relaxed max-w-xl">
                   Add sources, create Writing Blocks, detect the week&apos;s signals,
-                  and turn one accepted angle into a content pack.
+                  keep your Style Memory current, and turn one accepted angle into
+                  a content pack.
                 </p>
 
                 <div className="flex flex-col sm:flex-row items-start gap-4">
@@ -80,20 +81,17 @@ export function CtaSection() {
                 </div>
 
                 <p className="text-sm text-muted-foreground mt-8 font-mono">
-                  Manual review by default. No auto-publish.
+                  Manual review by default. Source and voice checks before publish.
                 </p>
               </div>
 
               {/* Right animation */}
               <div className="hidden lg:flex items-center justify-center w-[500px] h-[500px] -mr-16">
-                <AnimatedTetrahedron />
+                <AnimatedPlotSignal />
               </div>
             </div>
           </div>
 
-          {/* Decorative corner */}
-          <div className="absolute top-0 right-0 w-32 h-32 border-b border-l border-foreground/10" />
-          <div className="absolute bottom-0 left-0 w-32 h-32 border-t border-r border-foreground/10" />
         </div>
       </div>
     </section>

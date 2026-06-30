@@ -7,7 +7,7 @@ const plans = [
   {
     name: "Creator",
     description: "For founder-led creators and solo operators",
-    price: { monthly: 19, annual: 15 },
+    price: { monthly: 15, annual: 12 },
     features: [
       "Weekly creator brief",
       "Upload, paste, URL, and RSS inputs",
@@ -21,7 +21,7 @@ const plans = [
   {
     name: "Team",
     description: "For product marketers, DevRel, and founder-led teams",
-    price: { monthly: 79, annual: 64 },
+    price: { monthly: 20, annual: 16 },
     features: [
       "Launch and decision-to-content briefs",
       "GitHub, Docs, and selected source sync",
