@@ -44,7 +44,7 @@ export function PacksWorkspace() {
               role="option"
               aria-selected={pack.id === selectedPackId}
               onClick={() => selectPack(pack.id)}
-              className={`w-full rounded-lg border p-4 text-left transition ${
+              className={`w-full rounded-[12px] border p-4 text-left transition ${
                 pack.id === selectedPackId
                   ? "border-black/20 bg-white dark:border-white/20 dark:bg-white/10"
                   : "border-black/10 bg-white/60 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"
@@ -59,7 +59,7 @@ export function PacksWorkspace() {
             </button>
           ))}
           {packs.length === 0 && (
-            <div className="rounded-lg border border-black/10 bg-white/60 p-4 text-sm text-black/55 dark:border-white/10 dark:bg-white/5 dark:text-white/55">
+            <div className="rounded-[12px] border border-black/10 bg-white/60 p-4 text-sm text-black/55 dark:border-white/10 dark:bg-white/5 dark:text-white/55">
               No packs are available yet.
             </div>
           )}
@@ -85,7 +85,7 @@ export function PacksWorkspace() {
                   aria-selected={draft.id === selectedDraftId}
                   aria-controls={`draft-panel-${draft.id}`}
                   onClick={() => setSelectedDraftId(draft.id)}
-                  className={`rounded-lg border p-4 text-left transition ${
+                  className={`rounded-[12px] border p-4 text-left transition ${
                     draft.id === selectedDraftId
                       ? "border-black/20 bg-white dark:border-white/20 dark:bg-white/10"
                       : "border-black/10 bg-white/70 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"
@@ -96,7 +96,7 @@ export function PacksWorkspace() {
                 </button>
               ))}
               {packDrafts.length === 0 && (
-                <div className="rounded-lg border border-black/10 bg-white p-4 text-sm text-black/55 dark:border-white/10 dark:bg-white/5 dark:text-white/55">
+                <div className="rounded-[12px] border border-black/10 bg-white p-4 text-sm text-black/55 dark:border-white/10 dark:bg-white/5 dark:text-white/55">
                   This pack does not include any drafts yet.
                 </div>
               )}
@@ -107,7 +107,7 @@ export function PacksWorkspace() {
                 id={`draft-panel-${selectedDraft.id}`}
                 role="tabpanel"
                 aria-labelledby={`draft-tab-${selectedDraft.id}`}
-                className="rounded-xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/5"
+                className="rounded-[12px] border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/5"
               >
                 <div className="text-sm font-semibold">{selectedDraft.filename}</div>
                 <div className="mt-4 whitespace-pre-line text-sm leading-6 text-black/75 dark:text-white/75">
@@ -115,7 +115,7 @@ export function PacksWorkspace() {
                 </div>
               </section>
             ) : (
-              <section className="rounded-xl border border-black/10 bg-white p-5 text-sm text-black/55 dark:border-white/10 dark:bg-white/5 dark:text-white/55">
+              <section className="rounded-[12px] border border-black/10 bg-white p-5 text-sm text-black/55 dark:border-white/10 dark:bg-white/5 dark:text-white/55">
                 Select a draft to preview its content.
               </section>
             )}
@@ -124,13 +124,13 @@ export function PacksWorkspace() {
               <h3 className="text-sm font-semibold">References</h3>
               <div className="mt-3 grid gap-2">
                 {usedReferences.map((reference) => (
-                  <div key={reference.id} className="rounded-lg border border-black/10 bg-white p-3 text-sm dark:border-white/10 dark:bg-white/5">
+                  <div key={reference.id} className="rounded-[12px] border border-black/10 bg-white p-3 text-sm dark:border-white/10 dark:bg-white/5">
                     <div className="font-medium">{reference.label}</div>
                     <div className="mt-1 text-black/55 dark:text-white/55">{reference.summary}</div>
                   </div>
                 ))}
                 {usedReferences.length === 0 && (
-                  <div className="rounded-lg border border-black/10 bg-white p-3 text-sm text-black/55 dark:border-white/10 dark:bg-white/5 dark:text-white/55">
+                  <div className="rounded-[12px] border border-black/10 bg-white p-3 text-sm text-black/55 dark:border-white/10 dark:bg-white/5 dark:text-white/55">
                     No references are linked to this draft.
                   </div>
                 )}

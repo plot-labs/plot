@@ -30,7 +30,7 @@ export function SourcesWorkspace() {
               role="option"
               aria-selected={reference.id === selectedReferenceId}
               onClick={() => setSelectedReferenceId(reference.id)}
-              className={`w-full rounded-lg border p-4 text-left transition ${
+              className={`w-full rounded-[12px] border p-4 text-left transition ${
                 reference.id === selectedReferenceId
                   ? "border-black/20 bg-white dark:border-white/20 dark:bg-white/10"
                   : "border-black/10 bg-white/60 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"
@@ -46,7 +46,7 @@ export function SourcesWorkspace() {
             </button>
           ))}
           {references.length === 0 && (
-            <div className="rounded-lg border border-black/10 bg-white/60 p-4 text-sm text-black/55 dark:border-white/10 dark:bg-white/5 dark:text-white/55">
+            <div className="rounded-[12px] border border-black/10 bg-white/60 p-4 text-sm text-black/55 dark:border-white/10 dark:bg-white/5 dark:text-white/55">
               No sources are available yet.
             </div>
           )}
@@ -74,12 +74,12 @@ export function SourcesWorkspace() {
               <h3 className="text-sm font-semibold">Used in drafts</h3>
               <div className="mt-3 grid gap-2">
                 {usedDrafts.map((draft) => (
-                  <div key={draft.id} className="rounded-lg border border-black/10 bg-white p-3 text-sm dark:border-white/10 dark:bg-white/5">
+                  <div key={draft.id} className="rounded-[12px] border border-black/10 bg-white p-3 text-sm dark:border-white/10 dark:bg-white/5">
                     {draft.title}
                   </div>
                 ))}
                 {usedDrafts.length === 0 && (
-                  <div className="rounded-lg border border-black/10 bg-white p-3 text-sm text-black/55 dark:border-white/10 dark:bg-white/5 dark:text-white/55">
+                  <div className="rounded-[12px] border border-black/10 bg-white p-3 text-sm text-black/55 dark:border-white/10 dark:bg-white/5 dark:text-white/55">
                     This source has not been used in drafts yet.
                   </div>
                 )}
@@ -90,7 +90,7 @@ export function SourcesWorkspace() {
               <h3 className="text-sm font-semibold">Notes</h3>
               <ul className="mt-3 space-y-2 text-sm text-black/65 dark:text-white/65">
                 {selectedReference.notes.map((note) => (
-                  <li key={note} className="rounded-lg bg-black/5 px-3 py-2 dark:bg-white/10">
+                  <li key={note} className="rounded-[12px] bg-black/5 px-3 py-2 dark:bg-white/10">
                     {note}
                   </li>
                 ))}

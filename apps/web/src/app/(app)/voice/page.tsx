@@ -29,7 +29,7 @@ export default function VoicePage() {
 
 function GuidanceSection({ title, items }: { title: string; items: string[] }) {
   return (
-    <section className="rounded-xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/5">
+    <section className="rounded-[12px] border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/5">
       <h2 className="text-sm font-semibold">{title}</h2>
       <ul className="mt-4 space-y-3 text-sm leading-6 text-black/65 dark:text-white/65">
         {items.map((item) => (
