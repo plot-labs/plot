@@ -915,7 +915,6 @@ work_sessions (
   title text,
   session_type varchar not null,
   status varchar not null,
-  source_scope jsonb,
 
   created_by_user_id uuid references users(id),
   last_activity_at timestamptz,
@@ -951,13 +950,14 @@ Rules:
 - Sessions are user-facing. They should be stable enough to resume later.
 - The first screen should create or resume a session before asking users to
   manage integrations.
-- `source_scope` is a snapshot of the session's current working context, not a
-  global workspace setting.
 - Output and channel target selection belongs to update recipes, generation
   targets, content packs, or variants, not to the durable work session itself.
 - Review is not a session mode. Plot should provide source-cited content and
   human-controlled publishing handoff rather than formal in-product approval
   workflows.
+- Do not add a generic `source_scope` to sessions. Source range belongs to
+  source/import, recipe, and generation models where it can be validated against
+  connected sources.
 
 ### SessionMessage
 
@@ -1022,7 +1022,6 @@ tasks (
   task_type varchar not null,
   status varchar not null,
   objective text,
-  source_scope jsonb,
 
   created_by_user_id uuid references users(id),
   assigned_to_user_id uuid references users(id),
@@ -1077,6 +1076,9 @@ Rules:
 - Tasks are short-running update-generation or citation-preparation units, not
   long-lived project-management tasks with deadline workflows. Do not add
   `due_at` unless the product introduces an explicit deadline feature.
+- Do not add a generic `source_scope` to tasks. Source range belongs to
+  source/import, recipe, and generation models where it can be validated against
+  connected sources.
 
 ### TaskArtifact
 

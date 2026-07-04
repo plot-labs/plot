@@ -232,7 +232,6 @@ erDiagram
         text title
         varchar session_type
         varchar status
-        jsonb source_scope
         uuid created_by_user_id FK
         timestamptz last_activity_at
         timestamptz created_at
@@ -260,7 +259,6 @@ erDiagram
         varchar task_type
         varchar status
         text objective
-        jsonb source_scope
         uuid created_by_user_id FK
         uuid assigned_to_user_id FK
         timestamptz last_activity_at

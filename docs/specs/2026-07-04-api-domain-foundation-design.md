@@ -171,7 +171,6 @@ records created by services should receive IDs from `UuidGenerator`.
 - `title`
 - `session_type`
 - `status`
-- `source_scope`
 - `created_by_user_id`
 - `last_activity_at`
 - timestamps
@@ -185,7 +184,6 @@ records created by services should receive IDs from `UuidGenerator`.
 - `task_type`
 - `status`
 - `objective`
-- `source_scope`
 - `created_by_user_id`
 - `last_activity_at`
 - timestamps
@@ -265,7 +263,6 @@ erDiagram
         text title
         varchar session_type
         varchar status
-        jsonb source_scope
         uuid created_by_user_id FK
         timestamptz last_activity_at
         timestamptz created_at
@@ -280,7 +277,6 @@ erDiagram
         varchar task_type
         varchar status
         text objective
-        jsonb source_scope
         uuid created_by_user_id FK
         timestamptz last_activity_at
         timestamptz created_at
@@ -400,7 +396,6 @@ It does not allow status changes.
 Create/update fields:
 
 - `title`
-- `sourceScope`
 
 The request DTO does not need to expose `sessionType` in this foundation pass.
 The service should set `sessionType` to `CHAT` and `status` to `OPEN`.
@@ -413,7 +408,6 @@ Create/update fields:
 - `title`
 - `taskType`
 - `objective`
-- `sourceScope`
 
 If `sessionId` is provided, it must identify a work session in the current dev
 workspace. `status` defaults to `QUEUED`.
@@ -493,9 +487,9 @@ Prefer explicit repository methods that include `workspaceId`, such as
 `findByWorkspaceIdAndId`, for workspace-scoped resources. This keeps tenant
 scoping visible in service code.
 
-Use PostgreSQL `jsonb` for JSON-like columns such as `source_scope` and
-`metadata`. Keep their structure unconstrained in this foundation pass, but
-preserve JSON-shaped request and response fields in the API contract.
+Use PostgreSQL `jsonb` for JSON-like columns such as `metadata`. Keep their
+structure unconstrained in this foundation pass, but preserve JSON-shaped
+request and response fields in the API contract.
 
 Scheduled and batch automation should be modeled later as a separate recipe/run
 domain rather than as a generic task mode. A future scheduled automation can
@@ -514,6 +508,10 @@ Do not model review as a selectable `review_mode`. Plot should provide
 source-cited generated content and human-controlled publishing, not a formal
 in-product approval workflow. Future source support should use citations,
 source references, and content metadata rather than a review mode enum.
+
+Do not add generic `source_scope` fields to work sessions or tasks in this
+foundation. Source range belongs to future source/import, recipe, and generation
+models where it can be validated against real connected sources.
 
 Avoid introducing general abstractions until duplication becomes meaningful.
 The first implementation should optimize for clear domain boundaries over a
