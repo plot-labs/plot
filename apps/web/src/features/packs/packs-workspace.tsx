@@ -1,6 +1,6 @@
 "use client";
 
-import { X } from "lucide-react";
+import { FileText, GitPullRequest, X } from "lucide-react";
 import { useState } from "react";
 
 import { getPacksWorkspace } from "@/lib/api-client";
@@ -55,8 +55,17 @@ export function PacksWorkspace() {
                   : "border-black/10 bg-white/60 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"
               }`}
             >
-              <div className="font-medium">{pack.title}</div>
-              <div className="mt-1 text-sm text-black/55 dark:text-white/55">{pack.request}</div>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="truncate font-medium text-black/82 dark:text-white/86">{pack.title}</div>
+                  <div className="mt-1 line-clamp-2 text-sm leading-5 text-black/55 dark:text-white/55">
+                    {pack.request}
+                  </div>
+                </div>
+                <span className="shrink-0 rounded-[8px] bg-black/[0.04] px-2 py-1 text-[11px] text-black/45 dark:bg-white/10 dark:text-white/45">
+                  {pack.draftIds.length} drafts
+                </span>
+              </div>
               <div className="mt-3 flex items-center justify-between text-xs text-black/45 dark:text-white/45">
                 <span>{pack.status}</span>
                 <span>{pack.updatedAt}</span>
@@ -73,24 +82,36 @@ export function PacksWorkspace() {
 
       <section className="min-h-0 min-w-0 overflow-y-auto bg-[#f8fafc] px-6 py-10 dark:bg-[#18181b] lg:px-10">
         {selectedPack ? (
-          <article className="mx-auto max-w-4xl space-y-6">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="text-xs uppercase text-black/45 dark:text-white/45">Saved result</div>
-                <h2 className="mt-2 text-3xl font-semibold">{selectedPack.title}</h2>
-                <p className="mt-1 text-sm text-black/55 dark:text-white/55">{selectedPack.request}</p>
+          <article className="mx-auto max-w-4xl space-y-4">
+            <div className="rounded-[12px] border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/5">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="text-xs font-medium text-black/40 dark:text-white/40">Saved result</div>
+                  <h2 className="mt-2 text-[28px] font-semibold leading-tight tracking-normal text-black/88 dark:text-white/90">
+                    {selectedPack.title}
+                  </h2>
+                  <p className="mt-1 text-sm text-black/55 dark:text-white/55">{selectedPack.request}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closePackDetail}
+                  aria-label="Close pack detail"
+                  className="inline-flex size-8 shrink-0 items-center justify-center rounded-xl text-black/45 transition hover:bg-black/5 hover:text-black/70 dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white/75"
+                >
+                  <X className="size-4" />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={closePackDetail}
-                aria-label="Close pack detail"
-                className="inline-flex size-8 shrink-0 items-center justify-center rounded-xl text-black/45 transition hover:bg-black/5 hover:text-black/70 dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white/75"
-              >
-                <X className="size-4" />
-              </button>
+
+              <div className="mt-5 flex flex-wrap gap-2 text-xs text-black/50 dark:text-white/50">
+                <span className="rounded-[8px] bg-black/[0.04] px-2.5 py-1 dark:bg-white/10">{selectedPack.status}</span>
+                <span className="rounded-[8px] bg-black/[0.04] px-2.5 py-1 dark:bg-white/10">{selectedPack.updatedAt}</span>
+                <span className="rounded-[8px] bg-black/[0.04] px-2.5 py-1 dark:bg-white/10">
+                  {packDrafts.length} drafts
+                </span>
+              </div>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2" role="tablist" aria-label="Drafts in pack">
+            <div className="grid gap-2 md:grid-cols-2" role="tablist" aria-label="Drafts in pack">
               {packDrafts.map((draft) => (
                 <button
                   key={draft.id}
@@ -100,14 +121,17 @@ export function PacksWorkspace() {
                   aria-selected={draft.id === selectedDraftId}
                   aria-controls={`draft-panel-${draft.id}`}
                   onClick={() => setSelectedDraftId(draft.id)}
-                  className={`rounded-[12px] border p-4 text-left transition ${
+                  className={`rounded-[12px] border p-3.5 text-left transition ${
                     draft.id === selectedDraftId
                       ? "border-black/20 bg-white dark:border-white/20 dark:bg-white/10"
                       : "border-black/10 bg-white/70 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"
                   }`}
                 >
-                  <div className="font-medium">{draft.title}</div>
-                  <div className="mt-1 text-sm text-black/55 dark:text-white/55">{draft.status}</div>
+                  <div className="flex items-center gap-2">
+                    <FileText className="size-4 shrink-0 text-black/35 dark:text-white/40" />
+                    <div className="min-w-0 flex-1 truncate font-medium">{draft.title}</div>
+                  </div>
+                  <div className="mt-2 text-sm text-black/55 dark:text-white/55">{draft.status}</div>
                 </button>
               ))}
               {packDrafts.length === 0 && (
@@ -124,8 +148,11 @@ export function PacksWorkspace() {
                 aria-labelledby={`draft-tab-${selectedDraft.id}`}
                 className="rounded-[12px] border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/5"
               >
-                <div className="text-sm font-semibold">{selectedDraft.filename}</div>
-                <div className="mt-4 whitespace-pre-line text-sm leading-6 text-black/75 dark:text-white/75">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm font-semibold">{selectedDraft.filename}</div>
+                  <div className="text-xs text-black/40 dark:text-white/40">{selectedDraft.updatedAt}</div>
+                </div>
+                <div className="mt-4 whitespace-pre-line text-sm leading-6 text-black/72 dark:text-white/72">
                   {selectedDraft.body}
                 </div>
               </section>
@@ -140,7 +167,10 @@ export function PacksWorkspace() {
               <div className="mt-3 grid gap-2">
                 {usedReferences.map((reference) => (
                   <div key={reference.id} className="rounded-[12px] border border-black/10 bg-white p-3 text-sm dark:border-white/10 dark:bg-white/5">
-                    <div className="font-medium">{reference.label}</div>
+                    <div className="flex items-center gap-2">
+                      <GitPullRequest className="size-4 shrink-0 text-black/35 dark:text-white/40" />
+                      <div className="font-medium">{reference.label}</div>
+                    </div>
                     <div className="mt-1 text-black/55 dark:text-white/55">{reference.summary}</div>
                   </div>
                 ))}
@@ -153,7 +183,11 @@ export function PacksWorkspace() {
             </section>
           </article>
         ) : (
-          <div className="h-full" aria-hidden="true" />
+          <div className="flex h-full items-center justify-center">
+            <div className="max-w-[300px] rounded-[12px] border border-dashed border-black/10 bg-white/45 p-5 text-sm leading-6 text-black/45 dark:border-white/10 dark:bg-white/[0.03] dark:text-white/45">
+              Select a pack to inspect its drafts and references.
+            </div>
+          </div>
         )}
       </section>
     </div>
