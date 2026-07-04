@@ -1,6 +1,7 @@
 "use client";
 
-import { PanelRightOpen } from "lucide-react";
+import Link from "next/link";
+import { GitPullRequest, MessageSquareText, PanelRightOpen } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 
@@ -28,8 +29,13 @@ function SessionsWorkspaceContent() {
   const data = getSessionsWorkspace();
   const searchParams = useSearchParams();
   const requestedSessionId = searchParams.get("session");
-  const activeSession =
-    data.sessions.find((session) => session.id === requestedSessionId) ?? data.sessions[0];
+  const activeSession = requestedSessionId
+    ? data.sessions.find((session) => session.id === requestedSessionId)
+    : null;
+
+  if (!activeSession) {
+    return <SessionsHome data={data} />;
+  }
 
   return (
     <ActiveSessionWorkspace
@@ -37,6 +43,75 @@ function SessionsWorkspaceContent() {
       activeSession={activeSession}
       data={data}
     />
+  );
+}
+
+function SessionsHome({ data }: { data: ReturnType<typeof getSessionsWorkspace> }) {
+  const [submittedRequests, setSubmittedRequests] = useState<string[]>([]);
+  const recentRows = [
+    ...submittedRequests.map((request) => ({
+      id: `request-${request}`,
+      href: "/sessions",
+      icon: MessageSquareText,
+      label: request,
+      meta: "Just now",
+    })),
+    ...data.sessions.map((session) => ({
+      id: session.id,
+      href: `/sessions?session=${session.id}`,
+      icon: MessageSquareText,
+      label: session.subtitle,
+      meta: session.updatedAt,
+    })),
+    ...data.references.slice(0, 2).map((reference) => ({
+      id: reference.id,
+      href: `/sources`,
+      icon: GitPullRequest,
+      label: `Review ${reference.label}: ${reference.title}`,
+      meta: reference.date,
+    })),
+  ].slice(0, 5);
+
+  function submitHomeRequest(message: string) {
+    setSubmittedRequests((current) => [message, ...current].slice(0, 3));
+  }
+
+  return (
+    <div className="flex h-screen min-h-0 flex-col bg-white dark:bg-[#111113]">
+      <div className="flex min-h-0 flex-1 items-center justify-center px-6 pb-24 pt-16">
+        <div className="w-full max-w-[760px]">
+          <h1 className="text-center text-[28px] font-medium tracking-normal text-black/82 dark:text-white/88">
+            What should Plot create?
+          </h1>
+
+          <div className="mt-9">
+            <SessionComposer
+              variant="center"
+              placeholder="Ask for a changelog, customer update, or source-backed draft..."
+              onSubmit={submitHomeRequest}
+            />
+          </div>
+
+          <div className="mx-auto mt-5 max-w-[720px] text-sm">
+            {recentRows.map((row) => {
+              const Icon = row.icon;
+
+              return (
+                <Link
+                  key={row.id}
+                  href={row.href}
+                  className="flex items-center gap-3 border-b border-black/[0.06] px-3 py-3 text-black/45 transition hover:text-black/70 dark:border-white/10 dark:text-white/45 dark:hover:text-white/75"
+                >
+                  <Icon className="size-4 shrink-0" />
+                  <span className="min-w-0 flex-1 truncate">{row.label}</span>
+                  <span className="text-xs text-black/32 dark:text-white/35">{row.meta}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -103,13 +178,13 @@ function ActiveSessionWorkspace({
   }
 
   return (
-    <div className="flex h-[calc(100vh-3rem)] min-h-0">
+    <div className="flex h-screen min-h-0 bg-white dark:bg-[#111113]">
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="border-b border-black/10 bg-[#fbfaf6] px-4 py-4 dark:border-white/10 dark:bg-[#181818] sm:px-6 lg:px-8">
-          <div className="text-xs font-medium uppercase text-black/45 dark:text-white/45">Session</div>
+        <header className="border-b border-black/[0.08] bg-white px-4 py-4 dark:border-white/10 dark:bg-[#111113] sm:px-6 lg:px-8">
+          <div className="text-xs font-medium text-black/40 dark:text-white/40">Session</div>
           <div className="mt-1 flex items-center justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-semibold">{activeSession.title}</h1>
+              <h1 className="text-xl font-semibold">{activeSession.title}</h1>
               <p className="mt-1 text-sm text-black/55 dark:text-white/55">{activeSession.subtitle}</p>
             </div>
             {!rightPanelOpen && (
