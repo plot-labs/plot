@@ -14,7 +14,7 @@ export function SessionFloatingSummary({
   onSelectDocument,
 }: SessionFloatingSummaryProps) {
   return (
-    <div className="absolute right-5 top-5 w-[260px] rounded-xl border border-black/10 bg-white/95 p-3 text-sm shadow-xl shadow-black/10 backdrop-blur dark:border-white/10 dark:bg-[#242424]/95 dark:shadow-black/30">
+    <div className="w-full max-w-[260px] rounded-xl border border-black/10 bg-white/95 p-3 text-sm shadow-xl shadow-black/10 backdrop-blur dark:border-white/10 dark:bg-[#242424]/95 dark:shadow-black/30 2xl:max-w-none">
       <div className="text-xs font-semibold uppercase text-black/45 dark:text-white/45">Drafts</div>
       <div className="mt-2 space-y-1">
         {drafts.map((draft) => (

@@ -11,6 +11,8 @@ type SessionSidePanelProps = {
   openDocuments: SelectedSessionDocument[];
   drafts: DraftDocument[];
   references: ReferenceDocument[];
+  draftBodies: Record<string, string>;
+  onDraftBodyChange: (draftId: string, body: string) => void;
   onSelectDocument: (documentId: string) => void;
   onClose: () => void;
 };
@@ -20,6 +22,8 @@ export function SessionSidePanel({
   openDocuments,
   drafts,
   references,
+  draftBodies,
+  onDraftBodyChange,
   onSelectDocument,
   onClose,
 }: SessionSidePanelProps) {
@@ -30,27 +34,35 @@ export function SessionSidePanel({
   return (
     <aside className="flex h-full w-[460px] shrink-0 flex-col border-l border-black/10 bg-[#fbfaf6] dark:border-white/10 dark:bg-[#181818]">
       <div className="flex h-12 items-center gap-1 border-b border-black/10 px-3 dark:border-white/10">
-        {openDocuments.map((item) => {
-          const active = item.document.id === selectedDocument.document.id;
-          const Icon = item.kind === "draft" ? FileText : GitPullRequest;
-          const label = item.kind === "draft" ? item.document.filename : item.document.label;
+        <div className="flex min-w-0 flex-1 items-center gap-1" role="tablist" aria-label="Open session documents">
+          {openDocuments.map((item) => {
+            const active = item.document.id === selectedDocument.document.id;
+            const Icon = item.kind === "draft" ? FileText : GitPullRequest;
+            const label = item.kind === "draft" ? item.document.filename : item.document.label;
+            const tabId = `session-document-tab-${item.document.id}`;
+            const panelId = `session-document-panel-${item.document.id}`;
 
-          return (
-            <button
-              key={item.document.id}
-              type="button"
-              onClick={() => onSelectDocument(item.document.id)}
-              className={`flex min-w-0 items-center gap-2 rounded-md px-2.5 py-1.5 text-xs transition ${
-                active
-                  ? "bg-black/10 text-black dark:bg-white/10 dark:text-white"
-                  : "text-black/55 hover:bg-black/5 dark:text-white/55 dark:hover:bg-white/10"
-              }`}
-            >
-              <Icon className="size-3.5 shrink-0" />
-              <span className="truncate">{label}</span>
-            </button>
-          );
-        })}
+            return (
+              <button
+                key={item.document.id}
+                id={tabId}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                aria-controls={panelId}
+                onClick={() => onSelectDocument(item.document.id)}
+                className={`flex min-w-0 items-center gap-2 rounded-md px-2.5 py-1.5 text-xs transition ${
+                  active
+                    ? "bg-black/10 text-black dark:bg-white/10 dark:text-white"
+                    : "text-black/55 hover:bg-black/5 dark:text-white/55 dark:hover:bg-white/10"
+                }`}
+              >
+                <Icon className="size-3.5 shrink-0" />
+                <span className="truncate">{label}</span>
+              </button>
+            );
+          })}
+        </div>
         <button
           type="button"
           onClick={onClose}
@@ -61,9 +73,19 @@ export function SessionSidePanel({
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
+      <div
+        id={`session-document-panel-${selectedDocument.document.id}`}
+        role="tabpanel"
+        aria-labelledby={`session-document-tab-${selectedDocument.document.id}`}
+        className="min-h-0 flex-1 overflow-y-auto px-6 py-6"
+      >
         {selectedDocument.kind === "draft" ? (
-          <DraftView draft={selectedDocument.document} references={references} />
+          <DraftView
+            draft={selectedDocument.document}
+            references={references}
+            draftBody={draftBodies[selectedDocument.document.id] ?? selectedDocument.document.body}
+            onDraftBodyChange={onDraftBodyChange}
+          />
         ) : (
           <ReferenceView reference={selectedDocument.document} drafts={drafts} />
         )}
@@ -75,9 +97,13 @@ export function SessionSidePanel({
 function DraftView({
   draft,
   references,
+  draftBody,
+  onDraftBodyChange,
 }: {
   draft: DraftDocument;
   references: ReferenceDocument[];
+  draftBody: string;
+  onDraftBodyChange: (draftId: string, body: string) => void;
 }) {
   const usedReferences = references.filter((reference) => draft.referenceIds.includes(reference.id));
 
@@ -91,7 +117,8 @@ function DraftView({
 
       <textarea
         className="min-h-[300px] w-full resize-none rounded-lg border border-black/10 bg-white p-4 text-sm leading-6 outline-none focus:border-black/30 dark:border-white/10 dark:bg-[#202020] dark:focus:border-white/30"
-        defaultValue={draft.body}
+        value={draftBody}
+        onChange={(event) => onDraftBodyChange(draft.id, event.target.value)}
         aria-label={`${draft.title} body`}
       />
 

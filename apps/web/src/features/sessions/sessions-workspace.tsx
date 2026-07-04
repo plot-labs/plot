@@ -18,6 +18,9 @@ export function SessionsWorkspace() {
   const data = getSessionsWorkspace();
   const activeSession = data.sessions[0];
   const [messages, setMessages] = useState<SessionMessage[]>(activeSession.messages);
+  const [draftBodies, setDraftBodies] = useState<Record<string, string>>(() =>
+    Object.fromEntries(data.drafts.map((draft) => [draft.id, draft.body])),
+  );
   const [selectedDocumentId, setSelectedDocumentId] = useState(activeSession.draftIds[0]);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [openDocumentIds, setOpenDocumentIds] = useState<string[]>([
@@ -46,17 +49,26 @@ export function SessionsWorkspace() {
     );
   }
 
-  function submitMessage(message: string) {
-    const userMessage: SessionMessage = {
-      id: `user-message-${messages.length + 1}`,
-      role: "user",
-      author: "You",
-      timestamp: "Now",
-      content: message,
-    };
-    const agentReply = createDemoAgentReply(message, messages.length + 2);
+  function updateDraftBody(draftId: string, body: string) {
+    setDraftBodies((current) => ({
+      ...current,
+      [draftId]: body,
+    }));
+  }
 
-    setMessages((current) => [...current, userMessage, agentReply]);
+  function submitMessage(message: string) {
+    setMessages((current) => {
+      const userMessage: SessionMessage = {
+        id: `user-message-${current.length + 1}`,
+        role: "user",
+        author: "You",
+        timestamp: "Now",
+        content: message,
+      };
+      const agentReply = createDemoAgentReply(message, current.length + 2);
+
+      return [...current, userMessage, agentReply];
+    });
   }
 
   return (
@@ -97,6 +109,8 @@ export function SessionsWorkspace() {
           openDocuments={openDocuments}
           drafts={data.drafts}
           references={data.references}
+          draftBodies={draftBodies}
+          onDraftBodyChange={updateDraftBody}
           onSelectDocument={selectDocument}
           onClose={() => setRightPanelOpen(false)}
         />
