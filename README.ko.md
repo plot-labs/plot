@@ -86,7 +86,7 @@ monorepo입니다. Domain model은 production backend를 비용, 배포 방식,
 ```txt
 apps/
   web/  Next.js app
-  api/  reserved for the backend service once the runtime is selected
+  api/  Kotlin Spring Boot backend and agent runtime
 
 packages/
   api-client/  generated TypeScript client later
@@ -112,11 +112,20 @@ loop가 동작한 뒤 추가합니다.
 
 ## Development
 
+`just`를 root command runner로 사용합니다. `pnpm`은 JavaScript package manager와
+workspace manager 역할로 유지합니다.
+
 ```bash
-pnpm dev:web
-pnpm build:web
-pnpm lint:web
+brew install just
+
+just dev-api
+just dev-web
+just test
+just build
+just lint
 ```
+
+기존 `pnpm dev:api`, `pnpm build:web` 같은 script는 호환용 wrapper로 유지합니다.
 
 ## Docs
 
