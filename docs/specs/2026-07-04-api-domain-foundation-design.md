@@ -63,6 +63,37 @@ It provides a fixed user and workspace context until real authentication is
 introduced. Domain packages should depend on the current context abstraction,
 not embed development-only IDs directly.
 
+```mermaid
+flowchart LR
+    Client[API client]
+    DevContext[DevContext fixed user/workspace]
+    DevBootstrap[DevBootstrap dev/test seed]
+
+    Client --> WorkspaceController[Workspace controller]
+    Client --> WorkSessionController[WorkSession controller]
+    Client --> TaskController[Task controller]
+    Client --> WritingBlockController[WritingBlock controller]
+
+    DevBootstrap --> User[(users)]
+    DevBootstrap --> WorkspaceTable[(workspaces)]
+    DevBootstrap --> WorkspaceMember[(workspace_members)]
+
+    WorkspaceController --> WorkspaceService[Workspace service]
+    WorkSessionController --> WorkSessionService[WorkSession service]
+    TaskController --> TaskService[Task service]
+    WritingBlockController --> WritingBlockService[WritingBlock service]
+
+    WorkspaceService --> DevContext
+    WorkSessionService --> DevContext
+    TaskService --> DevContext
+    WritingBlockService --> DevContext
+
+    WorkspaceService --> WorkspaceTable
+    WorkSessionService --> WorkSession[(work_sessions)]
+    TaskService --> Task[(tasks)]
+    WritingBlockService --> WritingBlock[(writing_blocks)]
+```
+
 ## Database Schema
 
 Create Flyway migration `V1__core_schema.sql` as schema only. Do not seed
@@ -188,6 +219,109 @@ records created by services should receive IDs from `UuidGenerator`.
 
 Do not add nullable repository, import, or connection foreign keys yet. Those
 belong with the first source adapter implementation.
+
+### Core ERD
+
+```mermaid
+erDiagram
+    USERS ||--o{ WORKSPACES : creates
+    USERS ||--o{ WORKSPACE_MEMBERS : has
+    USERS ||--o{ WORK_SESSIONS : creates
+    USERS ||--o{ TASKS : creates
+    USERS ||--o{ WRITING_BLOCKS : creates
+    WORKSPACES ||--o{ WORKSPACE_MEMBERS : has
+    WORKSPACES ||--o{ WORK_SESSIONS : owns
+    WORKSPACES ||--o{ TASKS : owns
+    WORKSPACES ||--o{ WRITING_BLOCKS : owns
+    WORK_SESSIONS ||--o{ TASKS : groups
+
+    USERS {
+        uuid id PK
+        text email UK
+        text display_name
+        varchar status
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    WORKSPACES {
+        uuid id PK
+        text name
+        text slug UK
+        uuid created_by_user_id FK
+        varchar status
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    WORKSPACE_MEMBERS {
+        uuid id PK
+        uuid workspace_id FK
+        uuid user_id FK
+        varchar role
+        varchar status
+        timestamptz joined_at
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    WORK_SESSIONS {
+        uuid id PK
+        uuid workspace_id FK
+        text title
+        varchar session_type
+        varchar status
+        text intent
+        jsonb source_scope
+        jsonb channel_selection
+        varchar review_mode
+        uuid created_by_user_id FK
+        timestamptz last_activity_at
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    TASKS {
+        uuid id PK
+        uuid workspace_id FK
+        uuid work_session_id FK
+        text title
+        varchar task_type
+        varchar autonomy_mode
+        varchar status
+        varchar priority
+        text objective
+        jsonb source_scope
+        varchar review_mode
+        uuid created_by_user_id FK
+        timestamptz due_at
+        timestamptz last_activity_at
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    WRITING_BLOCKS {
+        uuid id PK
+        uuid workspace_id FK
+        varchar source_origin
+        varchar block_kind
+        text title
+        text body
+        text url
+        text canonical_url
+        text author
+        varchar platform
+        jsonb metadata
+        text content_hash
+        timestamptz source_created_at
+        timestamptz source_updated_at
+        timestamptz ingested_at
+        varchar status
+        uuid created_by_user_id FK
+        timestamptz created_at
+        timestamptz updated_at
+    }
+```
 
 ## Development Context
 
