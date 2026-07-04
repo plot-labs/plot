@@ -32,7 +32,7 @@ export function SessionSidePanel({
   }
 
   return (
-    <aside className="fixed bottom-0 right-0 top-12 z-50 flex w-full max-w-[460px] shrink-0 flex-col border-l border-black/10 bg-[#fbfaf6] shadow-2xl shadow-black/20 dark:border-white/10 dark:bg-[#181818] dark:shadow-black/50 xl:static xl:h-full xl:w-[460px] xl:max-w-none xl:shadow-none">
+    <aside className="fixed bottom-0 right-0 top-0 z-50 flex w-full max-w-[460px] shrink-0 flex-col border-l border-black/10 bg-[#f8fafc] shadow-2xl shadow-black/20 dark:border-white/10 dark:bg-[#18181b] dark:shadow-black/50 xl:static xl:h-full xl:w-[460px] xl:max-w-none xl:shadow-none">
       <div className="flex h-12 items-center gap-1 border-b border-black/10 px-3 dark:border-white/10">
         <div className="flex min-w-0 flex-1 items-center gap-1" role="tablist" aria-label="Open session documents">
           {openDocuments.map((item) => {
@@ -116,7 +116,7 @@ function DraftView({
       </div>
 
       <textarea
-        className="min-h-[300px] w-full resize-none rounded-lg border border-black/10 bg-white p-4 text-sm leading-6 outline-none focus:border-black/30 dark:border-white/10 dark:bg-[#202020] dark:focus:border-white/30"
+        className="min-h-[300px] w-full resize-none rounded-lg border border-black/10 bg-white p-4 text-sm leading-6 outline-none focus:border-black/30 dark:border-white/10 dark:bg-[#1f2024] dark:focus:border-white/30"
         value={draftBody}
         onChange={(event) => onDraftBodyChange(draft.id, event.target.value)}
         aria-label={`${draft.title} body`}

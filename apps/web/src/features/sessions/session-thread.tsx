@@ -24,7 +24,7 @@ export function SessionThread({
                 <span className="font-medium text-black/65 dark:text-white/65">{message.author}</span>
                 <span>{message.timestamp}</span>
               </div>
-              <div className="rounded-xl border border-black/10 bg-white px-4 py-3 text-sm leading-6 text-black/80 shadow-sm dark:border-white/10 dark:bg-[#222] dark:text-white/80">
+              <div className="rounded-xl border border-black/10 bg-white px-4 py-3 text-sm leading-6 text-black/80 shadow-sm dark:border-white/10 dark:bg-[#232326] dark:text-white/80">
                 {message.content}
               </div>
             </article>

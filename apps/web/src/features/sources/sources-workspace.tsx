@@ -13,8 +13,8 @@ export function SourcesWorkspace() {
     : [];
 
   return (
-    <div className="grid min-h-[calc(100vh-3rem)] grid-cols-1 lg:h-[calc(100vh-3rem)] lg:grid-cols-[minmax(320px,420px)_minmax(0,1fr)] lg:overflow-hidden">
-      <section className="min-h-0 border-b border-black/10 bg-[#f8f5ef] p-6 dark:border-white/10 dark:bg-[#141414] lg:overflow-y-auto lg:border-r lg:border-b-0">
+    <div className="grid min-h-screen grid-cols-1 lg:h-screen lg:grid-cols-[minmax(320px,420px)_minmax(0,1fr)] lg:overflow-hidden">
+      <section className="min-h-0 border-b border-black/10 bg-[#f6f7f9] p-6 dark:border-white/10 dark:bg-[#111113] lg:overflow-y-auto lg:border-r lg:border-b-0">
         <h1 className="text-2xl font-semibold">Sources</h1>
         <p className="mt-1 text-sm text-black/55 dark:text-white/55">
           References Plot can use when drafting updates.
@@ -51,7 +51,7 @@ export function SourcesWorkspace() {
         </div>
       </section>
 
-      <section className="min-h-0 min-w-0 overflow-y-auto bg-[#fbfaf6] p-6 dark:bg-[#181818] lg:p-8">
+      <section className="min-h-0 min-w-0 overflow-y-auto bg-[#f8fafc] p-6 dark:bg-[#18181b] lg:p-8">
         {selectedReference ? (
           <article className="mx-auto max-w-3xl space-y-6">
             <div>

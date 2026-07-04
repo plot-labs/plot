@@ -4,7 +4,7 @@ export default function VoicePage() {
   const voice = getVoiceWorkspace();
 
   return (
-    <div className="h-[calc(100vh-3rem)] overflow-y-auto bg-[#fbfaf6] p-8 dark:bg-[#181818]">
+    <div className="h-screen overflow-y-auto bg-[#f8fafc] p-8 dark:bg-[#18181b]">
       <div className="mx-auto max-w-5xl">
         <div>
           <div className="text-xs font-medium uppercase text-black/45 dark:text-white/45">Voice</div>
