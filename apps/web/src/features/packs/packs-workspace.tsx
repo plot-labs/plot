@@ -1,5 +1,6 @@
 "use client";
 
+import { X } from "lucide-react";
 import { useState } from "react";
 
 import { getPacksWorkspace } from "@/lib/api-client";
@@ -13,9 +14,8 @@ export function PacksWorkspace() {
     return pack?.draftIds.find((draftId) => drafts.some((draft) => draft.id === draftId));
   }
 
-  const initialPackId = packs[0]?.id;
-  const [selectedPackId, setSelectedPackId] = useState(initialPackId);
-  const [selectedDraftId, setSelectedDraftId] = useState(() => getFirstDraftIdForPack(initialPackId));
+  const [selectedPackId, setSelectedPackId] = useState<string | null>(null);
+  const [selectedDraftId, setSelectedDraftId] = useState<string | undefined>(undefined);
   const selectedPack = packs.find((pack) => pack.id === selectedPackId);
   const packDrafts = drafts.filter((draft) => selectedPack?.draftIds.includes(draft.id));
   const selectedDraft = packDrafts.find((draft) => draft.id === selectedDraftId);
@@ -24,6 +24,11 @@ export function PacksWorkspace() {
   function selectPack(packId: string) {
     setSelectedPackId(packId);
     setSelectedDraftId(getFirstDraftIdForPack(packId));
+  }
+
+  function closePackDetail() {
+    setSelectedPackId(null);
+    setSelectedDraftId(undefined);
   }
 
   return (
@@ -69,10 +74,20 @@ export function PacksWorkspace() {
       <section className="min-h-0 min-w-0 overflow-y-auto bg-[#f8fafc] px-6 py-10 dark:bg-[#18181b] lg:px-10">
         {selectedPack ? (
           <article className="mx-auto max-w-4xl space-y-6">
-            <div>
-              <div className="text-xs uppercase text-black/45 dark:text-white/45">Saved result</div>
-              <h2 className="mt-2 text-3xl font-semibold">{selectedPack.title}</h2>
-              <p className="mt-1 text-sm text-black/55 dark:text-white/55">{selectedPack.request}</p>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-xs uppercase text-black/45 dark:text-white/45">Saved result</div>
+                <h2 className="mt-2 text-3xl font-semibold">{selectedPack.title}</h2>
+                <p className="mt-1 text-sm text-black/55 dark:text-white/55">{selectedPack.request}</p>
+              </div>
+              <button
+                type="button"
+                onClick={closePackDetail}
+                aria-label="Close pack detail"
+                className="inline-flex size-8 shrink-0 items-center justify-center rounded-xl text-black/45 transition hover:bg-black/5 hover:text-black/70 dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white/75"
+              >
+                <X className="size-4" />
+              </button>
             </div>
 
             <div className="grid gap-3 md:grid-cols-2" role="tablist" aria-label="Drafts in pack">
@@ -138,11 +153,7 @@ export function PacksWorkspace() {
             </section>
           </article>
         ) : (
-          <div className="mx-auto max-w-4xl py-16 text-sm text-black/55 dark:text-white/55">
-            {packs.length === 0
-              ? "No packs are available yet."
-              : "Select a pack to review its saved drafts."}
-          </div>
+          <div className="h-full" aria-hidden="true" />
         )}
       </section>
     </div>

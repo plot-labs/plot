@@ -1,12 +1,13 @@
 "use client";
 
+import { X } from "lucide-react";
 import { useState } from "react";
 
 import { getSourcesWorkspace } from "@/lib/api-client";
 
 export function SourcesWorkspace() {
   const { references, drafts } = getSourcesWorkspace();
-  const [selectedReferenceId, setSelectedReferenceId] = useState(references[0]?.id);
+  const [selectedReferenceId, setSelectedReferenceId] = useState<string | null>(null);
   const selectedReference = references.find((reference) => reference.id === selectedReferenceId);
   const usedDrafts = selectedReference
     ? drafts.filter((draft) => selectedReference.usedInDraftIds.includes(draft.id))
@@ -56,14 +57,24 @@ export function SourcesWorkspace() {
       <section className="min-h-0 min-w-0 overflow-y-auto bg-[#f8fafc] px-6 py-10 dark:bg-[#18181b] lg:px-10">
         {selectedReference ? (
           <article className="mx-auto max-w-3xl space-y-6">
-            <div>
-              <div className="text-xs uppercase text-black/45 dark:text-white/45">
-                {selectedReference.sourceType}
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-xs uppercase text-black/45 dark:text-white/45">
+                  {selectedReference.sourceType}
+                </div>
+                <h2 className="mt-2 text-3xl font-semibold">{selectedReference.title}</h2>
+                <p className="mt-1 text-sm text-black/55 dark:text-white/55">
+                  {selectedReference.label} · {selectedReference.date}
+                </p>
               </div>
-              <h2 className="mt-2 text-3xl font-semibold">{selectedReference.title}</h2>
-              <p className="mt-1 text-sm text-black/55 dark:text-white/55">
-                {selectedReference.label} · {selectedReference.date}
-              </p>
+              <button
+                type="button"
+                onClick={() => setSelectedReferenceId(null)}
+                aria-label="Close source detail"
+                className="inline-flex size-8 shrink-0 items-center justify-center rounded-xl text-black/45 transition hover:bg-black/5 hover:text-black/70 dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white/75"
+              >
+                <X className="size-4" />
+              </button>
             </div>
 
             <p className="text-sm leading-6 text-black/70 dark:text-white/70">
@@ -98,11 +109,7 @@ export function SourcesWorkspace() {
             </section>
           </article>
         ) : (
-          <div className="mx-auto max-w-3xl py-16 text-sm text-black/55 dark:text-white/55">
-            {references.length === 0
-              ? "No sources are available yet."
-              : "Select a source to review its summary and linked drafts."}
-          </div>
+          <div className="h-full" aria-hidden="true" />
         )}
       </section>
     </div>
