@@ -190,7 +190,7 @@ records created by services should receive IDs from `UuidGenerator`.
 - `id`
 - `workspace_id`
 - `source_origin`
-- `block_kind`
+- `source_kind`
 - `title`
 - `body`
 - `url`
@@ -281,7 +281,7 @@ erDiagram
         uuid id PK
         uuid workspace_id FK
         varchar source_origin
-        varchar block_kind
+        varchar source_kind
         text title
         text body
         text url
@@ -409,7 +409,7 @@ workspace. `status` defaults to `QUEUED`.
 Create/update fields:
 
 - `sourceOrigin`
-- `blockKind`
+- `sourceKind`
 - `title`
 - `body`
 - `url`
@@ -431,7 +431,7 @@ Minimum validation:
 - task `title` must be present
 - task `sessionId`, when provided, must belong to the current workspace
 - writing block must include at least one of `title` or `body`
-- writing block `sourceOrigin` and `blockKind` must be present
+- writing block `sourceOrigin` and `sourceKind` must be present
 
 Use a small common error response:
 

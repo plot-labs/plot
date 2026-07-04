@@ -629,7 +629,7 @@ writing_blocks (
   workspace_id uuid not null references workspaces(id),
 
   source_origin varchar not null,
-  block_kind varchar not null,
+  source_kind varchar not null,
 
   title text,
   body text,
@@ -684,7 +684,7 @@ MANUAL
 IMPORTED_WRITING
 ```
 
-`block_kind`:
+`source_kind`:
 
 ```txt
 GITHUB_PR
@@ -694,7 +694,7 @@ GITHUB_RELEASE
 GITHUB_ISSUE
 ```
 
-Deferred block kinds:
+Deferred source kinds:
 
 ```txt
 UPLOADED_DOC
