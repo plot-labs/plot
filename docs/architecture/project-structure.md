@@ -1,8 +1,9 @@
 # Project Structure
 
 Plot is a monorepo with a generated Next.js frontend and a backend service
-scaffold. The product/data architecture should stay framework-neutral until the
-production backend choice is validated against cost and operational needs.
+scaffold. The backend runtime is Kotlin Spring Boot; the product/data
+architecture remains documented in framework-neutral terms so the domain model
+does not depend on persistence or agent implementation details.
 
 ## Top Level
 
@@ -10,7 +11,7 @@ production backend choice is validated against cost and operational needs.
 plot/
   apps/
     web/
-    api/          # reserved once the backend runtime is selected
+    api/          # Kotlin Spring Boot backend and agent runtime
   packages/
     api-client/
     ui/
@@ -57,13 +58,14 @@ apps/web/src/
 
 ## Backend
 
-`apps/api` is reserved for the backend service once the runtime is selected. v0
-uses a lightweight backend-managed update-agent loop plus direct model-provider
-calls, not a separate agent service. The module boundaries below describe the
-backend domain shape and should stay independent from any specific framework.
+`apps/api` owns the Kotlin Spring Boot backend service. v0 uses a lightweight
+backend-managed update-agent loop plus direct model-provider calls, not a
+separate agent service. The module boundaries below describe the backend domain
+shape and should stay independent from specific Spring infrastructure choices.
 
 ```txt
-apps/api/            # future backend service
+apps/api/
+  src/main/kotlin/com/plot/api/
   common/
   config/
   security/

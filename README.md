@@ -88,7 +88,7 @@ chosen for cost, deployment, and operational fit.
 ```txt
 apps/
   web/  Next.js app
-  api/  reserved for the backend service once the runtime is selected
+  api/  Kotlin Spring Boot backend and agent runtime
 
 packages/
   api-client/  generated TypeScript client later
@@ -114,11 +114,21 @@ automation can be added after the core update loop works.
 
 ## Development
 
+`just` is the root command runner. `pnpm` remains the JavaScript package manager
+and workspace manager.
+
 ```bash
-pnpm dev:web
-pnpm build:web
-pnpm lint:web
+brew install just
+
+just dev-api
+just dev-web
+just test
+just build
+just lint
 ```
+
+The existing `pnpm dev:api`, `pnpm build:web`, and related scripts are kept as
+wrappers for compatibility.
 
 ## Docs
 
