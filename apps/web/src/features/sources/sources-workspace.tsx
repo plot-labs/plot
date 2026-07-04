@@ -15,7 +15,9 @@ export function SourcesWorkspace() {
   return (
     <div className="grid min-h-screen grid-cols-1 lg:h-screen lg:grid-cols-[minmax(320px,420px)_minmax(0,1fr)] lg:overflow-hidden">
       <section className="min-h-0 border-b border-black/10 bg-[#f6f7f9] p-6 dark:border-white/10 dark:bg-[#111113] lg:overflow-y-auto lg:border-r lg:border-b-0">
-        <h1 className="text-2xl font-semibold">Sources</h1>
+        <h1 className="font-serif text-[38px] font-normal leading-tight tracking-normal text-black/90 dark:text-white/92">
+          Sources
+        </h1>
         <p className="mt-1 text-sm text-black/55 dark:text-white/55">
           References Plot can use when drafting updates.
         </p>

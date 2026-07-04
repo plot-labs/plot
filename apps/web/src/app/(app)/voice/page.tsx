@@ -8,7 +8,9 @@ export default function VoicePage() {
       <div className="mx-auto max-w-5xl">
         <div>
           <div className="text-xs font-medium uppercase text-black/45 dark:text-white/45">Voice</div>
-          <h1 className="mt-2 text-3xl font-semibold">Writing guidance</h1>
+          <h1 className="mt-2 font-serif text-[38px] font-normal leading-tight tracking-normal text-black/90 dark:text-white/92">
+            Writing guidance
+          </h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-black/60 dark:text-white/60">
             Practical guidance for drafts created in this workspace.
           </p>
