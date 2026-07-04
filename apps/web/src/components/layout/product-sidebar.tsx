@@ -12,7 +12,6 @@ import {
   FileText,
   FolderOpen,
   LogOut,
-  MessageSquareText,
   Mic2,
   Monitor,
   Moon,
@@ -32,7 +31,6 @@ import { getProductShellData } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { href: "/sessions", label: "Sessions", icon: MessageSquareText },
   { href: "/sources", label: "Sources", icon: FolderOpen },
   { href: "/packs", label: "Packs", icon: PackageOpen },
   { href: "/voice", label: "Voice", icon: Mic2 },
@@ -48,6 +46,8 @@ const themeOptions = [
   { value: "light", label: "Light", icon: Sun },
   { value: "dark", label: "Dark", icon: Moon },
 ] satisfies Array<{ value: ProductTheme; label: string; icon: typeof Monitor }>;
+
+const appHomeHref = "/sessions";
 
 const workspaceItems = [
   { id: "personal", name: "Personal", detail: "Current workspace", mark: "P", selected: true },
@@ -129,18 +129,25 @@ export function ProductSidebar({ theme, onThemeChange }: ProductSidebarProps) {
   return (
     <>
       <aside className="hidden h-screen w-[252px] shrink-0 flex-col bg-[#eef0f3] text-[#2f3237] dark:bg-[#202126] dark:text-[#f4f4f5] lg:flex">
-        <div className="flex items-center gap-2 px-4 pb-4 pt-5">
+        <Link
+          href={appHomeHref}
+          aria-label="Plot home"
+          className="flex items-center gap-2 px-4 pb-4 pt-5"
+        >
           <Image src="/plot-icon.svg" alt="" width={24} height={24} className="size-6 shrink-0 dark:invert" />
           <div className="font-display text-[22px] leading-none tracking-normal text-black/85 dark:text-white/90">
             Plot
           </div>
-        </div>
+        </Link>
 
         <div className="space-y-1 px-3 pb-4">
-          <button className="flex w-full items-center gap-2 rounded-xl px-2.5 py-1.5 text-left text-[13px] font-medium text-black/70 transition hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10">
+          <Link
+            href={appHomeHref}
+            className="flex w-full items-center gap-2 rounded-xl px-2.5 py-1.5 text-left text-[13px] font-medium text-black/70 transition hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10"
+          >
             <Plus className="size-4" />
             New session
-          </button>
+          </Link>
           <button className="flex w-full items-center gap-2 rounded-xl px-2.5 py-1.5 text-left text-[13px] font-medium text-black/70 transition hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10">
             <Search className="size-4" />
             Search
