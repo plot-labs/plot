@@ -19,9 +19,24 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Plot - Keep docs and content in sync with AI shipping",
+  metadataBase: new URL("https://useplot.xyz"),
+  title: "Plot — Autonomous update packs from shipped work",
   description:
-    "Plot helps product and engineering teams keep docs, release notes, launch content, and customer-facing updates in sync as AI coding accelerates shipping.",
+    "For AI and devtool teams shipping every week. Plot turns merged PRs, releases, and issues into source-backed, on-style changelogs, docs updates, customer updates, and launch drafts — with human approval before publish.",
+  openGraph: {
+    title: "Plot — Ship fast. Write less. Stay source-backed.",
+    description:
+      "Autonomous update packs from your repo. Docs, changelogs, and launch copy in your team's voice.",
+    url: "https://useplot.xyz",
+    siteName: "Plot",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Plot — Autonomous update packs from shipped work",
+    description:
+      "Turn merged work into source-backed update packs your team approves.",
+  },
   icons: {
     icon: "/plot-favicon.svg",
   },
