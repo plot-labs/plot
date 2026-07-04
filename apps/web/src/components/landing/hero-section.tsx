@@ -58,7 +58,7 @@ export function HeroSection() {
         >
           <span className="inline-flex items-center gap-3 font-mono text-sm text-muted-foreground">
             <span className="h-px w-8 bg-foreground/30" />
-            Ship fast. Write less. Stay in your team&apos;s voice.
+            Ship fast. Write less. Stay source-backed and on-style.
           </span>
         </div>
 
@@ -102,10 +102,10 @@ export function HeroSection() {
               isVisible ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
             }`}
           >
-            Pick a shipping window, set the cadence, and give Plot your team
-            voice. Plot prepares source-backed docs updates, release notes,
-            customer updates, and launch drafts so your team writes less before
-            anything goes out.
+            For AI and devtool teams shipping every week. Plot turns merged PRs,
+            releases, and issues into source-backed, on-style changelogs, docs
+            updates, customer updates, and launch drafts — with human approval
+            before publish.
           </p>
 
           <div
