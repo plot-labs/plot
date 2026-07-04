@@ -7,6 +7,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.method.annotation.HandlerMethodValidationException
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
 
 @RestControllerAdvice
 class ApiExceptionHandler {
@@ -47,5 +48,14 @@ class ApiExceptionHandler {
 		return ResponseEntity
 			.status(HttpStatus.BAD_REQUEST)
 			.body(ApiErrorResponse("BAD_REQUEST", "Request body is invalid"))
+	}
+
+	@ExceptionHandler(MethodArgumentTypeMismatchException::class)
+	fun handleTypeMismatchException(
+		exception: MethodArgumentTypeMismatchException,
+	): ResponseEntity<ApiErrorResponse> {
+		return ResponseEntity
+			.status(HttpStatus.BAD_REQUEST)
+			.body(ApiErrorResponse("BAD_REQUEST", "Request parameter is invalid"))
 	}
 }

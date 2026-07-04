@@ -37,6 +37,10 @@ class WorkSessionApiIntegrationTest {
 	@BeforeEach
 	fun cleanDevSessions() {
 		jdbcTemplate.update(
+			"delete from tasks where workspace_id = ?",
+			devContext.devWorkspaceId,
+		)
+		jdbcTemplate.update(
 			"delete from work_sessions where workspace_id = ?",
 			devContext.devWorkspaceId,
 		)
@@ -126,6 +130,15 @@ class WorkSessionApiIntegrationTest {
 	}
 
 	@Test
+	fun getReturnsBadRequestForMalformedSessionId() {
+		mockMvc.get("/api/sessions/not-a-uuid")
+			.andExpect {
+				status { isBadRequest() }
+				jsonPath("$.error") { value("BAD_REQUEST") }
+			}
+	}
+
+	@Test
 	fun patchReturnsNotFoundForRandomUuid() {
 		val randomUuid = UUID.randomUUID()
 
@@ -135,6 +148,17 @@ class WorkSessionApiIntegrationTest {
 		}.andExpect {
 			status { isNotFound() }
 			jsonPath("$.error") { value("NOT_FOUND") }
+		}
+	}
+
+	@Test
+	fun patchReturnsBadRequestForMalformedSessionId() {
+		mockMvc.patch("/api/sessions/not-a-uuid") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"title":"Updated Session"}"""
+		}.andExpect {
+			status { isBadRequest() }
+			jsonPath("$.error") { value("BAD_REQUEST") }
 		}
 	}
 
