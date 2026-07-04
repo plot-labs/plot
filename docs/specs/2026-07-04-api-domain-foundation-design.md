@@ -49,6 +49,7 @@ Do not implement these in this foundation pass:
 - content packs or variants
 - claims, evidence, or review checks
 - source repositories, repository watches, repository imports, or connections
+- scheduled or batch automation recipes and run history
 - pagination
 
 ## Architecture
@@ -170,9 +171,7 @@ records created by services should receive IDs from `UuidGenerator`.
 - `title`
 - `session_type`
 - `status`
-- `intent`
 - `source_scope`
-- `channel_selection`
 - `review_mode`
 - `created_by_user_id`
 - `last_activity_at`
@@ -185,7 +184,6 @@ records created by services should receive IDs from `UuidGenerator`.
 - `work_session_id`
 - `title`
 - `task_type`
-- `autonomy_mode`
 - `status`
 - `priority`
 - `objective`
@@ -271,9 +269,7 @@ erDiagram
         text title
         varchar session_type
         varchar status
-        text intent
         jsonb source_scope
-        jsonb channel_selection
         varchar review_mode
         uuid created_by_user_id FK
         timestamptz last_activity_at
@@ -287,7 +283,6 @@ erDiagram
         uuid work_session_id FK
         text title
         varchar task_type
-        varchar autonomy_mode
         varchar status
         varchar priority
         text objective
@@ -413,9 +408,7 @@ It does not allow status changes.
 Create/update fields:
 
 - `title`
-- `intent`
 - `sourceScope`
-- `channelSelection`
 - `reviewMode`
 
 The request DTO does not need to expose `sessionType` in this foundation pass.
@@ -435,9 +428,7 @@ Create/update fields:
 - `dueAt`
 
 If `sessionId` is provided, it must identify a work session in the current dev
-workspace. `status` defaults to `QUEUED`. `autonomyMode` defaults to
-`USER_REQUESTED`. The request DTO does not need to expose `autonomyMode` in
-this foundation pass.
+workspace. `status` defaults to `QUEUED`.
 
 ### Writing Block API
 
@@ -515,10 +506,14 @@ Prefer explicit repository methods that include `workspaceId`, such as
 `findByWorkspaceIdAndId`, for workspace-scoped resources. This keeps tenant
 scoping visible in service code.
 
-Use PostgreSQL `jsonb` for JSON-like columns such as `source_scope`,
-`channel_selection`, and `metadata`. Keep their structure unconstrained in this
-foundation pass, but preserve JSON-shaped request and response fields in the
-API contract.
+Use PostgreSQL `jsonb` for JSON-like columns such as `source_scope` and
+`metadata`. Keep their structure unconstrained in this foundation pass, but
+preserve JSON-shaped request and response fields in the API contract.
+
+Scheduled and batch automation should be modeled later as a separate recipe/run
+domain rather than as a generic task mode. A future scheduled automation can
+create tasks or task runs, but this foundation keeps `Task` as a single
+user-visible work item.
 
 Avoid introducing general abstractions until duplication becomes meaningful.
 The first implementation should optimize for clear domain boundaries over a

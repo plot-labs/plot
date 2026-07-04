@@ -232,9 +232,7 @@ erDiagram
         text title
         varchar session_type
         varchar status
-        text intent
         jsonb source_scope
-        jsonb channel_selection
         varchar review_mode
         uuid created_by_user_id FK
         timestamptz last_activity_at
@@ -261,7 +259,6 @@ erDiagram
         uuid repository_watch_id FK
         text title
         varchar task_type
-        varchar autonomy_mode
         varchar status
         varchar priority
         text objective

@@ -917,9 +917,7 @@ work_sessions (
   title text,
   session_type varchar not null,
   status varchar not null,
-  intent text,
   source_scope jsonb,
-  channel_selection jsonb,
   review_mode varchar not null,
 
   created_by_user_id uuid references users(id),
@@ -964,8 +962,10 @@ Rules:
 - Sessions are user-facing. They should be stable enough to resume later.
 - The first screen should create or resume a session before asking users to
   manage integrations.
-- `source_scope`, `channel_selection`, and `review_mode` are snapshots of the
-  user's intent for the current session, not global workspace settings.
+- `source_scope` and `review_mode` are snapshots of the session's current
+  working context, not global workspace settings.
+- Output and channel target selection belongs to update recipes, generation
+  targets, content packs, or variants, not to the durable work session itself.
 
 ### SessionMessage
 
@@ -1014,9 +1014,10 @@ ARTIFACT_REFERENCE
 
 ### Task
 
-`tasks` is the durable user-visible unit in the `Autonomous` tab. It can be
-created by a work session, a repository watch, a user request, or an external
-agent request.
+`tasks` is the durable user-visible work item for session, review, and agent
+work surfaces. A task can be created from a work session, repository watch, user
+request, external agent request, or future recipe run, but it should not encode
+the full automation schedule that created it.
 
 ```sql
 tasks (
@@ -1027,7 +1028,6 @@ tasks (
 
   title text not null,
   task_type varchar not null,
-  autonomy_mode varchar not null,
   status varchar not null,
   priority varchar not null,
   objective text,
@@ -1059,15 +1059,6 @@ REGENERATE_VARIANTS
 IMPROVE_STYLE
 ```
 
-`autonomy_mode`:
-
-```txt
-USER_REQUESTED
-SCHEDULED
-WATCH_TRIGGERED
-EXTERNAL_AGENT_REQUESTED
-```
-
 `status`:
 
 ```txt
@@ -1088,11 +1079,13 @@ ARCHIVED
 
 Rules:
 
-- Tasks are the source of truth for the `Autonomous` tab.
+- Tasks are the source of truth for visible work and review state.
 - A blocked task must explain the missing source, permission, context, or
   approval it needs.
 - Approval on a task does not publish externally in v0; publishing remains a
   separate approval-gated step.
+- Scheduled or batch automation should be modeled through recipes and run
+  history, not through a task mode enum.
 
 ### TaskArtifact
 
