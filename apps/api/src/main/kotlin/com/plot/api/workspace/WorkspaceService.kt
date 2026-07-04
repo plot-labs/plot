@@ -28,9 +28,15 @@ class WorkspaceService(
 
 	@Transactional
 	fun update(id: UUID, request: UpdateWorkspaceRequest): WorkspaceResponse {
+		val trimmedName = request.name.trim()
+		val trimmedSlug = request.slug.trim()
 		val workspace = findDevWorkspace(id)
-		workspace.name = request.name.trim()
-		workspace.slug = request.slug.trim()
+		if (workspaceRepository.existsBySlugAndIdNot(trimmedSlug, workspace.id)) {
+			throw ApiException(HttpStatus.CONFLICT, "CONFLICT", "Workspace slug already exists")
+		}
+
+		workspace.name = trimmedName
+		workspace.slug = trimmedSlug
 		workspace.updatedAt = Instant.now()
 		return workspace.toResponse()
 	}

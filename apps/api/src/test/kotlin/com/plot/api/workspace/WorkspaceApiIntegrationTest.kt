@@ -9,6 +9,7 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
 import org.springframework.context.annotation.Import
 import org.springframework.http.MediaType
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.TestPropertySource
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.get
@@ -25,6 +26,9 @@ class WorkspaceApiIntegrationTest {
 
 	@Autowired
 	private lateinit var devContext: DevContext
+
+	@Autowired
+	private lateinit var jdbcTemplate: JdbcTemplate
 
 	@Test
 	fun listReturnsDevWorkspace() {
@@ -67,6 +71,38 @@ class WorkspaceApiIntegrationTest {
 			jsonPath("$.name") { value("Plot Dev") }
 			jsonPath("$.slug") { value("plot-dev") }
 			jsonPath("$.status") { value("ACTIVE") }
+		}
+	}
+
+	@Test
+	fun patchTrimsNameAndSlug() {
+		mockMvc.patch("/api/workspaces/${devContext.devWorkspaceId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"name":"  Plot Dev  ","slug":" plot-dev "}"""
+		}.andExpect {
+			status { isOk() }
+			jsonPath("$.name") { value("Plot Dev") }
+			jsonPath("$.slug") { value("plot-dev") }
+		}
+	}
+
+	@Test
+	fun patchRejectsDuplicateSlug() {
+		jdbcTemplate.update(
+			"""
+			insert into workspaces (id, name, slug, created_by_user_id, status, created_at, updated_at)
+			values (?, 'Taken Workspace', 'taken-slug', ?, 'ACTIVE', now(), now())
+			""".trimIndent(),
+			UUID.randomUUID(),
+			devContext.devUserId,
+		)
+
+		mockMvc.patch("/api/workspaces/${devContext.devWorkspaceId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"name":"Plot Dev","slug":"taken-slug"}"""
+		}.andExpect {
+			status { isConflict() }
+			jsonPath("$.error") { value("CONFLICT") }
 		}
 	}
 
