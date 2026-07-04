@@ -114,18 +114,22 @@ export function HeroSection() {
             }`}
           >
             <Button
+              asChild
               className="h-14 rounded-full bg-foreground px-8 text-base text-background hover:bg-foreground/90 group"
               size="lg"
             >
-              Join waitlist
-              <ArrowRight className="ml-2 size-4 transition-transform group-hover:translate-x-1" />
+              <a href="#waitlist">
+                Join waitlist
+                <ArrowRight className="ml-2 size-4 transition-transform group-hover:translate-x-1" />
+              </a>
             </Button>
             <Button
+              asChild
               className="h-14 rounded-full border-foreground/20 px-8 text-base hover:bg-foreground/5"
               size="lg"
               variant="outline"
             >
-              See how it works
+              <a href="#how-it-works">See how it works</a>
             </Button>
           </div>
         </div>
