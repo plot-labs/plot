@@ -60,9 +60,17 @@ export function SourcesWorkspace() {
 
       <section className="min-h-0 min-w-0 overflow-y-auto bg-[#f8fafc] px-6 py-10 dark:bg-[#18181b] lg:px-10">
         {selectedReference ? (
-          <article className="mx-auto max-w-3xl space-y-4">
+          <article className="relative mx-auto max-w-3xl space-y-4">
+            <button
+              type="button"
+              onClick={() => setSelectedReferenceId(null)}
+              aria-label="Close source detail"
+              className="absolute right-0 top-0 inline-flex size-8 shrink-0 items-center justify-center rounded-xl text-black/45 transition hover:bg-black/5 hover:text-black/70 dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white/75"
+            >
+              <X className="size-4" />
+            </button>
             <div className="rounded-[12px] border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/5">
-              <div className="flex items-start justify-between gap-4">
+              <div className="max-w-[calc(100%-48px)]">
                 <div className="min-w-0">
                   <div className="text-xs font-medium text-black/40 dark:text-white/40">
                     {selectedReference.sourceType}
@@ -74,14 +82,6 @@ export function SourcesWorkspace() {
                     {selectedReference.label} · {selectedReference.date}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedReferenceId(null)}
-                  aria-label="Close source detail"
-                  className="inline-flex size-8 shrink-0 items-center justify-center rounded-xl text-black/45 transition hover:bg-black/5 hover:text-black/70 dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white/75"
-                >
-                  <X className="size-4" />
-                </button>
               </div>
 
               <p className="mt-5 text-sm leading-6 text-black/70 dark:text-white/70">
