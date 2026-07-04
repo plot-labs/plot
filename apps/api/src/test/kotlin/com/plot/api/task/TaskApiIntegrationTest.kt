@@ -193,6 +193,24 @@ class TaskApiIntegrationTest {
 	}
 
 	@Test
+	fun getReturnsNotFoundForTaskInAnotherWorkspace() {
+		val otherWorkspaceId = insertOtherWorkspace()
+		val otherTaskId = UUID.randomUUID()
+		insertTask(
+			id = otherTaskId,
+			workspaceId = otherWorkspaceId,
+			title = "Other Workspace Task",
+			createdAt = Instant.parse("2026-01-03T00:00:00Z"),
+		)
+
+		mockMvc.get("/api/tasks/$otherTaskId")
+			.andExpect {
+				status { isNotFound() }
+				jsonPath("$.error") { value("NOT_FOUND") }
+			}
+	}
+
+	@Test
 	fun getReturnsBadRequestForMalformedTaskId() {
 		mockMvc.get("/api/tasks/not-a-uuid")
 			.andExpect {
@@ -258,8 +276,23 @@ class TaskApiIntegrationTest {
 		)!!
 	}
 
+	private fun insertOtherWorkspace(): UUID {
+		val workspaceId = UUID.randomUUID()
+		jdbcTemplate.update(
+			"""
+			insert into workspaces (id, name, slug, created_by_user_id, status, created_at, updated_at)
+			values (?, 'Other Task Workspace', ?, ?, 'ACTIVE', now(), now())
+			""".trimIndent(),
+			workspaceId,
+			"other-task-${workspaceId}",
+			devContext.devUserId,
+		)
+		return workspaceId
+	}
+
 	private fun insertTask(
 		id: UUID,
+		workspaceId: UUID = devContext.devWorkspaceId,
 		title: String,
 		createdAt: Instant,
 	) {
@@ -280,7 +313,7 @@ class TaskApiIntegrationTest {
 			values (?, ?, null, ?, 'QUEUED', ?, ?, ?, ?)
 			""".trimIndent(),
 			id,
-			devContext.devWorkspaceId,
+			workspaceId,
 			title,
 			devContext.devUserId,
 			timestamp,

@@ -262,6 +262,24 @@ class WritingBlockApiIntegrationTest {
 	}
 
 	@Test
+	fun getReturnsNotFoundForWritingBlockInAnotherWorkspace() {
+		val otherWorkspaceId = insertOtherWorkspace()
+		val otherBlockId = UUID.randomUUID()
+		insertWritingBlock(
+			id = otherBlockId,
+			workspaceId = otherWorkspaceId,
+			title = "Other Workspace Block",
+			createdAt = Instant.parse("2026-01-03T00:00:00Z"),
+		)
+
+		mockMvc.get("/api/blocks/$otherBlockId")
+			.andExpect {
+				status { isNotFound() }
+				jsonPath("$.error") { value("NOT_FOUND") }
+			}
+	}
+
+	@Test
 	fun patchReturnsNotFoundForRandomUuid() {
 		val randomUuid = UUID.randomUUID()
 
@@ -309,8 +327,23 @@ class WritingBlockApiIntegrationTest {
 		)!!.toInstant()
 	}
 
+	private fun insertOtherWorkspace(): UUID {
+		val workspaceId = UUID.randomUUID()
+		jdbcTemplate.update(
+			"""
+			insert into workspaces (id, name, slug, created_by_user_id, status, created_at, updated_at)
+			values (?, 'Other Writing Block Workspace', ?, ?, 'ACTIVE', now(), now())
+			""".trimIndent(),
+			workspaceId,
+			"other-writing-block-${workspaceId}",
+			devContext.devUserId,
+		)
+		return workspaceId
+	}
+
 	private fun insertWritingBlock(
 		id: UUID,
+		workspaceId: UUID = devContext.devWorkspaceId,
 		title: String,
 		createdAt: Instant,
 	) {
@@ -341,7 +374,7 @@ class WritingBlockApiIntegrationTest {
 			values (?, ?, 'manual', 'note', ?, 'Body', null, null, null, null, null, 'hash', null, null, ?, 'ACTIVE', ?, ?, ?)
 			""".trimIndent(),
 			id,
-			devContext.devWorkspaceId,
+			workspaceId,
 			title,
 			timestamp,
 			devContext.devUserId,

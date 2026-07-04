@@ -130,6 +130,24 @@ class WorkSessionApiIntegrationTest {
 	}
 
 	@Test
+	fun getReturnsNotFoundForSessionInAnotherWorkspace() {
+		val otherWorkspaceId = insertOtherWorkspace()
+		val otherSessionId = UUID.randomUUID()
+		insertSession(
+			id = otherSessionId,
+			workspaceId = otherWorkspaceId,
+			title = "Other Workspace Session",
+			createdAt = Instant.parse("2026-01-03T00:00:00Z"),
+		)
+
+		mockMvc.get("/api/sessions/$otherSessionId")
+			.andExpect {
+				status { isNotFound() }
+				jsonPath("$.error") { value("NOT_FOUND") }
+			}
+	}
+
+	@Test
 	fun getReturnsBadRequestForMalformedSessionId() {
 		mockMvc.get("/api/sessions/not-a-uuid")
 			.andExpect {
@@ -175,8 +193,23 @@ class WorkSessionApiIntegrationTest {
 		)!!
 	}
 
+	private fun insertOtherWorkspace(): UUID {
+		val workspaceId = UUID.randomUUID()
+		jdbcTemplate.update(
+			"""
+			insert into workspaces (id, name, slug, created_by_user_id, status, created_at, updated_at)
+			values (?, 'Other Session Workspace', ?, ?, 'ACTIVE', now(), now())
+			""".trimIndent(),
+			workspaceId,
+			"other-session-${workspaceId}",
+			devContext.devUserId,
+		)
+		return workspaceId
+	}
+
 	private fun insertSession(
 		id: UUID,
+		workspaceId: UUID = devContext.devWorkspaceId,
 		title: String,
 		createdAt: Instant,
 	) {
@@ -196,7 +229,7 @@ class WorkSessionApiIntegrationTest {
 			values (?, ?, ?, 'OPEN', ?, ?, ?, ?)
 			""".trimIndent(),
 			id,
-			devContext.devWorkspaceId,
+			workspaceId,
 			title,
 			devContext.devUserId,
 			timestamp,
