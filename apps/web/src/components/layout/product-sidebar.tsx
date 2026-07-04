@@ -244,7 +244,7 @@ export function ProductSidebar({ theme, onThemeChange }: ProductSidebarProps) {
         </div>
       </aside>
 
-      <AccountSettingsModal open={accountSettingsOpen} onClose={() => setAccountSettingsOpen(false)} />
+      {accountSettingsOpen && <AccountSettingsModal open onClose={() => setAccountSettingsOpen(false)} />}
     </>
   );
 }
