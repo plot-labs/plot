@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { ArrowRight } from "lucide-react";
 import { AnimatedPlotSignal } from "./animated-plot-signal";
+import { WaitlistForm } from "./waitlist-form";
 
 export function CtaSection() {
   const [isVisible, setIsVisible] = useState(false);
@@ -61,32 +60,13 @@ export function CtaSection() {
 	                  Write less.
 	                </h2>
 
-	                <p className="text-xl text-muted-foreground mb-12 leading-relaxed max-w-xl">
+	                <p className="mb-10 max-w-xl text-xl leading-relaxed text-muted-foreground">
 	                  Pick the shipping window, set the release cadence, and let
 	                  Plot prepare source-backed, on-style docs, release notes,
 	                  customer updates, and launch drafts for approval.
                 </p>
 
-                <div className="flex flex-col sm:flex-row items-start gap-4">
-                  <Button
-                    size="lg"
-                    className="bg-foreground hover:bg-foreground/90 text-background px-8 h-14 text-base rounded-full group"
-                  >
-                    Create your first update pack
-                    <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover:translate-x-1" />
-                  </Button>
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    className="h-14 px-8 text-base rounded-full border-foreground/20 hover:bg-foreground/5"
-                  >
-                    Talk to us
-                  </Button>
-                </div>
-
-	                <p className="text-sm text-muted-foreground mt-8 font-mono">
-	                  Autonomous drafts. Human approval before publish.
-	                </p>
+                <WaitlistForm />
               </div>
 
               {/* Right animation */}
