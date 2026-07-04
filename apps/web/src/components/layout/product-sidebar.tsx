@@ -205,50 +205,50 @@ export function ProductSidebar({ theme, onThemeChange }: ProductSidebarProps) {
           </button>
 
           {workspaceMenuOpen && (
-            <div className="absolute left-3 top-[72px] z-50 w-[300px] overflow-hidden rounded-[14px] border border-black/[0.1] bg-white text-[13px] text-black/78 shadow-[0_18px_48px_rgb(15_23_42_/_0.18)] dark:border-white/10 dark:bg-[#292a2f] dark:text-white/82">
-              <div className="p-4">
-                <div className="flex items-center gap-3">
-                  <span className="flex size-11 shrink-0 items-center justify-center rounded-[10px] bg-[#ef3f2c] font-serif text-[21px] font-semibold leading-none text-white">
+            <div className="absolute left-3 top-[68px] z-50 w-[228px] overflow-hidden rounded-[12px] border border-black/[0.08] bg-white text-[12px] text-black/76 shadow-[0_10px_28px_rgb(15_23_42_/_0.04)] dark:border-white/10 dark:bg-[#292a2f] dark:text-white/80">
+              <div className="p-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-[9px] bg-[#ef3f2c] font-serif text-[17px] font-semibold leading-none text-white">
                     P
                   </span>
                   <div className="min-w-0">
-                    <div className="truncate text-[16px] font-semibold text-black/84 dark:text-white/88">Personal</div>
-                    <div className="mt-0.5 truncate text-[13px] text-black/45 dark:text-white/45">
+                    <div className="truncate text-[14px] font-semibold text-black/84 dark:text-white/88">Personal</div>
+                    <div className="mt-0.5 truncate text-[12px] text-black/45 dark:text-white/45">
                       Dev workspace
                     </div>
                   </div>
                 </div>
 
-                <div className="mt-4 flex gap-2">
+                <div className="mt-3 grid grid-cols-2 gap-1.5">
                   <Link
                     href={workspaceSettingsHref}
                     onClick={() => setWorkspaceMenuOpen(false)}
-                    className="inline-flex h-9 items-center gap-2 rounded-[9px] border border-black/[0.1] px-3 font-medium text-black/62 transition hover:bg-black/[0.04] dark:border-white/12 dark:text-white/62 dark:hover:bg-white/10"
+                    className="inline-flex h-8 items-center justify-center gap-1.5 rounded-[8px] border border-black/[0.08] px-2 font-medium text-black/62 transition hover:bg-black/[0.04] dark:border-white/12 dark:text-white/62 dark:hover:bg-white/10"
                   >
-                    <Settings className="size-4" />
+                    <Settings className="size-3.5" />
                     Settings
                   </Link>
                   <button
                     type="button"
-                    className="inline-flex h-9 items-center gap-2 rounded-[9px] border border-black/[0.1] px-3 font-medium text-black/62 transition hover:bg-black/[0.04] dark:border-white/12 dark:text-white/62 dark:hover:bg-white/10"
+                    className="inline-flex h-8 items-center justify-center gap-1.5 rounded-[8px] border border-black/[0.08] px-2 font-medium text-black/62 transition hover:bg-black/[0.04] dark:border-white/12 dark:text-white/62 dark:hover:bg-white/10"
                   >
-                    <UserPlus className="size-4" />
+                    <UserPlus className="size-3.5" />
                     Invite
                   </button>
                 </div>
               </div>
 
-              <div className="border-t border-black/[0.08] py-2 dark:border-white/10">
+              <div className="border-t border-black/[0.08] py-1 dark:border-white/10">
                 {workspaceItems.map((workspace) => (
                   <button
                     key={workspace.id}
                     type="button"
                     onClick={() => setWorkspaceMenuOpen(false)}
-                    className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-black/[0.04] dark:hover:bg-white/10"
+                    className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition hover:bg-black/[0.04] dark:hover:bg-white/10"
                   >
                     <span
                       className={cn(
-                        "flex size-8 shrink-0 items-center justify-center rounded-[8px] font-serif text-[15px] font-semibold leading-none",
+                        "flex size-7 shrink-0 items-center justify-center rounded-[8px] font-serif text-[13px] font-semibold leading-none",
                         workspace.selected
                           ? "bg-[#ef3f2c] text-white"
                           : "bg-black/[0.06] text-black/48 dark:bg-white/10 dark:text-white/52",
@@ -257,22 +257,22 @@ export function ProductSidebar({ theme, onThemeChange }: ProductSidebarProps) {
                       {workspace.mark}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate font-semibold text-black/78 dark:text-white/82">
+                      <span className="block truncate font-medium text-black/78 dark:text-white/82">
                         {workspace.name}
                       </span>
-                      <span className="block truncate text-xs text-black/38 dark:text-white/38">{workspace.detail}</span>
+                      <span className="block truncate text-[11px] text-black/38 dark:text-white/38">{workspace.detail}</span>
                     </span>
-                    {workspace.selected && <Check className="size-4 shrink-0 text-black/72 dark:text-white/76" />}
+                    {workspace.selected && <Check className="size-3.5 shrink-0 text-black/72 dark:text-white/76" />}
                   </button>
                 ))}
               </div>
 
-              <div className="border-t border-black/[0.08] p-2 dark:border-white/10">
+              <div className="border-t border-black/[0.08] p-1.5 dark:border-white/10">
                 <button
                   type="button"
-                  className="flex w-full items-center gap-2 rounded-[9px] px-2 py-2 text-left font-medium text-[#1677ff] transition hover:bg-[#1677ff]/10 dark:text-[#6aa8ff] dark:hover:bg-[#6aa8ff]/12"
+                  className="flex w-full items-center gap-1.5 rounded-[8px] px-2 py-1.5 text-left font-medium text-[#1677ff] transition hover:bg-[#1677ff]/10 dark:text-[#6aa8ff] dark:hover:bg-[#6aa8ff]/12"
                 >
-                  <Plus className="size-4" />
+                  <Plus className="size-3.5" />
                   New workspace
                 </button>
               </div>
