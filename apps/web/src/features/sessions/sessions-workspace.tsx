@@ -191,7 +191,7 @@ function ActiveSessionWorkspace({
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center justify-between bg-white px-4 dark:bg-[#111113] sm:px-6 lg:px-8">
           <h1 className="sr-only">{activeSession.title}</h1>
-          <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-black/78 dark:text-white/82">
+          <div className="shell-session-heading flex min-w-0 items-center gap-2 text-sm font-semibold text-black/78 dark:text-white/82">
             <FileText className="size-4 shrink-0 text-black/50 dark:text-white/50" />
             <span className="truncate">{activeSession.title}</span>
             <button

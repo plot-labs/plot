@@ -98,6 +98,16 @@
     font-family: var(--font-display);
   }
 
+  .shell-sidebar-closed .shell-session-heading {
+    padding-left: 2.5rem;
+  }
+
+  @media (max-width: 1023.98px) {
+    .shell-sidebar-closed .shell-session-heading {
+      padding-left: 0;
+    }
+  }
+
   .tracking-tight {
     letter-spacing: 0;
   }
