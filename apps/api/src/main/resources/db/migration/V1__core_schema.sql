@@ -86,6 +86,10 @@ create index work_sessions_workspace_created_idx
 create index tasks_workspace_created_idx
   on tasks(workspace_id, created_at desc);
 
+create index tasks_workspace_work_session_idx
+  on tasks(workspace_id, work_session_id)
+  where work_session_id is not null;
+
 create index writing_blocks_workspace_created_idx
   on writing_blocks(workspace_id, created_at desc);
 
