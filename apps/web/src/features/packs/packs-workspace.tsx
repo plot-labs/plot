@@ -82,7 +82,7 @@ export function PacksWorkspace() {
 
       <section className="min-h-0 min-w-0 overflow-y-auto bg-[#f8fafc] px-6 py-10 dark:bg-[#18181b] lg:px-10">
         {selectedPack ? (
-          <article className="relative mx-auto max-w-4xl space-y-4">
+          <article className="relative mx-auto max-w-4xl space-y-4 pt-10">
             <button
               type="button"
               onClick={closePackDetail}
