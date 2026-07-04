@@ -13,16 +13,16 @@ export function SourcesWorkspace() {
     : [];
 
   return (
-    <div className="grid min-h-screen grid-cols-1 lg:h-screen lg:grid-cols-[minmax(320px,420px)_minmax(0,1fr)] lg:overflow-hidden">
-      <section className="min-h-0 border-b border-black/10 bg-[#f6f7f9] p-6 dark:border-white/10 dark:bg-[#111113] lg:overflow-y-auto lg:border-r lg:border-b-0">
-        <h1 className="font-serif text-[38px] font-normal leading-tight tracking-normal text-black/90 dark:text-white/92">
+    <div className="grid min-h-screen grid-cols-1 lg:h-screen lg:grid-cols-[380px_minmax(0,1fr)] lg:overflow-hidden">
+      <section className="min-h-0 border-b border-black/10 bg-[#f6f7f9] px-6 pb-6 pt-14 dark:border-white/10 dark:bg-[#111113] lg:overflow-y-auto lg:border-r lg:border-b-0">
+        <h1 className="font-serif text-[32px] font-normal leading-none tracking-normal text-black/90 dark:text-white/92">
           Sources
         </h1>
         <p className="mt-1 text-sm text-black/55 dark:text-white/55">
           References Plot can use when drafting updates.
         </p>
 
-        <div className="mt-6 space-y-2" role="listbox" aria-label="Sources">
+        <div className="mt-7 space-y-2" role="listbox" aria-label="Sources">
           {references.map((reference) => (
             <button
               key={reference.id}
@@ -30,7 +30,7 @@ export function SourcesWorkspace() {
               role="option"
               aria-selected={reference.id === selectedReferenceId}
               onClick={() => setSelectedReferenceId(reference.id)}
-              className={`w-full rounded-[12px] border p-4 text-left transition ${
+              className={`w-full rounded-[12px] border px-4 py-3.5 text-left transition ${
                 reference.id === selectedReferenceId
                   ? "border-black/20 bg-white dark:border-white/20 dark:bg-white/10"
                   : "border-black/10 bg-white/60 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"
@@ -53,7 +53,7 @@ export function SourcesWorkspace() {
         </div>
       </section>
 
-      <section className="min-h-0 min-w-0 overflow-y-auto bg-[#f8fafc] p-6 dark:bg-[#18181b] lg:p-8">
+      <section className="min-h-0 min-w-0 overflow-y-auto bg-[#f8fafc] px-6 py-10 dark:bg-[#18181b] lg:px-10">
         {selectedReference ? (
           <article className="mx-auto max-w-3xl space-y-6">
             <div>
