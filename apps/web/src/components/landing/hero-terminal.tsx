@@ -4,17 +4,17 @@ import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 
 const terminalLines = [
-  "$ plot scan ai-coded changes --week=24",
-  "github/pr-482       -> shipped change",
-  "copilot/diff        -> docs gap",
-  "linear/issue-139    -> customer pain",
+  "$ plot agent run release-pack --watch=week-24",
+  "source/pr-482       -> selected",
+  "source/release-note -> docs delta",
+  "voice/profile       -> product-led",
   "",
-  "$ plot voice check",
-  "Brand voice         locked",
-  "unknown claims      0",
-  "source map          7 references",
+  "$ plot review checks",
+  "style match         92%",
+  "claims attached     7",
+  "source map          ready",
   "",
-  "$ plot draft release-pack --voice=brand",
+  "$ plot draft pack --approval=required",
   "changelog           ready",
   "docs update         typing...",
 ];
@@ -96,7 +96,7 @@ export function HeroTerminal() {
 
               <div className="space-y-1.5 pt-6">
                 {[
-                  ["Style", "locked"],
+                  ["Voice", "92%"],
                   ["Claims", "7"],
                   ["Pack", "3"],
                 ].map(([label, value]) => (

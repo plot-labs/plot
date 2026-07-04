@@ -31,7 +31,11 @@ export function CtaSection() {
   };
 
   return (
-    <section ref={sectionRef} className="relative py-24 lg:py-32 overflow-hidden">
+    <section
+      className="relative py-24 lg:py-32 overflow-hidden"
+      id="waitlist"
+      ref={sectionRef}
+    >
       <div className="max-w-[1400px] mx-auto px-6 lg:px-12">
         <div
           className={`relative border border-foreground transition-all duration-1000 ${
@@ -51,17 +55,16 @@ export function CtaSection() {
             <div className="flex flex-col lg:flex-row items-center justify-between gap-12">
               {/* Left content */}
               <div className="flex-1">
-                <h2 className="text-4xl lg:text-7xl font-display tracking-tight mb-8 leading-[0.95]">
-                  AI changed the code.
-                  <br />
-                  Plot catches up the story.
-                </h2>
+	                <h2 className="text-4xl lg:text-7xl font-display tracking-tight mb-8 leading-[0.95]">
+	                  Ship fast.
+	                  <br />
+	                  Write less.
+	                </h2>
 
-                <p className="text-xl text-muted-foreground mb-12 leading-relaxed max-w-xl">
-                  Add specs, AI-assisted PRs, issues, and customer feedback,
-                  detect what changed faster than the content process, keep brand
-                  voice current, and turn one accepted release brief into
-                  customer-ready docs and content.
+	                <p className="text-xl text-muted-foreground mb-12 leading-relaxed max-w-xl">
+	                  Pick the shipping window, set the release cadence, and let
+	                  Plot prepare source-backed, on-style docs, release notes,
+	                  customer updates, and launch drafts for approval.
                 </p>
 
                 <div className="flex flex-col sm:flex-row items-start gap-4">
@@ -69,7 +72,7 @@ export function CtaSection() {
                     size="lg"
                     className="bg-foreground hover:bg-foreground/90 text-background px-8 h-14 text-base rounded-full group"
                   >
-                    Create your first catch-up brief
+                    Create your first update pack
                     <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover:translate-x-1" />
                   </Button>
                   <Button
@@ -81,9 +84,9 @@ export function CtaSection() {
                   </Button>
                 </div>
 
-                <p className="text-sm text-muted-foreground mt-8 font-mono">
-                  Manual review by default. Source and voice checks before publish.
-                </p>
+	                <p className="text-sm text-muted-foreground mt-8 font-mono">
+	                  Autonomous drafts. Human approval before publish.
+	                </p>
               </div>
 
               {/* Right animation */}

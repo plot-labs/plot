@@ -6,15 +6,15 @@ import { useEffect, useRef, useState } from "react";
 const styleRules = [
   {
     label: "Voice",
-    detail: "Keep the brand's tone intact even when the source is an AI-assisted diff.",
+    detail: "Keep the team's tone intact even when the draft starts from an AI-assisted diff.",
   },
   {
     label: "Terminology",
     detail: "Use product words the team already uses. Flag vague or borrowed jargon.",
   },
   {
-    label: "Tradeoffs",
-    detail: "Keep engineering context visible when a decision affects user expectations.",
+    label: "Source",
+    detail: "Tie each important product claim back to a PR, issue, release, or commit group.",
   },
   {
     label: "Do-not-claim list",
@@ -34,7 +34,7 @@ const channels = [
     sample: "Use the migration checklist before inviting teammates, especially when importing legacy roles.",
   },
   {
-    name: "Sales handoff",
+    name: "Launch draft",
     tone: "context-rich, evidence-backed",
     sample: "The strongest proof is reduced setup time, backed by beta calls and PR #482.",
   },
@@ -80,27 +80,26 @@ export function StyleSection() {
               isVisible ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0"
             }`}
           >
-            <span className="mb-6 inline-flex items-center gap-3 font-mono text-sm text-muted-foreground">
-              <span className="h-px w-8 bg-foreground/30" />
-              Brand Voice
+              <span className="mb-6 inline-flex items-center gap-3 font-mono text-sm text-muted-foreground">
+                <span className="h-px w-8 bg-foreground/30" />
+              Voice & Review
             </span>
             <h2 className="mb-8 font-display text-4xl tracking-tight lg:text-6xl">
-              Keep every product update
+              Keep every update
               <br />
-              in your brand voice.
+              in your team&apos;s voice.
             </h2>
             <p className="mb-10 max-w-xl text-xl leading-relaxed text-muted-foreground">
-              AI can make code move faster, but it does not know how your company
-              explains change. Accepted docs, release notes, launch pages, and
-              customer-facing content become reusable voice memory before Plot
-              drafts anything from engineering context.
+              AI can make code move faster, but it does not know how your team
+              explains change. Plot keeps voice, source evidence, implementation
+              caveats, and draft output in the same review flow.
             </p>
 
             <div className="grid gap-px overflow-hidden rounded-xl border border-foreground/10 bg-foreground/10 sm:grid-cols-3">
               {[
-                ["Examples", "approved docs and release notes"],
-                ["Voice", "tone, terms, claims"],
-                ["Formats", "docs, launch, handoff"],
+                ["Voice", "tone and terminology"],
+                ["Claims", "evidence and caveats"],
+                ["Formats", "docs, changelog, launch"],
               ].map(([label, value]) => (
                 <div className="bg-background p-5" key={label}>
                   <div className="mb-2 font-mono text-[10px] uppercase text-muted-foreground">
@@ -121,10 +120,10 @@ export function StyleSection() {
               <div className="flex flex-col gap-5 border-b border-foreground/10 px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <div className="font-mono text-[10px] uppercase text-muted-foreground">
-                    Brand voice profile
+                    Voice, source, and claims
                   </div>
                   <div className="mt-1 font-medium text-foreground">
-                    One voice source of truth
+                    One review surface
                   </div>
                 </div>
                 <div className="flex items-center gap-2 font-mono text-[10px] uppercase text-muted-foreground">
@@ -137,7 +136,7 @@ export function StyleSection() {
                 <div className="border-b border-foreground/10 p-5 lg:border-b-0 lg:border-r">
                   <div className="mb-4 flex items-center gap-2 font-mono text-[10px] uppercase text-muted-foreground">
                     <SlidersHorizontal className="size-3.5" />
-                    Voice rules
+                    Style rules
                   </div>
                   <div className="space-y-3">
                     {styleRules.map((rule) => (
@@ -190,7 +189,7 @@ export function StyleSection() {
                       {active.sample}
                     </p>
                     <div className="space-y-2 border-t border-foreground/10 pt-4">
-                      {["Matches brand voice", "Keeps implementation caveats", "Claims require source"].map(
+                      {["Matches team voice", "Sources attached", "Claims require review"].map(
                         (check) => (
                           <div
                             className="flex items-center justify-between gap-3 text-sm"

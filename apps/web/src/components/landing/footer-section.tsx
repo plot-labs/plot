@@ -7,7 +7,6 @@ const footerLinks = {
   Product: [
     { name: "Product", href: "#features" },
     { name: "How it works", href: "#how-it-works" },
-    { name: "Pricing", href: "#pricing" },
   ],
   Trust: [
     { name: "Tool policy", href: "#security" },
@@ -15,8 +14,8 @@ const footerLinks = {
     { name: "Security", href: "#security" },
   ],
   Company: [
-    { name: "Waitlist", href: "#pricing", badge: "Open" },
-    { name: "Contact", href: "mailto:hello@plot.so" },
+    { name: "Waitlist", href: "#waitlist", badge: "Open" },
+    { name: "Contact", href: "mailto:hello@useplot.xyz" },
   ],
   Legal: [
     { name: "Privacy", href: "#" },
@@ -27,8 +26,7 @@ const footerLinks = {
 
 const socialLinks = [
   { name: "GitHub", href: "https://github.com/plot-labs/plot" },
-  { name: "Email", href: "mailto:hello@plot.so" },
-  { name: "LinkedIn", href: "#" },
+  { name: "Email", href: "mailto:hello@useplot.xyz" },
 ];
 
 export function FooterSection() {
@@ -50,9 +48,9 @@ export function FooterSection() {
               </a>
 
               <p className="text-muted-foreground leading-relaxed mb-8 max-w-xs">
-                AI coding made shipping faster than docs and content can follow.
-                Plot turns specs, PRs, decisions, and feedback into source-backed
-                updates in your brand voice.
+                AI coding made shipping faster than updates can follow. Plot is
+                the autonomous update agent for source-backed, on-style docs,
+                changelogs, customer updates, and launch drafts.
               </p>
 
               {/* Social Links */}
