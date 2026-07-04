@@ -1,4 +1,4 @@
-import type { DraftDocument, ReferenceDocument, SessionMessage } from "@/lib/dev-context";
+import type { DraftDocument, ReferenceDocument, SessionMessage } from "@/lib/api-client";
 import { SessionFloatingSummary } from "@/features/sessions/session-floating-summary";
 
 type SessionThreadProps = {
@@ -15,7 +15,7 @@ export function SessionThread({
   onSelectDocument,
 }: SessionThreadProps) {
   return (
-    <section className="min-h-0 flex-1 overflow-y-auto px-8 py-8">
+    <section className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
       <div className="mx-auto grid max-w-[calc(48rem+284px)] grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,48rem)_260px]">
         <div className="min-w-0 space-y-6 pb-40">
           {messages.map((message) => (

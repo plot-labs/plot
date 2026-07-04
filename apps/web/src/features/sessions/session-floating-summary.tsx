@@ -1,6 +1,6 @@
 import { FileText, GitPullRequest } from "lucide-react";
 
-import type { DraftDocument, ReferenceDocument } from "@/lib/dev-context";
+import type { DraftDocument, ReferenceDocument } from "@/lib/api-client";
 
 type SessionFloatingSummaryProps = {
   drafts: DraftDocument[];

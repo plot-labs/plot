@@ -1,6 +1,6 @@
 import { FileText, GitPullRequest, PanelRightClose } from "lucide-react";
 
-import type { DraftDocument, ReferenceDocument } from "@/lib/dev-context";
+import type { DraftDocument, ReferenceDocument } from "@/lib/api-client";
 
 type SelectedSessionDocument =
   | { kind: "draft"; document: DraftDocument }
@@ -32,7 +32,7 @@ export function SessionSidePanel({
   }
 
   return (
-    <aside className="flex h-full w-[460px] shrink-0 flex-col border-l border-black/10 bg-[#fbfaf6] dark:border-white/10 dark:bg-[#181818]">
+    <aside className="fixed bottom-0 right-0 top-12 z-50 flex w-full max-w-[460px] shrink-0 flex-col border-l border-black/10 bg-[#fbfaf6] shadow-2xl shadow-black/20 dark:border-white/10 dark:bg-[#181818] dark:shadow-black/50 xl:static xl:h-full xl:w-[460px] xl:max-w-none xl:shadow-none">
       <div className="flex h-12 items-center gap-1 border-b border-black/10 px-3 dark:border-white/10">
         <div className="flex min-w-0 flex-1 items-center gap-1" role="tablist" aria-label="Open session documents">
           {openDocuments.map((item) => {

@@ -5,6 +5,13 @@ import {
   type SessionMessage,
 } from "@/lib/dev-context";
 
+export type {
+  DraftDocument,
+  ReferenceDocument,
+  SessionMessage,
+  WorkSession,
+} from "@/lib/dev-context";
+
 export type SelectedDocument =
   | { kind: "draft"; document: DraftDocument }
   | { kind: "reference"; document: ReferenceDocument };

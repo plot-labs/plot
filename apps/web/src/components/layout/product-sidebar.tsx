@@ -29,7 +29,7 @@ export function ProductSidebar() {
   const { sessions } = getProductShellData();
 
   return (
-    <aside className="flex h-full w-[280px] shrink-0 flex-col border-r border-black/10 bg-[#ede8df] text-[#1c1a17] dark:border-white/10 dark:bg-[#2b2b2d] dark:text-[#f4f1ea]">
+    <aside className="hidden h-full w-[280px] shrink-0 flex-col border-r border-black/10 bg-[#ede8df] text-[#1c1a17] dark:border-white/10 dark:bg-[#2b2b2d] dark:text-[#f4f1ea] lg:flex">
       <div className="flex items-center gap-2 border-b border-black/10 px-4 py-4 dark:border-white/10">
         <div className="flex size-8 items-center justify-center rounded-md bg-[#1c1a17] text-sm font-semibold text-[#f8f5ef] dark:bg-[#f4f1ea] dark:text-[#19191a]">
           P
@@ -83,7 +83,7 @@ export function ProductSidebar() {
         {sessions.map((session) => (
           <Link
             key={session.id}
-            href="/sessions"
+            href={`/sessions?session=${session.id}`}
             className="group block rounded-md px-3 py-2 text-sm transition hover:bg-black/5 dark:hover:bg-white/10"
           >
             <div className="flex items-center gap-2">

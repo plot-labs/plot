@@ -1,39 +1,70 @@
 "use client";
 
 import { PanelRightOpen } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useMemo, useState } from "react";
 
 import {
   createDemoAgentReply,
   getSelectedDocument,
   getSessionsWorkspace,
   type SelectedDocument,
+  type SessionMessage,
+  type WorkSession,
 } from "@/lib/api-client";
-import type { SessionMessage } from "@/lib/dev-context";
 import { SessionComposer } from "@/features/sessions/session-composer";
 import { SessionSidePanel } from "@/features/sessions/session-side-panel";
 import { SessionThread } from "@/features/sessions/session-thread";
 
 export function SessionsWorkspace() {
+  return (
+    <Suspense fallback={null}>
+      <SessionsWorkspaceContent />
+    </Suspense>
+  );
+}
+
+function SessionsWorkspaceContent() {
   const data = getSessionsWorkspace();
-  const activeSession = data.sessions[0];
+  const searchParams = useSearchParams();
+  const requestedSessionId = searchParams.get("session");
+  const activeSession =
+    data.sessions.find((session) => session.id === requestedSessionId) ?? data.sessions[0];
+
+  return (
+    <ActiveSessionWorkspace
+      key={activeSession.id}
+      activeSession={activeSession}
+      data={data}
+    />
+  );
+}
+
+function ActiveSessionWorkspace({
+  activeSession,
+  data,
+}: {
+  activeSession: WorkSession;
+  data: ReturnType<typeof getSessionsWorkspace>;
+}) {
   const [messages, setMessages] = useState<SessionMessage[]>(activeSession.messages);
   const [draftBodies, setDraftBodies] = useState<Record<string, string>>(() =>
     Object.fromEntries(data.drafts.map((draft) => [draft.id, draft.body])),
   );
-  const [selectedDocumentId, setSelectedDocumentId] = useState(activeSession.draftIds[0]);
+  const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(() =>
+    getInitialSelectedDocumentId(activeSession),
+  );
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
-  const [openDocumentIds, setOpenDocumentIds] = useState<string[]>([
-    activeSession.draftIds[0],
-    activeSession.referenceIds[0],
-  ]);
+  const [openDocumentIds, setOpenDocumentIds] = useState<string[]>(() =>
+    getInitialOpenDocumentIds(activeSession),
+  );
 
   const sessionDrafts = data.drafts.filter((draft) => activeSession.draftIds.includes(draft.id));
   const sessionReferences = data.references.filter((reference) =>
     activeSession.referenceIds.includes(reference.id),
   );
 
-  const selectedDocument = getSelectedDocument(selectedDocumentId);
+  const selectedDocument = selectedDocumentId ? getSelectedDocument(selectedDocumentId) : null;
 
   const openDocuments = useMemo(() => {
     return openDocumentIds
@@ -74,7 +105,7 @@ export function SessionsWorkspace() {
   return (
     <div className="flex h-[calc(100vh-3rem)] min-h-0">
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="border-b border-black/10 bg-[#fbfaf6] px-8 py-4 dark:border-white/10 dark:bg-[#181818]">
+        <header className="border-b border-black/10 bg-[#fbfaf6] px-4 py-4 dark:border-white/10 dark:bg-[#181818] sm:px-6 lg:px-8">
           <div className="text-xs font-medium uppercase text-black/45 dark:text-white/45">Session</div>
           <div className="mt-1 flex items-center justify-between gap-4">
             <div>
@@ -107,8 +138,8 @@ export function SessionsWorkspace() {
         <SessionSidePanel
           selectedDocument={selectedDocument}
           openDocuments={openDocuments}
-          drafts={data.drafts}
-          references={data.references}
+          drafts={sessionDrafts}
+          references={sessionReferences}
           draftBodies={draftBodies}
           onDraftBodyChange={updateDraftBody}
           onSelectDocument={selectDocument}
@@ -116,5 +147,15 @@ export function SessionsWorkspace() {
         />
       )}
     </div>
+  );
+}
+
+function getInitialSelectedDocumentId(session: WorkSession) {
+  return session.draftIds[0] ?? session.referenceIds[0] ?? null;
+}
+
+function getInitialOpenDocumentIds(session: WorkSession) {
+  return [session.draftIds[0], session.referenceIds[0]].filter(
+    (documentId): documentId is string => Boolean(documentId),
   );
 }

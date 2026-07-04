@@ -33,7 +33,7 @@ export function ProductShell({ children }: { children: ReactNode }) {
             </div>
           </header>
 
-          <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
+          <main className="min-h-0 w-full flex-1 overflow-hidden">{children}</main>
         </div>
       </div>
     </div>
