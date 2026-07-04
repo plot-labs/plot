@@ -1036,7 +1036,6 @@ tasks (
 
   created_by_user_id uuid references users(id),
   assigned_to_user_id uuid references users(id),
-  due_at timestamptz,
   last_activity_at timestamptz,
   created_at timestamptz not null,
   updated_at timestamptz not null,

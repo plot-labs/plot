@@ -190,7 +190,6 @@ records created by services should receive IDs from `UuidGenerator`.
 - `source_scope`
 - `review_mode`
 - `created_by_user_id`
-- `due_at`
 - `last_activity_at`
 - timestamps
 
@@ -289,7 +288,6 @@ erDiagram
         jsonb source_scope
         varchar review_mode
         uuid created_by_user_id FK
-        timestamptz due_at
         timestamptz last_activity_at
         timestamptz created_at
         timestamptz updated_at
@@ -425,7 +423,6 @@ Create/update fields:
 - `objective`
 - `sourceScope`
 - `reviewMode`
-- `dueAt`
 
 If `sessionId` is provided, it must identify a work session in the current dev
 workspace. `status` defaults to `QUEUED`.
