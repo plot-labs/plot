@@ -8,20 +8,25 @@ export function SourcesWorkspace() {
   const { references, drafts } = getSourcesWorkspace();
   const [selectedReferenceId, setSelectedReferenceId] = useState(references[0]?.id);
   const selectedReference = references.find((reference) => reference.id === selectedReferenceId);
+  const usedDrafts = selectedReference
+    ? drafts.filter((draft) => selectedReference.usedInDraftIds.includes(draft.id))
+    : [];
 
   return (
-    <div className="grid h-[calc(100vh-3rem)] grid-cols-[minmax(360px,420px)_1fr] overflow-hidden">
-      <section className="border-r border-black/10 bg-[#f8f5ef] p-6 dark:border-white/10 dark:bg-[#141414]">
+    <div className="grid min-h-[calc(100vh-3rem)] grid-cols-1 lg:h-[calc(100vh-3rem)] lg:grid-cols-[minmax(320px,420px)_minmax(0,1fr)] lg:overflow-hidden">
+      <section className="min-h-0 border-b border-black/10 bg-[#f8f5ef] p-6 dark:border-white/10 dark:bg-[#141414] lg:overflow-y-auto lg:border-r lg:border-b-0">
         <h1 className="text-2xl font-semibold">Sources</h1>
         <p className="mt-1 text-sm text-black/55 dark:text-white/55">
           References Plot can use when drafting updates.
         </p>
 
-        <div className="mt-6 space-y-2">
+        <div className="mt-6 space-y-2" role="listbox" aria-label="Sources">
           {references.map((reference) => (
             <button
               key={reference.id}
               type="button"
+              role="option"
+              aria-selected={reference.id === selectedReferenceId}
               onClick={() => setSelectedReferenceId(reference.id)}
               className={`w-full rounded-lg border p-4 text-left transition ${
                 reference.id === selectedReferenceId
@@ -38,11 +43,16 @@ export function SourcesWorkspace() {
               <div className="mt-1 text-sm text-black/55 dark:text-white/55">{reference.title}</div>
             </button>
           ))}
+          {references.length === 0 && (
+            <div className="rounded-lg border border-black/10 bg-white/60 p-4 text-sm text-black/55 dark:border-white/10 dark:bg-white/5 dark:text-white/55">
+              No sources are available yet.
+            </div>
+          )}
         </div>
       </section>
 
-      <section className="overflow-y-auto bg-[#fbfaf6] p-8 dark:bg-[#181818]">
-        {selectedReference && (
+      <section className="min-h-0 min-w-0 overflow-y-auto bg-[#fbfaf6] p-6 dark:bg-[#181818] lg:p-8">
+        {selectedReference ? (
           <article className="mx-auto max-w-3xl space-y-6">
             <div>
               <div className="text-xs uppercase text-black/45 dark:text-white/45">
@@ -61,13 +71,16 @@ export function SourcesWorkspace() {
             <section>
               <h3 className="text-sm font-semibold">Used in drafts</h3>
               <div className="mt-3 grid gap-2">
-                {drafts
-                  .filter((draft) => selectedReference.usedInDraftIds.includes(draft.id))
-                  .map((draft) => (
-                    <div key={draft.id} className="rounded-lg border border-black/10 bg-white p-3 text-sm dark:border-white/10 dark:bg-white/5">
-                      {draft.title}
-                    </div>
-                  ))}
+                {usedDrafts.map((draft) => (
+                  <div key={draft.id} className="rounded-lg border border-black/10 bg-white p-3 text-sm dark:border-white/10 dark:bg-white/5">
+                    {draft.title}
+                  </div>
+                ))}
+                {usedDrafts.length === 0 && (
+                  <div className="rounded-lg border border-black/10 bg-white p-3 text-sm text-black/55 dark:border-white/10 dark:bg-white/5 dark:text-white/55">
+                    This source has not been used in drafts yet.
+                  </div>
+                )}
               </div>
             </section>
 
@@ -82,6 +95,12 @@ export function SourcesWorkspace() {
               </ul>
             </section>
           </article>
+        ) : (
+          <div className="mx-auto max-w-3xl py-16 text-sm text-black/55 dark:text-white/55">
+            {references.length === 0
+              ? "No sources are available yet."
+              : "Select a source to review its summary and linked drafts."}
+          </div>
         )}
       </section>
     </div>
