@@ -73,10 +73,11 @@ export function Navigation() {
           {/* Desktop CTA */}
           <div className="hidden md:flex items-center gap-4">
             <Button
+              asChild
               size="sm"
               className={`bg-foreground hover:bg-foreground/90 text-background rounded-full transition-all duration-500 ${isScrolled ? "px-4 h-8 text-xs" : "px-6"}`}
             >
-              Join waitlist
+              <a href="#waitlist">Join waitlist</a>
             </Button>
           </div>
 
@@ -133,11 +134,10 @@ export function Navigation() {
           }`}
           style={{ transitionDelay: isMobileMenuOpen ? "300ms" : "0ms" }}
           >
-            <Button 
-              className="w-full bg-foreground text-background rounded-full h-14 text-base"
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
-              Join waitlist
+            <Button asChild className="w-full bg-foreground text-background rounded-full h-14 text-base">
+              <a href="#waitlist" onClick={() => setIsMobileMenuOpen(false)}>
+                Join waitlist
+              </a>
             </Button>
           </div>
         </div>
