@@ -20,7 +20,7 @@ export function SessionThread({
   onSelectDocument,
 }: SessionThreadProps) {
   return (
-    <section className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-14 sm:px-6 lg:px-8 lg:pb-8 lg:pt-16">
+    <section className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-14 sm:px-6 lg:px-8 lg:pb-8 lg:pt-16 2xl:pr-[328px]">
       <div className="mx-auto max-w-3xl space-y-6 pb-40">
         {messages.map((message) => (
           <article key={message.id} className={message.role === "agent" ? "pl-8" : "pr-8"}>
