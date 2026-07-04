@@ -22,6 +22,14 @@ class DevBootstrapService(
 	fun bootstrap() {
 		val now = Instant.now()
 
+		userRepository.findByEmail("dev@plot.local")
+			?.takeIf { it.id != devContext.devUserId }
+			?.let {
+				it.email = "dev-conflict-${it.id}@plot.local"
+				it.updatedAt = now
+				userRepository.saveAndFlush(it)
+			}
+
 		val user = userRepository.findById(devContext.devUserId).orElseGet {
 			User(
 				id = devContext.devUserId,
@@ -37,6 +45,14 @@ class DevBootstrapService(
 		user.status = "ACTIVE"
 		user.updatedAt = now
 		userRepository.save(user)
+
+		workspaceRepository.findBySlug("dev-workspace")
+			?.takeIf { it.id != devContext.devWorkspaceId }
+			?.let {
+				it.slug = "dev-workspace-conflict-${it.id}"
+				it.updatedAt = now
+				workspaceRepository.saveAndFlush(it)
+			}
 
 		val workspace = workspaceRepository.findById(devContext.devWorkspaceId).orElseGet {
 			Workspace(
@@ -56,9 +72,15 @@ class DevBootstrapService(
 		workspace.updatedAt = now
 		workspaceRepository.save(workspace)
 
-		val workspaceMember = workspaceMemberRepository
+		val existingTupleMember = workspaceMemberRepository
 			.findByWorkspaceIdAndUserId(devContext.devWorkspaceId, devContext.devUserId)
-			?: WorkspaceMember(
+		if (existingTupleMember != null && existingTupleMember.id != devContext.devWorkspaceMemberId) {
+			workspaceMemberRepository.delete(existingTupleMember)
+			workspaceMemberRepository.flush()
+		}
+
+		val workspaceMember = workspaceMemberRepository.findById(devContext.devWorkspaceMemberId).orElseGet {
+			WorkspaceMember(
 				id = devContext.devWorkspaceMemberId,
 				workspaceId = devContext.devWorkspaceId,
 				userId = devContext.devUserId,
@@ -68,6 +90,7 @@ class DevBootstrapService(
 				createdAt = now,
 				updatedAt = now,
 			)
+		}
 		workspaceMember.workspaceId = devContext.devWorkspaceId
 		workspaceMember.userId = devContext.devUserId
 		workspaceMember.role = "OWNER"

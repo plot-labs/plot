@@ -1,6 +1,7 @@
 package com.plot.api.dev
 
 import com.plot.api.TestcontainersConfiguration
+import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import org.junit.jupiter.api.Test
@@ -84,6 +85,136 @@ class DevBootstrapIntegrationTest {
 		assertCanonicalDevUser()
 		assertCanonicalDevWorkspace()
 		assertCanonicalDevWorkspaceMembership()
+	}
+
+	@Test
+	fun bootstrapMovesConflictingDevUserEmailToCanonicalUser() {
+		devBootstrapService.bootstrap()
+		val conflictingUserId = UUID.randomUUID()
+
+		jdbcTemplate.update(
+			"""
+			update users
+			set email = ?,
+			    display_name = 'Stale Canonical User',
+			    status = 'DISABLED'
+			where id = ?
+			""".trimIndent(),
+			"canonical-stale-$conflictingUserId@plot.local",
+			devContext.devUserId,
+		)
+		jdbcTemplate.update(
+			"""
+			insert into users (id, email, display_name, status, created_at, updated_at)
+			values (?, 'dev@plot.local', 'Conflicting Dev User', 'ACTIVE', now(), now())
+			""".trimIndent(),
+			conflictingUserId,
+		)
+
+		devBootstrapService.bootstrap()
+
+		assertCanonicalDevUser()
+		val conflictingEmail = jdbcTemplate.queryForObject(
+			"select email from users where id = ?",
+			String::class.java,
+			conflictingUserId,
+		)
+		assertEquals("dev-conflict-$conflictingUserId@plot.local", conflictingEmail)
+	}
+
+	@Test
+	fun bootstrapMovesConflictingDevWorkspaceSlugToCanonicalWorkspace() {
+		devBootstrapService.bootstrap()
+		val conflictingWorkspaceId = UUID.randomUUID()
+
+		jdbcTemplate.update(
+			"""
+			update workspaces
+			set name = 'Stale Canonical Workspace',
+			    slug = ?,
+			    status = 'ARCHIVED'
+			where id = ?
+			""".trimIndent(),
+			"canonical-stale-$conflictingWorkspaceId",
+			devContext.devWorkspaceId,
+		)
+		jdbcTemplate.update(
+			"""
+			insert into workspaces (id, name, slug, created_by_user_id, status, created_at, updated_at)
+			values (?, 'Conflicting Dev Workspace', 'dev-workspace', ?, 'ACTIVE', now(), now())
+			""".trimIndent(),
+			conflictingWorkspaceId,
+			devContext.devUserId,
+		)
+
+		devBootstrapService.bootstrap()
+
+		assertCanonicalDevWorkspace()
+		val conflictingSlug = jdbcTemplate.queryForObject(
+			"select slug from workspaces where id = ?",
+			String::class.java,
+			conflictingWorkspaceId,
+		)
+		assertEquals("dev-workspace-conflict-$conflictingWorkspaceId", conflictingSlug)
+	}
+
+	@Test
+	fun bootstrapReplacesWrongIdWorkspaceMemberTupleWithCanonicalMember() {
+		devBootstrapService.bootstrap()
+		val staleUserId = UUID.randomUUID()
+		val staleWorkspaceId = UUID.randomUUID()
+		val wrongWorkspaceMemberId = UUID.randomUUID()
+
+		jdbcTemplate.update(
+			"""
+			insert into users (id, email, display_name, status, created_at, updated_at)
+			values (?, ?, 'Stale Member User', 'ACTIVE', now(), now())
+			""".trimIndent(),
+			staleUserId,
+			"stale-member-$staleUserId@plot.local",
+		)
+		jdbcTemplate.update(
+			"""
+			insert into workspaces (id, name, slug, created_by_user_id, status, created_at, updated_at)
+			values (?, 'Stale Member Workspace', ?, ?, 'ACTIVE', now(), now())
+			""".trimIndent(),
+			staleWorkspaceId,
+			"stale-member-workspace-$staleWorkspaceId",
+			staleUserId,
+		)
+		jdbcTemplate.update(
+			"""
+			update workspace_members
+			set workspace_id = ?,
+			    user_id = ?,
+			    role = 'VIEWER',
+			    status = 'REMOVED'
+			where id = ?
+			""".trimIndent(),
+			staleWorkspaceId,
+			staleUserId,
+			devContext.devWorkspaceMemberId,
+		)
+		jdbcTemplate.update(
+			"""
+			insert into workspace_members (id, workspace_id, user_id, role, status, joined_at, created_at, updated_at)
+			values (?, ?, ?, 'VIEWER', 'ACTIVE', now(), now(), now())
+			""".trimIndent(),
+			wrongWorkspaceMemberId,
+			devContext.devWorkspaceId,
+			devContext.devUserId,
+		)
+
+		devBootstrapService.bootstrap()
+
+		assertCanonicalDevWorkspaceMembership()
+		val membershipCount = jdbcTemplate.queryForObject(
+			"select count(*) from workspace_members where workspace_id = ? and user_id = ?",
+			Int::class.java,
+			devContext.devWorkspaceId,
+			devContext.devUserId,
+		)
+		assertEquals(1, membershipCount)
 	}
 
 	private fun assertCanonicalDevUser() {
