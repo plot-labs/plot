@@ -6,15 +6,15 @@ Last updated: 2026-07-04
 
 ## One Sentence
 
-Plot is an autonomous update agent that turns shipped work into source-backed,
-on-style updates for review: docs updates, changelogs, release notes, customer
-updates, and launch or social drafts.
+Plot is an autonomous update agent that turns shipped work into source-cited,
+on-style updates: docs updates, changelogs, release notes, customer updates,
+and launch or social drafts.
 
 ## Product Thesis
 
 Coding agents make product shipping faster. The surrounding update work does
-not keep up, and generic writing tools do not know what shipped, what can be
-claimed, or how the team should say it.
+not keep up, and generic writing tools do not know what shipped, what source
+supports it, or how the team should say it.
 
 Teams merge PRs, close issues, make tradeoffs, answer customers, and ship small
 improvements every day. The shipped work is real, but the updates around it
@@ -25,12 +25,12 @@ arrive late or not at all:
 - customer-facing updates require repeated context gathering
 - internal teams ask what changed
 - launch posts and social updates lag behind shipping
-- claims in generated content are hard to trust
+- factual statements in generated content are hard to trust
 
 Plot does not try to become a company knowledge base. It is an autonomous
 post-shipping update agent: watch configured shipped-work sources, prepare the
 needed update pack, preserve team voice and channel style, and keep important
-claims tied to source material for human and agent review.
+generated content tied to source material through citations.
 
 ## Status Quo / Why It Fails
 
@@ -42,18 +42,19 @@ The first user usually:
    promised publicly.
 3. Writes one version for docs or changelog, then rewrites it for customers,
    internal teams, launch posts, and social channels.
-4. Manually checks whether generated or copied claims are true.
+4. Manually checks whether generated statements are supported by source
+   material.
 5. Repeats the same context-gathering loop next week.
 
 Generic chat over pasted PR text is not enough because source selection,
-claim-checking, release-window boundaries, channel style, and multi-artifact
-review still live in the user's head. Source-native release notes alone are not
+source-checking, release-window boundaries, channel style, and multi-artifact
+rewriting still live in the user's head. Source-native release notes alone are not
 enough because teams also need docs deltas, customer language, and launch/social
 drafts that sound like the team.
 
 The failure mode is not weak prose. The failure mode is stale docs, missed
-changes, inaccurate claims, repeated context gathering, and one human becoming
-the bottleneck after every ship cycle.
+changes, inaccurate statements, repeated context gathering, and one human
+becoming the bottleneck after every ship cycle.
 
 ## Not A Knowledge Layer
 
@@ -65,8 +66,9 @@ Plot should not position itself as:
 - a universal RAG/search product
 - a place to store all company context forever
 
-Plot uses source material only to produce reviewed update artifacts. The product
-center is the autonomous update/review loop, not knowledge storage.
+Plot uses source material only to produce source-cited update artifacts. The
+product center is the autonomous update-generation and citation loop, not
+knowledge storage.
 
 ## Inspired By
 
@@ -77,7 +79,7 @@ part of that loop, but narrows the domain.
 
 ```txt
 Tyquill: save sources -> generate articles
-Plot: shipped work -> reviewed update pack
+Plot: shipped work -> source-cited update pack
 ```
 
 Plot is not a general newsletter or article workspace. It is for product teams
@@ -95,32 +97,32 @@ product-facing positioning. The reusable patterns are:
 - AI output should sound like the writer or team, not like a generic model
 - style should be visible through measurable signals, not hidden in a prompt
 - humans and agents should work inside the same durable work object
-- review should happen against artifacts, checks, metadata, and comments, not
-  only against a chat transcript
+- source citations should stay attached to generated content, not hidden in a
+  chat transcript
 
 Voice/style is not the only category, but it is a core quality bar:
 source-backed updates should also be on-style for the channel and team.
 
 Plot should borrow the activity-timeline clarity, content metadata, schedules,
 brand-voice setup, dense task detail, style metrics, draft comparison, and
-reviewable agent-work shape. Plot should differentiate through durable work
-sessions, editable source selection, claim/evidence review, style checks, and
-support for human plus agent review before publishing.
+inspectable agent-work shape. Plot should differentiate through durable work
+sessions, editable source selection, source citations, style guidance, and
+human-controlled publishing outside Plot.
 
 ### Agentic Work Environments
 
 Newer agentic work environments converge on the same product shape: durable
-work sessions, autonomous task execution, reviewable artifacts, and human
-approval. Plot should use that shape for product updates.
+work sessions, autonomous task execution, and inspectable artifacts. Plot
+should use that shape for product updates.
 
 ```txt
-Agent workbench: task -> agent work -> artifacts/checks -> human review
-Writing workspace: intent -> agent interview -> styled drafts -> human review
-Plot: shipping intent -> agent work -> source/claim/style artifacts -> approval
+Agent workbench: task -> agent work -> inspectable artifacts
+Writing workspace: intent -> agent interview -> styled drafts
+Plot: shipping intent -> agent work -> source-cited, on-style drafts
 ```
 
 Plot should have a chat-like session surface with an embedded task manager for
-running, blocked, and ready-for-review work. A separate `Autonomous` surface can
+running, blocked, and ready work. A separate `Autonomous` surface can
 be promoted later when scheduled or parallel agent work becomes common.
 `AgentRun` is execution detail; `Task` and `WorkSession` are the objects the
 user should understand.
@@ -143,7 +145,8 @@ into docs, changelogs, customer updates, and launch/social drafts.
 ```
 
 They already trust their shipped-work systems as the record of what changed, but
-they do not trust raw AI writing to explain those changes without review.
+they do not trust raw AI writing to explain those changes without source
+citations.
 
 Expansion personas can come later: product marketing, customer success,
 solutions engineering, and larger release teams.
@@ -160,15 +163,15 @@ work session
   -> autonomous import or refresh
   -> shipped-change selection
   -> source-backed, on-style update pack
-  -> human and agent review
-  -> human approval before publishing
+  -> source citations and style guidance
+  -> human-controlled publishing outside Plot
 ```
 
 The user should not need to paste individual PR links or remember to start from
-a blank composer every week. They should choose the shipping window, review the
-agent-prepared changes, and approve an update pack. The first implementation can
+a blank composer every week. They should choose the shipping window, inspect the
+agent-prepared changes, and edit or copy an update pack. The first implementation can
 start with a repository-backed adapter, but the product should read as a
-connected-source review workflow rather than a single integration.
+connected-source update workflow rather than a single integration.
 
 This is autonomous draft preparation, not autonomous publishing.
 
@@ -177,9 +180,10 @@ This is autonomous draft preparation, not autonomous publishing.
 For the first version, Plot should make one promise:
 
 ```txt
-After choosing a shipping window and source scope, Plot prepares a source-backed,
-on-style update pack in minutes, with every important claim tied back to source
-material and every variant ready for review.
+After choosing a shipping window and source scope, Plot prepares a
+source-backed, on-style update pack in minutes, with important generated
+statements tied back to source material and every variant ready to inspect,
+edit, or copy.
 ```
 
 The first pack should cover a small fixed set of artifacts:
@@ -191,40 +195,39 @@ The first pack should cover a small fixed set of artifacts:
 - launch or social draft
 
 This is intentionally smaller than a publishing automation platform. The update
-agent drafts, checks, and queues the pack; a human still reviews, edits, and
-approves what goes out.
+agent drafts and cites the pack; a human still edits, copies, and publishes
+outside Plot.
 
 ## Core Workflow
 
 1. A workspace member starts a work session with a request like "prepare this
    week's update pack."
 2. Plot asks for or infers the shipping window, source scope, voice, audience,
-   channels, and review strictness.
-3. Plot creates a durable task visible from the session's task/review area.
+   and channels.
+3. Plot creates a durable task visible from the session's task area.
 4. Plot's update agent imports PRs, commits, releases, issues, and useful
    metadata into source blocks.
 5. Plot proposes which shipped changes matter for this update and records that
-   source selection as a reviewable artifact.
+   source selection as an inspectable artifact.
 6. Plot creates an update pack with channel-specific, on-style variants.
-7. Plot extracts important claims and links them to source blocks where possible.
-8. Plot records source maps, claim maps, style reports, and draft packs as task
+7. Plot attaches source citations to generated content where possible.
+8. Plot records source maps, citation maps, style notes, and draft packs as task
    artifacts.
-9. A person or external coding agent can review the same pack, claims, evidence,
-   and style guidance.
-10. A human edits, rejects, or approves the variants before publishing.
-11. Approved content and edits improve future templates, voice/style guidance,
-    and review behavior.
+9. A person or external coding agent can inspect the same pack, citations, and
+   style guidance.
+10. A human edits, copies, or publishes variants outside Plot.
+11. Accepted edits can improve future templates and voice/style guidance.
 
 ## Product Surface
 
 The v0 UI should have three visible work surfaces, plus supporting settings:
 
-- `Sessions`: chat-like work sessions for starting, steering, and reviewing
-  update work, including running and ready-for-review tasks.
+- `Sessions`: chat-like work sessions for starting and steering update work,
+  including running and ready tasks.
 - `Sources`: a shipped-work timeline where the user can inspect and
   edit source selection.
-- `Packs`: draft and approved update packs, with source metadata and review
-  state.
+- `Packs`: draft update packs with source metadata, citations, and channel
+  variants.
 
 Supporting surfaces:
 
@@ -239,14 +242,14 @@ Session start should ask "What shipped, and what update do you need?" rather
 than leading with integration setup. The source adapter appears as a capability
 inside the session, not as the product's main promise.
 
-The review view should be a three-pane workspace:
+The content workspace should be a three-pane workspace:
 
 ```txt
-Source timeline  ->  Draft variants  ->  Claim, style, and approval review
+Source timeline  ->  Draft variants  ->  Citations and style guidance
 ```
 
 The task detail view should use a dense right rail for source window, channels,
-voice profile, owner, checks, claim risk, style match, and approval state.
+voice profile, source citations, style fit, and generation state.
 
 ## Update Pack
 
@@ -259,8 +262,8 @@ changes. The v0 pack should contain a fixed first set:
 - customer update
 - launch or social draft
 
-The same source set can produce multiple variants, but the review view should
-keep source, claim status, caveats, voice/style guidance, and draft output
+The same source set can produce multiple variants, but the content workspace
+should keep source citations, caveats, voice/style guidance, and draft output
 together.
 
 ## Core Objects
@@ -269,14 +272,11 @@ together.
   request and inspect resulting tasks and artifacts.
 - `SessionMessage`: one human, agent, or system message inside a work session.
 - `Task`: a durable user-visible unit of update work, shown in the session's
-  running or ready-for-review task area.
-- `TaskArtifact`: a reviewable output from a task, such as an agent plan, source
-  map, content pack, claim map, style report, or verification summary.
+  running or ready task area.
+- `TaskArtifact`: an inspectable output from a task, such as an agent plan,
+  source map, content pack, citation map, style note, or verification summary.
 - `SourceSelectionItem`: an included, excluded, or needs-context source item for
   a task.
-- `ReviewCheck`: a queryable approval-readiness signal for source coverage,
-  claim evidence, unsupported claims, style match, channel completeness, or
-  approval.
 - `UpdateRecipe`: a recurring update recipe for release cadence or scheduled
   update work, initially used as model shape rather than primary UI.
 - `UpdateRecipeRun`: one execution record for an update recipe.
@@ -291,14 +291,13 @@ together.
   release, or issue.
 - `ContentTemplate`: a reusable output recipe for changelogs, docs updates,
   customer updates, launch posts, and similar artifacts.
-- `VoiceProfile`: team and channel style guidance from approved examples and
+- `VoiceProfile`: team and channel style guidance from accepted examples and
   explicit rules.
 - `AgentRun`: one autonomous or user-requested update-agent attempt.
 - `GenerationRun`: one backend-managed model generation request.
 - `ContentPack`: the generated update pack.
 - `ContentVariant`: one editable draft inside the pack.
-- `Claim`: an important factual statement in a generated variant.
-- `ClaimEvidence`: the link between a claim and one or more source blocks.
+- `Citation`: the link between generated content and one or more source blocks.
 
 ## v0 Scope
 
@@ -314,21 +313,20 @@ v0 should include:
 - one default VoiceProfile with accepted examples, channel style rules, and
   explicit do/don't guidance
 - chat-like WorkSession UX for starting and steering update work
-- session task/review area backed by durable Task state
+- session task area backed by durable Task state
 - source timeline for imported shipped work
-- task detail with activity and right-side metadata/checks
+- task detail with activity and right-side metadata
 - draft comparison and style signals for generated variants
-- TaskArtifact records for source maps, claim maps, style reports, agent plans,
+- TaskArtifact records for source maps, citation maps, style notes, agent plans,
   verification summaries, and content pack links
-- SourceSelectionItem records for reviewable source inclusion/exclusion
-- ReviewCheck records for approval readiness
+- SourceSelectionItem records for inspectable source inclusion/exclusion
 - UpdateRecipe and UpdateRecipeRun model shape, even if scheduled execution and
   recipe UI are deferred
-- lightweight AgentRun state for import, draft, claim mapping, and review queue
+- lightweight AgentRun state for import, draft, citation mapping, and task state
 - direct model-provider API call from the backend
 - content packs and editable variants
-- claim/evidence-lite review for important factual claims
-- approve, reject, and edit states
+- citation/source-reference support for generated content
+- edit and copy/export states
 
 ## Pre-PMF Risks
 
@@ -345,10 +343,10 @@ true:
 - Voice/style quality matters enough that users prefer Plot over raw release
   notes or generic chat output.
 - Users trust a shipped-work activity timeline more when they can edit source
-  selection and see claim evidence before approval.
-- Source-backed claim review is meaningfully more trusted than a generic chat
+  selection and see citations next to generated content.
+- Source-backed citations are meaningfully more trusted than a generic chat
   prompt over copied PR text.
-- Users want one reviewed pack that fans out into multiple artifacts, rather
+- Users want one source-cited pack that fans out into multiple artifacts, rather
   than a single changelog generator.
 - The workflow saves enough time to become weekly habit before background
   automation exists.
@@ -362,7 +360,7 @@ Defer:
 - rich prior-writing import beyond a small accepted-example set
 - scheduled publishing
 - direct publish to docs, social, or changelog systems
-- autonomous publish without human approval
+- autonomous publish without human control
 - full planning, cycles, roadmaps, and initiatives
 - broad public template marketplace
 - complex multi-agent workflows beyond the update-agent loop
@@ -388,8 +386,8 @@ Messaging guardrail:
 
 ```txt
 "Ship fast" and "write less" are the outer promise. The product mechanism is
-autonomous draft preparation, source-backed claims, team voice/style, and human
-approval before publishing.
+autonomous draft preparation, source-backed citations, team voice/style, and
+human-controlled publishing.
 ```
 
 Avoid leading with:
@@ -399,7 +397,7 @@ Avoid leading with:
 - generic AI writer
 - voice-only writing assistant
 - autonomous publisher
-- always-on publishing without approval
+- always-on publishing without human control
 
 Those phrases either over-broaden the product or pull Plot toward categories
 that are not the intended v0.
@@ -408,14 +406,14 @@ that are not the intended v0.
 
 v0 should prove:
 
-- time from repository import to approved update pack
+- time from repository import to source-cited update pack
 - time from shipped change to agent-prepared draft pack
-- percentage of generated claims with attached source evidence
-- edit distance between generated and approved variants
-- style rewrite distance between generated and approved variants
+- percentage of generated variants with attached source citations
+- edit distance between generated and accepted variants
+- style rewrite distance between generated and accepted variants
 - repeat weekly usage by the same workspace
 - number of output artifacts generated from one shipped-change set
-- user trust in source-backed claims
+- user trust in source-backed citations
 
 ## Validation Plan
 
@@ -425,7 +423,7 @@ first connected shipped-work adapter:
 1. Watch 5 target users create release notes or docs updates from a recent
    release without Plot.
 2. Measure how long they spend gathering context, asking clarifying questions,
-   rewriting for channels, matching team style, and checking claims.
+   rewriting for channels, matching team style, and checking source support.
 3. Configure Plot for the same source/release window and prepare the pack
    before they ask for it.
 4. Ask whether they would keep the agent enabled for next week's release and
@@ -438,27 +436,27 @@ their real private source and use Plot on the next release.
 
 Generic AI writing will commoditize. That makes Plot's defensibility less about
 prose quality alone and more about workflow fit: permissioned source import,
-release-window selection, autonomous draft preparation, reviewable change
-selection, source-backed claims, approved edits, channel templates, and team
+release-window selection, autonomous draft preparation, inspectable change
+selection, source-backed citations, accepted edits, channel templates, and team
 voice/style memory.
 
 If coding agents keep increasing shipping velocity, the number of small shipped
 changes rises faster than the number of people willing to update docs,
 changelogs, customers, and launch channels. Plot becomes more important when
 shipping gets faster because it sits after shipping, where human trust and
-source review still matter.
+source citations still matter.
 
 ## Strategic Boundary
 
-Plot can grow into publishing automation after the review loop works. The
-sequence is:
+Plot can grow into publishing automation after the source-cited generation loop
+works. The sequence is:
 
 ```txt
-v0: first source adapter, autonomous draft packs, voice/style, and human approval
+v0: first source adapter, autonomous draft packs, voice/style, and human-controlled handoff
 v1: lightweight integrations, richer draft inbox, and external agent access
-v2: publishing handoff, schedules, and controlled approval policies
+v2: publishing handoff, schedules, and controlled publishing policies
 ```
 
 The moat is not that Plot writes better prose. Models will keep improving. The
-moat is the workflow memory around shipped changes, approved claims, source
-evidence, channel templates, accepted edits, and team voice/style.
+moat is the workflow memory around shipped changes, source citations, channel
+templates, accepted edits, and team voice/style.

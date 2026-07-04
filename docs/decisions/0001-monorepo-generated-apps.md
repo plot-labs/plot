@@ -18,7 +18,7 @@ The backend stays as one service for v0. The first autonomous loop is still
 backend-managed: watch a selected shipped-work source through the first adapter,
 import shipped changes, load Writing Blocks, a Content Template, and a Voice
 Profile; call the model provider; then persist the Agent Run, Content Pack,
-Content Variants, and claim/evidence/style review state. A separate agent
+Content Variants, citations, and style metadata. A separate agent
 service, direct publishing, policy checks, and broader automation can be added
 later without changing the monorepo shape.
 
@@ -30,7 +30,7 @@ hand-rolled setup, while the backend domain modules make Plot's v0 loop
 explicit:
 
 ```txt
-shipping window -> source adapter -> Writing Blocks -> Content Template -> Voice Profile -> Agent Run -> API Generation -> Content Pack -> Claim/source/style review
+shipping window -> source adapter -> Writing Blocks -> Content Template -> Voice Profile -> Agent Run -> API Generation -> Content Pack -> citations/style guidance
 ```
 
 ## Consequences

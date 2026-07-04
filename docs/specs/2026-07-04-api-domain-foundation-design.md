@@ -6,7 +6,7 @@ Date: 2026-07-04
 
 Build the first Kotlin Spring Boot backend domain foundation for Plot. This
 work establishes the workspace-scoped API shape that later authentication,
-source adapters, agent execution, generation, packs, claims, and review flows
+source adapters, agent execution, generation, packs, and source citation flows
 can build on.
 
 This is not the full v0 domain model. It intentionally stops at identity and
@@ -47,7 +47,7 @@ Do not implement these in this foundation pass:
 - agent runs
 - generation runs
 - content packs or variants
-- claims, evidence, or review checks
+- citations or source references
 - source repositories, repository watches, repository imports, or connections
 - scheduled or batch automation recipes and run history
 - pagination
@@ -172,7 +172,6 @@ records created by services should receive IDs from `UuidGenerator`.
 - `session_type`
 - `status`
 - `source_scope`
-- `review_mode`
 - `created_by_user_id`
 - `last_activity_at`
 - timestamps
@@ -185,10 +184,8 @@ records created by services should receive IDs from `UuidGenerator`.
 - `title`
 - `task_type`
 - `status`
-- `priority`
 - `objective`
 - `source_scope`
-- `review_mode`
 - `created_by_user_id`
 - `last_activity_at`
 - timestamps
@@ -269,7 +266,6 @@ erDiagram
         varchar session_type
         varchar status
         jsonb source_scope
-        varchar review_mode
         uuid created_by_user_id FK
         timestamptz last_activity_at
         timestamptz created_at
@@ -283,10 +279,8 @@ erDiagram
         text title
         varchar task_type
         varchar status
-        varchar priority
         text objective
         jsonb source_scope
-        varchar review_mode
         uuid created_by_user_id FK
         timestamptz last_activity_at
         timestamptz created_at
@@ -407,7 +401,6 @@ Create/update fields:
 
 - `title`
 - `sourceScope`
-- `reviewMode`
 
 The request DTO does not need to expose `sessionType` in this foundation pass.
 The service should set `sessionType` to `CHAT` and `status` to `OPEN`.
@@ -419,10 +412,8 @@ Create/update fields:
 - `sessionId`
 - `title`
 - `taskType`
-- `priority`
 - `objective`
 - `sourceScope`
-- `reviewMode`
 
 If `sessionId` is provided, it must identify a work session in the current dev
 workspace. `status` defaults to `QUEUED`.
@@ -451,8 +442,7 @@ is created.
 Minimum validation:
 
 - workspace `name` and `slug` must not be blank
-- work session `reviewMode` must be present
-- task `title`, `taskType`, `priority`, and `reviewMode` must be present
+- task `title` and `taskType` must be present
 - task `sessionId`, when provided, must belong to the current workspace
 - writing block must include at least one of `title` or `body`
 - writing block `sourceOrigin` and `blockKind` must be present
@@ -513,8 +503,17 @@ create tasks or task runs, but this foundation keeps `Task` as a single
 user-visible work item.
 
 Do not add task due dates in this foundation. Plot tasks are short-running
-update-generation or review-preparation units, not long-lived
+update-generation or citation-preparation units, not long-lived
 project-management tasks with deadline workflows.
+
+Do not add task priority in this foundation. Plot tasks are not a general
+project-management queue, and there is no priority-based scheduler or SLA in
+the product model.
+
+Do not model review as a selectable `review_mode`. Plot should provide
+source-cited generated content and human-controlled publishing, not a formal
+in-product approval workflow. Future source support should use citations,
+source references, and content metadata rather than a review mode enum.
 
 Avoid introducing general abstractions until duplication becomes meaningful.
 The first implementation should optimize for clear domain boundaries over a
