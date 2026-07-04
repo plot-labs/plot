@@ -6,7 +6,6 @@ import {
   GitPullRequest,
   MessageSquareText,
   MoreHorizontal,
-  PanelRightClose,
   PanelRightOpen,
   SlidersHorizontal,
 } from "lucide-react";
@@ -208,22 +207,23 @@ function ActiveSessionWorkspace({
               onClick={() => setFloatingSummaryOpen((open) => !open)}
               aria-pressed={floatingSummaryOpen}
               aria-label={floatingSummaryOpen ? "Hide session summary" : "Show session summary"}
-              className={`hidden size-9 shrink-0 items-center justify-center rounded-xl border border-black/10 text-black/55 transition hover:bg-black/5 hover:text-black/75 dark:border-white/10 dark:text-white/55 dark:hover:bg-white/10 dark:hover:text-white/75 ${
+              className={`hidden size-9 shrink-0 items-center justify-center rounded-xl text-black/55 transition hover:bg-black/5 hover:text-black/75 dark:text-white/55 dark:hover:bg-white/10 dark:hover:text-white/75 ${
                 rightPanelOpen ? "min-[2100px]:inline-flex" : "min-[1700px]:inline-flex"
               }`}
             >
               <SlidersHorizontal className="size-4" />
             </button>
-            <button
-              type="button"
-              onClick={() => setRightPanelOpen((open) => !open)}
-              disabled={!selectedDocument}
-              aria-pressed={rightPanelOpen}
-              aria-label={rightPanelOpen ? "Close document panel" : "Open document panel"}
-              className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl border border-black/10 text-black/55 transition hover:bg-black/5 hover:text-black/75 disabled:cursor-not-allowed disabled:opacity-35 dark:border-white/10 dark:text-white/55 dark:hover:bg-white/10 dark:hover:text-white/75"
-            >
-              {rightPanelOpen ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}
-            </button>
+            {!rightPanelOpen && (
+              <button
+                type="button"
+                onClick={() => setRightPanelOpen(true)}
+                disabled={!selectedDocument}
+                aria-label="Open document panel"
+                className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl text-black/55 transition hover:bg-black/5 hover:text-black/75 disabled:cursor-not-allowed disabled:opacity-35 dark:text-white/55 dark:hover:bg-white/10 dark:hover:text-white/75"
+              >
+                <PanelRightOpen className="size-4" />
+              </button>
+            )}
           </div>
         </header>
 
