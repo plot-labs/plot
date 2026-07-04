@@ -90,22 +90,22 @@ export function ProductSidebar({ theme, onThemeChange }: ProductSidebarProps) {
       </div>
 
       <div className="space-y-1 px-3 pb-4">
-        <button className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] font-medium text-black/70 transition hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10">
+        <button className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] font-medium text-black/70 transition hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10">
           <Plus className="size-4" />
           New session
         </button>
-        <button className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] font-medium text-black/70 transition hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10">
+        <button className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] font-medium text-black/70 transition hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10">
           <Search className="size-4" />
           Search
         </button>
-        <button className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] font-medium text-black/70 transition hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10">
+        <button className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] font-medium text-black/70 transition hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10">
           <CalendarClock className="size-4" />
           Scheduled
           <span className="ml-auto rounded-full bg-black/[0.06] px-2 py-0.5 text-xs text-black/45 dark:bg-white/10 dark:text-white/50">
             3
           </span>
         </button>
-        <button className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] font-medium text-black/70 transition hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10">
+        <button className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] font-medium text-black/70 transition hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10">
           <Puzzle className="size-4" />
           Integrations
         </button>
@@ -126,7 +126,7 @@ export function ProductSidebar({ theme, onThemeChange }: ProductSidebarProps) {
               href={item.href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition",
+                "flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition",
                 active
                   ? "bg-white/75 text-[#18181b] shadow-sm shadow-black/[0.03] dark:bg-white/10 dark:text-white"
                   : "text-black/65 hover:bg-black/5 dark:text-white/65 dark:hover:bg-white/10",
@@ -149,7 +149,7 @@ export function ProductSidebar({ theme, onThemeChange }: ProductSidebarProps) {
             <Link
               key={session.id}
               href={`/sessions?session=${session.id}`}
-              className="group flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] text-black/65 transition hover:bg-black/5 dark:text-white/65 dark:hover:bg-white/10"
+              className="group flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] text-black/65 transition hover:bg-black/5 dark:text-white/65 dark:hover:bg-white/10"
             >
               <FileText className="size-3.5 shrink-0 text-black/40 dark:text-white/40" />
               <span className="min-w-0 flex-1 truncate">{session.title}</span>
@@ -225,7 +225,7 @@ export function ProductSidebar({ theme, onThemeChange }: ProductSidebarProps) {
           onClick={() => setProfileMenuOpen((open) => !open)}
           aria-expanded={profileMenuOpen}
           aria-haspopup="menu"
-          className="flex w-full items-center gap-2 rounded-lg px-1 py-1 text-left transition hover:bg-black/[0.04] dark:hover:bg-white/10"
+          className="flex w-full items-center gap-2 rounded-xl px-1 py-1 text-left transition hover:bg-black/[0.04] dark:hover:bg-white/10"
         >
           <div className="flex size-8 items-center justify-center rounded-full border border-black/10 bg-white text-xs font-semibold text-black/65 dark:border-white/10 dark:bg-white/10 dark:text-white/75">
             <UserRound className="size-4" />
