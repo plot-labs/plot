@@ -512,6 +512,10 @@ domain rather than as a generic task mode. A future scheduled automation can
 create tasks or task runs, but this foundation keeps `Task` as a single
 user-visible work item.
 
+Do not add task due dates in this foundation. Plot tasks are short-running
+update-generation or review-preparation units, not long-lived
+project-management tasks with deadline workflows.
+
 Avoid introducing general abstractions until duplication becomes meaningful.
 The first implementation should optimize for clear domain boundaries over a
 generic CRUD framework.

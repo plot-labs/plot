@@ -1085,6 +1085,9 @@ Rules:
   separate approval-gated step.
 - Scheduled or batch automation should be modeled through recipes and run
   history, not through a task mode enum.
+- Tasks are short-running update-generation or review-preparation units, not
+  long-lived project-management tasks with deadline workflows. Do not add
+  `due_at` unless the product introduces an explicit deadline feature.
 
 ### TaskArtifact
 
