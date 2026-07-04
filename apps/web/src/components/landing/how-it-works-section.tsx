@@ -5,35 +5,35 @@ import { useEffect, useRef, useState } from "react";
 const steps = [
   {
     number: "I",
-    label: "Sources",
-    title: "Start where AI coding is speeding up the work.",
+    label: "Configure",
+    title: "Set the window and voice.",
     description:
-      "Connect PRDs, RFCs, AI-assisted PRs, issues, Slack decisions, support threads, and customer feedback. Plot keeps the source and timestamp attached to every block.",
+      "Choose the shipping window, release cadence, and shipped-work sources. Add the examples and rules that define how your team writes.",
   },
   {
     number: "II",
-    label: "Signals",
-    title: "Find what the docs and content missed.",
+    label: "Agent drafts",
+    title: "Let Plot prepare the pack.",
     description:
-      "Shipped changes, customer impact, decisions, objections, docs gaps, and rollout risks are scored against the update your team has not written yet.",
+      "The update agent imports shipped changes, proposes what matters, maps claims to sources, and drafts each channel in the right style.",
   },
   {
     number: "III",
-    label: "Plan",
-    title: "Draft the catch-up in your brand voice.",
+    label: "Approve",
+    title: "Review before it goes out.",
     description:
-      "The output is not a blank chat response. It is a docs brief, release note, changelog plan, and handoff where every factual claim points back to a source and every draft follows your voice.",
+      "Humans and coding agents see the same pack, claims, evidence, caveats, and style guidance. Publishing stays approval-gated.",
   },
 ];
 
 const sourceRows = [
-  { name: "PR #482", detail: "Onboarding import flow changed", meta: "GitHub" },
-  { name: "RFC notes", detail: "Migration guardrail added", meta: "Docs" },
-  { name: "Customer thread", detail: "Asked for clearer role setup", meta: "Email" },
+  { name: "PR #482", detail: "Onboarding import flow changed", meta: "Repo" },
+  { name: "Issue thread", detail: "Migration guardrail requested", meta: "Tracker" },
+  { name: "Release note", detail: "Role setup shipped", meta: "Release" },
 ];
 
 const signalRows = [
-  { name: "Shipped change", detail: "New onboarding path is live", score: "91" },
+  { name: "Agent-picked change", detail: "New onboarding path is live", score: "91" },
   { name: "Docs gap", detail: "Role setup needs migration language", score: "84" },
   { name: "Launch decision", detail: "Lead with reduced setup time", score: "78" },
 ];
@@ -41,13 +41,13 @@ const signalRows = [
 const planRows = [
   { name: "Release brief", detail: "Narrative, claims, and review owners", meta: "7 claims" },
   { name: "Docs update", detail: "Steps, caveats, and linked sources", meta: "help" },
-  { name: "Sales handoff", detail: "Customer impact with source chips", meta: "draft" },
+  { name: "Launch draft", detail: "Customer impact with source chips", meta: "draft" },
 ];
 
 const lanes = [
   { title: "Source ledger", rows: sourceRows },
-  { title: "Change queue", rows: signalRows },
-  { title: "Docs plan", rows: planRows },
+  { title: "Review queue", rows: signalRows },
+  { title: "Update pack", rows: planRows },
 ];
 
 export function HowItWorksSection() {
@@ -102,9 +102,9 @@ export function HowItWorksSection() {
               isVisible ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
             }`}
           >
-            Turn AI-shipped changes into
+            Let the agent prepare
             <br />
-            <span className="text-background/50">content that catches up.</span>
+            <span className="text-background/50">updates your team approves.</span>
           </h2>
         </div>
 
@@ -156,7 +156,7 @@ export function HowItWorksSection() {
                   </div>
                 </div>
                   <div className="font-mono text-[10px] uppercase text-background/45">
-                  Source + voice required
+                  Human approval required
                 </div>
               </div>
 

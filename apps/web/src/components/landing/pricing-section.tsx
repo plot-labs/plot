@@ -9,11 +9,11 @@ const plans = [
     description: "For product-led founders and small engineering teams",
     price: { monthly: 15, annual: 12 },
     features: [
-      "Weekly AI-shipping catch-up brief",
-      "PRD, spec, upload, paste, and URL inputs",
-      "Source block library",
-      "Release note, changelog, and content drafts",
-      "Manual customer feedback import",
+      "Shipping window and release cadence",
+      "Connected shipped-work sources",
+      "Code, issue, release, and note Writing Blocks",
+      "Voice/style profile for generated drafts",
+      "Claim evidence review",
     ],
     cta: "Join waitlist",
     popular: false,
@@ -23,11 +23,11 @@ const plans = [
     description: "For product, engineering, and DevRel teams",
     price: { monthly: 20, annual: 16 },
     features: [
-      "Decision-to-docs and launch content briefs",
-      "GitHub, Linear, Docs, and selected source sync",
+      "Private connected-source access",
+      "Agent-prepared shipped-change selection",
       "Claim evidence and needs-review status",
-      "Release notes, docs updates, and sales handoff content",
-      "Workspace memory and agent trace",
+      "Release note, changelog, and docs update drafts",
+      "Customer update and launch/social drafts",
     ],
     cta: "Request access",
     popular: true,
@@ -39,8 +39,8 @@ const plans = [
     features: [
       "Everything in Team",
       "Custom source review policy",
-      "Launch inbox, docs map, and evidence map",
-      "Product and engineering review workflow",
+      "Launch inbox and evidence map",
+      "Product, engineering, and agent review workflow",
       "Private onboarding for source setup",
       "Custom contracts",
     ],
@@ -170,7 +170,7 @@ export function PricingSection() {
 
         {/* Bottom Note */}
         <p className="mt-12 text-center text-sm text-muted-foreground">
-          All plans keep publishing manual and mark unsupported product claims for review.{" "}
+          All plans keep publishing approval-gated and mark unsupported product claims for review.{" "}
           <a href="#" className="underline underline-offset-4 hover:text-foreground transition-colors">
             See source policy
           </a>

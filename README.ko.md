@@ -1,117 +1,92 @@
-# Plot
+<div align="center">
+  <img src="apps/web/public/plot-icon.svg" alt="Plot logo" width="88" />
+  <h1>Plot</h1>
+  <p><strong>Ship fast. Write less. Stay in your team's voice.</strong></p>
+  <p>
+    AI-assisted shipping 속도를 따라가지 못하는 docs, release note, changelog,
+    customer update, launch content를 위한 autonomous post-shipping update
+    workspace입니다.
+  </p>
+  <p>
+    <a href="docs/product/product-definition.md"><strong>Product Definition</strong></a>
+    ·
+    <a href="docs/product/agentic-ux.md"><strong>Agentic UX</strong></a>
+    ·
+    <a href="docs/architecture/data-architecture.md"><strong>Data Architecture</strong></a>
+  </p>
+  <p>
+    <img alt="Status: in development" src="https://img.shields.io/badge/status-in_development-030303?style=flat-square">
+    <img alt="Sources: connected" src="https://img.shields.io/badge/sources-connected-030303?style=flat-square">
+    <img alt="Approval: human approved" src="https://img.shields.io/badge/approval-human_approved-030303?style=flat-square">
+  </p>
+</div>
 
 [English](README.md) | [한국어](README.ko.md)
 
-**Keep docs and content in sync with shipping.**
+## Plot은 무엇인가?
 
-AI coding은 product/engineering team의 shipping 속도를 빠르게 만들고 있지만, docs, release note, changelog, launch brief, customer-facing content는 여전히 예전 속도로 움직입니다. Plot은 연결하거나, 업로드하거나, 붙여넣거나, 포워딩한 모든 입력을 **Source Block**으로 바꾸고, 그 block에서 유용한 product signal을 감지해 brand voice에 맞는 source-backed docs와 release content를 생성합니다.
+AI coding agent는 product/engineering team의 shipping 속도를 빠르게 만들고
+있지만, shipped work 이후의 글쓰기 작업은 여전히 예전 속도로 움직입니다.
 
-Plot은 범용 AI writer가 아닙니다. Plot은 AI coding으로 빨라진 product shipping을 따라잡기 위한 connected documentation and release-content system입니다.
+Plot은 실제로 ship된 작업에서 시작해 connected source record를 **Writing
+Block**으로 바꾸고, 팀의 voice에 맞는 source-backed update pack을
+준비합니다. 제품 표면은 source 연결 화면이 아니라 review workspace입니다:
+sessions, sources, packs, voice, approvals.
 
-## 제품 아이디어
+Plot은 범용 AI writer도, company knowledge layer도 아닙니다. Agent가 작업을
+준비하고, 사람은 나가는 내용을 승인합니다.
 
-Product/engineering team은 이미 좋은 문서와 release content의 재료를 가지고 있습니다. 다만 AI coding 때문에 그 재료가 content process보다 더 빠르게 움직입니다.
-
-- PRD와 product spec
-- RFC와 design doc
-- GitHub PR과 issue
-- Linear 또는 Jira ticket
-- launch spec
-- 고객 이메일과 support thread
-- Slack decision
-- incident note
-- 업로드한 PDF와 research note
-
-문제는 빈 화면이 아닙니다. 문제는 맥락이 흩어져 있다는 것입니다.
-
-Plot은 이 맥락을 Source Block으로 정규화하고, change signal을 추출한 뒤, weekly 또는 launch-specific docs/content catch-up plan으로 바꿉니다.
+## Product Loop
 
 ```txt
-Inputs
-  -> Source Blocks
-  -> Signals
-  -> Brief
-  -> Catch-up Plan
-  -> Release Pack
-  -> Review
-  -> Follow-up Update
+Ask for an update
+  -> choose shipping window and sources
+  -> inspect Writing Blocks
+  -> apply template and voice
+  -> generate an update pack
+  -> review claims, evidence, and style
+  -> approve channel-ready variants
 ```
 
-## 핵심 객체
+## Plot이 하는 일
 
-Plot의 핵심 객체는 **Source Block**입니다.
+- 빈 화면이 아니라 shipped product work에서 update pack을 만듭니다.
+- 중요한 claim을 그것을 뒷받침하는 source block에 연결합니다.
+- changelog, docs update, customer update, launch draft, social copy 같은
+  channel variant를 만듭니다.
+- example, rule, template, review check를 통해 voice/style을 명시적으로
+  유지합니다.
+- Publishing은 human-approved 상태로 둡니다.
 
-Source Block은 Plot이 docs, release content, brand voice adaptation, claim 판단에 사용할 수 있는 정규화된 product/engineering context unit입니다.
+## Product Surface
 
-예시:
+| Surface | Role |
+| --- | --- |
+| Sessions | 사람이나 agent가 update pack을 요청하고 진행 상황을 따라가는 chat-like work session입니다. |
+| Sources | Shipped-work timeline, source selection, import, coverage를 다룹니다. |
+| Packs | Draft/approved update pack과 channel variant, review state를 봅니다. |
+| Voice | Team voice, channel style, sample, explicit rule을 관리합니다. |
+| Settings | Workspace, member, permission, source connection을 관리합니다. |
 
-- GitHub PR block
-- Linear issue block
-- Slack thread block
-- PDF block
-- Google Doc block
-- RFC block
-- incident note block
-- support thread block
-- customer email block
-- manual note block
+## How It Works
 
-Connection, upload, paste, URL, email forward는 모두 input method입니다. 이 모든 입력은 Source Block을 만듭니다.
+- Shipped-work source를 연결하고 update가 필요한 release window를 선택.
+- PR, issue, commit, tag, release, comparison range를 위한 Writing Block.
+- 초기 생성은 direct model-provider API call로 시작.
+- 반복 가능한 출력을 위한 Content Template과 Voice Profile.
+- Approval 전 claim, source, style review.
+- Publishing은 human-approved 상태로 유지.
 
-## 제품 원칙
+## Architecture
 
-**Every input becomes a block.**  
-Plot은 upload, connection, URL, paste를 서로 다른 제품 세계로 나누지 않습니다. 모든 입력은 Source Block이 됩니다.
-
-**Connections are live block factories.**  
-연결된 source는 시간이 지나면서 계속 새로운 Source Block을 만듭니다. 이 block들은 autonomous product/docs signal을 발생시킬 수 있습니다.
-
-**The Catch-up Brief is the home screen.**  
-Plot은 blank composer에서 시작하면 안 됩니다. 핵심 경험은 "무엇이 ship됐고, 어떤 source가 이를 뒷받침하며, 어떤 docs/content가 뒤처졌고, brand voice로 어떻게 고쳐야 하는지"를 먼저 보여주는 것입니다.
-
-**Source-backed by default.**  
-Plot은 그럴듯한 copy만 생성하면 안 됩니다. 중요한 product claim은 가능한 한 Source Block과 Signal에 연결되어야 합니다.
-
-## Origin
-
-Plot은 [Tyquill](https://github.com/tyquill)에서 전략적으로 피봇한 제품입니다.
-
-Tyquill은 source를 수집하고 draft를 생성하는 데 집중했습니다. Plot은 그 workflow의 유용한 insight는 유지하되, 제품의 중심을 broad AI writing assistance에서 product team을 위한 connected documentation intelligence로 바꿉니다.
-
-핵심 변화는 다음과 같습니다.
-
-```txt
-Tyquill: save sources -> generate drafts
-Plot: inputs -> Source Blocks -> Signals -> Catch-up Brief -> Release Pack -> Review -> Follow-up Update
-```
-
-Plot은 새 제품으로 처음부터 다시 만들어지고 있습니다. Source Block, source-backed product claim, brand voice, catch-up brief, release pack, dynamic agent workflow를 중심으로 더 명확한 domain model을 갖습니다.
-
-## 타깃 사용자
-
-초기 타깃:
-
-- product-led founder
-- 작은 product/engineering team
-- AI/devtool team
-- DevRel 및 developer experience team
-- product change를 자주 shipping하는 team
-
-확장 타깃:
-
-- product marketer
-- DevRel team
-- B2B launch team
-- solutions 및 sales engineering team
-
-## 아키텍처
-
-Plot은 생성기로 만든 Next.js frontend와 Spring Boot backend를 포함하는 monorepo입니다.
+Plot은 생성기로 만든 Next.js frontend와 backend service를 포함하는
+monorepo입니다. Domain model은 production backend를 비용, 배포 방식,
+운영 부담에 맞춰 선택할 수 있도록 framework-neutral하게 둡니다.
 
 ```txt
 apps/
   web/  Next.js app
-  api/  Spring Boot API and dynamic loop agent runtime
+  api/  reserved for the backend service once the runtime is selected
 
 packages/
   api-client/  generated TypeScript client later
@@ -130,21 +105,24 @@ docs/
   operations/    local/dev/ops runbooks
 ```
 
-v1에서는 backend와 agent runtime을 하나의 Spring Boot 프로세스 안에 둡니다. 목표는 domain state, job, policy check, agent trace를 한 곳에서 관리하는 modular monolith입니다.
+Core update loop를 검증하는 동안 backend는 하나의 service로 둡니다. 초기 AI
+생성은 그 service가 관리하는 direct model-provider API call로 시작하고, 더
+깊은 orchestration, authenticated integration, automation은 core update
+loop가 동작한 뒤 추가합니다.
 
-## 명령어
+## Development
 
 ```bash
 pnpm dev:web
 pnpm build:web
 pnpm lint:web
-
-pnpm dev:api
-pnpm build:api
-pnpm test:api
 ```
 
-## 문서
+## Docs
 
+- [Product Definition](docs/product/product-definition.md)
+- [Agentic UX Direction](docs/product/agentic-ux.md)
 - [Project Structure](docs/architecture/project-structure.md)
+- [Data Architecture](docs/architecture/data-architecture.md)
+- [Data ERD](docs/architecture/data-erd.mmd)
 - [ADR 0001: Monorepo With Generated Apps](docs/decisions/0001-monorepo-generated-apps.md)

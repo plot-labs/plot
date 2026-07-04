@@ -1,8 +1,14 @@
 "use client";
 
-import { icons as logoIcons } from "@iconify-json/logos";
 import { motion } from "framer-motion";
-import { Sparkles } from "lucide-react";
+import {
+  FileCode2,
+  GitPullRequest,
+  MessageSquare,
+  ScrollText,
+  Sparkles,
+  Tags,
+} from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 
 type CapabilityVisualType = "blocks" | "signals" | "style" | "pack";
@@ -17,30 +23,30 @@ type CapabilityFeature = {
 const features: CapabilityFeature[] = [
   {
     number: "01",
-    title: "AI-accelerated Shipping Context",
+    title: "Autonomous Shipping Watch",
     description:
-      "Bring in the places where AI-assisted product work now moves fastest: PRDs, RFCs, GitHub, Linear, Slack decisions, customer feedback, and more.",
+      "Choose a shipping window and release cadence. Plot uses connected shipped-work sources to prepare the changes that matter.",
     visual: "blocks",
   },
   {
     number: "02",
-    title: "Docs and Content Lag Detection",
+    title: "Agent + Human Review",
     description:
-      "Plot spots shipped changes, decisions, tradeoffs, customer pains, docs gaps, and release risks before content quietly falls behind the code.",
+      "The update agent proposes meaningful shipped changes, docs gaps, customer impact, and caveats. Humans approve what goes out.",
     visual: "signals",
   },
   {
     number: "03",
-    title: "Brand Voice for Product Content",
+    title: "Voice, Style, and Claims",
     description:
-      "Accepted docs, release notes, and launch content become a voice profile so rushed updates still sound like your company, not a generic AI draft.",
+      "Approved examples and explicit style rules guide tone and terminology, while factual claims stay tied to source blocks.",
     visual: "style",
   },
   {
     number: "04",
-    title: "Source-backed Content Packs",
+    title: "Source-backed Update Packs",
     description:
-      "Generate changelog entries, release notes, docs updates, launch briefs, and sales handoff content that catches up to shipping velocity with evidence and brand voice attached.",
+      "Generate on-style changelogs, release notes, docs updates, customer updates, and launch drafts from one shipped-change set.",
     visual: "pack",
   },
 ];
@@ -124,42 +130,33 @@ function FlowPath({
   );
 }
 
-function BrandIcon({
-  icon,
-  name,
-  monochrome,
-}: {
-  icon: string;
-  name: string;
-  monochrome?: boolean;
-}) {
-  const iconData = logoIcons.icons[icon];
-  const width = iconData?.width ?? 256;
-  const height = iconData?.height ?? 256;
-  const body = monochrome
-    ? iconData?.body.replace(/fill="[^"]+"/g, 'fill="currentColor"')
-    : iconData?.body;
-
-  if (!iconData) return null;
-
-  return (
-    <svg
-      aria-label={name}
-      className={`size-8 ${monochrome ? "text-background" : ""}`}
-      role="img"
-      viewBox={`0 0 ${width} ${height}`}
-      dangerouslySetInnerHTML={{ __html: body ?? "" }}
-    />
-  );
-}
-
 function BlocksVisual() {
   const sources = [
-    { name: "Gmail", icon: "google-gmail", className: "left-[154px] top-[86px] -rotate-12 z-20" },
-    { name: "GitHub", icon: "github-icon", className: "left-[234px] top-[58px] rotate-4 z-40", monochrome: true },
-    { name: "Slack", icon: "slack-icon", className: "left-[314px] top-[86px] rotate-12 z-20" },
-    { name: "Notion", icon: "notion-icon", className: "left-[194px] top-[126px] rotate-3 z-10" },
-    { name: "Linear", icon: "linear-icon", className: "left-[278px] top-[126px] -rotate-5 z-10", monochrome: true },
+    {
+      name: "Repo",
+      Icon: GitPullRequest,
+      className: "left-[154px] top-[86px] -rotate-12 z-20",
+    },
+    {
+      name: "Issues",
+      Icon: MessageSquare,
+      className: "left-[234px] top-[58px] rotate-4 z-40",
+    },
+    {
+      name: "Releases",
+      Icon: Tags,
+      className: "left-[314px] top-[86px] rotate-12 z-20",
+    },
+    {
+      name: "Docs",
+      Icon: ScrollText,
+      className: "left-[194px] top-[126px] rotate-3 z-10",
+    },
+    {
+      name: "Notes",
+      Icon: FileCode2,
+      className: "left-[278px] top-[126px] -rotate-5 z-10",
+    },
   ];
 
   return (
@@ -182,10 +179,9 @@ function BlocksVisual() {
                 ease: "easeInOut",
               }}
             >
-              <BrandIcon
-                icon={source.icon}
-                name={source.name}
-                monochrome={source.monochrome}
+              <source.Icon
+                aria-label={source.name}
+                className="size-8 text-background"
               />
             </motion.div>
           ))}
@@ -197,7 +193,7 @@ function BlocksVisual() {
 
 function SignalsVisual() {
   const signalRows = [
-    { label: "AI-coded Change", score: "91" },
+    { label: "Agent-picked Change", score: "91" },
     { label: "Docs Gap", score: "84" },
     { label: "Customer Impact", score: "78" },
   ];
@@ -228,7 +224,7 @@ function SignalsVisual() {
               Change queue
             </span>
             <span className="rounded-full bg-foreground/5 px-2 py-1 font-mono text-[9px] text-muted-foreground">
-              auto
+              agent
             </span>
           </div>
           <div className="space-y-2">
@@ -305,7 +301,7 @@ function StyleMemoryVisual() {
         <div className="absolute left-[210px] top-[36px] h-[178px] w-[150px] overflow-hidden rounded-lg border border-foreground/15 bg-background p-3 shadow-[0_24px_70px_rgb(18_17_15_/_0.08)]">
           <div className="mb-2.5 flex items-center justify-between gap-3">
             <div className="font-mono text-[10px] uppercase text-foreground">
-              Brand voice
+              Voice + claims
             </div>
             <div className="rounded-full bg-foreground/5 px-2 py-0.5 font-mono text-[8px] uppercase text-muted-foreground">
               locked
@@ -345,10 +341,10 @@ function StyleMemoryVisual() {
         >
           <div className="mb-2.5 flex items-center gap-2 font-mono text-[10px] uppercase text-muted-foreground">
             <Sparkles className="size-3.5 text-foreground" />
-            Voice check
+            Style check
           </div>
           <p className="mb-3 text-[12px] font-medium leading-snug text-foreground">
-            Same brand voice, tuned for the output.
+            On-style and source-backed.
           </p>
           <div className="grid grid-cols-3 gap-1">
             {["Terms", "Caveat", "Proof"].map((label, index) => (
