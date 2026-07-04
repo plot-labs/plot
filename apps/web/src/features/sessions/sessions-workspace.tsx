@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { GitPullRequest, MessageSquareText, PanelRightOpen } from "lucide-react";
+import { GitPullRequest, MessageSquareText, PanelRightClose, PanelRightOpen } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 
@@ -129,7 +129,7 @@ function ActiveSessionWorkspace({
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(() =>
     getInitialSelectedDocumentId(activeSession),
   );
-  const [rightPanelOpen, setRightPanelOpen] = useState(true);
+  const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const [openDocumentIds, setOpenDocumentIds] = useState<string[]>(() =>
     getInitialOpenDocumentIds(activeSession),
   );
@@ -187,16 +187,16 @@ function ActiveSessionWorkspace({
               <h1 className="text-xl font-semibold">{activeSession.title}</h1>
               <p className="mt-1 text-sm text-black/55 dark:text-white/55">{activeSession.subtitle}</p>
             </div>
-            {!rightPanelOpen && (
-              <button
-                type="button"
-                onClick={() => setRightPanelOpen(true)}
-                className="inline-flex items-center gap-2 rounded-md border border-black/10 px-3 py-2 text-sm dark:border-white/10"
-              >
-                <PanelRightOpen className="size-4" />
-                Open document
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => setRightPanelOpen((open) => !open)}
+              disabled={!selectedDocument}
+              aria-pressed={rightPanelOpen}
+              aria-label={rightPanelOpen ? "Close document panel" : "Open document panel"}
+              className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl border border-black/10 text-black/55 transition hover:bg-black/5 hover:text-black/75 disabled:cursor-not-allowed disabled:opacity-35 dark:border-white/10 dark:text-white/55 dark:hover:bg-white/10 dark:hover:text-white/75"
+            >
+              {rightPanelOpen ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}
+            </button>
           </div>
         </header>
 
