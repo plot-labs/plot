@@ -34,7 +34,8 @@ shipping intent
   model.
 - Keep Autonomous as an embedded task manager inside Sessions until parallel or
   recurring work needs its own surface.
-- Keep Recipes as a model concept until scheduled recurring work exists.
+- Keep AutomationRecipe as a model concept until scheduled recurring work
+  exists.
 - Keep publishing human-controlled outside Plot.
 
 ## Related Architecture

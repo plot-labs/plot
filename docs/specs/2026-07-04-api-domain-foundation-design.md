@@ -491,10 +491,12 @@ Use PostgreSQL `jsonb` for JSON-like columns such as `metadata`. Keep their
 structure unconstrained in this foundation pass, but preserve JSON-shaped
 request and response fields in the API contract.
 
-Scheduled and batch automation should be modeled later as a separate recipe/run
-domain rather than as a generic task mode. A future scheduled automation can
-create tasks or task runs, but this foundation keeps `Task` as a single
-user-visible work item.
+Scheduled and batch automation should be modeled later as a separate
+automation recipe/run domain rather than as a generic task mode. A future
+scheduled automation can create tasks or automation runs, but this foundation
+keeps `Task` as a single user-visible work item.
+The future user-facing surface can still be named `Autonomous`; this note is
+only about backend domain shape and API scope.
 
 Do not add task due dates in this foundation. Plot tasks are short-running
 update-generation or citation-preparation units, not long-lived
@@ -510,8 +512,8 @@ in-product approval workflow. Future source support should use citations,
 source references, and content metadata rather than a review mode enum.
 
 Do not add generic `source_scope` fields to work sessions or tasks in this
-foundation. Source range belongs to future source/import, recipe, and generation
-models where it can be validated against real connected sources.
+foundation. Source range belongs to future source/import, automation recipe, and
+generation models where it can be validated against real connected sources.
 
 Avoid introducing general abstractions until duplication becomes meaningful.
 The first implementation should optimize for clear domain boundaries over a

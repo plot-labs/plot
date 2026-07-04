@@ -11,7 +11,7 @@ shipping window / release cadence
   -> source adapters (GitHub first)
   -> work session
   -> task
-  -> optional update recipe run
+  -> optional automation run
   -> source watch or refresh
   -> selected shipped changes
   -> Writing Blocks + Content Templates + Voice Profile
@@ -52,9 +52,9 @@ v0 because the product is autonomous draft preparation, not a manual composer.
 - Plot should not model review as a selectable mode or formal approval gate.
   Source support belongs in citations, source references, generated content
   metadata, and human-controlled publishing handoff.
-- Recurring autonomous work should be represented as visible recipes and runs,
-  not invisible cron behavior. `update_recipes` can be deferred from the first
-  manual v0 flow, but the model should leave room for it.
+- Recurring or scheduled work should be represented as visible automation
+  recipes and runs, not invisible cron behavior. `automation_recipes` can be
+  deferred from the first manual v0 flow, but the model should leave room for it.
 - v0 implements GitHub as the first shipped-work source adapter. User-requested
   imports and lightweight repository watches are adapter behavior, not the
   visible product surface. Publishing remains human-controlled outside Plot.
@@ -128,8 +128,8 @@ Sessions and tasks
   Task
   TaskArtifact
   SourceSelectionItem
-  UpdateRecipe
-  UpdateRecipeRun
+  AutomationRecipe
+  AutomationRun
 
 Deferred supporting inputs
   UploadedFile
@@ -950,14 +950,14 @@ Rules:
 - Sessions are user-facing. They should be stable enough to resume later.
 - The first screen should create or resume a session before asking users to
   manage integrations.
-- Output and channel target selection belongs to update recipes, generation
+- Output and channel target selection belongs to automation recipes, generation
   targets, content packs, or variants, not to the durable work session itself.
 - Review is not a session mode. Plot should provide source-cited content and
   human-controlled publishing handoff rather than formal in-product approval
   workflows.
 - Do not add a generic `source_scope` to sessions. Source range belongs to
-  source/import, recipe, and generation models where it can be validated against
-  connected sources.
+  source/import, automation recipe, and generation models where it can be
+  validated against connected sources.
 
 ### SessionMessage
 
@@ -1008,8 +1008,8 @@ ARTIFACT_REFERENCE
 
 `tasks` is the durable user-visible work item for session and agent work
 surfaces. A task can be created from a work session, repository watch, user
-request, external agent request, or future recipe run, but it should not encode
-the full automation schedule that created it.
+request, external agent request, or future automation run, but it should not
+encode the full automation schedule that created it.
 
 ```sql
 tasks (
@@ -1071,14 +1071,14 @@ Rules:
   input it needs.
 - Task priority is intentionally omitted. Plot tasks are short-running
   update-generation units, not a general project-management queue.
-- Scheduled or batch automation should be modeled through recipes and run
-  history, not through a task mode enum.
+- Scheduled or batch automation should be modeled through automation recipes
+  and run history, not through a task mode enum.
 - Tasks are short-running update-generation or citation-preparation units, not
   long-lived project-management tasks with deadline workflows. Do not add
   `due_at` unless the product introduces an explicit deadline feature.
 - Do not add a generic `source_scope` to tasks. Source range belongs to
-  source/import, recipe, and generation models where it can be validated against
-  connected sources.
+  source/import, automation recipe, and generation models where it can be
+  validated against connected sources.
 
 ### TaskArtifact
 
@@ -1207,13 +1207,16 @@ Rules:
 - `NEEDS_CONTEXT` should keep missing context visible until resolved.
 - Source selection should be visible from task detail and the content workspace.
 
-### UpdateRecipe
+### AutomationRecipe
 
-`update_recipes` stores recurring autonomous update work such as a weekly
-release pack. It is a visible task recipe, not hidden cron behavior.
+`automation_recipes` stores recurring or scheduled automated work such as a
+weekly release pack, daily source monitor, or scheduled crash-summary task. It
+is a visible automation configuration, not hidden cron behavior.
+In the product UI, these records can appear as scheduled-task templates inside
+the `Autonomous` surface.
 
 ```sql
-update_recipes (
+automation_recipes (
   id uuid primary key,
   workspace_id uuid not null references workspaces(id),
   voice_profile_id uuid,
@@ -1254,20 +1257,20 @@ ARCHIVED
 Rules:
 
 - v0 can defer scheduled execution, but the UX should treat release cadence as a
-  recipe that users can inspect, pause, and run manually.
-- A recipe creates tasks; it does not publish content.
+  visible automation that users can inspect, pause, and run manually.
+- An automation recipe creates tasks or runs; it does not publish content.
 - `cadence_rrule` should follow RFC 5545 when recurring schedules are enabled.
 
-### UpdateRecipeRun
+### AutomationRun
 
-`update_recipe_runs` records each scheduled or manual run of an update recipe.
+`automation_runs` records each scheduled or manual run of an automation recipe.
 It gives users run history and makes skipped or failed runs visible.
 
 ```sql
-update_recipe_runs (
+automation_runs (
   id uuid primary key,
   workspace_id uuid not null references workspaces(id),
-  update_recipe_id uuid not null,
+  automation_recipe_id uuid not null,
   task_id uuid,
 
   trigger_type varchar not null,
@@ -1281,8 +1284,8 @@ update_recipe_runs (
   updated_at timestamptz not null,
 
   unique (workspace_id, id),
-  foreign key (workspace_id, update_recipe_id)
-    references update_recipes(workspace_id, id),
+  foreign key (workspace_id, automation_recipe_id)
+    references automation_recipes(workspace_id, id),
   foreign key (workspace_id, task_id)
     references tasks(workspace_id, id)
 );
@@ -1316,7 +1319,7 @@ Rules:
   artifacts.
 - `SKIPPED` should record why the run did not execute in `error_message` or
   structured payload if added later.
-- Recipe runs should appear in the `Autonomous` surface near their created
+- Automation runs should appear in the `Autonomous` surface near their created
   tasks.
 
 ## Agent Runs

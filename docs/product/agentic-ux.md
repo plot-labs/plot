@@ -108,8 +108,8 @@ Plot translation:
   and a right rail for source scope, voice, citations, and style guidance.
 - Use a content dashboard for packs, but keep the primary unit as a
   durable `Task`, not only a generated content row.
-- Keep schedules as `UpdateRecipe` objects with run history once recurring
-  work is implemented.
+- Keep schedules as `AutomationRecipe` objects with run history once recurring
+  or scheduled work is implemented.
 
 References:
 
@@ -126,7 +126,7 @@ Useful patterns:
 - Source support should be visible next to generated content through citations
   and source references, not modeled as a separate approval workflow.
 - Work intake can come from existing systems, not only blank prompts.
-- Scheduled agent work should eventually be visible as recipes/automations with
+- Scheduled agent work should eventually be visible as automations with
   run history.
 
 Plot translation:
@@ -136,7 +136,8 @@ Plot translation:
   channel completeness, and generation summaries.
 - Use source/request intake to start tasks from shipped work, issues, releases,
   manual notes, and later support/customer sources.
-- Add `UpdateRecipe` for recurring release/update cadence.
+- Add `AutomationRecipe` for recurring release/update cadence and other
+  scheduled work.
 - Keep source adapters permissioned and workspace-scoped.
 - Avoid copying code-specific surfaces such as terminals, worktrees, ports, and
   IDE handoff.
@@ -160,8 +161,11 @@ Settings      workspace, members, permissions
 
 `Sessions` is the default interactive surface. Running, blocked, and
 ready tasks should appear inside it first. `Autonomous` can become a
-separate nav item later. `Recipes` should stay out of primary navigation until
-recurring scheduled work is implemented.
+separate nav item later. Its first subview should be running or scheduled
+tasks; template/recipe management can appear there once recurring scheduled
+work is implemented.
+`Autonomous` is the user-facing work manager; `AutomationRecipe` is the later
+domain model for saved schedules/templates inside that manager.
 
 ### Home / Session Start
 
@@ -269,8 +273,8 @@ Draft request
   visible selection, not hidden pipeline state.
 - Add typed artifacts for source coverage, citations, style notes, and
   generation summaries.
-- Add `update_recipes` later for recurring release/update cadence, but keep
-  recipe UI out of v0 primary navigation.
+- Add `automation_recipes` later for recurring release/update cadence and
+  scheduled work, but keep recipe/template UI out of v0 primary navigation.
 - Link `agent_runs` to `tasks` and `work_sessions`.
 - Keep publishing human-controlled outside Plot in v0.
 - Keep source adapters permissioned and workspace-scoped.

@@ -298,7 +298,7 @@ erDiagram
         timestamptz updated_at
     }
 
-    UPDATE_RECIPES {
+    AUTOMATION_RECIPES {
         uuid id PK
         uuid workspace_id FK
         uuid voice_profile_id FK
@@ -318,10 +318,10 @@ erDiagram
         timestamptz updated_at
     }
 
-    UPDATE_RECIPE_RUNS {
+    AUTOMATION_RUNS {
         uuid id PK
         uuid workspace_id FK
-        uuid update_recipe_id FK
+        uuid automation_recipe_id FK
         uuid task_id FK
         varchar trigger_type
         varchar status
@@ -515,7 +515,7 @@ erDiagram
     USERS ||--o{ TASK_ARTIFACTS : creates
     USERS ||--o{ SOURCE_SELECTION_ITEMS : creates
     USERS ||--o{ SOURCE_SELECTION_ITEMS : updates
-    USERS ||--o{ UPDATE_RECIPES : creates
+    USERS ||--o{ AUTOMATION_RECIPES : creates
     USERS ||--o{ AGENT_RUNS : starts
     USERS ||--o{ GENERATION_RUNS : starts
     USERS ||--o{ CONTENT_PACKS : creates
@@ -539,8 +539,8 @@ erDiagram
     WORKSPACES ||--o{ TASKS : owns
     WORKSPACES ||--o{ TASK_ARTIFACTS : owns
     WORKSPACES ||--o{ SOURCE_SELECTION_ITEMS : owns
-    WORKSPACES ||--o{ UPDATE_RECIPES : owns
-    WORKSPACES ||--o{ UPDATE_RECIPE_RUNS : owns
+    WORKSPACES ||--o{ AUTOMATION_RECIPES : owns
+    WORKSPACES ||--o{ AUTOMATION_RUNS : owns
     WORKSPACES ||--o{ AGENT_RUNS : owns
     WORKSPACES ||--o{ GENERATION_RUNS : owns
     WORKSPACES ||--o{ GENERATION_INPUTS : owns
@@ -570,10 +570,10 @@ erDiagram
     TASKS ||--o{ TASK_ARTIFACTS : produces
     TASKS ||--o{ SOURCE_SELECTION_ITEMS : selects
     WRITING_BLOCKS ||--o{ SOURCE_SELECTION_ITEMS : selected_as
-    VOICE_PROFILES ||--o{ UPDATE_RECIPES : guides
-    REPOSITORY_WATCHES ||--o{ UPDATE_RECIPES : scopes
-    UPDATE_RECIPES ||--o{ UPDATE_RECIPE_RUNS : runs
-    TASKS ||--o{ UPDATE_RECIPE_RUNS : created_by
+    VOICE_PROFILES ||--o{ AUTOMATION_RECIPES : guides
+    REPOSITORY_WATCHES ||--o{ AUTOMATION_RECIPES : scopes
+    AUTOMATION_RECIPES ||--o{ AUTOMATION_RUNS : runs
+    TASKS ||--o{ AUTOMATION_RUNS : created_by
 
     REPOSITORY_WATCHES ||--o{ AGENT_RUNS : triggers
     WORK_SESSIONS ||--o{ AGENT_RUNS : starts

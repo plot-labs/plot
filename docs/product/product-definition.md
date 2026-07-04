@@ -122,8 +122,8 @@ Plot: shipping intent -> agent work -> source-cited, on-style drafts
 ```
 
 Plot should have a chat-like session surface with an embedded task manager for
-running, blocked, and ready work. A separate `Autonomous` surface can
-be promoted later when scheduled or parallel agent work becomes common.
+running, blocked, and ready work. A separate `Autonomous` surface can be
+promoted later when scheduled or parallel agent work becomes common.
 `AgentRun` is execution detail; `Task` and `WorkSession` are the objects the
 user should understand.
 
@@ -236,7 +236,10 @@ Supporting surfaces:
 
 The `Autonomous` manager should start embedded inside `Sessions` and can become
 an independent nav item after multiple concurrent or scheduled tasks exist.
-`Recipes` should remain a model concept in v0, not a primary UI surface.
+`AutomationRecipe` should remain a model concept in v0, not a primary UI
+surface.
+When `Autonomous` gets its own screen, it can expose task and template subviews
+without renaming the underlying domain objects.
 
 Session start should ask "What shipped, and what update do you need?" rather
 than leading with integration setup. The source adapter appears as a capability
@@ -277,9 +280,9 @@ together.
   source map, content pack, citation map, style note, or verification summary.
 - `SourceSelectionItem`: an included, excluded, or needs-context source item for
   a task.
-- `UpdateRecipe`: a recurring update recipe for release cadence or scheduled
-  update work, initially used as model shape rather than primary UI.
-- `UpdateRecipeRun`: one execution record for an update recipe.
+- `AutomationRecipe`: a recurring or scheduled automation configuration,
+  initially used as model shape rather than primary UI.
+- `AutomationRun`: one execution record for an automation recipe.
 - `Connection`: an authenticated source connection. v0 can implement one
   repository-backed adapter first.
 - `SourceRepository`: a configured repository source from the first adapter.
@@ -320,8 +323,8 @@ v0 should include:
 - TaskArtifact records for source maps, citation maps, style notes, agent plans,
   verification summaries, and content pack links
 - SourceSelectionItem records for inspectable source inclusion/exclusion
-- UpdateRecipe and UpdateRecipeRun model shape, even if scheduled execution and
-  recipe UI are deferred
+- AutomationRecipe and AutomationRun model shape, even if scheduled execution
+  and automation UI are deferred
 - lightweight AgentRun state for import, draft, citation mapping, and task state
 - direct model-provider API call from the backend
 - content packs and editable variants
