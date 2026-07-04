@@ -83,8 +83,8 @@ export type DevContext = {
 
 export const devContext: DevContext = {
   workspace: {
-    id: "workspace-dev",
-    name: "Plot Dev Workspace",
+    id: "59e698fa-c565-4c9e-9ae2-685eca99072a",
+    name: "Personal",
     environment: "Local dev",
     connectionLabel: "GitHub demo source",
   },
