@@ -1,7 +1,10 @@
 "use client";
 
+import Image from "next/image";
+import Link from "next/link";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
+import { PanelLeftOpen } from "lucide-react";
 
 import { ProductSidebar } from "@/components/layout/product-sidebar";
 
@@ -9,6 +12,7 @@ export type ProductTheme = "system" | "light" | "dark";
 
 export function ProductShell({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<ProductTheme>("light");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [systemDark, setSystemDark] = useState(() => {
     if (typeof window === "undefined") {
       return false;
@@ -34,12 +38,43 @@ export function ProductShell({ children }: { children: ReactNode }) {
   return (
     <div className={darkMode ? "dark" : undefined}>
       <div className="flex min-h-screen bg-[#eef0f3] text-[#18181b] dark:bg-[#202126] dark:text-[#f4f4f5]">
-        <ProductSidebar theme={theme} onThemeChange={setTheme} />
+        {sidebarOpen ? (
+          <ProductSidebar
+            theme={theme}
+            onThemeChange={setTheme}
+            onToggleSidebar={() => setSidebarOpen(false)}
+          />
+        ) : (
+          <CollapsedSidebar onToggleSidebar={() => setSidebarOpen(true)} />
+        )}
 
         <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-white dark:bg-[#111113] lg:rounded-l-[22px] lg:border-l lg:border-black/[0.08] lg:shadow-[-10px_0_24px_rgb(15_23_42_/_0.04)] lg:dark:border-white/10 lg:dark:shadow-black/25">
           <main className="min-h-0 w-full flex-1 overflow-hidden">{children}</main>
         </div>
       </div>
     </div>
+  );
+}
+
+function CollapsedSidebar({ onToggleSidebar }: { onToggleSidebar: () => void }) {
+  return (
+    <aside className="hidden h-screen w-[52px] shrink-0 flex-col items-center bg-[#eef0f3] pt-5 text-[#2f3237] dark:bg-[#202126] dark:text-[#f4f4f5] lg:flex">
+      <Link
+        href="/sessions"
+        aria-label="Plot home"
+        className="inline-flex size-8 items-center justify-center rounded-xl transition hover:bg-black/5 dark:hover:bg-white/10"
+      >
+        <Image src="/plot-icon.svg" alt="" width={22} height={22} className="size-[22px] dark:invert" />
+      </Link>
+
+      <button
+        type="button"
+        onClick={onToggleSidebar}
+        aria-label="Open sidebar"
+        className="mt-2 inline-flex size-8 items-center justify-center rounded-xl text-black/42 transition hover:bg-black/5 hover:text-black/70 dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white/75"
+      >
+        <PanelLeftOpen className="size-4" />
+      </button>
+    </aside>
   );
 }

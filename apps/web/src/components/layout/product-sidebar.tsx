@@ -16,6 +16,7 @@ import {
   Monitor,
   Moon,
   PackageOpen,
+  PanelLeftClose,
   Puzzle,
   Plus,
   Search,
@@ -39,6 +40,7 @@ const navItems = [
 type ProductSidebarProps = {
   theme: ProductTheme;
   onThemeChange: (theme: ProductTheme) => void;
+  onToggleSidebar: () => void;
 };
 
 const themeOptions = [
@@ -56,7 +58,7 @@ const workspaceItems = [
   { id: "hiring", name: "Hiring", detail: "Research workspace", mark: "H", selected: false },
 ];
 
-export function ProductSidebar({ theme, onThemeChange }: ProductSidebarProps) {
+export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: ProductSidebarProps) {
   const pathname = usePathname();
   const { workspace, sessions } = getProductShellData();
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
@@ -129,16 +131,26 @@ export function ProductSidebar({ theme, onThemeChange }: ProductSidebarProps) {
   return (
     <>
       <aside className="hidden h-screen w-[252px] shrink-0 flex-col bg-[#eef0f3] text-[#2f3237] dark:bg-[#202126] dark:text-[#f4f4f5] lg:flex">
-        <Link
-          href={appHomeHref}
-          aria-label="Plot home"
-          className="flex items-center gap-2 px-4 pb-4 pt-5"
-        >
-          <Image src="/plot-icon.svg" alt="" width={24} height={24} className="size-6 shrink-0 dark:invert" />
-          <div className="font-display text-[22px] leading-none tracking-normal text-black/85 dark:text-white/90">
-            Plot
-          </div>
-        </Link>
+        <div className="flex items-center gap-2 px-4 pb-4 pt-5">
+          <Link
+            href={appHomeHref}
+            aria-label="Plot home"
+            className="flex min-w-0 flex-1 items-center gap-2"
+          >
+            <Image src="/plot-icon.svg" alt="" width={24} height={24} className="size-6 shrink-0 dark:invert" />
+            <div className="font-display text-[22px] leading-none tracking-normal text-black/85 dark:text-white/90">
+              Plot
+            </div>
+          </Link>
+          <button
+            type="button"
+            onClick={onToggleSidebar}
+            aria-label="Close sidebar"
+            className="inline-flex size-8 shrink-0 items-center justify-center rounded-xl text-black/35 transition hover:bg-black/5 hover:text-black/65 dark:text-white/38 dark:hover:bg-white/10 dark:hover:text-white/70"
+          >
+            <PanelLeftClose className="size-4" />
+          </button>
+        </div>
 
         <div className="space-y-1 px-3 pb-4">
           <Link

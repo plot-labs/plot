@@ -53,14 +53,14 @@ export function SessionComposer({
         <div className="flex items-center gap-2 px-3 pb-3 text-xs text-black/45 dark:text-white/45">
           <button
             type="button"
-            className="inline-flex size-8 items-center justify-center rounded-md transition hover:bg-black/5 dark:hover:bg-white/10"
+            className="inline-flex size-8 items-center justify-center rounded-xl transition hover:bg-black/5 dark:hover:bg-white/10"
             aria-label="Attach source"
           >
             <Plus className="size-4" />
           </button>
           <button
             type="button"
-            className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 font-medium text-[#2563eb] transition hover:bg-[#2563eb]/5 dark:text-[#93c5fd] dark:hover:bg-white/10"
+            className="inline-flex items-center gap-1.5 rounded-xl px-2 py-1.5 font-medium text-[#2563eb] transition hover:bg-[#2563eb]/5 dark:text-[#93c5fd] dark:hover:bg-white/10"
           >
             <Sparkles className="size-3.5" />
             References
@@ -70,7 +70,7 @@ export function SessionComposer({
           <div className="ml-auto flex items-center gap-1.5">
             <button
               type="button"
-              className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 transition hover:bg-black/5 dark:hover:bg-white/10"
+              className="inline-flex items-center gap-1 rounded-xl px-2 py-1.5 transition hover:bg-black/5 dark:hover:bg-white/10"
             >
               <SlidersHorizontal className="size-3.5" />
               Voice
@@ -78,7 +78,7 @@ export function SessionComposer({
             </button>
             <button
               type="button"
-              className="inline-flex size-8 items-center justify-center rounded-md transition hover:bg-black/5 dark:hover:bg-white/10"
+              className="inline-flex size-8 items-center justify-center rounded-xl transition hover:bg-black/5 dark:hover:bg-white/10"
               aria-label="Voice input"
             >
               <Mic className="size-3.5" />
