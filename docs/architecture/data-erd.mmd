@@ -230,7 +230,6 @@ erDiagram
         uuid workspace_id FK
         uuid voice_profile_id FK
         text title
-        varchar session_type
         varchar status
         uuid created_by_user_id FK
         timestamptz last_activity_at
@@ -256,9 +255,7 @@ erDiagram
         uuid work_session_id FK
         uuid repository_watch_id FK
         text title
-        varchar task_type
         varchar status
-        text objective
         uuid created_by_user_id FK
         uuid assigned_to_user_id FK
         timestamptz last_activity_at
@@ -344,7 +341,6 @@ erDiagram
         varchar run_type
         varchar trigger_type
         varchar status
-        text objective
         jsonb input_snapshot
         jsonb output_summary
         text error_message

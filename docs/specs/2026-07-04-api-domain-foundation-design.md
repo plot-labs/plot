@@ -169,7 +169,6 @@ records created by services should receive IDs from `UuidGenerator`.
 - `id`
 - `workspace_id`
 - `title`
-- `session_type`
 - `status`
 - `created_by_user_id`
 - `last_activity_at`
@@ -181,9 +180,7 @@ records created by services should receive IDs from `UuidGenerator`.
 - `workspace_id`
 - `work_session_id`
 - `title`
-- `task_type`
 - `status`
-- `objective`
 - `created_by_user_id`
 - `last_activity_at`
 - timestamps
@@ -261,7 +258,6 @@ erDiagram
         uuid id PK
         uuid workspace_id FK
         text title
-        varchar session_type
         varchar status
         uuid created_by_user_id FK
         timestamptz last_activity_at
@@ -274,9 +270,7 @@ erDiagram
         uuid workspace_id FK
         uuid work_session_id FK
         text title
-        varchar task_type
         varchar status
-        text objective
         uuid created_by_user_id FK
         timestamptz last_activity_at
         timestamptz created_at
@@ -397,8 +391,8 @@ Create/update fields:
 
 - `title`
 
-The request DTO does not need to expose `sessionType` in this foundation pass.
-The service should set `sessionType` to `CHAT` and `status` to `OPEN`.
+The request DTO does not expose a session type in this foundation pass. The
+service should set `status` to `OPEN`.
 
 ### Task API
 
@@ -406,8 +400,6 @@ Create/update fields:
 
 - `sessionId`
 - `title`
-- `taskType`
-- `objective`
 
 If `sessionId` is provided, it must identify a work session in the current dev
 workspace. `status` defaults to `QUEUED`.
@@ -436,7 +428,7 @@ is created.
 Minimum validation:
 
 - workspace `name` and `slug` must not be blank
-- task `title` and `taskType` must be present
+- task `title` must be present
 - task `sessionId`, when provided, must belong to the current workspace
 - writing block must include at least one of `title` or `body`
 - writing block `sourceOrigin` and `blockKind` must be present
@@ -497,6 +489,10 @@ scheduled automation can create tasks or automation runs, but this foundation
 keeps `Task` as a single user-visible work item.
 The future user-facing surface can still be named `Autonomous`; this note is
 only about backend domain shape and API scope.
+
+Do not add `session_type`, `task_type`, or `objective` in this foundation.
+Sessions and tasks should stay minimal until the execution model needs a real
+typed workflow discriminator or durable request snapshot.
 
 Do not add task due dates in this foundation. Plot tasks are short-running
 update-generation or citation-preparation units, not long-lived

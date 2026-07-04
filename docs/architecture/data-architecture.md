@@ -913,7 +913,6 @@ work_sessions (
   voice_profile_id uuid,
 
   title text,
-  session_type varchar not null,
   status varchar not null,
 
   created_by_user_id uuid references users(id),
@@ -925,14 +924,6 @@ work_sessions (
   foreign key (workspace_id, voice_profile_id)
     references voice_profiles(workspace_id, id)
 );
-```
-
-`session_type`:
-
-```txt
-CHAT
-AUTONOMOUS_WORK
-PACK_WORK
 ```
 
 `status`:
@@ -950,6 +941,8 @@ Rules:
 - Sessions are user-facing. They should be stable enough to resume later.
 - The first screen should create or resume a session before asking users to
   manage integrations.
+- Do not add `session_type` yet. A single visible session can contain chat,
+  update-pack preparation, and autonomous task steering over time.
 - Output and channel target selection belongs to automation recipes, generation
   targets, content packs, or variants, not to the durable work session itself.
 - Review is not a session mode. Plot should provide source-cited content and
@@ -1019,9 +1012,7 @@ tasks (
   repository_watch_id uuid,
 
   title text not null,
-  task_type varchar not null,
   status varchar not null,
-  objective text,
 
   created_by_user_id uuid references users(id),
   assigned_to_user_id uuid references users(id),
@@ -1035,16 +1026,6 @@ tasks (
   foreign key (workspace_id, repository_watch_id)
     references repository_watches(workspace_id, id)
 );
-```
-
-`task_type`:
-
-```txt
-PREPARE_UPDATE_PACK
-REFRESH_UPDATE_PACK
-ATTACH_CITATIONS
-REGENERATE_VARIANTS
-IMPROVE_STYLE
 ```
 
 `status`:
@@ -1069,6 +1050,11 @@ Rules:
 - Tasks are the source of truth for visible work state.
 - A blocked task must explain the missing source, permission, context, or
   input it needs.
+- Do not add `task_type` in the foundation. Add a workflow discriminator later
+  only when the backend has multiple real task executors to route between.
+- Do not add `objective`. Durable task intent should come from the title,
+  session messages, future input snapshots, or artifacts instead of a generic
+  text field that can drift.
 - Task priority is intentionally omitted. Plot tasks are short-running
   update-generation units, not a general project-management queue.
 - Scheduled or batch automation should be modeled through automation recipes
@@ -1344,7 +1330,6 @@ agent_runs (
   run_type varchar not null,
   trigger_type varchar not null,
   status varchar not null,
-  objective text,
   input_snapshot jsonb,
   output_summary jsonb,
   error_message text,
