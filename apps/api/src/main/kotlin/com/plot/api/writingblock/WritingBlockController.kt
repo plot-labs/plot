@@ -1,5 +1,8 @@
 package com.plot.api.writingblock
 
+import com.plot.api.writingblock.dto.CreateWritingBlockRequest
+import com.plot.api.writingblock.dto.UpdateWritingBlockRequest
+import com.plot.api.writingblock.dto.WritingBlockResponse
 import jakarta.validation.Valid
 import java.util.UUID
 import org.springframework.web.bind.annotation.GetMapping

@@ -1,5 +1,7 @@
 package com.plot.api.workspace
 
+import com.plot.api.workspace.dto.UpdateWorkspaceRequest
+import com.plot.api.workspace.dto.WorkspaceResponse
 import jakarta.validation.Valid
 import java.util.UUID
 import org.springframework.web.bind.annotation.GetMapping

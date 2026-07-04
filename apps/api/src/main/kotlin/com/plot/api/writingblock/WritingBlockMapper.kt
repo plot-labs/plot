@@ -1,5 +1,7 @@
 package com.plot.api.writingblock
 
+import com.plot.api.writingblock.dto.WritingBlockResponse
+
 fun WritingBlock.toResponse(): WritingBlockResponse {
 	return WritingBlockResponse(
 		id = id,

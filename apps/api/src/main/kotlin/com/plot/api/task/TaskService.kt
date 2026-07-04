@@ -3,6 +3,9 @@ package com.plot.api.task
 import com.plot.api.common.ApiException
 import com.plot.api.common.UuidGenerator
 import com.plot.api.dev.DevContext
+import com.plot.api.task.dto.CreateTaskRequest
+import com.plot.api.task.dto.TaskResponse
+import com.plot.api.task.dto.UpdateTaskRequest
 import com.plot.api.worksession.WorkSessionService
 import java.time.Instant
 import java.util.UUID

@@ -1,5 +1,8 @@
 package com.plot.api.task
 
+import com.plot.api.task.dto.CreateTaskRequest
+import com.plot.api.task.dto.TaskResponse
+import com.plot.api.task.dto.UpdateTaskRequest
 import jakarta.validation.Valid
 import java.util.UUID
 import org.springframework.web.bind.annotation.GetMapping

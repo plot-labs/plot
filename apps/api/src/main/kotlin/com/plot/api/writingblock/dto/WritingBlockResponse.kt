@@ -1,12 +1,11 @@
-package com.plot.api.writingblock
+package com.plot.api.writingblock.dto
 
-import jakarta.validation.constraints.NotBlank
 import java.time.Instant
+import java.util.UUID
 
-data class UpdateWritingBlockRequest(
-	@field:NotBlank
+data class WritingBlockResponse(
+	val id: UUID,
 	val sourceOrigin: String,
-	@field:NotBlank
 	val sourceKind: String,
 	val title: String?,
 	val body: String?,
@@ -17,4 +16,8 @@ data class UpdateWritingBlockRequest(
 	val metadata: Map<String, Any?>?,
 	val sourceCreatedAt: Instant?,
 	val sourceUpdatedAt: Instant?,
+	val ingestedAt: Instant,
+	val status: String,
+	val createdAt: Instant,
+	val updatedAt: Instant,
 )

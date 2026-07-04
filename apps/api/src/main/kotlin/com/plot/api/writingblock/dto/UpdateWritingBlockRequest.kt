@@ -1,9 +1,9 @@
-package com.plot.api.writingblock
+package com.plot.api.writingblock.dto
 
 import jakarta.validation.constraints.NotBlank
 import java.time.Instant
 
-data class CreateWritingBlockRequest(
+data class UpdateWritingBlockRequest(
 	@field:NotBlank
 	val sourceOrigin: String,
 	@field:NotBlank

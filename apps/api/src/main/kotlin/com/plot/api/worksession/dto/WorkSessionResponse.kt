@@ -1,13 +1,13 @@
-package com.plot.api.workspace
+package com.plot.api.worksession.dto
 
 import java.time.Instant
 import java.util.UUID
 
-data class WorkspaceResponse(
+data class WorkSessionResponse(
 	val id: UUID,
-	val name: String,
-	val slug: String,
+	val title: String?,
 	val status: String,
+	val lastActivityAt: Instant?,
 	val createdAt: Instant,
 	val updatedAt: Instant,
 )

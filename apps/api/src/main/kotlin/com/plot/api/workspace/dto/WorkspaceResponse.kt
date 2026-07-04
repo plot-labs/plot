@@ -1,14 +1,13 @@
-package com.plot.api.task
+package com.plot.api.workspace.dto
 
 import java.time.Instant
 import java.util.UUID
 
-data class TaskResponse(
+data class WorkspaceResponse(
 	val id: UUID,
-	val sessionId: UUID?,
-	val title: String,
+	val name: String,
+	val slug: String,
 	val status: String,
-	val lastActivityAt: Instant?,
 	val createdAt: Instant,
 	val updatedAt: Instant,
 )

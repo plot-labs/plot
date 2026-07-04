@@ -3,6 +3,9 @@ package com.plot.api.writingblock
 import com.plot.api.common.ApiException
 import com.plot.api.common.UuidGenerator
 import com.plot.api.dev.DevContext
+import com.plot.api.writingblock.dto.CreateWritingBlockRequest
+import com.plot.api.writingblock.dto.UpdateWritingBlockRequest
+import com.plot.api.writingblock.dto.WritingBlockResponse
 import java.security.MessageDigest
 import java.time.Instant
 import java.util.HexFormat

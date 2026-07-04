@@ -3,6 +3,9 @@ package com.plot.api.worksession
 import com.plot.api.common.ApiException
 import com.plot.api.common.UuidGenerator
 import com.plot.api.dev.DevContext
+import com.plot.api.worksession.dto.CreateWorkSessionRequest
+import com.plot.api.worksession.dto.UpdateWorkSessionRequest
+import com.plot.api.worksession.dto.WorkSessionResponse
 import java.time.Instant
 import java.util.UUID
 import org.springframework.http.HttpStatus

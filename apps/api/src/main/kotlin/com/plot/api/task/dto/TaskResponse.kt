@@ -1,11 +1,12 @@
-package com.plot.api.worksession
+package com.plot.api.task.dto
 
 import java.time.Instant
 import java.util.UUID
 
-data class WorkSessionResponse(
+data class TaskResponse(
 	val id: UUID,
-	val title: String?,
+	val sessionId: UUID?,
+	val title: String,
 	val status: String,
 	val lastActivityAt: Instant?,
 	val createdAt: Instant,

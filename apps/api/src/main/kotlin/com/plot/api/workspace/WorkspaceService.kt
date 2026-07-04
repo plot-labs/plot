@@ -2,6 +2,8 @@ package com.plot.api.workspace
 
 import com.plot.api.common.ApiException
 import com.plot.api.dev.DevContext
+import com.plot.api.workspace.dto.UpdateWorkspaceRequest
+import com.plot.api.workspace.dto.WorkspaceResponse
 import java.time.Instant
 import java.util.UUID
 import org.springframework.http.HttpStatus

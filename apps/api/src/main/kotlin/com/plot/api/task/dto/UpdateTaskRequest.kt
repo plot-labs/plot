@@ -1,4 +1,4 @@
-package com.plot.api.task
+package com.plot.api.task.dto
 
 import jakarta.validation.constraints.NotBlank
 

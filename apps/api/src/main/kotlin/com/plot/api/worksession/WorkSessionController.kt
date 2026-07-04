@@ -1,5 +1,8 @@
 package com.plot.api.worksession
 
+import com.plot.api.worksession.dto.CreateWorkSessionRequest
+import com.plot.api.worksession.dto.UpdateWorkSessionRequest
+import com.plot.api.worksession.dto.WorkSessionResponse
 import java.util.UUID
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping

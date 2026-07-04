@@ -1,4 +1,4 @@
-package com.plot.api.worksession
+package com.plot.api.worksession.dto
 
 data class CreateWorkSessionRequest(
 	val title: String?,

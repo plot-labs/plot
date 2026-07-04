@@ -1,4 +1,4 @@
-package com.plot.api.workspace
+package com.plot.api.workspace.dto
 
 import jakarta.validation.constraints.NotBlank
 

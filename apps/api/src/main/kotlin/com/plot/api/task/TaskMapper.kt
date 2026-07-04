@@ -1,5 +1,7 @@
 package com.plot.api.task
 
+import com.plot.api.task.dto.TaskResponse
+
 fun Task.toResponse(): TaskResponse {
 	return TaskResponse(
 		id = id,
