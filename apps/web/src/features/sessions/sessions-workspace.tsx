@@ -208,7 +208,9 @@ function ActiveSessionWorkspace({
               onClick={() => setFloatingSummaryOpen((open) => !open)}
               aria-pressed={floatingSummaryOpen}
               aria-label={floatingSummaryOpen ? "Hide session summary" : "Show session summary"}
-              className="hidden size-9 shrink-0 items-center justify-center rounded-xl border border-black/10 text-black/55 transition hover:bg-black/5 hover:text-black/75 dark:border-white/10 dark:text-white/55 dark:hover:bg-white/10 dark:hover:text-white/75 2xl:inline-flex"
+              className={`hidden size-9 shrink-0 items-center justify-center rounded-xl border border-black/10 text-black/55 transition hover:bg-black/5 hover:text-black/75 dark:border-white/10 dark:text-white/55 dark:hover:bg-white/10 dark:hover:text-white/75 ${
+                rightPanelOpen ? "min-[2100px]:inline-flex" : "min-[1700px]:inline-flex"
+              }`}
             >
               <SlidersHorizontal className="size-4" />
             </button>

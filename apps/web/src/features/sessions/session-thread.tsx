@@ -20,7 +20,7 @@ export function SessionThread({
   onSelectDocument,
 }: SessionThreadProps) {
   return (
-    <section className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-14 sm:px-6 lg:px-8 lg:pb-8 lg:pt-16 2xl:pr-[328px]">
+    <section className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-14 sm:px-6 lg:px-8 lg:pb-8 lg:pt-16">
       <div className="mx-auto max-w-3xl space-y-6 pb-40">
         {messages.map((message) => (
           <article key={message.id} className={message.role === "agent" ? "pl-8" : "pr-8"}>
@@ -38,8 +38,8 @@ export function SessionThread({
       {floatingSummaryOpen && (
         <div
           className={cn(
-            "fixed top-[76px] z-20 hidden 2xl:block",
-            rightPanelOpen ? "right-[484px]" : "right-6",
+            "fixed top-[76px] z-20 hidden",
+            rightPanelOpen ? "right-[484px] min-[2100px]:block" : "right-6 min-[1700px]:block",
           )}
         >
           <SessionFloatingSummary
