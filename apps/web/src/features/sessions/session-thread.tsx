@@ -1,10 +1,12 @@
 import type { DraftDocument, ReferenceDocument, SessionMessage } from "@/lib/api-client";
+import { cn } from "@/lib/utils";
 import { SessionFloatingSummary } from "@/features/sessions/session-floating-summary";
 
 type SessionThreadProps = {
   messages: SessionMessage[];
   drafts: DraftDocument[];
   references: ReferenceDocument[];
+  floatingSummaryOpen: boolean;
   onSelectDocument: (documentId: string) => void;
 };
 
@@ -12,11 +14,17 @@ export function SessionThread({
   messages,
   drafts,
   references,
+  floatingSummaryOpen,
   onSelectDocument,
 }: SessionThreadProps) {
   return (
-    <section className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-      <div className="mx-auto grid max-w-[calc(48rem+284px)] grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,48rem)_260px]">
+    <section className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-14 sm:px-6 lg:px-8 lg:pb-8 lg:pt-16">
+      <div
+        className={cn(
+          "mx-auto grid max-w-3xl grid-cols-1 gap-6",
+          floatingSummaryOpen && "2xl:max-w-[calc(48rem+304px)] 2xl:grid-cols-[minmax(0,48rem)_280px]",
+        )}
+      >
         <div className="min-w-0 space-y-6 pb-40">
           {messages.map((message) => (
             <article key={message.id} className={message.role === "agent" ? "pl-8" : "pr-8"}>
@@ -31,13 +39,15 @@ export function SessionThread({
           ))}
         </div>
 
-        <div className="order-first justify-self-end 2xl:order-none 2xl:sticky 2xl:top-5 2xl:self-start 2xl:justify-self-auto">
-          <SessionFloatingSummary
-            drafts={drafts}
-            references={references}
-            onSelectDocument={onSelectDocument}
-          />
-        </div>
+        {floatingSummaryOpen && (
+          <div className="hidden 2xl:sticky 2xl:top-6 2xl:block 2xl:self-start">
+            <SessionFloatingSummary
+              drafts={drafts}
+              references={references}
+              onSelectDocument={onSelectDocument}
+            />
+          </div>
+        )}
       </div>
     </section>
   );

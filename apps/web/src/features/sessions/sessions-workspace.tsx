@@ -1,7 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { GitPullRequest, MessageSquareText, PanelRightClose, PanelRightOpen } from "lucide-react";
+import {
+  FileText,
+  GitPullRequest,
+  MessageSquareText,
+  MoreHorizontal,
+  PanelRightClose,
+  PanelRightOpen,
+  SlidersHorizontal,
+} from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 
@@ -130,6 +138,7 @@ function ActiveSessionWorkspace({
     getInitialSelectedDocumentId(activeSession),
   );
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const [floatingSummaryOpen, setFloatingSummaryOpen] = useState(true);
   const [openDocumentIds, setOpenDocumentIds] = useState<string[]>(() =>
     getInitialOpenDocumentIds(activeSession),
   );
@@ -180,13 +189,29 @@ function ActiveSessionWorkspace({
   return (
     <div className="flex h-screen min-h-0 bg-white dark:bg-[#111113]">
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="border-b border-black/[0.08] bg-white px-4 py-4 dark:border-white/10 dark:bg-[#111113] sm:px-6 lg:px-8">
-          <div className="text-xs font-medium text-black/40 dark:text-white/40">Session</div>
-          <div className="mt-1 flex items-center justify-between gap-4">
-            <div>
-              <h1 className="text-xl font-semibold">{activeSession.title}</h1>
-              <p className="mt-1 text-sm text-black/55 dark:text-white/55">{activeSession.subtitle}</p>
-            </div>
+        <header className="flex h-14 shrink-0 items-center justify-between bg-white px-4 dark:bg-[#111113] sm:px-6 lg:px-8">
+          <h1 className="sr-only">{activeSession.title}</h1>
+          <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-black/78 dark:text-white/82">
+            <FileText className="size-4 shrink-0 text-black/50 dark:text-white/50" />
+            <span className="truncate">{activeSession.title}</span>
+            <button
+              type="button"
+              aria-label="Session actions"
+              className="inline-flex size-7 shrink-0 items-center justify-center rounded-xl text-black/45 transition hover:bg-black/5 hover:text-black/70 dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white/75"
+            >
+              <MoreHorizontal className="size-4" />
+            </button>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setFloatingSummaryOpen((open) => !open)}
+              aria-pressed={floatingSummaryOpen}
+              aria-label={floatingSummaryOpen ? "Hide session summary" : "Show session summary"}
+              className="hidden size-9 shrink-0 items-center justify-center rounded-xl border border-black/10 text-black/55 transition hover:bg-black/5 hover:text-black/75 dark:border-white/10 dark:text-white/55 dark:hover:bg-white/10 dark:hover:text-white/75 2xl:inline-flex"
+            >
+              <SlidersHorizontal className="size-4" />
+            </button>
             <button
               type="button"
               onClick={() => setRightPanelOpen((open) => !open)}
@@ -204,6 +229,7 @@ function ActiveSessionWorkspace({
           messages={messages}
           drafts={sessionDrafts}
           references={sessionReferences}
+          floatingSummaryOpen={floatingSummaryOpen}
           onSelectDocument={selectDocument}
         />
         <SessionComposer onSubmit={submitMessage} />
