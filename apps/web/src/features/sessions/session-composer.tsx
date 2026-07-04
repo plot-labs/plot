@@ -22,7 +22,7 @@ export function SessionComposer({
     <form
       className={cn(
         variant === "dock"
-          ? "border-t border-black/[0.08] bg-white/95 px-4 py-4 dark:border-white/10 dark:bg-[#111113]/95 sm:px-8"
+          ? "bg-white/95 px-4 py-4 dark:bg-[#111113]/95 sm:px-8"
           : "w-full",
       )}
       onSubmit={(event) => {
