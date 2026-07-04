@@ -2,6 +2,7 @@ package com.plot.api.workspace
 
 import com.plot.api.TestcontainersConfiguration
 import com.plot.api.dev.DevContext
+import java.util.UUID
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -46,6 +47,17 @@ class WorkspaceApiIntegrationTest {
 	}
 
 	@Test
+	fun detailReturnsNotFoundForNonDevWorkspace() {
+		val randomUuid = UUID.randomUUID()
+
+		mockMvc.get("/api/workspaces/$randomUuid")
+			.andExpect {
+				status { isNotFound() }
+				jsonPath("$.error") { value("NOT_FOUND") }
+			}
+	}
+
+	@Test
 	fun patchUpdatesNameAndSlug() {
 		mockMvc.patch("/api/workspaces/${devContext.devWorkspaceId}") {
 			contentType = MediaType.APPLICATION_JSON
@@ -59,10 +71,34 @@ class WorkspaceApiIntegrationTest {
 	}
 
 	@Test
+	fun patchReturnsNotFoundForNonDevWorkspace() {
+		val randomUuid = UUID.randomUUID()
+
+		mockMvc.patch("/api/workspaces/$randomUuid") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"name":"Plot Dev","slug":"plot-dev"}"""
+		}.andExpect {
+			status { isNotFound() }
+			jsonPath("$.error") { value("NOT_FOUND") }
+		}
+	}
+
+	@Test
 	fun patchRejectsBlankName() {
 		mockMvc.patch("/api/workspaces/${devContext.devWorkspaceId}") {
 			contentType = MediaType.APPLICATION_JSON
 			content = """{"name":" ","slug":"plot-dev"}"""
+		}.andExpect {
+			status { isBadRequest() }
+			jsonPath("$.error") { value("BAD_REQUEST") }
+		}
+	}
+
+	@Test
+	fun patchRejectsBlankSlug() {
+		mockMvc.patch("/api/workspaces/${devContext.devWorkspaceId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"name":"Plot Dev","slug":" "}"""
 		}.andExpect {
 			status { isBadRequest() }
 			jsonPath("$.error") { value("BAD_REQUEST") }
