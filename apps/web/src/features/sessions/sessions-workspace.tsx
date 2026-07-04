@@ -230,6 +230,7 @@ function ActiveSessionWorkspace({
           drafts={sessionDrafts}
           references={sessionReferences}
           floatingSummaryOpen={floatingSummaryOpen}
+          rightPanelOpen={rightPanelOpen}
           onSelectDocument={selectDocument}
         />
         <SessionComposer onSubmit={submitMessage} />
