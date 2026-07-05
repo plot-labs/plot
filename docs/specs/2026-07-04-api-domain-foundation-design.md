@@ -396,13 +396,19 @@ service should set `status` to `OPEN`.
 
 ### Task API
 
-Create/update fields:
+Create fields:
 
 - `sessionId`
 - `title`
 
+Update fields:
+
+- `title`
+
 If `sessionId` is provided, it must identify a work session in the current dev
-workspace. `status` defaults to `QUEUED`.
+workspace. `sessionId` is create-only in this foundation because a task's
+session is treated as creation context, not a mutable classification field.
+`status` defaults to `QUEUED`.
 
 ### Writing Block API
 
@@ -429,7 +435,7 @@ Minimum validation:
 
 - workspace `name` and `slug` must not be blank
 - task `title` must be present
-- task `sessionId`, when provided, must belong to the current workspace
+- task create `sessionId`, when provided, must belong to the current workspace
 - writing block must include at least one of `title` or `body`
 - writing block `sourceOrigin` and `sourceKind` must be present
 
