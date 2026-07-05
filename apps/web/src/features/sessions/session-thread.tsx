@@ -1,6 +1,17 @@
 "use client";
 
-import { ChevronDown, ChevronRight, FileText, GitPullRequest, TerminalSquare } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  Copy,
+  FileText,
+  GitPullRequest,
+  Pencil,
+  RotateCcw,
+  TerminalSquare,
+  ThumbsDown,
+  ThumbsUp,
+} from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import { useState } from "react";
 
@@ -62,21 +73,17 @@ function SessionThreadMessage({
   message: SessionMessage;
   messageIndex: number;
 }) {
-  const [workOpen, setWorkOpen] = useState(true);
+  const [workOpen, setWorkOpen] = useState(false);
   const workIndex = Math.max(0, messageIndex - 1);
 
   if (message.role === "user") {
     return (
       <article className="flex justify-end">
-        <div className="max-w-[min(620px,86%)]">
-          <MessageMeta
-            author={message.author}
-            timestamp={message.timestamp}
-            align="right"
-          />
-          <div className="rounded-[18px] bg-black/[0.045] px-4 py-2.5 text-sm leading-6 text-black/80 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.025)] dark:bg-white/10 dark:text-white/82">
+        <div className="max-w-[min(720px,86%)]">
+          <div className="rounded-[22px] bg-black/[0.055] px-5 py-3 text-[15px] leading-7 text-black/84 dark:bg-white/10 dark:text-white/84">
             <MessageContent content={message.content} compact />
           </div>
+          <UserMessageActions timestamp={message.timestamp} />
         </div>
       </article>
     );
@@ -101,8 +108,32 @@ function SessionThreadMessage({
 
       <div className="space-y-4 text-[15px] leading-7 text-black/82 dark:text-white/82">
         <MessageContent content={message.content} />
+        <AgentResultCards workIndex={workIndex} />
       </div>
+      <AgentMessageActions />
     </article>
+  );
+}
+
+function UserMessageActions({ timestamp }: { timestamp: string }) {
+  return (
+    <div className="mt-3 flex items-center justify-end gap-4 text-sm text-black/45 dark:text-white/45">
+      <span>{timestamp}</span>
+      <button
+        type="button"
+        className="inline-flex size-6 items-center justify-center rounded-lg transition hover:bg-black/5 hover:text-black/68 dark:hover:bg-white/10 dark:hover:text-white/70"
+        aria-label="Copy message"
+      >
+        <Copy className="size-4" />
+      </button>
+      <button
+        type="button"
+        className="inline-flex size-6 items-center justify-center rounded-lg transition hover:bg-black/5 hover:text-black/68 dark:hover:bg-white/10 dark:hover:text-white/70"
+        aria-label="Edit message"
+      >
+        <Pencil className="size-4" />
+      </button>
+    </div>
   );
 }
 
@@ -147,24 +178,88 @@ function WorkRunDetails({ workIndex }: { workIndex: number }) {
   );
 }
 
-function MessageMeta({
-  author,
-  timestamp,
-  align,
-}: {
-  author: string;
-  timestamp: string;
-  align: "left" | "right";
-}) {
+function AgentResultCards({ workIndex }: { workIndex: number }) {
+  const result = getResultSummary(workIndex);
+
   return (
-    <div
-      className={cn(
-        "mb-2 flex items-center gap-2 text-xs text-black/45 dark:text-white/45",
-        align === "right" && "justify-start",
-      )}
-    >
-      <span className="font-medium text-black/62 dark:text-white/62">{author}</span>
-      <span>{timestamp}</span>
+    <div className="space-y-3 pt-2">
+      <button
+        type="button"
+        className="inline-flex items-center gap-2 text-left text-[15px] font-medium leading-6 text-[#1f7ae0] transition hover:text-[#155fba] dark:text-[#7bb5ff] dark:hover:text-[#a7ceff]"
+      >
+        <FileText className="size-4 shrink-0" />
+        <span className="break-all">{result.fileName}</span>
+      </button>
+
+      <div className="rounded-[16px] border border-black/[0.10] bg-white px-5 py-4 dark:border-white/10 dark:bg-[#1d1d20]">
+        <div className="flex items-center gap-4">
+          <div className="flex size-12 shrink-0 items-center justify-center rounded-[14px] bg-black/[0.04] text-black/50 dark:bg-white/[0.08] dark:text-white/55">
+            <FileText className="size-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[15px] font-semibold text-black/84 dark:text-white/86">
+              {result.fileName}
+            </div>
+            <div className="mt-0.5 text-sm text-black/48 dark:text-white/48">{result.fileKind}</div>
+          </div>
+          <button
+            type="button"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-[14px] border border-black/10 px-3.5 py-2 text-sm font-medium text-black/78 transition hover:bg-black/5 dark:border-white/10 dark:text-white/78 dark:hover:bg-white/10"
+          >
+            Open next
+            <ChevronDown className="size-4" />
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-[16px] border border-black/[0.10] bg-white px-5 py-4 dark:border-white/10 dark:bg-[#1d1d20]">
+        <div className="flex items-center gap-4">
+          <div className="flex size-12 shrink-0 items-center justify-center rounded-[14px] bg-black/[0.04] text-black/50 dark:bg-white/[0.08] dark:text-white/55">
+            <FileText className="size-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[15px] font-semibold text-black/84 dark:text-white/86">
+              {result.changeTitle}
+            </div>
+            <div className="mt-0.5 text-sm">
+              <span className="font-medium text-[#089a3a]">+{result.added}</span>
+              <span className="text-black/35 dark:text-white/35"> </span>
+              <span className="font-medium text-[#c92f2f]">-{result.removed}</span>
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-3">
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-xl px-2 py-1.5 text-sm font-medium text-black/70 transition hover:bg-black/5 dark:text-white/72 dark:hover:bg-white/10"
+            >
+              Undo
+              <RotateCcw className="size-4" />
+            </button>
+            <button
+              type="button"
+              className="rounded-[14px] border border-black/10 px-3.5 py-2 text-sm font-medium text-black/78 transition hover:bg-black/5 dark:border-white/10 dark:text-white/78 dark:hover:bg-white/10"
+            >
+              Review
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AgentMessageActions() {
+  return (
+    <div className="flex items-center gap-4 pt-1 text-black/42 dark:text-white/42">
+      <button type="button" className="transition hover:text-black/68 dark:hover:text-white/70" aria-label="Copy response">
+        <Copy className="size-4" />
+      </button>
+      <button type="button" className="transition hover:text-black/68 dark:hover:text-white/70" aria-label="Like response">
+        <ThumbsUp className="size-4" />
+      </button>
+      <button type="button" className="transition hover:text-black/68 dark:hover:text-white/70" aria-label="Dislike response">
+        <ThumbsDown className="size-4" />
+      </button>
     </div>
   );
 }
@@ -287,4 +382,25 @@ function getWorkSteps(messageIndex: number): WorkStep[] {
   ];
 
   return runs[messageIndex % runs.length];
+}
+
+function getResultSummary(messageIndex: number) {
+  const results = [
+    {
+      fileName: "Changelog.md",
+      fileKind: "Document · MD",
+      changeTitle: "Changelog.md updated",
+      added: 42,
+      removed: 0,
+    },
+    {
+      fileName: "Customer-update.md",
+      fileKind: "Document · MD",
+      changeTitle: "Customer-update.md updated",
+      added: 28,
+      removed: 0,
+    },
+  ];
+
+  return results[messageIndex % results.length];
 }
