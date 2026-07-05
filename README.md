@@ -17,7 +17,7 @@
   <p>
     <img alt="Status: in development" src="https://img.shields.io/badge/status-in_development-030303?style=flat-square">
     <img alt="Sources: connected" src="https://img.shields.io/badge/sources-connected-030303?style=flat-square">
-    <img alt="Approval: human approved" src="https://img.shields.io/badge/approval-human_approved-030303?style=flat-square">
+    <img alt="Publishing: human controlled" src="https://img.shields.io/badge/publishing-human_controlled-030303?style=flat-square">
   </p>
 </div>
 
@@ -30,11 +30,11 @@ writing that follows shipped work still moves at the old speed.
 
 Plot starts from what actually shipped, turns connected source records into
 **Writing Blocks**, and prepares source-backed update packs in the team's voice.
-The product surface is the review workspace: sessions, sources, packs, voice,
-and approvals.
+The product surface is the source-backed update workspace: sessions, sources,
+packs, voice, and source citations.
 
 Plot is not a generic AI writer or a company knowledge layer. Agents prepare the
-work; humans approve what goes out.
+work; humans control what gets copied, edited, and published outside Plot.
 
 ## Product Loop
 
@@ -44,19 +44,19 @@ Ask for an update
   -> inspect Writing Blocks
   -> apply template and voice
   -> generate an update pack
-  -> review claims, evidence, and style
-  -> approve channel-ready variants
+  -> inspect source citations and style
+  -> copy, edit, or publish outside Plot
 ```
 
 ## What Plot Does
 
 - Creates update packs from shipped product work, not from a blank page.
-- Keeps claims linked to the source blocks that justify them.
+- Keeps generated content linked to the source blocks that justify it.
 - Produces channel variants for changelogs, docs updates, customer updates,
   launch drafts, and social copy.
-- Keeps voice/style explicit through examples, rules, templates, and review
-  checks.
-- Keeps publishing human-approved.
+- Keeps voice/style explicit through examples, rules, templates, and visible
+  source citations.
+- Keeps publishing human-controlled.
 
 ## Product Surface
 
@@ -64,7 +64,7 @@ Ask for an update
 | --- | --- |
 | Sessions | Chat-like work sessions where a person or agent asks for an update pack and follows progress. |
 | Sources | Shipped-work timeline, source selection, imports, and coverage. |
-| Packs | Draft and approved update packs with channel variants and review state. |
+| Packs | Draft update packs with channel variants and source citations. |
 | Voice | Team voice, channel styles, samples, and explicit rules. |
 | Settings | Workspace, members, permissions, and source connections. |
 
@@ -76,8 +76,8 @@ Ask for an update
   ranges.
 - Direct model-provider API calls for initial generation.
 - Content templates and voice profiles for repeatable output.
-- Claim, source, and style review before approval.
-- Publishing stays human-approved.
+- Source citations and style guidance beside generated content.
+- Publishing stays human-controlled outside Plot.
 
 ## Architecture
 

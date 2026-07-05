@@ -11,14 +11,14 @@ shipping window / release cadence
   -> source adapters (GitHub first)
   -> work session
   -> task
-  -> optional update recipe run
+  -> optional automation run
   -> source watch or refresh
   -> selected shipped changes
   -> Writing Blocks + Content Templates + Voice Profile
   -> Update Agent Run
   -> direct model-provider API call
   -> editable Content Variants grouped in a Content Pack
-  -> claim, source, and style review
+  -> source-cited, on-style content variants
 ```
 
 Uploads, paste, URL import, non-GitHub integrations, formal content checks,
@@ -30,15 +30,15 @@ v0 because the product is autonomous draft preparation, not a manual composer.
 
 - PostgreSQL is the system of record.
 - Plot is an autonomous post-shipping update agent, not a company knowledge
-  base. Store the source material, generated drafts, voice/style guidance, claim
-  decisions, and review state needed to produce updates; do not model a general
-  knowledge graph in v0.
+  base. Store the source material, generated drafts, voice/style guidance, and
+  citation metadata needed to produce updates; do not model a general knowledge
+  graph in v0.
 - Workspace-scoped data is the default. Domain records include `workspace_id`
   unless they are global identity records or system templates.
 - User identity and workspace access are separate. `users` is global identity;
   `workspace_members` is the authorization source of truth.
 - Generated drafts are derived data, but they are persisted because users edit,
-  approve, copy, and compare them.
+  copy, and compare them.
 - Generation must be explainable later. Runs store snapshots of source blocks,
   templates, voice profile/rules/samples, model config, and prompt assembly
   version.
@@ -46,18 +46,18 @@ v0 because the product is autonomous draft preparation, not a manual composer.
   records that call. `agent_runs` records the higher-level update-agent attempt.
 - `work_sessions` and `tasks` are the user-facing agentic UX objects.
   `agent_runs` is execution detail under a task.
-- Agent work must produce reviewable artifacts, not only a transcript. Use
-  `task_artifacts` for plans, source maps, content pack links, claim maps, style
-  reports, and verification summaries.
-- ADE-style task environments separate execution from approval readiness. Use
-  `review_checks` for queryable source, claim, style, channel, and approval
-  gates instead of hiding readiness inside a generation result.
-- Recurring autonomous work should be represented as visible recipes and runs,
-  not invisible cron behavior. `update_recipes` can be deferred from the first
-  manual v0 flow, but the model should leave room for it.
+- Agent work must produce inspectable artifacts, not only a transcript. Use
+  `task_artifacts` for plans, source maps, content pack links, citation maps,
+  style notes, and verification summaries.
+- Plot should not model review as a selectable mode or formal approval gate.
+  Source support belongs in citations, source references, generated content
+  metadata, and human-controlled publishing handoff.
+- Recurring or scheduled work should be represented as visible automation
+  recipes and runs, not invisible cron behavior. `automation_recipes` can be
+  deferred from the first manual v0 flow, but the model should leave room for it.
 - v0 implements GitHub as the first shipped-work source adapter. User-requested
   imports and lightweight repository watches are adapter behavior, not the
-  visible product surface. Publishing remains approval-gated.
+  visible product surface. Publishing remains human-controlled outside Plot.
 - Prefer `status` fields over destructive deletes for user-visible objects.
 - IDs are UUIDs. Tables use `created_at` and `updated_at` unless noted.
 
@@ -103,8 +103,7 @@ User
   -> ModelInvocation
   -> ContentPack
   -> ContentVariant
-  -> Claim
-  -> ClaimEvidence
+  -> Citation
 ```
 
 ## Entity Groups
@@ -129,9 +128,8 @@ Sessions and tasks
   Task
   TaskArtifact
   SourceSelectionItem
-  ReviewCheck
-  UpdateRecipe
-  UpdateRecipeRun
+  AutomationRecipe
+  AutomationRun
 
 Deferred supporting inputs
   UploadedFile
@@ -154,8 +152,7 @@ Generation
   ModelInvocation
   ContentPack
   ContentVariant
-  Claim
-  ClaimEvidence
+  Citation
   WorkspaceAuditEvent
 ```
 
@@ -431,7 +428,7 @@ Rules:
 
 - Repository watches create or refresh `repository_imports` through an
   `agent_runs` row.
-- Watch output is a draft/review queue, never direct publish.
+- Watch output is a draft queue, never direct publish.
 
 ### RepositoryImport
 
@@ -510,7 +507,8 @@ Rules:
 - `writing_blocks` also power the shipped-work source timeline. The timeline is a
   product view over imported source material, not a separate knowledge store.
 - The update agent proposes which imported blocks should be included in a pack;
-  a human or external agent can review before approval.
+  a human or external agent can adjust the source set before generation or
+  export.
 
 ### Connection
 
@@ -631,7 +629,7 @@ writing_blocks (
   workspace_id uuid not null references workspaces(id),
 
   source_origin varchar not null,
-  block_kind varchar not null,
+  source_kind varchar not null,
 
   title text,
   body text,
@@ -686,7 +684,7 @@ MANUAL
 IMPORTED_WRITING
 ```
 
-`block_kind`:
+`source_kind`:
 
 ```txt
 GITHUB_PR
@@ -696,7 +694,7 @@ GITHUB_RELEASE
 GITHUB_ISSUE
 ```
 
-Deferred block kinds:
+Deferred source kinds:
 
 ```txt
 UPLOADED_DOC
@@ -708,7 +706,7 @@ THREAD_POST
 BLOG_POST
 NEWSLETTER
 BRAND_DOC
-APPROVED_GENERATION
+ACCEPTED_GENERATION
 MANUAL_NOTE
 ```
 
@@ -835,7 +833,7 @@ BLOG_POST
 NEWSLETTER
 BRAND_DOC
 PAST_CONTENT
-APPROVED_GENERATION
+ACCEPTED_GENERATION
 USER_EDIT
 PASTED_TEXT
 UPLOADED_FILE
@@ -844,7 +842,7 @@ UPLOADED_FILE
 Rule:
 
 - Voice samples are style inputs, not general source material. v0 can accept a
-  small set of approved examples without turning Plot into a broad knowledge
+  small set of accepted examples without turning Plot into a broad knowledge
   layer.
 
 ### VoiceRule
@@ -904,7 +902,7 @@ AVOID
 
 ### WorkSession
 
-`work_sessions` is the chat-like surface for starting, steering, and reviewing
+`work_sessions` is the chat-like surface for starting, steering, and inspecting
 update work. A session can create one or more tasks. It is the Plot equivalent
 of an agent thread or writing session.
 
@@ -915,12 +913,7 @@ work_sessions (
   voice_profile_id uuid,
 
   title text,
-  session_type varchar not null,
   status varchar not null,
-  intent text,
-  source_scope jsonb,
-  channel_selection jsonb,
-  review_mode varchar not null,
 
   created_by_user_id uuid references users(id),
   last_activity_at timestamptz,
@@ -933,30 +926,14 @@ work_sessions (
 );
 ```
 
-`session_type`:
-
-```txt
-CHAT
-AUTONOMOUS_REVIEW
-PACK_REVIEW
-```
-
 `status`:
 
 ```txt
 OPEN
 WAITING_FOR_USER
 RUNNING
-READY_FOR_REVIEW
+READY
 ARCHIVED
-```
-
-`review_mode`:
-
-```txt
-SOURCE_BACKED_APPROVAL_REQUIRED
-STYLE_ONLY
-DRAFT_ONLY
 ```
 
 Rules:
@@ -964,14 +941,22 @@ Rules:
 - Sessions are user-facing. They should be stable enough to resume later.
 - The first screen should create or resume a session before asking users to
   manage integrations.
-- `source_scope`, `channel_selection`, and `review_mode` are snapshots of the
-  user's intent for the current session, not global workspace settings.
+- Do not add `session_type` yet. A single visible session can contain chat,
+  update-pack preparation, and autonomous task steering over time.
+- Output and channel target selection belongs to automation recipes, generation
+  targets, content packs, or variants, not to the durable work session itself.
+- Review is not a session mode. Plot should provide source-cited content and
+  human-controlled publishing handoff rather than formal in-product approval
+  workflows.
+- Do not add a generic `source_scope` to sessions. Source range belongs to
+  source/import, automation recipe, and generation models where it can be
+  validated against connected sources.
 
 ### SessionMessage
 
 `session_messages` stores the transcript for human, agent, and system turns.
-It is useful for clarifying questions and auditability, but final review should
-focus on `task_artifacts`, not raw chat logs.
+It is useful for clarifying questions and auditability, but final source
+citations and generated artifacts should live outside the raw chat log.
 
 ```sql
 session_messages (
@@ -1014,9 +999,10 @@ ARTIFACT_REFERENCE
 
 ### Task
 
-`tasks` is the durable user-visible unit in the `Autonomous` tab. It can be
-created by a work session, a repository watch, a user request, or an external
-agent request.
+`tasks` is the durable user-visible work item for session and agent work
+surfaces. A task can be created from a work session, repository watch, user
+request, external agent request, or future automation run, but it should not
+encode the full automation schedule that created it.
 
 ```sql
 tasks (
@@ -1026,17 +1012,10 @@ tasks (
   repository_watch_id uuid,
 
   title text not null,
-  task_type varchar not null,
-  autonomy_mode varchar not null,
   status varchar not null,
-  priority varchar not null,
-  objective text,
-  source_scope jsonb,
-  review_mode varchar not null,
 
   created_by_user_id uuid references users(id),
   assigned_to_user_id uuid references users(id),
-  due_at timestamptz,
   last_activity_at timestamptz,
   created_at timestamptz not null,
   updated_at timestamptz not null,
@@ -1049,25 +1028,6 @@ tasks (
 );
 ```
 
-`task_type`:
-
-```txt
-PREPARE_UPDATE_PACK
-REFRESH_UPDATE_PACK
-REVIEW_CLAIMS
-REGENERATE_VARIANTS
-IMPROVE_STYLE
-```
-
-`autonomy_mode`:
-
-```txt
-USER_REQUESTED
-SCHEDULED
-WATCH_TRIGGERED
-EXTERNAL_AGENT_REQUESTED
-```
-
 `status`:
 
 ```txt
@@ -1078,8 +1038,7 @@ SELECTING_SOURCES
 RUNNING
 CHECKING
 BLOCKED
-READY_FOR_REVIEW
-APPROVED
+READY
 EXPORTED
 FAILED
 CANCELLED
@@ -1088,15 +1047,28 @@ ARCHIVED
 
 Rules:
 
-- Tasks are the source of truth for the `Autonomous` tab.
+- Tasks are the source of truth for visible work state.
 - A blocked task must explain the missing source, permission, context, or
-  approval it needs.
-- Approval on a task does not publish externally in v0; publishing remains a
-  separate approval-gated step.
+  input it needs.
+- Do not add `task_type` in the foundation. Add a workflow discriminator later
+  only when the backend has multiple real task executors to route between.
+- Do not add `objective`. Durable task intent should come from the title,
+  session messages, future input snapshots, or artifacts instead of a generic
+  text field that can drift.
+- Task priority is intentionally omitted. Plot tasks are short-running
+  update-generation units, not a general project-management queue.
+- Scheduled or batch automation should be modeled through automation recipes
+  and run history, not through a task mode enum.
+- Tasks are short-running update-generation or citation-preparation units, not
+  long-lived project-management tasks with deadline workflows. Do not add
+  `due_at` unless the product introduces an explicit deadline feature.
+- Do not add a generic `source_scope` to tasks. Source range belongs to
+  source/import, automation recipe, and generation models where it can be
+  validated against connected sources.
 
 ### TaskArtifact
 
-`task_artifacts` stores reviewable outputs from a task. Artifacts make agent
+`task_artifacts` stores inspectable outputs from a task. Artifacts make agent
 work inspectable without forcing users to read every message or tool call.
 
 ```sql
@@ -1131,10 +1103,9 @@ SOURCE_TIMELINE
 SOURCE_SELECTION
 SOURCE_MAP
 CONTENT_PACK
-CLAIM_MAP
+CITATION_MAP
 STYLE_REPORT
 VERIFICATION_SUMMARY
-REVIEW_CHECK_SUMMARY
 ERROR_REPORT
 ```
 
@@ -1143,7 +1114,7 @@ ERROR_REPORT
 ```txt
 DRAFT
 READY
-NEEDS_REVIEW
+NEEDS_SOURCE
 ACCEPTED
 REJECTED
 SUPERSEDED
@@ -1155,7 +1126,7 @@ Rules:
   such as `CONTENT_PACK`, `CONTENT_VARIANT`, `CLAIM`, or `WRITING_BLOCK`.
 - v0 does not need polymorphic foreign keys. The application validates
   references and stores workspace-scoped snapshots in `payload`.
-- Content packs, claim maps, and style reports should be visible from both the
+- Content packs, citation maps, and style notes should be visible from both the
   session and the task detail view.
 - `SOURCE_TIMELINE` snapshots the source scope, timeframe, trigger, selected
   writing blocks, and excluded-but-relevant blocks shown to the user.
@@ -1165,7 +1136,7 @@ Rules:
 
 ### SourceSelectionItem
 
-`source_selection_items` stores the agent-proposed and human-reviewed source
+`source_selection_items` stores the agent-proposed and user-adjustable source
 selection for a task. This is Plot's equivalent of a changed-file list in a
 coding ADE: the user should see which source materials are in scope before
 trusting generated copy.
@@ -1181,7 +1152,7 @@ source_selection_items (
   selected_by varchar not null,
   reason text,
   confidence_score numeric,
-  reviewer_note text,
+  user_note text,
 
   created_by_user_id uuid references users(id),
   updated_by_user_id uuid references users(id),
@@ -1217,99 +1188,21 @@ SYSTEM
 
 Rules:
 
-- The agent can propose source selection, but users and external review agents
-  can override it before approval.
-- `NEEDS_CONTEXT` should block or lower approval readiness until resolved.
-- Source selection should be visible from task detail and pack review.
+- The agent can propose source selection, but users and external agents
+  can override it before generation or export.
+- `NEEDS_CONTEXT` should keep missing context visible until resolved.
+- Source selection should be visible from task detail and the content workspace.
 
-### ReviewCheck
+### AutomationRecipe
 
-`review_checks` stores approval-readiness signals for a task or content pack.
-It is Plot's equivalent of a coding ADE checks tab.
-
-```sql
-review_checks (
-  id uuid primary key,
-  workspace_id uuid not null references workspaces(id),
-  task_id uuid not null,
-  content_pack_id uuid,
-  content_variant_id uuid,
-  claim_id uuid,
-
-  check_type varchar not null,
-  status varchar not null,
-  severity varchar not null,
-  summary text,
-  payload jsonb,
-
-  resolved_by_user_id uuid references users(id),
-  resolved_at timestamptz,
-  created_at timestamptz not null,
-  updated_at timestamptz not null,
-
-  unique (workspace_id, id),
-  foreign key (workspace_id, task_id)
-    references tasks(workspace_id, id),
-  foreign key (workspace_id, content_pack_id)
-    references content_packs(workspace_id, id),
-  foreign key (workspace_id, content_variant_id)
-    references content_variants(workspace_id, id),
-  foreign key (workspace_id, claim_id)
-    references claims(workspace_id, id)
-);
-```
-
-`check_type`:
-
-```txt
-SOURCE_COVERAGE
-CLAIM_EVIDENCE
-UNSUPPORTED_CLAIMS
-STYLE_MATCH
-CHANNEL_COMPLETENESS
-SENSITIVE_CLAIMS
-APPROVAL_REQUIRED
-```
-
-`status`:
-
-```txt
-PENDING
-PASS
-WARNING
-FAIL
-WAIVED
-```
-
-`severity`:
-
-```txt
-INFO
-LOW
-MEDIUM
-HIGH
-BLOCKING
-```
-
-Rules:
-
-- A task should not become `READY_FOR_REVIEW` unless required checks have been
-  created.
-- A pack should not become approved while blocking checks remain unresolved or
-  unwaived.
-- `WAIVED` must store reviewer identity and reason in `payload`.
-- `STYLE_MATCH` payloads should expose the same style metrics shown in the UI;
-  they should not be opaque pass/fail labels.
-- Source-related checks should store the source window, trigger, selected source
-  IDs, and any omitted sources that may affect trust.
-
-### UpdateRecipe
-
-`update_recipes` stores recurring autonomous update work such as a weekly
-release pack. It is a visible task recipe, not hidden cron behavior.
+`automation_recipes` stores recurring or scheduled automated work such as a
+weekly release pack, daily source monitor, or scheduled crash-summary task. It
+is a visible automation configuration, not hidden cron behavior.
+In the product UI, these records can appear as scheduled-task templates inside
+the `Autonomous` surface.
 
 ```sql
-update_recipes (
+automation_recipes (
   id uuid primary key,
   workspace_id uuid not null references workspaces(id),
   voice_profile_id uuid,
@@ -1320,7 +1213,6 @@ update_recipes (
   status varchar not null,
   source_scope jsonb,
   channel_selection jsonb,
-  review_mode varchar not null,
   cadence_rrule text,
   timezone text,
   prompt_template text,
@@ -1351,20 +1243,20 @@ ARCHIVED
 Rules:
 
 - v0 can defer scheduled execution, but the UX should treat release cadence as a
-  recipe that users can inspect, pause, and run manually.
-- A recipe creates tasks; it does not publish content.
+  visible automation that users can inspect, pause, and run manually.
+- An automation recipe creates tasks or runs; it does not publish content.
 - `cadence_rrule` should follow RFC 5545 when recurring schedules are enabled.
 
-### UpdateRecipeRun
+### AutomationRun
 
-`update_recipe_runs` records each scheduled or manual run of an update recipe.
+`automation_runs` records each scheduled or manual run of an automation recipe.
 It gives users run history and makes skipped or failed runs visible.
 
 ```sql
-update_recipe_runs (
+automation_runs (
   id uuid primary key,
   workspace_id uuid not null references workspaces(id),
-  update_recipe_id uuid not null,
+  automation_recipe_id uuid not null,
   task_id uuid,
 
   trigger_type varchar not null,
@@ -1378,8 +1270,8 @@ update_recipe_runs (
   updated_at timestamptz not null,
 
   unique (workspace_id, id),
-  foreign key (workspace_id, update_recipe_id)
-    references update_recipes(workspace_id, id),
+  foreign key (workspace_id, automation_recipe_id)
+    references automation_recipes(workspace_id, id),
   foreign key (workspace_id, task_id)
     references tasks(workspace_id, id)
 );
@@ -1401,7 +1293,7 @@ SCHEDULED
 QUEUED
 CREATING_TASK
 RUNNING
-READY_FOR_REVIEW
+READY
 FAILED
 SKIPPED
 CANCELLED
@@ -1409,11 +1301,11 @@ CANCELLED
 
 Rules:
 
-- `READY_FOR_REVIEW` means the run created or updated a task that has reviewable
-  artifacts; it does not mean approved.
+- `READY` means the run created or updated a task that has inspectable
+  artifacts.
 - `SKIPPED` should record why the run did not execute in `error_message` or
   structured payload if added later.
-- Recipe runs should appear in the `Autonomous` surface near their created
+- Automation runs should appear in the `Autonomous` surface near their created
   tasks.
 
 ## Agent Runs
@@ -1421,9 +1313,9 @@ Rules:
 ### AgentRun
 
 `agent_runs` records one autonomous or user-requested update-agent attempt. It
-coordinates repository import, shipped-change selection, generation, claim
-mapping, and review-queue creation. It is not a separate agent service in v0;
-the backend service owns the state machine.
+coordinates repository import, shipped-change selection, generation, and
+citation mapping. It is not a separate agent service in v0; the backend service
+owns the state machine.
 
 ```sql
 agent_runs (
@@ -1438,7 +1330,6 @@ agent_runs (
   run_type varchar not null,
   trigger_type varchar not null,
   status varchar not null,
-  objective text,
   input_snapshot jsonb,
   output_summary jsonb,
   error_message text,
@@ -1467,9 +1358,9 @@ agent_runs (
 
 ```txt
 IMPORT_AND_DRAFT_UPDATE_PACK
-REFRESH_REVIEW_QUEUE
+REFRESH_UPDATE_PACK
 REGENERATE_VARIANTS
-MAP_CLAIMS
+MAP_CITATIONS
 ```
 
 `trigger_type`:
@@ -1494,7 +1385,7 @@ CANCELLED
 
 Rules:
 
-- Agent runs may prepare drafts and review queues autonomously.
+- Agent runs may prepare drafts and citation metadata autonomously.
 - Agent runs must not publish externally in v0.
 - User-facing task status is derived from task state and artifacts, not only
   `agent_runs.status`.
@@ -1878,8 +1769,8 @@ content_variants (
   generated_at timestamptz,
   edited_at timestamptz,
   edited_by_user_id uuid references users(id),
-  approved_at timestamptz,
-  approved_by_user_id uuid references users(id),
+  accepted_at timestamptz,
+  accepted_by_user_id uuid references users(id),
   created_at timestamptz not null,
   updated_at timestamptz not null,
 
@@ -1898,7 +1789,7 @@ content_variants (
 ```txt
 DRAFT
 EDITED
-APPROVED
+ACCEPTED
 REJECTED
 ARCHIVED
 ```
@@ -1908,100 +1799,36 @@ Rules:
 - `generated_body` is immutable after creation.
 - `body` is the current editable draft.
 - `editor_json` is optional UI state. In v0, text fields remain canonical.
-- `claims` stores the factual statements that need source review. It is a
-  review aid, not a complete semantic annotation of the draft.
+- Source support should be exposed through citations or source references near
+  the generated content, not through an approval workflow.
 - If full edit history becomes necessary, add `content_variant_versions` later.
 
-### Claim
+### Citation
 
-`claims` stores important factual statements extracted from a generated variant
-or added by a reviewer. It lets Plot show whether a statement is supported by
-source material before the user approves the draft.
+`citations` links generated content to the Writing Blocks that support it. This
+is the source-backed trust layer for Plot. It is not a formal review workflow;
+it lets users inspect why generated text says what it says before they copy,
+edit, or publish outside Plot.
 
 ```sql
-claims (
+citations (
   id uuid primary key,
   workspace_id uuid not null references workspaces(id),
   content_variant_id uuid not null,
-
-  claim_text text not null,
-  claim_type varchar not null,
-  support_status varchar not null,
-  position_hint jsonb,
-  extracted_from varchar not null,
-  reviewer_note text,
-
-  reviewed_at timestamptz,
-  reviewed_by_user_id uuid references users(id),
-  created_at timestamptz not null,
-  updated_at timestamptz not null,
-
-  unique (workspace_id, id),
-  foreign key (workspace_id, content_variant_id)
-    references content_variants(workspace_id, id)
-);
-```
-
-`claim_type`:
-
-```txt
-FEATURE
-BEHAVIOR
-METRIC
-CUSTOMER_IMPACT
-AVAILABILITY
-LIMITATION
-OTHER
-```
-
-`support_status`:
-
-```txt
-SUPPORTED
-PARTIAL
-UNSUPPORTED
-NEEDS_REVIEW
-REJECTED
-```
-
-`extracted_from`:
-
-```txt
-MODEL
-USER
-SYSTEM
-```
-
-Rules:
-
-- v0 should extract only important factual claims, not every sentence.
-- Unsupported claims should remain visible until edited, rejected, or reviewed.
-- `position_hint` can store a paragraph index, text quote, or editor selection.
-  Full durable character-span mapping can be added later.
-
-### ClaimEvidence
-
-`claim_evidence` links claims to the Writing Blocks that support them. This is
-the v0 source-backed trust layer.
-
-```sql
-claim_evidence (
-  id uuid primary key,
-  workspace_id uuid not null references workspaces(id),
-  claim_id uuid not null,
   writing_block_id uuid not null,
 
-  evidence_text text,
-  evidence_url text,
+  target_text text,
+  position_hint jsonb,
+  source_excerpt text,
+  source_url text,
   confidence numeric,
   status varchar not null,
   created_at timestamptz not null,
   updated_at timestamptz not null,
 
   unique (workspace_id, id),
-  unique (workspace_id, claim_id, writing_block_id),
-  foreign key (workspace_id, claim_id)
-    references claims(workspace_id, id),
+  foreign key (workspace_id, content_variant_id)
+    references content_variants(workspace_id, id),
   foreign key (workspace_id, writing_block_id)
     references writing_blocks(workspace_id, id)
 );
@@ -2011,17 +1838,19 @@ claim_evidence (
 
 ```txt
 PROPOSED
-ACCEPTED
-REJECTED
+CONFIRMED
 STALE
+REMOVED
 ```
 
 Rules:
 
-- A claim can link to multiple Writing Blocks.
-- `evidence_text` is a short excerpt or summary, not a full copied source.
-- If a source block is archived, claim evidence should remain for audit but can
-  be marked `STALE`.
+- A generated paragraph or sentence can link to multiple Writing Blocks.
+- `target_text` is the generated text being supported; it can be omitted when
+  `position_hint` is enough for the editor.
+- `source_excerpt` is a short excerpt or summary, not a full copied source.
+- If a source block is archived, citations should remain visible but can be
+  marked `STALE`.
 
 ### WorkspaceAuditEvent
 
@@ -2057,10 +1886,10 @@ MODEL_INVOCATION_SUCCEEDED
 MODEL_INVOCATION_FAILED
 CONTENT_VARIANT_CREATED
 CONTENT_VARIANT_EDITED
-CONTENT_VARIANT_APPROVED
+CONTENT_VARIANT_ACCEPTED
 CLAIM_CREATED
 CLAIM_REVIEWED
-CLAIM_EVIDENCE_ACCEPTED
+CITATION_CONFIRMED
 VOICE_PROFILE_UPDATED
 TEMPLATE_UPDATED
 WRITING_BLOCK_ARCHIVED
@@ -2114,9 +1943,8 @@ erDiagram
     CONTENT_PACKS ||--o{ CONTENT_VARIANTS : contains
     GENERATION_TARGETS ||--o{ CONTENT_VARIANTS : produced_for
     MODEL_INVOCATIONS ||--o{ CONTENT_VARIANTS : produces
-    CONTENT_VARIANTS ||--o{ CLAIMS : contains
-    CLAIMS ||--o{ CLAIM_EVIDENCE : supported_by
-    WRITING_BLOCKS ||--o{ CLAIM_EVIDENCE : evidences
+    CONTENT_VARIANTS ||--o{ CITATIONS : has
+    WRITING_BLOCKS ||--o{ CITATIONS : cites
     WORKSPACES ||--o{ WORKSPACE_AUDIT_EVENTS : records
 ```
 
@@ -2131,7 +1959,7 @@ erDiagram
 6. `generation_runs`, `generation_inputs`, `generation_targets`,
    `model_invocations`
 7. `content_packs`, `content_variants`
-8. `claims`, `claim_evidence`
+8. `citations`
 9. `workspace_audit_events`
 
 ## Deferred From v0
@@ -2144,9 +1972,9 @@ Non-GitHub connections
 Full webhook ingestion beyond lightweight repository watches
 ChannelVoiceStyle table
 ContentChecks
-Full ClaimMap span annotation
-EvidenceMap graph
-VariantSourceLink projection beyond claim-level links
+Full citation span annotation
+Citation graph
+VariantSourceLink projection beyond citation links
 HandoffExport
 DirectPublish
 ScheduledPublish

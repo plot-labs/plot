@@ -134,7 +134,7 @@ erDiagram
         uuid id PK
         uuid workspace_id FK
         varchar source_origin
-        varchar block_kind
+        varchar source_kind
         text title
         text body
         text url
@@ -230,12 +230,7 @@ erDiagram
         uuid workspace_id FK
         uuid voice_profile_id FK
         text title
-        varchar session_type
         varchar status
-        text intent
-        jsonb source_scope
-        jsonb channel_selection
-        varchar review_mode
         uuid created_by_user_id FK
         timestamptz last_activity_at
         timestamptz created_at
@@ -260,16 +255,9 @@ erDiagram
         uuid work_session_id FK
         uuid repository_watch_id FK
         text title
-        varchar task_type
-        varchar autonomy_mode
         varchar status
-        varchar priority
-        text objective
-        jsonb source_scope
-        varchar review_mode
         uuid created_by_user_id FK
         uuid assigned_to_user_id FK
-        timestamptz due_at
         timestamptz last_activity_at
         timestamptz created_at
         timestamptz updated_at
@@ -300,32 +288,14 @@ erDiagram
         varchar selected_by
         text reason
         numeric confidence_score
-        text reviewer_note
+        text user_note
         uuid created_by_user_id FK
         uuid updated_by_user_id FK
         timestamptz created_at
         timestamptz updated_at
     }
 
-    REVIEW_CHECKS {
-        uuid id PK
-        uuid workspace_id FK
-        uuid task_id FK
-        uuid content_pack_id FK
-        uuid content_variant_id FK
-        uuid claim_id FK
-        varchar check_type
-        varchar status
-        varchar severity
-        text summary
-        jsonb payload
-        uuid resolved_by_user_id FK
-        timestamptz resolved_at
-        timestamptz created_at
-        timestamptz updated_at
-    }
-
-    UPDATE_RECIPES {
+    AUTOMATION_RECIPES {
         uuid id PK
         uuid workspace_id FK
         uuid voice_profile_id FK
@@ -335,7 +305,6 @@ erDiagram
         varchar status
         jsonb source_scope
         jsonb channel_selection
-        varchar review_mode
         text cadence_rrule
         text timezone
         text prompt_template
@@ -346,10 +315,10 @@ erDiagram
         timestamptz updated_at
     }
 
-    UPDATE_RECIPE_RUNS {
+    AUTOMATION_RUNS {
         uuid id PK
         uuid workspace_id FK
-        uuid update_recipe_id FK
+        uuid automation_recipe_id FK
         uuid task_id FK
         varchar trigger_type
         varchar status
@@ -372,7 +341,6 @@ erDiagram
         varchar run_type
         varchar trigger_type
         varchar status
-        text objective
         jsonb input_snapshot
         jsonb output_summary
         text error_message
@@ -492,35 +460,21 @@ erDiagram
         timestamptz generated_at
         timestamptz edited_at
         uuid edited_by_user_id FK
-        timestamptz approved_at
-        uuid approved_by_user_id FK
+        timestamptz accepted_at
+        uuid accepted_by_user_id FK
         timestamptz created_at
         timestamptz updated_at
     }
 
-    CLAIMS {
+    CITATIONS {
         uuid id PK
         uuid workspace_id FK
         uuid content_variant_id FK
-        text claim_text
-        varchar claim_type
-        varchar support_status
-        jsonb position_hint
-        varchar extracted_from
-        text reviewer_note
-        timestamptz reviewed_at
-        uuid reviewed_by_user_id FK
-        timestamptz created_at
-        timestamptz updated_at
-    }
-
-    CLAIM_EVIDENCE {
-        uuid id PK
-        uuid workspace_id FK
-        uuid claim_id FK
         uuid writing_block_id FK
-        text evidence_text
-        text evidence_url
+        text target_text
+        jsonb position_hint
+        text source_excerpt
+        text source_url
         numeric confidence
         varchar status
         timestamptz created_at
@@ -557,14 +511,12 @@ erDiagram
     USERS ||--o{ TASK_ARTIFACTS : creates
     USERS ||--o{ SOURCE_SELECTION_ITEMS : creates
     USERS ||--o{ SOURCE_SELECTION_ITEMS : updates
-    USERS ||--o{ REVIEW_CHECKS : resolves
-    USERS ||--o{ UPDATE_RECIPES : creates
+    USERS ||--o{ AUTOMATION_RECIPES : creates
     USERS ||--o{ AGENT_RUNS : starts
     USERS ||--o{ GENERATION_RUNS : starts
     USERS ||--o{ CONTENT_PACKS : creates
     USERS ||--o{ CONTENT_VARIANTS : edits
-    USERS ||--o{ CONTENT_VARIANTS : approves
-    USERS ||--o{ CLAIMS : reviews
+    USERS ||--o{ CONTENT_VARIANTS : accepts
     USERS ||--o{ WORKSPACE_AUDIT_EVENTS : acts
 
     WORKSPACES ||--o{ WORKSPACE_MEMBERS : has
@@ -583,9 +535,8 @@ erDiagram
     WORKSPACES ||--o{ TASKS : owns
     WORKSPACES ||--o{ TASK_ARTIFACTS : owns
     WORKSPACES ||--o{ SOURCE_SELECTION_ITEMS : owns
-    WORKSPACES ||--o{ REVIEW_CHECKS : owns
-    WORKSPACES ||--o{ UPDATE_RECIPES : owns
-    WORKSPACES ||--o{ UPDATE_RECIPE_RUNS : owns
+    WORKSPACES ||--o{ AUTOMATION_RECIPES : owns
+    WORKSPACES ||--o{ AUTOMATION_RUNS : owns
     WORKSPACES ||--o{ AGENT_RUNS : owns
     WORKSPACES ||--o{ GENERATION_RUNS : owns
     WORKSPACES ||--o{ GENERATION_INPUTS : owns
@@ -593,8 +544,7 @@ erDiagram
     WORKSPACES ||--o{ MODEL_INVOCATIONS : owns
     WORKSPACES ||--o{ CONTENT_PACKS : owns
     WORKSPACES ||--o{ CONTENT_VARIANTS : owns
-    WORKSPACES ||--o{ CLAIMS : owns
-    WORKSPACES ||--o{ CLAIM_EVIDENCE : owns
+    WORKSPACES ||--o{ CITATIONS : owns
     WORKSPACES ||--o{ WORKSPACE_AUDIT_EVENTS : records
 
     CONNECTIONS ||--o{ SOURCE_REPOSITORIES : authorizes
@@ -616,14 +566,10 @@ erDiagram
     TASKS ||--o{ TASK_ARTIFACTS : produces
     TASKS ||--o{ SOURCE_SELECTION_ITEMS : selects
     WRITING_BLOCKS ||--o{ SOURCE_SELECTION_ITEMS : selected_as
-    TASKS ||--o{ REVIEW_CHECKS : checked_by
-    CONTENT_PACKS ||--o{ REVIEW_CHECKS : checked_by
-    CONTENT_VARIANTS ||--o{ REVIEW_CHECKS : checked_by
-    CLAIMS ||--o{ REVIEW_CHECKS : checked_by
-    VOICE_PROFILES ||--o{ UPDATE_RECIPES : guides
-    REPOSITORY_WATCHES ||--o{ UPDATE_RECIPES : scopes
-    UPDATE_RECIPES ||--o{ UPDATE_RECIPE_RUNS : runs
-    TASKS ||--o{ UPDATE_RECIPE_RUNS : created_by
+    VOICE_PROFILES ||--o{ AUTOMATION_RECIPES : guides
+    REPOSITORY_WATCHES ||--o{ AUTOMATION_RECIPES : scopes
+    AUTOMATION_RECIPES ||--o{ AUTOMATION_RUNS : runs
+    TASKS ||--o{ AUTOMATION_RUNS : created_by
 
     REPOSITORY_WATCHES ||--o{ AGENT_RUNS : triggers
     WORK_SESSIONS ||--o{ AGENT_RUNS : starts
@@ -643,6 +589,5 @@ erDiagram
     GENERATION_TARGETS ||--o{ CONTENT_VARIANTS : produced_for
     CONTENT_TEMPLATES ||--o{ CONTENT_VARIANTS : filters_by
     MODEL_INVOCATIONS ||--o{ CONTENT_VARIANTS : produces
-    CONTENT_VARIANTS ||--o{ CLAIMS : contains
-    CLAIMS ||--o{ CLAIM_EVIDENCE : supported_by
-    WRITING_BLOCKS ||--o{ CLAIM_EVIDENCE : evidences
+    CONTENT_VARIANTS ||--o{ CITATIONS : has
+    WRITING_BLOCKS ||--o{ CITATIONS : cites

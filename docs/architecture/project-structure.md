@@ -51,7 +51,7 @@ apps/web/src/
     agents/
     drafts/
     content-pack/
-    claims/
+    citations/
     connections/        # source adapter setup
   lib/
 ```
@@ -90,7 +90,7 @@ apps/api/
   agent/
   generation/
   contentpack/
-  claim/
+  citation/
   ai/
     provider/
     prompt/
@@ -102,9 +102,9 @@ apps/api/
 2. First source adapter, repository watches, repository imports, Writing Block
    model, and input endpoints
 3. Voice Profile, Voice Samples, Voice Rules, and system Content Templates
-4. Agent Run state machine for import, draft, claim mapping, and review queue
+4. Agent Run state machine for import, draft, and citation mapping
 5. Generation Run, Generation Target, and Model Invocation endpoints backed by
    a direct model-provider API call
 6. Content Pack and Content Variant UI
-7. Claim, evidence, and style review UI
+7. Citation/source-reference and style guidance UI
 8. Later: upload/paste/url/email source inputs and publishing automation
