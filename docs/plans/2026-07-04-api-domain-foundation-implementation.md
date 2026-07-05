@@ -6,7 +6,7 @@
 
 **Architecture:** Implement a schema-first Spring Boot backend with Flyway, JPA entities, repository interfaces, transactional services, and MVC controllers. Domain services apply `DevContext` workspace scoping and status defaults; controllers return DTOs and never serialize entities. Tests run through MockMvc against Testcontainers PostgreSQL so Flyway, JPA mappings, bootstrap data, and HTTP contracts are verified together.
 
-**Tech Stack:** Kotlin 2.2.21, Java 21, Spring Boot 4.0.7, Spring Web MVC, Spring Data JPA, Flyway, PostgreSQL/pgvector Testcontainers, Jakarta Validation, Jackson Kotlin, MockMvc, JUnit 5.
+**Tech Stack:** Kotlin 2.4.0, Java 21, Spring Boot 4.0.7, Spring Web MVC, Spring Data JPA, Flyway, PostgreSQL/pgvector Testcontainers, Jakarta Validation, Jackson Kotlin, MockMvc, JUnit 5.
 
 ---
 

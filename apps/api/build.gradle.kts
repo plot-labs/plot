@@ -1,9 +1,9 @@
 plugins {
-	kotlin("jvm") version "2.2.21"
-	kotlin("plugin.spring") version "2.2.21"
+	kotlin("jvm") version "2.4.0"
+	kotlin("plugin.spring") version "2.4.0"
 	id("org.springframework.boot") version "4.0.7"
 	id("io.spring.dependency-management") version "1.1.7"
-	kotlin("plugin.jpa") version "2.2.21"
+	kotlin("plugin.jpa") version "2.4.0"
 }
 
 group = "com.plot"
@@ -21,6 +21,7 @@ repositories {
 }
 
 extra["springAiVersion"] = "2.0.0"
+extra["kotlin.version"] = "2.4.0"
 
 dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-actuator")
@@ -65,7 +66,7 @@ dependencyManagement {
 
 kotlin {
 	compilerOptions {
-		freeCompilerArgs.addAll("-Xjsr305=strict", "-Xannotation-default-target=param-property")
+		freeCompilerArgs.add("-Xjsr305=strict")
 	}
 }
 
