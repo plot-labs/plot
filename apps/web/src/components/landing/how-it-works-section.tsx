@@ -15,14 +15,14 @@ const steps = [
     label: "Agent drafts",
     title: "Let Plot prepare the pack.",
     description:
-      "The update agent imports shipped changes, proposes what matters, maps claims to sources, and drafts each channel in the right style.",
+      "The update agent imports shipped changes, proposes what matters, attaches source citations, and drafts each channel in the right style.",
   },
   {
     number: "III",
-    label: "Approve",
-    title: "Review before it goes out.",
+    label: "Handoff",
+    title: "Inspect, then publish outside Plot.",
     description:
-      "Humans and coding agents see the same pack, claims, evidence, caveats, and style guidance. Publishing stays approval-gated.",
+      "Humans and coding agents see the same pack, citations, caveats, and style guidance. You edit, copy, and publish on your own channels.",
   },
 ];
 
@@ -39,14 +39,14 @@ const signalRows = [
 ];
 
 const planRows = [
-  { name: "Release brief", detail: "Narrative, claims, and review owners", meta: "7 claims" },
+  { name: "Release brief", detail: "Narrative, citations, and owners", meta: "7 cites" },
   { name: "Docs update", detail: "Steps, caveats, and linked sources", meta: "help" },
   { name: "Launch draft", detail: "Customer impact with source chips", meta: "draft" },
 ];
 
 const lanes = [
   { title: "Source ledger", rows: sourceRows },
-  { title: "Review queue", rows: signalRows },
+  { title: "Change signals", rows: signalRows },
   { title: "Update pack", rows: planRows },
 ];
 
@@ -156,7 +156,7 @@ export function HowItWorksSection() {
                   </div>
                 </div>
                   <div className="font-mono text-[10px] uppercase text-background/45">
-                  Human approval required
+                  Publish outside Plot
                 </div>
               </div>
 

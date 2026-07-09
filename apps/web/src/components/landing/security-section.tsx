@@ -7,7 +7,7 @@ const securityFeatures = [
   {
     icon: Shield,
     title: "Workspace boundaries",
-    description: "Every source watch, agent run, Writing Block, update pack, claim, voice rule, and approval belongs to one workspace.",
+    description: "Every source watch, agent run, Writing Block, update pack, citation, and voice rule belongs to one workspace.",
   },
   {
     icon: Lock,
@@ -16,17 +16,17 @@ const securityFeatures = [
   },
   {
     icon: Eye,
-    title: "Claim evidence",
-    description: "Factual product claims are mapped to source blocks and marked verified, inferred, review-needed, or opinion.",
+    title: "Source citations",
+    description: "Important statements in generated content stay linked to source blocks so you can inspect why the draft says what it says.",
   },
   {
     icon: FileCheck,
-    title: "Approval-gated publish",
-    description: "Plot can prepare docs and release content autonomously, but it does not publish without product or engineering approval.",
+    title: "Human publish outside Plot",
+    description: "Plot prepares docs and release content autonomously. You edit, copy, and publish on your own channels.",
   },
 ];
 
-const certifications = ["VERIFIED", "INFERRED", "NEEDS REVIEW", "OPINION", "WORKSPACE-SCOPED"];
+const certifications = ["SOURCE-CITED", "ON-STYLE", "WORKSPACE-SCOPED", "HUMAN HANDOFF", "NO AUTO-PUBLISH"];
 
 export function SecuritySection() {
   const [isVisible, setIsVisible] = useState(false);
@@ -59,14 +59,14 @@ export function SecuritySection() {
               Safety
             </span>
             <h2 className="text-4xl lg:text-6xl font-display tracking-tight mb-8">
-              The review map
+              Citations beat
               <br />
-              is the product.
+              confident fiction.
             </h2>
             <p className="text-xl text-muted-foreground leading-relaxed mb-12">
-              Plot should not create confident product fiction. It shows where a
-              claim came from, which voice rules shaped the draft, and when product
-              or engineering needs to review it.
+              Plot should not invent product story. It shows which sources support
+              a draft, which voice rules shaped the wording, and leaves publish
+              decisions with you outside Plot.
             </p>
 
             {/* Certifications */}
