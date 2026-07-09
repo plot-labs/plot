@@ -358,6 +358,7 @@ true:
 
 Defer:
 
+- real-time collaborative editing (async share links and comments come first)
 - issue tracker and team chat integrations
 - manual paste/upload input
 - rich prior-writing import beyond a small accepted-example set

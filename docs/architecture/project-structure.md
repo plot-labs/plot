@@ -35,26 +35,36 @@ frontend feature modules.
 ```txt
 apps/web/src/
   app/
-    (marketing)/
-    (auth)/
+    (marketing)/        # reserved route group (landing currently lives at app/page.tsx)
+    (auth)/             # reserved route group
     (app)/
+      sessions/
+      sources/
+      packs/
+      voice/
+      workspaces/[workspaceId]/settings/
+    api/                # serverless routes (waitlist)
   components/
+    landing/
     layout/
     ui/
   features/
-    blocks/
-    repositories/
-    imports/
-    watches/
-    templates/
-    voice/
-    agents/
-    drafts/
-    content-pack/
-    citations/
-    connections/        # source adapter setup
-  lib/
+    sessions/           # implemented (mock data)
+    sources/            # implemented (mock data)
+    packs/              # implemented (mock data)
+    agent-trace/        # placeholder
+    angles/             # placeholder
+    blocks/             # placeholder
+    brief/              # placeholder
+    connections/        # placeholder, source adapter setup
+    content-pack/       # placeholder
+    memory/             # placeholder
+    signals/            # placeholder
+  lib/                  # api-client.ts (dev boundary), dev-context.ts, waitlist.ts
 ```
+
+The product shell currently renders seeded dev data from `lib/dev-context.ts`
+through `lib/api-client.ts`; it does not call the backend yet.
 
 ## Backend
 
@@ -62,6 +72,11 @@ apps/web/src/
 backend-managed update-agent loop plus direct model-provider calls, not a
 separate agent service. The module boundaries below describe the backend domain
 shape and should stay independent from specific Spring infrastructure choices.
+
+Implemented today: `common/`, `dev/` (dev bootstrap context), `workspace/`,
+`worksession/`, `task/`, and `writingblock/`, each with entity, repository,
+service, controller, and DTO layers plus Testcontainers-backed integration
+tests. The remaining modules below are the planned target shape.
 
 ```txt
 apps/api/

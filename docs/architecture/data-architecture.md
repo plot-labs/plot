@@ -1123,7 +1123,7 @@ SUPERSEDED
 Rules:
 
 - `artifact_ref_type` and `artifact_ref_id` may point to another typed object,
-  such as `CONTENT_PACK`, `CONTENT_VARIANT`, `CLAIM`, or `WRITING_BLOCK`.
+  such as `CONTENT_PACK`, `CONTENT_VARIANT`, `CITATION`, or `WRITING_BLOCK`.
 - v0 does not need polymorphic foreign keys. The application validates
   references and stores workspace-scoped snapshots in `payload`.
 - Content packs, citation maps, and style notes should be visible from both the
@@ -1887,8 +1887,7 @@ MODEL_INVOCATION_FAILED
 CONTENT_VARIANT_CREATED
 CONTENT_VARIANT_EDITED
 CONTENT_VARIANT_ACCEPTED
-CLAIM_CREATED
-CLAIM_REVIEWED
+CITATION_CREATED
 CITATION_CONFIRMED
 VOICE_PROFILE_UPDATED
 TEMPLATE_UPDATED
