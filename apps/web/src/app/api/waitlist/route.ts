@@ -24,7 +24,10 @@ export async function POST(request: Request) {
   const payload = parseWaitlistPayload(body);
 
   if (!payload) {
-    return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Enter a valid email and choose the most painful update channel." },
+      { status: 400 },
+    );
   }
 
   if (payload.website) {
@@ -38,6 +41,9 @@ export async function POST(request: Request) {
     email: payload.email,
     firstName: role,
     unsubscribed: false,
+    properties: {
+      pain_channel: payload.painChannel,
+    },
     ...(segmentId ? { segments: [{ id: segmentId }] } : {}),
   });
 
@@ -61,7 +67,7 @@ export async function POST(request: Request) {
       text: [
         "Thanks for joining the Plot waitlist.",
         "",
-        "Plot prepares source-backed, on-style update packs from shipped work — docs, release notes, customer updates, and launch drafts — with human approval before anything goes out.",
+        "Plot prepares source-backed, on-style update packs from shipped work — docs, release notes, customer updates, and launch drafts — so you can edit, copy, and publish outside Plot.",
         "",
         "We'll reach out as early access opens.",
       ].join("\n"),
