@@ -1,6 +1,7 @@
 package com.plot.api.common
 
 import jakarta.validation.constraints.Min
+import java.util.UUID
 import org.junit.jupiter.api.Test
 import org.springframework.http.MediaType
 import org.springframework.test.web.servlet.MockMvc
@@ -31,12 +32,33 @@ class ApiExceptionHandlerTest {
 			.andExpect(jsonPath("$.message").value("count must be at least 1"))
 	}
 
+	@Test
+	fun integrationFailuresExposeOnlyResourceIdAndDisableCaching() {
+		val importId = UUID.fromString("018fd000-0000-7000-8000-000000000099")
+		mockMvc.perform(get("/github-error"))
+			.andExpect(status().isBadGateway())
+			.andExpect(jsonPath("$.error").value("IMPORT_FAILED"))
+			.andExpect(jsonPath("$.resourceId").value(importId.toString()))
+			.andExpect(jsonPath("$.secret").doesNotExist())
+			.andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Cache-Control", "no-store"))
+	}
+
 	@RestController
 	class ValidationController {
 
 		@GetMapping("/validation")
 		fun validate(@RequestParam @Min(value = 1, message = "count must be at least 1") count: Int): Map<String, Int> {
 			return mapOf("count" to count)
+		}
+
+		@GetMapping("/github-error")
+		fun githubError(): Nothing {
+			throw ApiException(
+				org.springframework.http.HttpStatus.BAD_GATEWAY,
+				"IMPORT_FAILED",
+				"safe failure",
+				UUID.fromString("018fd000-0000-7000-8000-000000000099"),
+			)
 		}
 	}
 }

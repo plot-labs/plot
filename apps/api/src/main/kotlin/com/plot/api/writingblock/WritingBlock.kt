@@ -14,6 +14,8 @@ class WritingBlock(
 	@Id
 	var id: UUID,
 	var workspaceId: UUID,
+	var sourceNamespaceId: UUID?,
+	var externalObjectKey: String?,
 	var sourceOrigin: String,
 	var sourceKind: String,
 	var title: String?,

@@ -1,5 +1,6 @@
 package com.plot.api.common
 
+import org.springframework.http.CacheControl
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.http.converter.HttpMessageNotReadableException
@@ -14,9 +15,14 @@ class ApiExceptionHandler {
 
 	@ExceptionHandler(ApiException::class)
 	fun handleApiException(exception: ApiException): ResponseEntity<ApiErrorResponse> {
-		return ResponseEntity
+		val response = ResponseEntity
 			.status(exception.status)
-			.body(ApiErrorResponse(exception.error, exception.message))
+			.body(ApiErrorResponse(exception.error, exception.message, exception.resourceId))
+		return if (exception.error.startsWith("GITHUB") || exception.error.startsWith("IMPORT") || exception.error == "INVALID_GITHUB_STATE") {
+			ResponseEntity.status(response.statusCode).cacheControl(CacheControl.noStore()).body(response.body)
+		} else {
+			response
+		}
 	}
 
 	@ExceptionHandler(MethodArgumentNotValidException::class)

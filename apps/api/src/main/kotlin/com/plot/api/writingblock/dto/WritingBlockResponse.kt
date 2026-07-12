@@ -18,6 +18,7 @@ data class WritingBlockResponse(
 	val sourceUpdatedAt: Instant?,
 	val ingestedAt: Instant,
 	val status: String,
+	val sourceManaged: Boolean,
 	val createdAt: Instant,
 	val updatedAt: Instant,
 )

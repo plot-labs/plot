@@ -18,6 +18,7 @@ fun WritingBlock.toResponse(): WritingBlockResponse {
 		sourceUpdatedAt = sourceUpdatedAt,
 		ingestedAt = ingestedAt,
 		status = status,
+		sourceManaged = sourceNamespaceId != null,
 		createdAt = createdAt,
 		updatedAt = updatedAt,
 	)
