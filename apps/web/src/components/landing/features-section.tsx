@@ -30,16 +30,16 @@ const features: CapabilityFeature[] = [
   },
   {
     number: "02",
-    title: "Agent + Human Review",
+    title: "Agent-prepared, human-led",
     description:
-      "The update agent proposes meaningful shipped changes, docs gaps, customer impact, and caveats. Humans approve what goes out.",
+      "The update agent proposes meaningful shipped changes, docs gaps, customer impact, and caveats. You inspect the pack, then publish outside Plot.",
     visual: "signals",
   },
   {
     number: "03",
-    title: "Voice, Style, and Claims",
+    title: "Voice, Style, and Citations",
     description:
-      "Approved examples and explicit style rules guide tone and terminology, while factual claims stay tied to source blocks.",
+      "Approved examples and explicit style rules guide tone and terminology, while important statements stay tied to source blocks through citations.",
     visual: "style",
   },
   {
@@ -301,7 +301,7 @@ function StyleMemoryVisual() {
         <div className="absolute left-[210px] top-[36px] h-[178px] w-[150px] overflow-hidden rounded-lg border border-foreground/15 bg-background p-3 shadow-[0_24px_70px_rgb(18_17_15_/_0.08)]">
           <div className="mb-2.5 flex items-center justify-between gap-3">
             <div className="font-mono text-[10px] uppercase text-foreground">
-              Voice + claims
+              Voice + citations
             </div>
             <div className="rounded-full bg-foreground/5 px-2 py-0.5 font-mono text-[8px] uppercase text-muted-foreground">
               locked

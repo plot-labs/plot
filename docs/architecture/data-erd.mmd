@@ -159,6 +159,22 @@ erDiagram
         timestamptz processed_at
     }
 
+    UPLOADED_FILES {
+        uuid id PK
+        uuid workspace_id FK
+        uuid uploaded_by_user_id FK
+        text storage_key
+        text original_filename
+        text mime_type
+        bigint byte_size
+        text checksum_sha256
+        varchar status
+        timestamptz processed_at
+        text error_message
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
     VOICE_PROFILES {
         uuid id PK
         uuid workspace_id FK
@@ -526,6 +542,8 @@ erDiagram
     WORKSPACES ||--o{ REPOSITORY_IMPORTS : owns
     WORKSPACES ||--o{ CONNECTIONS : owns
     WORKSPACES ||--o{ WRITING_BLOCKS : owns
+    WORKSPACES ||--o{ UPLOADED_FILES : owns
+    USERS ||--o{ UPLOADED_FILES : uploads
     WORKSPACES ||--o{ VOICE_PROFILES : owns
     WORKSPACES ||--o{ VOICE_SAMPLES : owns
     WORKSPACES ||--o{ VOICE_RULES : owns

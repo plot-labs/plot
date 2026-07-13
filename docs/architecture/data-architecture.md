@@ -26,6 +26,37 @@ direct publishing, scheduled publishing, and broad automation rules are outside
 the first v0 proof. Lightweight repository watches and update-agent runs are in
 v0 because the product is autonomous draft preparation, not a manual composer.
 
+## Provider-neutral source adapter boundary
+
+The first implemented adapter uses the additive V2 model:
+
+```txt
+Connection -> ConnectionNamespaceBinding -> SourceNamespace
+                                                |-> SourceScope
+                                                |     \-> SourceObservation -> SourceImport
+                                                \-> WritingBlock <- WritingBlockScope -> SourceScope
+```
+
+`connections` represent credentials and provider access (GitHub App today,
+Linear/Jira/Slack later). `source_namespaces` own canonical external identity;
+bindings allow credentials to rotate without changing imported object identity.
+`source_scopes` describe collections or queries such as a GitHub repository,
+Slack channel, Linear team/project, Jira project/filter, or Drive corpus.
+
+Provider DTOs are normalized directly into Writing Blocks. Their idempotency
+key is `(workspace_id, source_namespace_id, source_kind,
+external_object_key)`, independent of connection and scope. A block can belong
+to multiple scopes through `writing_block_scopes`. `source_observations` record
+partial or complete authority-bearing reads, and `source_imports` record the
+user-visible attempt and counters. Thread messages, comments, file items, and
+canvas-like sub-content can be represented as `writing_block_fragments`, while
+cross-object links use `writing_block_relations` and relation observations.
+No provider-specific raw-record table is required.
+
+The older repository-specific entities later in this document remain
+conceptual v0 history and must not be copied into new adapters. The implemented
+V2 schema and its migration are authoritative for source adapter work.
+
 ## Design Principles
 
 - PostgreSQL is the system of record.
@@ -1123,7 +1154,7 @@ SUPERSEDED
 Rules:
 
 - `artifact_ref_type` and `artifact_ref_id` may point to another typed object,
-  such as `CONTENT_PACK`, `CONTENT_VARIANT`, `CLAIM`, or `WRITING_BLOCK`.
+  such as `CONTENT_PACK`, `CONTENT_VARIANT`, `CITATION`, or `WRITING_BLOCK`.
 - v0 does not need polymorphic foreign keys. The application validates
   references and stores workspace-scoped snapshots in `payload`.
 - Content packs, citation maps, and style notes should be visible from both the
@@ -1887,8 +1918,7 @@ MODEL_INVOCATION_FAILED
 CONTENT_VARIANT_CREATED
 CONTENT_VARIANT_EDITED
 CONTENT_VARIANT_ACCEPTED
-CLAIM_CREATED
-CLAIM_REVIEWED
+CITATION_CREATED
 CITATION_CONFIRMED
 VOICE_PROFILE_UPDATED
 TEMPLATE_UPDATED

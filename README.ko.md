@@ -126,6 +126,12 @@ just lint
 ```
 
 기존 `pnpm dev:api`, `pnpm build:web` 같은 script는 호환용 wrapper로 유지합니다.
+GitHub App adapter의 local 검증 절차는
+[`docs/operations/github-app-development-smoke-test.md`](docs/operations/github-app-development-smoke-test.md)에
+정리되어 있습니다.
+API 테스트는 기본적으로 Testcontainers를 사용하며, Docker를 사용할 수 없는
+환경에서는 `PLOT_TESTCONTAINERS_ENABLED=false`, `SPRING_DATASOURCE_URL`,
+`SPRING_DATASOURCE_USERNAME`으로 임시 로컬 PostgreSQL을 지정할 수 있습니다.
 
 ## Docs
 
@@ -134,4 +140,5 @@ just lint
 - [Project Structure](docs/architecture/project-structure.md)
 - [Data Architecture](docs/architecture/data-architecture.md)
 - [Data ERD](docs/architecture/data-erd.mmd)
+- [GitHub App Development Smoke Test](docs/operations/github-app-development-smoke-test.md)
 - [ADR 0001: Monorepo With Generated Apps](docs/decisions/0001-monorepo-generated-apps.md)

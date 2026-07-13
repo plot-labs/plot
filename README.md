@@ -127,6 +127,13 @@ just build
 just lint
 ```
 
+The optional GitHub App adapter's local validation procedure is documented in
+[`docs/operations/github-app-development-smoke-test.md`](docs/operations/github-app-development-smoke-test.md).
+API tests use Testcontainers by default; when Docker is unavailable, the same
+tests can target a temporary local PostgreSQL instance with
+`PLOT_TESTCONTAINERS_ENABLED=false`, `SPRING_DATASOURCE_URL`, and
+`SPRING_DATASOURCE_USERNAME` set.
+
 The existing `pnpm dev:api`, `pnpm build:web`, and related scripts are kept as
 wrappers for compatibility.
 
@@ -137,4 +144,5 @@ wrappers for compatibility.
 - [Project Structure](docs/architecture/project-structure.md)
 - [Data Architecture](docs/architecture/data-architecture.md)
 - [Data ERD](docs/architecture/data-erd.mmd)
+- [GitHub App development smoke test](docs/operations/github-app-development-smoke-test.md)
 - [ADR 0001: Monorepo With Generated Apps](docs/decisions/0001-monorepo-generated-apps.md)

@@ -9,12 +9,12 @@ const terminalLines = [
   "source/release-note -> docs delta",
   "voice/profile       -> product-led",
   "",
-  "$ plot review checks",
+  "$ plot pack checks",
   "style match         92%",
-  "claims attached     7",
+  "citations attached  7",
   "source map          ready",
   "",
-  "$ plot draft pack --approval=required",
+  "$ plot draft pack --handoff=copy",
   "changelog           ready",
   "docs update         typing...",
 ];
@@ -97,7 +97,7 @@ export function HeroTerminal() {
               <div className="space-y-1.5 pt-6">
                 {[
                   ["Voice", "92%"],
-                  ["Claims", "7"],
+                  ["Cites", "7"],
                   ["Pack", "3"],
                 ].map(([label, value]) => (
                   <div

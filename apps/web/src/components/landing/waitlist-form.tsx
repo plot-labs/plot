@@ -4,13 +4,14 @@ import { useState } from "react";
 import { ArrowRight, Check } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { WAITLIST_ROLES } from "@/lib/waitlist";
+import { WAITLIST_PAIN_CHANNELS, WAITLIST_ROLES } from "@/lib/waitlist";
 
 type FormState = "idle" | "loading" | "success" | "error";
 
 export function WaitlistForm() {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("");
+  const [painChannel, setPainChannel] = useState("");
   const [state, setState] = useState<FormState>("idle");
   const [message, setMessage] = useState("");
 
@@ -28,6 +29,7 @@ export function WaitlistForm() {
         body: JSON.stringify({
           email,
           role: role || undefined,
+          painChannel: painChannel || undefined,
           website: String(formData.get("website") ?? ""),
         }),
       });
@@ -48,6 +50,7 @@ export function WaitlistForm() {
       );
       setEmail("");
       setRole("");
+      setPainChannel("");
     } catch {
       setState("error");
       setMessage("Network error. Try again.");
@@ -104,6 +107,32 @@ export function WaitlistForm() {
         </select>
       </div>
 
+      <div>
+        <label
+          className="mb-2 block text-sm font-medium text-foreground"
+          htmlFor="waitlist-pain-channel"
+        >
+          Which post-shipping update is most painful?
+        </label>
+        <select
+          className="h-14 w-full rounded-full border border-foreground/15 bg-background px-5 text-base text-foreground outline-none transition-colors focus:border-foreground/40"
+          id="waitlist-pain-channel"
+          name="painChannel"
+          onChange={(event) => setPainChannel(event.target.value)}
+          required
+          value={painChannel}
+        >
+          <option disabled value="">
+            Select a channel
+          </option>
+          {WAITLIST_PAIN_CHANNELS.map((item) => (
+            <option key={item.value} value={item.value}>
+              {item.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <input
         aria-hidden="true"
         autoComplete="off"
@@ -142,7 +171,7 @@ export function WaitlistForm() {
       ) : null}
 
       <p className="text-sm font-mono text-muted-foreground">
-        Autonomous drafts. Human approval before publish.
+        Source-backed packs. You publish outside Plot.
       </p>
     </form>
   );

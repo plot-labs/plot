@@ -104,8 +104,8 @@ export function HeroSection() {
           >
             For AI and devtool teams shipping every week. Plot turns merged PRs,
             releases, and issues into source-backed, on-style changelogs, docs
-            updates, customer updates, and launch drafts — with human approval
-            before publish.
+            updates, customer updates, and launch drafts — so you can edit, copy,
+            and publish outside Plot.
           </p>
 
           <div

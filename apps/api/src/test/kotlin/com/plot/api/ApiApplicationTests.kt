@@ -26,6 +26,17 @@ class ApiApplicationTests {
 			"work_sessions",
 			"tasks",
 			"writing_blocks",
+			"github_installation_states",
+			"connections",
+			"source_namespaces",
+			"connection_namespace_bindings",
+			"source_scopes",
+			"source_observations",
+			"source_imports",
+			"writing_block_scopes",
+			"writing_block_fragments",
+			"writing_block_relations",
+			"writing_block_relation_observations",
 		)
 		val actualTables = jdbcTemplate.queryForList(
 			"""
@@ -41,7 +52,23 @@ class ApiApplicationTests {
 
 		assertEquals(expectedTables, actualTables)
 
-		listOf("workspace_members", "work_sessions", "tasks", "writing_blocks").forEach { tableName ->
+		listOf(
+			"workspace_members",
+			"work_sessions",
+			"tasks",
+			"writing_blocks",
+			"github_installation_states",
+			"connections",
+			"source_namespaces",
+			"connection_namespace_bindings",
+			"source_scopes",
+			"source_observations",
+			"source_imports",
+			"writing_block_scopes",
+			"writing_block_fragments",
+			"writing_block_relations",
+			"writing_block_relation_observations",
+		).forEach { tableName ->
 			assertTrue(
 				hasIndex(tableName, listOf("workspace_id", "id"), uniqueOnly = true),
 				"$tableName must have a unique index on (workspace_id, id)",
@@ -49,6 +76,19 @@ class ApiApplicationTests {
 		}
 		assertTrue(hasTasksWorkSessionForeignKey())
 		assertTrue(hasIndex("tasks", listOf("workspace_id", "work_session_id")))
+		assertTrue(
+			hasIndex(
+				"writing_blocks",
+				listOf("workspace_id", "source_namespace_id", "source_kind", "external_object_key"),
+				uniqueOnly = true,
+			),
+		)
+		assertTrue(
+			hasIndex("source_scopes", listOf("workspace_id", "source_namespace_id", "scope_kind", "external_scope_key"), uniqueOnly = true),
+		)
+		assertTrue(
+			hasIndex("source_imports", listOf("workspace_id", "source_scope_id"), uniqueOnly = true),
+		)
 	}
 
 	private fun hasTasksWorkSessionForeignKey(): Boolean {
