@@ -11,7 +11,7 @@ and implementation boundaries for Plot.
 | --- | --- |
 | [Product Definition](product-definition.md) | Product thesis, target users, initial boundaries, product surfaces, and domain language. |
 | [Agentic UX Direction](agentic-ux.md) | Session-first UX, embedded task manager, source-backed packs, voice, and citation flow. |
-| [YC-Style Product Review](yc-review.md) | Market framing, wedge, risk, and what should be sharpened before pitching. |
+| [Roadmap](roadmap.md) | Phase sequencing and what each phase validates before the next. |
 
 ## Current Product Shape
 

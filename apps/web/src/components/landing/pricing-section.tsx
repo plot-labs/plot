@@ -13,7 +13,7 @@ const plans = [
       "Connected shipped-work sources",
       "Code, issue, release, and note Writing Blocks",
       "Voice/style profile for generated drafts",
-      "Claim evidence review",
+      "Source citations on update packs",
     ],
     cta: "Join waitlist",
     popular: false,
@@ -25,7 +25,7 @@ const plans = [
     features: [
       "Private connected-source access",
       "Agent-prepared shipped-change selection",
-      "Claim evidence and needs-review status",
+      "Source citations next to draft variants",
       "Release note, changelog, and docs update drafts",
       "Customer update and launch/social drafts",
     ],
@@ -38,9 +38,9 @@ const plans = [
     price: { monthly: null, annual: null },
     features: [
       "Everything in Team",
-      "Custom source review policy",
-      "Launch inbox and evidence map",
-      "Product, engineering, and agent review workflow",
+      "Custom source and citation policy",
+      "Launch inbox and source map",
+      "Product, engineering, and agent inspect workflow",
       "Private onboarding for source setup",
       "Custom contracts",
     ],
@@ -170,7 +170,7 @@ export function PricingSection() {
 
         {/* Bottom Note */}
         <p className="mt-12 text-center text-sm text-muted-foreground">
-          All plans keep publishing approval-gated and mark unsupported product claims for review.{" "}
+          All plans prepare source-backed packs and leave publishing to you outside Plot.{" "}
           <a href="#" className="underline underline-offset-4 hover:text-foreground transition-colors">
             See source policy
           </a>

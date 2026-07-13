@@ -37,6 +37,10 @@ class WritingBlockApiIntegrationTest {
 
 	@BeforeEach
 	fun cleanDevWritingBlockData() {
+		jdbcTemplate.update("delete from writing_block_relation_observations where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from writing_block_relations where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from writing_block_fragments where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from writing_block_scopes where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update(
 			"delete from writing_blocks where workspace_id = ?",
 			devContext.devWorkspaceId,
@@ -91,14 +95,14 @@ class WritingBlockApiIntegrationTest {
 		mockMvc.get("/api/blocks")
 			.andExpect {
 				status { isOk() }
-				jsonPath("$[0].id") { value(blockId.toString()) }
-				jsonPath("$[0].sourceOrigin") { value("import") }
-				jsonPath("$[0].sourceKind") { value("note") }
-				jsonPath("$[0].title") { value("Draft Title") }
-				jsonPath("$[0].body") { value("Draft Body") }
-				jsonPath("$[0].metadata.tags[1]") { value("api") }
-				jsonPath("$[0].workspaceId") { doesNotExist() }
-				jsonPath("$[0].contentHash") { doesNotExist() }
+				jsonPath("$.items[0].id") { value(blockId.toString()) }
+				jsonPath("$.items[0].sourceOrigin") { value("import") }
+				jsonPath("$.items[0].sourceKind") { value("note") }
+				jsonPath("$.items[0].title") { value("Draft Title") }
+				jsonPath("$.items[0].body") { value("Draft Body") }
+				jsonPath("$.items[0].metadata.tags[1]") { value("api") }
+				jsonPath("$.items[0].workspaceId") { doesNotExist() }
+				jsonPath("$.items[0].contentHash") { doesNotExist() }
 			}
 
 		mockMvc.get("/api/blocks/$blockId")
@@ -172,8 +176,8 @@ class WritingBlockApiIntegrationTest {
 		mockMvc.get("/api/blocks")
 			.andExpect {
 				status { isOk() }
-				jsonPath("$[0].id") { value(newerId.toString()) }
-				jsonPath("$[1].id") { value(olderId.toString()) }
+				jsonPath("$.items[0].id") { value(newerId.toString()) }
+				jsonPath("$.items[1].id") { value(olderId.toString()) }
 			}
 	}
 
