@@ -58,7 +58,7 @@ class GenerationPersistence(
 			return@execute loadState(reservation.workspaceId, existing.first)
 		}
 		val now = clock.instant()
-		jdbcTemplate.update(
+		val inserted = jdbcTemplate.update(
 			"""
 			insert into generation_runs (
 			 id, workspace_id, source_scope_id, created_by_user_id, idempotency_key, request_fingerprint,
@@ -66,12 +66,22 @@ class GenerationPersistence(
 			 model_name, budget_snapshot, user_instruction, created_at, updated_at
 			) values (?, ?, ?, ?, ?, ?, 'QUEUED', 'fixed-v1', 'changelog-v1', 'generation-v1',
 			 'budget-v1', ?, ?, ?::jsonb, ?, ?, ?)
+			on conflict (workspace_id, created_by_user_id, idempotency_key) do nothing
 			""".trimIndent(),
 			reservation.state.runId, reservation.workspaceId, reservation.sourceScopeId,
 			reservation.createdByUserId, reservation.idempotencyKey, reservation.requestFingerprint,
 			reservation.provider, reservation.modelName, reservation.budgetJson, reservation.state.instruction,
 			timestamp(now), timestamp(now),
 		)
+		if (inserted == 0) {
+			val raced = jdbcTemplate.query(
+				"select id, request_fingerprint from generation_runs where workspace_id = ? and created_by_user_id = ? and idempotency_key = ?",
+				{ rs, _ -> rs.getObject(1, UUID::class.java) to rs.getString(2) },
+				reservation.workspaceId, reservation.createdByUserId, reservation.idempotencyKey,
+			).single()
+			if (raced.second != reservation.requestFingerprint) throw GenerationIdempotencyConflictException()
+			return@execute loadState(reservation.workspaceId, raced.first)
+		}
 		reservation.state.evidence.forEach { insertEvidence(reservation.workspaceId, it) }
 		insertCheckpoint(reservation.workspaceId, reservation.state, "EVIDENCE_SET", now)
 		reservation.state
@@ -286,7 +296,7 @@ class GenerationPersistence(
 		val payload = jdbcTemplate.query(
 			"select payload::text from generation_artifacts where workspace_id = ? and generation_run_id = ? order by sequence_no desc limit 1",
 			{ rs, _ -> rs.getString(1) }, workspaceId, runId,
-		).firstOrNull() ?: error("Generation checkpoint not found")
+		).firstOrNull() ?: throw GenerationRunNotFoundException(runId)
 		return objectMapper.readValue(payload, GenerationWorkflowState::class.java)
 	}
 
@@ -473,6 +483,7 @@ class GenerationPersistence(
 }
 
 class GenerationIdempotencyConflictException : IllegalStateException("Idempotency key was reused with different inputs")
+class GenerationRunNotFoundException(val runId: UUID) : IllegalStateException("Generation run not found")
 
 private val ModelRole.stepKind: String
 	get() = when (this) {

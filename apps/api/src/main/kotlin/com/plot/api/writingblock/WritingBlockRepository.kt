@@ -37,6 +37,12 @@ interface WritingBlockRepository : JpaRepository<WritingBlock, UUID> {
 		  and b.id in :ids
 		  and b.status = 'ACTIVE'
 		  and exists (
+		    select 1 from SourceScope scope
+		    where scope.workspaceId = :workspaceId
+		      and scope.id = :sourceScopeId
+		      and scope.status = 'ACTIVE'
+		  )
+		  and exists (
 		    select 1 from WritingBlockScope membership
 		    where membership.workspaceId = :workspaceId
 		      and membership.sourceScopeId = :sourceScopeId

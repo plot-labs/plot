@@ -1,5 +1,6 @@
 package com.plot.api.generation
 
+import com.plot.api.common.ApiException
 import com.plot.api.common.UuidGenerator
 import com.plot.api.config.PlotAiProperties
 import com.plot.api.dev.DevContext
@@ -8,6 +9,7 @@ import com.plot.api.writingblock.WritingBlockRepository
 import java.security.MessageDigest
 import java.util.HexFormat
 import java.util.UUID
+import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import tools.jackson.databind.ObjectMapper
 
@@ -64,7 +66,11 @@ class GenerationRunService(
 		return state
 	}
 
-	fun get(runId: UUID): GenerationWorkflowState = persistence.loadState(devContext.devWorkspaceId, runId)
+	fun get(runId: UUID): GenerationWorkflowState = try {
+		persistence.loadState(devContext.devWorkspaceId, runId)
+	} catch (_: GenerationRunNotFoundException) {
+		throw ApiException(HttpStatus.NOT_FOUND, "GENERATION_NOT_FOUND", "Generation run not found")
+	}
 
 	fun resolve(resolution: ConflictResolution): GenerationWorkflowState {
 		val state = persistence.resolveConflict(

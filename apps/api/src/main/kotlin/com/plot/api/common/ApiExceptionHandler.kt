@@ -1,5 +1,9 @@
 package com.plot.api.common
 
+import com.plot.api.generation.GenerationIdempotencyConflictException
+import com.plot.api.generation.GenerationSourceAccessException
+import com.plot.api.generation.StaleConflictResolutionException
+import com.plot.api.contentpack.ExportConfirmationRequiredException
 import org.springframework.http.CacheControl
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -9,21 +13,52 @@ import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.method.annotation.HandlerMethodValidationException
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
+import org.springframework.web.bind.MissingRequestHeaderException
 
 @RestControllerAdvice
 class ApiExceptionHandler {
 
 	@ExceptionHandler(ApiException::class)
 	fun handleApiException(exception: ApiException): ResponseEntity<ApiErrorResponse> {
-		val response = ResponseEntity
+		return ResponseEntity
 			.status(exception.status)
+			.cacheControl(CacheControl.noStore())
 			.body(ApiErrorResponse(exception.error, exception.message, exception.resourceId))
-		return if (exception.error.startsWith("GITHUB") || exception.error.startsWith("IMPORT") || exception.error == "INVALID_GITHUB_STATE") {
-			ResponseEntity.status(response.statusCode).cacheControl(CacheControl.noStore()).body(response.body)
-		} else {
-			response
-		}
 	}
+
+	@ExceptionHandler(MissingRequestHeaderException::class)
+	fun handleMissingHeader(exception: MissingRequestHeaderException): ResponseEntity<ApiErrorResponse> = ResponseEntity
+		.status(HttpStatus.BAD_REQUEST).cacheControl(CacheControl.noStore())
+		.body(ApiErrorResponse("BAD_REQUEST", "${exception.headerName} header is required"))
+
+	@ExceptionHandler(GenerationIdempotencyConflictException::class)
+	fun handleIdempotencyConflict(exception: GenerationIdempotencyConflictException): ResponseEntity<ApiErrorResponse> = ResponseEntity
+		.status(HttpStatus.CONFLICT).cacheControl(CacheControl.noStore())
+		.body(ApiErrorResponse("IDEMPOTENCY_KEY_REUSED", exception.message ?: "Idempotency key was reused"))
+
+	@ExceptionHandler(StaleConflictResolutionException::class)
+	fun handleStaleIntervention(exception: StaleConflictResolutionException): ResponseEntity<ApiErrorResponse> = ResponseEntity
+		.status(HttpStatus.CONFLICT).cacheControl(CacheControl.noStore())
+		.body(ApiErrorResponse("STALE_INTERVENTION", exception.message ?: "Intervention is stale"))
+
+	@ExceptionHandler(GenerationSourceAccessException::class)
+	fun handleGenerationSourceAccess(exception: GenerationSourceAccessException): ResponseEntity<ApiErrorResponse> = ResponseEntity
+		.status(HttpStatus.NOT_FOUND).cacheControl(CacheControl.noStore())
+		.body(ApiErrorResponse("SOURCE_NOT_FOUND", exception.message ?: "Source is unavailable"))
+
+	@ExceptionHandler(IllegalArgumentException::class)
+	fun handleIllegalArgument(exception: IllegalArgumentException): ResponseEntity<ApiErrorResponse> = ResponseEntity
+		.status(HttpStatus.BAD_REQUEST).cacheControl(CacheControl.noStore())
+		.body(ApiErrorResponse("BAD_REQUEST", exception.message ?: "Request is invalid"))
+
+	@ExceptionHandler(ExportConfirmationRequiredException::class)
+	fun handleExportConfirmation(exception: ExportConfirmationRequiredException): ResponseEntity<ApiErrorResponse> = ResponseEntity
+		.status(HttpStatus.CONFLICT).cacheControl(CacheControl.noStore())
+		.body(ApiErrorResponse(
+			"EXPORT_CONFIRMATION_REQUIRED",
+			exception.message ?: "Export requires explicit confirmation",
+			details = mapOf("sentenceIds" to exception.sentenceIds),
+		))
 
 	@ExceptionHandler(MethodArgumentNotValidException::class)
 	fun handleValidationException(exception: MethodArgumentNotValidException): ResponseEntity<ApiErrorResponse> {
@@ -31,6 +66,7 @@ class ApiExceptionHandler {
 			?: "Request validation failed"
 		return ResponseEntity
 			.status(HttpStatus.BAD_REQUEST)
+			.cacheControl(CacheControl.noStore())
 			.body(ApiErrorResponse("BAD_REQUEST", message))
 	}
 
@@ -46,6 +82,7 @@ class ApiExceptionHandler {
 			?: "Request validation failed"
 		return ResponseEntity
 			.status(HttpStatus.BAD_REQUEST)
+			.cacheControl(CacheControl.noStore())
 			.body(ApiErrorResponse("BAD_REQUEST", message))
 	}
 
@@ -53,6 +90,7 @@ class ApiExceptionHandler {
 	fun handleUnreadableJson(exception: HttpMessageNotReadableException): ResponseEntity<ApiErrorResponse> {
 		return ResponseEntity
 			.status(HttpStatus.BAD_REQUEST)
+			.cacheControl(CacheControl.noStore())
 			.body(ApiErrorResponse("BAD_REQUEST", "Request body is invalid"))
 	}
 
@@ -62,6 +100,7 @@ class ApiExceptionHandler {
 	): ResponseEntity<ApiErrorResponse> {
 		return ResponseEntity
 			.status(HttpStatus.BAD_REQUEST)
+			.cacheControl(CacheControl.noStore())
 			.body(ApiErrorResponse("BAD_REQUEST", "Request parameter is invalid"))
 	}
 }

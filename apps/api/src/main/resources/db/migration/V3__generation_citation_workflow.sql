@@ -383,6 +383,7 @@ create table generation_export_events (
   generation_run_id uuid not null,
   content_variant_id uuid not null,
   format varchar not null,
+  disposition varchar not null,
   status varchar not null,
   unresolved_count integer not null,
   warning_acknowledged boolean not null,
@@ -396,6 +397,7 @@ create table generation_export_events (
   foreign key (workspace_id, content_variant_id, generation_run_id)
     references content_variants(workspace_id, id, generation_run_id) on delete restrict,
   check (format = 'MARKDOWN'),
+  check (disposition in ('COPY', 'DOWNLOAD')),
   check (status in ('SUCCEEDED', 'REJECTED')),
   check (unresolved_count >= 0),
   check (status <> 'SUCCEEDED' or unresolved_count = 0 or warning_acknowledged)

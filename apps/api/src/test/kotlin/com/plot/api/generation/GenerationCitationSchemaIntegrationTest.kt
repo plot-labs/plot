@@ -13,10 +13,12 @@ import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.dao.DuplicateKeyException
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.TestPropertySource
+import org.springframework.test.annotation.DirtiesContext
 
 @SpringBootTest
 @Import(TestcontainersConfiguration::class)
 @TestPropertySource(properties = ["plot.dev-bootstrap.enabled=true"])
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class GenerationCitationSchemaIntegrationTest {
 	@Autowired private lateinit var jdbcTemplate: JdbcTemplate
 	@Autowired private lateinit var devContext: DevContext
@@ -315,8 +317,8 @@ class GenerationCitationSchemaIntegrationTest {
 	): UUID = UUID.randomUUID().also { id ->
 		jdbcTemplate.update("""
 			insert into generation_export_events (id, workspace_id, generation_run_id, content_variant_id,
-			 format, status, unresolved_count, warning_acknowledged, created_by_user_id, created_at)
-			values (?, ?, ?, ?, 'MARKDOWN', ?, ?, ?, ?, now())
+			 format, disposition, status, unresolved_count, warning_acknowledged, created_by_user_id, created_at)
+			values (?, ?, ?, ?, 'MARKDOWN', 'COPY', ?, ?, ?, ?, now())
 		""".trimIndent(), id, devContext.devWorkspaceId, runId, variantId, status, unresolvedCount, acknowledged, devContext.devUserId)
 	}
 }
