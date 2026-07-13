@@ -14,11 +14,11 @@ const styleRules = [
   },
   {
     label: "Source",
-    detail: "Tie each important product claim back to a PR, issue, release, or commit group.",
+    detail: "Tie each important statement back to a PR, issue, release, or commit group via citations.",
   },
   {
-    label: "Do-not-claim list",
-    detail: "Avoid claims, timelines, and guarantees the brand would not stand behind.",
+    label: "Brand guardrails",
+    detail: "Avoid timelines and guarantees the brand would not stand behind.",
   },
 ];
 
@@ -82,7 +82,7 @@ export function StyleSection() {
           >
               <span className="mb-6 inline-flex items-center gap-3 font-mono text-sm text-muted-foreground">
                 <span className="h-px w-8 bg-foreground/30" />
-              Voice & Review
+              Voice & Style
             </span>
             <h2 className="mb-8 font-display text-4xl tracking-tight lg:text-6xl">
               Keep every update
@@ -91,14 +91,14 @@ export function StyleSection() {
             </h2>
             <p className="mb-10 max-w-xl text-xl leading-relaxed text-muted-foreground">
               AI can make code move faster, but it does not know how your team
-              explains change. Plot keeps voice, source evidence, implementation
-              caveats, and draft output in the same review flow.
+              explains change. Plot keeps voice, source citations, implementation
+              caveats, and draft output in one inspectable pack.
             </p>
 
             <div className="grid gap-px overflow-hidden rounded-xl border border-foreground/10 bg-foreground/10 sm:grid-cols-3">
               {[
                 ["Voice", "tone and terminology"],
-                ["Claims", "evidence and caveats"],
+                ["Citations", "sources and caveats"],
                 ["Formats", "docs, changelog, launch"],
               ].map(([label, value]) => (
                 <div className="bg-background p-5" key={label}>
@@ -120,15 +120,15 @@ export function StyleSection() {
               <div className="flex flex-col gap-5 border-b border-foreground/10 px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <div className="font-mono text-[10px] uppercase text-muted-foreground">
-                    Voice, source, and claims
+                    Voice, source, and citations
                   </div>
                   <div className="mt-1 font-medium text-foreground">
-                    One review surface
+                    One inspectable pack
                   </div>
                 </div>
                 <div className="flex items-center gap-2 font-mono text-[10px] uppercase text-muted-foreground">
                   <Check className="size-3.5 text-foreground" />
-                  Review required
+                  Sources attached
                 </div>
               </div>
 
@@ -189,7 +189,7 @@ export function StyleSection() {
                       {active.sample}
                     </p>
                     <div className="space-y-2 border-t border-foreground/10 pt-4">
-                      {["Matches team voice", "Sources attached", "Claims require review"].map(
+                      {["Matches team voice", "Sources attached", "Ready to copy outside Plot"].map(
                         (check) => (
                           <div
                             className="flex items-center justify-between gap-3 text-sm"
