@@ -174,18 +174,21 @@ create table generation_artifacts (
   workflow_step_id uuid,
   artifact_type varchar not null,
   artifact_version integer not null,
+  sequence_no integer not null,
   payload jsonb not null,
   content_hash text,
   created_at timestamptz not null,
   unique (workspace_id, id),
   unique (workspace_id, generation_run_id, artifact_type, artifact_version),
+  unique (workspace_id, generation_run_id, sequence_no),
   foreign key (workspace_id, generation_run_id)
     references generation_runs(workspace_id, id) on delete restrict,
   foreign key (workspace_id, workflow_step_id, generation_run_id)
     references generation_workflow_steps(workspace_id, id, generation_run_id) on delete restrict,
   check (artifact_type in ('EVIDENCE_SET', 'WRITER_OUTPUT', 'REVIEWER_OUTPUT',
     'REWRITER_OUTPUT', 'CONFLICT_DECISION', 'FINAL_OUTPUT')),
-  check (artifact_version > 0)
+  check (artifact_version > 0),
+  check (sequence_no >= 0)
 );
 
 create table content_packs (
@@ -335,8 +338,8 @@ create table generation_interventions (
   unique (workspace_id, id, generation_run_id),
   foreign key (workspace_id, generation_run_id)
     references generation_runs(workspace_id, id) on delete restrict,
-  foreign key (workspace_id, sentence_id, generation_run_id)
-    references content_variant_sentences(workspace_id, id, generation_run_id) on delete restrict,
+  -- sentence_id is a stable workflow identity. The referenced terminal sentence row
+  -- intentionally does not exist until READY/NEEDS_REVIEW materialization.
   check (kind = 'SOURCE_CONFLICT'),
   check (status in ('PENDING', 'RESOLVED', 'CANCELLED')),
   check (version > 0),

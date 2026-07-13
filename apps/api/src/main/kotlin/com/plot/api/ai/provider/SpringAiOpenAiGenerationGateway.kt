@@ -181,7 +181,9 @@ class GenerationModelGatewayConfiguration {
 		properties: PlotAiProperties,
 		promptFactory: ChangelogPromptFactory,
 	): GenerationModelGateway {
-		val builder = builderProvider.ifAvailable
+		// Do not resolve ChatClient.Builder when generation is disabled: with
+		// spring.ai.model.chat=none its factory exists but intentionally has no ChatModel.
+		val builder = if (properties.configured) builderProvider.ifAvailable else null
 		return if (properties.configured && builder != null) {
 			SpringAiOpenAiGenerationGateway(SpringAiStructuredChatTransport(builder, properties), properties, promptFactory)
 		} else {

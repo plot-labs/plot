@@ -184,14 +184,15 @@ class GenerationCitationSchemaIntegrationTest {
 		""".trimIndent(), id, devContext.devWorkspaceId, "PR $key", "https://github.test/acme/repo/pull/$key", "hash-$key", devContext.devUserId)
 	}
 
-	private fun insertRun(key: String, status: String = "QUEUED"): UUID = UUID.randomUUID().also { id ->
+	private fun insertRun(key: String, status: String = "FAILED"): UUID = UUID.randomUUID().also { id ->
 		jdbcTemplate.update("""
 			insert into generation_runs (id, workspace_id, source_scope_id, created_by_user_id, idempotency_key,
 			 request_fingerprint, status, workflow_version, prompt_version, output_schema_version, budget_version, provider,
-			 model_name, budget_snapshot, created_at, updated_at)
+			 model_name, budget_snapshot, finished_at, created_at, updated_at)
 			values (?, ?, null, ?, ?, ?, ?, 'fixed-v1', 'changelog-v1', 'generation-v1', 'budget-v1', 'OPENAI',
-			 'configured-model', '{"maxModelCalls":12}'::jsonb, now(), now())
-		""".trimIndent(), id, devContext.devWorkspaceId, devContext.devUserId, key, "fingerprint-$key", status)
+			 'configured-model', '{"maxModelCalls":12}'::jsonb,
+			 case when ? in ('READY', 'NEEDS_REVIEW', 'FAILED') then now() else null end, now(), now())
+		""".trimIndent(), id, devContext.devWorkspaceId, devContext.devUserId, key, "fingerprint-$key", status, status)
 	}
 
 	private fun insertInput(runId: UUID, blockId: UUID, orderIndex: Int, workspaceId: UUID = devContext.devWorkspaceId): UUID = UUID.randomUUID().also { id ->
@@ -225,8 +226,8 @@ class GenerationCitationSchemaIntegrationTest {
 	private fun insertArtifact(runId: UUID, stepId: UUID, type: String, version: Int): UUID = UUID.randomUUID().also { id ->
 		jdbcTemplate.update("""
 			insert into generation_artifacts (id, workspace_id, generation_run_id, workflow_step_id,
-			 artifact_type, artifact_version, payload, created_at)
-			values (?, ?, ?, ?, ?, ?, '{"sentences":[]}'::jsonb, now())
+			 artifact_type, artifact_version, sequence_no, payload, created_at)
+			values (?, ?, ?, ?, ?, ?, 0, '{"sentences":[]}'::jsonb, now())
 		""".trimIndent(), id, devContext.devWorkspaceId, runId, stepId, type, version)
 	}
 
