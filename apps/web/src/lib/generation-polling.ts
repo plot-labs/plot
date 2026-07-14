@@ -11,6 +11,7 @@ export interface PollingOptions {
   signal?: AbortSignal;
   initialDelayMs?: number;
   maxDelayMs?: number;
+  onUpdate?: (run: GenerationRun) => void;
 }
 
 export async function pollGeneration(
@@ -25,6 +26,7 @@ export async function pollGeneration(
   while (true) {
     throwIfAborted(options.signal);
     const run = await client.getGeneration(runId, { signal: options.signal });
+    options.onUpdate?.(run);
     if (terminalStatuses.has(run.status)) return run;
     const delayMs = Math.max(1, Math.min(run.pollAfterMs ?? fallbackDelay, maxDelay));
     await abortableDelay(delayMs, options.signal);
@@ -39,6 +41,7 @@ export async function createAndPollGeneration(
   options: PollingOptions = {},
 ): Promise<GenerationRun> {
   const accepted = await client.createGeneration(input, idempotencyKey, { signal: options.signal });
+  options.onUpdate?.(accepted);
   if (terminalStatuses.has(accepted.status)) return accepted;
   await abortableDelay(
     Math.max(1, Math.min(accepted.pollAfterMs ?? options.initialDelayMs ?? 500, options.maxDelayMs ?? 4_000)),

@@ -14,6 +14,19 @@ export interface GenerationEvidence {
   contentHash: string;
 }
 
+export interface GenerationReference {
+  id: string;
+  sourceScopeId: string;
+  provider: SourceProvider;
+  sourceKind: string;
+  sourceLabel: string;
+  repositoryLabel: string;
+  title: string | null;
+  body: string | null;
+  originalUrl: string | null;
+  sourceCreatedAt: string | null;
+}
+
 export interface GenerationCitation {
   evidenceId: string;
   provider: SourceProvider;
@@ -89,6 +102,7 @@ export class PlotApiError extends Error {
 }
 
 export interface PlotApiClient {
+  listGenerationReferences(options?: RequestOptions): Promise<GenerationReference[]>;
   createGeneration(input: CreateGenerationInput, idempotencyKey: string, options?: RequestOptions): Promise<GenerationRun>;
   getGeneration(id: string, options?: RequestOptions): Promise<GenerationRun>;
   getContentPack(id: string, options?: RequestOptions): Promise<ContentPack>;
@@ -126,6 +140,31 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
   }
 
   return {
+    listGenerationReferences: async (requestOptions) => {
+      const connections = await request<GitHubConnectionResponse[]>("/github/connections", { signal: requestOptions?.signal });
+      const scopes = connections
+        .filter((connection) => connection.status === "ACTIVE")
+        .flatMap((connection) => connection.repositories)
+        .filter((repository): repository is GitHubRepositoryResponse & { id: string } => Boolean(repository.id) && repository.status === "ACTIVE");
+      const pages = await Promise.all(scopes.map(async (scope) => ({
+        scope,
+        page: await request<WritingBlockPage>(`/blocks?sourceScopeId=${encodeURIComponent(scope.id)}&page=0&size=100`, { signal: requestOptions?.signal }),
+      })));
+      return pages.flatMap(({ scope, page }) => page.items
+        .filter((block) => block.status === "ACTIVE")
+        .map((block): GenerationReference => ({
+          id: block.id,
+          sourceScopeId: scope.id,
+          provider: "GITHUB",
+          sourceKind: block.sourceKind,
+          sourceLabel: block.title?.trim() || scope.displayName,
+          repositoryLabel: scope.displayName,
+          title: block.title,
+          body: block.body,
+          originalUrl: block.canonicalUrl ?? block.url,
+          sourceCreatedAt: block.sourceCreatedAt,
+        })));
+    },
     createGeneration: (input, idempotencyKey, requestOptions) => request("/generations", {
       method: "POST",
       body: JSON.stringify(input),
@@ -147,6 +186,30 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
       { method: "POST", body: JSON.stringify(input), signal: requestOptions?.signal },
     ),
   };
+}
+
+interface GitHubRepositoryResponse {
+  id: string | null;
+  displayName: string;
+  status: string | null;
+}
+
+interface GitHubConnectionResponse {
+  status: string;
+  repositories: GitHubRepositoryResponse[];
+}
+
+interface WritingBlockPage {
+  items: Array<{
+    id: string;
+    sourceKind: string;
+    title: string | null;
+    body: string | null;
+    url: string | null;
+    canonicalUrl: string | null;
+    sourceCreatedAt: string | null;
+    status: string;
+  }>;
 }
 
 async function parsePayload(response: Response): Promise<unknown> {

@@ -47,14 +47,17 @@ describe("generation polling", () => {
       createGeneration: vi.fn().mockResolvedValue(run("QUEUED", 5)),
       getGeneration: vi.fn().mockResolvedValue(run("READY", null)),
     } as unknown as PlotApiClient;
+    const onUpdate = vi.fn();
     const result = createAndPollGeneration(client, { sourceScopeId: "scope", writingBlockIds: ["block"] }, "key", {
       initialDelayMs: 5,
       maxDelayMs: 10,
+      onUpdate,
     });
     await vi.runAllTimersAsync();
 
     await expect(result).resolves.toMatchObject({ status: "READY" });
     expect(client.createGeneration).toHaveBeenCalledTimes(1);
     expect(client.getGeneration).toHaveBeenCalledTimes(1);
+    expect(onUpdate.mock.calls.map(([value]: [GenerationRun]) => value.status)).toEqual(["QUEUED", "READY"]);
   });
 });

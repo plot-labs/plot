@@ -47,6 +47,20 @@ describe("Plot same-origin proxy", () => {
   });
 
   it.each([
+    ["github/connections", ["github", "connections"]],
+    ["blocks?sourceScopeId=scope-1&page=0&size=100", ["blocks"]],
+  ])("allows the read-only reference discovery route %s", async (pathAndQuery, path) => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ items: [] }));
+    const response = await proxyPlotRequest(
+      new Request(`http://web.test/api/plot/${pathAndQuery}`),
+      path,
+      { fetch: fetcher, baseUrl: "http://127.0.0.1:8080" },
+    );
+    expect(response.status).toBe(200);
+    expect(String(fetcher.mock.calls[0]?.[0])).toBe(`http://127.0.0.1:8080/api/${pathAndQuery}`);
+  });
+
+  it.each([
     ["GET", ["https:", "attacker.test"]],
     ["DELETE", ["generations", "run-1"]],
     ["POST", ["admin"]],

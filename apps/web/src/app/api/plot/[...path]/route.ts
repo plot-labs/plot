@@ -90,6 +90,8 @@ export async function proxyPlotRequest(
 function isAllowed(method: string, path: string[]): boolean {
   if (path.length === 0 || path.some((segment) => !safeSegment.test(segment))) return false;
   const route = path.join("/");
+  if (method === "GET" && route === "github/connections") return true;
+  if (method === "GET" && route === "blocks") return true;
   if (method === "POST" && route === "generations") return true;
   if (method === "GET" && /^generations\/[^/]+$/.test(route)) return true;
   if (method === "GET" && /^content-packs\/[^/]+$/.test(route)) return true;

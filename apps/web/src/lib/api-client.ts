@@ -10,6 +10,7 @@ export type {
   ContentPack,
   CreateGenerationInput,
   GenerationRun,
+  GenerationReference,
   PlotApiClient,
 } from "@plot/api-client";
 

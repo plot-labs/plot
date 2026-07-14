@@ -3,6 +3,25 @@ import { describe, expect, it, vi } from "vitest";
 import { PlotApiError, createPlotApiClient } from "./index";
 
 describe("Plot API client", () => {
+  it("hydrates provider-neutral generation references from connected source scopes", async () => {
+    const fetcher = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json([{ id: "connection-1", installationId: 1, status: "ACTIVE", repositories: [
+        { id: "scope-1", externalRepositoryId: 42, owner: "acme", name: "plot", displayName: "acme/plot", url: "https://github.com/acme/plot", status: "ACTIVE" },
+      ] }]))
+      .mockResolvedValueOnce(Response.json({ items: [
+        { id: "block-1", sourceOrigin: "GITHUB", sourceKind: "PULL_REQUEST", title: "Clarify recovery", body: "Recovery copy", url: "https://github.com/acme/plot/pull/184", canonicalUrl: null, sourceCreatedAt: "2026-07-03T00:00:00Z", status: "ACTIVE" },
+      ], page: 0, size: 100, totalItems: 1, totalPages: 1 }));
+    const client = createPlotApiClient({ fetch: fetcher });
+
+    await expect(client.listGenerationReferences()).resolves.toEqual([
+      expect.objectContaining({ id: "block-1", sourceScopeId: "scope-1", provider: "GITHUB", sourceLabel: "Clarify recovery", repositoryLabel: "acme/plot" }),
+    ]);
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+      "/api/plot/github/connections",
+      "/api/plot/blocks?sourceScopeId=scope-1&page=0&size=100",
+    ]);
+  });
+
   it("serializes provider-neutral generation requests once and preserves abort", async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
       Response.json({
