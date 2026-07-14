@@ -22,6 +22,13 @@ dev-web:
 test-api:
     cd apps/api && ./gradlew test
 
+# Run the explicit real-model generation contract smoke (never part of normal CI)
+generation-contract-smoke:
+    @test "${PLOT_AI_CONTRACT_SMOKE:-}" = "true" || (echo "Set PLOT_AI_CONTRACT_SMOKE=true to opt in" >&2; exit 2)
+    @test -n "${OPENAI_API_KEY:-}" || (echo "OPENAI_API_KEY is required" >&2; exit 2)
+    @test -n "${PLOT_AI_MODEL:-}" || (echo "PLOT_AI_MODEL is required" >&2; exit 2)
+    cd apps/api && ./gradlew test --tests com.plot.api.ai.provider.OpenAiGenerationContractSmokeTest --rerun-tasks
+
 # Run all tests
 test: test-api
     @echo "Tests complete"

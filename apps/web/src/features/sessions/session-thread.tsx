@@ -26,6 +26,7 @@ type SessionThreadProps = {
   floatingSummaryOpen: boolean;
   rightPanelOpen: boolean;
   onSelectDocument: (documentId: string) => void;
+  generationPanel?: ReactNode;
 };
 
 export function SessionThread({
@@ -35,6 +36,7 @@ export function SessionThread({
   floatingSummaryOpen,
   rightPanelOpen,
   onSelectDocument,
+  generationPanel,
 }: SessionThreadProps) {
   return (
     <section className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 pt-16 sm:px-6 lg:px-8 lg:pb-10 lg:pt-20">
@@ -46,6 +48,7 @@ export function SessionThread({
             messageIndex={index}
           />
         ))}
+        {generationPanel}
       </div>
 
       {floatingSummaryOpen && (

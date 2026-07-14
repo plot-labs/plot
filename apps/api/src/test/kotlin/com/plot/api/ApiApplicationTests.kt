@@ -37,6 +37,20 @@ class ApiApplicationTests {
 			"writing_block_fragments",
 			"writing_block_relations",
 			"writing_block_relation_observations",
+			"generation_runs",
+			"generation_inputs",
+			"generation_workflow_steps",
+			"model_invocations",
+			"generation_artifacts",
+			"content_packs",
+			"content_variants",
+			"content_variant_sentences",
+			"content_variant_sentence_revisions",
+			"sentence_evaluations",
+			"sentence_citations",
+			"generation_interventions",
+			"generation_intervention_resolutions",
+			"generation_export_events",
 		)
 		val actualTables = jdbcTemplate.queryForList(
 			"""

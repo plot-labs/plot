@@ -53,6 +53,9 @@ export type ReferenceDocument = {
   summary: string;
   usedInDraftIds: string[];
   notes: string[];
+  /** Present when this reference is backed by an imported generation source. */
+  sourceScopeId?: string;
+  writingBlockId?: string;
 };
 
 export type SavedPack = {
