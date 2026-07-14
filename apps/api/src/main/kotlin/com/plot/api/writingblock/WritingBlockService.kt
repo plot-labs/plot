@@ -8,9 +8,7 @@ import com.plot.api.source.SourceScopeRepository
 import com.plot.api.writingblock.dto.CreateWritingBlockRequest
 import com.plot.api.writingblock.dto.UpdateWritingBlockRequest
 import com.plot.api.writingblock.dto.WritingBlockResponse
-import java.security.MessageDigest
 import java.time.Instant
-import java.util.HexFormat
 import java.util.UUID
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
@@ -77,7 +75,7 @@ class WritingBlockService(
 			author = fields.author,
 			platform = fields.platform,
 			metadata = fields.metadata,
-			contentHash = contentHash(fields.title, fields.body),
+			contentHash = writingBlockContentHash(fields.title, fields.body),
 			sourceCreatedAt = fields.sourceCreatedAt,
 			sourceUpdatedAt = fields.sourceUpdatedAt,
 			ingestedAt = now,
@@ -119,7 +117,7 @@ class WritingBlockService(
 		writingBlock.author = fields.author
 		writingBlock.platform = fields.platform
 		writingBlock.metadata = fields.metadata
-		writingBlock.contentHash = contentHash(fields.title, fields.body)
+		writingBlock.contentHash = writingBlockContentHash(fields.title, fields.body)
 		writingBlock.sourceCreatedAt = fields.sourceCreatedAt
 		writingBlock.sourceUpdatedAt = fields.sourceUpdatedAt
 		writingBlock.updatedAt = Instant.now()
@@ -142,11 +140,6 @@ class WritingBlockService(
 		}
 	}
 
-	private fun contentHash(title: String?, body: String?): String {
-		val digest = MessageDigest.getInstance("SHA-256")
-			.digest("${title.orEmpty()}\n${body.orEmpty()}".toByteArray(Charsets.UTF_8))
-		return HexFormat.of().formatHex(digest)
-	}
 }
 
 private data class WritingBlockFields(

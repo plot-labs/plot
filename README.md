@@ -91,7 +91,7 @@ apps/
   api/  Kotlin Spring Boot backend and agent runtime
 
 packages/
-  api-client/  generated TypeScript client later
+  api-client/  shared typed generation/citation client
   ui/          shared UI components later
   config/      shared frontend config later
 
@@ -129,6 +129,8 @@ just lint
 
 The optional GitHub App adapter's local validation procedure is documented in
 [`docs/operations/github-app-development-smoke-test.md`](docs/operations/github-app-development-smoke-test.md).
+The opt-in real-model contract and GitHub evidence-to-export procedure is in
+[`docs/operations/generation-citation-smoke-test.md`](docs/operations/generation-citation-smoke-test.md).
 API tests use Testcontainers by default; when Docker is unavailable, the same
 tests can target a temporary local PostgreSQL instance with
 `PLOT_TESTCONTAINERS_ENABLED=false`, `SPRING_DATASOURCE_URL`, and
@@ -145,4 +147,5 @@ wrappers for compatibility.
 - [Data Architecture](docs/architecture/data-architecture.md)
 - [Data ERD](docs/architecture/data-erd.mmd)
 - [GitHub App development smoke test](docs/operations/github-app-development-smoke-test.md)
+- [Generation and citation smoke test](docs/operations/generation-citation-smoke-test.md)
 - [ADR 0001: Monorepo With Generated Apps](docs/decisions/0001-monorepo-generated-apps.md)

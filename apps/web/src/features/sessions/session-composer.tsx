@@ -6,17 +6,28 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 type SessionComposerProps = {
-  onSubmit: (message: string) => void;
+  onSubmit: (message: string, referenceIds: string[]) => void;
   variant?: "center" | "dock";
   placeholder?: string;
+  references?: { id: string; label: string; available: boolean; groupId?: string }[];
+  busy?: boolean;
 };
 
 export function SessionComposer({
   onSubmit,
   variant = "dock",
   placeholder = "Ask Plot to revise, use another reference, or create another draft...",
+  references = [],
+  busy = false,
 }: SessionComposerProps) {
   const [message, setMessage] = useState("");
+  const [referencesOpen, setReferencesOpen] = useState(false);
+  const [selectedReferenceIds, setSelectedReferenceIds] = useState<string[]>(() => {
+    const first = references.find((reference) => reference.available);
+    return first
+      ? references.filter((reference) => reference.available && reference.groupId === first.groupId).map((reference) => reference.id)
+      : [];
+  });
 
   return (
     <form
@@ -33,7 +44,7 @@ export function SessionComposer({
           return;
         }
 
-        onSubmit(trimmed);
+        onSubmit(trimmed, selectedReferenceIds);
         setMessage("");
       }}
     >
@@ -58,14 +69,39 @@ export function SessionComposer({
           >
             <Plus className="size-4" />
           </button>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 rounded-xl px-2 py-1.5 font-medium text-[#2563eb] transition hover:bg-[#2563eb]/5 dark:text-[#93c5fd] dark:hover:bg-white/10"
-          >
-            <Sparkles className="size-3.5" />
-            References
-            <ChevronDown className="size-3.5" />
-          </button>
+          <div className="relative">
+            <button
+              type="button"
+              aria-expanded={referencesOpen}
+              onClick={() => setReferencesOpen((open) => !open)}
+              className="inline-flex min-h-8 items-center gap-1.5 rounded-xl px-2 py-1.5 font-medium text-[#2563eb] transition hover:bg-[#2563eb]/5 dark:text-[#93c5fd] dark:hover:bg-white/10"
+            >
+              <Sparkles className="size-3.5" />
+              References{selectedReferenceIds.length ? ` · ${selectedReferenceIds.length}` : ""}
+              <ChevronDown className="size-3.5" />
+            </button>
+            {referencesOpen && references.length ? (
+              <div className="absolute bottom-[calc(100%+8px)] left-0 z-30 w-[min(300px,calc(100vw-32px))] rounded-xl border border-black/10 bg-white p-2 shadow-xl dark:border-white/15 dark:bg-[#232326]">
+                <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-black/42 dark:text-white/42">Use current references</div>
+                {references.map((reference) => (
+                  <label key={reference.id} className="flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm hover:bg-black/5 dark:hover:bg-white/10">
+                    <input
+                      type="checkbox"
+                      disabled={!reference.available || busy}
+                      checked={selectedReferenceIds.includes(reference.id)}
+                      onChange={(event) => setSelectedReferenceIds((current) => {
+                        if (!event.target.checked) return current.filter((id) => id !== reference.id);
+                        const currentGroup = references.find((item) => current.includes(item.id))?.groupId;
+                        return currentGroup !== undefined && currentGroup !== reference.groupId ? [reference.id] : [...current, reference.id];
+                      })}
+                    />
+                    <span className="min-w-0 flex-1 truncate">{reference.label}</span>
+                    {!reference.available ? <span className="text-[10px] text-black/40 dark:text-white/40">Preview only</span> : null}
+                  </label>
+                ))}
+              </div>
+            ) : null}
+          </div>
 
           <div className="ml-auto flex items-center gap-1.5">
             <button
@@ -85,6 +121,7 @@ export function SessionComposer({
             </button>
             <button
               type="submit"
+              disabled={busy}
               className="inline-flex size-9 items-center justify-center rounded-full bg-black/35 text-white transition hover:bg-black/55 dark:bg-white/35 dark:hover:bg-white/55"
               aria-label="Send message"
             >

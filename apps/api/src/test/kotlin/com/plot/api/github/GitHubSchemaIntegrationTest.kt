@@ -28,10 +28,28 @@ class GitHubSchemaIntegrationTest {
 	fun cleanSourceData() {
 		listOf(
 			"writing_block_relation_observations", "writing_block_relations", "writing_block_fragments",
-			"writing_block_scopes", "source_imports", "source_observations", "writing_blocks",
-			"source_scopes", "connection_namespace_bindings", "source_namespaces", "connections",
-			"github_installation_states",
+			"writing_block_scopes", "source_imports", "source_observations",
 		).forEach { jdbcTemplate.update("delete from $it where workspace_id = ?", devContext.devWorkspaceId) }
+		jdbcTemplate.update(
+			"""
+			delete from writing_blocks b
+			where b.workspace_id = ? and b.source_namespace_id is not null
+			  and not exists (select 1 from generation_inputs i where i.workspace_id = b.workspace_id and i.writing_block_id = b.id)
+			""".trimIndent(),
+			devContext.devWorkspaceId,
+		)
+		jdbcTemplate.update(
+			"delete from source_scopes s where s.workspace_id = ? and not exists (select 1 from generation_runs r where r.workspace_id = s.workspace_id and r.source_scope_id = s.id)",
+			devContext.devWorkspaceId,
+		)
+		jdbcTemplate.update("delete from connection_namespace_bindings where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update(
+			"delete from source_namespaces n where n.workspace_id = ? and not exists (select 1 from source_scopes s where s.workspace_id = n.workspace_id and s.source_namespace_id = n.id) and not exists (select 1 from writing_blocks b where b.workspace_id = n.workspace_id and b.source_namespace_id = n.id)",
+			devContext.devWorkspaceId,
+		)
+		listOf("connections", "github_installation_states").forEach {
+			jdbcTemplate.update("delete from $it where workspace_id = ?", devContext.devWorkspaceId)
+		}
 	}
 
 	@Test

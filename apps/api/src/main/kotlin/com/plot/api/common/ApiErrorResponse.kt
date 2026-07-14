@@ -8,4 +8,5 @@ data class ApiErrorResponse(
 	val error: String,
 	val message: String,
 	val resourceId: UUID? = null,
+	val details: Map<String, Any?>? = null,
 )
