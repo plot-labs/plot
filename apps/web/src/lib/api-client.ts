@@ -4,6 +4,16 @@ import {
   type ReferenceDocument,
   type SessionMessage,
 } from "@/lib/dev-context";
+import { createPlotApiClient } from "@plot/api-client";
+
+export type {
+  ContentPack,
+  CreateGenerationInput,
+  GenerationRun,
+  PlotApiClient,
+} from "@plot/api-client";
+
+export const plotApiClient = createPlotApiClient({ baseUrl: "/api/plot" });
 
 export type {
   DraftDocument,
