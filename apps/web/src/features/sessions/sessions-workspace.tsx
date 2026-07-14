@@ -24,7 +24,7 @@ import {
   type GenerationReference,
   plotApiClient,
 } from "@/lib/api-client";
-import { createAndPollGeneration, pollGeneration } from "@/lib/generation-polling";
+import { createAndPollGeneration, isTerminalGenerationStatus, pollGeneration } from "@/lib/generation-polling";
 import { CitedDraftEditor } from "@/features/citations/cited-draft-editor";
 import { ExportDialog } from "@/features/citations/export-dialog";
 import { InterventionPanel } from "@/features/citations/intervention-panel";
@@ -260,7 +260,7 @@ function ActiveSessionWorkspace({
     if (!current?.pendingIntervention) throw new Error("This intervention is no longer current.");
     const accepted = await plotApiClient.resolveConflict(current.id, current.pendingIntervention.id, input);
     setGenerationRun(accepted);
-    if (["READY", "NEEDS_REVIEW", "NEEDS_YOUR_CALL", "FAILED"].includes(accepted.status)) {
+    if (isTerminalGenerationStatus(accepted.status)) {
       setGeneratedPack(accepted.contentPack);
       return accepted;
     }

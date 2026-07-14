@@ -1,6 +1,7 @@
 package com.plot.api.generation.dto
 
 import com.plot.api.generation.ConflictResolutionAction
+import com.plot.api.generation.GenerationRunStatus
 import com.plot.api.generation.GenerationWorkflowState
 import com.plot.api.generation.model.ReviewVerdict
 import com.plot.api.generation.model.SentenceOrigin
@@ -81,7 +82,7 @@ fun GenerationWorkflowState.toResponse(): GenerationRunResponse {
 		id = runId,
 		status = status.name,
 		semanticRewriteAttempt = semanticRewriteAttempt,
-		pollAfterMs = if (status.name in setOf("QUEUED", "WRITING", "REVIEWING", "REWRITING")) 500 else null,
+		pollAfterMs = if (status !in GenerationRunStatus.terminalOrPaused) 500 else null,
 		failureCode = failureCode,
 		evidence = evidence.map {
 			GenerationEvidenceResponse(it.id, it.sourceProvider, it.sourceKind, it.sourceLabel, it.originalUrl, it.snapshotExcerpt, it.contentHash)

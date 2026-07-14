@@ -80,7 +80,7 @@ class MarkdownExportService {
 	private fun escapeLabel(label: String): String = label.replace("\\", "\\\\").replace("]", "\\]")
 }
 
-private val ExportSentenceStatus.isUnresolved: Boolean
+internal val ExportSentenceStatus.isUnresolved: Boolean
 	get() = this in setOf(
 		ExportSentenceStatus.NEEDS_SUPPORT,
 		ExportSentenceStatus.CONFLICT,

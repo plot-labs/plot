@@ -148,7 +148,7 @@ class GenerationPersistence(
 			 semantic_attempt, status, started_at, created_at)
 			values (?, ?, ?, ?, ?, ?, 'RUNNING', ?, ?)
 			""".trimIndent(),
-			stepId, claim.workspaceId, claim.runId, role.stepKind, sequence, attempt, timestamp(now), timestamp(now),
+			stepId, claim.workspaceId, claim.runId, role.name, sequence, attempt, timestamp(now), timestamp(now),
 		)
 		val providerModel = jdbcTemplate.queryForMap(
 			"select provider, model_name from generation_runs where workspace_id = ? and id = ?",
@@ -484,13 +484,6 @@ class GenerationPersistence(
 
 class GenerationIdempotencyConflictException : IllegalStateException("Idempotency key was reused with different inputs")
 class GenerationRunNotFoundException(val runId: UUID) : IllegalStateException("Generation run not found")
-
-private val ModelRole.stepKind: String
-	get() = when (this) {
-		ModelRole.WRITER -> "WRITER"
-		ModelRole.REVIEWER -> "REVIEWER"
-		ModelRole.REWRITER -> "REWRITER"
-	}
 
 private val GenerationWorkflowState.artifactType: String
 	get() = when (artifacts.lastOrNull()?.kind) {

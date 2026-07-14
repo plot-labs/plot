@@ -60,4 +60,22 @@ describe("generation polling", () => {
     expect(client.getGeneration).toHaveBeenCalledTimes(1);
     expect(onUpdate.mock.calls.map(([value]: [GenerationRun]) => value.status)).toEqual(["QUEUED", "READY"]);
   });
+
+  it("normalizes the initial and maximum delay before the first poll", async () => {
+    vi.useFakeTimers();
+    const client = {
+      createGeneration: vi.fn().mockResolvedValue(run("QUEUED", 50)),
+      getGeneration: vi.fn().mockResolvedValue(run("READY", null)),
+    } as unknown as PlotApiClient;
+
+    const result = createAndPollGeneration(client, { sourceScopeId: "scope", writingBlockIds: ["block"] }, "key", {
+      initialDelayMs: 10,
+      maxDelayMs: 5,
+    });
+    await vi.advanceTimersByTimeAsync(9);
+    expect(client.getGeneration).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+
+    await expect(result).resolves.toMatchObject({ status: "READY" });
+  });
 });

@@ -4,6 +4,7 @@ import { AlertTriangle } from "lucide-react";
 import { useState } from "react";
 
 import type { GenerationRun } from "@plot/api-client";
+import { providerName } from "./evidence-popover";
 
 type ResolutionInput = {
   expectedVersion: number;
@@ -98,8 +99,4 @@ function ResolutionChoice({ checked, label, onChange }: { checked: boolean; labe
       {label}
     </label>
   );
-}
-
-function providerName(provider: string) {
-  return provider === "GITHUB" ? "GitHub" : provider === "SLACK" ? "Slack" : "Linear";
 }

@@ -96,7 +96,7 @@ class ContentPackService(
 				},
 			)
 		}
-		val unresolvedIds = exportSentences.filter { it.status in setOf(ExportSentenceStatus.NEEDS_SUPPORT, ExportSentenceStatus.CONFLICT, ExportSentenceStatus.USER_MODIFIED) }.map { it.id }
+		val unresolvedIds = exportSentences.filter { it.status.isUnresolved }.map { it.id }
 		if (unresolvedIds.isNotEmpty() && !acknowledge) {
 			recordExport(runId, variantId, disposition, unresolvedIds.size, false, "REJECTED", null)
 			throw ExportConfirmationRequiredException(unresolvedIds)
