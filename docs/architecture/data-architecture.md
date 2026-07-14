@@ -73,8 +73,9 @@ V2 schema and its migration are authoritative for source adapter work.
 - Generation must be explainable later. Runs store snapshots of source blocks,
   templates, voice profile/rules/samples, model config, and prompt assembly
   version.
-- v0 uses a direct backend-managed model-provider call. `model_invocations`
-  records that call. `agent_runs` records the higher-level update-agent attempt.
+- v0 uses backend-managed, tool-free model-provider calls. `model_invocations`
+  records each logical writer, reviewer, or rewriter call independently. The
+  fixed generation workflow does not require an `agent_runs` parent.
 - `work_sessions` and `tasks` are the user-facing agentic UX objects.
   `agent_runs` is execution detail under a task.
 - Agent work must produce inspectable artifacts, not only a transcript. Use
@@ -179,11 +180,18 @@ Templates
 Generation
   GenerationRun
   GenerationInput
-  GenerationTarget
+  GenerationWorkflowStep
   ModelInvocation
+  GenerationArtifact
   ContentPack
   ContentVariant
+  ContentVariantSentence
+  ContentVariantSentenceRevision
+  SentenceEvaluation
   Citation
+  GenerationIntervention
+  GenerationInterventionResolution
+  GenerationExportEvent
   WorkspaceAuditEvent
 ```
 
@@ -1517,6 +1525,104 @@ Rules:
 - Generation stores a template snapshot so old variants remain explainable.
 
 ## Generation
+
+### Implemented fixed workflow (V3)
+
+The V3 schema is authoritative for the first shipped generation/citation loop.
+The older target-, voice-, template-, and agent-run-oriented sketches later in
+this section describe a possible broader model; they are not prerequisites for
+the implemented changelog workflow.
+
+```txt
+GenerationRun -> GenerationInput -> WritingBlock (lineage only)
+       |
+       |-> GenerationWorkflowStep -> ModelInvocation
+       |                         \-> GenerationArtifact
+       |
+       \-> ContentPack -> ContentVariant -> ContentVariantSentence
+                                             |
+                                             \-> ContentVariantSentenceRevision
+                                                    |-> SentenceEvaluation
+                                                    \-> Citation -> GenerationInput
+
+GenerationRun -> GenerationIntervention -> GenerationInterventionResolution
+ContentVariant -> GenerationExportEvent
+```
+
+The run is a durable, workspace-scoped state machine with these visible states:
+
+```txt
+QUEUED -> WRITING -> REVIEWING <-> REWRITING
+                              \-> NEEDS_YOUR_CALL
+                              \-> READY | NEEDS_REVIEW | FAILED
+```
+
+`generation_runs` stores the idempotency key and request fingerprint alongside
+workflow, prompt, output-schema, provider/model, and budget snapshots. A
+workspace/user/idempotency-key tuple is unique. Claim ownership, heartbeat,
+next-attempt time, semantic rewrite count, and optimistic transition version
+make a run recoverable without using an in-memory queue as the source of truth.
+The configurable claim lease must exceed the complete provider retry envelope;
+startup recovery only releases stale claims and schedules the bounded worker,
+so application readiness never waits for a model call.
+
+`generation_inputs` is an append-only evidence snapshot. It retains the source
+provider and kind, display label, captured title/body/excerpt, original URL,
+source timestamps, content hash, and capture time. Its composite foreign keys
+preserve both workspace and run identity. The Writing Block foreign key is
+lineage, so changing or archiving the block does not change captured evidence.
+Provider identity is neutral across `GITHUB`, `SLACK`, and `LINEAR`; only the
+GitHub ingestion path is executed in this release.
+
+Workflow history separates three concepts:
+
+- `generation_workflow_steps` checkpoints deterministic workflow stages and
+  semantic rewrite attempts.
+- `model_invocations` records one logical writer, reviewer, or rewriter call,
+  including separate transport/schema attempt counts, redacted provider/result
+  metadata, usage, latency, and machine-readable failure details.
+- `generation_artifacts` stores immutable versioned evidence, writer, reviewer,
+  rewriter, conflict-decision, and final structured payloads.
+
+The run detail API exposes a sanitized ordered artifact projection (kind,
+sentence identities, verdicts, evidence identities, reason, and decision
+detail) while withholding provider prompts, completions, credentials, and raw
+snapshot bodies. Generation accepts at most 20 Writing Blocks and enforces a
+server-owned aggregate evidence-character limit before snapshot persistence.
+
+Draft text is canonical at sentence level. `content_variant_sentences` owns a
+stable sentence identity and deterministic order. Generated, rewritten, and
+user-modified text is appended to `content_variant_sentence_revisions`; only a
+previous current flag may be retired, while identity and historical content
+cannot be changed or deleted. `USER_MODIFIED` revisions require user
+attribution. `sentence_evaluations` is append-only and accepts exactly
+`SUPPORTED`, `NOT_REQUIRED`, `NEEDS_SUPPORT`, or `CONFLICT`.
+
+`sentence_citations` joins a specific sentence revision to a specific
+`generation_input`. Composite keys require both sides to belong to the same run
+and workspace, preventing current Writing Block content or a different run's
+evidence from being substituted later. Citation order is local presentation
+order; exported numeric source labels are derived rather than stored identity.
+
+Only one pending source-conflict intervention may exist for a run.
+`generation_intervention_resolutions` appends versioned `PREFER_SOURCE`,
+`OMIT_CLAIM`, or `PROVIDE_WORDING` decisions with user attribution. Preferred
+sources must be inputs from the same run, while provided wording remains a
+user-modified revision rather than reviewed generated truth.
+
+`generation_export_events` is append-only. It records the variant, format,
+result, unresolved sentence count, user, and whether the unresolved-content
+warning was explicitly acknowledged. A successful export with unresolved
+content is rejected by a database constraint unless acknowledgment is true.
+The confirmation request also carries the exact unresolved sentence revision
+IDs shown in the warning; any intervening edit invalidates that confirmation
+and returns a fresh warning. Persisted packs are discoverable through the
+workspace-scoped paginated content-pack list API after navigation or reload.
+
+All high-risk links use `(workspace_id, ...)` composite foreign keys. Inputs,
+structured artifacts, evaluations, intervention decisions, revisions, and
+export events retain immutable history; mutable projection/status rows are kept
+separate so workers and editors can advance without rewriting audit evidence.
 
 ### GenerationRun
 

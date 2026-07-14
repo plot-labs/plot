@@ -1,7 +1,7 @@
 # Project Structure
 
-Plot is a monorepo with a generated Next.js frontend and a backend service
-scaffold. The backend runtime is Kotlin Spring Boot; the product/data
+Plot is a monorepo with a Next.js frontend and a Kotlin Spring Boot backend.
+The product/data
 architecture remains documented in framework-neutral terms so the domain model
 does not depend on persistence or agent implementation details.
 
@@ -49,9 +49,10 @@ apps/web/src/
     layout/
     ui/
   features/
-    sessions/           # implemented (mock data)
+    citations/          # sentence review, inline evidence, conflict, export
+    sessions/           # real generation path plus seeded unrelated sessions
     sources/            # implemented (mock data)
-    packs/              # implemented (mock data)
+    packs/              # generated pack detail plus seeded pack list
     agent-trace/        # placeholder
     angles/             # placeholder
     blocks/             # placeholder
@@ -60,11 +61,14 @@ apps/web/src/
     content-pack/       # placeholder
     memory/             # placeholder
     signals/            # placeholder
-  lib/                  # api-client.ts (dev boundary), dev-context.ts, waitlist.ts
+  lib/                  # shared client boundary, polling, dev-context, waitlist
 ```
 
-The product shell currently renders seeded dev data from `lib/dev-context.ts`
-through `lib/api-client.ts`; it does not call the backend yet.
+Sessions discovers imported GitHub Writing Blocks through the same-origin
+`/api/plot` BFF, creates and polls durable generation runs, resolves conflicts,
+and opens structured cited packs. Unrelated product surfaces still use seeded
+dev data while they migrate independently. `packages/api-client` owns the
+shared generation/citation contract used by the web boundary.
 
 ## Backend
 
@@ -73,10 +77,11 @@ backend-managed update-agent loop plus direct model-provider calls, not a
 separate agent service. The module boundaries below describe the backend domain
 shape and should stay independent from specific Spring infrastructure choices.
 
-Implemented today: `common/`, `dev/` (dev bootstrap context), `workspace/`,
-`worksession/`, `task/`, and `writingblock/`, each with entity, repository,
-service, controller, and DTO layers plus Testcontainers-backed integration
-tests. The remaining modules below are the planned target shape.
+Implemented today: workspace/dev context, GitHub connection/import,
+Writing Blocks, durable generation workflow/recovery, structured OpenAI model
+gateway, content packs, sentence revisions/citations, conflict intervention,
+and audited export. Integration tests use PostgreSQL through Testcontainers;
+the real-model contract test is explicit and opt-in.
 
 ```txt
 apps/api/
@@ -102,14 +107,17 @@ apps/api/
   block/
   template/
   voice/
-  agent/
-  generation/
-  contentpack/
-  citation/
+  generation/           # fixed durable write/review/rewrite state machine
+  contentpack/          # structured sentences, revisions, Markdown export
   ai/
-    provider/
-    prompt/
+    provider/            # disabled/fake/OpenAI structured gateways
+    prompt/              # untrusted evidence and sentence delimiters
 ```
+
+The current workflow is intentionally fixed and backend-owned. Dynamic agent
+planning, tool selection, self-directed loop construction, and multi-agent
+delegation remain deferred; they are not hidden inside the web client or model
+prompt.
 
 ## First Implementation Order
 
@@ -117,9 +125,9 @@ apps/api/
 2. First source adapter, repository watches, repository imports, Writing Block
    model, and input endpoints
 3. Voice Profile, Voice Samples, Voice Rules, and system Content Templates
-4. Agent Run state machine for import, draft, and citation mapping
-5. Generation Run, Generation Target, and Model Invocation endpoints backed by
-   a direct model-provider API call
-6. Content Pack and Content Variant UI
-7. Citation/source-reference and style guidance UI
-8. Later: upload/paste/url/email source inputs and publishing automation
+4. Generation Run state machine for snapshot, draft, review, targeted rewrite,
+   conflict intervention, and citation mapping — implemented for changelogs
+5. Content Pack, sentence revision, export API, and citation UX — implemented
+6. Voice Profile, Voice Samples, Voice Rules, and additional system templates
+7. Later: dynamic agent planning, upload/paste/url/email inputs, additional
+   providers, retention controls, and publishing automation

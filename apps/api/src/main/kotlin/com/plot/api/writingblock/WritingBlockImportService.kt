@@ -74,7 +74,7 @@ class WritingBlockImportService(
 		).firstOrNull()
 
 		val metadata = objectMapper.writeValueAsString(block.metadata)
-		val hash = contentHash(block.title, block.body)
+		val hash = writingBlockContentHash(block.title, block.body)
 		if (existing != null) {
 			val changed = existing.contentHash != hash ||
 				existing.title != block.title ||
@@ -207,9 +207,4 @@ class WritingBlockImportService(
 
 	private fun normalizeJson(value: String?): Any? = value?.let { objectMapper.readTree(it) }
 
-	private fun contentHash(title: String?, body: String?): String {
-		return java.security.MessageDigest.getInstance("SHA-256")
-			.digest("${title.orEmpty()}\n${body.orEmpty()}".toByteArray(Charsets.UTF_8))
-			.joinToString("") { "%02x".format(it) }
-	}
 }

@@ -10,7 +10,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   createDemoAgentReply,
@@ -19,7 +19,15 @@ import {
   type SelectedDocument,
   type SessionMessage,
   type WorkSession,
+  type ContentPack,
+  type GenerationRun,
+  type GenerationReference,
+  plotApiClient,
 } from "@/lib/api-client";
+import { createAndPollGeneration, isTerminalGenerationStatus, pollGeneration } from "@/lib/generation-polling";
+import { CitedDraftEditor } from "@/features/citations/cited-draft-editor";
+import { ExportDialog } from "@/features/citations/export-dialog";
+import { InterventionPanel } from "@/features/citations/intervention-panel";
 import { SessionComposer } from "@/features/sessions/session-composer";
 import { SessionSidePanel } from "@/features/sessions/session-side-panel";
 import { SessionThread } from "@/features/sessions/session-thread";
@@ -141,11 +149,30 @@ function ActiveSessionWorkspace({
   const [openDocumentIds, setOpenDocumentIds] = useState<string[]>(() =>
     getInitialOpenDocumentIds(activeSession),
   );
+  const [generationRun, setGenerationRun] = useState<GenerationRun | null>(null);
+  const [generatedPack, setGeneratedPack] = useState<ContentPack | null>(null);
+  const [generationError, setGenerationError] = useState("");
+  const [generationReferences, setGenerationReferences] = useState<GenerationReference[]>([]);
+  const [generating, setGenerating] = useState(false);
+  const generationAbortRef = useRef<AbortController | null>(null);
 
   const sessionDrafts = data.drafts.filter((draft) => activeSession.draftIds.includes(draft.id));
   const sessionReferences = data.references.filter((reference) =>
     activeSession.referenceIds.includes(reference.id),
   );
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void plotApiClient.listGenerationReferences({ signal: controller.signal })
+      .then(setGenerationReferences)
+      .catch(() => {
+        // Source discovery is progressive enhancement; unrelated mock sessions remain available.
+      });
+    return () => {
+      controller.abort();
+      generationAbortRef.current?.abort();
+    };
+  }, []);
 
   const selectedDocument = selectedDocumentId ? getSelectedDocument(selectedDocumentId) : null;
 
@@ -170,7 +197,7 @@ function ActiveSessionWorkspace({
     }));
   }
 
-  function submitMessage(message: string) {
+  function appendConversation(message: string, includeDemoReply: boolean) {
     setMessages((current) => {
       const userMessage: SessionMessage = {
         id: `user-message-${current.length + 1}`,
@@ -179,10 +206,76 @@ function ActiveSessionWorkspace({
         timestamp: "Now",
         content: message,
       };
-      const agentReply = createDemoAgentReply(message, current.length + 2);
-
-      return [...current, userMessage, agentReply];
+      return includeDemoReply
+        ? [...current, userMessage, createDemoAgentReply(message, current.length + 2)]
+        : [...current, userMessage];
     });
+  }
+
+  async function submitMessage(message: string, referenceIds: string[]) {
+    const imported = generationReferences
+      .filter((reference) => referenceIds.includes(reference.id))
+      .map((reference) => ({ sourceScopeId: reference.sourceScopeId, writingBlockId: reference.id }));
+    const selected = sessionReferences
+      .filter((reference) => referenceIds.includes(reference.id) && reference.sourceScopeId && reference.writingBlockId)
+      .map((reference) => ({ sourceScopeId: reference.sourceScopeId!, writingBlockId: reference.writingBlockId! }));
+    const generationReady = [...imported, ...selected];
+    if (!generationReady.length) {
+      appendConversation(message, true);
+      return;
+    }
+    const scopeId = generationReady[0]!.sourceScopeId;
+    if (generationReady.some((reference) => reference.sourceScopeId !== scopeId)) {
+      setGenerationError("Selected references must belong to the same source scope.");
+      return;
+    }
+
+    appendConversation(message, false);
+    generationAbortRef.current?.abort();
+    const controller = new AbortController();
+    generationAbortRef.current = controller;
+    setGenerating(true);
+    setGenerationError("");
+    setGeneratedPack(null);
+    try {
+      const run = await createAndPollGeneration(
+        plotApiClient,
+        { sourceScopeId: scopeId, writingBlockIds: generationReady.map((reference) => reference.writingBlockId), instruction: message },
+        crypto.randomUUID(),
+        { signal: controller.signal, onUpdate: setGenerationRun },
+      );
+      setGenerationRun(run);
+      setGeneratedPack(run.contentPack);
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) {
+        setGenerationError(error instanceof Error ? error.message : "Generation could not be completed.");
+      }
+    } finally {
+      if (generationAbortRef.current === controller) setGenerating(false);
+    }
+  }
+
+  async function resolveIntervention(input: Parameters<typeof plotApiClient.resolveConflict>[2]) {
+    const current = generationRun;
+    if (!current?.pendingIntervention) throw new Error("This intervention is no longer current.");
+    const accepted = await plotApiClient.resolveConflict(current.id, current.pendingIntervention.id, input);
+    setGenerationRun(accepted);
+    if (isTerminalGenerationStatus(accepted.status)) {
+      setGeneratedPack(accepted.contentPack);
+      return accepted;
+    }
+    const controller = new AbortController();
+    generationAbortRef.current?.abort();
+    generationAbortRef.current = controller;
+    setGenerating(true);
+    try {
+      const resumed = await pollGeneration(plotApiClient, accepted.id, { signal: controller.signal, onUpdate: setGenerationRun });
+      setGenerationRun(resumed);
+      setGeneratedPack(resumed.contentPack);
+      return resumed;
+    } finally {
+      if (generationAbortRef.current === controller) setGenerating(false);
+    }
   }
 
   return (
@@ -234,8 +327,35 @@ function ActiveSessionWorkspace({
           floatingSummaryOpen={floatingSummaryOpen}
           rightPanelOpen={rightPanelOpen}
           onSelectDocument={selectDocument}
+          generationPanel={
+            <GenerationPanel
+              run={generationRun}
+              pack={generatedPack}
+              busy={generating}
+              error={generationError}
+              onResolve={resolveIntervention}
+              onPackChange={setGeneratedPack}
+            />
+          }
         />
-        <SessionComposer onSubmit={submitMessage} />
+        <SessionComposer
+          key={generationReferences.map((reference) => reference.id).join(":") || "mock-references"}
+          onSubmit={(message, referenceIds) => void submitMessage(message, referenceIds)}
+          references={generationReferences.length
+            ? generationReferences.map((reference) => ({
+                id: reference.id,
+                label: `${reference.repositoryLabel} · ${reference.sourceLabel}`,
+                available: true,
+                groupId: reference.sourceScopeId,
+              }))
+            : sessionReferences.map((reference) => ({
+                id: reference.id,
+                label: reference.label,
+                available: Boolean(reference.sourceScopeId && reference.writingBlockId),
+                groupId: reference.sourceScopeId,
+              }))}
+          busy={generating}
+        />
       </div>
 
       {rightPanelOpen && (
@@ -252,6 +372,57 @@ function ActiveSessionWorkspace({
       )}
     </div>
   );
+}
+
+function GenerationPanel({
+  run,
+  pack,
+  busy,
+  error,
+  onResolve,
+  onPackChange,
+}: {
+  run: GenerationRun | null;
+  pack: ContentPack | null;
+  busy: boolean;
+  error: string;
+  onResolve: (input: Parameters<typeof plotApiClient.resolveConflict>[2]) => Promise<GenerationRun>;
+  onPackChange: (pack: ContentPack) => void;
+}) {
+  if (!run && !busy && !error) return null;
+  return (
+    <article className="space-y-3" aria-live="polite">
+      {busy ? (
+        <div className="rounded-xl border border-black/10 bg-black/[0.025] px-4 py-3 text-sm text-black/62 dark:border-white/10 dark:bg-white/[0.04] dark:text-white/62">
+          Plot is {stageLabel(run?.status)}…
+        </div>
+      ) : null}
+      {error ? <div role="alert" className="rounded-xl border border-rose-300/60 bg-rose-50 px-4 py-3 text-sm text-rose-900 dark:border-rose-400/25 dark:bg-rose-400/[0.08] dark:text-rose-200">{error}</div> : null}
+      {run?.status === "FAILED" && !error ? (
+        <div role="alert" className="rounded-xl border border-rose-300/60 bg-rose-50 px-4 py-3 text-sm text-rose-900 dark:border-rose-400/25 dark:bg-rose-400/[0.08] dark:text-rose-200">
+          Generation stopped before a reviewable draft was produced{run.failureCode ? ` (${run.failureCode})` : ""}. Try again or adjust the selected references.
+        </div>
+      ) : null}
+      {run?.pendingIntervention ? <InterventionPanel key={run.pendingIntervention.id} run={run} onResolve={onResolve} /> : null}
+      {pack ? (
+        <>
+          <CitedDraftEditor
+            pack={pack}
+            onEditSentence={(sentence, body) => plotApiClient.editSentence(pack.variant.id, sentence.id, { expectedRevisionNumber: sentence.revisionNumber, body })}
+            onPackChange={onPackChange}
+          />
+          <ExportDialog pack={pack} client={plotApiClient} />
+        </>
+      ) : null}
+    </article>
+  );
+}
+
+function stageLabel(status?: GenerationRun["status"]) {
+  if (status === "REVIEWING") return "checking source support";
+  if (status === "REWRITING") return "revising failed sentences";
+  if (status === "WRITING") return "drafting from selected references";
+  return "preparing the grounded draft";
 }
 
 function getInitialSelectedDocumentId(session: WorkSession) {
