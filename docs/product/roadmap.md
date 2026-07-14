@@ -2,7 +2,7 @@
 
 Status: working roadmap
 
-Last updated: 2026-07-09
+Last updated: 2026-07-14
 
 ## Principle
 
@@ -23,20 +23,23 @@ Goal: align the public product surface and capture the first channel signal.
 
 Goal: `repo connect -> shipping window -> source-cited draft` works for real.
 
-1. GitHub adapter minimum: one OAuth flow covering login and source
-   connection, repository selection, date-range import, WritingBlock
-   normalization.
-2. Generation loop: GenerationRun, ModelInvocation, and two seeded system
-   templates first — changelog and launch/social post. Adjust from waitlist
-   answers.
-3. Citation UX inside Phase 1, not after: hover a generated sentence, see the
-   supporting PR. This is the first visible differentiator.
+1. GitHub adapter minimum: App connection, repository selection, date-range
+   import, and Writing Block normalization. Implemented for local development;
+   production auth/installation operations still need validation.
+2. Generation loop: durable GenerationRun/ModelInvocation state, bounded
+   write-review-targeted-rewrite stages, conflict intervention, and changelog
+   content packs. Implemented; launch/social templates remain next.
+3. Citation UX inside Phase 1: sentence-level source labels, snapshot popovers,
+   failed/conflicting states, edits that become unverified, and warned export.
+   Implemented for the changelog flow.
 4. Replace the web mock boundary with real API calls, Sessions screen first.
+   The generation/citation path is implemented; unrelated session history and
+   other screens still use seeded data.
 5. Voice as rules plus a few samples. Measurable style signals come later.
 
 Explicitly not in Phase 1: repository watches and scheduled refresh, the full
 five-artifact pack, real-time co-editing, team permissions, automation
-recipes.
+recipes, retention administration, and dynamic agent planning/tool loops.
 
 ## Phase 2 — Design Partner Validation
 
