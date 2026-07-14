@@ -14,7 +14,7 @@ import java.util.UUID
 
 data class CreateGenerationRequest(
 	@field:NotNull val sourceScopeId: UUID?,
-	@field:NotEmpty val writingBlockIds: List<UUID>,
+	@field:NotEmpty @field:Size(max = 20) val writingBlockIds: List<UUID>,
 	@field:Size(max = 2_000) val instruction: String? = null,
 )
 
@@ -33,6 +33,7 @@ data class GenerationRunResponse(
 	val failureCode: String?,
 	val evidence: List<GenerationEvidenceResponse>,
 	val sentences: List<GenerationSentenceResponse>,
+	val artifacts: List<GenerationArtifactResponse>,
 	val pendingIntervention: GenerationInterventionResponse?,
 	val contentPack: ContentPackResponse? = null,
 )
@@ -54,9 +55,24 @@ data class GenerationSentenceResponse(
 	val orderIndex: Int,
 	val body: String,
 	val origin: SentenceOrigin,
-	val verdict: ReviewVerdict?,
+	val verdict: String?,
 	val reason: String?,
 	val citations: List<GenerationCitationResponse>,
+)
+
+data class GenerationArtifactResponse(
+	val kind: String,
+	val sequence: Int,
+	val sentenceIds: List<UUID>,
+	val reviews: List<GenerationArtifactReviewResponse>,
+	val detail: String?,
+)
+
+data class GenerationArtifactReviewResponse(
+	val sentenceId: UUID,
+	val verdict: ReviewVerdict,
+	val evidenceIds: List<UUID>,
+	val reason: String?,
 )
 
 data class GenerationCitationResponse(
@@ -89,12 +105,23 @@ fun GenerationWorkflowState.toResponse(): GenerationRunResponse {
 		},
 		sentences = sentences.sortedBy { it.orderIndex }.map { sentence ->
 			val review = reviewsBySentence[sentence.id]
+			val userModified = sentence.origin == SentenceOrigin.USER_MODIFIED
 			GenerationSentenceResponse(
 				sentence.id, sentence.revisionId, sentence.revisionNumber, sentence.orderIndex, sentence.body,
-				sentence.origin, review?.verdict, review?.reason,
-				review?.evidenceIds.orEmpty().mapNotNull { id -> evidenceById[id] }.map {
+				sentence.origin, if (userModified) SentenceOrigin.USER_MODIFIED.name else review?.verdict?.name,
+				if (userModified) null else review?.reason,
+				(if (userModified) emptyList() else review?.evidenceIds.orEmpty()).mapNotNull { id -> evidenceById[id] }.map {
 					GenerationCitationResponse(it.id, it.sourceProvider, it.sourceLabel, it.originalUrl, it.snapshotExcerpt)
 				},
+			)
+		},
+		artifacts = artifacts.sortedBy { it.sequence }.map { artifact ->
+			GenerationArtifactResponse(
+				artifact.kind.name,
+				artifact.sequence,
+				artifact.sentences.map { it.id },
+				artifact.reviews.map { GenerationArtifactReviewResponse(it.sentenceId, it.verdict, it.evidenceIds, it.reason) },
+				artifact.detail,
 			)
 		},
 		pendingIntervention = pendingIntervention?.let {

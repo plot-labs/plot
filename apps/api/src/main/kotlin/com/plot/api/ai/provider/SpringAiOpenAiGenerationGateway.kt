@@ -58,6 +58,7 @@ class SpringAiOpenAiGenerationGateway(
 	private val transport: StructuredChatTransport,
 	private val properties: PlotAiProperties,
 	private val promptFactory: ChangelogPromptFactory,
+	private val sleep: (Duration) -> Unit = { Thread.sleep(it.toMillis()) },
 ) : GenerationModelGateway {
 	override fun write(request: WriterModelRequest): ModelCallResult<WriterOutput> = invoke(
 		role = ModelRole.WRITER,
@@ -89,6 +90,7 @@ class SpringAiOpenAiGenerationGateway(
 				if (transportFailures++ >= properties.transportRetries) {
 					throw GenerationModelException(ModelFailureCode.PROVIDER_UNAVAILABLE, "The model provider is temporarily unavailable", failure)
 				}
+				sleep(properties.retryInitialDelay.multipliedBy(1L shl (transportFailures - 1).coerceAtMost(8)))
 			} catch (failure: MalformedModelOutputException) {
 				if (schemaFailures++ >= properties.schemaRetries) {
 					throw GenerationModelException(ModelFailureCode.MALFORMED_OUTPUT, "The model returned invalid structured output", failure)

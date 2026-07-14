@@ -100,6 +100,8 @@ class OpenAiGenerationContractSmokeTest {
 			assertTrue(metrics.unsupportedClaimRecall >= 1.0, "Unsupported-claim recall fell below the contract threshold")
 			assertTrue(metrics.conflictRecall >= 1.0, "Conflict recall fell below the contract threshold")
 			assertTrue(metrics.citationPrecision >= 0.8, "Citation precision fell below the contract threshold")
+			assertTrue(metrics.supportedClaimRecall >= 1.0, "Supported-claim recall fell below the contract threshold")
+			assertTrue(metrics.citationRecall >= 0.8, "Citation recall fell below the contract threshold")
 			assertEquals(0.0, metrics.notRequiredFalsePositiveRate, "The reviewer overused NOT_REQUIRED")
 		} finally {
 			openAiClient.close()
@@ -175,6 +177,9 @@ private class MetricsAccumulator(private val configuredModel: String) {
 	private var foundConflicts = 0
 	private var predictedCitations = 0
 	private var correctCitations = 0
+	private var expectedSupported = 0
+	private var foundSupported = 0
+	private var expectedCitations = 0
 	private var factualSentences = 0
 	private var notRequiredFalsePositives = 0
 
@@ -196,9 +201,16 @@ private class MetricsAccumulator(private val configuredModel: String) {
 				expectedConflicts += 1
 				if (review.verdict == ReviewVerdict.CONFLICT) foundConflicts += 1
 			}
+			if (sentence.expectedVerdict == ReviewVerdict.SUPPORTED) {
+				expectedSupported += 1
+				expectedCitations += sentence.expectedEvidenceIds.size
+				if (review.verdict == ReviewVerdict.SUPPORTED) foundSupported += 1
+			}
 			if (review.verdict == ReviewVerdict.SUPPORTED) {
 				predictedCitations += review.evidenceIds.size
-				correctCitations += review.evidenceIds.count { it in sentence.expectedEvidenceIds }
+				if (sentence.expectedVerdict == ReviewVerdict.SUPPORTED) {
+					correctCitations += review.evidenceIds.count { it in sentence.expectedEvidenceIds }
+				}
 			}
 			if (sentence.expectedVerdict != ReviewVerdict.NOT_REQUIRED) {
 				factualSentences += 1
@@ -220,6 +232,8 @@ private class MetricsAccumulator(private val configuredModel: String) {
 			estimatedCostUsd = estimatedCost,
 			unsupportedClaimRecall = ratio(foundUnsupported, expectedUnsupported),
 			citationPrecision = ratio(correctCitations, predictedCitations),
+			supportedClaimRecall = ratio(foundSupported, expectedSupported),
+			citationRecall = ratio(correctCitations, expectedCitations),
 			conflictRecall = ratio(foundConflicts, expectedConflicts),
 			notRequiredFalsePositiveRate = ratio(notRequiredFalsePositives, factualSentences),
 		)
@@ -238,6 +252,8 @@ private data class ContractMetrics(
 	val estimatedCostUsd: BigDecimal?,
 	val unsupportedClaimRecall: Double,
 	val citationPrecision: Double,
+	val supportedClaimRecall: Double,
+	val citationRecall: Double,
 	val conflictRecall: Double,
 	val notRequiredFalsePositiveRate: Double,
 )

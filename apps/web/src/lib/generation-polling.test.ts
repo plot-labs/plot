@@ -11,6 +11,7 @@ const run = (status: GenerationRun["status"], pollAfterMs: number | null = 10): 
   failureCode: null,
   evidence: [],
   sentences: [],
+  artifacts: [],
   pendingIntervention: null,
   contentPack: null,
 });

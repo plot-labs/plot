@@ -4,10 +4,9 @@ import com.plot.api.common.UuidGenerator
 import com.plot.api.generation.model.EvidenceSnapshot
 import com.plot.api.generation.model.SourceProvider
 import com.plot.api.writingblock.WritingBlock
+import com.plot.api.writingblock.writingBlockContentHash
 import java.net.URI
-import java.security.MessageDigest
 import java.time.Clock
-import java.util.HexFormat
 import java.util.UUID
 
 class InvalidEvidenceSnapshotException(message: String) : IllegalArgumentException(message)
@@ -29,7 +28,7 @@ class EvidenceSnapshotService(
 			writingBlock.canonicalUrl?.takeIf { it.isNotBlank() } ?: writingBlock.url,
 		)
 		val contentHash = writingBlock.contentHash?.trim()?.takeIf { it.isNotBlank() }
-			?: contentHash(title, body)
+			?: writingBlockContentHash(title, body)
 
 		return EvidenceSnapshot(
 			id = idGenerator(),
@@ -68,12 +67,6 @@ class EvidenceSnapshotService(
 			invalid("Evidence original URL must use HTTP or HTTPS")
 		}
 		return uri.toASCIIString()
-	}
-
-	private fun contentHash(title: String?, body: String?): String {
-		val digest = MessageDigest.getInstance("SHA-256")
-			.digest("${title.orEmpty()}\n${body.orEmpty()}".toByteArray(Charsets.UTF_8))
-		return HexFormat.of().formatHex(digest)
 	}
 
 	private fun invalid(message: String): Nothing = throw InvalidEvidenceSnapshotException(message)

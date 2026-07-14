@@ -76,9 +76,21 @@ export interface GenerationRun {
   failureCode: string | null;
   evidence: GenerationEvidence[];
   sentences: GenerationSentence[];
+  artifacts: GenerationArtifact[];
   pendingIntervention: GenerationIntervention | null;
   contentPack: ContentPack | null;
 }
+
+export interface GenerationArtifact {
+  kind: "WRITER_OUTPUT" | "REVIEWER_OUTPUT" | "REWRITER_OUTPUT" | "CONFLICT" | "CONFLICT_DECISION";
+  sequence: number;
+  sentenceIds: string[];
+  reviews: Array<{ sentenceId: string; verdict: Exclude<SentenceVerdict, "USER_MODIFIED">; evidenceIds: string[]; reason: string | null }>;
+  detail: string | null;
+}
+
+export interface ContentPackSummary { id: string; generationRunId: string; status: string; title: string | null }
+export interface ContentPackPage { items: ContentPackSummary[]; page: number; size: number; totalItems: number; totalPages: number }
 
 export interface CreateGenerationInput {
   sourceScopeId: string;
@@ -106,9 +118,10 @@ export interface PlotApiClient {
   createGeneration(input: CreateGenerationInput, idempotencyKey: string, options?: RequestOptions): Promise<GenerationRun>;
   getGeneration(id: string, options?: RequestOptions): Promise<GenerationRun>;
   getContentPack(id: string, options?: RequestOptions): Promise<ContentPack>;
+  listContentPacks(page?: number, size?: number, options?: RequestOptions): Promise<ContentPackPage>;
   editSentence(variantId: string, sentenceId: string, input: { expectedRevisionNumber: number; body: string }, options?: RequestOptions): Promise<ContentPack>;
   resolveConflict(runId: string, interventionId: string, input: { expectedVersion: number; action: "PREFER_SOURCE" | "OMIT_CLAIM" | "PROVIDE_WORDING"; preferredEvidenceId?: string; providedWording?: string }, options?: RequestOptions): Promise<GenerationRun>;
-  exportVariant(variantId: string, input: { acknowledgeUnresolved: boolean; disposition: "COPY" | "DOWNLOAD" }, options?: RequestOptions): Promise<{ exportId: string; disposition: "COPY" | "DOWNLOAD"; filename: string; mediaType: string; text: string; unresolvedCount: number; warningAcknowledged: boolean }>;
+  exportVariant(variantId: string, input: { acknowledgeUnresolved: boolean; acknowledgedRevisionIds?: string[]; disposition: "COPY" | "DOWNLOAD" }, options?: RequestOptions): Promise<{ exportId: string; disposition: "COPY" | "DOWNLOAD"; filename: string; mediaType: string; text: string; unresolvedCount: number; warningAcknowledged: boolean }>;
 }
 
 export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof fetch } = {}): PlotApiClient {
@@ -146,11 +159,13 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
         .filter((connection) => connection.status === "ACTIVE")
         .flatMap((connection) => connection.repositories)
         .filter((repository): repository is GitHubRepositoryResponse & { id: string } => Boolean(repository.id) && repository.status === "ACTIVE");
-      const pages = await Promise.all(scopes.map(async (scope) => ({
-        scope,
-        page: await request<WritingBlockPage>(`/blocks?sourceScopeId=${encodeURIComponent(scope.id)}&page=0&size=100`, { signal: requestOptions?.signal }),
-      })));
-      return pages.flatMap(({ scope, page }) => page.items
+      const pages = await Promise.all(scopes.map(async (scope) => {
+        const first = await request<WritingBlockPage>(`/blocks?sourceScopeId=${encodeURIComponent(scope.id)}&page=0&size=100`, { signal: requestOptions?.signal });
+        const rest = await Promise.all(Array.from({ length: Math.max(0, first.totalPages - 1) }, (_, index) =>
+          request<WritingBlockPage>(`/blocks?sourceScopeId=${encodeURIComponent(scope.id)}&page=${index + 1}&size=100`, { signal: requestOptions?.signal })));
+        return { scope, items: [first, ...rest].flatMap((page) => page.items) };
+      }));
+      return pages.flatMap(({ scope, items }) => items
         .filter((block) => block.status === "ACTIVE")
         .map((block): GenerationReference => ({
           id: block.id,
@@ -173,6 +188,7 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
     }),
     getGeneration: (id, requestOptions) => request(`/generations/${encodeURIComponent(id)}`, { signal: requestOptions?.signal }),
     getContentPack: (id, requestOptions) => request(`/content-packs/${encodeURIComponent(id)}`, { signal: requestOptions?.signal }),
+    listContentPacks: (page = 0, size = 25, requestOptions) => request(`/content-packs?page=${page}&size=${size}`, { signal: requestOptions?.signal }),
     editSentence: (variantId, sentenceId, input, requestOptions) => request(
       `/content-variants/${encodeURIComponent(variantId)}/sentences/${encodeURIComponent(sentenceId)}`,
       { method: "PATCH", body: JSON.stringify(input), signal: requestOptions?.signal },
@@ -200,6 +216,10 @@ interface GitHubConnectionResponse {
 }
 
 interface WritingBlockPage {
+  page: number;
+  size: number;
+  totalItems: number;
+  totalPages: number;
   items: Array<{
     id: string;
     sourceKind: string;

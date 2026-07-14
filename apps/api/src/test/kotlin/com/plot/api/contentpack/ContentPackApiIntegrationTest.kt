@@ -55,6 +55,11 @@ class ContentPackApiIntegrationTest {
 	@Test
 	fun `sentence-local edit stales citations and acknowledged exports share private-safe markdown`() {
 		val fixture = readyPack()
+		mockMvc.get("/api/content-packs?page=0&size=25").andExpect {
+			status { isOk() }
+			jsonPath("$.items[0].id") { value(fixture.packId.toString()) }
+			jsonPath("$.totalItems") { value(1) }
+		}
 
 		mockMvc.get("/api/content-packs/${fixture.packId}").andExpect {
 			status { isOk() }
@@ -91,6 +96,26 @@ class ContentPackApiIntegrationTest {
 			status { isConflict() }
 			jsonPath("$.error") { value("EXPORT_CONFIRMATION_REQUIRED") }
 			jsonPath("$.details.sentenceIds[0]") { value(fixture.firstSentenceId.toString()) }
+			jsonPath("$.details.revisionIds.length()") { value(1) }
+		}
+		val acknowledgedRevision = jdbcTemplate.queryForObject(
+			"select id from content_variant_sentence_revisions where sentence_id = ? and is_current",
+			UUID::class.java, fixture.firstSentenceId,
+		)!!
+		mockMvc.patch("/api/content-variants/${fixture.variantId}/sentences/${fixture.firstSentenceId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"expectedRevisionNumber":2,"body":"Changed after warning."}"""
+		}.andExpect { status { isOk() } }
+		mockMvc.post("/api/content-variants/${fixture.variantId}/exports") {
+			contentType = MediaType.APPLICATION_JSON
+			content = objectMapper.writeValueAsString(mapOf(
+				"acknowledgeUnresolved" to true,
+				"acknowledgedRevisionIds" to listOf(acknowledgedRevision),
+				"disposition" to "COPY",
+			))
+		}.andExpect {
+			status { isConflict() }
+			jsonPath("$.error") { value("EXPORT_CONFIRMATION_REQUIRED") }
 		}
 
 		val copy = export(fixture.variantId, "COPY")
@@ -108,9 +133,17 @@ class ContentPackApiIntegrationTest {
 	}
 
 	private fun export(variantId: UUID, disposition: String): String {
+		val revisionIds = jdbcTemplate.queryForList(
+			"select id from content_variant_sentence_revisions where content_variant_id = ? and is_current and origin = 'USER_MODIFIED'",
+			UUID::class.java, variantId,
+		)
 		val response = mockMvc.post("/api/content-variants/$variantId/exports") {
 			contentType = MediaType.APPLICATION_JSON
-			content = """{"acknowledgeUnresolved":true,"disposition":"$disposition"}"""
+			content = objectMapper.writeValueAsString(mapOf(
+				"acknowledgeUnresolved" to true,
+				"acknowledgedRevisionIds" to revisionIds,
+				"disposition" to disposition,
+			))
 		}.andExpect {
 			status { isOk() }
 			header { string("Cache-Control", "no-store") }

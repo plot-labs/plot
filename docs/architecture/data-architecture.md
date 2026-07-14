@@ -1562,6 +1562,9 @@ workflow, prompt, output-schema, provider/model, and budget snapshots. A
 workspace/user/idempotency-key tuple is unique. Claim ownership, heartbeat,
 next-attempt time, semantic rewrite count, and optimistic transition version
 make a run recoverable without using an in-memory queue as the source of truth.
+The configurable claim lease must exceed the complete provider retry envelope;
+startup recovery only releases stale claims and schedules the bounded worker,
+so application readiness never waits for a model call.
 
 `generation_inputs` is an append-only evidence snapshot. It retains the source
 provider and kind, display label, captured title/body/excerpt, original URL,
@@ -1580,6 +1583,12 @@ Workflow history separates three concepts:
   metadata, usage, latency, and machine-readable failure details.
 - `generation_artifacts` stores immutable versioned evidence, writer, reviewer,
   rewriter, conflict-decision, and final structured payloads.
+
+The run detail API exposes a sanitized ordered artifact projection (kind,
+sentence identities, verdicts, evidence identities, reason, and decision
+detail) while withholding provider prompts, completions, credentials, and raw
+snapshot bodies. Generation accepts at most 20 Writing Blocks and enforces a
+server-owned aggregate evidence-character limit before snapshot persistence.
 
 Draft text is canonical at sentence level. `content_variant_sentences` owns a
 stable sentence identity and deterministic order. Generated, rewritten, and
@@ -1605,6 +1614,10 @@ user-modified revision rather than reviewed generated truth.
 result, unresolved sentence count, user, and whether the unresolved-content
 warning was explicitly acknowledged. A successful export with unresolved
 content is rejected by a database constraint unless acknowledgment is true.
+The confirmation request also carries the exact unresolved sentence revision
+IDs shown in the warning; any intervening edit invalidates that confirmation
+and returns a fresh warning. Persisted packs are discoverable through the
+workspace-scoped paginated content-pack list API after navigation or reload.
 
 All high-risk links use `(workspace_id, ...)` composite foreign keys. Inputs,
 structured artifacts, evaluations, intervention decisions, revisions, and

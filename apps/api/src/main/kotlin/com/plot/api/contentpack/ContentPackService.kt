@@ -6,6 +6,8 @@ import com.plot.api.common.UuidGenerator
 import com.plot.api.contentpack.dto.ContentCitationResponse
 import com.plot.api.contentpack.dto.ContentExportResponse
 import com.plot.api.contentpack.dto.ContentPackResponse
+import com.plot.api.contentpack.dto.ContentPackPageResponse
+import com.plot.api.contentpack.dto.ContentPackSummaryResponse
 import com.plot.api.contentpack.dto.ContentSentenceResponse
 import com.plot.api.contentpack.dto.ContentVariantResponse
 import com.plot.api.contentpack.dto.ExportDisposition
@@ -34,6 +36,23 @@ class ContentPackService(
 	private val markdownExportService: MarkdownExportService,
 	private val clock: Clock = Clock.systemUTC(),
 ) {
+	fun list(page: Int, size: Int): ContentPackPageResponse {
+		require(page >= 0) { "Page must not be negative" }
+		require(size in 1..100) { "Size must be between 1 and 100" }
+		val total = jdbcTemplate.queryForObject(
+			"select count(*) from content_packs where workspace_id = ?", Long::class.java, devContext.devWorkspaceId,
+		) ?: 0L
+		val items = jdbcTemplate.query(
+			"""
+			select id, generation_run_id, status, title from content_packs
+			where workspace_id = ? order by created_at desc, id desc limit ? offset ?
+			""".trimIndent(),
+			{ rs, _ -> ContentPackSummaryResponse(rs.getObject(1, UUID::class.java), rs.getObject(2, UUID::class.java), rs.getString(3), rs.getString(4)) },
+			devContext.devWorkspaceId, size, page * size,
+		)
+		return ContentPackPageResponse(items, page, size, total, if (total == 0L) 0 else ((total + size - 1) / size).toInt())
+	}
+
 	fun get(packId: UUID): ContentPackResponse = loadPack("cp.id = ?", packId)
 
 	fun findByRun(runId: UUID): ContentPackResponse? = try {
@@ -80,7 +99,7 @@ class ContentPackService(
 			loadPack("cv.id = ?", variantId)
 		}
 
-	fun export(variantId: UUID, acknowledge: Boolean, disposition: ExportDisposition): ContentExportResponse = transactionTemplate.execute {
+	fun export(variantId: UUID, acknowledge: Boolean, acknowledgedRevisionIds: List<UUID>, disposition: ExportDisposition): ContentExportResponse = transactionTemplate.execute {
 		val projection = loadPack("cv.id = ?", variantId)
 		val runId = projection.generationRunId
 		val evidence = loadEvidence(runId)
@@ -96,10 +115,16 @@ class ContentPackService(
 				},
 			)
 		}
-		val unresolvedIds = exportSentences.filter { it.status.isUnresolved }.map { it.id }
+		val unresolved = exportSentences.filter { it.status.isUnresolved }
+		val unresolvedIds = unresolved.map { it.id }
+		val unresolvedRevisionIds = unresolved.map { it.revisionId }
 		if (unresolvedIds.isNotEmpty() && !acknowledge) {
 			recordExport(runId, variantId, disposition, unresolvedIds.size, false, "REJECTED", null)
-			throw ExportConfirmationRequiredException(unresolvedIds)
+			throw ExportConfirmationRequiredException(unresolvedIds, unresolvedRevisionIds)
+		}
+		if (acknowledge && acknowledgedRevisionIds.toSet() != unresolvedRevisionIds.toSet()) {
+			recordExport(runId, variantId, disposition, unresolvedIds.size, false, "REJECTED", null)
+			throw ExportConfirmationRequiredException(unresolvedIds, unresolvedRevisionIds)
 		}
 		val rendered = markdownExportService.render(exportSentences, evidence, acknowledge)
 		val exportId = recordExport(runId, variantId, disposition, rendered.unresolvedCount, rendered.warningAcknowledged, "SUCCEEDED", rendered.markdown)
@@ -126,7 +151,9 @@ class ContentPackService(
 		)
 	}
 
-	private fun loadSentences(variantId: UUID): List<ContentSentenceResponse> = jdbcTemplate.query(
+	private fun loadSentences(variantId: UUID): List<ContentSentenceResponse> {
+		val citationsBySentence = loadCitations(variantId)
+		return jdbcTemplate.query(
 		"""
 		select s.id, r.id, r.revision_no, s.order_index, r.body, r.origin,
 		       case when r.origin = 'USER_MODIFIED' then 'USER_MODIFIED' else coalesce(e.verdict, 'NEEDS_SUPPORT') end,
@@ -145,20 +172,21 @@ class ContentPackService(
 			val revisionId = rs.getObject(2, UUID::class.java)
 			ContentSentenceResponse(
 				sentenceId, revisionId, rs.getInt(3), rs.getInt(4), rs.getString(5), rs.getString(6),
-				rs.getString(7), rs.getString(8), loadCitations(sentenceId),
+				rs.getString(7), rs.getString(8), citationsBySentence[sentenceId].orEmpty(),
 			)
 		}, devContext.devWorkspaceId, variantId,
 	)
+	}
 
-	private fun loadCitations(sentenceId: UUID): List<ContentCitationResponse> = jdbcTemplate.query(
+	private fun loadCitations(variantId: UUID): Map<UUID, List<ContentCitationResponse>> = jdbcTemplate.query(
 		"""
-		select c.generation_input_id, i.source_provider, i.source_label, i.original_url, i.snapshot_excerpt, c.status
+		select c.sentence_id, c.generation_input_id, i.source_provider, i.source_label, i.original_url, i.snapshot_excerpt, c.status
 		from sentence_citations c join generation_inputs i on i.workspace_id=c.workspace_id and i.id=c.generation_input_id
-		where c.workspace_id = ? and c.sentence_id = ? order by c.citation_order
+		where c.workspace_id = ? and c.content_variant_id = ? order by c.sentence_id, c.citation_order
 		""".trimIndent(),
-		{ rs, _ -> ContentCitationResponse(rs.getObject(1, UUID::class.java), rs.getString(2), rs.getString(3), rs.getString(4), rs.getString(5), rs.getString(6)) },
-		devContext.devWorkspaceId, sentenceId,
-	)
+		{ rs, _ -> rs.getObject(1, UUID::class.java) to ContentCitationResponse(rs.getObject(2, UUID::class.java), rs.getString(3), rs.getString(4), rs.getString(5), rs.getString(6), rs.getString(7)) },
+		devContext.devWorkspaceId, variantId,
+	).groupBy({ it.first }, { it.second })
 
 	private fun loadEvidence(runId: UUID): List<EvidenceSnapshot> = jdbcTemplate.query(
 		"""
@@ -194,5 +222,5 @@ class ContentPackService(
 	)
 }
 
-class ExportConfirmationRequiredException(val sentenceIds: List<UUID>) :
+class ExportConfirmationRequiredException(val sentenceIds: List<UUID>, val revisionIds: List<UUID>) :
 	IllegalStateException("Export requires explicit confirmation")

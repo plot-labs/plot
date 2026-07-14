@@ -16,4 +16,3 @@ class DisabledGenerationModelGateway : GenerationModelGateway {
 		message = "The generation model is not configured",
 	)
 }
-

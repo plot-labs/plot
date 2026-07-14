@@ -2,6 +2,7 @@ package com.plot.api.generation
 
 import com.plot.api.ai.provider.GenerationModelGateway
 import com.plot.api.common.UuidGenerator
+import com.plot.api.config.PlotAiProperties
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -39,7 +40,8 @@ class GenerationWorkflowConfiguration {
 		persistence: GenerationPersistence,
 		workflowService: GenerationWorkflowService,
 		modelGateway: GenerationModelGateway,
-	): GenerationRunWorker = GenerationRunWorker(persistence, workflowService, modelGateway)
+		properties: PlotAiProperties,
+	): GenerationRunWorker = GenerationRunWorker(persistence, workflowService, modelGateway, claimTimeout = properties.claimTimeout)
 
 	@Bean
 	fun generationTaskExecutor(): ThreadPoolTaskExecutor = ThreadPoolTaskExecutor().apply {
@@ -60,7 +62,7 @@ class GenerationWorkflowConfiguration {
 	@Bean
 	fun generationRunRecovery(
 		persistence: GenerationPersistence,
-		worker: GenerationRunWorker,
 		dispatcher: GenerationRunDispatcher,
-	): GenerationRunRecovery = GenerationRunRecovery(persistence, worker, dispatcher)
+		properties: PlotAiProperties,
+	): GenerationRunRecovery = GenerationRunRecovery(persistence, dispatcher, claimTimeout = properties.claimTimeout)
 }

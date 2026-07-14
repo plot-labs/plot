@@ -9,15 +9,15 @@ type Disposition = "COPY" | "DOWNLOAD";
 
 export function ExportDialog({ pack, client }: { pack: ContentPack; client: PlotApiClient }) {
   const [pending, setPending] = useState<Disposition | null>(null);
-  const [confirmation, setConfirmation] = useState<{ disposition: Disposition; sentenceIds: string[] } | null>(null);
+  const [confirmation, setConfirmation] = useState<{ disposition: Disposition; sentenceIds: string[]; revisionIds: string[] } | null>(null);
   const [message, setMessage] = useState("");
 
-  async function requestExport(disposition: Disposition, acknowledgeUnresolved: boolean) {
+  async function requestExport(disposition: Disposition, acknowledgeUnresolved: boolean, acknowledgedRevisionIds: string[] = []) {
     if (pending) return;
     setPending(disposition);
     setMessage("");
     try {
-      const result = await client.exportVariant(pack.variant.id, { acknowledgeUnresolved, disposition });
+      const result = await client.exportVariant(pack.variant.id, { acknowledgeUnresolved, acknowledgedRevisionIds, disposition });
       if (disposition === "COPY") {
         await navigator.clipboard.writeText(result.text);
       } else {
@@ -30,7 +30,10 @@ export function ExportDialog({ pack, client }: { pack: ContentPack; client: Plot
         const sentenceIds = Array.isArray(error.details?.sentenceIds)
           ? error.details.sentenceIds.filter((id): id is string => typeof id === "string")
           : [];
-        setConfirmation({ disposition, sentenceIds });
+        const revisionIds = Array.isArray(error.details?.revisionIds)
+          ? error.details.revisionIds.filter((id): id is string => typeof id === "string")
+          : [];
+        setConfirmation({ disposition, sentenceIds, revisionIds });
         setMessage("Explicit confirmation is required before export.");
       } else {
         setMessage(error instanceof Error ? error.message : "The changelog could not be exported.");
@@ -69,7 +72,7 @@ export function ExportDialog({ pack, client }: { pack: ContentPack; client: Plot
             </div>
             <button type="button" onClick={() => setConfirmation(null)} className="inline-flex size-9 items-center justify-center rounded-lg" aria-label="Cancel export warning"><X className="size-4" /></button>
           </div>
-          <button autoFocus type="button" disabled={Boolean(pending)} onClick={() => void requestExport(confirmation.disposition, true)} className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg bg-amber-950 px-3 text-sm font-semibold text-white disabled:opacity-40 dark:bg-amber-200 dark:text-amber-950">
+          <button autoFocus type="button" disabled={Boolean(pending)} onClick={() => void requestExport(confirmation.disposition, true, confirmation.revisionIds)} className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg bg-amber-950 px-3 text-sm font-semibold text-white disabled:opacity-40 dark:bg-amber-200 dark:text-amber-950">
             <Check className="size-4" /> Confirm and {confirmation.disposition === "COPY" ? "copy" : "download"}
           </button>
         </div>

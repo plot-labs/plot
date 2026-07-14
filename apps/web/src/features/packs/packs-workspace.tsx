@@ -1,12 +1,12 @@
 "use client";
 
 import { FileText, GitPullRequest, X } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
 import { CitedDraftEditor } from "@/features/citations/cited-draft-editor";
 import { ExportDialog } from "@/features/citations/export-dialog";
-import { getPacksWorkspace, plotApiClient, type ContentPack } from "@/lib/api-client";
+import { getPacksWorkspace, plotApiClient, type ContentPack, type ContentPackSummary } from "@/lib/api-client";
 
 export function PacksWorkspace() {
   return (
@@ -19,9 +19,11 @@ export function PacksWorkspace() {
 function PacksWorkspaceContent() {
   const { packs, drafts, references } = getPacksWorkspace();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const requestedPackId = searchParams.get("pack");
   const [remotePackResult, setRemotePackResult] = useState<{ requestedId: string; pack: ContentPack } | null>(null);
   const [remotePackFailure, setRemotePackFailure] = useState<{ requestedId: string; message: string } | null>(null);
+  const [generatedPacks, setGeneratedPacks] = useState<ContentPackSummary[]>([]);
   const remotePack = remotePackResult?.requestedId === requestedPackId ? remotePackResult.pack : null;
   const remotePackError = remotePackFailure?.requestedId === requestedPackId ? remotePackFailure.message : "";
 
@@ -53,6 +55,14 @@ function PacksWorkspaceContent() {
     return () => controller.abort();
   }, [requestedPackId]);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    void plotApiClient.listContentPacks(0, 100, { signal: controller.signal })
+      .then((page) => setGeneratedPacks(page.items))
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, []);
+
   function selectPack(packId: string) {
     setSelectedPackId(packId);
     setSelectedDraftId(getFirstDraftIdForPack(packId));
@@ -74,6 +84,19 @@ function PacksWorkspaceContent() {
         </p>
 
         <div className="mt-7 space-y-2" role="listbox" aria-label="Packs">
+          {generatedPacks.map((pack) => (
+            <button
+              key={pack.id}
+              type="button"
+              role="option"
+              aria-selected={pack.id === requestedPackId}
+              onClick={() => router.push(`/packs?pack=${encodeURIComponent(pack.id)}`)}
+              className={`w-full rounded-[12px] border px-4 py-3.5 text-left transition ${pack.id === requestedPackId ? "border-black/20 bg-white dark:border-white/20 dark:bg-white/10" : "border-black/10 bg-white/60 hover:bg-white dark:border-white/10 dark:bg-white/5"}`}
+            >
+              <div className="truncate font-medium text-black/82 dark:text-white/86">{pack.title ?? "Generated changelog"}</div>
+              <div className="mt-2 text-xs text-black/45 dark:text-white/45">{pack.status}</div>
+            </button>
+          ))}
           {packs.map((pack) => (
             <button
               key={pack.id}

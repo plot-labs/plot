@@ -7,7 +7,6 @@ import org.springframework.context.event.EventListener
 
 class GenerationRunRecovery(
 	private val persistence: GenerationPersistence,
-	private val worker: GenerationRunWorker,
 	private val dispatcher: GenerationRunDispatcher,
 	private val clock: Clock = Clock.systemUTC(),
 	private val claimTimeout: Duration = Duration.ofMinutes(2),
@@ -15,9 +14,8 @@ class GenerationRunRecovery(
 	@EventListener(ApplicationReadyEvent::class)
 	fun recover(): RecoveryResult {
 		val releasedClaims = persistence.recoverStaleClaims(clock.instant().minus(claimTimeout))
-		val processedCheckpoints = worker.drain()
-		if (processedCheckpoints > 0) dispatcher.dispatch()
-		return RecoveryResult(releasedClaims, processedCheckpoints)
+		dispatcher.dispatch()
+		return RecoveryResult(releasedClaims, 0)
 	}
 }
 

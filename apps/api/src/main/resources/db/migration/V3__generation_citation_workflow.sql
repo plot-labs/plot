@@ -321,6 +321,12 @@ create table sentence_citations (
   check (status in ('ACTIVE', 'STALE', 'REMOVED'))
 );
 
+create index sentence_citations_sentence_idx
+  on sentence_citations(workspace_id, sentence_id, citation_order);
+
+create index sentence_citations_variant_idx
+  on sentence_citations(workspace_id, content_variant_id, sentence_id, citation_order);
+
 create table generation_interventions (
   id uuid primary key,
   workspace_id uuid not null,

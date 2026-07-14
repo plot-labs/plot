@@ -43,7 +43,7 @@ just generation-contract-smoke
 The command fails before Gradle starts when the opt-in flag, API key, or model
 is absent. The test validates writer, reviewer, and targeted-rewrite payloads
 against the same schemas and semantic validators used by the API. It reports
-unsupported-claim recall, citation precision, conflict recall,
+unsupported-claim recall, supported-claim recall, citation precision, citation recall, conflict recall,
 `NOT_REQUIRED` false-positive rate, calls, tokens, latency, and optional cost.
 Do not copy provider responses into issues or CI logs.
 

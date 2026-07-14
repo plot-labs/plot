@@ -8,6 +8,7 @@ import { createPlotApiClient } from "@plot/api-client";
 
 export type {
   ContentPack,
+  ContentPackSummary,
   CreateGenerationInput,
   GenerationRun,
   GenerationReference,

@@ -22,6 +22,20 @@ describe("Plot API client", () => {
     ]);
   });
 
+  it("loads every writing-block page for a source scope", async () => {
+    const fetcher = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json([{ status: "ACTIVE", repositories: [{ id: "scope-1", displayName: "acme/plot", status: "ACTIVE" }] }]))
+      .mockResolvedValueOnce(Response.json({ items: [{ id: "block-1", sourceKind: "PULL_REQUEST", title: "First", body: "A", url: null, canonicalUrl: null, sourceCreatedAt: null, status: "ACTIVE" }], page: 0, size: 100, totalItems: 2, totalPages: 2 }))
+      .mockResolvedValueOnce(Response.json({ items: [{ id: "block-2", sourceKind: "PULL_REQUEST", title: "Second", body: "B", url: null, canonicalUrl: null, sourceCreatedAt: null, status: "ACTIVE" }], page: 1, size: 100, totalItems: 2, totalPages: 2 }));
+    const client = createPlotApiClient({ fetch: fetcher });
+
+    await expect(client.listGenerationReferences()).resolves.toEqual([
+      expect.objectContaining({ id: "block-1" }),
+      expect.objectContaining({ id: "block-2" }),
+    ]);
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+
   it("serializes provider-neutral generation requests once and preserves abort", async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
       Response.json({

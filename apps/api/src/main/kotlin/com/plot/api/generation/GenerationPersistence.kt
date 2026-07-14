@@ -47,6 +47,21 @@ class GenerationPersistence(
 	private val uuidGenerator: UuidGenerator,
 	private val clock: Clock = Clock.systemUTC(),
 ) {
+	fun findIdempotentRun(
+		workspaceId: UUID,
+		createdByUserId: UUID,
+		idempotencyKey: String,
+		requestFingerprint: String,
+	): GenerationWorkflowState? {
+		val existing = jdbcTemplate.query(
+			"select id, request_fingerprint from generation_runs where workspace_id = ? and created_by_user_id = ? and idempotency_key = ?",
+			{ rs, _ -> rs.getObject(1, UUID::class.java) to rs.getString(2) },
+			workspaceId, createdByUserId, idempotencyKey,
+		).firstOrNull() ?: return null
+		if (existing.second != requestFingerprint) throw GenerationIdempotencyConflictException()
+		return loadState(workspaceId, existing.first)
+	}
+
 	fun createRun(reservation: GenerationRunReservation): GenerationWorkflowState = transactionTemplate.execute {
 		val existing = jdbcTemplate.query(
 			"select id, request_fingerprint from generation_runs where workspace_id = ? and created_by_user_id = ? and idempotency_key = ?",
@@ -257,7 +272,7 @@ class GenerationPersistence(
 				"update generation_workflow_steps set status = 'FAILED', failure_code = ?, finished_at = ? where workspace_id = ? and id = ? and status = 'RUNNING'",
 				code, timestamp(now), claim.workspaceId, lease.stepId,
 			)
-			val failed = state.copy(status = if (state.reviews.isEmpty()) GenerationRunStatus.FAILED else GenerationRunStatus.NEEDS_REVIEW, failureCode = code)
+			val failed = state.asFailure(code)
 			insertCheckpoint(claim.workspaceId, failed, "FINAL_OUTPUT", now, lease.stepId)
 			if (failed.status == GenerationRunStatus.NEEDS_REVIEW) materializeTerminal(claim.workspaceId, failed, now)
 			jdbcTemplate.update(
@@ -275,10 +290,7 @@ class GenerationPersistence(
 		transactionTemplate.executeWithoutResult {
 			requireClaim(claim)
 			val now = clock.instant()
-			val failed = state.copy(
-				status = if (state.reviews.isEmpty()) GenerationRunStatus.FAILED else GenerationRunStatus.NEEDS_REVIEW,
-				failureCode = code,
-			)
+			val failed = state.asFailure(code)
 			insertCheckpoint(claim.workspaceId, failed, "FINAL_OUTPUT", now)
 			if (failed.status == GenerationRunStatus.NEEDS_REVIEW) materializeTerminal(claim.workspaceId, failed, now)
 			jdbcTemplate.update(
@@ -481,6 +493,11 @@ class GenerationPersistence(
 		check(count == 1) { "Generation run claim was lost" }
 	}
 }
+
+private fun GenerationWorkflowState.asFailure(code: String): GenerationWorkflowState = copy(
+	status = if (reviews.isEmpty()) GenerationRunStatus.FAILED else GenerationRunStatus.NEEDS_REVIEW,
+	failureCode = code,
+)
 
 class GenerationIdempotencyConflictException : IllegalStateException("Idempotency key was reused with different inputs")
 class GenerationRunNotFoundException(val runId: UUID) : IllegalStateException("Generation run not found")

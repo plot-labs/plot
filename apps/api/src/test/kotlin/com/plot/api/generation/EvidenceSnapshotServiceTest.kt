@@ -1,11 +1,6 @@
 package com.plot.api.generation
 
-import com.plot.api.citation.CitationProjectionService
-import com.plot.api.generation.model.ReviewVerdict
-import com.plot.api.generation.model.SentenceArtifact
-import com.plot.api.generation.model.SentenceOrigin
 import com.plot.api.generation.model.SourceProvider
-import com.plot.api.generation.model.ValidatedSentenceReview
 import com.plot.api.writingblock.WritingBlock
 import java.time.Clock
 import java.time.Instant
@@ -14,8 +9,6 @@ import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 class EvidenceSnapshotServiceTest {
 	private val runId = UUID.fromString("00000000-0000-0000-0000-000000000001")
@@ -68,33 +61,6 @@ class EvidenceSnapshotServiceTest {
 
 		assertEquals(attack, result.snapshotBody)
 		assertEquals("https://example.com/canonical", result.originalUrl)
-	}
-
-	@Test
-	fun citationProjectionUsesServerSnapshotAndIgnoresModelUrls() {
-		val evidence = service.snapshot(runId, 0, writingBlock())
-		val sentence = SentenceArtifact(
-			id = UUID.randomUUID(),
-			generationRunId = runId,
-			revisionId = UUID.randomUUID(),
-			revisionNumber = 1,
-			orderIndex = 0,
-			body = "Citations shipped.",
-			origin = SentenceOrigin.GENERATED,
-		)
-		val review = ValidatedSentenceReview(
-			sentenceId = sentence.id,
-			verdict = ReviewVerdict.SUPPORTED,
-			evidenceIds = listOf(evidence.id),
-			reason = null,
-		)
-
-		val result = CitationProjectionService().project(sentence, review, listOf(evidence))
-
-		assertEquals("https://example.com/canonical", result.citations.single().originalUrl)
-		assertEquals("Reviewed source body", result.citations.single().snapshotExcerpt)
-		assertFalse(result.citations.single().originalUrl.contains("attacker"))
-		assertTrue(result.citations.single().sourceLabel.isNotBlank())
 	}
 
 	private fun writingBlock(

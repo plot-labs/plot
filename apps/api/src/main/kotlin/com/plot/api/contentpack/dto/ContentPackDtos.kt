@@ -14,7 +14,23 @@ enum class ExportDisposition { COPY, DOWNLOAD }
 
 data class ExportContentVariantRequest(
 	val acknowledgeUnresolved: Boolean = false,
+	val acknowledgedRevisionIds: List<UUID> = emptyList(),
 	val disposition: ExportDisposition = ExportDisposition.COPY,
+)
+
+data class ContentPackSummaryResponse(
+	val id: UUID,
+	val generationRunId: UUID,
+	val status: String,
+	val title: String?,
+)
+
+data class ContentPackPageResponse(
+	val items: List<ContentPackSummaryResponse>,
+	val page: Int,
+	val size: Int,
+	val totalItems: Long,
+	val totalPages: Int,
 )
 
 data class ContentPackResponse(

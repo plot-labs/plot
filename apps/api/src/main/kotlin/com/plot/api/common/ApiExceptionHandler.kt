@@ -57,7 +57,7 @@ class ApiExceptionHandler {
 		.body(ApiErrorResponse(
 			"EXPORT_CONFIRMATION_REQUIRED",
 			exception.message ?: "Export requires explicit confirmation",
-			details = mapOf("sentenceIds" to exception.sentenceIds),
+			details = mapOf("sentenceIds" to exception.sentenceIds, "revisionIds" to exception.revisionIds),
 		))
 
 	@ExceptionHandler(MethodArgumentNotValidException::class)

@@ -13,6 +13,7 @@ const run: GenerationRun = {
   pollAfterMs: null,
   failureCode: null,
   sentences: [],
+  artifacts: [],
   contentPack: null,
   evidence: [
     { id: "ev-1", provider: "GITHUB", sourceKind: "PULL_REQUEST", sourceLabel: "PR #184", originalUrl: "https://github.com/a/b/pull/184", snapshotExcerpt: "assisted drafting", contentHash: "a" },

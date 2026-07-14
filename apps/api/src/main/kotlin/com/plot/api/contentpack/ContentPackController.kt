@@ -2,6 +2,7 @@ package com.plot.api.contentpack
 
 import com.plot.api.contentpack.dto.ContentExportResponse
 import com.plot.api.contentpack.dto.ContentPackResponse
+import com.plot.api.contentpack.dto.ContentPackPageResponse
 import com.plot.api.contentpack.dto.EditSentenceRequest
 import com.plot.api.contentpack.dto.ExportContentVariantRequest
 import jakarta.validation.Valid
@@ -15,10 +16,18 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.bind.annotation.RequestParam
 
 @RestController
 @RequestMapping("/api")
 class ContentPackController(private val service: ContentPackService) {
+	@GetMapping("/content-packs")
+	fun list(
+		@RequestParam(defaultValue = "0") page: Int,
+		@RequestParam(defaultValue = "25") size: Int,
+	): ResponseEntity<ContentPackPageResponse> = ResponseEntity.ok()
+		.cacheControl(CacheControl.noStore()).body(service.list(page, size))
+
 	@GetMapping("/content-packs/{id}")
 	fun get(@PathVariable id: UUID): ResponseEntity<ContentPackResponse> = ResponseEntity.ok()
 		.cacheControl(CacheControl.noStore()).body(service.get(id))
@@ -37,6 +46,6 @@ class ContentPackController(private val service: ContentPackService) {
 		@PathVariable variantId: UUID,
 		@Valid @RequestBody request: ExportContentVariantRequest,
 	): ResponseEntity<ContentExportResponse> = ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(
-		service.export(variantId, request.acknowledgeUnresolved, request.disposition),
+		service.export(variantId, request.acknowledgeUnresolved, request.acknowledgedRevisionIds, request.disposition),
 	)
 }

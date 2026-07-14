@@ -109,6 +109,14 @@ class GenerationApiIntegrationTest {
 		}
 
 		jdbcTemplate.update("update writing_blocks set body='MUTATED', status='ARCHIVED', updated_at=now() where id = ?", fixture.blockId)
+		mockMvc.post("/api/generations") {
+			header("Idempotency-Key", key)
+			contentType = MediaType.APPLICATION_JSON
+			content = body
+		}.andExpect {
+			status { isAccepted() }
+			jsonPath("$.id") { value(runId.toString()) }
+		}
 		mockMvc.get("/api/generations/$runId").andExpect {
 			status { isOk() }
 			header { string("Cache-Control", "no-store") }
@@ -149,6 +157,9 @@ class GenerationApiIntegrationTest {
 			jsonPath("$.pendingIntervention.id") { value(intervention.id.toString()) }
 			jsonPath("$.pendingIntervention.version") { value(1) }
 			jsonPath("$.evidence[0].snapshotExcerpt") { value("CONFLICT SNAPSHOT") }
+			jsonPath("$.artifacts[0].kind") { value("WRITER_OUTPUT") }
+			jsonPath("$.artifacts[1].kind") { value("REVIEWER_OUTPUT") }
+			jsonPath("$.artifacts[2].kind") { value("CONFLICT") }
 		}
 
 		mockMvc.post("/api/generations/$runId/interventions/${intervention.id}/resolution") {
@@ -167,6 +178,8 @@ class GenerationApiIntegrationTest {
 		}.andExpect {
 			status { isOk() }
 			jsonPath("$.status") { value("NEEDS_REVIEW") }
+			jsonPath("$.sentences[0].verdict") { value("USER_MODIFIED") }
+			jsonPath("$.sentences[0].citations.length()") { value(0) }
 			jsonPath("$.contentPack.variant.sentences[0].verdict") { value("USER_MODIFIED") }
 		}
 		mockMvc.post("/api/generations/$runId/interventions/${intervention.id}/resolution") {
@@ -189,16 +202,22 @@ class GenerationApiIntegrationTest {
 	fun `unknown inactive and cross-scope blocks are rejected before invocation`() {
 		val fixture = sourceFixture()
 		val other = sourceFixture()
-		mockMvc.post("/api/generations") {
-			header("Idempotency-Key", "cross-${UUID.randomUUID()}")
-			contentType = MediaType.APPLICATION_JSON
-			content = """{"sourceScopeId":"${fixture.scopeId}","writingBlockIds":["${other.blockId}"]}"""
-		}.andExpect {
-			status { isNotFound() }
-			jsonPath("$.error") { value("SOURCE_NOT_FOUND") }
+		fun rejected(key: String, blockId: UUID) {
+			mockMvc.post("/api/generations") {
+				header("Idempotency-Key", key)
+				contentType = MediaType.APPLICATION_JSON
+				content = """{"sourceScopeId":"${fixture.scopeId}","writingBlockIds":["$blockId"]}"""
+			}.andExpect {
+				status { isNotFound() }
+				jsonPath("$.error") { value("SOURCE_NOT_FOUND") }
+			}
 		}
+		rejected("access-cross-${UUID.randomUUID()}", other.blockId)
+		rejected("access-unknown-${UUID.randomUUID()}", UUID.randomUUID())
+		jdbcTemplate.update("update writing_blocks set status = 'ARCHIVED' where id = ?", fixture.blockId)
+		rejected("access-archived-${UUID.randomUUID()}", fixture.blockId)
 		assertEquals(0, jdbcTemplate.queryForObject(
-			"select count(*) from generation_runs where idempotency_key like 'cross-%'", Int::class.java,
+			"select count(*) from generation_runs where idempotency_key like 'access-%'", Int::class.java,
 		))
 	}
 

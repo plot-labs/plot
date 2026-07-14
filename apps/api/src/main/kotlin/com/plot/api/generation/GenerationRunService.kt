@@ -35,6 +35,11 @@ class GenerationRunService(
 		require(idempotencyKey.isNotBlank()) { "Idempotency key is required" }
 		require(writingBlockIds.isNotEmpty()) { "At least one Writing Block is required" }
 		require(writingBlockIds.distinct().size == writingBlockIds.size) { "Writing Block IDs must be unique" }
+		val normalizedKey = idempotencyKey.trim()
+		val requestFingerprint = fingerprint(sourceScopeId, writingBlockIds, instruction)
+		persistence.findIdempotentRun(
+			devContext.devWorkspaceId, devContext.devUserId, normalizedKey, requestFingerprint,
+		)?.let { return it }
 		val selected = writingBlockRepository.findSelectedReadable(
 			devContext.devWorkspaceId,
 			sourceScopeId,
@@ -42,6 +47,10 @@ class GenerationRunService(
 		).associateBy { it.id }
 		if (selected.size != writingBlockIds.size) throw GenerationSourceAccessException()
 		if (selected.values.any { it.sourceNamespaceId != null }) sourceManagedAccessGuard.requireReadable()
+		val evidenceCharacters = selected.values.sumOf { it.title.orEmpty().length + it.body.orEmpty().length }
+		require(evidenceCharacters <= properties.maxEvidenceCharacters) {
+			"Selected evidence exceeds the ${properties.maxEvidenceCharacters} character limit"
+		}
 		val runId = uuidGenerator.next()
 		val evidence = writingBlockIds.mapIndexed { index, id ->
 			evidenceSnapshotService.snapshot(runId, index, selected.getValue(id))
@@ -51,8 +60,8 @@ class GenerationRunService(
 			workspaceId = devContext.devWorkspaceId,
 			createdByUserId = devContext.devUserId,
 			sourceScopeId = sourceScopeId,
-			idempotencyKey = idempotencyKey.trim(),
-			requestFingerprint = fingerprint(sourceScopeId, writingBlockIds, instruction),
+			idempotencyKey = normalizedKey,
+			requestFingerprint = requestFingerprint,
 			state = initialState,
 			provider = properties.provider.uppercase(),
 			modelName = properties.model?.trim().takeUnless { it.isNullOrBlank() } ?: "not-configured",

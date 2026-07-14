@@ -22,7 +22,7 @@ class ChangelogPromptFactory(private val objectMapper: ObjectMapper) {
 			appendLine("Write an ordered changelog as sentence objects.")
 			if (!instruction.isNullOrBlank()) {
 				appendLine("<requested_changelog_instruction>")
-				appendLine(instruction)
+				appendLine(instruction.escapeTaggedData())
 				appendLine("</requested_changelog_instruction>")
 			}
 			appendEvidence(evidence)
@@ -54,7 +54,7 @@ class ChangelogPromptFactory(private val objectMapper: ObjectMapper) {
 			appendSentences(request.sentences)
 			if (!request.resolutionInstruction.isNullOrBlank()) {
 				appendLine("<recorded_resolution_instruction>")
-				appendLine(request.resolutionInstruction)
+				appendLine(request.resolutionInstruction.escapeTaggedData())
 				appendLine("</recorded_resolution_instruction>")
 			}
 			appendEvidence(request.evidence)
@@ -76,14 +76,16 @@ class ChangelogPromptFactory(private val objectMapper: ObjectMapper) {
 			)
 		}
 		appendLine("<untrusted_evidence_json>")
-		appendLine(objectMapper.writeValueAsString(projection))
+		appendLine(objectMapper.writeValueAsString(projection).escapeTaggedData())
 		appendLine("</untrusted_evidence_json>")
 	}
 
 	private fun StringBuilder.appendSentences(sentences: List<SentenceArtifact>) {
 		val projection = sentences.sortedBy { it.orderIndex }.map { mapOf("sentenceId" to it.id, "body" to it.body) }
 		appendLine("<untrusted_sentences_json>")
-		appendLine(objectMapper.writeValueAsString(projection))
+		appendLine(objectMapper.writeValueAsString(projection).escapeTaggedData())
 		appendLine("</untrusted_sentences_json>")
 	}
+
+	private fun String.escapeTaggedData(): String = replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 }

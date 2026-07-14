@@ -73,19 +73,6 @@ data class SentenceCitation(
 	val status: CitationStatus = CitationStatus.ACTIVE,
 )
 
-data class CitationProjection(
-	val evidenceId: UUID,
-	val provider: SourceProvider,
-	val sourceLabel: String,
-	val originalUrl: String,
-	val snapshotExcerpt: String?,
-)
-
-data class SentenceCitationProjection(
-	val sentenceId: UUID,
-	val citations: List<CitationProjection>,
-)
-
 enum class ExportSentenceStatus { SUPPORTED, NOT_REQUIRED, NEEDS_SUPPORT, CONFLICT, USER_MODIFIED }
 
 data class ExportSentence(

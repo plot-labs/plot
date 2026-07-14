@@ -65,4 +65,3 @@ class GenerationModelException(
 ) : RuntimeException(message, cause)
 
 enum class ModelRole { WRITER, REVIEWER, REWRITER }
-

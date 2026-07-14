@@ -30,14 +30,14 @@ describe("ExportDialog", () => {
     render(<ExportDialog pack={pack} client={{ exportVariant } as unknown as PlotApiClient} />);
     fireEvent.click(screen.getByRole("button", { name: /download changelog/i }));
     await waitFor(() => expect(click).toHaveBeenCalled());
-    expect(exportVariant).toHaveBeenCalledWith("variant-1", { acknowledgeUnresolved: false, disposition: "DOWNLOAD" });
+    expect(exportVariant).toHaveBeenCalledWith("variant-1", { acknowledgeUnresolved: false, acknowledgedRevisionIds: [], disposition: "DOWNLOAD" });
     click.mockRestore();
   });
 
   it("warns with affected sentence IDs and exports only after explicit confirmation", async () => {
     const exportVariant = vi
       .fn()
-      .mockRejectedValueOnce(new PlotApiError(409, "EXPORT_CONFIRMATION_REQUIRED", "Confirm", { sentenceIds: ["sentence-7"] }))
+      .mockRejectedValueOnce(new PlotApiError(409, "EXPORT_CONFIRMATION_REQUIRED", "Confirm", { sentenceIds: ["sentence-7"], revisionIds: ["rev-7"] }))
       .mockResolvedValueOnce({ exportId: "export-1", disposition: "COPY", filename: "changelog.md", mediaType: "text/markdown", text: "A claim.", unresolvedCount: 1, warningAcknowledged: true });
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
@@ -49,7 +49,7 @@ describe("ExportDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: /confirm and copy/i }));
 
     await waitFor(() => expect(writeText).toHaveBeenCalledWith("A claim."));
-    expect(exportVariant).toHaveBeenNthCalledWith(1, "variant-1", { acknowledgeUnresolved: false, disposition: "COPY" });
-    expect(exportVariant).toHaveBeenNthCalledWith(2, "variant-1", { acknowledgeUnresolved: true, disposition: "COPY" });
+    expect(exportVariant).toHaveBeenNthCalledWith(1, "variant-1", { acknowledgeUnresolved: false, acknowledgedRevisionIds: [], disposition: "COPY" });
+    expect(exportVariant).toHaveBeenNthCalledWith(2, "variant-1", { acknowledgeUnresolved: true, acknowledgedRevisionIds: ["rev-7"], disposition: "COPY" });
   });
 });
