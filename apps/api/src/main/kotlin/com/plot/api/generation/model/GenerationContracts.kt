@@ -25,7 +25,13 @@ data class EvidenceSnapshot(
 
 data class WriterOutput(val sentences: List<WriterSentence>)
 
-data class WriterSentence(val body: String)
+enum class SentenceIntent { FACTUAL, EDITORIAL, UNRESOLVED_CONFLICT }
+
+data class WriterSentence(
+	val body: String,
+	val intent: SentenceIntent = SentenceIntent.FACTUAL,
+	val conflictEvidenceIds: List<UUID> = emptyList(),
+)
 
 enum class SentenceOrigin { GENERATED, REWRITTEN, USER_MODIFIED }
 
@@ -37,11 +43,22 @@ data class SentenceArtifact(
 	val orderIndex: Int,
 	val body: String,
 	val origin: SentenceOrigin,
+	val intent: SentenceIntent = SentenceIntent.FACTUAL,
+	val conflictEvidenceIds: List<UUID> = emptyList(),
 )
 
 enum class ReviewVerdict { SUPPORTED, NOT_REQUIRED, NEEDS_SUPPORT, CONFLICT }
 
-data class ReviewerOutput(val reviews: List<SentenceReview>)
+data class ReviewerOutput(
+	val reviews: List<SentenceReview>,
+	val documentConflicts: List<DocumentConflict> = emptyList(),
+)
+
+data class DocumentConflict(
+	val sentenceIds: List<UUID>,
+	val evidenceIds: List<UUID>,
+	val reason: String,
+)
 
 data class SentenceReview(
 	val sentenceId: UUID,
@@ -61,7 +78,11 @@ data class ValidatedSentenceReview(
 
 data class TargetedRewriteOutput(val rewrites: List<TargetedRewrite>)
 
-data class TargetedRewrite(val sentenceId: UUID, val body: String)
+data class TargetedRewrite(
+	val sentenceId: UUID,
+	val body: String? = null,
+	val omit: Boolean = false,
+)
 
 enum class CitationStatus { ACTIVE, STALE, REMOVED }
 
@@ -73,7 +94,7 @@ data class SentenceCitation(
 	val status: CitationStatus = CitationStatus.ACTIVE,
 )
 
-enum class ExportSentenceStatus { SUPPORTED, NOT_REQUIRED, NEEDS_SUPPORT, CONFLICT, USER_MODIFIED }
+enum class ExportSentenceStatus { SUPPORTED, NOT_REQUIRED, NEEDS_SUPPORT, CONFLICT, USER_MODIFIED, REVIEW_FAILED }
 
 data class ExportSentence(
 	val id: UUID,

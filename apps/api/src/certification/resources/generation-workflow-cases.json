@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "generation-workflow-cases-v1",
+  "cases": [
+    {
+      "scenarioId": "supported-release",
+      "provider": "github",
+      "sourceKind": "PULL_REQUEST",
+      "title": "Synthetic release change",
+      "body": "The synthetic search endpoint now returns stable pagination metadata."
+    },
+    {
+      "scenarioId": "not-required-context",
+      "provider": "slack",
+      "sourceKind": "MESSAGE",
+      "title": "Synthetic team context",
+      "body": "Thanks to everyone who tested the controlled release candidate."
+    },
+    {
+      "scenarioId": "controlled-conflict",
+      "provider": "linear",
+      "sourceKind": "ISSUE",
+      "title": "Synthetic rollout status",
+      "body": "The controlled rollout date remains undecided pending validation."
+    }
+  ]
+}

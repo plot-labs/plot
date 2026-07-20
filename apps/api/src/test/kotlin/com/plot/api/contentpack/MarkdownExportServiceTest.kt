@@ -12,11 +12,18 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class MarkdownExportServiceTest {
 	private val runId = UUID.fromString("00000000-0000-0000-0000-000000000001")
 	private val github = evidence("00000000-0000-0000-0000-000000000021", "GitHub PR #42", "https://github.com/acme/app/pull/42", "private github excerpt")
-	private val linear = evidence("00000000-0000-0000-0000-000000000022", "Linear PLOT-9", "https://linear.app/acme/issue/PLOT-9", "private linear excerpt")
+	private val linear = evidence(
+		"00000000-0000-0000-0000-000000000022",
+		"Linear PLOT-9",
+		"https://linear.app/acme/issue/PLOT-9",
+		"private linear excerpt",
+		SourceProvider.LINEAR,
+	)
 
 	@Test
 	fun rendersDeterministicNumericCitationsAndDeduplicatedSources() {
@@ -72,7 +79,63 @@ class MarkdownExportServiceTest {
 		val acknowledged = MarkdownExportService().render(sentences, listOf(github), acknowledgeUnresolved = true)
 		assertEquals(2, acknowledged.unresolvedCount)
 		assertEquals(true, acknowledged.warningAcknowledged)
+		assertTrue(acknowledged.markdown.contains("Unsupported claim."))
+		assertTrue(acknowledged.markdown.contains("User wording."))
 		assertFalse(acknowledged.markdown.contains("private github excerpt"))
+	}
+
+	@Test
+	fun neutralizesActiveContentAndKeepsOnlyApprovedSourceLinksActive() {
+		val hostileBody = """
+			Release [click](javascript:alert(1)), ![pixel](https://attacker.example/pixel),
+			<script>alert(1)</script>, <https://attacker.example/autolink>, https://attacker.example/bare,
+			and data:text/html,boom.
+		""".trimIndent().replace("\n", " ")
+		val hostileEvidence = evidence(
+			"00000000-0000-0000-0000-000000000023",
+			"Hostile ](https://attacker.example)\n<script>label</script>",
+			"javascript:alert(1)",
+			"HIDDEN SNAPSHOT",
+		)
+		val result = MarkdownExportService().render(
+			listOf(sentence(0, hostileBody, github.id, hostileEvidence.id)),
+			listOf(github, hostileEvidence),
+			false,
+		)
+
+		val activeDestinations = Regex("(?<!\\\\)\\]\\(([^)]+)\\)").findAll(result.markdown)
+			.map { it.groupValues[1] }
+			.toList()
+		assertEquals(listOf(github.originalUrl), activeDestinations)
+		assertFalse(result.markdown.contains("<script", ignoreCase = true))
+		assertFalse(result.markdown.contains("!["))
+		assertFalse(result.markdown.contains("<https://"))
+		assertFalse(result.markdown.contains("https://attacker.example"))
+		assertFalse(result.markdown.contains("javascript:", ignoreCase = true))
+		assertFalse(result.markdown.contains("data:", ignoreCase = true))
+		assertFalse(result.markdown.contains("HIDDEN SNAPSHOT"))
+		assertTrue(result.markdown.contains("link unavailable"))
+	}
+
+	@Test
+	fun allowsCanonicalHttpsLinksForEachSupportedProvider() {
+		val slack = evidence(
+			"00000000-0000-0000-0000-000000000024",
+			"Slack release thread",
+			"https://acme.slack.com/archives/C123/p456",
+			"private slack excerpt",
+			SourceProvider.SLACK,
+		)
+		val result = MarkdownExportService().render(
+			listOf(sentence(0, "Release context.", github.id, slack.id, linear.id)),
+			listOf(github, slack, linear),
+			false,
+		)
+
+		assertTrue(result.markdown.contains("](https://github.com/acme/app/pull/42)"))
+		assertTrue(result.markdown.contains("](https://acme.slack.com/archives/C123/p456)"))
+		assertTrue(result.markdown.contains("](https://linear.app/acme/issue/PLOT-9)"))
+		assertFalse(result.markdown.contains("private slack excerpt"))
 	}
 
 	private fun sentence(orderIndex: Int, body: String, vararg evidenceIds: UUID): ExportSentence {
@@ -90,12 +153,18 @@ class MarkdownExportServiceTest {
 		)
 	}
 
-	private fun evidence(id: String, label: String, url: String, excerpt: String) = EvidenceSnapshot(
+	private fun evidence(
+		id: String,
+		label: String,
+		url: String,
+		excerpt: String,
+		provider: SourceProvider = SourceProvider.GITHUB,
+	) = EvidenceSnapshot(
 		id = UUID.fromString(id),
 		generationRunId = runId,
 		writingBlockId = UUID.randomUUID(),
 		orderIndex = 0,
-		sourceProvider = SourceProvider.GITHUB,
+		sourceProvider = provider,
 		sourceKind = "pull_request",
 		sourceLabel = label,
 		snapshotTitle = label,

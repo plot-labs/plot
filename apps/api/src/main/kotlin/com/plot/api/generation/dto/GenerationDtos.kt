@@ -1,6 +1,5 @@
 package com.plot.api.generation.dto
 
-import com.plot.api.generation.ConflictResolutionAction
 import com.plot.api.generation.GenerationRunStatus
 import com.plot.api.generation.GenerationWorkflowState
 import com.plot.api.generation.model.ReviewVerdict
@@ -16,13 +15,6 @@ data class CreateGenerationRequest(
 	@field:NotNull val sourceScopeId: UUID?,
 	@field:NotEmpty @field:Size(max = 20) val writingBlockIds: List<UUID>,
 	@field:Size(max = 2_000) val instruction: String? = null,
-)
-
-data class ResolveConflictRequest(
-	@field:NotNull val expectedVersion: Long?,
-	@field:NotNull val action: ConflictResolutionAction?,
-	val preferredEvidenceId: UUID? = null,
-	@field:Size(max = 4_000) val providedWording: String? = null,
 )
 
 data class GenerationRunResponse(
@@ -94,6 +86,11 @@ data class GenerationInterventionResponse(
 fun GenerationWorkflowState.toResponse(): GenerationRunResponse {
 	val reviewsBySentence = reviews.associateBy { it.sentenceId }
 	val evidenceById = evidence.associateBy { it.id }
+	val reviewedRevisionIds = artifacts
+		.filter { it.kind.name == "REVIEWER_OUTPUT" }
+		.flatMap { it.sentences }
+		.map { it.revisionId }
+		.toSet()
 	return GenerationRunResponse(
 		id = runId,
 		status = status.name,
@@ -106,11 +103,21 @@ fun GenerationWorkflowState.toResponse(): GenerationRunResponse {
 		sentences = sentences.sortedBy { it.orderIndex }.map { sentence ->
 			val review = reviewsBySentence[sentence.id]
 			val userModified = sentence.origin == SentenceOrigin.USER_MODIFIED
+			val reviewFailed = failureCode != null && sentence.revisionId !in reviewedRevisionIds
 			GenerationSentenceResponse(
 				sentence.id, sentence.revisionId, sentence.revisionNumber, sentence.orderIndex, sentence.body,
-				sentence.origin, if (userModified) SentenceOrigin.USER_MODIFIED.name else review?.verdict?.name,
-				if (userModified) null else review?.reason,
-				(if (userModified) emptyList() else review?.evidenceIds.orEmpty()).mapNotNull { id -> evidenceById[id] }.map {
+				sentence.origin,
+				when {
+					userModified -> SentenceOrigin.USER_MODIFIED.name
+					reviewFailed -> "REVIEW_FAILED"
+					else -> review?.verdict?.name
+				},
+				when {
+					userModified -> null
+					reviewFailed -> failureCode
+					else -> review?.reason
+				},
+				(if (userModified || reviewFailed) emptyList() else review?.evidenceIds.orEmpty()).mapNotNull { id -> evidenceById[id] }.map {
 					GenerationCitationResponse(it.id, it.sourceProvider, it.sourceLabel, it.originalUrl, it.snapshotExcerpt)
 				},
 			)

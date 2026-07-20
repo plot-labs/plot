@@ -77,7 +77,7 @@ export function ExportDialog({ pack, client }: { pack: ContentPack; client: Plot
           </button>
         </div>
       ) : null}
-      {message ? <p className="mt-3 text-xs text-black/58 dark:text-white/58" aria-live="polite">{message}</p> : null}
+      {message ? <p role="status" className="mt-3 text-xs text-black/58 dark:text-white/58" aria-live="polite">{message}</p> : null}
     </section>
   );
 }

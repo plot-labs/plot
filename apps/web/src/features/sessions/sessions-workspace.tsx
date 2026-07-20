@@ -27,7 +27,6 @@ import {
 import { createAndPollGeneration, isTerminalGenerationStatus, pollGeneration } from "@/lib/generation-polling";
 import { CitedDraftEditor } from "@/features/citations/cited-draft-editor";
 import { ExportDialog } from "@/features/citations/export-dialog";
-import { InterventionPanel } from "@/features/citations/intervention-panel";
 import { SessionComposer } from "@/features/sessions/session-composer";
 import { SessionSidePanel } from "@/features/sessions/session-side-panel";
 import { SessionThread } from "@/features/sessions/session-thread";
@@ -137,6 +136,8 @@ function ActiveSessionWorkspace({
   activeSession: WorkSession;
   data: ReturnType<typeof getSessionsWorkspace>;
 }) {
+  const searchParams = useSearchParams();
+  const requestedGenerationId = searchParams.get("generation");
   const [messages, setMessages] = useState<SessionMessage[]>(activeSession.messages);
   const [draftBodies, setDraftBodies] = useState<Record<string, string>>(() =>
     Object.fromEntries(data.drafts.map((draft) => [draft.id, draft.body])),
@@ -155,6 +156,7 @@ function ActiveSessionWorkspace({
   const [generationReferences, setGenerationReferences] = useState<GenerationReference[]>([]);
   const [generating, setGenerating] = useState(false);
   const generationAbortRef = useRef<AbortController | null>(null);
+  const activeGenerationIdRef = useRef<string | null>(null);
 
   const sessionDrafts = data.drafts.filter((draft) => activeSession.draftIds.includes(draft.id));
   const sessionReferences = data.references.filter((reference) =>
@@ -173,6 +175,52 @@ function ActiveSessionWorkspace({
       generationAbortRef.current?.abort();
     };
   }, []);
+
+  useEffect(() => {
+    if (!requestedGenerationId || activeGenerationIdRef.current === requestedGenerationId) return;
+    const controller = new AbortController();
+    activeGenerationIdRef.current = requestedGenerationId;
+    generationAbortRef.current?.abort();
+    generationAbortRef.current = controller;
+    setGenerationRun(null);
+    setGeneratedPack(null);
+    setGenerating(true);
+    setGenerationError("");
+
+    async function restoreGeneration() {
+      try {
+        const current = await plotApiClient.getGeneration(requestedGenerationId!, { signal: controller.signal });
+        if (generationAbortRef.current !== controller) return;
+        setGenerationRun(current);
+        const restored = isTerminalGenerationStatus(current.status)
+          ? current
+          : await pollGeneration(plotApiClient, current.id, {
+              signal: controller.signal,
+              onUpdate: (next) => {
+                if (generationAbortRef.current === controller) setGenerationRun(next);
+              },
+            });
+        if (generationAbortRef.current !== controller) return;
+        setGenerationRun(restored);
+        setGeneratedPack(restored.contentPack);
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          setGenerationError("The saved generation could not be restored.");
+        }
+      } finally {
+        if (generationAbortRef.current === controller) setGenerating(false);
+      }
+    }
+
+    void restoreGeneration();
+    return () => {
+      controller.abort();
+      if (generationAbortRef.current === controller) {
+        generationAbortRef.current = null;
+        activeGenerationIdRef.current = null;
+      }
+    };
+  }, [requestedGenerationId]);
 
   const selectedDocument = selectedDocumentId ? getSelectedDocument(selectedDocumentId) : null;
 
@@ -242,7 +290,17 @@ function ActiveSessionWorkspace({
         plotApiClient,
         { sourceScopeId: scopeId, writingBlockIds: generationReady.map((reference) => reference.writingBlockId), instruction: message },
         crypto.randomUUID(),
-        { signal: controller.signal, onUpdate: setGenerationRun },
+        {
+          signal: controller.signal,
+          onUpdate: (next) => {
+            setGenerationRun(next);
+            if (activeGenerationIdRef.current === next.id) return;
+            activeGenerationIdRef.current = next.id;
+            const nextParams = new URLSearchParams(searchParams.toString());
+            nextParams.set("generation", next.id);
+            window.history.replaceState(null, "", `/sessions?${nextParams.toString()}`);
+          },
+        },
       );
       setGenerationRun(run);
       setGeneratedPack(run.contentPack);
@@ -250,29 +308,6 @@ function ActiveSessionWorkspace({
       if (!(error instanceof DOMException && error.name === "AbortError")) {
         setGenerationError(error instanceof Error ? error.message : "Generation could not be completed.");
       }
-    } finally {
-      if (generationAbortRef.current === controller) setGenerating(false);
-    }
-  }
-
-  async function resolveIntervention(input: Parameters<typeof plotApiClient.resolveConflict>[2]) {
-    const current = generationRun;
-    if (!current?.pendingIntervention) throw new Error("This intervention is no longer current.");
-    const accepted = await plotApiClient.resolveConflict(current.id, current.pendingIntervention.id, input);
-    setGenerationRun(accepted);
-    if (isTerminalGenerationStatus(accepted.status)) {
-      setGeneratedPack(accepted.contentPack);
-      return accepted;
-    }
-    const controller = new AbortController();
-    generationAbortRef.current?.abort();
-    generationAbortRef.current = controller;
-    setGenerating(true);
-    try {
-      const resumed = await pollGeneration(plotApiClient, accepted.id, { signal: controller.signal, onUpdate: setGenerationRun });
-      setGenerationRun(resumed);
-      setGeneratedPack(resumed.contentPack);
-      return resumed;
     } finally {
       if (generationAbortRef.current === controller) setGenerating(false);
     }
@@ -333,7 +368,6 @@ function ActiveSessionWorkspace({
               pack={generatedPack}
               busy={generating}
               error={generationError}
-              onResolve={resolveIntervention}
               onPackChange={setGeneratedPack}
             />
           }
@@ -379,19 +413,22 @@ function GenerationPanel({
   pack,
   busy,
   error,
-  onResolve,
   onPackChange,
 }: {
   run: GenerationRun | null;
   pack: ContentPack | null;
   busy: boolean;
   error: string;
-  onResolve: (input: Parameters<typeof plotApiClient.resolveConflict>[2]) => Promise<GenerationRun>;
   onPackChange: (pack: ContentPack) => void;
 }) {
   if (!run && !busy && !error) return null;
   return (
     <article className="space-y-3" aria-live="polite">
+      {run ? (
+        <p role="status" aria-label={`Generation status: ${generationStatusLabel(run.status)}`} className="sr-only">
+          Generation status: {generationStatusLabel(run.status)}
+        </p>
+      ) : null}
       {busy ? (
         <div className="rounded-xl border border-black/10 bg-black/[0.025] px-4 py-3 text-sm text-black/62 dark:border-white/10 dark:bg-white/[0.04] dark:text-white/62">
           Plot is {stageLabel(run?.status)}…
@@ -403,7 +440,16 @@ function GenerationPanel({
           Generation stopped before a reviewable draft was produced{run.failureCode ? ` (${run.failureCode})` : ""}. Try again or adjust the selected references.
         </div>
       ) : null}
-      {run?.pendingIntervention ? <InterventionPanel key={run.pendingIntervention.id} run={run} onResolve={onResolve} /> : null}
+      {run?.status === "NEEDS_REVIEW" && run.failureCode && !error ? (
+        <div role="alert" className="rounded-xl border border-rose-300/60 bg-rose-50 px-4 py-3 text-sm text-rose-900 dark:border-rose-400/25 dark:bg-rose-400/[0.08] dark:text-rose-200">
+          Review failed ({run.failureCode}). The latest draft is preserved, but its failed revision has not been verified.
+        </div>
+      ) : null}
+      {run?.status === "NEEDS_YOUR_CALL" && !error ? (
+        <div role="alert" className="rounded-xl border border-black/10 bg-black/[0.025] px-4 py-3 text-sm text-black/62 dark:border-white/10 dark:bg-white/[0.04] dark:text-white/62">
+          This saved draft predates automatic conflict handling. Generate it again to receive a single resolved result.
+        </div>
+      ) : null}
       {pack ? (
         <>
           <CitedDraftEditor
@@ -416,6 +462,11 @@ function GenerationPanel({
       ) : null}
     </article>
   );
+}
+
+function generationStatusLabel(status: GenerationRun["status"]) {
+  const label = status.toLowerCase().replaceAll("_", " ");
+  return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 function stageLabel(status?: GenerationRun["status"]) {

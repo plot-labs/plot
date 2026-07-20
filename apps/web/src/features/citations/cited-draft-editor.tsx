@@ -5,7 +5,6 @@ import { useState } from "react";
 
 import type { ContentPack, GenerationSentence } from "@plot/api-client";
 import { InlineCitation } from "./inline-citation";
-import { SentenceReviewState } from "./sentence-review-state";
 
 type CitedDraftEditorProps = {
   pack: ContentPack;
@@ -21,7 +20,13 @@ export function CitedDraftEditor({ pack, onEditSentence, onPackChange }: CitedDr
   const [message, setMessage] = useState("");
 
   const currentPack = editedPack?.id === pack.id ? editedPack : pack;
-  const sentences = [...currentPack.variant.sentences].sort((a, b) => a.orderIndex - b.orderIndex);
+  const sentences = [...currentPack.variant.sentences]
+    .filter((sentence) =>
+      sentence.verdict === "SUPPORTED" ||
+      sentence.verdict === "NOT_REQUIRED" ||
+      sentence.verdict === "USER_MODIFIED"
+    )
+    .sort((a, b) => a.orderIndex - b.orderIndex);
 
   function beginEdit(sentence: GenerationSentence) {
     setEditingId(sentence.id);
@@ -55,16 +60,12 @@ export function CitedDraftEditor({ pack, onEditSentence, onPackChange }: CitedDr
 
   return (
     <section aria-label="Cited draft" className="rounded-xl border border-black/10 bg-white dark:border-white/10 dark:bg-white/[0.04]">
-      <div className="border-b border-black/[0.07] px-4 py-3 dark:border-white/10 sm:px-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-black/42 dark:text-white/42">Sentence review</p>
-        <h2 className="mt-1 text-lg font-semibold text-black/86 dark:text-white/88">{currentPack.title ?? "Generated changelog"}</h2>
-      </div>
-      <ol className="divide-y divide-black/[0.07] dark:divide-white/10">
+      <ol className="space-y-4 px-4 py-5 sm:px-6">
         {sentences.map((sentence) => {
           const number = sentence.orderIndex + 1;
           const editing = editingId === sentence.id;
           return (
-            <li key={sentence.id} data-sentence-id={sentence.id} className="group px-4 py-4 sm:px-6">
+            <li key={sentence.id} data-sentence-id={sentence.id} className="group">
               {editing ? (
                 <div>
                   <label htmlFor={`sentence-edit-${sentence.id}`} className="text-xs font-semibold text-black/55 dark:text-white/55">
@@ -97,7 +98,6 @@ export function CitedDraftEditor({ pack, onEditSentence, onPackChange }: CitedDr
                           ))
                         : null}
                     </p>
-                    <SentenceReviewState sentence={sentence} />
                   </div>
                   <button type="button" onClick={() => beginEdit(sentence)} className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg text-black/42 opacity-100 hover:bg-black/5 hover:text-black/75 dark:text-white/42 dark:hover:bg-white/10 dark:hover:text-white/75 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100" aria-label={`Edit sentence ${number}`}>
                     <Pencil className="size-4" />
@@ -107,9 +107,14 @@ export function CitedDraftEditor({ pack, onEditSentence, onPackChange }: CitedDr
             </li>
           );
         })}
+        {sentences.length === 0 ? (
+          <li className="text-sm leading-6 text-black/55 dark:text-white/55">
+            No source-backed claims were publishable from the selected references.
+          </li>
+        ) : null}
       </ol>
       {message ? (
-        <p className="border-t border-black/[0.07] px-4 py-3 text-xs text-black/58 dark:border-white/10 dark:text-white/58 sm:px-6" aria-live="polite">
+        <p role="status" className="border-t border-black/[0.07] px-4 py-3 text-xs text-black/58 dark:border-white/10 dark:text-white/58 sm:px-6" aria-live="polite">
           {message}
         </p>
       ) : null}

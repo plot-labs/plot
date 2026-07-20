@@ -2,7 +2,6 @@ package com.plot.api.generation
 
 import com.plot.api.generation.dto.CreateGenerationRequest
 import com.plot.api.generation.dto.GenerationRunResponse
-import com.plot.api.generation.dto.ResolveConflictRequest
 import com.plot.api.generation.dto.toResponse
 import com.plot.api.source.SourceManagedAccessGuard
 import com.plot.api.contentpack.ContentPackService
@@ -45,21 +44,6 @@ class GenerationController(
 	fun get(@PathVariable id: UUID): ResponseEntity<GenerationRunResponse> = ResponseEntity.ok()
 		.cacheControl(CacheControl.noStore())
 		.body(runService.get(id).toResponse().withPack())
-
-	@PostMapping("/{runId}/interventions/{interventionId}/resolution")
-	fun resolve(
-		@PathVariable runId: UUID,
-		@PathVariable interventionId: UUID,
-		@Valid @RequestBody request: ResolveConflictRequest,
-	): ResponseEntity<GenerationRunResponse> {
-		val current = runService.get(runId)
-		if (current.pendingIntervention?.id != interventionId) throw StaleConflictResolutionException("Conflict intervention is stale")
-		val resolved = runService.resolve(ConflictResolution(
-			interventionId, requireNotNull(request.expectedVersion), requireNotNull(request.action),
-			request.preferredEvidenceId, request.providedWording,
-		))
-		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(resolved.toResponse().withPack())
-	}
 
 	private fun GenerationRunResponse.withPack(): GenerationRunResponse = copy(contentPack = contentPackService.findByRun(id))
 }
