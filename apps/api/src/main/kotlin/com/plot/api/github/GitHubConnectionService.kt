@@ -116,7 +116,7 @@ class GitHubConnectionService(
 
 	@Transactional(readOnly = true)
 	fun listConnections(): List<GitHubConnectionResponse> {
-		guard.requireEnabled()
+		guard.requireReadAccess()
 		val connections = jdbcTemplate.query(
 			"""
 			select id, external_connection_key, status

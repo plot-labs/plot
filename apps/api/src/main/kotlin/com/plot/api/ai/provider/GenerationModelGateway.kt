@@ -24,6 +24,7 @@ data class ReviewerModelRequest(
 	val generationRunId: UUID,
 	val sentences: List<SentenceArtifact>,
 	val evidence: List<EvidenceSnapshot>,
+	val resolutionInstruction: String? = null,
 )
 
 data class RewriteModelRequest(
@@ -49,7 +50,18 @@ data class ModelCallMetadata(
 	val latency: Duration,
 	/** A deliberately allow-listed metadata projection. Prompt, completion, and evidence bodies never belong here. */
 	val observationAttributes: Map<String, String>,
-)
+	val gateway: String? = null,
+	val requestedModel: String? = null,
+	/** Physical provider exchanges represented by this logical call, including successful retries. */
+	val physicalCallCount: Int = 1,
+) {
+	init {
+		require(physicalCallCount > 0) { "physicalCallCount must be positive" }
+	}
+
+	val servedModel: String?
+		get() = actualModel
+}
 
 enum class ModelFailureCode {
 	MODEL_NOT_CONFIGURED,

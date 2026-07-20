@@ -1,7 +1,7 @@
 export type SourceProvider = "GITHUB" | "SLACK" | "LINEAR";
 export type GenerationStatus = "QUEUED" | "WRITING" | "REVIEWING" | "REWRITING" | "READY" | "NEEDS_YOUR_CALL" | "NEEDS_REVIEW" | "FAILED";
 export type SentenceOrigin = "GENERATED" | "REWRITTEN" | "USER_MODIFIED";
-export type SentenceVerdict = "SUPPORTED" | "NOT_REQUIRED" | "NEEDS_SUPPORT" | "CONFLICT" | "USER_MODIFIED";
+export type SentenceVerdict = "SUPPORTED" | "NOT_REQUIRED" | "NEEDS_SUPPORT" | "CONFLICT" | "USER_MODIFIED" | "REVIEW_FAILED";
 export type CitationStatus = "ACTIVE" | "STALE" | "REMOVED";
 
 export interface GenerationEvidence {
@@ -85,7 +85,7 @@ export interface GenerationArtifact {
   kind: "WRITER_OUTPUT" | "REVIEWER_OUTPUT" | "REWRITER_OUTPUT" | "CONFLICT" | "CONFLICT_DECISION";
   sequence: number;
   sentenceIds: string[];
-  reviews: Array<{ sentenceId: string; verdict: Exclude<SentenceVerdict, "USER_MODIFIED">; evidenceIds: string[]; reason: string | null }>;
+  reviews: Array<{ sentenceId: string; verdict: Exclude<SentenceVerdict, "USER_MODIFIED" | "REVIEW_FAILED">; evidenceIds: string[]; reason: string | null }>;
   detail: string | null;
 }
 
@@ -120,7 +120,6 @@ export interface PlotApiClient {
   getContentPack(id: string, options?: RequestOptions): Promise<ContentPack>;
   listContentPacks(page?: number, size?: number, options?: RequestOptions): Promise<ContentPackPage>;
   editSentence(variantId: string, sentenceId: string, input: { expectedRevisionNumber: number; body: string }, options?: RequestOptions): Promise<ContentPack>;
-  resolveConflict(runId: string, interventionId: string, input: { expectedVersion: number; action: "PREFER_SOURCE" | "OMIT_CLAIM" | "PROVIDE_WORDING"; preferredEvidenceId?: string; providedWording?: string }, options?: RequestOptions): Promise<GenerationRun>;
   exportVariant(variantId: string, input: { acknowledgeUnresolved: boolean; acknowledgedRevisionIds?: string[]; disposition: "COPY" | "DOWNLOAD" }, options?: RequestOptions): Promise<{ exportId: string; disposition: "COPY" | "DOWNLOAD"; filename: string; mediaType: string; text: string; unresolvedCount: number; warningAcknowledged: boolean }>;
 }
 
@@ -192,10 +191,6 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
     editSentence: (variantId, sentenceId, input, requestOptions) => request(
       `/content-variants/${encodeURIComponent(variantId)}/sentences/${encodeURIComponent(sentenceId)}`,
       { method: "PATCH", body: JSON.stringify(input), signal: requestOptions?.signal },
-    ),
-    resolveConflict: (runId, interventionId, input, requestOptions) => request(
-      `/generations/${encodeURIComponent(runId)}/interventions/${encodeURIComponent(interventionId)}/resolution`,
-      { method: "POST", body: JSON.stringify(input), signal: requestOptions?.signal },
     ),
     exportVariant: (variantId, input, requestOptions) => request(
       `/content-variants/${encodeURIComponent(variantId)}/exports`,

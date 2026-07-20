@@ -19,6 +19,7 @@ class GenerationRunWorker(
 	private val persistence: GenerationPersistence,
 	private val workflowService: GenerationWorkflowService,
 	private val modelGateway: GenerationModelGateway,
+	private val checkpointObserver: GenerationCheckpointObserver = GenerationCheckpointObserver.NO_OP,
 	private val clock: Clock = Clock.systemUTC(),
 	private val claimTimeout: Duration = Duration.ofMinutes(2),
 	private val workerId: String = "generation-${UUID.randomUUID()}",
@@ -38,21 +39,30 @@ class GenerationRunWorker(
 		val role = state.nextRole ?: return false
 		val lease = persistence.beginInvocation(claim, role)
 		val recording = RecordingGateway(modelGateway)
-		return try {
+		val advanced = try {
 			val advanced = workflowService.advance(state, recording)
 			persistence.completeCheckpoint(claim, lease, advanced, recording.metadata)
-			true
+			advanced
 		} catch (failure: GenerationModelException) {
 			persistence.failCheckpoint(claim, lease, state, failure.code.name)
-			true
+			return true
 		} catch (_: InvalidModelOutputException) {
 			persistence.failCheckpoint(claim, lease, state, "MALFORMED_OUTPUT")
-			true
+			return true
 		} catch (failure: RuntimeException) {
 			lastFailure = failure
 			persistence.failCheckpoint(claim, lease, state, "WORKFLOW_FAILED")
-			true
+			return true
 		}
+		checkpointObserver.afterDurableCheckpoint(DurableGenerationCheckpoint(
+			workspaceId = claim.workspaceId,
+			runId = claim.runId,
+			invocationId = lease.id,
+			role = lease.role,
+			artifactType = lease.role.checkpointArtifactType,
+			runStatus = advanced.status,
+		))
+		return true
 	}
 
 	fun drain(maxCheckpoints: Int = 16): Int {
@@ -62,6 +72,13 @@ class GenerationRunWorker(
 		return processed
 	}
 }
+
+private val ModelRole.checkpointArtifactType: String
+	get() = when (this) {
+		ModelRole.WRITER -> "WRITER_OUTPUT"
+		ModelRole.REVIEWER -> "REVIEWER_OUTPUT"
+		ModelRole.REWRITER -> "REWRITER_OUTPUT"
+	}
 
 private val GenerationWorkflowState.nextRole: ModelRole?
 	get() = when (status) {

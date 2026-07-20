@@ -10,10 +10,11 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["sentenceId", "body"],
+        "required": ["sentenceId", "body", "omit"],
         "properties": {
           "sentenceId": { "type": "string", "format": "uuid" },
-          "body": { "type": "string", "minLength": 1 }
+          "body": { "type": ["string", "null"] },
+          "omit": { "type": "boolean" }
         }
       }
     }

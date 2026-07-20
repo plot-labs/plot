@@ -23,3 +23,15 @@ build/
 
 # Logs
 *.log
+
+# Local generation certification output (manifests, audits, browser captures)
+.generation-certification/
+generation-certification-artifacts/
+apps/api/build/certification/
+apps/web/playwright/.auth/
+apps/web/test-results/
+apps/web/playwright-report/
+apps/web/blob-report/
+apps/web/.playwright-artifacts/
+**/trace.zip
+**/*.webm

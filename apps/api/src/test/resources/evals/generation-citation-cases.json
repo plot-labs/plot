@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "cases": [
     {
       "id": "supported-date-number-and-non-factual",
@@ -28,14 +28,18 @@
             "10000000-0000-0000-0000-000000000001",
             "10000000-0000-0000-0000-000000000002"
           ],
-          "rewriteTarget": false
+          "rewriteTarget": false,
+          "rewriteExpectedVerdict": null,
+          "rewriteExpectedEvidenceIds": []
         },
         {
           "id": "20000000-0000-0000-0000-000000000002",
           "body": "That makes review a little calmer.",
           "expectedVerdict": "NOT_REQUIRED",
           "expectedEvidenceIds": [],
-          "rewriteTarget": false
+          "rewriteTarget": false,
+          "rewriteExpectedVerdict": null,
+          "rewriteExpectedEvidenceIds": []
         }
       ]
     },
@@ -54,10 +58,12 @@
       "sentences": [
         {
           "id": "20000000-0000-0000-0000-000000000003",
-          "body": "The release automatically rotates all workspace credentials.",
+          "body": "The release automatically rotates all workspace credentials and adjusts button spacing.",
           "expectedVerdict": "NEEDS_SUPPORT",
           "expectedEvidenceIds": [],
-          "rewriteTarget": false
+          "rewriteTarget": true,
+          "rewriteExpectedVerdict": "SUPPORTED",
+          "rewriteExpectedEvidenceIds": ["10000000-0000-0000-0000-000000000003"]
         }
       ]
     },
@@ -88,14 +94,18 @@
             "10000000-0000-0000-0000-000000000004",
             "10000000-0000-0000-0000-000000000005"
           ],
-          "rewriteTarget": true
+          "rewriteTarget": false,
+          "rewriteExpectedVerdict": null,
+          "rewriteExpectedEvidenceIds": []
         },
         {
           "id": "20000000-0000-0000-0000-000000000005",
           "body": "The export dialog now requires an explicit confirmation.",
           "expectedVerdict": "SUPPORTED",
           "expectedEvidenceIds": ["10000000-0000-0000-0000-000000000004"],
-          "rewriteTarget": false
+          "rewriteTarget": false,
+          "rewriteExpectedVerdict": null,
+          "rewriteExpectedEvidenceIds": []
         }
       ]
     }
