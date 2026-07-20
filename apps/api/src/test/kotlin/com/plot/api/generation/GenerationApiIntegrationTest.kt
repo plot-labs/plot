@@ -125,7 +125,7 @@ class GenerationApiIntegrationTest {
 	}
 
 	@Test
-	fun `run detail exposes pending conflict and resolution is accepted only once`() {
+	fun `run detail omits a conflicting claim and returns a publishable result without intervention`() {
 		val runId = UUID.randomUUID()
 		val blockId = UUID.randomUUID()
 		jdbcTemplate.update(
@@ -146,50 +146,31 @@ class GenerationApiIntegrationTest {
 			state, "OPENAI", "scripted", "{\"maxModelCalls\":12,\"maxTotalTokens\":1000,\"maxRunDurationMillis\":60000}",
 		))
 		GenerationRunWorker(persistence, workflow, ApiConflictGateway(evidence.id), workerId = "api-conflict").drain()
-		val paused = persistence.loadState(devContext.devWorkspaceId, runId)
-		val intervention = requireNotNull(paused.pendingIntervention)
 
 		mockMvc.get("/api/generations/$runId").andExpect {
 			status { isOk() }
 			header { string("Cache-Control", "no-store") }
-			jsonPath("$.status") { value("NEEDS_YOUR_CALL") }
-			jsonPath("$.sentences[0].verdict") { value("CONFLICT") }
-			jsonPath("$.pendingIntervention.id") { value(intervention.id.toString()) }
-			jsonPath("$.pendingIntervention.version") { value(1) }
+			jsonPath("$.status") { value("READY") }
+			jsonPath("$.sentences.length()") { value(1) }
+			jsonPath("$.sentences[0].body") { value("Grounded claim.") }
+			jsonPath("$.pendingIntervention") { doesNotExist() }
 			jsonPath("$.evidence[0].snapshotExcerpt") { value("CONFLICT SNAPSHOT") }
 			jsonPath("$.artifacts[0].kind") { value("WRITER_OUTPUT") }
 			jsonPath("$.artifacts[1].kind") { value("REVIEWER_OUTPUT") }
 			jsonPath("$.artifacts[2].kind") { value("CONFLICT") }
+			jsonPath("$.contentPack.status") { value("READY") }
+			jsonPath("$.contentPack.variant.sentences.length()") { value(1) }
 		}
-
-		mockMvc.post("/api/generations/$runId/interventions/${intervention.id}/resolution") {
-			contentType = MediaType.APPLICATION_JSON
-			content = """{"expectedVersion":1,"action":"BOGUS"}"""
-		}.andExpect {
-			status { isBadRequest() }
-			header { string("Cache-Control", "no-store") }
-			jsonPath("$.error") { value("BAD_REQUEST") }
-		}
-
-		val resolution = """{"expectedVersion":1,"action":"PROVIDE_WORDING","providedWording":"User wording."}"""
-		mockMvc.post("/api/generations/$runId/interventions/${intervention.id}/resolution") {
-			contentType = MediaType.APPLICATION_JSON
-			content = resolution
-		}.andExpect {
-			status { isOk() }
-			jsonPath("$.status") { value("NEEDS_REVIEW") }
-			jsonPath("$.sentences[0].verdict") { value("USER_MODIFIED") }
-			jsonPath("$.sentences[0].citations.length()") { value(0) }
-			jsonPath("$.contentPack.variant.sentences[0].verdict") { value("USER_MODIFIED") }
-		}
-		mockMvc.post("/api/generations/$runId/interventions/${intervention.id}/resolution") {
-			contentType = MediaType.APPLICATION_JSON
-			content = resolution
-		}.andExpect {
-			status { isConflict() }
-			header { string("Cache-Control", "no-store") }
-			jsonPath("$.error") { value("STALE_INTERVENTION") }
-		}
+		assertEquals(0, jdbcTemplate.queryForObject(
+			"select count(*) from generation_interventions where generation_run_id = ?",
+			Int::class.java,
+			runId,
+		))
+		assertEquals("READY", jdbcTemplate.queryForObject(
+			"select status from generation_runs where id = ?",
+			String::class.java,
+			runId,
+		))
 
 		mockMvc.get("/api/generations/${UUID.randomUUID()}").andExpect {
 			status { isNotFound() }
@@ -258,9 +239,13 @@ class GenerationApiIntegrationTest {
 private data class SourceFixture(val scopeId: UUID, val blockId: UUID)
 
 private class ApiConflictGateway(private val evidenceId: UUID) : GenerationModelGateway {
-	override fun write(request: WriterModelRequest) = result(WriterOutput(listOf(WriterSentence("Conflicting claim."))))
+	override fun write(request: WriterModelRequest) = result(WriterOutput(listOf(
+		WriterSentence("Conflicting claim."),
+		WriterSentence("Grounded claim."),
+	)))
 	override fun review(request: ReviewerModelRequest) = result(ReviewerOutput(listOf(
-		SentenceReview(request.sentences.single().id, ReviewVerdict.CONFLICT, listOf(evidenceId), "Sources disagree"),
+		SentenceReview(request.sentences[0].id, ReviewVerdict.CONFLICT, listOf(evidenceId), "Sources disagree"),
+		SentenceReview(request.sentences[1].id, ReviewVerdict.SUPPORTED, listOf(evidenceId)),
 	)))
 	override fun rewrite(request: RewriteModelRequest): ModelCallResult<TargetedRewriteOutput> = error("Unexpected rewrite")
 	private fun <T : Any> result(value: T) = ModelCallResult(value, ModelCallMetadata(null, "scripted", "stop", 1, 1, 2, Duration.ofMillis(1), emptyMap()))

@@ -4,6 +4,14 @@ This runbook validates the backend adapter against a disposable GitHub App and a
 non-production repository. It is intentionally manual; automated tests use a
 fake `GitHubClient` and never call GitHub.
 
+## Production generation certification handoff
+
+For the production generation/citation campaign, this runbook supplies only the GitHub installation and bounded import phase of the complete [production generation certification](generation-citation-smoke-test.md). Use a dedicated, revocable App installation restricted to the data-owner-approved repository aliases and UTC PR window. Complete installation/import while the orchestrator is running its GitHub-only API phase; OpenRouter credentials must be absent from that process.
+
+Record only opaque source aliases, Writing Block UUIDs in transient operator environment, the approval window, and import counters. Do not place repository names, PR titles/URLs/bodies, installation IDs, callback state, or tokens in manifests, browser output, audit envelopes, or reports. After confirming the exact imported block set, the orchestrator restarts the API without GitHub credentials for model/browser execution.
+
+The certification cleanup gate requires the App/installation credential to be revoked or disposed. The development cleanup instructions below are mandatory, not optional, for final GO.
+
 ## Configure the local API
 
 Register an unlisted GitHub App with repository **Metadata: read-only** and

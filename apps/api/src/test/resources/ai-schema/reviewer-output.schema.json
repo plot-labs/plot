@@ -14,7 +14,7 @@
         "properties": {
           "sentenceId": { "type": "string", "format": "uuid" },
           "verdict": { "type": "string", "enum": ["SUPPORTED", "NOT_REQUIRED", "NEEDS_SUPPORT", "CONFLICT"] },
-          "evidenceIds": { "type": "array", "items": { "type": "string", "format": "uuid" }, "uniqueItems": true },
+          "evidenceIds": { "type": "array", "items": { "type": "string", "format": "uuid" } },
           "reason": { "type": ["string", "null"] },
           "modelSuppliedUrls": { "type": "array", "items": { "type": "string" } }
         }

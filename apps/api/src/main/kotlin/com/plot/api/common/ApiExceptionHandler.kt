@@ -2,7 +2,6 @@ package com.plot.api.common
 
 import com.plot.api.generation.GenerationIdempotencyConflictException
 import com.plot.api.generation.GenerationSourceAccessException
-import com.plot.api.generation.StaleConflictResolutionException
 import com.plot.api.contentpack.ExportConfirmationRequiredException
 import org.springframework.http.CacheControl
 import org.springframework.http.HttpStatus
@@ -35,11 +34,6 @@ class ApiExceptionHandler {
 	fun handleIdempotencyConflict(exception: GenerationIdempotencyConflictException): ResponseEntity<ApiErrorResponse> = ResponseEntity
 		.status(HttpStatus.CONFLICT).cacheControl(CacheControl.noStore())
 		.body(ApiErrorResponse("IDEMPOTENCY_KEY_REUSED", exception.message ?: "Idempotency key was reused"))
-
-	@ExceptionHandler(StaleConflictResolutionException::class)
-	fun handleStaleIntervention(exception: StaleConflictResolutionException): ResponseEntity<ApiErrorResponse> = ResponseEntity
-		.status(HttpStatus.CONFLICT).cacheControl(CacheControl.noStore())
-		.body(ApiErrorResponse("STALE_INTERVENTION", exception.message ?: "Intervention is stale"))
 
 	@ExceptionHandler(GenerationSourceAccessException::class)
 	fun handleGenerationSourceAccess(exception: GenerationSourceAccessException): ResponseEntity<ApiErrorResponse> = ResponseEntity

@@ -41,6 +41,21 @@ class GitHubGuardTest {
 		assertNotNull(exception.message)
 	}
 
+	@Test
+	fun certificationProfileAllowsPersistedReadWithoutProviderCredentials() {
+		val properties = GitHubProperties(enabled = false)
+		val environment = MockEnvironment().apply {
+			setActiveProfiles("generation-certification")
+			setProperty("server.address", "127.0.0.1")
+		}
+		val guard = GitHubGuard(properties, environment)
+
+		guard.requireReadAccess()
+
+		val exception = assertFailsWith<ApiException> { guard.requireEnabled() }
+		assertEquals("GITHUB_NOT_CONFIGURED", exception.error)
+	}
+
 	private fun configuredProperties() = GitHubProperties(
 		enabled = true,
 		appId = "1",

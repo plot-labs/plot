@@ -1,0 +1,274 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plot.local/schemas/production-generation-certification-artifacts/v1",
+  "title": "Plot production generation certification artifacts",
+  "description": "A content-free identity and evidence contract. Manifests are sealed once by preflight; later stages emit immutable envelopes that reference their hashes.",
+  "x-plot-schema-version": "plot.production-generation-certification/v1",
+  "oneOf": [
+    { "$ref": "#/$defs/campaignManifest" },
+    { "$ref": "#/$defs/modelExecutionManifest" },
+    { "$ref": "#/$defs/evidenceEnvelope" }
+  ],
+  "$defs": {
+    "schemaVersion": { "const": "plot.production-generation-certification/v1" },
+    "artifactId": { "type": "string", "pattern": "^artifact-[a-f0-9]{16,64}$" },
+    "campaignId": { "type": "string", "pattern": "^campaign-[a-f0-9]{16,64}$" },
+    "modelExecutionId": { "type": "string", "pattern": "^model-execution-[a-f0-9]{16,64}$" },
+    "attemptId": { "type": "string", "pattern": "^attempt-[a-f0-9]{16,64}$" },
+    "hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "scenarioId": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+    "modelId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*/[a-zA-Z0-9][a-zA-Z0-9._:-]*$" },
+    "providerSlug": { "type": "string", "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$" },
+    "revisionLineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relation", "priorCampaignId", "priorSourceRevision", "priorCampaignManifestHash"],
+      "properties": {
+        "relation": { "const": "SUPERSEDES_REVISION" },
+        "priorCampaignId": { "$ref": "#/$defs/campaignId" },
+        "priorSourceRevision": { "type": "string", "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$" },
+        "priorCampaignManifestHash": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "campaignManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion", "artifactType", "artifactId", "campaignId", "sealedAt", "sourceRevision",
+        "corpusHash", "profileHash", "sourceSnapshotSetHash", "environmentFingerprint", "reportId", "approvedSourceAliases"
+      ],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/schemaVersion" },
+        "artifactType": { "const": "CAMPAIGN_MANIFEST" },
+        "artifactId": { "$ref": "#/$defs/artifactId" },
+        "campaignId": { "$ref": "#/$defs/campaignId" },
+        "sealedAt": { "$ref": "#/$defs/timestamp" },
+        "sourceRevision": { "type": "string", "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$" },
+        "corpusHash": { "$ref": "#/$defs/hash" },
+        "profileHash": { "$ref": "#/$defs/hash" },
+        "sourceSnapshotSetHash": {
+          "$ref": "#/$defs/hash",
+          "description": "Hash of the ordered content-free source snapshot identity set; source labels, URLs, titles, and bodies are never embedded."
+        },
+        "environmentFingerprint": { "$ref": "#/$defs/hash" },
+        "reportId": { "type": "string", "pattern": "^report-[a-f0-9]{16,64}$" },
+        "approvedSourceAliases": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^source-[a-f0-9]{16,64}$" }
+        },
+        "revisionLineage": { "$ref": "#/$defs/revisionLineage" }
+      }
+    },
+    "modelExecutionManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion", "artifactType", "artifactId", "campaignId", "campaignManifestHash",
+        "modelExecutionId", "sealedAt", "requestedModel", "servedModel", "modelProfileHash", "pinnedUpstream",
+        "routePolicyHash", "processIdentity", "sourceNamespace", "idempotencyNamespace", "scenarioIds"
+      ],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/schemaVersion" },
+        "artifactType": { "const": "MODEL_EXECUTION_MANIFEST" },
+        "artifactId": { "$ref": "#/$defs/artifactId" },
+        "campaignId": { "$ref": "#/$defs/campaignId" },
+        "campaignManifestHash": { "$ref": "#/$defs/hash" },
+        "modelExecutionId": { "$ref": "#/$defs/modelExecutionId" },
+        "sealedAt": { "$ref": "#/$defs/timestamp" },
+        "requestedModel": { "$ref": "#/$defs/modelId" },
+        "servedModel": {
+          "$ref": "#/$defs/modelId",
+          "description": "Immutable concrete model identity observed by the preflight canary before the model execution is sealed."
+        },
+        "modelProfileHash": { "$ref": "#/$defs/hash" },
+        "pinnedUpstream": { "$ref": "#/$defs/providerSlug" },
+        "routePolicyHash": { "$ref": "#/$defs/hash" },
+        "processIdentity": { "type": "string", "pattern": "^process-[a-f0-9]{16,64}$" },
+        "sourceNamespace": { "type": "string", "pattern": "^namespace-[a-f0-9]{16,64}$" },
+        "idempotencyNamespace": { "type": "string", "pattern": "^namespace-[a-f0-9]{16,64}$" },
+        "scenarioIds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/scenarioId" }
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "latencyMs": { "type": "integer", "minimum": 0 },
+        "promptTokens": { "type": "integer", "minimum": 0 },
+        "completionTokens": { "type": "integer", "minimum": 0 },
+        "reasoningTokens": { "type": "integer", "minimum": 0 },
+        "cachedTokens": { "type": "integer", "minimum": 0 },
+        "costUsdMicros": { "type": "integer", "minimum": 0 },
+        "rewriteCount": { "type": "integer", "minimum": 0 },
+        "citationCount": { "type": "integer", "minimum": 0 },
+        "reviewNeededSentenceCount": { "type": "integer", "minimum": 0 },
+        "unresolvedConflictCount": { "type": "integer", "minimum": 0 },
+        "modelCallCount": { "type": "integer", "minimum": 0 },
+        "citationPrecisionBasisPoints": { "type": "integer", "minimum": 0, "maximum": 10000 },
+        "citationRecallBasisPoints": { "type": "integer", "minimum": 0, "maximum": 10000 },
+        "supportedClaimRecallBasisPoints": { "type": "integer", "minimum": 0, "maximum": 10000 },
+        "unsupportedClaimRecallBasisPoints": { "type": "integer", "minimum": 0, "maximum": 10000 },
+        "conflictRecallBasisPoints": { "type": "integer", "minimum": 0, "maximum": 10000 },
+        "notRequiredFalsePositiveBasisPoints": { "type": "integer", "minimum": 0, "maximum": 10000 },
+        "exportEventCount": { "type": "integer", "minimum": 0 },
+        "listenerCount": { "type": "integer", "minimum": 0 },
+        "liveCredentialCount": { "type": "integer", "minimum": 0 },
+        "transientArtifactCount": { "type": "integer", "minimum": 0 },
+        "coldStart": { "type": "boolean" }
+      }
+    },
+    "attribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requestedModel", "servedModel", "observedUpstream", "responseIdHash"],
+      "properties": {
+        "requestedModel": { "$ref": "#/$defs/modelId" },
+        "servedModel": { "$ref": "#/$defs/modelId" },
+        "observedUpstream": { "$ref": "#/$defs/providerSlug" },
+        "responseIdHash": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "replacementLineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relation", "priorArtifactId", "priorAttemptId"],
+      "properties": {
+        "relation": { "const": "REPLACES_INCONCLUSIVE" },
+        "priorArtifactId": { "$ref": "#/$defs/artifactId" },
+        "priorAttemptId": { "$ref": "#/$defs/attemptId" }
+      }
+    },
+    "evidenceEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion", "artifactType", "artifactId", "campaignId", "campaignManifestHash",
+        "recordedAt", "evidenceType", "subjectType", "outcome", "metrics", "codes"
+      ],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/schemaVersion" },
+        "artifactType": { "const": "EVIDENCE_ENVELOPE" },
+        "artifactId": { "$ref": "#/$defs/artifactId" },
+        "campaignId": { "$ref": "#/$defs/campaignId" },
+        "campaignManifestHash": { "$ref": "#/$defs/hash" },
+        "modelExecutionId": { "$ref": "#/$defs/modelExecutionId" },
+        "modelExecutionManifestHash": { "$ref": "#/$defs/hash" },
+        "recordedAt": { "$ref": "#/$defs/timestamp" },
+        "evidenceType": {
+          "enum": ["PREFLIGHT", "ROUTE_CANARY", "MODEL_ATTEMPT", "BROWSER_OBSERVATION", "PERSISTED_AUDIT", "CLEANUP", "DECISION"]
+        },
+        "subjectType": { "enum": ["CAMPAIGN", "MODEL_EXECUTION", "ATTEMPT"] },
+        "attemptId": { "$ref": "#/$defs/attemptId" },
+        "scenarioId": { "$ref": "#/$defs/scenarioId" },
+        "ordinal": { "type": "integer", "minimum": 1, "maximum": 3 },
+        "outcome": { "enum": ["PASS", "HARD_GATE_FAIL", "INCONCLUSIVE"] },
+        "metrics": { "$ref": "#/$defs/metrics" },
+        "codes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,63}$" }
+        },
+        "attribution": { "$ref": "#/$defs/attribution" },
+        "lineage": { "$ref": "#/$defs/replacementLineage" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "subjectType": { "const": "CAMPAIGN" } }, "required": ["subjectType"] },
+          "then": {
+            "properties": { "evidenceType": { "enum": ["PREFLIGHT", "CLEANUP", "DECISION"] } },
+            "not": { "anyOf": [
+              { "required": ["modelExecutionId"] }, { "required": ["modelExecutionManifestHash"] },
+              { "required": ["attemptId"] }, { "required": ["scenarioId"] }, { "required": ["ordinal"] },
+              { "required": ["attribution"] }, { "required": ["lineage"] }
+            ] }
+          }
+        },
+        {
+          "if": { "properties": { "subjectType": { "const": "MODEL_EXECUTION" } }, "required": ["subjectType"] },
+          "then": {
+            "required": ["modelExecutionId", "modelExecutionManifestHash", "attribution"],
+            "properties": { "evidenceType": { "const": "ROUTE_CANARY" } },
+            "not": { "anyOf": [
+              { "required": ["attemptId"] }, { "required": ["scenarioId"] },
+              { "required": ["ordinal"] }, { "required": ["lineage"] }
+            ] }
+          }
+        },
+        {
+          "if": { "properties": { "subjectType": { "const": "ATTEMPT" } }, "required": ["subjectType"] },
+          "then": {
+            "required": ["modelExecutionId", "modelExecutionManifestHash", "attemptId", "scenarioId", "ordinal"],
+            "properties": { "evidenceType": { "enum": ["MODEL_ATTEMPT", "BROWSER_OBSERVATION", "PERSISTED_AUDIT"] } }
+          }
+        }
+      ]
+    }
+  },
+  "examples": [
+    {
+      "schemaVersion": "plot.production-generation-certification/v1",
+      "artifactType": "CAMPAIGN_MANIFEST",
+      "artifactId": "artifact-aaaaaaaaaaaaaaaa",
+      "campaignId": "campaign-aaaaaaaaaaaaaaaa",
+      "sealedAt": "2026-07-16T00:00:00Z",
+      "sourceRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "corpusHash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "profileHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "sourceSnapshotSetHash": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+      "environmentFingerprint": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "reportId": "report-aaaaaaaaaaaaaaaa",
+      "approvedSourceAliases": ["source-aaaaaaaaaaaaaaaa"]
+    },
+    {
+      "schemaVersion": "plot.production-generation-certification/v1",
+      "artifactType": "MODEL_EXECUTION_MANIFEST",
+      "artifactId": "artifact-bbbbbbbbbbbbbbbb",
+      "campaignId": "campaign-aaaaaaaaaaaaaaaa",
+      "campaignManifestHash": "sha256:55792a10244d42f3eba2c2f2cc180e477f7fe76273a38dabeee846d703648dff",
+      "modelExecutionId": "model-execution-aaaaaaaaaaaaaaaa",
+      "sealedAt": "2026-07-16T00:01:00Z",
+      "requestedModel": "openai/gpt-5.4-nano",
+      "servedModel": "openai/gpt-5.4-nano-2026-06-01",
+      "modelProfileHash": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "pinnedUpstream": "openai",
+      "routePolicyHash": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "processIdentity": "process-aaaaaaaaaaaaaaaa",
+      "sourceNamespace": "namespace-aaaaaaaaaaaaaaaa",
+      "idempotencyNamespace": "namespace-bbbbbbbbbbbbbbbb",
+      "scenarioIds": ["real-github-journey"]
+    },
+    {
+      "schemaVersion": "plot.production-generation-certification/v1",
+      "artifactType": "EVIDENCE_ENVELOPE",
+      "artifactId": "artifact-cccccccccccccccc",
+      "campaignId": "campaign-aaaaaaaaaaaaaaaa",
+      "campaignManifestHash": "sha256:55792a10244d42f3eba2c2f2cc180e477f7fe76273a38dabeee846d703648dff",
+      "modelExecutionId": "model-execution-aaaaaaaaaaaaaaaa",
+      "modelExecutionManifestHash": "sha256:e875813d906d081953b4bf4a4fd6aac8f1fb9a9f9d64452682a69282412328ae",
+      "recordedAt": "2026-07-16T00:02:00Z",
+      "evidenceType": "MODEL_ATTEMPT",
+      "subjectType": "ATTEMPT",
+      "attemptId": "attempt-aaaaaaaaaaaaaaaa",
+      "scenarioId": "real-github-journey",
+      "ordinal": 1,
+      "outcome": "PASS",
+      "metrics": { "latencyMs": 1234, "promptTokens": 10, "completionTokens": 20 },
+      "codes": [],
+      "attribution": {
+        "requestedModel": "openai/gpt-5.4-nano",
+        "servedModel": "openai/gpt-5.4-nano-2026-06-01",
+        "observedUpstream": "openai",
+        "responseIdHash": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+      }
+    }
+  ]
+}

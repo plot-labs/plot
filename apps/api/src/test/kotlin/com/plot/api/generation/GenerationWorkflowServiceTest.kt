@@ -6,10 +6,11 @@ import com.plot.api.ai.provider.ModelCallResult
 import com.plot.api.ai.provider.ReviewerModelRequest
 import com.plot.api.ai.provider.RewriteModelRequest
 import com.plot.api.ai.provider.WriterModelRequest
+import com.plot.api.generation.model.DocumentConflict
 import com.plot.api.generation.model.EvidenceSnapshot
 import com.plot.api.generation.model.ReviewVerdict
 import com.plot.api.generation.model.ReviewerOutput
-import com.plot.api.generation.model.SentenceOrigin
+import com.plot.api.generation.model.SentenceIntent
 import com.plot.api.generation.model.SentenceReview
 import com.plot.api.generation.model.SourceProvider
 import com.plot.api.generation.model.TargetedRewrite
@@ -22,7 +23,6 @@ import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
-import kotlin.test.assertTrue
 
 class GenerationWorkflowServiceTest {
 	private val ids = ArrayDeque((1..200).map(::uuid))
@@ -93,56 +93,58 @@ class GenerationWorkflowServiceTest {
 	}
 
 	@Test
-	fun `conflict pauses once and prefer-source resumes only affected sentence`() {
-		val gateway = conflictGateway()
-		val paused = run(workflow.start(runId, evidence, null), gateway)
-
-		assertEquals(GenerationRunStatus.NEEDS_YOUR_CALL, paused.status)
-		assertEquals(1, paused.artifacts.count { it.kind == WorkflowArtifactKind.CONFLICT })
-		val conflict = requireNotNull(paused.pendingIntervention)
-		val resumed = workflow.resolve(
-			paused,
-			ConflictResolution(conflict.id, conflict.version, ConflictResolutionAction.PREFER_SOURCE, preferredEvidenceId = evidence[1].id),
+	fun `individually supported but incompatible sentences are omitted without interrupting the user`() {
+		val gateway = ScriptedGateway(
+			writes = ArrayDeque(listOf(WriterOutput(listOf(
+				WriterSentence("Unresolved sentences must block export."),
+				WriterSentence("Unresolved sentences may be exported after acknowledgement."),
+				WriterSentence("The export command supports JSON output."),
+			)))),
+			reviews = ArrayDeque(listOf { request -> ReviewerOutput(
+				reviews = listOf(
+					SentenceReview(request.sentences[0].id, ReviewVerdict.SUPPORTED, listOf(evidence[0].id)),
+					SentenceReview(request.sentences[1].id, ReviewVerdict.SUPPORTED, listOf(evidence[1].id)),
+					SentenceReview(request.sentences[2].id, ReviewVerdict.SUPPORTED, listOf(evidence[0].id)),
+				),
+				documentConflicts = listOf(DocumentConflict(
+					sentenceIds = request.sentences.take(2).map { it.id },
+					evidenceIds = evidence.map { it.id },
+					reason = "The export policies are mutually exclusive.",
+				)),
+			) }),
 		)
-		val terminal = run(resumed, gateway)
+
+		val terminal = run(workflow.start(runId, evidence, null), gateway)
 
 		assertEquals(GenerationRunStatus.READY, terminal.status)
-		assertEquals(listOf(conflict.sentenceId), gateway.rewriteRequests.single().targetSentenceIds)
-		assertTrue(gateway.rewriteRequests.single().resolutionInstruction!!.contains(evidence[1].id.toString()))
+		assertEquals(listOf("The export command supports JSON output."), terminal.sentences.map { it.body })
+		assertEquals(null, terminal.pendingIntervention)
 		assertEquals(1, terminal.artifacts.count { it.kind == WorkflowArtifactKind.CONFLICT })
-	}
-
-	@Test
-	fun `provided wording becomes user-modified partial without model rewrite`() {
-		val gateway = conflictGateway()
-		val paused = run(workflow.start(runId, evidence, null), gateway)
-		val conflict = requireNotNull(paused.pendingIntervention)
-
-		val terminal = workflow.resolve(
-			paused,
-			ConflictResolution(conflict.id, conflict.version, ConflictResolutionAction.PROVIDE_WORDING, providedWording = "Release timing remains undecided."),
-		)
-
-		assertEquals(GenerationRunStatus.NEEDS_REVIEW, terminal.status)
-		assertEquals(SentenceOrigin.USER_MODIFIED, terminal.sentences.single().origin)
-		assertEquals("Release timing remains undecided.", terminal.sentences.single().body)
 		assertEquals(0, gateway.rewriteCalls)
 	}
 
 	@Test
-	fun `omit-claim resolution targets the conflict and removes the claim`() {
-		val gateway = conflictGateway(omitResult = "Release timing omitted.")
-		val paused = run(workflow.start(runId, evidence, null), gateway)
-		val conflict = requireNotNull(paused.pendingIntervention)
+	fun `writer declared conflict is omitted while unrelated grounded copy becomes ready`() {
+		val gateway = ScriptedGateway(
+			writes = ArrayDeque(listOf(WriterOutput(listOf(
+				WriterSentence(
+					"The export policies conflict and require a product decision.",
+					SentenceIntent.UNRESOLVED_CONFLICT,
+					evidence.map { it.id },
+				),
+				WriterSentence("The export command supports JSON output."),
+			)))),
+			reviews = ArrayDeque(listOf { request -> ReviewerOutput(listOf(
+				SentenceReview(request.sentences[0].id, ReviewVerdict.SUPPORTED, listOf(evidence[0].id)),
+				SentenceReview(request.sentences[1].id, ReviewVerdict.SUPPORTED, listOf(evidence[0].id)),
+			)) }),
+		)
 
-		val terminal = run(workflow.resolve(
-			paused,
-			ConflictResolution(conflict.id, conflict.version, ConflictResolutionAction.OMIT_CLAIM),
-		), gateway)
+		val terminal = run(workflow.start(runId, evidence, null), gateway)
 
 		assertEquals(GenerationRunStatus.READY, terminal.status)
-		assertEquals("Release timing omitted.", terminal.sentences.single().body)
-		assertTrue(gateway.rewriteRequests.single().resolutionInstruction!!.contains("OMIT_CLAIM"))
+		assertEquals(listOf("The export command supports JSON output."), terminal.sentences.map { it.body })
+		assertEquals(0, gateway.rewriteCalls)
 	}
 
 	@Test
@@ -174,17 +176,6 @@ class GenerationWorkflowServiceTest {
 		} }),
 	)
 
-	private fun conflictGateway(omitResult: String = "Grounded release timing.") = ScriptedGateway(
-		writes = ArrayDeque(listOf(WriterOutput(listOf(WriterSentence("Release shipped."))))),
-		reviews = ArrayDeque(listOf(
-			{ request -> ReviewerOutput(listOf(SentenceReview(request.sentences.single().id, ReviewVerdict.CONFLICT, evidence.map { it.id }, "Sources disagree"))) },
-			{ request -> ReviewerOutput(listOf(SentenceReview(request.sentences.single().id, ReviewVerdict.SUPPORTED, listOf(evidence[1].id)))) },
-		)),
-		rewrites = ArrayDeque(listOf { request ->
-			TargetedRewriteOutput(listOf(TargetedRewrite(request.targetSentenceIds.single(), omitResult)))
-		}),
-	)
-
 	private fun run(initial: GenerationWorkflowState, gateway: GenerationModelGateway): GenerationWorkflowState {
 		var state = initial
 		repeat(20) {
@@ -214,6 +205,7 @@ private class ScriptedGateway(
 	var reviewCalls = 0
 	var rewriteCalls = 0
 	val rewriteRequests = mutableListOf<RewriteModelRequest>()
+	val reviewRequests = mutableListOf<ReviewerModelRequest>()
 
 	override fun write(request: WriterModelRequest): ModelCallResult<WriterOutput> {
 		writeCalls++
@@ -222,6 +214,7 @@ private class ScriptedGateway(
 
 	override fun review(request: ReviewerModelRequest): ModelCallResult<ReviewerOutput> {
 		reviewCalls++
+		reviewRequests += request
 		return result(reviews.removeFirst()(request))
 	}
 

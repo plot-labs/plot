@@ -87,6 +87,10 @@ describe("CitedDraftEditor", () => {
   it("opens a compact provider-label citation by click and Escape returns focus", () => {
     render(<CitedDraftEditor pack={pack} onEditSentence={vi.fn()} />);
 
+    expect(screen.queryByText("July changelog")).not.toBeInTheDocument();
+    expect(screen.queryByText(/sentence review/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^verified$/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("Updates are now fully automatic.")).not.toBeInTheDocument();
     expect(screen.queryByText(/citation not required/i)).not.toBeInTheDocument();
     const citation = screen.getByRole("button", { name: /GitHub · PR #184/i });
     fireEvent.click(citation);
@@ -101,7 +105,7 @@ describe("CitedDraftEditor", () => {
     expect(citation).toHaveFocus();
   });
 
-  it("keeps review failure local and explicitly saves only the edited sentence", async () => {
+  it("shows only publishable result copy and explicitly saves only the edited sentence", async () => {
     const updated: ContentPack = {
       ...pack,
       variant: {
@@ -123,15 +127,36 @@ describe("CitedDraftEditor", () => {
     const onEditSentence = vi.fn().mockResolvedValue(updated);
     render(<CitedDraftEditor pack={pack} onEditSentence={onEditSentence} />);
 
-    expect(screen.getByText("No source supports the automation claim.")).toBeVisible();
+    expect(screen.queryByText("No source supports the automation claim.")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /edit sentence 1/i }));
     const input = screen.getByRole("textbox", { name: /sentence 1 text/i });
     fireEvent.change(input, { target: { value: "Recovery guidance now explains the next step." } });
     fireEvent.click(screen.getByRole("button", { name: /^save sentence 1$/i }));
 
     await waitFor(() => expect(onEditSentence).toHaveBeenCalledWith(pack.variant.sentences[0], "Recovery guidance now explains the next step."));
-    expect(await screen.findByText("Edited · unverified")).toBeVisible();
+    expect(await screen.findByText("Recovery guidance now explains the next step.")).toBeVisible();
     expect(screen.queryByRole("button", { name: /GitHub · PR #184/i })).not.toBeInTheDocument();
-    expect(screen.getByText("No source supports the automation claim.")).toBeVisible();
+    expect(screen.queryByText("No source supports the automation claim.")).not.toBeInTheDocument();
+  });
+
+  it("does not place a failed reviewer revision in the generated result", () => {
+    const failed: ContentPack = {
+      ...pack,
+      variant: {
+        ...pack.variant,
+        sentences: [{
+          ...pack.variant.sentences[0]!,
+          verdict: "REVIEW_FAILED",
+          reason: "MALFORMED_OUTPUT",
+          citations: [],
+        }],
+      },
+    };
+
+    render(<CitedDraftEditor pack={failed} onEditSentence={vi.fn()} />);
+
+    expect(screen.queryByText("Sign-in recovery now explains the next step.")).not.toBeInTheDocument();
+    expect(screen.queryByText("MALFORMED_OUTPUT")).not.toBeInTheDocument();
+    expect(screen.getByText(/no source-backed claims were publishable/i)).toBeVisible();
   });
 });

@@ -5,6 +5,8 @@ import com.plot.api.generation.model.EvidenceSnapshot
 import com.plot.api.generation.model.ExportSentence
 import com.plot.api.generation.model.ExportSentenceStatus
 import com.plot.api.generation.model.MarkdownExport
+import com.plot.api.generation.model.SourceProvider
+import java.net.URI
 import java.util.UUID
 
 class UnresolvedExportException(val unresolvedCount: Int) :
@@ -44,7 +46,7 @@ class MarkdownExportService {
 				emptyList()
 			}
 			buildString {
-				append(sentence.body.trim())
+				append(neutralizeUntrustedText(sentence.body.trim()))
 				if (references.isNotEmpty()) {
 					append(' ')
 					append(references.joinToString(separator = "") { "[$it]" })
@@ -59,11 +61,19 @@ class MarkdownExportService {
 				sourceNumbers.forEach { (evidenceId, number) ->
 					val source = evidenceById.getValue(evidenceId)
 					append(number)
-					append(". [")
-					append(escapeLabel(source.sourceLabel))
-					append("](")
-					append(source.originalUrl)
-					append(")\n")
+					append(". ")
+					val label = neutralizeUntrustedText(source.sourceLabel.replace(NEWLINE, " ")).trim()
+					val approvedUrl = approvedSourceUrl(source.sourceProvider, source.originalUrl)
+					if (approvedUrl == null) {
+						append(label)
+						append(" (link unavailable)\n")
+					} else {
+						append('[')
+						append(label)
+						append("](")
+						append(approvedUrl)
+						append(")\n")
+					}
 				}
 			} else if (isNotEmpty()) {
 				append('\n')
@@ -77,7 +87,40 @@ class MarkdownExportService {
 		)
 	}
 
-	private fun escapeLabel(label: String): String = label.replace("\\", "\\\\").replace("]", "\\]")
+	private fun neutralizeUntrustedText(value: String): String = value
+		.replace("&", "&amp;")
+		.replace("<", "&lt;")
+		.replace(">", "&gt;")
+		.replace("\\", "\\\\")
+		.replace("[", "\\[")
+		.replace("]", "\\]")
+		.replace(ACTIVE_SCHEME) { match -> "${match.groupValues[1]}&#58;" }
+
+	private fun approvedSourceUrl(provider: SourceProvider, value: String): String? {
+		return try {
+			val uri = URI(value)
+			val host = uri.host?.lowercase() ?: return null
+			if (uri.scheme?.lowercase() != "https" || uri.isOpaque || uri.rawUserInfo != null || (uri.port != -1 && uri.port != 443)) return null
+			val approved = when (provider) {
+				SourceProvider.GITHUB -> host == "github.com"
+				SourceProvider.SLACK -> host == "slack.com" || host.endsWith(".slack.com")
+				SourceProvider.LINEAR -> host == "linear.app" || host.endsWith(".linear.app")
+			}
+			if (!approved) return null
+			uri.toASCIIString()
+				.replace("\\", "%5C")
+				.replace("(", "%28")
+				.replace(")", "%29")
+				.takeIf { encoded -> encoded.none { it.isISOControl() || it == '<' || it == '>' || it == '\"' || it == '\'' } }
+		} catch (_: IllegalArgumentException) {
+			null
+		}
+	}
+
+	private companion object {
+		val ACTIVE_SCHEME = Regex("(?i)\\b(https?|javascript|data)\\s*:")
+		val NEWLINE = Regex("[\\r\\n]+")
+	}
 }
 
 internal val ExportSentenceStatus.isUnresolved: Boolean
@@ -85,4 +128,5 @@ internal val ExportSentenceStatus.isUnresolved: Boolean
 		ExportSentenceStatus.NEEDS_SUPPORT,
 		ExportSentenceStatus.CONFLICT,
 		ExportSentenceStatus.USER_MODIFIED,
+		ExportSentenceStatus.REVIEW_FAILED,
 	)

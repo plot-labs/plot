@@ -112,17 +112,15 @@ describe("Plot API client", () => {
 		});
   });
 
-  it("forwards edit resolve and export contracts without provider fields", async () => {
+  it("forwards edit and export contracts without provider fields", async () => {
     const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => Response.json({ ok: true }));
     const client = createPlotApiClient({ fetch: fetcher });
 
     await client.editSentence("variant", "sentence", { expectedRevisionNumber: 2, body: "Edited" });
-    await client.resolveConflict("run", "intervention", { expectedVersion: 1, action: "PREFER_SOURCE", preferredEvidenceId: "e-1" });
     await client.exportVariant("variant", { acknowledgeUnresolved: true, disposition: "DOWNLOAD" });
 
     expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
       "/api/plot/content-variants/variant/sentences/sentence",
-      "/api/plot/generations/run/interventions/intervention/resolution",
       "/api/plot/content-variants/variant/exports",
     ]);
   });

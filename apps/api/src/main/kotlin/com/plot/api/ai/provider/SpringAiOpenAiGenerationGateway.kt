@@ -16,11 +16,12 @@ import org.springframework.ai.openai.OpenAiChatOptions
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.core.env.Environment
 
 object ModelSchemas {
-	val WRITER = """{"${'$'}schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["sentences"],"properties":{"sentences":{"type":"array","minItems":1,"items":{"type":"object","additionalProperties":false,"required":["body"],"properties":{"body":{"type":"string","minLength":1}}}}}}"""
-	val REVIEWER = """{"${'$'}schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["reviews"],"properties":{"reviews":{"type":"array","minItems":1,"items":{"type":"object","additionalProperties":false,"required":["sentenceId","verdict","evidenceIds","reason","modelSuppliedUrls"],"properties":{"sentenceId":{"type":"string","format":"uuid"},"verdict":{"type":"string","enum":["SUPPORTED","NOT_REQUIRED","NEEDS_SUPPORT","CONFLICT"]},"evidenceIds":{"type":"array","items":{"type":"string","format":"uuid"},"uniqueItems":true},"reason":{"type":["string","null"]},"modelSuppliedUrls":{"type":"array","items":{"type":"string"}}}}}}}"""
-	val REWRITE = """{"${'$'}schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["rewrites"],"properties":{"rewrites":{"type":"array","minItems":1,"items":{"type":"object","additionalProperties":false,"required":["sentenceId","body"],"properties":{"sentenceId":{"type":"string","format":"uuid"},"body":{"type":"string","minLength":1}}}}}}"""
+	val WRITER = """{"${'$'}schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["sentences"],"properties":{"sentences":{"type":"array","minItems":1,"maxItems":6,"items":{"type":"object","additionalProperties":false,"required":["body","intent","conflictEvidenceIds"],"properties":{"body":{"type":"string","minLength":1},"intent":{"type":"string","enum":["FACTUAL","EDITORIAL","UNRESOLVED_CONFLICT"]},"conflictEvidenceIds":{"type":"array","items":{"type":"string","format":"uuid"}}}}}}}"""
+	val REVIEWER = """{"${'$'}schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["reviews"],"properties":{"reviews":{"type":"array","minItems":1,"items":{"type":"object","additionalProperties":false,"required":["sentenceId","verdict","evidenceIds","reason","modelSuppliedUrls"],"properties":{"sentenceId":{"type":"string","format":"uuid"},"verdict":{"type":"string","enum":["SUPPORTED","NOT_REQUIRED","NEEDS_SUPPORT","CONFLICT"]},"evidenceIds":{"type":"array","items":{"type":"string","format":"uuid"}},"reason":{"type":["string","null"]},"modelSuppliedUrls":{"type":"array","items":{"type":"string"}}}}}}}"""
+	val REWRITE = """{"${'$'}schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["rewrites"],"properties":{"rewrites":{"type":"array","minItems":1,"items":{"type":"object","additionalProperties":false,"required":["sentenceId","body","omit"],"properties":{"sentenceId":{"type":"string","format":"uuid"},"body":{"type":["string","null"]},"omit":{"type":"boolean"}}}}}}"""
 
 	fun forRole(role: ModelRole): String = when (role) {
 		ModelRole.WRITER -> WRITER
@@ -85,7 +86,13 @@ class SpringAiOpenAiGenerationGateway(
 		while (true) {
 			try {
 				val response = transport.exchange(StructuredChatRequest(role, prompt), responseType)
-				return ModelCallResult(response.value, response.toMetadata(Duration.between(startedAt, Instant.now())))
+				return ModelCallResult(
+					response.value,
+					response.toMetadata(
+						latency = Duration.between(startedAt, Instant.now()),
+						physicalCallCount = transportFailures + schemaFailures + 1,
+					),
+				)
 			} catch (failure: TransientModelTransportException) {
 				if (transportFailures++ >= properties.transportRetries) {
 					throw GenerationModelException(ModelFailureCode.PROVIDER_UNAVAILABLE, "The model provider is temporarily unavailable", failure)
@@ -101,7 +108,10 @@ class SpringAiOpenAiGenerationGateway(
 		}
 	}
 
-	private fun StructuredTransportResponse<*>.toMetadata(latency: Duration) = ModelCallMetadata(
+	private fun StructuredTransportResponse<*>.toMetadata(
+		latency: Duration,
+		physicalCallCount: Int,
+	) = ModelCallMetadata(
 		responseId = responseId,
 		actualModel = actualModel,
 		finishReason = finishReason,
@@ -110,11 +120,15 @@ class SpringAiOpenAiGenerationGateway(
 		totalTokens = totalTokens,
 		latency = latency,
 		observationAttributes = mapOf(
-			"provider" to "openai",
+			"gateway" to PlotAiProperties.OPENROUTER_GATEWAY,
+			"requestedModel" to requireNotNull(properties.model),
+			"servedModel" to actualModel.orEmpty(),
 			"responseId" to responseId.orEmpty(),
-			"model" to actualModel.orEmpty(),
 			"finishReason" to finishReason.orEmpty(),
 		),
+		gateway = PlotAiProperties.OPENROUTER_GATEWAY,
+		requestedModel = properties.model,
+		physicalCallCount = physicalCallCount,
 	)
 }
 
@@ -124,15 +138,28 @@ class SpringAiStructuredChatTransport(
 ) : StructuredChatTransport {
 	internal val writerClient: ChatClient = builder.clone().build()
 	internal val reviewerClient: ChatClient = builder.clone().build()
+	private val optionsByRole = ModelRole.entries.associateWith(::buildOptions)
 
-	internal fun optionsFor(role: ModelRole): ChatOptions = OpenAiChatOptions.builder()
-		.model(requireNotNull(properties.model))
-		.temperature(if (role == ModelRole.REVIEWER) properties.reviewerTemperature else properties.writerTemperature)
-		.maxCompletionTokens(properties.maxOutputTokens)
-		.timeout(properties.timeout)
-		.maxRetries(0)
-		.outputSchema(ModelSchemas.forRole(role))
-		.build()
+	internal fun optionsFor(role: ModelRole): ChatOptions = optionsByRole.getValue(role)
+
+	private fun buildOptions(role: ModelRole): ChatOptions {
+		val builder = OpenAiChatOptions.builder()
+			.baseUrl(properties.baseUrl)
+			.model(requireNotNull(properties.model))
+			.maxCompletionTokens(properties.maxOutputTokens)
+			.timeout(properties.timeout)
+			.maxRetries(0)
+			.customHeaders(mapOf(
+				"X-OpenRouter-Metadata" to "enabled",
+				"X-OpenRouter-Title" to "Plot",
+			))
+			.extraBody(mapOf("provider" to properties.openRouterProviderPolicy))
+			.outputSchema(ModelSchemas.forRole(role))
+		if (properties.supportsTemperature) {
+			builder.temperature(if (role == ModelRole.REVIEWER) properties.reviewerTemperature else properties.writerTemperature)
+		}
+		return builder.build()
+	}
 
 	override fun <T : Any> exchange(request: StructuredChatRequest, responseType: Class<T>): StructuredTransportResponse<T> {
 		val client = if (request.role == ModelRole.REVIEWER) reviewerClient else writerClient
@@ -182,14 +209,37 @@ class GenerationModelGatewayConfiguration {
 		builderProvider: ObjectProvider<ChatClient.Builder>,
 		properties: PlotAiProperties,
 		promptFactory: ChangelogPromptFactory,
+		environment: Environment,
 	): GenerationModelGateway {
 		// Do not resolve ChatClient.Builder when generation is disabled: with
 		// spring.ai.model.chat=none its factory exists but intentionally has no ChatModel.
+		if (properties.configured) validateRuntimeOpenRouterConfiguration(properties, environment)
 		val builder = if (properties.configured) builderProvider.ifAvailable else null
 		return if (properties.configured && builder != null) {
 			SpringAiOpenAiGenerationGateway(SpringAiStructuredChatTransport(builder, properties), properties, promptFactory)
 		} else {
 			DisabledGenerationModelGateway()
+		}
+	}
+
+	private fun validateRuntimeOpenRouterConfiguration(properties: PlotAiProperties, environment: Environment) {
+		require(environment.getProperty("spring.ai.openai.base-url", properties.baseUrl) == PlotAiProperties.OPENROUTER_BASE_URL) {
+			"spring.ai.openai.base-url must match the canonical OpenRouter API origin"
+		}
+		val frameworkRetries = environment.getProperty(
+			"spring.ai.openai.chat.max-retries",
+			Int::class.java,
+			environment.getProperty("spring.ai.openai.max-retries", Int::class.java, 0),
+		)
+		require(frameworkRetries == 0) { "Spring AI framework retries must remain disabled" }
+		val loggingKeys = listOf(
+			"spring.ai.chat.observations.log-prompt",
+			"spring.ai.chat.observations.log-completion",
+			"spring.ai.chat.client.observations.log-prompt",
+			"spring.ai.chat.client.observations.log-completion",
+		)
+		require(loggingKeys.none { environment.getProperty(it, Boolean::class.java, false) }) {
+			"Spring AI prompt and completion logging must remain disabled"
 		}
 	}
 }

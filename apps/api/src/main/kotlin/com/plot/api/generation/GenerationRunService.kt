@@ -81,17 +81,6 @@ class GenerationRunService(
 		throw ApiException(HttpStatus.NOT_FOUND, "GENERATION_NOT_FOUND", "Generation run not found")
 	}
 
-	fun resolve(resolution: ConflictResolution): GenerationWorkflowState {
-		val state = persistence.resolveConflict(
-			devContext.devWorkspaceId,
-			devContext.devUserId,
-			resolution,
-			workflowService,
-		)
-		dispatcher.dispatch()
-		return state
-	}
-
 	private fun fingerprint(sourceScopeId: UUID, ids: List<UUID>, instruction: String?): String {
 		val canonical = buildString {
 			append(sourceScopeId).append('\n')

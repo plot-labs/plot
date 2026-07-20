@@ -9,7 +9,9 @@ import org.springframework.stereotype.Component
 @Component
 class SourceManagedAccessGuard(private val environment: Environment) {
 	fun requireReadable() {
-		if (environment.activeProfiles.none { it == "local" || it == "dev" || it == "test" }) {
+		if (environment.activeProfiles.none {
+				it == "local" || it == "dev" || it == "test" || it == "generation-certification"
+			}) {
 			throw ApiException(HttpStatus.SERVICE_UNAVAILABLE, "SOURCE_AUTH_REQUIRED", "Source-managed blocks require product authentication")
 		}
 		if (environment.getProperty("server.address") !in setOf("localhost", "127.0.0.1", "::1")) {

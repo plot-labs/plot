@@ -1,9 +1,11 @@
 package com.plot.api.generation
 
+import com.plot.api.generation.model.DocumentConflict
 import com.plot.api.generation.model.EvidenceSnapshot
 import com.plot.api.generation.model.ReviewVerdict
 import com.plot.api.generation.model.ReviewerOutput
 import com.plot.api.generation.model.SentenceArtifact
+import com.plot.api.generation.model.SentenceIntent
 import com.plot.api.generation.model.SentenceOrigin
 import com.plot.api.generation.model.SentenceReview
 import com.plot.api.generation.model.SourceProvider
@@ -33,11 +35,119 @@ class ModelOutputValidatorTest {
 		val result = ModelOutputValidator().assignSentenceIds(
 			runId,
 			WriterOutput(listOf(WriterSentence("Shipped search."), WriterSentence("Thanks for reading."))),
+			setOf(github.id, slack.id),
 		) { ids.removeFirst() }
 
 		assertEquals(listOf(sentenceOne.id, sentenceTwo.id), result.map { it.id })
 		assertEquals(listOf(0, 1), result.map { it.orderIndex })
 		assertEquals(listOf("Shipped search.", "Thanks for reading."), result.map { it.body })
+	}
+
+	@Test
+	fun rejectsProviderAuthoredCitationMarkupFromWriterAndRewriterBodies() {
+		val validator = ModelOutputValidator()
+		val pollutedBodies = listOf(
+			"Shipped search. [https://github.com/acme/plot/pull/42]",
+			"Shipped search. [source](https://github.com/acme/plot/pull/42)",
+		)
+
+		pollutedBodies.forEach { body ->
+			assertFailsWith<InvalidModelOutputException> {
+				validator.assignSentenceIds(
+					runId,
+					WriterOutput(listOf(WriterSentence(body))),
+					setOf(github.id, slack.id),
+				) { UUID.randomUUID() }
+			}
+			assertFailsWith<InvalidModelOutputException> {
+				validator.applyTargetedRewrite(
+					runId,
+					listOf(sentenceOne),
+					listOf(sentenceOne.id),
+					TargetedRewriteOutput(listOf(TargetedRewrite(sentenceOne.id, body))),
+				) { UUID.randomUUID() }
+			}
+		}
+	}
+
+	@Test
+	fun requiresOneUnresolvedConflictSentenceAndPreventsReviewerDowngrade() {
+		val validator = ModelOutputValidator()
+		assertFailsWith<InvalidModelOutputException> {
+			validator.assignSentenceIds(
+				runId,
+				WriterOutput(listOf(
+					WriterSentence(
+						"The policies conflict.",
+						SentenceIntent.UNRESOLVED_CONFLICT,
+						listOf(github.id, slack.id),
+					),
+					WriterSentence(
+						"A user must choose.",
+						SentenceIntent.UNRESOLVED_CONFLICT,
+						listOf(github.id, slack.id),
+					),
+				)),
+				setOf(github.id, slack.id),
+			) { UUID.randomUUID() }
+		}
+
+		val conflictSentence = sentenceOne.copy(
+			body = "The export policies conflict and require a product decision.",
+			intent = SentenceIntent.UNRESOLVED_CONFLICT,
+			conflictEvidenceIds = listOf(github.id, slack.id),
+		)
+		val downgraded = validator.validateReview(
+			runId,
+			listOf(conflictSentence),
+			listOf(github, slack),
+			ReviewerOutput(listOf(
+				SentenceReview(conflictSentence.id, ReviewVerdict.SUPPORTED, listOf(github.id)),
+			)),
+		)
+		assertEquals(ReviewVerdict.CONFLICT, downgraded.single().verdict)
+		assertEquals(listOf(github.id, slack.id), downgraded.single().evidenceIds)
+
+		val result = validator.validateReview(
+			runId,
+			listOf(conflictSentence),
+			listOf(github, slack),
+			ReviewerOutput(listOf(
+				SentenceReview(
+					conflictSentence.id,
+					ReviewVerdict.CONFLICT,
+					listOf(github.id, slack.id),
+					"Export policies disagree.",
+				),
+			)),
+		)
+
+		assertEquals(ReviewVerdict.CONFLICT, result.single().verdict)
+		assertEquals(listOf(github.id, slack.id), result.single().evidenceIds)
+	}
+
+	@Test
+	fun rejectsInvalidConflictEvidenceDeclarations() {
+		val validator = ModelOutputValidator()
+		val unknown = UUID.randomUUID()
+		listOf(
+			emptyList(),
+			listOf(github.id),
+			listOf(github.id, github.id),
+			listOf(github.id, unknown),
+		).forEach { conflictEvidenceIds ->
+			assertFailsWith<InvalidModelOutputException> {
+				validator.assignSentenceIds(
+					runId,
+					WriterOutput(listOf(WriterSentence(
+						"These policies conflict.",
+						SentenceIntent.UNRESOLVED_CONFLICT,
+						conflictEvidenceIds,
+					))),
+					setOf(github.id, slack.id),
+				) { UUID.randomUUID() }
+			}
+		}
 	}
 
 	@Test
@@ -125,6 +235,34 @@ class ModelOutputValidatorTest {
 	}
 
 	@Test
+	fun documentConflictOverridesOneIndividuallySupportedSentenceWithAConflictVerdict() {
+		val output = ReviewerOutput(
+			reviews = listOf(
+				SentenceReview(sentenceOne.id, ReviewVerdict.SUPPORTED, listOf(github.id)),
+				SentenceReview(sentenceTwo.id, ReviewVerdict.SUPPORTED, listOf(slack.id)),
+			),
+			documentConflicts = listOf(DocumentConflict(
+				sentenceIds = listOf(sentenceOne.id, sentenceTwo.id),
+				evidenceIds = listOf(github.id, slack.id),
+				reason = "The two supported policies are mutually exclusive.",
+			)),
+		)
+
+		val result = ModelOutputValidator().validateReview(
+			runId,
+			listOf(sentenceOne, sentenceTwo),
+			listOf(github, slack),
+			output,
+		)
+
+		assertEquals(listOf(ReviewVerdict.CONFLICT, ReviewVerdict.CONFLICT), result.map { it.verdict })
+		assertEquals(listOf(github.id, slack.id), result.first().evidenceIds)
+		assertEquals(listOf(github.id, slack.id), result.last().evidenceIds)
+		assertEquals("The two supported policies are mutually exclusive.", result.first().reason)
+		assertEquals("The two supported policies are mutually exclusive.", result.last().reason)
+	}
+
+	@Test
 	fun targetedRewriteChangesExactTargetsAndPreservesNonTargetsByIdentity() {
 		val newRevisionId = UUID.fromString("00000000-0000-0000-0000-000000000099")
 
@@ -139,6 +277,18 @@ class ModelOutputValidatorTest {
 		assertEquals(2, result.first().revisionNumber)
 		assertEquals(SentenceOrigin.REWRITTEN, result.first().origin)
 		assertSame(sentenceTwo, result.last())
+	}
+
+	@Test
+	fun targetedRewriteCanOmitOnlyTheRequestedSentence() {
+		val result = ModelOutputValidator().applyTargetedRewrite(
+			runId = runId,
+			current = listOf(sentenceOne, sentenceTwo),
+			targetSentenceIds = listOf(sentenceOne.id),
+			output = TargetedRewriteOutput(listOf(TargetedRewrite(sentenceOne.id, body = null, omit = true))),
+		) { UUID.randomUUID() }
+
+		assertEquals(listOf(sentenceTwo), result)
 	}
 
 	@Test
@@ -161,6 +311,24 @@ class ModelOutputValidatorTest {
 		invalid.forEach { output ->
 			assertFailsWith<InvalidModelOutputException> {
 				validator.applyTargetedRewrite(runId, listOf(sentenceOne, sentenceTwo), targets, output) { UUID.randomUUID() }
+			}
+		}
+	}
+
+	@Test
+	fun targetedRewriteRejectsInconsistentOmitAndBodyFieldsAsInvalidModelOutput() {
+		val validator = ModelOutputValidator()
+		listOf(
+			TargetedRewrite(sentenceOne.id, body = null, omit = false),
+			TargetedRewrite(sentenceOne.id, body = "Should not be present.", omit = true),
+		).forEach { rewrite ->
+			assertFailsWith<InvalidModelOutputException> {
+				validator.applyTargetedRewrite(
+					runId,
+					listOf(sentenceOne, sentenceTwo),
+					listOf(sentenceOne.id),
+					TargetedRewriteOutput(listOf(rewrite)),
+				) { UUID.randomUUID() }
 			}
 		}
 	}

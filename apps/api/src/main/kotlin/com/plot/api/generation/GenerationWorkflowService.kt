@@ -7,7 +7,6 @@ import com.plot.api.ai.provider.WriterModelRequest
 import com.plot.api.generation.model.EvidenceSnapshot
 import com.plot.api.generation.model.ReviewVerdict
 import com.plot.api.generation.model.SentenceArtifact
-import com.plot.api.generation.model.SentenceOrigin
 import com.plot.api.generation.model.ValidatedSentenceReview
 import java.util.UUID
 
@@ -36,18 +35,6 @@ data class ConflictIntervention(
 	val reason: String,
 	val evidenceIds: List<UUID>,
 )
-
-enum class ConflictResolutionAction { PREFER_SOURCE, OMIT_CLAIM, PROVIDE_WORDING }
-
-data class ConflictResolution(
-	val interventionId: UUID,
-	val expectedVersion: Long,
-	val action: ConflictResolutionAction,
-	val preferredEvidenceId: UUID? = null,
-	val providedWording: String? = null,
-)
-
-class StaleConflictResolutionException(message: String) : IllegalStateException(message)
 
 data class GenerationWorkflowState(
 	val runId: UUID,
@@ -87,58 +74,6 @@ class GenerationWorkflowService(
 		else -> state
 	}
 
-	fun resolve(state: GenerationWorkflowState, resolution: ConflictResolution): GenerationWorkflowState {
-		val intervention = state.pendingIntervention
-		if (state.status != GenerationRunStatus.NEEDS_YOUR_CALL || intervention == null) {
-			throw StaleConflictResolutionException("Run has no pending conflict")
-		}
-		if (resolution.interventionId != intervention.id || resolution.expectedVersion != intervention.version) {
-			throw StaleConflictResolutionException("Conflict resolution version is stale")
-		}
-		val detail = when (resolution.action) {
-			ConflictResolutionAction.PREFER_SOURCE -> {
-				val evidenceId = requireNotNull(resolution.preferredEvidenceId) { "Preferred evidence is required" }
-				require(evidenceId in intervention.evidenceIds) { "Preferred evidence is not part of the conflict" }
-				"PREFER_SOURCE evidenceId=$evidenceId"
-			}
-			ConflictResolutionAction.OMIT_CLAIM -> "OMIT_CLAIM"
-			ConflictResolutionAction.PROVIDE_WORDING -> {
-				require(!resolution.providedWording.isNullOrBlank()) { "Provided wording is required" }
-				"PROVIDE_WORDING"
-			}
-		}
-		val artifacts = state.artifacts + WorkflowArtifact(
-			WorkflowArtifactKind.CONFLICT_DECISION,
-			state.artifacts.size,
-			detail = detail,
-		)
-		if (resolution.action == ConflictResolutionAction.PROVIDE_WORDING) {
-			val wording = resolution.providedWording!!.trim()
-			val revised = state.sentences.map { sentence ->
-				if (sentence.id != intervention.sentenceId) sentence else sentence.copy(
-					revisionId = idGenerator(),
-					revisionNumber = sentence.revisionNumber + 1,
-					body = wording,
-					origin = SentenceOrigin.USER_MODIFIED,
-				)
-			}
-			return state.copy(
-				status = GenerationRunStatus.NEEDS_REVIEW,
-				sentences = revised,
-				artifacts = artifacts,
-				pendingIntervention = null,
-				rewriteTargetSentenceIds = emptyList(),
-			)
-		}
-		return state.copy(
-			status = GenerationRunStatus.REWRITING,
-			artifacts = artifacts,
-			pendingIntervention = null,
-			rewriteTargetSentenceIds = listOf(intervention.sentenceId),
-			resolutionInstruction = detail,
-		)
-	}
-
 	fun fail(state: GenerationWorkflowState, code: String): GenerationWorkflowState = state.copy(
 		status = if (state.reviews.isEmpty()) GenerationRunStatus.FAILED else GenerationRunStatus.NEEDS_REVIEW,
 		failureCode = code,
@@ -146,7 +81,7 @@ class GenerationWorkflowService(
 
 	private fun write(state: GenerationWorkflowState, gateway: GenerationModelGateway): GenerationWorkflowState {
 		val output = gateway.write(WriterModelRequest(state.runId, state.instruction, state.evidence)).value
-		val sentences = validator.assignSentenceIds(state.runId, output, idGenerator)
+		val sentences = validator.assignSentenceIds(state.runId, output, state.evidence.map { it.id }.toSet(), idGenerator)
 		return state.copy(
 			status = GenerationRunStatus.REVIEWING,
 			sentences = sentences,
@@ -159,7 +94,9 @@ class GenerationWorkflowService(
 	}
 
 	private fun review(state: GenerationWorkflowState, gateway: GenerationModelGateway): GenerationWorkflowState {
-		val output = gateway.review(ReviewerModelRequest(state.runId, state.sentences, state.evidence)).value
+		val output = gateway.review(
+			ReviewerModelRequest(state.runId, state.sentences, state.evidence, state.resolutionInstruction),
+		).value
 		val reviews = validator.validateReview(state.runId, state.sentences, state.evidence, output)
 		val artifacts = state.artifacts + WorkflowArtifact(
 			WorkflowArtifactKind.REVIEWER_OUTPUT,
@@ -167,39 +104,36 @@ class GenerationWorkflowService(
 			sentences = state.sentences,
 			reviews = reviews,
 		)
-		val conflict = reviews.firstOrNull { it.verdict == ReviewVerdict.CONFLICT }
-		if (conflict != null) {
-			val intervention = ConflictIntervention(
-				id = idGenerator(),
-				sentenceId = conflict.sentenceId,
-				version = 1,
-				reason = requireNotNull(conflict.reason),
-				evidenceIds = conflict.evidenceIds,
-			)
-			return state.copy(
-				status = GenerationRunStatus.NEEDS_YOUR_CALL,
-				reviews = reviews,
-				artifacts = artifacts + WorkflowArtifact(
-					WorkflowArtifactKind.CONFLICT,
-					artifacts.size,
-					reviews = listOf(conflict),
-					detail = conflict.reason,
-				),
-				pendingIntervention = intervention,
+		val conflicts = reviews.filter { it.verdict == ReviewVerdict.CONFLICT }
+		val conflictSentenceIds = conflicts.map { it.sentenceId }.toSet()
+		val reviewedSentences = state.sentences.filterNot { it.id in conflictSentenceIds }
+		val reviewedReviews = reviews.filterNot { it.sentenceId in conflictSentenceIds }
+		val reviewedArtifacts = if (conflicts.isEmpty()) {
+			artifacts
+		} else {
+			artifacts + WorkflowArtifact(
+				WorkflowArtifactKind.CONFLICT,
+				artifacts.size,
+				reviews = conflicts,
+				detail = "Automatically omitted ${conflicts.size} conflicting sentence(s).",
 			)
 		}
-		val targets = reviews.filter { it.verdict == ReviewVerdict.NEEDS_SUPPORT }.map { it.sentenceId }
+		val targets = reviewedReviews.filter { it.verdict == ReviewVerdict.NEEDS_SUPPORT }.map { it.sentenceId }
 		val status = when {
+			reviewedSentences.isEmpty() -> GenerationRunStatus.NEEDS_REVIEW
 			targets.isEmpty() -> GenerationRunStatus.READY
 			state.semanticRewriteAttempt >= maxSemanticRewrites -> GenerationRunStatus.NEEDS_REVIEW
 			else -> GenerationRunStatus.REWRITING
 		}
 		return state.copy(
 			status = status,
-			reviews = reviews,
-			artifacts = artifacts,
+			sentences = reviewedSentences,
+			reviews = reviewedReviews,
+			artifacts = reviewedArtifacts,
 			rewriteTargetSentenceIds = targets,
-			resolutionInstruction = null,
+			resolutionInstruction = if (status == GenerationRunStatus.REWRITING) state.resolutionInstruction else null,
+			pendingIntervention = null,
+			failureCode = if (reviewedSentences.isEmpty()) "NO_PUBLISHABLE_SENTENCES" else null,
 		)
 	}
 
@@ -230,4 +164,5 @@ class GenerationWorkflowService(
 			),
 		)
 	}
+
 }
