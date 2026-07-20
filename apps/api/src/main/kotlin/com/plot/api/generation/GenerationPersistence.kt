@@ -241,7 +241,6 @@ class GenerationPersistence(
 				timestamp(now), claim.workspaceId, lease.stepId,
 			)
 			insertCheckpoint(claim.workspaceId, state, state.artifactType, now, lease.stepId)
-			if (state.status == GenerationRunStatus.NEEDS_YOUR_CALL) insertIntervention(claim.workspaceId, state, now)
 			if (state.status == GenerationRunStatus.READY || state.status == GenerationRunStatus.NEEDS_REVIEW) {
 				insertCheckpoint(claim.workspaceId, state, "FINAL_OUTPUT", now)
 				materializeTerminal(claim.workspaceId, state, now)
@@ -322,66 +321,6 @@ class GenerationPersistence(
 		timestamp(clock.instant()), timestamp(staleBefore),
 	)
 
-	fun resolveConflict(
-		workspaceId: UUID,
-		userId: UUID,
-		resolution: ConflictResolution,
-		workflowService: GenerationWorkflowService,
-	): GenerationWorkflowState = transactionTemplate.execute {
-		val row = jdbcTemplate.query(
-			"""
-			select generation_run_id, version, status
-			from generation_interventions
-			where workspace_id = ? and id = ?
-			for update
-			""".trimIndent(),
-			{ rs, _ -> Triple(rs.getObject(1, UUID::class.java), rs.getLong(2), rs.getString(3)) },
-			workspaceId, resolution.interventionId,
-		).firstOrNull() ?: throw StaleConflictResolutionException("Conflict intervention does not exist")
-		if (row.second != resolution.expectedVersion || row.third != "PENDING") {
-			throw StaleConflictResolutionException("Conflict resolution version is stale")
-		}
-		val current = loadState(workspaceId, row.first)
-		val resolved = workflowService.resolve(current, resolution)
-		val now = clock.instant()
-		val resolutionVersion = 1
-		jdbcTemplate.update(
-			"""
-			insert into generation_intervention_resolutions (id, workspace_id, generation_run_id, intervention_id,
-			 version, action, preferred_generation_input_id, provided_wording, decided_by_user_id, created_at)
-			values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-			""".trimIndent(),
-			uuidGenerator.next(), workspaceId, row.first, resolution.interventionId, resolutionVersion,
-			resolution.action.name, resolution.preferredEvidenceId, resolution.providedWording?.trim(), userId, timestamp(now),
-		)
-		val updated = jdbcTemplate.update(
-			"""
-			update generation_interventions set status = 'RESOLVED', resolution_action = ?, resolved_at = ?,
-			 version = version + 1, updated_at = ?
-			where workspace_id = ? and id = ? and status = 'PENDING' and version = ?
-			""".trimIndent(),
-			resolution.action.name, timestamp(now), timestamp(now), workspaceId, resolution.interventionId, resolution.expectedVersion,
-		)
-		if (updated != 1) throw StaleConflictResolutionException("Conflict resolution version is stale")
-		insertCheckpoint(workspaceId, resolved, "CONFLICT_DECISION", now)
-		if (resolved.status == GenerationRunStatus.NEEDS_REVIEW) {
-			insertCheckpoint(workspaceId, resolved, "FINAL_OUTPUT", now)
-			materializeTerminal(workspaceId, resolved, now, userId)
-		}
-		jdbcTemplate.update(
-			"""
-			update generation_runs set status = ?, semantic_rewrite_attempt = ?, transition_version = transition_version + 1,
-			 next_attempt_at = ?, finished_at = ?, updated_at = ?
-			where workspace_id = ? and id = ? and status = 'NEEDS_YOUR_CALL'
-			""".trimIndent(),
-			resolved.status.name, resolved.semanticRewriteAttempt,
-			timestamp(now).takeIf { resolved.status == GenerationRunStatus.REWRITING },
-			timestamp(now).takeIf { resolved.status == GenerationRunStatus.NEEDS_REVIEW },
-			timestamp(now), workspaceId, row.first,
-		)
-		resolved
-	}
-
 	private fun insertEvidence(workspaceId: UUID, evidence: EvidenceSnapshot) {
 		jdbcTemplate.update(
 			"""
@@ -411,25 +350,6 @@ class GenerationPersistence(
 			"insert into generation_artifacts (id, workspace_id, generation_run_id, workflow_step_id, artifact_type, artifact_version, sequence_no, payload, created_at) values (?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?)",
 			uuidGenerator.next(), workspaceId, state.runId, stepId, type, version, sequence,
 			objectMapper.writeValueAsString(state), timestamp(now),
-		)
-	}
-
-	private fun insertIntervention(workspaceId: UUID, state: GenerationWorkflowState, now: Instant) {
-		val intervention = requireNotNull(state.pendingIntervention)
-		val exists = jdbcTemplate.queryForObject(
-			"select count(*) from generation_interventions where workspace_id = ? and id = ?",
-			Int::class.java, workspaceId, intervention.id,
-		) ?: 0
-		if (exists > 0) return
-		jdbcTemplate.update(
-			"""
-			insert into generation_interventions (id, workspace_id, generation_run_id, sentence_id, kind, status,
-			 version, conflict_detail, created_at, updated_at)
-			values (?, ?, ?, ?, 'SOURCE_CONFLICT', 'PENDING', ?, ?::jsonb, ?, ?)
-			""".trimIndent(),
-			intervention.id, workspaceId, state.runId, intervention.sentenceId, intervention.version,
-			objectMapper.writeValueAsString(mapOf("reason" to intervention.reason, "evidenceIds" to intervention.evidenceIds)),
-			timestamp(now), timestamp(now),
 		)
 	}
 

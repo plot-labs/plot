@@ -124,14 +124,13 @@ class CertificationEvidenceReconcilerTest {
 	}
 
 	@Test
-	fun `human decision citation and warning export mismatches are hard failures`() {
+	fun `citation and warning export mismatches are hard failures`() {
 		val result = reconciler.reconcile(
 			campaign(), execution(), browser(),
-			audit().copy(interventionCount = 1, resolvedInterventionCount = 0, citationCount = 1, exports = audit().exports.take(1)),
+			audit().copy(citationCount = 1, exports = audit().exports.take(1)),
 		)
 
 		assertEquals(EvidenceOutcome.HARD_GATE_FAIL, result.outcome)
-		assertTrue(ReconciliationCode.HUMAN_DECISION_MISMATCH in result.codes)
 		assertTrue(ReconciliationCode.CITATION_COUNT_MISMATCH in result.codes)
 		assertTrue(ReconciliationCode.EXPORT_SEQUENCE_MISMATCH in result.codes)
 	}
@@ -190,7 +189,7 @@ class CertificationEvidenceReconcilerTest {
 		mapOf("latencyMs" to 100, "citationCount" to 2, "reviewNeededSentenceCount" to 1, "exportEventCount" to 2),
 		listOf(
 			"BROWSER_CONTRACT_OBSERVED", "CITATION_POPOVER_OBSERVED", "EVIDENCE_FREE_SENTENCE_OBSERVED",
-			"EXPORT_CONFIRMATION_OBSERVED", "HUMAN_DECISION_OBSERVED", "MARKDOWN_SAFETY_OBSERVED",
+			"EXPORT_CONFIRMATION_OBSERVED", "MARKDOWN_SAFETY_OBSERVED",
 			"PENDING_AUDIT_RECONCILIATION", "REAL_GITHUB_BLOCKS_OBSERVED", "STALE_EDIT_OBSERVED",
 		),
 		null, null,

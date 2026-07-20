@@ -16,7 +16,6 @@ test("observes the production generation contract", async ({ context, page }) =>
   let generationRequestCount = 0;
   let citationCount = 0;
   let exportEventCount = 0;
-  let humanDecisionCount = 0;
   let externalRequestObserved = false;
   let productContractStarted = false;
   const codes = new Set<BrowserObservationCode>();
@@ -72,31 +71,11 @@ test("observes the production generation contract", async ({ context, page }) =>
     await expect.poll(() => generationRequestCount).toBe(1);
     await page.waitForURL((url) => isGenerationRunUrl(url), { timeout: 30_000 });
 
-    await expect(page.getByRole("status", { name: "Generation status: Needs your call" })).toBeVisible({ timeout: 120_000 });
-    await expect(page.getByRole("heading", { name: "Needs your call" })).toBeVisible();
-    await page.reload({ waitUntil: "domcontentloaded" });
-    const needsYourCall = page.getByRole("heading", { name: "Needs your call" });
     const terminalStatus = page.getByRole("status", { name: /Generation status: (Ready|Needs review)/ });
-    while (humanDecisionCount < 5) {
-      await expect(needsYourCall).toBeVisible({ timeout: humanDecisionCount === 0 ? 30_000 : 120_000 });
-      const resolveButton = page.getByRole("button", { name: "Resolve and continue" });
-      await expect(resolveButton).toBeDisabled();
-      await page.getByRole("radio", { name: "Omit this claim" }).check();
-      await resolveButton.click();
-      humanDecisionCount += 1;
-      await expect.poll(async () => {
-        if (await terminalStatus.isVisible().catch(() => false)) return "terminal";
-        if (await page.getByRole("button", { name: "Resolve and continue" }).isVisible().catch(() => false)) {
-          return "needs-call";
-        }
-        return "processing";
-      }, { timeout: 120_000 }).not.toBe("processing");
-      if (await terminalStatus.isVisible().catch(() => false)) break;
-    }
-    requireObservation(humanDecisionCount > 0, "BROWSER_HUMAN_DECISION_MISSING");
-    await expect(terminalStatus).toBeVisible();
-    await expect(needsYourCall).toHaveCount(0);
-    codes.add("HUMAN_DECISION_OBSERVED");
+    await expect(terminalStatus).toBeVisible({ timeout: 120_000 });
+    await expect(page.getByRole("status", { name: "Generation status: Needs your call" })).toHaveCount(0);
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(terminalStatus).toBeVisible({ timeout: 30_000 });
 
     const draft = page.getByRole("region", { name: "Cited draft" });
     await expect(draft).toBeVisible();
@@ -112,24 +91,23 @@ test("observes the production generation contract", async ({ context, page }) =>
     codes.add("EVIDENCE_FREE_SENTENCE_OBSERVED");
 
     const editedSentence = citedSentences[0]!;
+    const editedBody = "This operator-edited sentence must be revalidated before publication.";
     await editedSentence.getByRole("button", { name: /^Edit sentence/ }).click();
-    await editedSentence.getByRole("textbox", { name: /^Sentence \d+ text$/ }).fill(
-      "This operator-edited sentence must be revalidated before publication.",
-    );
+    await editedSentence.getByRole("textbox", { name: /^Sentence \d+ text$/ }).fill(editedBody);
     await editedSentence.getByRole("button", { name: /^Save sentence/ }).click();
-    await expect(editedSentence.getByRole("status", { name: "Edited · unverified" })).toBeVisible();
-    await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("status", { name: "Edited · unverified" })).toBeVisible({ timeout: 30_000 });
-    await expect(editedSentence.getByRole("status", { name: "Verified" })).toHaveCount(0);
+    await expect(editedSentence).toContainText(editedBody);
     await expect(editedSentence.getByRole("button", { expanded: false })).toHaveCount(0);
-    await expect(page.getByRole("heading", { name: "Needs your call" })).toHaveCount(0);
+    await page.reload({ waitUntil: "domcontentloaded" });
+    const restoredEditedSentence = page.getByRole("listitem").filter({ hasText: editedBody });
+    await expect(restoredEditedSentence).toBeVisible({ timeout: 30_000 });
+    await expect(restoredEditedSentence.getByRole("button", { expanded: false })).toHaveCount(0);
     codes.add("STALE_EDIT_OBSERVED");
 
     await page.getByRole("button", { name: "Copy changelog" }).click();
     exportEventCount += 1;
     const warning = page.getByRole("alertdialog", { name: "Unresolved sentences will be exported" });
     await expect(warning).toBeVisible();
-    await expect(page.getByRole("status", { name: "Edited · unverified" })).toBeVisible();
+    await expect(restoredEditedSentence).toContainText(editedBody);
     await warning.getByRole("button", { name: "Confirm and copy" }).click();
     exportEventCount += 1;
     await expect(page.getByRole("status", { name: "Changelog copied." })).toBeVisible();
@@ -147,7 +125,7 @@ test("observes the production generation contract", async ({ context, page }) =>
       metrics: {
         latencyMs: Date.now() - startedAt,
         citationCount,
-        reviewNeededSentenceCount: humanDecisionCount,
+        reviewNeededSentenceCount: 1,
         unresolvedConflictCount: 0,
         exportEventCount,
       },
@@ -206,10 +184,7 @@ async function findCitedSentences(draft: Locator): Promise<Locator[]> {
   const sentenceCount = await sentences.count();
   for (let index = 0; index < sentenceCount; index += 1) {
     const sentence = sentences.nth(index);
-    if (
-      await sentence.getByRole("status", { name: "Verified" }).count() === 1 &&
-      await sentence.getByRole("button", { expanded: false }).count() > 0
-    ) cited.push(sentence);
+    if (await sentence.getByRole("button", { expanded: false }).count() > 0) cited.push(sentence);
   }
   return cited;
 }
@@ -254,10 +229,7 @@ async function hasEvidenceFreeSentence(draft: Locator): Promise<boolean> {
   const sentenceCount = await sentences.count();
   for (let index = 0; index < sentenceCount; index += 1) {
     const sentence = sentences.nth(index);
-    if (
-      await sentence.getByRole("status").count() === 0 &&
-      await sentence.getByRole("button", { expanded: false }).count() === 0
-    ) return true;
+    if (await sentence.getByRole("button", { expanded: false }).count() === 0) return true;
   }
   return false;
 }

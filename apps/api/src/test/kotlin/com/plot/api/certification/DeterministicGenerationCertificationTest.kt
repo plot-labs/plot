@@ -9,7 +9,6 @@ import com.plot.api.ai.provider.ReviewerModelRequest
 import com.plot.api.ai.provider.RewriteModelRequest
 import com.plot.api.ai.provider.WriterModelRequest
 import com.plot.api.contentpack.ContentPackService
-import com.plot.api.contentpack.ExportConfirmationRequiredException
 import com.plot.api.contentpack.dto.ExportDisposition
 import com.plot.api.dev.DevContext
 import com.plot.api.generation.DurableGenerationCheckpoint
@@ -33,7 +32,6 @@ import java.time.Instant
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import org.springframework.beans.factory.annotation.Autowired
@@ -57,7 +55,7 @@ class DeterministicGenerationCertificationTest {
 	@Autowired private lateinit var mapper: ObjectMapper
 
 	@Test
-	fun `unsupported corpus claim exhausts bounded rewrite and acknowledged export stays failed safe and exactly once`() {
+	fun `unsupported corpus claim exhausts bounded rewrite and export omits it exactly once`() {
 		val corpusCase = corpus().cases.single { it.id == "unsupported-prompt-injection" }
 		assertTrue("prompt-injection" in corpusCase.tags)
 		assertEquals(ReviewVerdict.NEEDS_SUPPORT, corpusCase.sentences.single().expectedVerdict)
@@ -124,32 +122,27 @@ class DeterministicGenerationCertificationTest {
 		val reviewNeeded = pack.variant.sentences.single()
 		assertEquals("NEEDS_SUPPORT", reviewNeeded.verdict)
 		assertTrue(reviewNeeded.body.contains("Attempt 3"))
-		val warning = assertFailsWith<ExportConfirmationRequiredException> {
-			contentPacks.export(pack.variant.id, false, emptyList(), ExportDisposition.COPY)
-		}
-		assertEquals(listOf(reviewNeeded.revisionId), warning.revisionIds)
-
 		val firstExport = contentPacks.export(
 			pack.variant.id,
-			true,
-			listOf(reviewNeeded.revisionId),
+			false,
+			emptyList(),
 			ExportDisposition.COPY,
 		)
 		val repeatedExport = contentPacks.export(
 			pack.variant.id,
-			true,
-			listOf(reviewNeeded.revisionId),
+			false,
+			emptyList(),
 			ExportDisposition.COPY,
 		)
 		assertEquals(firstExport.exportId, repeatedExport.exportId)
 		assertEquals(firstExport.text, repeatedExport.text)
-		assertTrue(firstExport.warningAcknowledged)
-		assertTrue(firstExport.text.contains("Attempt 3"))
+		assertFalse(firstExport.warningAcknowledged)
+		assertFalse(firstExport.text.contains("Attempt 3"))
 		assertFalse(firstExport.text.contains("<script", ignoreCase = true))
 		assertFalse(firstExport.text.contains("javascript:", ignoreCase = true))
 		assertFalse(firstExport.text.contains(corpusCase.evidence.single().body))
-		assertEquals(2, count("generation_export_events", state.runId))
-		assertEquals(listOf("REJECTED", "SUCCEEDED"), jdbcTemplate.queryForList(
+		assertEquals(1, count("generation_export_events", state.runId))
+		assertEquals(listOf("SUCCEEDED"), jdbcTemplate.queryForList(
 			"select status from generation_export_events where generation_run_id = ? order by created_at, id",
 			String::class.java,
 			state.runId,

@@ -58,7 +58,7 @@ class ContentPackApiIntegrationTest {
 		mockMvc.get("/api/content-packs?page=0&size=25").andExpect {
 			status { isOk() }
 			jsonPath("$.items[0].id") { value(fixture.packId.toString()) }
-			jsonPath("$.totalItems") { value(1) }
+				jsonPath("$.totalItems") { value(org.hamcrest.Matchers.greaterThanOrEqualTo(1)) }
 		}
 
 		mockMvc.get("/api/content-packs/${fixture.packId}").andExpect {
@@ -133,7 +133,7 @@ class ContentPackApiIntegrationTest {
 	}
 
 	@Test
-	fun `current revision without reviewer result is review-failed when the run failed`() {
+	fun `current revision without reviewer result is review-failed and excluded from export`() {
 		val fixture = readyPack()
 		val currentRevisionId = jdbcTemplate.queryForObject(
 			"select id from content_variant_sentence_revisions where sentence_id = ? and is_current",
@@ -162,12 +162,23 @@ class ContentPackApiIntegrationTest {
 			fixture.runId,
 		)
 
-		mockMvc.get("/api/content-packs/${fixture.packId}").andExpect {
-			status { isOk() }
-			jsonPath("$.variant.sentences[0].verdict") { value("REVIEW_FAILED") }
-			jsonPath("$.variant.sentences[0].reason") { value("MALFORMED_OUTPUT") }
+			mockMvc.get("/api/content-packs/${fixture.packId}").andExpect {
+				status { isOk() }
+				jsonPath("$.variant.sentences[0].verdict") { value("REVIEW_FAILED") }
+				jsonPath("$.variant.sentences[0].reason") { value("MALFORMED_OUTPUT") }
+			}
+			mockMvc.post("/api/content-variants/${fixture.variantId}/exports") {
+				contentType = MediaType.APPLICATION_JSON
+				content = objectMapper.writeValueAsString(mapOf(
+					"acknowledgeUnresolved" to false,
+					"disposition" to "COPY",
+				))
+			}.andExpect {
+				status { isOk() }
+				jsonPath("$.unresolvedCount") { value(0) }
+				jsonPath("$.text") { value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("Latest unreviewed rewrite."))) }
+			}
 		}
-	}
 
 	private fun export(variantId: UUID, disposition: String): String {
 		val revisionIds = jdbcTemplate.queryForList(

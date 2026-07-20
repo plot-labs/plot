@@ -120,8 +120,8 @@ flowchart TB
 - R6. A factual sentence that requires support must retain sentence-level citations grounded in its generation-time source snapshot, while a sentence that does not require evidence may remain uncited.
 - R7. Export must be blocked while unresolved review failures or conflicts remain and may proceed only after the existing explicit confirmation path permits it.
 - R8. An unsupported claim must fail review and re-enter bounded rewriting rather than being presented as confirmed text.
-- R9. Rewrite exhaustion must expose the failed sentence to the user as review-needed draft content and must not silently convert it into a confirmed sentence.
-- R10. Conflicting evidence must produce a Needs your call state instead of selecting a definitive sentence without user input.
+- R9. Rewrite exhaustion must preserve the failed revision for audit while excluding it from the generated result and export.
+- R10. Conflicting evidence must omit the disputed claim instead of selecting a definitive sentence or asking the user to operate the review loop.
 - R11. A user edit that invalidates prior support must make the affected citation stale or otherwise require revalidation before confirmed export.
 - R12. The workflow must recover from a service restart at its persisted checkpoint without losing the evidence snapshot, review state, or export safety decision.
 - R13. Source content and prompt-injection text must not alter the fixed workflow, acquire new capabilities, introduce active unapproved Markdown or HTML, substitute unapproved links, or bypass validation and export controls.
@@ -154,11 +154,11 @@ flowchart TB
 - AE3. **Covers R8, R9, R17.**
   - **Given:** A controlled source cannot support one generated factual sentence.
   - **When:** Review rejects the sentence until the rewrite limit is reached.
-  - **Then:** The sentence remains visibly review-needed, the attempt is a hard-gate failure if the system presents it as confirmed, and the failure is recorded with its rerun history.
+  - **Then:** The sentence is absent from the generated result and export, the attempt is a hard-gate failure if the system presents it as confirmed, and the failure is recorded with its rerun history.
 - AE4. **Covers R10, R17.**
   - **Given:** Two preserved sources materially disagree about the same release claim.
   - **When:** The workflow reviews the generated sentence.
-  - **Then:** The user receives a Needs your call conflict with no fabricated resolution, and any automatic definitive claim produces NO-GO.
+  - **Then:** The disputed claim is omitted from the generated result, and any automatic definitive claim produces NO-GO.
 - AE5. **Covers R11, R12.**
   - **Given:** A supported sentence has completed review and the workflow has persisted its checkpoint.
   - **When:** The user changes the sentence or the service restarts.
@@ -676,7 +676,7 @@ U9 lands first so Kotlin, Playwright, and the orchestrator share one sealed mani
 
 - Unsupported factual claim re-enters bounded rewriting and cannot appear confirmed before support passes.
 - Rewrite exhaustion preserves the failed sentence as visible review-needed draft content and blocks unconfirmed export.
-- Conflicting snapshots produce `Needs your call`; only an attributable human decision advances the state.
+- Conflicting snapshots omit the disputed claim without exposing an internal review step.
 - Editing a supported sentence marks its citation stale or requires revalidation before export.
 - Prompt injection cannot change workflow order, retry limits, model/route selection, source link, review result, or report projection.
 - Same-process recovery resumes from the named checkpoint with unchanged snapshot hash, prior decision state, and invocation counts.
@@ -713,7 +713,7 @@ U9 lands first so Kotlin, Playwright, and the orchestrator share one sealed mani
 2. Configure one Chromium project, one worker, and zero Playwright retries. Each attempt receives a fresh browser context and unique server-side idempotency key.
 3. Treat GitHub installation/import as setup evidence from the existing runbook. Verify in-browser that the recorded imported Writing Blocks are discoverable before generation begins.
 4. Use accessible roles, labels, and web-first assertions. Do not use fixed sleeps or automate github.com UI.
-5. Inspect inline source labels, popover snapshot display, safe original links, sentence-local review status, `Needs your call`, stale edit behavior, blocked export, explicit confirmation, and final Markdown content.
+5. Inspect inline source labels, popover snapshot display, safe original links, automatic conflict omission, stale edit behavior, blocked export, explicit confirmation, and final Markdown content.
 6. For real-source runs, disable traces, screenshots, video, HTML reports, stored auth state, and assertion output that includes DOM or response bodies. Emit only a redacted browser observation envelope keyed by campaign, model execution, manifest hash, and generation run.
 7. Keep diagnostic capture in a separate synthetic-fixture reproduction mode with no GitHub/OpenRouter secret. U7 performs offline reconciliation with the independent audit envelope; U6 cannot declare `PASS` by itself.
 
@@ -723,7 +723,7 @@ U9 lands first so Kotlin, Playwright, and the orchestrator share one sealed mani
 - Supported factual sentences render inline source labels and open the corresponding snapshot popover and permitted original link.
 - Evidence-free prose is not forced to display a citation.
 - An unresolved failed sentence or conflict blocks export; the allowed warning path requires explicit operator confirmation.
-- `Needs your call` remains undecided until a human action is recorded and survives a page reload.
+- Conflicting claims remain absent after a page reload.
 - Editing a cited sentence produces stale/revalidation UI and prevents it from silently remaining confirmed.
 - Exported/copied Markdown preserves safe source labels and original links while excluding snapshot excerpts and hidden evidence.
 - Browser observations contain the safe IDs and states needed for U7 to reconcile the same run, sentence states, citation snapshot hashes, human decisions, and export event.

@@ -101,27 +101,29 @@ class ContentPackService(
 
 	fun export(variantId: UUID, acknowledge: Boolean, acknowledgedRevisionIds: List<UUID>, disposition: ExportDisposition): ContentExportResponse {
 		val outcome = transactionTemplate.execute {
-			val projection = loadPack("cv.id = ?", variantId)
-			jdbcTemplate.queryForObject(
+			jdbcTemplate.query(
 				"select id from content_variants where workspace_id = ? and id = ? for update",
-				UUID::class.java,
+				{ rs, _ -> rs.getObject(1, UUID::class.java) },
 				devContext.devWorkspaceId,
 				variantId,
-			)
+			).firstOrNull() ?: notFound()
+			val projection = loadPack("cv.id = ?", variantId)
 			val runId = projection.generationRunId
 			val evidence = loadEvidence(runId)
 			val evidenceIds = evidence.map { it.id }.toSet()
-			val exportSentences = projection.variant.sentences.map { sentence ->
-				ExportSentence(
-					sentence.id, sentence.revisionId, sentence.orderIndex, sentence.body,
-					ExportSentenceStatus.valueOf(sentence.verdict),
-					sentence.citations.filter { it.evidenceId in evidenceIds }.mapIndexed { index, citation ->
-						SentenceCitation(
-							sentence.id, sentence.revisionId, citation.evidenceId, index, CitationStatus.valueOf(citation.status),
-						)
-					},
-				)
-			}
+			val exportSentences = projection.variant.sentences
+				.filter { it.verdict in PUBLISHABLE_VERDICTS }
+				.map { sentence ->
+					ExportSentence(
+						sentence.id, sentence.revisionId, sentence.orderIndex, sentence.body,
+						ExportSentenceStatus.valueOf(sentence.verdict),
+						sentence.citations.filter { it.evidenceId in evidenceIds }.mapIndexed { index, citation ->
+							SentenceCitation(
+								sentence.id, sentence.revisionId, citation.evidenceId, index, CitationStatus.valueOf(citation.status),
+							)
+						},
+					)
+				}
 			val unresolved = exportSentences.filter { it.status.isUnresolved }
 			val unresolvedIds = unresolved.map { it.id }
 			val unresolvedRevisionIds = unresolved.map { it.revisionId }
@@ -283,6 +285,10 @@ class ContentPackService(
 	private fun sha256(value: String): String = HexFormat.of().formatHex(
 		MessageDigest.getInstance("SHA-256").digest(value.toByteArray(Charsets.UTF_8)),
 	)
+
+	private companion object {
+		val PUBLISHABLE_VERDICTS = setOf("SUPPORTED", "NOT_REQUIRED", "USER_MODIFIED")
+	}
 }
 
 private sealed interface ExportAttempt {

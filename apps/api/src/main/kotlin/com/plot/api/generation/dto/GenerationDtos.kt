@@ -1,6 +1,5 @@
 package com.plot.api.generation.dto
 
-import com.plot.api.generation.ConflictResolutionAction
 import com.plot.api.generation.GenerationRunStatus
 import com.plot.api.generation.GenerationWorkflowState
 import com.plot.api.generation.model.ReviewVerdict
@@ -16,13 +15,6 @@ data class CreateGenerationRequest(
 	@field:NotNull val sourceScopeId: UUID?,
 	@field:NotEmpty @field:Size(max = 20) val writingBlockIds: List<UUID>,
 	@field:Size(max = 2_000) val instruction: String? = null,
-)
-
-data class ResolveConflictRequest(
-	@field:NotNull val expectedVersion: Long?,
-	@field:NotNull val action: ConflictResolutionAction?,
-	val preferredEvidenceId: UUID? = null,
-	@field:Size(max = 4_000) val providedWording: String? = null,
 )
 
 data class GenerationRunResponse(

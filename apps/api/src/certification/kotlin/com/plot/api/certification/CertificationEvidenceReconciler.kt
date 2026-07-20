@@ -9,7 +9,6 @@ enum class ReconciliationCode {
 	BROWSER_OBSERVATION_NOT_PENDING_AUDIT,
 	RUN_NOT_DURABLY_COMPLETE,
 	INVOCATION_SEQUENCE_INVALID,
-	HUMAN_DECISION_MISMATCH,
 	SENTENCE_STATE_MISMATCH,
 	CITATION_STATE_MISMATCH,
 	CITATION_COUNT_MISMATCH,
@@ -139,9 +138,6 @@ class CertificationEvidenceReconciler {
 		}) {
 			codes += ReconciliationCode.ROUTE_ATTRIBUTION_MISMATCH
 		}
-		if ("HUMAN_DECISION_OBSERVED" in browser.codes &&
-			(audit.interventionCount == 0 || audit.interventionCount != audit.resolvedInterventionCount)
-		) codes += ReconciliationCode.HUMAN_DECISION_MISMATCH
 		if ((audit.currentRevisionOriginCounts["USER_MODIFIED"] ?: 0) < 1 ||
 			(audit.sentenceVerdictCounts["NOT_REQUIRED"] ?: 0) < 1
 		) codes += ReconciliationCode.SENTENCE_STATE_MISMATCH
@@ -277,7 +273,6 @@ class CertificationEvidenceReconciler {
 			"CITATION_POPOVER_OBSERVED",
 			"EVIDENCE_FREE_SENTENCE_OBSERVED",
 			"EXPORT_CONFIRMATION_OBSERVED",
-			"HUMAN_DECISION_OBSERVED",
 			"MARKDOWN_SAFETY_OBSERVED",
 			"PENDING_AUDIT_RECONCILIATION",
 			"REAL_GITHUB_BLOCKS_OBSERVED",
