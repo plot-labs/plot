@@ -1,7 +1,7 @@
 export type SourceProvider = "GITHUB" | "SLACK" | "LINEAR";
 export type GenerationStatus = "QUEUED" | "WRITING" | "REVIEWING" | "REWRITING" | "READY" | "NEEDS_YOUR_CALL" | "NEEDS_REVIEW" | "FAILED";
 export type SentenceOrigin = "GENERATED" | "REWRITTEN" | "USER_MODIFIED";
-export type SentenceVerdict = "SUPPORTED" | "NOT_REQUIRED" | "NEEDS_SUPPORT" | "CONFLICT" | "USER_MODIFIED";
+export type SentenceVerdict = "SUPPORTED" | "NOT_REQUIRED" | "NEEDS_SUPPORT" | "CONFLICT" | "USER_MODIFIED" | "REVIEW_FAILED";
 export type CitationStatus = "ACTIVE" | "STALE" | "REMOVED";
 
 export interface GenerationEvidence {
@@ -85,7 +85,7 @@ export interface GenerationArtifact {
   kind: "WRITER_OUTPUT" | "REVIEWER_OUTPUT" | "REWRITER_OUTPUT" | "CONFLICT" | "CONFLICT_DECISION";
   sequence: number;
   sentenceIds: string[];
-  reviews: Array<{ sentenceId: string; verdict: Exclude<SentenceVerdict, "USER_MODIFIED">; evidenceIds: string[]; reason: string | null }>;
+  reviews: Array<{ sentenceId: string; verdict: Exclude<SentenceVerdict, "USER_MODIFIED" | "REVIEW_FAILED">; evidenceIds: string[]; reason: string | null }>;
   detail: string | null;
 }
 

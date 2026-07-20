@@ -94,6 +94,11 @@ data class GenerationInterventionResponse(
 fun GenerationWorkflowState.toResponse(): GenerationRunResponse {
 	val reviewsBySentence = reviews.associateBy { it.sentenceId }
 	val evidenceById = evidence.associateBy { it.id }
+	val reviewedRevisionIds = artifacts
+		.filter { it.kind.name == "REVIEWER_OUTPUT" }
+		.flatMap { it.sentences }
+		.map { it.revisionId }
+		.toSet()
 	return GenerationRunResponse(
 		id = runId,
 		status = status.name,
@@ -106,11 +111,21 @@ fun GenerationWorkflowState.toResponse(): GenerationRunResponse {
 		sentences = sentences.sortedBy { it.orderIndex }.map { sentence ->
 			val review = reviewsBySentence[sentence.id]
 			val userModified = sentence.origin == SentenceOrigin.USER_MODIFIED
+			val reviewFailed = failureCode != null && sentence.revisionId !in reviewedRevisionIds
 			GenerationSentenceResponse(
 				sentence.id, sentence.revisionId, sentence.revisionNumber, sentence.orderIndex, sentence.body,
-				sentence.origin, if (userModified) SentenceOrigin.USER_MODIFIED.name else review?.verdict?.name,
-				if (userModified) null else review?.reason,
-				(if (userModified) emptyList() else review?.evidenceIds.orEmpty()).mapNotNull { id -> evidenceById[id] }.map {
+				sentence.origin,
+				when {
+					userModified -> SentenceOrigin.USER_MODIFIED.name
+					reviewFailed -> "REVIEW_FAILED"
+					else -> review?.verdict?.name
+				},
+				when {
+					userModified -> null
+					reviewFailed -> failureCode
+					else -> review?.reason
+				},
+				(if (userModified || reviewFailed) emptyList() else review?.evidenceIds.orEmpty()).mapNotNull { id -> evidenceById[id] }.map {
 					GenerationCitationResponse(it.id, it.sourceProvider, it.sourceLabel, it.originalUrl, it.snapshotExcerpt)
 				},
 			)

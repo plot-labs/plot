@@ -99,40 +99,97 @@ class ContentPackService(
 			loadPack("cv.id = ?", variantId)
 		}
 
-	fun export(variantId: UUID, acknowledge: Boolean, acknowledgedRevisionIds: List<UUID>, disposition: ExportDisposition): ContentExportResponse = transactionTemplate.execute {
-		val projection = loadPack("cv.id = ?", variantId)
-		val runId = projection.generationRunId
-		val evidence = loadEvidence(runId)
-		val evidenceIds = evidence.map { it.id }.toSet()
-		val exportSentences = projection.variant.sentences.map { sentence ->
-			ExportSentence(
-				sentence.id, sentence.revisionId, sentence.orderIndex, sentence.body,
-				ExportSentenceStatus.valueOf(sentence.verdict),
-				sentence.citations.filter { it.evidenceId in evidenceIds }.mapIndexed { index, citation ->
-					SentenceCitation(
-						sentence.id, sentence.revisionId, citation.evidenceId, index, CitationStatus.valueOf(citation.status),
-					)
-				},
+	fun export(variantId: UUID, acknowledge: Boolean, acknowledgedRevisionIds: List<UUID>, disposition: ExportDisposition): ContentExportResponse {
+		val outcome = transactionTemplate.execute {
+			val projection = loadPack("cv.id = ?", variantId)
+			jdbcTemplate.queryForObject(
+				"select id from content_variants where workspace_id = ? and id = ? for update",
+				UUID::class.java,
+				devContext.devWorkspaceId,
+				variantId,
+			)
+			val runId = projection.generationRunId
+			val evidence = loadEvidence(runId)
+			val evidenceIds = evidence.map { it.id }.toSet()
+			val exportSentences = projection.variant.sentences.map { sentence ->
+				ExportSentence(
+					sentence.id, sentence.revisionId, sentence.orderIndex, sentence.body,
+					ExportSentenceStatus.valueOf(sentence.verdict),
+					sentence.citations.filter { it.evidenceId in evidenceIds }.mapIndexed { index, citation ->
+						SentenceCitation(
+							sentence.id, sentence.revisionId, citation.evidenceId, index, CitationStatus.valueOf(citation.status),
+						)
+					},
+				)
+			}
+			val unresolved = exportSentences.filter { it.status.isUnresolved }
+			val unresolvedIds = unresolved.map { it.id }
+			val unresolvedRevisionIds = unresolved.map { it.revisionId }
+			if (unresolvedIds.isNotEmpty() && !acknowledge) {
+				recordExport(runId, variantId, disposition, unresolvedIds.size, false, "REJECTED", null)
+				return@execute ExportAttempt.ConfirmationRequired(unresolvedIds, unresolvedRevisionIds)
+			}
+			if (acknowledge && acknowledgedRevisionIds.toSet() != unresolvedRevisionIds.toSet()) {
+				recordExport(runId, variantId, disposition, unresolvedIds.size, false, "REJECTED", null)
+				return@execute ExportAttempt.ConfirmationRequired(unresolvedIds, unresolvedRevisionIds)
+			}
+			val rendered = markdownExportService.render(exportSentences, evidence, acknowledge)
+			val outputHash = sha256(rendered.markdown)
+			val exportId = findSuccessfulExport(
+				runId,
+				variantId,
+				disposition,
+				rendered.unresolvedCount,
+				rendered.warningAcknowledged,
+				outputHash,
+			) ?: recordExport(
+				runId,
+				variantId,
+				disposition,
+				rendered.unresolvedCount,
+				rendered.warningAcknowledged,
+				"SUCCEEDED",
+				outputHash,
+			)
+			ExportAttempt.Completed(ContentExportResponse(
+				exportId, disposition, "plot-changelog-${projection.id}.md", "text/markdown;charset=UTF-8", rendered.markdown,
+				rendered.unresolvedCount, rendered.warningAcknowledged,
+			))
+		}
+		return when (outcome) {
+			is ExportAttempt.Completed -> outcome.response
+			is ExportAttempt.ConfirmationRequired -> throw ExportConfirmationRequiredException(
+				outcome.sentenceIds,
+				outcome.revisionIds,
 			)
 		}
-		val unresolved = exportSentences.filter { it.status.isUnresolved }
-		val unresolvedIds = unresolved.map { it.id }
-		val unresolvedRevisionIds = unresolved.map { it.revisionId }
-		if (unresolvedIds.isNotEmpty() && !acknowledge) {
-			recordExport(runId, variantId, disposition, unresolvedIds.size, false, "REJECTED", null)
-			throw ExportConfirmationRequiredException(unresolvedIds, unresolvedRevisionIds)
-		}
-		if (acknowledge && acknowledgedRevisionIds.toSet() != unresolvedRevisionIds.toSet()) {
-			recordExport(runId, variantId, disposition, unresolvedIds.size, false, "REJECTED", null)
-			throw ExportConfirmationRequiredException(unresolvedIds, unresolvedRevisionIds)
-		}
-		val rendered = markdownExportService.render(exportSentences, evidence, acknowledge)
-		val exportId = recordExport(runId, variantId, disposition, rendered.unresolvedCount, rendered.warningAcknowledged, "SUCCEEDED", rendered.markdown)
-		ContentExportResponse(
-			exportId, disposition, "plot-changelog-${projection.id}.md", "text/markdown;charset=UTF-8", rendered.markdown,
-			rendered.unresolvedCount, rendered.warningAcknowledged,
-		)
 	}
+
+	private fun findSuccessfulExport(
+		runId: UUID,
+		variantId: UUID,
+		disposition: ExportDisposition,
+		unresolved: Int,
+		acknowledged: Boolean,
+		outputHash: String,
+	): UUID? = jdbcTemplate.query(
+		"""
+		select id from generation_export_events
+		where workspace_id = ? and generation_run_id = ? and content_variant_id = ? and format = 'MARKDOWN'
+		  and disposition = ? and status = 'SUCCEEDED' and unresolved_count = ?
+		  and warning_acknowledged = ? and output_content_hash = ? and created_by_user_id = ?
+		order by created_at, id limit 1
+		""".trimIndent(),
+		{ rs, _ -> rs.getObject(1, UUID::class.java) },
+		devContext.devWorkspaceId,
+		runId,
+		variantId,
+		disposition.name,
+		unresolved,
+		acknowledged,
+		outputHash,
+		devContext.devUserId,
+	).firstOrNull()
 
 	private fun loadPack(predicate: String, id: UUID): ContentPackResponse {
 		val header = jdbcTemplate.query(
@@ -156,10 +213,16 @@ class ContentPackService(
 		return jdbcTemplate.query(
 		"""
 		select s.id, r.id, r.revision_no, s.order_index, r.body, r.origin,
-		       case when r.origin = 'USER_MODIFIED' then 'USER_MODIFIED' else coalesce(e.verdict, 'NEEDS_SUPPORT') end,
-		       e.reason
+		       case
+		         when r.origin = 'USER_MODIFIED' then 'USER_MODIFIED'
+		         when e.verdict is not null then e.verdict
+		         when gr.error_code is not null then 'REVIEW_FAILED'
+		         else 'NEEDS_SUPPORT'
+		       end,
+		       case when e.verdict is null and gr.error_code is not null then gr.error_code else e.reason end
 		from content_variant_sentences s
 		join content_variant_sentence_revisions r on r.workspace_id=s.workspace_id and r.sentence_id=s.id and r.is_current
+		join generation_runs gr on gr.workspace_id=s.workspace_id and gr.id=s.generation_run_id
 		left join lateral (
 		 select verdict, reason from sentence_evaluations se
 		 where se.workspace_id=s.workspace_id and se.sentence_revision_id=r.id
@@ -201,7 +264,7 @@ class ContentPackService(
 		) }, devContext.devWorkspaceId, runId,
 	)
 
-	private fun recordExport(runId: UUID, variantId: UUID, disposition: ExportDisposition, unresolved: Int, acknowledged: Boolean, status: String, output: String?): UUID =
+	private fun recordExport(runId: UUID, variantId: UUID, disposition: ExportDisposition, unresolved: Int, acknowledged: Boolean, status: String, outputHash: String?): UUID =
 		uuidGenerator.next().also { id ->
 			jdbcTemplate.update(
 				"""
@@ -210,7 +273,7 @@ class ContentPackService(
 				values (?, ?, ?, ?, 'MARKDOWN', ?, ?, ?, ?, ?, ?, ?, ?)
 				""".trimIndent(),
 				id, devContext.devWorkspaceId, runId, variantId, disposition.name, status, unresolved, acknowledged,
-				output?.let(::sha256), if (status == "REJECTED") "EXPORT_CONFIRMATION_REQUIRED" else null,
+				outputHash, if (status == "REJECTED") "EXPORT_CONFIRMATION_REQUIRED" else null,
 				devContext.devUserId, timestamp(clock.instant()),
 			)
 		}
@@ -220,6 +283,11 @@ class ContentPackService(
 	private fun sha256(value: String): String = HexFormat.of().formatHex(
 		MessageDigest.getInstance("SHA-256").digest(value.toByteArray(Charsets.UTF_8)),
 	)
+}
+
+private sealed interface ExportAttempt {
+	data class Completed(val response: ContentExportResponse) : ExportAttempt
+	data class ConfirmationRequired(val sentenceIds: List<UUID>, val revisionIds: List<UUID>) : ExportAttempt
 }
 
 class ExportConfirmationRequiredException(val sentenceIds: List<UUID>, val revisionIds: List<UUID>) :

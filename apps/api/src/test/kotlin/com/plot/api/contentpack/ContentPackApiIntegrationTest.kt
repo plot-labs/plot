@@ -132,6 +132,43 @@ class ContentPackApiIntegrationTest {
 		).toSet())
 	}
 
+	@Test
+	fun `current revision without reviewer result is review-failed when the run failed`() {
+		val fixture = readyPack()
+		val currentRevisionId = jdbcTemplate.queryForObject(
+			"select id from content_variant_sentence_revisions where sentence_id = ? and is_current",
+			UUID::class.java,
+			fixture.firstSentenceId,
+		)!!
+		jdbcTemplate.update(
+			"update content_variant_sentence_revisions set is_current = false where id = ?",
+			currentRevisionId,
+		)
+		jdbcTemplate.update(
+			"""
+			insert into content_variant_sentence_revisions (
+				id, workspace_id, generation_run_id, content_variant_id, sentence_id,
+				revision_no, origin, body, is_current, created_at
+			) values (?, ?, ?, ?, ?, 2, 'REWRITTEN', 'Latest unreviewed rewrite.', true, now())
+			""".trimIndent(),
+			UUID.randomUUID(),
+			devContext.devWorkspaceId,
+			fixture.runId,
+			fixture.variantId,
+			fixture.firstSentenceId,
+		)
+		jdbcTemplate.update(
+			"update generation_runs set status = 'NEEDS_REVIEW', error_code = 'MALFORMED_OUTPUT' where id = ?",
+			fixture.runId,
+		)
+
+		mockMvc.get("/api/content-packs/${fixture.packId}").andExpect {
+			status { isOk() }
+			jsonPath("$.variant.sentences[0].verdict") { value("REVIEW_FAILED") }
+			jsonPath("$.variant.sentences[0].reason") { value("MALFORMED_OUTPUT") }
+		}
+	}
+
 	private fun export(variantId: UUID, disposition: String): String {
 		val revisionIds = jdbcTemplate.queryForList(
 			"select id from content_variant_sentence_revisions where content_variant_id = ? and is_current and origin = 'USER_MODIFIED'",

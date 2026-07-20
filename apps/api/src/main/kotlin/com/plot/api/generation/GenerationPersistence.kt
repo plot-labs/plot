@@ -79,7 +79,7 @@ class GenerationPersistence(
 			 id, workspace_id, source_scope_id, created_by_user_id, idempotency_key, request_fingerprint,
 			 status, workflow_version, prompt_version, output_schema_version, budget_version, provider,
 			 model_name, budget_snapshot, user_instruction, created_at, updated_at
-			) values (?, ?, ?, ?, ?, ?, 'QUEUED', 'fixed-v1', 'changelog-v1', 'generation-v1',
+			) values (?, ?, ?, ?, ?, ?, 'QUEUED', 'fixed-v1', 'changelog-v8', 'generation-v5',
 			 'budget-v1', ?, ?, ?::jsonb, ?, ?, ?)
 			on conflict (workspace_id, created_by_user_id, idempotency_key) do nothing
 			""".trimIndent(),
@@ -243,6 +243,7 @@ class GenerationPersistence(
 			insertCheckpoint(claim.workspaceId, state, state.artifactType, now, lease.stepId)
 			if (state.status == GenerationRunStatus.NEEDS_YOUR_CALL) insertIntervention(claim.workspaceId, state, now)
 			if (state.status == GenerationRunStatus.READY || state.status == GenerationRunStatus.NEEDS_REVIEW) {
+				insertCheckpoint(claim.workspaceId, state, "FINAL_OUTPUT", now)
 				materializeTerminal(claim.workspaceId, state, now)
 			}
 			val terminal = state.status in setOf(GenerationRunStatus.READY, GenerationRunStatus.NEEDS_REVIEW, GenerationRunStatus.FAILED)
@@ -363,7 +364,10 @@ class GenerationPersistence(
 		)
 		if (updated != 1) throw StaleConflictResolutionException("Conflict resolution version is stale")
 		insertCheckpoint(workspaceId, resolved, "CONFLICT_DECISION", now)
-		if (resolved.status == GenerationRunStatus.NEEDS_REVIEW) materializeTerminal(workspaceId, resolved, now, userId)
+		if (resolved.status == GenerationRunStatus.NEEDS_REVIEW) {
+			insertCheckpoint(workspaceId, resolved, "FINAL_OUTPUT", now)
+			materializeTerminal(workspaceId, resolved, now, userId)
+		}
 		jdbcTemplate.update(
 			"""
 			update generation_runs set status = ?, semantic_rewrite_attempt = ?, transition_version = transition_version + 1,
@@ -463,8 +467,9 @@ class GenerationPersistence(
 			}
 		}
 		val reviewArtifacts = state.artifacts.filter { it.kind == WorkflowArtifactKind.REVIEWER_OUTPUT }
+		val materializedSentenceIds = state.sentences.mapTo(mutableSetOf()) { it.id }
 		reviewArtifacts.forEachIndexed { reviewIndex, artifact ->
-			artifact.reviews.forEach { review ->
+			artifact.reviews.filter { it.sentenceId in materializedSentenceIds }.forEach { review ->
 				val sentence = artifact.sentences.single { it.id == review.sentenceId }
 				jdbcTemplate.update(
 					"insert into sentence_evaluations (id, workspace_id, generation_run_id, sentence_id, sentence_revision_id, review_attempt, verdict, reason, created_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?)",

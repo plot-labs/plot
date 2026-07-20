@@ -1,7 +1,6 @@
 package com.plot.api.github
 
 import com.plot.api.common.ApiException
-import java.net.URI
 import org.springframework.http.HttpStatus
 import org.springframework.core.env.Environment
 import org.springframework.stereotype.Component
@@ -16,6 +15,20 @@ class GitHubGuard(
 	private val properties: GitHubProperties,
 	private val environment: Environment,
 ) {
+	fun requireReadAccess() {
+		if (environment.activeProfiles.any { it == "generation-certification" }) {
+			if (environment.getProperty("server.address") !in setOf("localhost", "127.0.0.1", "::1")) {
+				throw ApiException(
+					HttpStatus.SERVICE_UNAVAILABLE,
+					"GITHUB_DEV_EXPOSURE_INVALID",
+					"GitHub development routes require a loopback server address",
+				)
+			}
+			return
+		}
+		requireEnabled()
+	}
+
 	fun requireEnabled() {
 		if (
 			!properties.enabled || properties.appId.isNullOrBlank() || properties.appSlug.isNullOrBlank() ||
@@ -57,7 +70,7 @@ class GitHubGuard(
 				"GitHub development routes require a loopback server address",
 			)
 		}
-		if (!trustedOrigin(properties.apiBaseUrl) || !trustedOrigin(properties.webBaseUrl)) {
+		if (properties.apiBaseUrl != "https://api.github.com" || properties.webBaseUrl != "https://github.com") {
 			throw ApiException(
 				HttpStatus.SERVICE_UNAVAILABLE,
 				"GITHUB_ORIGIN_INVALID",
@@ -66,8 +79,4 @@ class GitHubGuard(
 		}
 	}
 
-	private fun trustedOrigin(value: String): Boolean = runCatching {
-		val uri = URI(value)
-		uri.scheme == "https" || (uri.scheme == "http" && uri.host in setOf("localhost", "127.0.0.1", "::1"))
-	}.getOrDefault(false)
 }

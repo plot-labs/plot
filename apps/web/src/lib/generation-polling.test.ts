@@ -48,7 +48,7 @@ describe("generation polling", () => {
       createGeneration: vi.fn().mockResolvedValue(run("QUEUED", 5)),
       getGeneration: vi.fn().mockResolvedValue(run("READY", null)),
     } as unknown as PlotApiClient;
-    const onUpdate = vi.fn();
+    const onUpdate = vi.fn<(value: GenerationRun) => void>();
     const result = createAndPollGeneration(client, { sourceScopeId: "scope", writingBlockIds: ["block"] }, "key", {
       initialDelayMs: 5,
       maxDelayMs: 10,
@@ -59,7 +59,7 @@ describe("generation polling", () => {
     await expect(result).resolves.toMatchObject({ status: "READY" });
     expect(client.createGeneration).toHaveBeenCalledTimes(1);
     expect(client.getGeneration).toHaveBeenCalledTimes(1);
-    expect(onUpdate.mock.calls.map(([value]: [GenerationRun]) => value.status)).toEqual(["QUEUED", "READY"]);
+    expect(onUpdate.mock.calls.map(([value]) => value.status)).toEqual(["QUEUED", "READY"]);
   });
 
   it("normalizes the initial and maximum delay before the first poll", async () => {
