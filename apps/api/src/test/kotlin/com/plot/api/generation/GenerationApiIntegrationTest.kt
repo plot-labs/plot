@@ -158,9 +158,26 @@ class GenerationApiIntegrationTest {
 			jsonPath("$.artifacts[0].kind") { value("WRITER_OUTPUT") }
 			jsonPath("$.artifacts[1].kind") { value("REVIEWER_OUTPUT") }
 			jsonPath("$.artifacts[2].kind") { value("CONFLICT") }
+			jsonPath("$.timing.createdAt") { exists() }
+			jsonPath("$.timing.startedAt") { exists() }
+			jsonPath("$.timing.finishedAt") { exists() }
+			jsonPath("$.timing.steps.length()") { value(2) }
+			jsonPath("$.timing.steps[0].kind") { value("WRITER") }
+			jsonPath("$.timing.steps[0].status") { value("SUCCEEDED") }
+			jsonPath("$.timing.steps[0].durationMs") { isNumber() }
+			jsonPath("$.timing.steps[1].kind") { value("REVIEWER") }
+			jsonPath("$.timing.model.modelName") { value("scripted") }
+			jsonPath("$.timing.model.totalTokens") { value(4) }
 			jsonPath("$.contentPack.status") { value("READY") }
 			jsonPath("$.contentPack.variant.sentences.length()") { value(1) }
 		}
+		val events = mockMvc.get("/api/generations/$runId/events") {
+			accept(MediaType.TEXT_EVENT_STREAM)
+		}.andExpect {
+			status { isOk() }
+			content { contentTypeCompatibleWith(MediaType.TEXT_EVENT_STREAM) }
+		}.andReturn()
+		assertEquals(true, events.response.contentAsString.contains("\"runStatus\":\"READY\""))
 		assertEquals(0, jdbcTemplate.queryForObject(
 			"select count(*) from generation_interventions where generation_run_id = ?",
 			Int::class.java,

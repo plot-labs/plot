@@ -9,6 +9,7 @@ import com.plot.api.writingblock.WritingBlockRepository
 import java.security.MessageDigest
 import java.util.HexFormat
 import java.util.UUID
+import com.plot.api.generation.dto.GenerationRunTimingResponse
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import tools.jackson.databind.ObjectMapper
@@ -77,6 +78,12 @@ class GenerationRunService(
 
 	fun get(runId: UUID): GenerationWorkflowState = try {
 		persistence.loadState(devContext.devWorkspaceId, runId)
+	} catch (_: GenerationRunNotFoundException) {
+		throw ApiException(HttpStatus.NOT_FOUND, "GENERATION_NOT_FOUND", "Generation run not found")
+	}
+
+	fun getTiming(runId: UUID): GenerationRunTimingResponse = try {
+		persistence.loadTiming(devContext.devWorkspaceId, runId)
 	} catch (_: GenerationRunNotFoundException) {
 		throw ApiException(HttpStatus.NOT_FOUND, "GENERATION_NOT_FOUND", "Generation run not found")
 	}

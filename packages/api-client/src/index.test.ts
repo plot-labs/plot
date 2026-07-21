@@ -124,4 +124,66 @@ describe("Plot API client", () => {
       "/api/plot/content-variants/variant/exports",
     ]);
   });
+
+  it("parses checkpoint events from the SSE stream", async () => {
+    const encoder = new TextEncoder();
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(
+      new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode('event: checkpoint\ndata: {"runId":"run-1","runStatus":"REVIEWING","sequence":2}\n\n'));
+          controller.close();
+        },
+      }),
+      { headers: { "Content-Type": "text/event-stream" } },
+    ));
+    const client = createPlotApiClient({ fetch: fetcher, baseUrl: "/api/plot" });
+    const events: unknown[] = [];
+
+    await client.subscribeGenerationEvents("run-1", { onEvent: (event) => events.push(event) });
+
+    expect(events).toEqual([{ runId: "run-1", runStatus: "REVIEWING", sequence: 2 }]);
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/plot/generations/run-1/events",
+      expect.objectContaining({ headers: expect.objectContaining({ Accept: "text/event-stream" }) }),
+    );
+  });
+
+  it("buffers split events and rejects invalid event payloads", async () => {
+    const encoder = new TextEncoder();
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(
+      new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode("event: checkpoint\ndata: {\"runId\":\"run-1\",\"runStatus\":\"WR"));
+          controller.enqueue(encoder.encode("ITING\",\"sequence\":3}\n\n"));
+          controller.close();
+        },
+      }),
+      { headers: { "Content-Type": "text/event-stream" } },
+    ));
+    const client = createPlotApiClient({ fetch: fetcher });
+    const events: unknown[] = [];
+
+    await client.subscribeGenerationEvents!("run-1", { onEvent: (event) => events.push(event) });
+    expect(events).toEqual([{ runId: "run-1", runStatus: "WRITING", sequence: 3 }]);
+
+    const invalidClient = createPlotApiClient({
+      fetch: vi.fn<typeof fetch>().mockResolvedValue(new Response(
+        "event: checkpoint\ndata: {\"runId\":\"run-1\",\"runStatus\":\"UNKNOWN\",\"sequence\":1}\n\n",
+        { headers: { "Content-Type": "text/event-stream" } },
+      )),
+    });
+    await expect(invalidClient.subscribeGenerationEvents!("run-1", { onEvent: () => undefined })).rejects.toMatchObject<PlotApiError>({
+      code: "INVALID_EVENT_STREAM",
+    });
+
+    const malformedClient = createPlotApiClient({
+      fetch: vi.fn<typeof fetch>().mockResolvedValue(new Response(
+        "event: checkpoint\ndata: {not-json}\n\n",
+        { headers: { "Content-Type": "text/event-stream" } },
+      )),
+    });
+    await expect(malformedClient.subscribeGenerationEvents!("run-1", { onEvent: () => undefined })).rejects.toMatchObject<PlotApiError>({
+      code: "INVALID_EVENT_STREAM",
+    });
+  });
 });

@@ -84,6 +84,9 @@ export async function proxyPlotRequest(
       responseHeaders.delete("location");
     }
   }
+  if (request.method === "GET" && path.at(-1) === "events") {
+    responseHeaders.set("X-Accel-Buffering", "no");
+  }
   return new Response(upstreamResponse.body, { status: upstreamResponse.status, headers: responseHeaders });
 }
 
@@ -94,6 +97,7 @@ function isAllowed(method: string, path: string[]): boolean {
   if (method === "GET" && route === "blocks") return true;
   if (method === "POST" && route === "generations") return true;
   if (method === "GET" && /^generations\/[^/]+$/.test(route)) return true;
+  if (method === "GET" && /^generations\/[^/]+\/events$/.test(route)) return true;
   if (method === "GET" && /^content-packs\/[^/]+$/.test(route)) return true;
   if (method === "POST" && /^generations\/[^/]+\/interventions\/[^/]+\/resolution$/.test(route)) return true;
   if (method === "PATCH" && /^content-variants\/[^/]+\/sentences\/[^/]+$/.test(route)) return true;

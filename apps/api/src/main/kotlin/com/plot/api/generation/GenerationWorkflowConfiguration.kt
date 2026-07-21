@@ -30,6 +30,9 @@ class GenerationWorkflowConfiguration {
 	): GenerationWorkflowService = GenerationWorkflowService(validator, uuidGenerator::next)
 
 	@Bean
+	fun generationEventPublisher(): GenerationEventPublisher = GenerationEventPublisher()
+
+	@Bean
 	fun generationPersistence(
 		jdbcTemplate: JdbcTemplate,
 		objectMapper: ObjectMapper,
@@ -45,7 +48,8 @@ class GenerationWorkflowConfiguration {
 		havingValue = "false",
 		matchIfMissing = true,
 	)
-	fun generationCheckpointObserver(): GenerationCheckpointObserver = GenerationCheckpointObserver.NO_OP
+	fun generationCheckpointObserver(eventPublisher: GenerationEventPublisher): GenerationCheckpointObserver =
+		GenerationCheckpointEventObserver(eventPublisher)
 
 	@Bean
 	fun generationRunWorker(

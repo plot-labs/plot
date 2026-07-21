@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
   listReferences: vi.fn(),
   getGeneration: vi.fn(),
-  createAndPoll: vi.fn(),
+  createAndStream: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -27,8 +27,8 @@ vi.mock("@/lib/api-client", () => ({
   plotApiClient: { listGenerationReferences: mocks.listReferences, getGeneration: mocks.getGeneration },
 }));
 vi.mock("@/lib/generation-polling", () => ({
-  createAndPollGeneration: mocks.createAndPoll,
-  pollGeneration: vi.fn(),
+  createAndStreamGeneration: mocks.createAndStream,
+  streamGeneration: vi.fn(),
   isTerminalGenerationStatus: () => true,
 }));
 vi.mock("@/features/sessions/session-composer", () => ({
@@ -49,7 +49,7 @@ describe("SessionsWorkspace generation orchestration", () => {
     mocks.replace.mockReset();
     mocks.listReferences.mockReset();
     mocks.getGeneration.mockReset();
-    mocks.createAndPoll.mockReset();
+    mocks.createAndStream.mockReset();
     window.history.replaceState(null, "", "/sessions?session=session-1");
   });
 
@@ -61,7 +61,7 @@ describe("SessionsWorkspace generation orchestration", () => {
       evidence: [], sentences: [], artifacts: [], pendingIntervention: null,
       contentPack: { id: "pack-1", generationRunId: "run-1", status: "READY", title: "Release", variant: { id: "variant-1", status: "READY", sentences: [] } },
     };
-    mocks.createAndPoll.mockImplementation(async (_client, _input, _key, options) => {
+    mocks.createAndStream.mockImplementation(async (_client, _input, _key, options) => {
       options.onUpdate(terminalRun);
       return terminalRun;
     });
@@ -70,8 +70,8 @@ describe("SessionsWorkspace generation orchestration", () => {
     await waitFor(() => expect(mocks.listReferences).toHaveBeenCalledTimes(1));
     fireEvent.click(screen.getByRole("button", { name: "Generate" }));
 
-    await waitFor(() => expect(mocks.createAndPoll).toHaveBeenCalledTimes(1));
-    expect(mocks.createAndPoll.mock.calls[0]?.[1]).toEqual({ sourceScopeId: "scope-1", writingBlockIds: ["block-1"], instruction: "Write release notes" });
+    await waitFor(() => expect(mocks.createAndStream).toHaveBeenCalledTimes(1));
+    expect(mocks.createAndStream.mock.calls[0]?.[1]).toEqual({ sourceScopeId: "scope-1", writingBlockIds: ["block-1"], instruction: "Write release notes" });
     expect(new URLSearchParams(window.location.search).get("generation")).toBe("run-1");
     expect(await screen.findByText("Reviewed draft")).toBeVisible();
   });
