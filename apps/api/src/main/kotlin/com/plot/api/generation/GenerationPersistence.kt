@@ -7,7 +7,11 @@ import com.plot.api.common.UuidGenerator
 import com.plot.api.generation.model.EvidenceSnapshot
 import com.plot.api.generation.model.ReviewVerdict
 import com.plot.api.generation.model.SentenceArtifact
+import com.plot.api.generation.dto.GenerationModelTimingResponse
+import com.plot.api.generation.dto.GenerationRunTimingResponse
+import com.plot.api.generation.dto.GenerationStepTimingResponse
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 import org.springframework.jdbc.core.JdbcTemplate
@@ -260,12 +264,24 @@ class GenerationPersistence(
 		}
 	}
 
-	fun failCheckpoint(claim: ClaimedGenerationRun, lease: ModelInvocationLease, state: GenerationWorkflowState, code: String) {
+	fun failCheckpoint(
+		claim: ClaimedGenerationRun,
+		lease: ModelInvocationLease,
+		state: GenerationWorkflowState,
+		code: String,
+		metadata: ModelCallMetadata? = null,
+	) {
 		transactionTemplate.executeWithoutResult {
 			requireClaim(claim)
 			val now = clock.instant()
 			jdbcTemplate.update(
-				"update model_invocations set status = 'FAILED', failure_code = ?, finished_at = ? where workspace_id = ? and id = ? and status = 'RUNNING'",
+				"""
+				update model_invocations set status = 'FAILED', provider_request_id = ?, result_metadata = ?::jsonb,
+				 prompt_token_count = ?, completion_token_count = ?, total_token_count = ?, latency_ms = ?, failure_code = ?, finished_at = ?
+				where workspace_id = ? and id = ? and status = 'RUNNING'
+				""".trimIndent(),
+				metadata?.responseId, objectMapper.writeValueAsString(metadata?.observationAttributes ?: emptyMap<String, String>()),
+				metadata?.promptTokens, metadata?.completionTokens, metadata?.totalTokens, metadata?.latency?.toMillis()?.toInt(),
 				code, timestamp(now), claim.workspaceId, lease.id,
 			)
 			jdbcTemplate.update(
@@ -310,6 +326,62 @@ class GenerationPersistence(
 			{ rs, _ -> rs.getString(1) }, workspaceId, runId,
 		).firstOrNull() ?: throw GenerationRunNotFoundException(runId)
 		return objectMapper.readValue(payload, GenerationWorkflowState::class.java)
+	}
+
+	fun loadTiming(workspaceId: UUID, runId: UUID): GenerationRunTimingResponse {
+		val run = jdbcTemplate.query(
+			"""
+			select gr.created_at, gr.started_at, gr.finished_at, gr.model_name,
+			       coalesce(sum(case when mi.status = 'SUCCEEDED' then coalesce(mi.total_token_count, 0) else 0 end), 0),
+			       coalesce(sum(case when mi.status = 'SUCCEEDED' then coalesce(mi.latency_ms, 0) else 0 end), 0)
+			from generation_runs gr
+			left join model_invocations mi on mi.workspace_id = gr.workspace_id and mi.generation_run_id = gr.id
+			where gr.workspace_id = ? and gr.id = ?
+			group by gr.created_at, gr.started_at, gr.finished_at, gr.model_name
+			""".trimIndent(),
+			{ rs, _ ->
+				RunTimingRow(
+					rs.getTimestamp("created_at").toInstant(),
+					rs.getTimestamp("started_at")?.toInstant(),
+					rs.getTimestamp("finished_at")?.toInstant(),
+					rs.getString("model_name"),
+					rs.getLong(5),
+					rs.getLong(6),
+				)
+			},
+			workspaceId, runId,
+		).firstOrNull() ?: throw GenerationRunNotFoundException(runId)
+
+		val steps = jdbcTemplate.query(
+			"""
+			select step_kind, sequence_no, status, started_at, finished_at, failure_code
+			from generation_workflow_steps
+			where workspace_id = ? and generation_run_id = ?
+			order by sequence_no
+			""".trimIndent(),
+			{ rs, _ ->
+				val startedAt = rs.getTimestamp("started_at").toInstant()
+				val finishedAt = rs.getTimestamp("finished_at")?.toInstant()
+				GenerationStepTimingResponse(
+					kind = rs.getString("step_kind"),
+					sequence = rs.getInt("sequence_no"),
+					status = rs.getString("status"),
+					startedAt = startedAt,
+					finishedAt = finishedAt,
+					durationMs = finishedAt?.let { Duration.between(startedAt, it).toMillis().coerceAtLeast(0) },
+					failureCode = rs.getString("failure_code"),
+				)
+			},
+			workspaceId, runId,
+		)
+
+		return GenerationRunTimingResponse(
+			createdAt = run.createdAt,
+			startedAt = run.startedAt,
+			finishedAt = run.finishedAt,
+			steps = steps,
+			model = GenerationModelTimingResponse(run.modelName, run.totalTokens, run.totalLatencyMs),
+		)
 	}
 
 	fun recoverStaleClaims(staleBefore: Instant): Int = jdbcTemplate.update(
@@ -418,6 +490,15 @@ class GenerationPersistence(
 		check(count == 1) { "Generation run claim was lost" }
 	}
 }
+
+private data class RunTimingRow(
+	val createdAt: Instant,
+	val startedAt: Instant?,
+	val finishedAt: Instant?,
+	val modelName: String,
+	val totalTokens: Long,
+	val totalLatencyMs: Long,
+)
 
 private fun GenerationWorkflowState.asFailure(code: String): GenerationWorkflowState = copy(
 	status = if (reviews.isEmpty()) GenerationRunStatus.FAILED else GenerationRunStatus.NEEDS_REVIEW,

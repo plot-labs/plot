@@ -9,6 +9,7 @@ import com.plot.api.contentpack.dto.ContentPackResponse
 import jakarta.validation.constraints.NotEmpty
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
+import java.time.Instant
 import java.util.UUID
 
 data class CreateGenerationRequest(
@@ -27,7 +28,32 @@ data class GenerationRunResponse(
 	val sentences: List<GenerationSentenceResponse>,
 	val artifacts: List<GenerationArtifactResponse>,
 	val pendingIntervention: GenerationInterventionResponse?,
+	val timing: GenerationRunTimingResponse? = null,
 	val contentPack: ContentPackResponse? = null,
+)
+
+data class GenerationRunTimingResponse(
+	val createdAt: Instant,
+	val startedAt: Instant?,
+	val finishedAt: Instant?,
+	val steps: List<GenerationStepTimingResponse>,
+	val model: GenerationModelTimingResponse?,
+)
+
+data class GenerationStepTimingResponse(
+	val kind: String,
+	val sequence: Int,
+	val status: String,
+	val startedAt: Instant,
+	val finishedAt: Instant?,
+	val durationMs: Long?,
+	val failureCode: String?,
+)
+
+data class GenerationModelTimingResponse(
+	val modelName: String,
+	val totalTokens: Long,
+	val totalLatencyMs: Long,
 )
 
 data class GenerationEvidenceResponse(

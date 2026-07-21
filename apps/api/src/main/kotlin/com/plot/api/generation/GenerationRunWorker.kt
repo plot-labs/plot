@@ -34,6 +34,7 @@ class GenerationRunWorker(
 		val budgetFailure = persistence.budgetFailureCode(claim)
 		if (budgetFailure != null) {
 			persistence.failClaim(claim, state, budgetFailure)
+			checkpointObserver.afterRunStatus(claim.workspaceId, claim.runId, failureStatus(state))
 			return true
 		}
 		val role = state.nextRole ?: return false
@@ -44,14 +45,17 @@ class GenerationRunWorker(
 			persistence.completeCheckpoint(claim, lease, advanced, recording.metadata)
 			advanced
 		} catch (failure: GenerationModelException) {
-			persistence.failCheckpoint(claim, lease, state, failure.code.name)
+			persistence.failCheckpoint(claim, lease, state, failure.code.name, recording.metadata)
+			checkpointObserver.afterRunStatus(claim.workspaceId, claim.runId, failureStatus(state))
 			return true
 		} catch (_: InvalidModelOutputException) {
-			persistence.failCheckpoint(claim, lease, state, "MALFORMED_OUTPUT")
+			persistence.failCheckpoint(claim, lease, state, "MALFORMED_OUTPUT", recording.metadata)
+			checkpointObserver.afterRunStatus(claim.workspaceId, claim.runId, failureStatus(state))
 			return true
 		} catch (failure: RuntimeException) {
 			lastFailure = failure
-			persistence.failCheckpoint(claim, lease, state, "WORKFLOW_FAILED")
+			persistence.failCheckpoint(claim, lease, state, "WORKFLOW_FAILED", recording.metadata)
+			checkpointObserver.afterRunStatus(claim.workspaceId, claim.runId, failureStatus(state))
 			return true
 		}
 		checkpointObserver.afterDurableCheckpoint(DurableGenerationCheckpoint(
@@ -72,6 +76,9 @@ class GenerationRunWorker(
 		return processed
 	}
 }
+
+private fun failureStatus(state: GenerationWorkflowState): GenerationRunStatus =
+	if (state.reviews.isEmpty()) GenerationRunStatus.FAILED else GenerationRunStatus.NEEDS_REVIEW
 
 private val ModelRole.checkpointArtifactType: String
 	get() = when (this) {

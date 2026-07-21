@@ -10,6 +10,8 @@ import java.util.UUID
 fun interface GenerationCheckpointObserver {
 	fun afterDurableCheckpoint(checkpoint: DurableGenerationCheckpoint)
 
+	fun afterRunStatus(workspaceId: UUID, runId: UUID, status: GenerationRunStatus) {}
+
 	companion object {
 		val NO_OP = GenerationCheckpointObserver { }
 	}

@@ -79,6 +79,41 @@ export interface GenerationRun {
   artifacts: GenerationArtifact[];
   pendingIntervention: GenerationIntervention | null;
   contentPack: ContentPack | null;
+  timing?: GenerationRunTiming | null;
+}
+
+export interface GenerationRunTiming {
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  steps: GenerationStepTiming[];
+  model: GenerationModelTiming | null;
+}
+
+export interface GenerationStepTiming {
+  kind: "WRITER" | "REVIEWER" | "REWRITER";
+  sequence: number;
+  status: "RUNNING" | "SUCCEEDED" | "FAILED";
+  startedAt: string;
+  finishedAt: string | null;
+  durationMs: number | null;
+  failureCode: string | null;
+}
+
+export interface GenerationModelTiming {
+  modelName: string;
+  totalTokens: number;
+  totalLatencyMs: number;
+}
+
+export interface GenerationProgressEvent {
+  runId: string;
+  runStatus: GenerationStatus;
+  sequence: number;
+}
+
+export interface GenerationEventOptions extends RequestOptions {
+  onEvent: (event: GenerationProgressEvent) => void | Promise<void>;
 }
 
 export interface GenerationArtifact {
@@ -117,6 +152,7 @@ export interface PlotApiClient {
   listGenerationReferences(options?: RequestOptions): Promise<GenerationReference[]>;
   createGeneration(input: CreateGenerationInput, idempotencyKey: string, options?: RequestOptions): Promise<GenerationRun>;
   getGeneration(id: string, options?: RequestOptions): Promise<GenerationRun>;
+  subscribeGenerationEvents?: (id: string, options: GenerationEventOptions) => Promise<void>;
   getContentPack(id: string, options?: RequestOptions): Promise<ContentPack>;
   listContentPacks(page?: number, size?: number, options?: RequestOptions): Promise<ContentPackPage>;
   editSentence(variantId: string, sentenceId: string, input: { expectedRevisionNumber: number; body: string }, options?: RequestOptions): Promise<ContentPack>;
@@ -186,6 +222,47 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
       headers: { "Idempotency-Key": idempotencyKey },
     }),
     getGeneration: (id, requestOptions) => request(`/generations/${encodeURIComponent(id)}`, { signal: requestOptions?.signal }),
+    subscribeGenerationEvents: async (id, eventOptions) => {
+      const response = await fetcher(`${baseUrl}/generations/${encodeURIComponent(id)}/events`, {
+        cache: "no-store",
+        signal: eventOptions.signal,
+        headers: { Accept: "text/event-stream" },
+      });
+      if (!response.ok) {
+        const payload = await parsePayload(response);
+        const error = isRecord(payload) ? payload : {};
+        throw new PlotApiError(
+          response.status,
+          typeof error.error === "string" ? error.error : "API_ERROR",
+          typeof error.message === "string" ? error.message : `Plot API request failed (${response.status})`,
+          isRecord(error.details) ? error.details : null,
+          typeof error.resourceId === "string" ? error.resourceId : null,
+        );
+      }
+      if (!response.body) throw new PlotApiError(502, "EMPTY_EVENT_STREAM", "Plot API returned an empty event stream");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let completed = false;
+      try {
+        while (true) {
+          const chunk = await reader.read();
+          buffer += decoder.decode(chunk.value, { stream: !chunk.done });
+          const blocks = buffer.split(/\r?\n\r?\n/);
+          buffer = blocks.pop() ?? "";
+          for (const block of blocks) await parseEventBlock(block, eventOptions.onEvent);
+          if (chunk.done) {
+            if (buffer.trim()) await parseEventBlock(buffer, eventOptions.onEvent);
+            completed = true;
+            return;
+          }
+        }
+      } finally {
+        if (!completed) await reader.cancel().catch(() => undefined);
+        reader.releaseLock();
+      }
+    },
     getContentPack: (id, requestOptions) => request(`/content-packs/${encodeURIComponent(id)}`, { signal: requestOptions?.signal }),
     listContentPacks: (page = 0, size = 25, requestOptions) => request(`/content-packs?page=${page}&size=${size}`, { signal: requestOptions?.signal }),
     editSentence: (variantId, sentenceId, input, requestOptions) => request(
@@ -197,6 +274,32 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
       { method: "POST", body: JSON.stringify(input), signal: requestOptions?.signal },
     ),
   };
+}
+
+async function parseEventBlock(block: string, onEvent: (event: GenerationProgressEvent) => void | Promise<void>): Promise<void> {
+  let eventName = "message";
+  const data: string[] = [];
+  for (const line of block.split(/\r?\n/)) {
+    if (line.startsWith(":")) continue;
+    if (line.startsWith("event:")) eventName = line.slice(6).trim();
+    if (line.startsWith("data:")) data.push(line.slice(5).trimStart());
+  }
+  if (eventName !== "checkpoint" || data.length === 0) return;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(data.join("\n"));
+  } catch {
+    throw new PlotApiError(502, "INVALID_EVENT_STREAM", "Plot API returned invalid generation event JSON");
+  }
+  if (!isRecord(parsed) || typeof parsed.runId !== "string" || !isGenerationStatus(parsed.runStatus) || typeof parsed.sequence !== "number" || !Number.isSafeInteger(parsed.sequence) || parsed.sequence < 0) {
+    throw new PlotApiError(502, "INVALID_EVENT_STREAM", "Plot API returned an invalid generation event");
+  }
+  await onEvent({ runId: parsed.runId, runStatus: parsed.runStatus, sequence: parsed.sequence });
+}
+
+function isGenerationStatus(value: unknown): value is GenerationStatus {
+  return value === "QUEUED" || value === "WRITING" || value === "REVIEWING" || value === "REWRITING"
+    || value === "READY" || value === "NEEDS_YOUR_CALL" || value === "NEEDS_REVIEW" || value === "FAILED";
 }
 
 interface GitHubRepositoryResponse {
