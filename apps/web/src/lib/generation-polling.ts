@@ -16,6 +16,34 @@ export interface PollingOptions {
   initialDelayMs?: number;
   maxDelayMs?: number;
   onUpdate?: (run: GenerationRun) => void;
+  initialRun?: GenerationRun;
+}
+
+export async function streamGeneration(
+  client: PlotApiClient,
+  runId: string,
+  options: PollingOptions = {},
+): Promise<GenerationRun> {
+  let latest = await client.getGeneration(runId, { signal: options.signal });
+  options.onUpdate?.(latest);
+  if (isTerminalGenerationStatus(latest.status)) return latest;
+  if (!client.subscribeGenerationEvents) return pollGeneration(client, runId, { ...options, initialRun: latest });
+
+  try {
+    await client.subscribeGenerationEvents(runId, {
+      signal: options.signal,
+      onEvent: async (event) => {
+        if (event.runId !== runId) return;
+        latest = await client.getGeneration(runId, { signal: options.signal });
+        options.onUpdate?.(latest);
+      },
+    });
+    if (isTerminalGenerationStatus(latest.status)) return latest;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
+  }
+
+  return pollGeneration(client, runId, { ...options, initialRun: latest });
 }
 
 export async function pollGeneration(
@@ -25,10 +53,12 @@ export async function pollGeneration(
 ): Promise<GenerationRun> {
   const { initialDelay, maxDelay } = resolvePollingDelays(options);
   let fallbackDelay = initialDelay;
+  let initialRun = options.initialRun;
 
   while (true) {
     throwIfAborted(options.signal);
-    const run = await client.getGeneration(runId, { signal: options.signal });
+    const run = initialRun ?? await client.getGeneration(runId, { signal: options.signal });
+    initialRun = undefined;
     options.onUpdate?.(run);
     if (isTerminalGenerationStatus(run.status)) return run;
     const delayMs = boundedDelay(run.pollAfterMs ?? fallbackDelay, maxDelay);
@@ -49,6 +79,18 @@ export async function createAndPollGeneration(
   const { initialDelay, maxDelay } = resolvePollingDelays(options);
   await abortableDelay(boundedDelay(accepted.pollAfterMs ?? initialDelay, maxDelay), options.signal);
   return pollGeneration(client, accepted.id, options);
+}
+
+export async function createAndStreamGeneration(
+  client: PlotApiClient,
+  input: CreateGenerationInput,
+  idempotencyKey: string,
+  options: PollingOptions = {},
+): Promise<GenerationRun> {
+  const accepted = await client.createGeneration(input, idempotencyKey, { signal: options.signal });
+  options.onUpdate?.(accepted);
+  if (isTerminalGenerationStatus(accepted.status)) return accepted;
+  return streamGeneration(client, accepted.id, options);
 }
 
 function resolvePollingDelays(options: PollingOptions) {

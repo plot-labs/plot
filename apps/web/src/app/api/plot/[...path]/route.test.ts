@@ -60,6 +60,28 @@ describe("Plot same-origin proxy", () => {
     expect(String(fetcher.mock.calls[0]?.[0])).toBe(`http://127.0.0.1:8080/api/${pathAndQuery}`);
   });
 
+  it("passes through generation event streams without buffering", async () => {
+    const body = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("event: checkpoint\n\n"));
+        controller.close();
+      },
+    });
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(body, {
+      headers: { "Content-Type": "text/event-stream" },
+    }));
+
+    const response = await proxyPlotRequest(
+      new Request("http://web.test/api/plot/generations/run-1/events"),
+      ["generations", "run-1", "events"],
+      { fetch: fetcher, baseUrl: "http://127.0.0.1:8080" },
+    );
+
+    expect(response.headers.get("content-type")).toContain("text/event-stream");
+    expect(response.headers.get("x-accel-buffering")).toBe("no");
+    expect(response.body).toBe(body);
+  });
+
   it.each([
     ["GET", ["https:", "attacker.test"]],
     ["DELETE", ["generations", "run-1"]],

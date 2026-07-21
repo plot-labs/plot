@@ -24,12 +24,13 @@ import {
   type GenerationReference,
   plotApiClient,
 } from "@/lib/api-client";
-import { createAndPollGeneration, isTerminalGenerationStatus, pollGeneration } from "@/lib/generation-polling";
+import { createAndStreamGeneration, isTerminalGenerationStatus, streamGeneration } from "@/lib/generation-polling";
 import { CitedDraftEditor } from "@/features/citations/cited-draft-editor";
 import { ExportDialog } from "@/features/citations/export-dialog";
 import { SessionComposer } from "@/features/sessions/session-composer";
 import { SessionSidePanel } from "@/features/sessions/session-side-panel";
 import { SessionThread } from "@/features/sessions/session-thread";
+import { GenerationWorkLog } from "@/features/sessions/generation-work-log";
 
 export function SessionsWorkspace() {
   return (
@@ -173,11 +174,19 @@ function ActiveSessionWorkspace({
     return () => {
       controller.abort();
       generationAbortRef.current?.abort();
+      generationAbortRef.current = null;
+      activeGenerationIdRef.current = null;
     };
   }, []);
 
   useEffect(() => {
-    if (!requestedGenerationId || activeGenerationIdRef.current === requestedGenerationId) return;
+    if (!requestedGenerationId) {
+      generationAbortRef.current?.abort();
+      generationAbortRef.current = null;
+      activeGenerationIdRef.current = null;
+      return;
+    }
+    if (activeGenerationIdRef.current === requestedGenerationId) return;
     const controller = new AbortController();
     activeGenerationIdRef.current = requestedGenerationId;
     generationAbortRef.current?.abort();
@@ -194,7 +203,7 @@ function ActiveSessionWorkspace({
         setGenerationRun(current);
         const restored = isTerminalGenerationStatus(current.status)
           ? current
-          : await pollGeneration(plotApiClient, current.id, {
+           : await streamGeneration(plotApiClient, current.id, {
               signal: controller.signal,
               onUpdate: (next) => {
                 if (generationAbortRef.current === controller) setGenerationRun(next);
@@ -204,7 +213,7 @@ function ActiveSessionWorkspace({
         setGenerationRun(restored);
         setGeneratedPack(restored.contentPack);
       } catch (error) {
-        if (!(error instanceof DOMException && error.name === "AbortError")) {
+        if (generationAbortRef.current === controller && !(error instanceof DOMException && error.name === "AbortError")) {
           setGenerationError("The saved generation could not be restored.");
         }
       } finally {
@@ -218,6 +227,7 @@ function ActiveSessionWorkspace({
       if (generationAbortRef.current === controller) {
         generationAbortRef.current = null;
         activeGenerationIdRef.current = null;
+        setGenerating(false);
       }
     };
   }, [requestedGenerationId]);
@@ -286,14 +296,15 @@ function ActiveSessionWorkspace({
     setGenerationError("");
     setGeneratedPack(null);
     try {
-      const run = await createAndPollGeneration(
+      const run = await createAndStreamGeneration(
         plotApiClient,
         { sourceScopeId: scopeId, writingBlockIds: generationReady.map((reference) => reference.writingBlockId), instruction: message },
         crypto.randomUUID(),
         {
-          signal: controller.signal,
-          onUpdate: (next) => {
-            setGenerationRun(next);
+           signal: controller.signal,
+           onUpdate: (next) => {
+             if (generationAbortRef.current !== controller || controller.signal.aborted) return;
+             setGenerationRun(next);
             if (activeGenerationIdRef.current === next.id) return;
             activeGenerationIdRef.current = next.id;
             const nextParams = new URLSearchParams(searchParams.toString());
@@ -301,11 +312,12 @@ function ActiveSessionWorkspace({
             window.history.replaceState(null, "", `/sessions?${nextParams.toString()}`);
           },
         },
-      );
-      setGenerationRun(run);
+       );
+       if (generationAbortRef.current !== controller || controller.signal.aborted) return;
+       setGenerationRun(run);
       setGeneratedPack(run.contentPack);
     } catch (error) {
-      if (!(error instanceof DOMException && error.name === "AbortError")) {
+      if (generationAbortRef.current === controller && !(error instanceof DOMException && error.name === "AbortError")) {
         setGenerationError(error instanceof Error ? error.message : "Generation could not be completed.");
       }
     } finally {
@@ -423,15 +435,17 @@ function GenerationPanel({
 }) {
   if (!run && !busy && !error) return null;
   return (
-    <article className="space-y-3" aria-live="polite">
+    <article className="space-y-3">
       {run ? (
         <p role="status" aria-label={`Generation status: ${generationStatusLabel(run.status)}`} className="sr-only">
           Generation status: {generationStatusLabel(run.status)}
         </p>
       ) : null}
-      {busy ? (
+      {run ? (
+        <GenerationWorkLog run={run} />
+      ) : busy ? (
         <div className="rounded-xl border border-black/10 bg-black/[0.025] px-4 py-3 text-sm text-black/62 dark:border-white/10 dark:bg-white/[0.04] dark:text-white/62">
-          Plot is {stageLabel(run?.status)}…
+          Plot is {stageLabel()}…
         </div>
       ) : null}
       {error ? <div role="alert" className="rounded-xl border border-rose-300/60 bg-rose-50 px-4 py-3 text-sm text-rose-900 dark:border-rose-400/25 dark:bg-rose-400/[0.08] dark:text-rose-200">{error}</div> : null}
@@ -469,10 +483,7 @@ function generationStatusLabel(status: GenerationRun["status"]) {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-function stageLabel(status?: GenerationRun["status"]) {
-  if (status === "REVIEWING") return "checking source support";
-  if (status === "REWRITING") return "revising failed sentences";
-  if (status === "WRITING") return "drafting from selected references";
+function stageLabel() {
   return "preparing the grounded draft";
 }
 
