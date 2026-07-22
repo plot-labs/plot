@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { proxyPlotRequest } from "./route";
+import { proxyPlotRequest, serverJwtPayload } from "./route";
 
 describe("Plot same-origin proxy", () => {
   const previousAllowedEmails = process.env.AUTH_ALLOWED_EMAILS;
@@ -12,6 +12,15 @@ describe("Plot same-origin proxy", () => {
   afterAll(() => {
     if (previousAllowedEmails === undefined) delete process.env.AUTH_ALLOWED_EMAILS;
     else process.env.AUTH_ALLOWED_EMAILS = previousAllowedEmails;
+  });
+
+  it("builds Kotlin JWT claims from the verified Better Auth session", () => {
+    expect(serverJwtPayload({ user: { id: " auth-user ", email: " Member@Example.com ", name: " Plot Member " } })).toEqual({
+      sub: "auth-user",
+      email: "member@example.com",
+      name: "Plot Member",
+    });
+    expect(serverJwtPayload({ user: { id: "auth-user", email: null } })).toBeNull();
   });
 
   it("uses the server JWT and never forwards browser credentials", async () => {
@@ -103,6 +112,23 @@ describe("Plot same-origin proxy", () => {
 
     expect(response.status).toBe(403);
     expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("uses the browser-facing Host header for local same-origin checks", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ ok: true }));
+    const request = new Request("http://localhost:3000/api/plot/account/bootstrap", {
+      method: "POST",
+      headers: { Host: "127.0.0.1:3000", Origin: "http://127.0.0.1:3000" },
+    });
+
+    const response = await proxyPlotRequest(request, ["account", "bootstrap"], {
+      fetch: fetcher,
+      getSession: async () => ({ user: { email: "member@example.com" } }),
+      getServerJwt: async () => "server-issued-jwt",
+    });
+
+    expect(response.status).toBe(200);
+    expect(fetcher).toHaveBeenCalledOnce();
   });
 
   it("allows only declared paths and strips hop-by-hop headers", async () => {
