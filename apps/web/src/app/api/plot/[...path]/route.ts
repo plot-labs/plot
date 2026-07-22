@@ -7,11 +7,12 @@ const allowedResponseHeaders = new Set(["cache-control", "content-disposition", 
 const safeSegment = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 
 type RouteContext = { params: Promise<{ path: string[] }> };
+type ProxySession = { user?: { id?: string; email?: string | null; name?: string | null } } | null;
 type ProxyDependencies = {
   fetch?: typeof fetch;
   baseUrl?: string;
-  getSession?: (request: Request) => Promise<{ user?: { email?: string | null } } | null>;
-  getServerJwt?: (request: Request) => Promise<string | null>;
+  getSession?: (request: Request) => Promise<ProxySession>;
+  getServerJwt?: (session: ProxySession) => Promise<string | null>;
 };
 
 export const dynamic = "force-dynamic";
@@ -223,7 +224,7 @@ async function authenticateRequest(request: Request, dependencies: ProxyDependen
     method: request.method,
     headers: sessionHeaders,
   });
-  let session: { user?: { email?: string | null } } | null;
+  let session: ProxySession;
   try {
     session = dependencies.getSession
       ? await dependencies.getSession(sessionRequest)
@@ -239,8 +240,8 @@ async function authenticateRequest(request: Request, dependencies: ProxyDependen
   let jwt: string | null;
   try {
     jwt = dependencies.getServerJwt
-      ? await dependencies.getServerJwt(sessionRequest)
-      : await getServerJwt(sessionRequest);
+      ? await dependencies.getServerJwt(session)
+      : await getServerJwt(session);
   } catch {
     jwt = null;
   }
@@ -250,11 +251,19 @@ async function authenticateRequest(request: Request, dependencies: ProxyDependen
   return { ok: true, jwt };
 }
 
-async function getServerJwt(request: Request): Promise<string | null> {
-  const sessionHeaders = new Headers(request.headers);
-  sessionHeaders.delete("authorization");
-  const result = await auth.api.getToken({ headers: sessionHeaders });
+async function getServerJwt(session: ProxySession): Promise<string | null> {
+  const payload = serverJwtPayload(session);
+  if (!payload) return null;
+  const result = await auth.api.signJWT({ body: { payload } });
   return result?.token ?? null;
+}
+
+export function serverJwtPayload(session: ProxySession): { sub: string; email: string; name: string } | null {
+  const subject = session?.user?.id?.trim();
+  const email = session?.user?.email?.trim().toLowerCase();
+  if (!subject || !email) return null;
+  const name = session?.user?.name?.trim() || email.split("@")[0] || email;
+  return { sub: subject, email, name };
 }
 
 function isStateChanging(method: string): boolean {
@@ -262,11 +271,31 @@ function isStateChanging(method: string): boolean {
 }
 
 function isSameOrigin(request: Request): boolean {
+  const expectedOrigin = browserFacingOrigin(request);
+  if (!expectedOrigin) return false;
   const origin = request.headers.get("origin");
-  if (origin) return origin === new URL(request.url).origin;
+  if (origin) {
+    try {
+      return new URL(origin).origin === expectedOrigin;
+    } catch {
+      return false;
+    }
+  }
   const referer = request.headers.get("referer");
   if (!referer) return true;
-  try { return new URL(referer).origin === new URL(request.url).origin; } catch { return false; }
+  try { return new URL(referer).origin === expectedOrigin; } catch { return false; }
+}
+
+function browserFacingOrigin(request: Request): string | null {
+  try {
+    const requestUrl = new URL(request.url);
+    const host = (request.headers.get("host") ?? requestUrl.host).toLowerCase();
+    const externalUrl = new URL(`${requestUrl.protocol}//${host}`);
+    if (externalUrl.username || externalUrl.password || externalUrl.host !== host || externalUrl.pathname !== "/") return null;
+    return externalUrl.origin;
+  } catch {
+    return null;
+  }
 }
 
 function parseBaseUrl(value: string): URL {
