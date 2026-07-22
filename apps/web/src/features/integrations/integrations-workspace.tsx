@@ -208,7 +208,11 @@ export function IntegrationsWorkspace({
               </div>
 
               {repositories.length > 0 ? (
-                <div className="mt-5 space-y-2" role="radiogroup" aria-label="Allowed GitHub repositories">
+                <div
+                  className="mt-5 h-64 space-y-2 overflow-y-auto overscroll-contain pr-1"
+                  role="radiogroup"
+                  aria-label="Allowed GitHub repositories"
+                >
                   {repositories.map((repository) => (
                     <label
                       key={repository.externalRepositoryId}
