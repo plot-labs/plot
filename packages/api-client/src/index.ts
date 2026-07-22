@@ -159,7 +159,7 @@ export interface PlotApiClient {
   exportVariant(variantId: string, input: { acknowledgeUnresolved: boolean; acknowledgedRevisionIds?: string[]; disposition: "COPY" | "DOWNLOAD" }, options?: RequestOptions): Promise<{ exportId: string; disposition: "COPY" | "DOWNLOAD"; filename: string; mediaType: string; text: string; unresolvedCount: number; warningAcknowledged: boolean }>;
 }
 
-export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof fetch } = {}): PlotApiClient {
+export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof fetch; workspaceId?: string } = {}): PlotApiClient {
   const baseUrl = (options.baseUrl ?? "/api/plot").replace(/\/$/, "");
   const fetcher = options.fetch ?? globalThis.fetch;
 
@@ -169,6 +169,7 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
       cache: "no-store",
       headers: {
         Accept: "application/json",
+        ...(options.workspaceId ? { "X-Plot-Workspace-Id": options.workspaceId } : {}),
         ...(init.body ? { "Content-Type": "application/json" } : {}),
         ...init.headers,
       },
@@ -226,7 +227,10 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
       const response = await fetcher(`${baseUrl}/generations/${encodeURIComponent(id)}/events`, {
         cache: "no-store",
         signal: eventOptions.signal,
-        headers: { Accept: "text/event-stream" },
+        headers: {
+          Accept: "text/event-stream",
+          ...(options.workspaceId ? { "X-Plot-Workspace-Id": options.workspaceId } : {}),
+        },
       });
       if (!response.ok) {
         const payload = await parsePayload(response);
