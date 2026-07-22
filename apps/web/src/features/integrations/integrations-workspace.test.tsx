@@ -157,6 +157,26 @@ describe("IntegrationsWorkspace", () => {
     expect(mocks.listRepositories).toHaveBeenCalledTimes(2);
   });
 
+  it("offers a stateful reconnect when the stored installation no longer exists", async () => {
+    mocks.listConnections.mockResolvedValue([connection]);
+    mocks.listRepositories.mockRejectedValue(
+      new PlotApiError(502, "GITHUB_NOT_FOUND", "GitHub resource was not found (request provider-id)"),
+    );
+    mocks.createInstallationRequest.mockReturnValue(new Promise(() => undefined));
+
+    render(<IntegrationsWorkspace />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("previous GitHub installation was replaced or removed");
+    expect(screen.getByText("Not connected")).toBeVisible();
+    expect(screen.queryByText(/No repositories are currently granted/)).not.toBeInTheDocument();
+
+    const reconnect = screen.getByRole("button", { name: "Reconnect GitHub" });
+    fireEvent.click(reconnect);
+
+    await waitFor(() => expect(mocks.createInstallationRequest).toHaveBeenCalledTimes(1));
+    expect(reconnect).toBeDisabled();
+  });
+
   it("turns an overlapping import into a recoverable status message", async () => {
     mocks.listConnections.mockResolvedValue([connection]);
     mocks.listRepositories.mockResolvedValue([{ ...repository, id: "scope-1", status: "ACTIVE" }]);

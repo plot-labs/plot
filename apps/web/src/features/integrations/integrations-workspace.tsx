@@ -25,6 +25,7 @@ export function IntegrationsWorkspace() {
   const [repositories, setRepositories] = useState<GitHubRepository[]>([]);
   const [selectedRepositoryId, setSelectedRepositoryId] = useState<number | null>(null);
   const [isOwner, setIsOwner] = useState<boolean | null>(null);
+  const [connectionNeedsReconnect, setConnectionNeedsReconnect] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [action, setAction] = useState<IntegrationAction>(null);
   const actionRef = useRef<IntegrationAction>(null);
@@ -64,6 +65,7 @@ export function IntegrationsWorkspace() {
         setIsOwner(owner);
         setConnections(nextConnections);
         setRepositories([]);
+        setConnectionNeedsReconnect(false);
 
         if (owner && preferredConnection?.status === "ACTIVE") {
           const nextRepositories = await plotApiClient.listGitHubRepositories(preferredConnection.id);
@@ -74,7 +76,10 @@ export function IntegrationsWorkspace() {
           ));
         }
       } catch (error) {
-        if (!cancelled) setMessage(errorMessage(error));
+        if (!cancelled) {
+          setConnectionNeedsReconnect(requiresReconnect(error));
+          setMessage(errorMessage(error));
+        }
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -161,7 +166,7 @@ export function IntegrationsWorkspace() {
               </p>
             </div>
             {!isLoading && (
-              <ConnectionBadge connected={Boolean(activeConnection)} />
+              <ConnectionBadge connected={Boolean(activeConnection) && !connectionNeedsReconnect} />
             )}
           </div>
 
@@ -171,10 +176,10 @@ export function IntegrationsWorkspace() {
           {isLoading ? (
             <Loading />
           ) : isOwner === null ? null : !isOwner ? (
-            <NonOwnerState connected={Boolean(activeConnection)} />
-          ) : !activeConnection ? (
+            <NonOwnerState connected={Boolean(activeConnection) && !connectionNeedsReconnect} />
+          ) : !activeConnection || connectionNeedsReconnect ? (
             <ConnectState
-              reconnect={hasInactiveConnection}
+              reconnect={hasInactiveConnection || connectionNeedsReconnect}
               busy={action === "install"}
               onConnect={() => { void installGitHub(); }}
             />
@@ -341,6 +346,7 @@ function errorMessage(error: unknown) {
   if (error instanceof PlotApiError) {
     if (error.code === "GITHUB_NOT_CONFIGURED") return "GitHub is not configured for this environment. Try again after an administrator enables it.";
     if (error.code === "GITHUB_RATE_LIMITED") return "GitHub rate limit reached. Wait a moment, then retry.";
+    if (error.code === "GITHUB_NOT_FOUND") return "The previous GitHub installation was replaced or removed. Reconnect GitHub to restore repository access.";
     if (error.code === "GITHUB_ACCESS_DENIED" || error.code === "CONNECTION_INACTIVE" || error.code === "REPOSITORY_INACTIVE") return "GitHub access was revoked. Reconnect GitHub, then retry.";
     if (error.code === "FORBIDDEN") return "Workspace owner must connect GitHub.";
     if (error.code === "IMPORT_ALREADY_RUNNING") return "An import is already running for this repository. Wait for it to finish, then retry.";
@@ -348,4 +354,13 @@ function errorMessage(error: unknown) {
     return error.message;
   }
   return "Could not update the GitHub integration. Try again.";
+}
+
+function requiresReconnect(error: unknown) {
+  return error instanceof PlotApiError && new Set([
+    "GITHUB_NOT_FOUND",
+    "GITHUB_ACCESS_DENIED",
+    "CONNECTION_INACTIVE",
+    "REPOSITORY_INACTIVE",
+  ]).has(error.code);
 }
