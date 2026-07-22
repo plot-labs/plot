@@ -86,7 +86,7 @@ export type DevContext = {
 
 export const devContext: DevContext = {
   workspace: {
-    id: "59e698fa-c565-4c9e-9ae2-685eca99072a",
+    id: "018fd000-0000-7000-8000-000000000002",
     name: "Personal",
     environment: "Local dev",
     connectionLabel: "GitHub demo source",

@@ -135,6 +135,71 @@ export interface CreateGenerationInput {
 
 export interface RequestOptions { signal?: AbortSignal }
 
+export interface GitHubInstallationRequest {
+  installUrl: string;
+  expiresAt: string;
+}
+
+export interface GitHubRepository {
+  id: string | null;
+  externalRepositoryId: number;
+  owner: string;
+  name: string;
+  displayName: string;
+  url: string;
+  status: string | null;
+}
+
+export interface GitHubConnection {
+  id: string;
+  installationId: number;
+  status: string;
+  repositories: GitHubRepository[];
+}
+
+export interface GitHubImport {
+  id: string;
+  sourceScopeId: string;
+  from: string;
+  to: string;
+  status: string;
+  eligibleCount: number;
+  blockCreatedCount: number;
+  blockUpdatedCount: number;
+  blockUnchangedCount: number;
+  errorCode: string | null;
+  errorMessage: string | null;
+  startedAt: string;
+  completedAt: string | null;
+}
+
+interface WritingBlock {
+  id: string;
+  sourceKind: string;
+  title: string | null;
+  body: string | null;
+  url: string | null;
+  canonicalUrl: string | null;
+  sourceCreatedAt: string | null;
+  status: string;
+}
+
+interface WritingBlockPage {
+  page: number;
+  size: number;
+  totalItems: number;
+  totalPages: number;
+  items: WritingBlock[];
+}
+
+export interface WorkspaceSummary {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  role: string | null;
+}
+
 export class PlotApiError extends Error {
   constructor(
     public readonly status: number,
@@ -149,6 +214,13 @@ export class PlotApiError extends Error {
 }
 
 export interface PlotApiClient {
+
+  createGitHubInstallationRequest(options?: RequestOptions): Promise<GitHubInstallationRequest>;
+  listGitHubConnections(options?: RequestOptions): Promise<GitHubConnection[]>;
+  listGitHubRepositories(connectionId: string, options?: RequestOptions): Promise<GitHubRepository[]>;
+  connectGitHubRepository(connectionId: string, externalRepositoryId: number, options?: RequestOptions): Promise<GitHubRepository>;
+  importGitHubRepository(sourceScopeId: string, input: { from: string; to: string }, options?: RequestOptions): Promise<GitHubImport>;
+  getWorkspace(id: string, options?: RequestOptions): Promise<WorkspaceSummary>;
   listGenerationReferences(options?: RequestOptions): Promise<GenerationReference[]>;
   createGeneration(input: CreateGenerationInput, idempotencyKey: string, options?: RequestOptions): Promise<GenerationRun>;
   getGeneration(id: string, options?: RequestOptions): Promise<GenerationRun>;
@@ -191,12 +263,30 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
   }
 
   return {
+    createGitHubInstallationRequest: (requestOptions) => request("/github/installations/requests", {
+      method: "POST",
+      signal: requestOptions?.signal,
+    }),
+    listGitHubConnections: (requestOptions) => request("/github/connections", { signal: requestOptions?.signal }),
+    listGitHubRepositories: (connectionId, requestOptions) => request(
+      `/github/connections/${encodeURIComponent(connectionId)}/repositories`,
+      { signal: requestOptions?.signal },
+    ),
+    connectGitHubRepository: (connectionId, externalRepositoryId, requestOptions) => request(
+      `/github/repositories/${encodeURIComponent(String(externalRepositoryId))}`,
+      { method: "PUT", body: JSON.stringify({ connectionId }), signal: requestOptions?.signal },
+    ),
+    importGitHubRepository: (sourceScopeId, input, requestOptions) => request(
+      `/github/repositories/${encodeURIComponent(sourceScopeId)}/imports`,
+      { method: "POST", body: JSON.stringify(input), signal: requestOptions?.signal },
+    ),
+    getWorkspace: (id, requestOptions) => request(`/workspaces/${encodeURIComponent(id)}`, { signal: requestOptions?.signal }),
     listGenerationReferences: async (requestOptions) => {
-      const connections = await request<GitHubConnectionResponse[]>("/github/connections", { signal: requestOptions?.signal });
+      const connections = await request<GitHubConnection[]>("/github/connections", { signal: requestOptions?.signal });
       const scopes = connections
         .filter((connection) => connection.status === "ACTIVE")
         .flatMap((connection) => connection.repositories)
-        .filter((repository): repository is GitHubRepositoryResponse & { id: string } => Boolean(repository.id) && repository.status === "ACTIVE");
+        .filter((repository): repository is GitHubRepository & { id: string } => Boolean(repository.id) && repository.status === "ACTIVE");
       const pages = await Promise.all(scopes.map(async (scope) => {
         const first = await request<WritingBlockPage>(`/blocks?sourceScopeId=${encodeURIComponent(scope.id)}&page=0&size=100`, { signal: requestOptions?.signal });
         const rest = await Promise.all(Array.from({ length: Math.max(0, first.totalPages - 1) }, (_, index) =>
@@ -307,34 +397,6 @@ async function parseEventBlock(block: string, onEvent: (event: GenerationProgres
 function isGenerationStatus(value: unknown): value is GenerationStatus {
   return value === "QUEUED" || value === "WRITING" || value === "REVIEWING" || value === "REWRITING"
     || value === "READY" || value === "NEEDS_YOUR_CALL" || value === "NEEDS_REVIEW" || value === "FAILED";
-}
-
-interface GitHubRepositoryResponse {
-  id: string | null;
-  displayName: string;
-  status: string | null;
-}
-
-interface GitHubConnectionResponse {
-  status: string;
-  repositories: GitHubRepositoryResponse[];
-}
-
-interface WritingBlockPage {
-  page: number;
-  size: number;
-  totalItems: number;
-  totalPages: number;
-  items: Array<{
-    id: string;
-    sourceKind: string;
-    title: string | null;
-    body: string | null;
-    url: string | null;
-    canonicalUrl: string | null;
-    sourceCreatedAt: string | null;
-    status: string;
-  }>;
 }
 
 async function parsePayload(response: Response): Promise<unknown> {

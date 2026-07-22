@@ -136,6 +136,27 @@ class GitHubConnectionService(
 		}
 	}
 
+	/**
+	 * Returns the installation's current GitHub grant, annotated with the local
+	 * repository scope when this workspace has already selected it.  The
+	 * connection lookup is deliberately tenant-scoped before calling GitHub so a
+	 * guessed connection ID cannot reveal a different workspace's installation.
+	 */
+	@Transactional(readOnly = true)
+	fun listGrantedRepositories(connectionId: UUID): List<GitHubRepositoryResponse> {
+		guard.requireEnabled()
+		requireOwner()
+		val connection = findConnection(connectionId)
+		val scopesByRepositoryId = listScopesForConnection(connection.id)
+			.associateBy { it.externalRepositoryId }
+		return githubClient.listInstallationRepositories(connection.installationId)
+			.sortedBy { it.id }
+			.map { repository ->
+				val scope = scopesByRepositoryId[repository.id]
+				repository.toResponse(scope?.id, scope?.status)
+			}
+	}
+
 	@Transactional
 	fun connectRepository(externalRepositoryId: Long, request: GitHubConnectRepositoryRequest): GitHubRepositoryResponse {
 		guard.requireEnabled()
