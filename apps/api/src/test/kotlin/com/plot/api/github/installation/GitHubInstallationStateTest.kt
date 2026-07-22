@@ -30,7 +30,9 @@ class GitHubInstallationStateTest {
 		assertNotNull(jdbc.nonceHash)
 		assertEquals(false, jdbc.nonceHash!!.contains(state.value))
 
-		service.consume(state.value)
+		val binding = service.consume(state.value)
+		assertEquals(DevContext().devUserId, binding.userId)
+		assertEquals(DevContext().devWorkspaceId, binding.workspaceId)
 		assertFailsWith<ApiException> { service.consume(state.value) }
 
 		val tampered = state.value.dropLast(1) + if (state.value.last() == 'a') 'b' else 'a'

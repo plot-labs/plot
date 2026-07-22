@@ -1,8 +1,110 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { proxyPlotRequest } from "./route";
 
 describe("Plot same-origin proxy", () => {
+  const previousAllowedEmails = process.env.AUTH_ALLOWED_EMAILS;
+
+  beforeAll(() => {
+    process.env.AUTH_ALLOWED_EMAILS = "member@example.com";
+  });
+
+  afterAll(() => {
+    if (previousAllowedEmails === undefined) delete process.env.AUTH_ALLOWED_EMAILS;
+    else process.env.AUTH_ALLOWED_EMAILS = previousAllowedEmails;
+  });
+
+  it("uses the server JWT and never forwards browser credentials", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ ok: true }));
+    const request = new Request("http://web.test/api/plot/sessions", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer forged",
+        Cookie: "better-auth.session_token=browser-session",
+        Origin: "http://web.test",
+        "X-Plot-Workspace-Id": "018fd000-0000-7000-8000-000000000002",
+      },
+      body: "{}",
+    });
+
+    const response = await proxyPlotRequest(request, ["sessions"], {
+      fetch: fetcher,
+      getSession: async () => ({ user: { email: "member@example.com" } }),
+      getServerJwt: async () => "server-issued-jwt",
+    });
+
+    expect(response.status).toBe(200);
+    const initHeaders = new Headers(fetcher.mock.calls[0]?.[1]?.headers);
+    expect(initHeaders.get("authorization")).toBe("Bearer server-issued-jwt");
+    expect(initHeaders.get("cookie")).toBeNull();
+    expect(initHeaders.get("x-plot-workspace-id")).toBe("018fd000-0000-7000-8000-000000000002");
+  });
+
+  it("rejects an expired or missing Better Auth session before reaching Kotlin", async () => {
+    const fetcher = vi.fn<typeof fetch>();
+    const request = new Request("http://web.test/api/plot/me");
+
+    const response = await proxyPlotRequest(request, ["me"], {
+      fetch: fetcher,
+      getSession: async () => null,
+      getServerJwt: async () => "should-not-be-called",
+    });
+
+    expect(response.status).toBe(401);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("allows the certification BFF bypass only on an explicit loopback run", async () => {
+    process.env.PLOT_CERTIFICATION_LOOPBACK_GUARD = "true";
+    try {
+      const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ ok: true }));
+      const response = await proxyPlotRequest(
+        new Request("http://127.0.0.1:3000/api/plot/sessions", { headers: { Host: "127.0.0.1:3000" } }),
+        ["sessions"],
+        { fetch: fetcher, baseUrl: "http://127.0.0.1:8080" },
+      );
+
+      expect(response.status).toBe(200);
+      expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).get("authorization")).toBe("Bearer certification-loopback");
+    } finally {
+      delete process.env.PLOT_CERTIFICATION_LOOPBACK_GUARD;
+    }
+  });
+
+  it("does not enable the certification BFF bypass for non-loopback authorities", async () => {
+    process.env.PLOT_CERTIFICATION_LOOPBACK_GUARD = "true";
+    try {
+      const fetcher = vi.fn<typeof fetch>();
+      const response = await proxyPlotRequest(
+        new Request("https://app.useplot.xyz/api/plot/sessions", { headers: { Host: "app.useplot.xyz" } }),
+        ["sessions"],
+        { fetch: fetcher, getSession: async () => null },
+      );
+
+      expect(response.status).toBe(401);
+      expect(fetcher).not.toHaveBeenCalled();
+    } finally {
+      delete process.env.PLOT_CERTIFICATION_LOOPBACK_GUARD;
+    }
+  });
+
+  it("rejects cross-origin state changes", async () => {
+    const fetcher = vi.fn<typeof fetch>();
+    const request = new Request("http://web.test/api/plot/sessions", {
+      method: "POST",
+      headers: { Origin: "https://attacker.test" },
+    });
+
+    const response = await proxyPlotRequest(request, ["sessions"], {
+      fetch: fetcher,
+      getSession: async () => ({ user: { email: "member@example.com" } }),
+      getServerJwt: async () => "server-issued-jwt",
+    });
+
+    expect(response.status).toBe(403);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it("allows only declared paths and strips hop-by-hop headers", async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response("{}", {
       status: 202,

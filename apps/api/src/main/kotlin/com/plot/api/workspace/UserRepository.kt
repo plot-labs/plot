@@ -5,4 +5,6 @@ import org.springframework.data.jpa.repository.JpaRepository
 
 interface UserRepository : JpaRepository<User, UUID> {
 	fun findByEmail(email: String): User?
+	fun findByEmailIgnoreCase(email: String): User?
+	fun findByAuthIssuerAndAuthSubject(authIssuer: String, authSubject: String): User?
 }

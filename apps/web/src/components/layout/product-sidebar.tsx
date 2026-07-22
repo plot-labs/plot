@@ -8,7 +8,6 @@ import {
   CalendarClock,
   Check,
   ChevronDown,
-  CreditCard,
   FileText,
   FolderOpen,
   LogOut,
@@ -23,7 +22,6 @@ import {
   Settings,
   Sun,
   UserRound,
-  UserPlus,
 } from "lucide-react";
 
 import { AccountSettingsModal } from "@/components/layout/account-settings-modal";
@@ -51,22 +49,53 @@ const themeOptions = [
 
 const appHomeHref = "/sessions";
 
-const workspaceItems = [
-  { id: "personal", name: "Personal", detail: "Current workspace", mark: "P", selected: true },
-  { id: "plot", name: "Plot", detail: "Dev workspace", mark: "P", selected: false },
-  { id: "launch", name: "Launch copy", detail: "Draft workspace", mark: "L", selected: false },
-  { id: "hiring", name: "Hiring", detail: "Research workspace", mark: "H", selected: false },
-];
+type Account = {
+  user: { id: string; email: string; displayName: string };
+  workspaces: Array<{ id: string; name: string; slug: string; role: string }>;
+  defaultWorkspaceId: string;
+};
 
 export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: ProductSidebarProps) {
   const pathname = usePathname();
   const { workspace, sessions } = getProductShellData();
+  const [account, setAccount] = useState<Account | null>(null);
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
   const workspaceMenuRef = useRef<HTMLDivElement>(null);
   const profileMenuRef = useRef<HTMLDivElement>(null);
-  const workspaceSettingsHref = `/workspaces/${workspace.id}/settings`;
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/plot/me", { cache: "no-store", headers: { Accept: "application/json" } })
+      .then((response) => response.ok ? response.json() as Promise<Account> : null)
+      .then((value) => {
+        if (cancelled || !value) return;
+        setAccount(value);
+        const savedId = window.localStorage.getItem("plot.workspaceId");
+        const savedWorkspace = savedId ? value.workspaces.find((item) => item.id === savedId) : undefined;
+        const resolvedWorkspaceId = savedWorkspace?.id ?? value.defaultWorkspaceId ?? value.workspaces[0]?.id ?? null;
+        if (resolvedWorkspaceId) window.localStorage.setItem("plot.workspaceId", resolvedWorkspaceId);
+        else window.localStorage.removeItem("plot.workspaceId");
+        setSelectedWorkspaceId(resolvedWorkspaceId);
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, []);
+
+  const currentWorkspace = account?.workspaces.find((item) => item.id === selectedWorkspaceId)
+    ?? account?.workspaces.find((item) => item.id === account.defaultWorkspaceId)
+    ?? account?.workspaces[0];
+  const currentWorkspaceId = currentWorkspace?.id ?? workspace.id;
+  const currentWorkspaceName = currentWorkspace?.name ?? workspace.name;
+  const workspaceSettingsHref = `/workspaces/${currentWorkspaceId}/settings`;
+  const workspaceItems = account?.workspaces.map((item) => ({
+    ...item,
+    detail: item.role,
+    mark: item.name.slice(0, 1).toUpperCase(),
+    selected: item.id === currentWorkspaceId,
+  })) ?? [{ id: workspace.id, name: workspace.name, detail: "OWNER", mark: "P", selected: true }];
 
   useEffect(() => {
     if (!workspaceMenuOpen) {
@@ -207,7 +236,7 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
             <span className="flex size-7 shrink-0 items-center justify-center rounded-[8px] bg-[#ef3f2c] font-serif text-[15px] font-semibold leading-none text-white">
               P
             </span>
-            <span className="min-w-0 flex-1 truncate">Personal</span>
+            <span className="min-w-0 flex-1 truncate">{currentWorkspaceName}</span>
             <ChevronDown
               className={cn(
                 "size-4 shrink-0 text-black/38 transition dark:text-white/40",
@@ -224,14 +253,14 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
                     P
                   </span>
                   <div className="min-w-0">
-                    <div className="truncate text-[14px] font-semibold text-black/84 dark:text-white/88">Personal</div>
+                    <div className="truncate text-[14px] font-semibold text-black/84 dark:text-white/88">{currentWorkspaceName}</div>
                     <div className="mt-0.5 truncate text-[12px] text-black/45 dark:text-white/45">
-                      Dev workspace
+                      {currentWorkspace?.role ?? "OWNER"}
                     </div>
                   </div>
                 </div>
 
-                <div className="mt-3 grid grid-cols-2 gap-1.5">
+                <div className="mt-3 grid grid-cols-1 gap-1.5">
                   <Link
                     href={workspaceSettingsHref}
                     onClick={() => setWorkspaceMenuOpen(false)}
@@ -240,13 +269,6 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
                     <Settings className="size-3.5" />
                     Settings
                   </Link>
-                  <button
-                    type="button"
-                    className="inline-flex h-8 items-center justify-center gap-1.5 rounded-[8px] border border-black/[0.08] px-2 font-medium text-black/62 transition hover:bg-black/[0.04] dark:border-white/12 dark:text-white/62 dark:hover:bg-white/10"
-                  >
-                    <UserPlus className="size-3.5" />
-                    Invite
-                  </button>
                 </div>
               </div>
 
@@ -255,7 +277,12 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
                   <button
                     key={workspace.id}
                     type="button"
-                    onClick={() => setWorkspaceMenuOpen(false)}
+                    onClick={() => {
+                      window.localStorage.setItem("plot.workspaceId", workspace.id);
+                      setSelectedWorkspaceId(workspace.id);
+                      setWorkspaceMenuOpen(false);
+                      window.location.reload();
+                    }}
                     className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition hover:bg-black/[0.04] dark:hover:bg-white/10"
                   >
                     <span
@@ -385,13 +412,10 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
               </button>
               <button
                 type="button"
-                className="flex w-full items-center gap-2 rounded-[8px] px-2 py-2 text-left transition hover:bg-black/[0.04] dark:hover:bg-white/10"
-              >
-                <CreditCard className="size-4 text-black/45 dark:text-white/45" />
-                Billing
-              </button>
-              <button
-                type="button"
+                onClick={async () => {
+                  await fetch("/api/auth/sign-out", { method: "POST", credentials: "include" });
+                  window.location.assign("/sign-in");
+                }}
                 className="flex w-full items-center gap-2 rounded-[8px] px-2 py-2 text-left transition hover:bg-black/[0.04] dark:hover:bg-white/10"
               >
                 <LogOut className="size-4 text-black/45 dark:text-white/45" />
@@ -411,14 +435,14 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
               <UserRound className="size-4" />
             </div>
             <div className="min-w-0">
-              <div className="truncate text-[13px] font-semibold">Plot</div>
-              <div className="text-xs text-black/45 dark:text-white/45">Dev workspace</div>
+              <div className="truncate text-[13px] font-semibold">{account?.user.displayName ?? "Plot"}</div>
+              <div className="truncate text-xs text-black/45 dark:text-white/45">{account?.user.email ?? currentWorkspaceName}</div>
             </div>
           </button>
         </div>
       </aside>
 
-      {accountSettingsOpen && <AccountSettingsModal open onClose={() => setAccountSettingsOpen(false)} />}
+      {accountSettingsOpen && <AccountSettingsModal open onClose={() => setAccountSettingsOpen(false)} user={account?.user} />}
     </>
   );
 }

@@ -91,6 +91,7 @@ apps/
   api/  Kotlin Spring Boot backend and agent runtime
 
 packages/
+  auth/        Better Auth server/client boundary and allowlist policy
   api-client/  shared typed generation/citation client
   ui/          shared UI components later
   config/      shared frontend config later

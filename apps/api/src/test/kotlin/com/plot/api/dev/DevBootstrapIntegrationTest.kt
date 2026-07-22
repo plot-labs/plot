@@ -9,9 +9,11 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.test.context.ActiveProfiles
 
-@SpringBootTest
+@SpringBootTest(properties = ["plot.dev-bootstrap.enabled=true"])
 @Import(TestcontainersConfiguration::class)
+@ActiveProfiles("test")
 class DevBootstrapIntegrationTest {
 
 	@Autowired

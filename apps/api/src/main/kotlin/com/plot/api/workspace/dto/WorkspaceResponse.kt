@@ -8,6 +8,7 @@ data class WorkspaceResponse(
 	val name: String,
 	val slug: String,
 	val status: String,
+	val role: String? = null,
 	val createdAt: Instant,
 	val updatedAt: Instant,
 )

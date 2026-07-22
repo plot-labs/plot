@@ -14,6 +14,8 @@ class User(
 	var email: String,
 	var displayName: String,
 	var status: String,
+	var authIssuer: String? = null,
+	var authSubject: String? = null,
 	var createdAt: Instant,
 	var updatedAt: Instant,
 )

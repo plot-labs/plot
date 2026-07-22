@@ -1,5 +1,6 @@
 package com.plot.api.source
 
+import com.plot.api.auth.RequestActorResolver
 import com.plot.api.common.ApiException
 import org.springframework.core.env.Environment
 import org.springframework.http.HttpStatus
@@ -7,8 +8,15 @@ import org.springframework.stereotype.Component
 
 /** Temporary product-auth boundary shared by every provider-managed source. */
 @Component
-class SourceManagedAccessGuard(private val environment: Environment) {
+class SourceManagedAccessGuard(
+	private val environment: Environment,
+	private val actorResolver: RequestActorResolver? = null,
+) {
 	fun requireReadable() {
+		if (actorResolver?.current() != null) {
+			actorResolver.requireWorkspace()
+			return
+		}
 		if (environment.activeProfiles.none {
 				it == "local" || it == "dev" || it == "test" || it == "generation-certification"
 			}) {
