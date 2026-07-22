@@ -191,13 +191,15 @@ describe("Plot same-origin proxy", () => {
   it("turns a browser GitHub callback into a state-free Integrations redirect", async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ connectionId: "018fd000-0000-7000-8000-000000000002" }));
     const response = await proxyPlotRequest(
-      new Request("http://web.test/api/plot/github/installations/callback?state=private-state&installation_id=77"),
+      new Request("http://localhost:3000/api/plot/github/installations/callback?state=private-state&installation_id=77", {
+        headers: { Host: "127.0.0.1:3000" },
+      }),
       ["github", "installations", "callback"],
       { fetch: fetcher, baseUrl: "http://127.0.0.1:8080" },
     );
 
     expect(response.status).toBe(303);
-    expect(response.headers.get("location")).toBe("http://web.test/integrations?githubConnection=018fd000-0000-7000-8000-000000000002");
+    expect(response.headers.get("location")).toBe("http://127.0.0.1:3000/integrations?githubConnection=018fd000-0000-7000-8000-000000000002");
     expect(String(fetcher.mock.calls[0]?.[0])).toContain("state=private-state");
   });
 

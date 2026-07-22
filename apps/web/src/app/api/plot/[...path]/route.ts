@@ -134,7 +134,7 @@ export async function proxyPlotRequest(
  * reflecting them into client storage, logs, or the final URL.
  */
 async function githubInstallationCallbackRedirect(request: Request, upstreamResponse: Response): Promise<Response> {
-  const integrationsUrl = new URL("/integrations", request.url);
+  const integrationsUrl = new URL("/integrations", browserFacingOrigin(request) ?? request.url);
   if (upstreamResponse.ok) {
     const payload = await readJsonRecord(upstreamResponse);
     const connectionId = payload?.connectionId;
