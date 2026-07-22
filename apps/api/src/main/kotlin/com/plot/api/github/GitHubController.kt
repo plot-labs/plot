@@ -45,6 +45,10 @@ class GitHubInstallationController(
 	@GetMapping("/connections")
 	fun listConnections(): List<GitHubConnectionResponse> = connectionService.listConnections()
 
+	@GetMapping("/connections/{connectionId}/repositories")
+	fun listGrantedRepositories(@PathVariable connectionId: UUID): List<GitHubRepositoryResponse> =
+		connectionService.listGrantedRepositories(connectionId)
+
 	@PutMapping("/repositories/{externalRepositoryId}")
 	fun connectRepository(
 		@PathVariable @Min(1) externalRepositoryId: Long,

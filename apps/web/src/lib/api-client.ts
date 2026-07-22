@@ -6,16 +6,22 @@ import {
 } from "@/lib/dev-context";
 import { createPlotApiClient } from "@plot/api-client";
 
+export { PlotApiError } from "@plot/api-client";
+
 export type {
   ContentPack,
   ContentPackSummary,
   CreateGenerationInput,
   GenerationRun,
   GenerationReference,
+  GitHubConnection,
+  GitHubImport,
+  GitHubRepository,
   PlotApiClient,
+  WorkspaceSummary,
 } from "@plot/api-client";
 
-const getSelectedWorkspaceId = () => typeof window === "undefined"
+export const getSelectedWorkspaceId = () => typeof window === "undefined"
   ? devContext.workspace.id
   : window.localStorage.getItem("plot.workspaceId") ?? devContext.workspace.id;
 
