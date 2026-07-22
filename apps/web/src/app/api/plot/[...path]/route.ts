@@ -133,20 +133,20 @@ export async function proxyPlotRequest(
  * reflecting them into client storage, logs, or the final URL.
  */
 async function githubInstallationCallbackRedirect(request: Request, upstreamResponse: Response): Promise<Response> {
-  const sourcesUrl = new URL("/sources", request.url);
+  const integrationsUrl = new URL("/integrations", request.url);
   if (upstreamResponse.ok) {
     const payload = await readJsonRecord(upstreamResponse);
     const connectionId = payload?.connectionId;
     if (typeof connectionId === "string" && isUuid(connectionId)) {
-      sourcesUrl.searchParams.set("githubConnection", connectionId);
-      return Response.redirect(sourcesUrl, 303);
+      integrationsUrl.searchParams.set("githubConnection", connectionId);
+      return Response.redirect(integrationsUrl, 303);
     }
-    sourcesUrl.searchParams.set("githubError", "failed");
-    return Response.redirect(sourcesUrl, 303);
+    integrationsUrl.searchParams.set("githubError", "failed");
+    return Response.redirect(integrationsUrl, 303);
   }
   const payload = await readJsonRecord(upstreamResponse);
-  sourcesUrl.searchParams.set("githubError", callbackErrorKind(upstreamResponse.status, payload?.error));
-  return Response.redirect(sourcesUrl, 303);
+  integrationsUrl.searchParams.set("githubError", callbackErrorKind(upstreamResponse.status, payload?.error));
+  return Response.redirect(integrationsUrl, 303);
 }
 
 async function readJsonRecord(response: Response): Promise<Record<string, unknown> | null> {
