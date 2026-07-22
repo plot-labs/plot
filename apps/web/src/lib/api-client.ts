@@ -15,7 +15,11 @@ export type {
   PlotApiClient,
 } from "@plot/api-client";
 
-export const plotApiClient = createPlotApiClient({ baseUrl: "/api/plot" });
+const getSelectedWorkspaceId = () => typeof window === "undefined"
+  ? devContext.workspace.id
+  : window.localStorage.getItem("plot.workspaceId") ?? devContext.workspace.id;
+
+export const plotApiClient = createPlotApiClient({ baseUrl: "/api/plot", workspaceId: getSelectedWorkspaceId });
 
 export type {
   DraftDocument,

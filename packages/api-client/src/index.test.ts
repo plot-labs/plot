@@ -148,6 +148,34 @@ describe("Plot API client", () => {
     );
   });
 
+  it("resolves the workspace ID for each request and event stream", async () => {
+    const encoder = new TextEncoder();
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      if (String(input).endsWith("/events")) {
+        return new Response(new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode('event: checkpoint\ndata: {"runId":"run-1","runStatus":"WRITING","sequence":1}\n\n'));
+            controller.close();
+          },
+        }));
+      }
+      return Response.json({});
+    });
+    let workspaceId = "stale-workspace";
+    const client = createPlotApiClient({ fetch: fetcher, workspaceId: () => workspaceId });
+
+    await client.getGeneration("run-1");
+    workspaceId = "resolved-workspace";
+    await client.getGeneration("run-2");
+    await client.subscribeGenerationEvents!("run-1", { onEvent: () => undefined });
+
+    expect(fetcher.mock.calls.map(([, init]) => new Headers(init?.headers).get("X-Plot-Workspace-Id"))).toEqual([
+      "stale-workspace",
+      "resolved-workspace",
+      "resolved-workspace",
+    ]);
+  });
+
   it("buffers split events and rejects invalid event payloads", async () => {
     const encoder = new TextEncoder();
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(

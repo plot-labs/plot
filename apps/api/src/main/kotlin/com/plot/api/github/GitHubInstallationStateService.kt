@@ -23,6 +23,11 @@ data class GitHubInstallationState(
 	val expiresAt: Instant,
 )
 
+data class GitHubInstallationStateBinding(
+	val userId: UUID,
+	val workspaceId: UUID,
+)
+
 @Service
 class GitHubInstallationStateService(
 	private val properties: GitHubProperties,
@@ -58,7 +63,7 @@ class GitHubInstallationStateService(
 	}
 
 	@Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
-	fun consume(value: String) {
+	fun consume(value: String): GitHubInstallationStateBinding {
 		val parts = value.split('.')
 		if (parts.size != 4) invalid()
 		val payload = parts.dropLast(1).joinToString(".")
@@ -66,7 +71,6 @@ class GitHubInstallationStateService(
 		if (!MessageDigest.isEqual(expected.toByteArray(), parts.last().toByteArray())) invalid()
 		val userId = runCatching { UUID.fromString(parts[0]) }.getOrNull() ?: invalid()
 		val workspaceId = runCatching { UUID.fromString(parts[1]) }.getOrNull() ?: invalid()
-		if (userId != devContext.devUserId || workspaceId != devContext.devWorkspaceId) invalid()
 		val nonce = parts[2]
 		val now = Instant.now(clock)
 		val updated = jdbcTemplate.update(
@@ -77,12 +81,13 @@ class GitHubInstallationStateService(
 			  and consumed_at is null and expires_at > ?
 			""".trimIndent(),
 			timestamp(now),
-			devContext.devWorkspaceId,
-			devContext.devUserId,
+			workspaceId,
+			userId,
 			hash(nonce),
 			timestamp(now),
 		)
 		if (updated != 1) invalid()
+		return GitHubInstallationStateBinding(userId, workspaceId)
 	}
 
 	private fun sign(payload: String): String {

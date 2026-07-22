@@ -1,5 +1,6 @@
 package com.plot.api.github
 
+import com.plot.api.auth.RequestActorResolver
 import com.plot.api.common.ApiException
 import org.springframework.http.HttpStatus
 import org.springframework.core.env.Environment
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Component
 class GitHubGuard(
 	private val properties: GitHubProperties,
 	private val environment: Environment,
+	private val actorResolver: RequestActorResolver? = null,
 ) {
 	fun requireReadAccess() {
 		if (environment.activeProfiles.any { it == "generation-certification" }) {
@@ -41,6 +43,7 @@ class GitHubGuard(
 				"GitHub is not configured",
 			)
 		}
+		if (actorResolver?.current() != null) return
 		if (!properties.devOnly) {
 			throw ApiException(
 				HttpStatus.SERVICE_UNAVAILABLE,
