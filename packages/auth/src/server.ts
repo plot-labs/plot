@@ -134,6 +134,7 @@ function createAuth() {
 }
 
 type BetterAuthInstance = ReturnType<typeof createAuth>;
+let authInstance: BetterAuthInstance | undefined;
 
 /**
  * Importing a Next route during `next build` must not require production
@@ -143,7 +144,7 @@ type BetterAuthInstance = ReturnType<typeof createAuth>;
  */
 export const auth = new Proxy({} as BetterAuthInstance, {
   get(_target, property, receiver) {
-    return Reflect.get(createAuth(), property, receiver);
+    return Reflect.get(authInstance ??= createAuth(), property, receiver);
   },
 });
 
