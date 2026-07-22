@@ -101,6 +101,9 @@ export async function proxyPlotRequest(
       headers: { "Cache-Control": "no-store" },
     });
   }
+  if (request.method === "GET" && path.join("/") === "github/installations/callback") {
+    return githubInstallationCallbackRedirect(request, upstreamResponse);
+  }
   const responseHeaders = new Headers({ "Cache-Control": "no-store" });
   upstreamResponse.headers.forEach((value, key) => {
     if (allowedResponseHeaders.has(key.toLowerCase())) responseHeaders.set(key, value);
@@ -124,6 +127,44 @@ export async function proxyPlotRequest(
   return new Response(upstreamResponse.body, { status: upstreamResponse.status, headers: responseHeaders });
 }
 
+/**
+ * GitHub reaches this browser route with a one-time state query parameter.
+ * Consume it upstream, then discard both provider parameters instead of
+ * reflecting them into client storage, logs, or the final URL.
+ */
+async function githubInstallationCallbackRedirect(request: Request, upstreamResponse: Response): Promise<Response> {
+  const sourcesUrl = new URL("/sources", request.url);
+  if (upstreamResponse.ok) {
+    const payload = await readJsonRecord(upstreamResponse);
+    const connectionId = payload?.connectionId;
+    if (typeof connectionId === "string" && isUuid(connectionId)) {
+      sourcesUrl.searchParams.set("githubConnection", connectionId);
+      return Response.redirect(sourcesUrl, 303);
+    }
+    sourcesUrl.searchParams.set("githubError", "failed");
+    return Response.redirect(sourcesUrl, 303);
+  }
+  const payload = await readJsonRecord(upstreamResponse);
+  sourcesUrl.searchParams.set("githubError", callbackErrorKind(upstreamResponse.status, payload?.error));
+  return Response.redirect(sourcesUrl, 303);
+}
+
+async function readJsonRecord(response: Response): Promise<Record<string, unknown> | null> {
+  try {
+    const value: unknown = await response.json();
+    return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
+}
+
+function callbackErrorKind(status: number, code: unknown): "invalid" | "unauthorized" | "unavailable" | "failed" {
+  if (status === 400 || code === "INVALID_GITHUB_STATE" || code === "GITHUB_CALLBACK_INVALID") return "invalid";
+  if (status === 401 || status === 403 || code === "FORBIDDEN") return "unauthorized";
+  if (status === 429 || status >= 500 || code === "GITHUB_NOT_CONFIGURED" || code === "GITHUB_PROVIDER_UNAVAILABLE") return "unavailable";
+  return "failed";
+}
+
 function isAllowed(method: string, path: string[]): boolean {
   if (path.length === 0 || path.some((segment) => !safeSegment.test(segment))) return false;
   const route = path.join("/");
@@ -133,6 +174,7 @@ function isAllowed(method: string, path: string[]): boolean {
   if (method === "GET" && /^workspaces\/[0-9a-fA-F-]+$/.test(route)) return true;
   if (method === "PATCH" && /^workspaces\/[0-9a-fA-F-]+$/.test(route)) return true;
   if (method === "GET" && route === "github/connections") return true;
+	if (method === "GET" && /^github\/connections\/[0-9a-fA-F-]+\/repositories$/.test(route)) return true;
   if (method === "POST" && route === "github/installations/requests") return true;
   if (method === "POST" && route === "github/installations/callback") return true;
   if (method === "GET" && route === "github/installations/callback") return true;

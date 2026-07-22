@@ -158,6 +158,27 @@ class GitHubConnectionApiIntegrationTest {
 	}
 
 	@Test
+	fun listsCurrentInstallationGrantWithExistingScopeStatus() {
+		val connectionId = completeInstallation()
+		val scopeId = connect(connectionId, 1001)
+
+		mockMvc.get("/api/github/connections/$connectionId/repositories")
+			.andExpect {
+				status { isOk() }
+				jsonPath("$.length()") { value(2) }
+				jsonPath("\$[0].externalRepositoryId") { value(1001) }
+				jsonPath("\$[0].sourceScopeId") { value(scopeId.toString()) }
+				jsonPath("\$[0].status") { value("ACTIVE") }
+				jsonPath("\$[1].externalRepositoryId") { value(1002) }
+				jsonPath("\$[1].sourceScopeId") { doesNotExist() }
+			}
+
+		val foreignConnectionId = UUID.randomUUID()
+		mockMvc.get("/api/github/connections/$foreignConnectionId/repositories")
+			.andExpect { status { isNotFound() } }
+	}
+
+	@Test
 	fun overlappingImportIsRejectedBeforeProviderWorkAndProviderFailureIsDurable() {
 		val connectionId = completeInstallation()
 		val containerId = connect(connectionId, 1001)

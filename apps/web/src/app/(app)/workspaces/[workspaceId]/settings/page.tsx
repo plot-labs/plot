@@ -1,4 +1,5 @@
 import { Trash2, Upload, UserRound } from "lucide-react";
+import Link from "next/link";
 
 export default function WorkspaceSettingsPage() {
   return (
@@ -101,6 +102,16 @@ export default function WorkspaceSettingsPage() {
                 Upgrade to team
               </button>
             </div>
+          </section>
+
+          <section className="rounded-[14px] border border-black/[0.1] bg-white p-7 shadow-[0_1px_2px_rgb(15_23_42_/_0.03)] dark:border-white/10 dark:bg-white/[0.04]">
+            <h2 className="text-[18px] font-semibold text-black/85 dark:text-white/88">GitHub</h2>
+            <p className="mt-2 text-[14px] leading-5 text-black/45 dark:text-white/45">
+              Connect repositories and import merged pull requests from Sources.
+            </p>
+            <Link href="/sources" className="mt-5 inline-flex rounded-full border border-black/[0.12] bg-black/[0.03] px-3 py-1.5 text-[13px] font-medium text-black/65 transition hover:bg-black/[0.06] dark:border-white/12 dark:bg-white/8 dark:text-white/70 dark:hover:bg-white/12">
+              Manage GitHub in Sources
+            </Link>
           </section>
 
           <section className="rounded-[14px] border border-red-200 bg-white p-7 shadow-[0_1px_2px_rgb(15_23_42_/_0.03)] dark:border-red-500/35 dark:bg-white/[0.04]">
