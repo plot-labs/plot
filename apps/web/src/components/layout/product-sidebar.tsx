@@ -90,6 +90,7 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
   const currentWorkspaceId = currentWorkspace?.id ?? workspace.id;
   const currentWorkspaceName = currentWorkspace?.name ?? workspace.name;
   const workspaceSettingsHref = `/workspaces/${currentWorkspaceId}/settings`;
+  const integrationsActive = pathname === "/integrations" || pathname.startsWith("/integrations/");
   const workspaceItems = account?.workspaces.map((item) => ({
     ...item,
     detail: item.role,
@@ -200,10 +201,19 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
               3
             </span>
           </button>
-          <button className="flex w-full items-center gap-2 rounded-xl px-2.5 py-1.5 text-left text-[13px] font-medium text-black/70 transition hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10">
+          <Link
+            href="/integrations"
+            aria-current={integrationsActive ? "page" : undefined}
+            className={cn(
+              "flex w-full items-center gap-2 rounded-xl px-2.5 py-1.5 text-left text-[13px] font-medium transition",
+              integrationsActive
+                ? "bg-white/75 text-[#18181b] shadow-sm shadow-black/[0.03] dark:bg-white/10 dark:text-white"
+                : "text-black/70 hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10",
+            )}
+          >
             <Puzzle className="size-4" />
             Integrations
-          </button>
+          </Link>
         </div>
 
         <div ref={workspaceMenuRef} className="relative px-3 pb-4">

@@ -28,7 +28,10 @@ class WorkspaceService(
 
 	@Transactional(readOnly = true)
 	fun get(id: UUID): WorkspaceResponse {
-		return findDevWorkspace(id).toResponse()
+		val workspace = findDevWorkspace(id)
+		val membership = memberRepository.findByWorkspaceIdAndUserIdAndStatus(id, devContext.devUserId, "ACTIVE")
+			?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Workspace not found")
+		return workspace.toResponse(membership.role)
 	}
 
 	@Transactional

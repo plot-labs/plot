@@ -47,6 +47,7 @@ class WorkspaceApiIntegrationTest {
 				status { isOk() }
 				jsonPath("$.id") { value(devContext.devWorkspaceId.toString()) }
 				jsonPath("$.status") { value("ACTIVE") }
+				jsonPath("$.role") { value("OWNER") }
 			}
 	}
 
