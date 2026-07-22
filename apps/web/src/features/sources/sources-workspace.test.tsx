@@ -4,14 +4,12 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  listConnections: vi.fn(),
-  listWritingBlocks: vi.fn(),
+  listReferences: vi.fn(),
 }));
 
 vi.mock("@/lib/api-client", () => ({
   plotApiClient: {
-    listGitHubConnections: mocks.listConnections,
-    listWritingBlocks: mocks.listWritingBlocks,
+    listGenerationReferences: mocks.listReferences,
   },
 }));
 
@@ -19,34 +17,22 @@ import { SourcesWorkspace } from "./sources-workspace";
 
 describe("SourcesWorkspace", () => {
   beforeEach(() => {
-    mocks.listConnections.mockReset();
-    mocks.listWritingBlocks.mockReset();
+    mocks.listReferences.mockReset();
   });
 
   it("shows only collected Writing Blocks and their original details", async () => {
-    mocks.listConnections.mockResolvedValue([{ id: "connection-1", status: "ACTIVE", repositories: [{
-      id: "scope-1",
+    mocks.listReferences.mockResolvedValue([{
+      id: "block-1",
       sourceScopeId: "scope-1",
-      externalRepositoryId: 42,
-      displayName: "acme/plot",
-      status: "ACTIVE",
-    }] }]);
-    mocks.listWritingBlocks.mockResolvedValue({
-      items: [{
-        id: "block-1",
-        sourceKind: "PULL_REQUEST",
-        title: "Clarify recovery",
-        body: "Recovery copy and retry behavior.",
-        url: "https://github.com/acme/plot/pull/184",
-        canonicalUrl: null,
-        sourceCreatedAt: "2026-07-03T00:00:00Z",
-        status: "ACTIVE",
-      }],
-      page: 0,
-      size: 100,
-      totalItems: 1,
-      totalPages: 1,
-    });
+      provider: "GITHUB",
+      sourceKind: "PULL_REQUEST",
+      sourceLabel: "Clarify recovery",
+      repositoryLabel: "acme/plot",
+      title: "Clarify recovery",
+      body: "Recovery copy and retry behavior.",
+      originalUrl: "https://github.com/acme/plot/pull/184",
+      sourceCreatedAt: "2026-07-03T00:00:00Z",
+    }]);
 
     render(<SourcesWorkspace />);
     fireEvent.click(await screen.findByRole("option", { name: /Clarify recovery/ }));
@@ -59,12 +45,12 @@ describe("SourcesWorkspace", () => {
   });
 
   it("links to Integrations without starting an import when no blocks exist", async () => {
-    mocks.listConnections.mockResolvedValue([]);
+    mocks.listReferences.mockResolvedValue([]);
 
     render(<SourcesWorkspace />);
 
     const link = await screen.findByRole("link", { name: "Set up GitHub in Integrations" });
     expect(link).toHaveAttribute("href", "/integrations");
-    expect(mocks.listWritingBlocks).not.toHaveBeenCalled();
+    expect(mocks.listReferences).toHaveBeenCalledTimes(1);
   });
 });

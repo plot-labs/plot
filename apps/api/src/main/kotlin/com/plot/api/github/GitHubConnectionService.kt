@@ -27,7 +27,6 @@ data class GitHubCallbackRequest(
 
 data class GitHubRepositoryResponse(
 	val id: UUID?,
-	val sourceScopeId: UUID?,
 	val externalRepositoryId: Long,
 	val owner: String,
 	val name: String,
@@ -323,7 +322,6 @@ class GitHubConnectionService(
 				val externalKey = rs.getString(3).orEmpty()
 				GitHubRepositoryResponse(
 					id = rs.getObject(1, UUID::class.java),
-					sourceScopeId = rs.getObject(1, UUID::class.java),
 					externalRepositoryId = rs.getString(2).toLong(),
 					owner = externalKey.substringBefore('/'),
 					name = externalKey.substringAfter('/', rs.getString(4)),
@@ -399,7 +397,6 @@ data class GitHubScopeRecord(
 
 private fun GitHubRepository.toResponse(id: UUID?, status: String? = null): GitHubRepositoryResponse = GitHubRepositoryResponse(
 	id = id,
-	sourceScopeId = id,
 	externalRepositoryId = this.id,
 	owner = owner,
 	name = name,

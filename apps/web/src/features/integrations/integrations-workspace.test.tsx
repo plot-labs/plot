@@ -47,7 +47,6 @@ const connection = {
 
 const repository = {
   id: null,
-  sourceScopeId: null,
   externalRepositoryId: 42,
   owner: "acme",
   name: "plot",
@@ -73,17 +72,13 @@ describe("IntegrationsWorkspace", () => {
   });
 
   it("starts GitHub App installation from the empty owner state", async () => {
-    const navigate = vi.fn();
-    mocks.createInstallationRequest.mockResolvedValue({
-      installUrl: "https://github.test/apps/plot/installations/new",
-      expiresAt: "2026-07-23T00:00:00Z",
-    });
+    mocks.createInstallationRequest.mockReturnValue(new Promise(() => undefined));
 
-    render(<IntegrationsWorkspace navigateToInstall={navigate} />);
+    render(<IntegrationsWorkspace />);
     fireEvent.click(await screen.findByRole("button", { name: "Connect GitHub" }));
 
     await waitFor(() => expect(mocks.createInstallationRequest).toHaveBeenCalledTimes(1));
-    expect(navigate).toHaveBeenCalledWith("https://github.test/apps/plot/installations/new");
+    expect(screen.getByRole("button", { name: "Connect GitHub" })).toBeDisabled();
   });
 
   it("loads callback repositories and immediately removes callback query parameters", async () => {
@@ -105,7 +100,6 @@ describe("IntegrationsWorkspace", () => {
     mocks.listRepositories.mockResolvedValue([repository]);
     let resolveConnection: ((value: {
       id: string;
-      sourceScopeId: string;
       externalRepositoryId: number;
       owner: string;
       name: string;
@@ -137,7 +131,7 @@ describe("IntegrationsWorkspace", () => {
     fireEvent.click(submit);
 
     expect(mocks.connectRepository).toHaveBeenCalledTimes(1);
-    resolveConnection?.({ ...repository, id: "scope-1", sourceScopeId: "scope-1", status: "ACTIVE" });
+    resolveConnection?.({ ...repository, id: "scope-1", status: "ACTIVE" });
 
     await waitFor(() => expect(mocks.importRepository).toHaveBeenCalledTimes(1));
     const [sourceScopeId, window] = mocks.importRepository.mock.calls[0] ?? [];
@@ -165,7 +159,7 @@ describe("IntegrationsWorkspace", () => {
 
   it("turns an overlapping import into a recoverable status message", async () => {
     mocks.listConnections.mockResolvedValue([connection]);
-    mocks.listRepositories.mockResolvedValue([{ ...repository, id: "scope-1", sourceScopeId: "scope-1", status: "ACTIVE" }]);
+    mocks.listRepositories.mockResolvedValue([{ ...repository, id: "scope-1", status: "ACTIVE" }]);
     mocks.importRepository.mockRejectedValue(new PlotApiError(409, "IMPORT_ALREADY_RUNNING", "busy"));
 
     render(<IntegrationsWorkspace />);

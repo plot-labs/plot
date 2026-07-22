@@ -2,7 +2,7 @@
 
 import { ExternalLink, GitBranch, LoaderCircle, RefreshCw, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   getSelectedWorkspaceId,
@@ -15,13 +15,7 @@ import {
 
 type IntegrationAction = "install" | "import" | null;
 
-type IntegrationsWorkspaceProps = {
-  navigateToInstall?: (url: string) => void;
-};
-
-export function IntegrationsWorkspace({
-  navigateToInstall = (url) => window.location.assign(url),
-}: IntegrationsWorkspaceProps = {}) {
+export function IntegrationsWorkspace() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackConnectionId = searchParams.get("githubConnection");
@@ -38,10 +32,9 @@ export function IntegrationsWorkspace({
   const [lastImport, setLastImport] = useState<GitHubImport | null>(null);
   const [reloadNonce, setReloadNonce] = useState(0);
 
-  const activeConnection = useMemo(() => {
-    const active = connections.filter((connection) => connection.status === "ACTIVE");
-    return active.find((connection) => connection.id === preferredConnectionId) ?? active[0] ?? null;
-  }, [connections, preferredConnectionId]);
+  const activeConnection = connections.find(
+    (connection) => connection.status === "ACTIVE" && connection.id === preferredConnectionId,
+  ) ?? connections.find((connection) => connection.status === "ACTIVE") ?? null;
   const selectedRepository = repositories.find(
     (repository) => repository.externalRepositoryId === selectedRepositoryId,
   ) ?? null;
@@ -102,7 +95,7 @@ export function IntegrationsWorkspace({
     setMessage(null);
     try {
       const request = await plotApiClient.createGitHubInstallationRequest();
-      navigateToInstall(request.installUrl);
+      window.location.assign(request.installUrl);
     } catch (error) {
       setMessage(errorMessage(error));
     } finally {
@@ -117,13 +110,13 @@ export function IntegrationsWorkspace({
     setAction("import");
     setMessage(null);
     try {
-      const connected = selectedRepository.sourceScopeId
+      const connected = selectedRepository.id
         ? selectedRepository
         : await plotApiClient.connectGitHubRepository(
           activeConnection.id,
           selectedRepository.externalRepositoryId,
         );
-      const sourceScopeId = connected.sourceScopeId ?? connected.id;
+      const sourceScopeId = connected.id;
       if (!sourceScopeId) throw new Error("GitHub repository was connected without a source scope");
 
       const to = new Date();
@@ -177,9 +170,7 @@ export function IntegrationsWorkspace({
 
           {isLoading ? (
             <Loading />
-          ) : isOwner === null ? (
-            <UnavailableState />
-          ) : !isOwner ? (
+          ) : isOwner === null ? null : !isOwner ? (
             <NonOwnerState connected={Boolean(activeConnection)} />
           ) : !activeConnection ? (
             <ConnectState
@@ -228,7 +219,7 @@ export function IntegrationsWorkspace({
                       <span className="min-w-0 flex-1 truncate font-medium text-black/78 dark:text-white/80">
                         {repository.displayName}
                       </span>
-                      {repository.sourceScopeId && (
+                      {repository.id && (
                         <span className="text-xs text-emerald-700 dark:text-emerald-300">Connected</span>
                       )}
                       <a
@@ -258,7 +249,7 @@ export function IntegrationsWorkspace({
                   className="mt-5 inline-flex items-center gap-2 rounded-full bg-black px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-black"
                 >
                   {action === "import" && <LoaderCircle className="size-4 animate-spin" />}
-                  {selectedRepository?.sourceScopeId ? "Import last 30 days" : "Connect and import last 30 days"}
+                  {selectedRepository?.id ? "Import last 30 days" : "Connect and import last 30 days"}
                 </button>
               )}
             </div>
@@ -317,14 +308,6 @@ function Loading() {
     <div className="mt-6 flex items-center gap-2 border-t border-black/[0.08] pt-6 text-sm text-black/50 dark:border-white/10 dark:text-white/50">
       <LoaderCircle className="size-4 animate-spin" />
       Loading GitHub integration…
-    </div>
-  );
-}
-
-function UnavailableState() {
-  return (
-    <div className="mt-6 border-t border-black/[0.08] pt-6 text-sm text-black/50 dark:border-white/10 dark:text-white/50">
-      GitHub integration state is unavailable. Retry to load it again.
     </div>
   );
 }

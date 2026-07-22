@@ -18,7 +18,6 @@ export type {
   GitHubImport,
   GitHubRepository,
   PlotApiClient,
-  WritingBlock,
   WorkspaceSummary,
 } from "@plot/api-client";
 

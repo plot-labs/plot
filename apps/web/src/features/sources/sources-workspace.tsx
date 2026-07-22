@@ -4,17 +4,10 @@ import { ExternalLink, LoaderCircle, RefreshCw, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import {
-  plotApiClient,
-  type GitHubConnection,
-  type GitHubRepository,
-  type WritingBlock,
-} from "@/lib/api-client";
-
-type SourceItem = WritingBlock & { repository: string; sourceScopeId: string };
+import { plotApiClient, type GenerationReference } from "@/lib/api-client";
 
 export function SourcesWorkspace() {
-  const [sources, setSources] = useState<SourceItem[]>([]);
+  const [sources, setSources] = useState<GenerationReference[]>([]);
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
@@ -32,8 +25,7 @@ export function SourcesWorkspace() {
 
     async function load() {
       try {
-        const connections = await plotApiClient.listGitHubConnections();
-        const nextSources = await loadBlocks(connections);
+        const nextSources = await plotApiClient.listGenerationReferences();
         if (cancelled) return;
         setSources(nextSources);
         setSelectedSourceId((current) => nextSources.some((source) => source.id === current) ? current : null);
@@ -75,7 +67,7 @@ export function SourcesWorkspace() {
                 className={`w-full rounded-[12px] border px-4 py-3.5 text-left transition ${source.id === selectedSourceId ? "border-black/20 bg-white dark:border-white/20 dark:bg-white/10" : "border-black/10 bg-white/60 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"}`}
               >
                 <div className="font-medium text-black/82 dark:text-white/86">{source.title || "Untitled pull request"}</div>
-                <div className="mt-1 text-sm text-black/55 dark:text-white/55">{source.repository}</div>
+                <div className="mt-1 text-sm text-black/55 dark:text-white/55">{source.repositoryLabel}</div>
                 <div className="mt-3 text-xs text-black/40 dark:text-white/40">{formatDate(source.sourceCreatedAt)}</div>
               </button>
             ))}
@@ -97,12 +89,12 @@ export function SourcesWorkspace() {
               <X className="size-4" />
             </button>
             <div className="rounded-[12px] border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/5">
-              <div className="text-xs font-medium text-black/40 dark:text-white/40">Pull request · {selectedSource.repository}</div>
+              <div className="text-xs font-medium text-black/40 dark:text-white/40">Pull request · {selectedSource.repositoryLabel}</div>
               <h2 className="mt-2 text-[28px] font-semibold leading-tight text-black/88 dark:text-white/90">{selectedSource.title || "Untitled pull request"}</h2>
               <p className="mt-1 text-sm text-black/55 dark:text-white/55">{formatDate(selectedSource.sourceCreatedAt)}</p>
               {selectedSource.body && <p className="mt-5 whitespace-pre-wrap text-sm leading-6 text-black/70 dark:text-white/70">{selectedSource.body}</p>}
-              {(selectedSource.canonicalUrl || selectedSource.url) && (
-                <a href={selectedSource.canonicalUrl || selectedSource.url || undefined} target="_blank" rel="noreferrer" className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-black/70 underline underline-offset-4 dark:text-white/75">
+              {selectedSource.originalUrl && (
+                <a href={selectedSource.originalUrl} target="_blank" rel="noreferrer" className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-black/70 underline underline-offset-4 dark:text-white/75">
                   View on GitHub <ExternalLink className="size-3.5" />
                 </a>
               )}
@@ -118,27 +110,6 @@ export function SourcesWorkspace() {
       </section>
     </div>
   );
-}
-
-async function loadBlocks(connections: GitHubConnection[]): Promise<SourceItem[]> {
-  const scopes = connections
-    .filter((connection) => connection.status === "ACTIVE")
-    .flatMap((connection) => connection.repositories)
-    .filter((repository): repository is GitHubRepository & { sourceScopeId: string } => (
-      repository.status === "ACTIVE" && Boolean(repository.sourceScopeId)
-    ));
-  const pages = await Promise.all(scopes.map(async (repository) => {
-    const first = await plotApiClient.listWritingBlocks(repository.sourceScopeId);
-    const rest = await Promise.all(Array.from({ length: Math.max(0, first.totalPages - 1) }, (_, index) => (
-      plotApiClient.listWritingBlocks(repository.sourceScopeId, index + 1)
-    )));
-    return [first, ...rest].flatMap((page) => page.items).map((item) => ({
-      ...item,
-      repository: repository.displayName,
-      sourceScopeId: repository.sourceScopeId,
-    }));
-  }));
-  return pages.flat().filter((item) => item.status === "ACTIVE");
 }
 
 function Loading() {

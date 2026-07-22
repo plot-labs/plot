@@ -7,8 +7,8 @@ describe("Plot API client", () => {
     const fetcher = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(Response.json({ installUrl: "https://github.test/install", expiresAt: "2026-07-01T00:00:00Z" }))
       .mockResolvedValueOnce(Response.json([{ id: "connection-1", status: "ACTIVE", repositories: [] }]))
-      .mockResolvedValueOnce(Response.json([{ id: null, sourceScopeId: null, externalRepositoryId: 42, owner: "acme", name: "plot", displayName: "acme/plot", url: "https://github.com/acme/plot", status: null }]))
-      .mockResolvedValueOnce(Response.json({ id: "scope-1", sourceScopeId: "scope-1", externalRepositoryId: 42, owner: "acme", name: "plot", displayName: "acme/plot", url: "https://github.com/acme/plot", status: "ACTIVE" }))
+      .mockResolvedValueOnce(Response.json([{ id: null, externalRepositoryId: 42, owner: "acme", name: "plot", displayName: "acme/plot", url: "https://github.com/acme/plot", status: null }]))
+      .mockResolvedValueOnce(Response.json({ id: "scope-1", externalRepositoryId: 42, owner: "acme", name: "plot", displayName: "acme/plot", url: "https://github.com/acme/plot", status: "ACTIVE" }))
       .mockResolvedValueOnce(Response.json({ id: "import-1", sourceScopeId: "scope-1", status: "COMPLETED" }));
     const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
 

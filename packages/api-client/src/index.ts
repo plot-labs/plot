@@ -142,7 +142,6 @@ export interface GitHubInstallationRequest {
 
 export interface GitHubRepository {
   id: string | null;
-  sourceScopeId: string | null;
   externalRepositoryId: number;
   owner: string;
   name: string;
@@ -174,7 +173,7 @@ export interface GitHubImport {
   completedAt: string | null;
 }
 
-export interface WritingBlock {
+interface WritingBlock {
   id: string;
   sourceKind: string;
   title: string | null;
@@ -185,7 +184,7 @@ export interface WritingBlock {
   status: string;
 }
 
-export interface WritingBlockPage {
+interface WritingBlockPage {
   page: number;
   size: number;
   totalItems: number;
@@ -221,7 +220,6 @@ export interface PlotApiClient {
   listGitHubRepositories(connectionId: string, options?: RequestOptions): Promise<GitHubRepository[]>;
   connectGitHubRepository(connectionId: string, externalRepositoryId: number, options?: RequestOptions): Promise<GitHubRepository>;
   importGitHubRepository(sourceScopeId: string, input: { from: string; to: string }, options?: RequestOptions): Promise<GitHubImport>;
-  listWritingBlocks(sourceScopeId: string, page?: number, size?: number, options?: RequestOptions): Promise<WritingBlockPage>;
   getWorkspace(id: string, options?: RequestOptions): Promise<WorkspaceSummary>;
   listGenerationReferences(options?: RequestOptions): Promise<GenerationReference[]>;
   createGeneration(input: CreateGenerationInput, idempotencyKey: string, options?: RequestOptions): Promise<GenerationRun>;
@@ -281,10 +279,6 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
     importGitHubRepository: (sourceScopeId, input, requestOptions) => request(
       `/github/repositories/${encodeURIComponent(sourceScopeId)}/imports`,
       { method: "POST", body: JSON.stringify(input), signal: requestOptions?.signal },
-    ),
-    listWritingBlocks: (sourceScopeId, page = 0, size = 100, requestOptions) => request(
-      `/blocks?sourceScopeId=${encodeURIComponent(sourceScopeId)}&page=${page}&size=${size}`,
-      { signal: requestOptions?.signal },
     ),
     getWorkspace: (id, requestOptions) => request(`/workspaces/${encodeURIComponent(id)}`, { signal: requestOptions?.signal }),
     listGenerationReferences: async (requestOptions) => {

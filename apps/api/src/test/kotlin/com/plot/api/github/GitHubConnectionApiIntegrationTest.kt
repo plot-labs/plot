@@ -167,10 +167,10 @@ class GitHubConnectionApiIntegrationTest {
 				status { isOk() }
 				jsonPath("$.length()") { value(2) }
 				jsonPath("\$[0].externalRepositoryId") { value(1001) }
-				jsonPath("\$[0].sourceScopeId") { value(scopeId.toString()) }
+				jsonPath("\$[0].id") { value(scopeId.toString()) }
 				jsonPath("\$[0].status") { value("ACTIVE") }
 				jsonPath("\$[1].externalRepositoryId") { value(1002) }
-				jsonPath("\$[1].sourceScopeId") { doesNotExist() }
+				jsonPath("\$[1].id") { doesNotExist() }
 			}
 
 		val foreignConnectionId = UUID.randomUUID()
