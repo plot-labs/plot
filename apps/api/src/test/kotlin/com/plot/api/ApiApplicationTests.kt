@@ -20,6 +20,11 @@ class ApiApplicationTests {
 	@Test
 	fun contextStartsAndFlywayCreatesCoreTables() {
 		val expectedTables = setOf(
+			"auth_user",
+			"auth_session",
+			"auth_account",
+			"auth_verification",
+			"auth_jwks",
 			"users",
 			"workspaces",
 			"workspace_members",

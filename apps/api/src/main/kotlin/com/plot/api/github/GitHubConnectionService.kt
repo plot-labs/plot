@@ -3,6 +3,7 @@ package com.plot.api.github
 import com.plot.api.common.ApiException
 import com.plot.api.common.JdbcTime.timestamp
 import com.plot.api.dev.DevContext
+import com.plot.api.auth.RequestActorResolver
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.time.Instant
@@ -60,9 +61,11 @@ class GitHubConnectionService(
 	private val githubClient: GitHubClient,
 	private val jdbcTemplate: JdbcTemplate,
 	private val objectMapper: ObjectMapper,
+	private val actorResolver: RequestActorResolver? = null,
 ) {
 	fun createInstallationRequest(): GitHubInstallationRequestResponse {
 		guard.requireEnabled()
+		requireOwner()
 		val state = stateService.create()
 		val slug = properties.appSlug ?: throw notConfigured()
 		val encodedState = URLEncoder.encode(state.value, StandardCharsets.UTF_8)
@@ -80,7 +83,8 @@ class GitHubConnectionService(
 			throw ApiException(HttpStatus.BAD_REQUEST, "GITHUB_CALLBACK_INVALID", "GitHub callback is invalid")
 		}
 		// Consume before any provider call. A failed token exchange cannot replay the state.
-		stateService.consume(request.state)
+		val state = stateService.consume(request.state)
+		requireCallbackOwner(state)
 		val repositories = githubClient.listInstallationRepositories(request.installationId)
 		val now = Instant.now()
 		val connectionId = jdbcTemplate.queryForObject(
@@ -99,11 +103,11 @@ class GitHubConnectionService(
 			""".trimIndent(),
 			{ rs, _ -> rs.getObject(1, UUID::class.java) },
 			UUID.randomUUID(),
-			devContext.devWorkspaceId,
+			state.workspaceId,
 			request.installationId.toString(),
 			repositories.firstOrNull()?.owner,
 			objectMapper.writeValueAsString(mapOf("metadata" to "read", "pull_requests" to "read")),
-			devContext.devUserId,
+			state.userId,
 			timestamp(now),
 			timestamp(now),
 		) ?: throw ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "GitHub connection could not be saved")
@@ -135,6 +139,7 @@ class GitHubConnectionService(
 	@Transactional
 	fun connectRepository(externalRepositoryId: Long, request: GitHubConnectRepositoryRequest): GitHubRepositoryResponse {
 		guard.requireEnabled()
+		requireOwner()
 		if (externalRepositoryId <= 0L) throw ApiException(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "Repository ID is invalid")
 		val connection = findConnection(request.connectionId)
 		if (connection.status != "ACTIVE") throw ApiException(HttpStatus.CONFLICT, "CONNECTION_INACTIVE", "GitHub connection is inactive")
@@ -183,6 +188,7 @@ class GitHubConnectionService(
 	@Transactional
 	fun disconnectRepository(id: UUID) {
 		guard.requireEnabled()
+		requireOwner()
 		val updated = jdbcTemplate.update(
 			"""
 			update source_scopes
@@ -252,6 +258,33 @@ class GitHubConnectionService(
 			devContext.devWorkspaceId,
 			id,
 		).firstOrNull() ?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "GitHub connection not found")
+	}
+
+	private fun requireOwner() {
+		val actor = actorResolver?.current()
+		if (actor != null && actorResolver.requireWorkspace().role != "OWNER") {
+			throw ApiException(org.springframework.http.HttpStatus.FORBIDDEN, "FORBIDDEN", "Workspace owner access is required")
+		}
+	}
+
+	/** The callback has no workspace header; its one-time signed state is authoritative. */
+	private fun requireCallbackOwner(state: GitHubInstallationStateBinding) {
+		val actor = actorResolver?.current()
+		if (actor != null && actor.userId != state.userId) {
+			throw ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "GitHub state does not belong to the authenticated user")
+		}
+		val ownerMembership = jdbcTemplate.queryForObject(
+			"""
+			select count(*) from workspace_members
+			where workspace_id = ? and user_id = ? and status = 'ACTIVE' and role = 'OWNER'
+			""".trimIndent(),
+			Int::class.java,
+			state.workspaceId,
+			state.userId,
+		) ?: 0
+		if (ownerMembership != 1) {
+			throw ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Workspace owner access is required")
+		}
 	}
 
 	private fun listScopesForConnection(connectionId: UUID): List<GitHubRepositoryResponse> {
