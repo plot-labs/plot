@@ -1,7 +1,6 @@
 package com.plot.api.common
 
 import com.plot.api.auth.PlotAuthProperties
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.env.Environment
@@ -23,7 +22,6 @@ import org.springframework.security.authentication.BadCredentialsException
 @EnableWebSecurity
 class SecurityConfig(
 	private val authProperties: PlotAuthProperties,
-	@Value("\${plot.dev-bootstrap.enabled:false}") private val devBootstrapEnabled: Boolean,
 	private val environment: Environment,
 ) {
 	@Bean
@@ -42,8 +40,7 @@ class SecurityConfig(
 
 	@Bean
 	fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
-		val legacyDevMode = devBootstrapEnabled || environment.activeProfiles.any { it in setOf("local", "dev", "test", "generation-certification") }
-		val enforce = authProperties.enabled && authProperties.required && !legacyDevMode
+		val enforce = authProperties.enabled && authProperties.required && !environment.allowsDevelopmentAuthBypass()
 		if (enforce) {
 			http
 				.csrf { it.ignoringRequestMatchers("/api/**") }
@@ -61,6 +58,12 @@ class SecurityConfig(
 		return http.build()
 	}
 }
+
+internal fun Environment.allowsDevelopmentAuthBypass(): Boolean =
+	activeProfiles.any { it in setOf("local", "test") } ||
+		("generation-certification" in activeProfiles && getProperty("server.address") in LOOPBACK_ADDRESSES)
+
+private val LOOPBACK_ADDRESSES = setOf("localhost", "127.0.0.1", "::1")
 
 private class AudienceValidator(private val audience: String) : OAuth2TokenValidator<Jwt> {
 	private val error = OAuth2Error("invalid_token", "The required audience is missing", null)
