@@ -61,6 +61,7 @@ class GitHubConnectionService(
 	private val githubClient: GitHubClient,
 	private val jdbcTemplate: JdbcTemplate,
 	private val objectMapper: ObjectMapper,
+	private val statusRecorder: GitHubConnectionStatusRecorder,
 	private val actorResolver: RequestActorResolver? = null,
 ) {
 	fun createInstallationRequest(): GitHubInstallationRequestResponse {
@@ -149,12 +150,19 @@ class GitHubConnectionService(
 		val connection = findConnection(connectionId)
 		val scopesByRepositoryId = listScopesForConnection(connection.id)
 			.associateBy { it.externalRepositoryId }
-		return githubClient.listInstallationRepositories(connection.installationId)
-			.sortedBy { it.id }
-			.map { repository ->
-				val scope = scopesByRepositoryId[repository.id]
-				repository.toResponse(scope?.id, scope?.status)
+		return try {
+			githubClient.listInstallationRepositories(connection.installationId)
+				.sortedBy { it.id }
+				.map { repository ->
+					val scope = scopesByRepositoryId[repository.id]
+					repository.toResponse(scope?.id, scope?.status)
+				}
+		} catch (exception: ApiException) {
+			if (exception.error == "GITHUB_ACCESS_DENIED" || exception.error == "GITHUB_NOT_FOUND") {
+				statusRecorder.markNeedsReauth(connection.id)
 			}
+			throw exception
+		}
 	}
 
 	@Transactional
@@ -377,6 +385,26 @@ class GitHubConnectionService(
 	}
 
 	private fun notConfigured() = ApiException(HttpStatus.SERVICE_UNAVAILABLE, "GITHUB_NOT_CONFIGURED", "GitHub is not configured")
+}
+
+@Service
+class GitHubConnectionStatusRecorder(
+	private val devContext: DevContext,
+	private val jdbcTemplate: JdbcTemplate,
+) {
+	@Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+	fun markNeedsReauth(connectionId: UUID) {
+		jdbcTemplate.update(
+			"""
+			update connections
+			set status = 'NEEDS_REAUTH', updated_at = ?
+			where workspace_id = ? and id = ? and status = 'ACTIVE'
+			""".trimIndent(),
+			timestamp(Instant.now()),
+			devContext.devWorkspaceId,
+			connectionId,
+		)
+	}
 }
 
 data class GitHubConnectionRecord(val id: UUID, val installationId: Long, val status: String)

@@ -179,6 +179,25 @@ class GitHubConnectionApiIntegrationTest {
 	}
 
 	@Test
+	fun missingInstallationIsPersistedAsNeedingReauthentication() {
+		val connectionId = completeInstallation()
+		fakeClient.repositoryFailureCode = "GITHUB_NOT_FOUND"
+
+		mockMvc.get("/api/github/connections/$connectionId/repositories")
+			.andExpect {
+				status { isBadGateway() }
+				jsonPath("$.error") { value("GITHUB_NOT_FOUND") }
+			}
+
+		assertEquals("NEEDS_REAUTH", jdbcTemplate.queryForObject(
+			"select status from connections where workspace_id = ? and id = ?",
+			String::class.java,
+			devContext.devWorkspaceId,
+			connectionId,
+		))
+	}
+
+	@Test
 	fun overlappingImportIsRejectedBeforeProviderWorkAndProviderFailureIsDurable() {
 		val connectionId = completeInstallation()
 		val containerId = connect(connectionId, 1001)
@@ -336,6 +355,7 @@ class FakeGitHubClient : GitHubClient {
 	var updatedAt: Instant = Instant.parse("2026-01-02T00:00:00Z")
 	var failImports = false
 	var failureCode: String? = null
+	var repositoryFailureCode: String? = null
 	var invalidPayload = false
 
 	private val repositories = listOf(
@@ -345,6 +365,9 @@ class FakeGitHubClient : GitHubClient {
 
 	override fun listInstallationRepositories(installationId: Long): List<GitHubRepository> {
 		repositoryListCalls.incrementAndGet()
+		repositoryFailureCode?.let {
+			throw com.plot.api.common.ApiException(org.springframework.http.HttpStatus.BAD_GATEWAY, it, "provider failure")
+		}
 		return repositories
 	}
 
@@ -424,6 +447,7 @@ class FakeGitHubClient : GitHubClient {
 		updatedAt = Instant.parse("2026-01-02T00:00:00Z")
 		failImports = false
 		failureCode = null
+		repositoryFailureCode = null
 		invalidPayload = false
 	}
 }
