@@ -12,8 +12,8 @@ const mocks = vi.hoisted(() => ({
   createGeneration: vi.fn(),
   updateSession: vi.fn(),
   getGeneration: vi.fn(),
-  createAndStream: vi.fn(),
   stream: vi.fn(),
+  locationAssign: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams(mocks.search) }));
@@ -29,13 +29,12 @@ vi.mock("@/lib/api-client", () => ({
   },
 }));
 vi.mock("@/lib/generation-polling", () => ({
-  createAndStreamGeneration: mocks.createAndStream,
   streamGeneration: mocks.stream,
   isTerminalGenerationStatus: (status: string) => ["READY", "NEEDS_REVIEW", "NEEDS_YOUR_CALL", "FAILED"].includes(status),
 }));
 vi.mock("@/features/sessions/session-composer", () => ({
   SessionComposer: ({ onSubmit, variant }: { onSubmit: (message: string, ids: string[]) => void; variant?: string }) => (
-    <button type="button" onClick={() => onSubmit("Write release notes", variant === "center" ? ["block-1"] : ["block-2"])}>
+    <button type="button" onClick={() => onSubmit("Write release notes", ["block-1"])}>
       {variant === "center" ? "Start generation" : "Generate again"}
     </button>
   ),
@@ -64,6 +63,7 @@ describe("SessionsWorkspace", () => {
     mocks.updateSession.mockResolvedValue(session);
     window.sessionStorage.clear();
     window.history.replaceState(null, "", "/sessions");
+    Object.defineProperty(window, "location", { configurable: true, value: { ...window.location, assign: mocks.locationAssign } });
   });
 
   it("shows only actual sessions and the empty state", async () => {
@@ -75,8 +75,6 @@ describe("SessionsWorkspace", () => {
   it("creates a real session before generation and stores the latest generation", async () => {
     mocks.createSession.mockResolvedValue({ ...session, latestGenerationId: null });
     mocks.createGeneration.mockResolvedValue({ ...terminalRun, id: "run-new" });
-    const assign = vi.fn();
-    Object.defineProperty(window, "location", { configurable: true, value: { ...window.location, assign } });
 
     render(<SessionsWorkspace />);
     await screen.findByRole("button", { name: "Start generation" });
@@ -85,7 +83,7 @@ describe("SessionsWorkspace", () => {
     await waitFor(() => expect(mocks.updateSession).toHaveBeenCalledWith("session-1", { latestGenerationId: "run-new" }));
     expect(mocks.createSession.mock.invocationCallOrder[0]).toBeLessThan(mocks.createGeneration.mock.invocationCallOrder[0]!);
     expect(mocks.createGeneration.mock.invocationCallOrder[0]).toBeLessThan(mocks.updateSession.mock.invocationCallOrder[0]!);
-    expect(assign).toHaveBeenCalledWith("/sessions?session=session-1&generation=run-new");
+    expect(mocks.locationAssign).toHaveBeenCalledWith("/sessions?session=session-1&generation=run-new");
   });
 
   it("keeps a created empty session and shows a retry error when generation cannot start", async () => {
@@ -126,6 +124,39 @@ describe("SessionsWorkspace", () => {
     render(<SessionsWorkspace />);
     expect(await screen.findByText("Reviewed draft")).toBeVisible();
     expect(mocks.updateSession).not.toHaveBeenCalled();
+  });
+
+  it("starts a follow-up generation, updates the session, and reloads the saved run", async () => {
+    mocks.search = "session=session-1&generation=run-1";
+    mocks.listSessions.mockResolvedValue([session]);
+    mocks.getGeneration.mockResolvedValue(terminalRun);
+    mocks.createGeneration.mockResolvedValue({ ...terminalRun, id: "run-2" });
+    render(<SessionsWorkspace />);
+    expect(await screen.findByText("Reviewed draft")).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate again" }));
+
+    await waitFor(() => expect(mocks.updateSession).toHaveBeenCalledWith("session-1", {
+      title: "Write release notes",
+      latestGenerationId: "run-2",
+    }));
+    expect(mocks.createGeneration.mock.invocationCallOrder[0]).toBeLessThan(mocks.updateSession.mock.invocationCallOrder[0]!);
+    expect(mocks.locationAssign).toHaveBeenCalledWith("/sessions?session=session-1&generation=run-2");
+  });
+
+  it("reloads a follow-up run and schedules pointer repair when the session update fails", async () => {
+    mocks.search = "session=session-1&generation=run-1";
+    mocks.listSessions.mockResolvedValue([session]);
+    mocks.getGeneration.mockResolvedValue(terminalRun);
+    mocks.createGeneration.mockResolvedValue({ ...terminalRun, id: "run-2" });
+    mocks.updateSession.mockRejectedValue(new Error("Session unavailable"));
+    render(<SessionsWorkspace />);
+    expect(await screen.findByText("Reviewed draft")).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate again" }));
+
+    await waitFor(() => expect(mocks.locationAssign).toHaveBeenCalledWith("/sessions?session=session-1&generation=run-2"));
+    expect(window.sessionStorage.getItem("plot.session-pointer-repair:session-1")).toBe("run-2");
   });
 
   it("restarts restoration after StrictMode effect replay", async () => {

@@ -7,7 +7,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 
 import type { ContentPack, GenerationReference, GenerationRun, WorkSessionSummary } from "@/lib/api-client";
 import { plotApiClient } from "@/lib/api-client";
-import { createAndStreamGeneration, isTerminalGenerationStatus, streamGeneration } from "@/lib/generation-polling";
+import { isTerminalGenerationStatus, streamGeneration } from "@/lib/generation-polling";
 import { CitedDraftEditor } from "@/features/citations/cited-draft-editor";
 import { ExportDialog } from "@/features/citations/export-dialog";
 import { GenerationWorkLog } from "@/features/sessions/generation-work-log";
@@ -160,7 +160,6 @@ function ActiveSessionWorkspace({ activeSession, references, sourceError }: { ac
   const [generating, setGenerating] = useState(false);
   const generationAbortRef = useRef<AbortController | null>(null);
   const activeGenerationIdRef = useRef<string | null>(null);
-  const sessionUpdateRef = useRef(new Set<string>());
   const messages: SessionMessage[] = [{
     id: activeSession.id,
     role: "user",
@@ -226,39 +225,24 @@ function ActiveSessionWorkspace({ activeSession, references, sourceError }: { ac
     generationAbortRef.current = controller;
     setGenerating(true);
     setGenerationError("");
+    setGenerationRun(null);
     setGeneratedPack(null);
     try {
-      const run = await createAndStreamGeneration(plotApiClient, {
+      const run = await plotApiClient.createGeneration({
         sourceScopeId: selected[0]!.sourceScopeId,
         writingBlockIds: selected.map((reference) => reference.id),
         instruction: message,
-      }, crypto.randomUUID(), {
-        signal: controller.signal,
-        onUpdate: (next) => {
-          if (generationAbortRef.current !== controller || controller.signal.aborted) return;
-          setGenerationRun(next);
-          if (activeGenerationIdRef.current !== next.id) {
-            activeGenerationIdRef.current = next.id;
-            window.history.replaceState(null, "", sessionHref(activeSession.id, next.id));
-          }
-          const sessionUpdateKey = `${activeSession.id}:${next.id}`;
-          if (!sessionUpdateRef.current.has(sessionUpdateKey)) {
-            sessionUpdateRef.current.add(sessionUpdateKey);
-            void plotApiClient.updateSession(activeSession.id, { title: message, latestGenerationId: next.id })
-              .catch((error) => {
-                if (generationAbortRef.current === controller) {
-                  setGenerationError(messageFor(error, "The generation started, but this session could not be updated."));
-                }
-              });
-          }
-        },
-      });
+      }, crypto.randomUUID(), { signal: controller.signal });
       if (generationAbortRef.current !== controller || controller.signal.aborted) return;
-      setGenerationRun(run);
-      setGeneratedPack(run.contentPack);
+      try {
+        await plotApiClient.updateSession(activeSession.id, { title: message, latestGenerationId: run.id });
+      } catch {
+        markSessionPointerRepair(activeSession.id, run.id);
+      }
+      window.location.assign(sessionHref(activeSession.id, run.id));
     } catch (error) {
       if (generationAbortRef.current === controller && !(error instanceof DOMException && error.name === "AbortError")) {
-        setGenerationError(messageFor(error, "Generation could not be completed."));
+        setGenerationError(messageFor(error, "Generation could not be started."));
       }
     } finally {
       if (generationAbortRef.current === controller) setGenerating(false);
