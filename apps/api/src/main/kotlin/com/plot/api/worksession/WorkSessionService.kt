@@ -24,7 +24,7 @@ class WorkSessionService(
 	@Transactional(readOnly = true)
 	fun list(): List<WorkSessionResponse> {
 		return workSessionRepository
-			.findAllByWorkspaceIdOrderByCreatedAtDesc(devContext.devWorkspaceId)
+			.findRecentByWorkspaceId(devContext.devWorkspaceId)
 			.map { it.toResponse() }
 	}
 

@@ -150,13 +150,14 @@ class WorkSessionApiIntegrationTest {
 	}
 
 	@Test
-	fun listOrdersSessionsByCreatedAtDescending() {
+	fun listOrdersSessionsByLatestActivity() {
 		val olderId = UUID.randomUUID()
 		val newerId = UUID.randomUUID()
 		insertSession(
 			id = olderId,
 			title = "Older Session",
 			createdAt = Instant.parse("2026-01-01T00:00:00Z"),
+			lastActivityAt = Instant.parse("2026-01-03T00:00:00Z"),
 		)
 		insertSession(
 			id = newerId,
@@ -167,8 +168,8 @@ class WorkSessionApiIntegrationTest {
 		mockMvc.get("/api/sessions")
 			.andExpect {
 				status { isOk() }
-				jsonPath("$[0].id") { value(newerId.toString()) }
-				jsonPath("$[1].id") { value(olderId.toString()) }
+				jsonPath("$[0].id") { value(olderId.toString()) }
+				jsonPath("$[1].id") { value(newerId.toString()) }
 			}
 	}
 
@@ -266,8 +267,10 @@ class WorkSessionApiIntegrationTest {
 		workspaceId: UUID = devContext.devWorkspaceId,
 		title: String,
 		createdAt: Instant,
+		lastActivityAt: Instant = createdAt,
 	) {
-		val timestamp = Timestamp.from(createdAt)
+		val createdTimestamp = Timestamp.from(createdAt)
+		val activityTimestamp = Timestamp.from(lastActivityAt)
 		jdbcTemplate.update(
 			"""
 			insert into work_sessions (
@@ -286,9 +289,9 @@ class WorkSessionApiIntegrationTest {
 			workspaceId,
 			title,
 			devContext.devUserId,
-			timestamp,
-			timestamp,
-			timestamp,
+			activityTimestamp,
+			createdTimestamp,
+			createdTimestamp,
 		)
 	}
 
