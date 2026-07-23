@@ -62,6 +62,7 @@ describe("SessionsWorkspace", () => {
     mocks.listSessions.mockResolvedValue([]);
     mocks.listReferences.mockResolvedValue([reference]);
     mocks.updateSession.mockResolvedValue(session);
+    window.sessionStorage.clear();
     window.history.replaceState(null, "", "/sessions");
   });
 
@@ -110,10 +111,21 @@ describe("SessionsWorkspace", () => {
     mocks.search = "session=session-1&generation=run-1";
     mocks.listSessions.mockResolvedValue([{ ...session, latestGenerationId: null }]);
     mocks.getGeneration.mockResolvedValue(terminalRun);
+    window.sessionStorage.setItem("plot.session-pointer-repair:session-1", "run-1");
     render(<SessionsWorkspace />);
     expect(await screen.findByText("Reviewed draft")).toBeVisible();
     expect(mocks.getGeneration).toHaveBeenCalledWith("run-1", expect.objectContaining({ signal: expect.any(AbortSignal) }));
     expect(mocks.updateSession).toHaveBeenCalledWith("session-1", { latestGenerationId: "run-1" });
+    expect(window.sessionStorage.getItem("plot.session-pointer-repair:session-1")).toBeNull();
+  });
+
+  it("does not repoint a session from an arbitrary generation URL", async () => {
+    mocks.search = "session=session-1&generation=run-1";
+    mocks.listSessions.mockResolvedValue([{ ...session, latestGenerationId: null }]);
+    mocks.getGeneration.mockResolvedValue(terminalRun);
+    render(<SessionsWorkspace />);
+    expect(await screen.findByText("Reviewed draft")).toBeVisible();
+    expect(mocks.updateSession).not.toHaveBeenCalled();
   });
 
   it("restarts restoration after StrictMode effect replay", async () => {

@@ -106,7 +106,7 @@ function SessionsHome({
       try {
         await plotApiClient.updateSession(session.id, { latestGenerationId: run.id });
       } catch {
-        // The session screen restores the real run and retries this pointer once.
+        markSessionPointerRepair(session.id, run.id);
       }
       window.location.assign(sessionHref(session.id, run.id));
     } catch (error) {
@@ -160,7 +160,6 @@ function ActiveSessionWorkspace({ activeSession, references, sourceError }: { ac
   const [generating, setGenerating] = useState(false);
   const generationAbortRef = useRef<AbortController | null>(null);
   const activeGenerationIdRef = useRef<string | null>(null);
-  const pointerRetryRef = useRef(new Set<string>());
   const sessionUpdateRef = useRef(new Set<string>());
   const messages: SessionMessage[] = [{
     id: activeSession.id,
@@ -185,9 +184,8 @@ function ActiveSessionWorkspace({ activeSession, references, sourceError }: { ac
       try {
         const current = await plotApiClient.getGeneration(generationId!, { signal: controller.signal });
         if (generationAbortRef.current !== controller) return;
-        const pointerKey = `${activeSession.id}:${current.id}`;
-        if (activeSession.latestGenerationId !== current.id && !pointerRetryRef.current.has(pointerKey)) {
-          pointerRetryRef.current.add(pointerKey);
+        const repairRequested = consumeSessionPointerRepair(activeSession.id, current.id);
+        if (activeSession.latestGenerationId !== current.id && repairRequested) {
           void plotApiClient.updateSession(activeSession.id, { latestGenerationId: current.id }).catch(() => undefined);
         }
         setGenerationRun(current);
@@ -326,6 +324,29 @@ function sessionHref(sessionId: string, generationId: string | null) {
   const params = new URLSearchParams({ session: sessionId });
   if (generationId) params.set("generation", generationId);
   return `/sessions?${params.toString()}`;
+}
+
+function markSessionPointerRepair(sessionId: string, generationId: string) {
+  try {
+    window.sessionStorage.setItem(sessionPointerRepairKey(sessionId), generationId);
+  } catch {
+    // Navigation still restores the real generation when storage is unavailable.
+  }
+}
+
+function consumeSessionPointerRepair(sessionId: string, generationId: string) {
+  try {
+    const key = sessionPointerRepairKey(sessionId);
+    if (window.sessionStorage.getItem(key) !== generationId) return false;
+    window.sessionStorage.removeItem(key);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function sessionPointerRepairKey(sessionId: string) {
+  return `plot.session-pointer-repair:${sessionId}`;
 }
 
 function formatActivity(value: string | null) {
