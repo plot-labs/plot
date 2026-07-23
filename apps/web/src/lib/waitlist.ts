@@ -60,7 +60,3 @@ export function parseWaitlistPayload(body: unknown): WaitlistPayload | null {
 export function roleLabel(role?: WaitlistRole) {
   return WAITLIST_ROLES.find((item) => item.value === role)?.label;
 }
-
-export function painChannelLabel(channel?: WaitlistPainChannel) {
-  return WAITLIST_PAIN_CHANNELS.find((item) => item.value === channel)?.label;
-}
