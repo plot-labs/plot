@@ -26,7 +26,7 @@ import {
 
 import { AccountSettingsModal } from "@/components/layout/account-settings-modal";
 import type { ProductTheme } from "@/components/layout/product-shell";
-import { getProductShellData } from "@/lib/api-client";
+import { getProductShellData, plotApiClient, type WorkSessionSummary } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -57,7 +57,8 @@ type Account = {
 
 export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: ProductSidebarProps) {
   const pathname = usePathname();
-  const { workspace, sessions } = getProductShellData();
+  const { workspace } = getProductShellData();
+  const [sessions, setSessions] = useState<WorkSessionSummary[]>([]);
   const [account, setAccount] = useState<Account | null>(null);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
@@ -82,6 +83,14 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
       })
       .catch(() => undefined);
     return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void plotApiClient.listSessions({ signal: controller.signal })
+      .then((value) => { if (!controller.signal.aborted) setSessions(value); })
+      .catch(() => undefined);
+    return () => controller.abort();
   }, []);
 
   const currentWorkspace = account?.workspaces.find((item) => item.id === selectedWorkspaceId)
@@ -362,12 +371,13 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
             return (
               <Link
                 key={session.id}
-                href={`/sessions?session=${session.id}`}
+                href={session.latestGenerationId
+                  ? `/sessions?session=${encodeURIComponent(session.id)}&generation=${encodeURIComponent(session.latestGenerationId)}`
+                  : `/sessions?session=${encodeURIComponent(session.id)}`}
                 className="group flex items-center gap-2 rounded-xl px-2.5 py-1.5 text-[13px] text-black/65 transition hover:bg-black/5 dark:text-white/65 dark:hover:bg-white/10"
               >
                 <FileText className="size-3.5 shrink-0 text-black/40 dark:text-white/40" />
-                <span className="min-w-0 flex-1 truncate">{session.title}</span>
-                <span className="text-xs text-black/35 dark:text-white/35">{session.updatedAt}</span>
+                <span className="min-w-0 flex-1 truncate">{session.title || "Untitled session"}</span>
               </Link>
             );
           })}

@@ -2,7 +2,6 @@ import {
   devContext,
   type DraftDocument,
   type ReferenceDocument,
-  type SessionMessage,
 } from "@/lib/dev-context";
 import { createPlotApiClient } from "@plot/api-client";
 
@@ -18,6 +17,7 @@ export type {
   GitHubImport,
   GitHubRepository,
   PlotApiClient,
+  WorkSessionSummary,
   WorkspaceSummary,
 } from "@plot/api-client";
 
@@ -30,8 +30,6 @@ export const plotApiClient = createPlotApiClient({ baseUrl: "/api/plot", workspa
 export type {
   DraftDocument,
   ReferenceDocument,
-  SessionMessage,
-  WorkSession,
 } from "@/lib/dev-context";
 
 export type SelectedDocument =
@@ -41,16 +39,6 @@ export type SelectedDocument =
 export function getProductShellData() {
   return {
     workspace: devContext.workspace,
-    sessions: devContext.sessions,
-  };
-}
-
-export function getSessionsWorkspace() {
-  return {
-    workspace: devContext.workspace,
-    sessions: devContext.sessions,
-    drafts: devContext.drafts,
-    references: devContext.references,
   };
 }
 
@@ -94,21 +82,4 @@ export function getSelectedDocument(documentId: string): SelectedDocument | null
   }
 
   return null;
-}
-
-export function createDemoAgentReply(message: string, count: number): SessionMessage {
-  const asksForAnotherDraft =
-    message.toLowerCase().includes("customer") ||
-    message.toLowerCase().includes("launch") ||
-    message.toLowerCase().includes("draft");
-
-  return {
-    id: `agent-reply-${count}`,
-    role: "agent",
-    author: "Plot",
-    timestamp: "Now",
-    content: asksForAnotherDraft
-      ? "I can add another draft to this work. Open an existing draft on the right, or ask for a specific format."
-      : "I noted that. The current draft and references are still available from the summary card.",
-  };
 }

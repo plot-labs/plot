@@ -14,6 +14,8 @@ const instruction = "Create a concise changelog from the selected Writing Blocks
 test("observes the production generation contract", async ({ context, page }) => {
   const startedAt = Date.now();
   let generationRequestCount = 0;
+  let sessionRequestCount = 0;
+  let sessionUpdateCount = 0;
   let citationCount = 0;
   let exportEventCount = 0;
   let externalRequestObserved = false;
@@ -47,10 +49,25 @@ test("observes the production generation contract", async ({ context, page }) =>
         });
         return;
       }
+      if (url.pathname === "/api/plot/sessions" && request.method() === "POST") {
+        sessionRequestCount += 1;
+        const body = request.postDataJSON();
+        requireObservation(
+          Boolean(body) && typeof body === "object" && !Array.isArray(body) && (body as Record<string, unknown>).title === instruction,
+          "BROWSER_GENERATION_INSTRUCTION_REJECTED",
+        );
+        await route.continue();
+        return;
+      }
+      if (/^\/api\/plot\/sessions\/[a-f0-9-]+$/.test(url.pathname) && request.method() === "PATCH") {
+        sessionUpdateCount += 1;
+        await route.continue();
+        return;
+      }
       await route.continue();
     });
 
-    await page.goto("/sessions?session=session-changelog-july", { waitUntil: "domcontentloaded" });
+    await page.goto("/sessions", { waitUntil: "domcontentloaded" });
     productContractStarted = true;
     const referencesButton = page.getByRole("button", {
       name: `References · ${certification.writingBlockIds.length}`,
@@ -68,13 +85,20 @@ test("observes the production generation contract", async ({ context, page }) =>
 
     await page.getByRole("textbox", { name: "Session message" }).fill(instruction);
     await page.getByRole("button", { name: "Send message" }).click();
+    await expect.poll(() => sessionRequestCount).toBe(1);
     await expect.poll(() => generationRequestCount).toBe(1);
+    await expect.poll(() => sessionUpdateCount).toBe(1);
     await page.waitForURL((url) => isGenerationRunUrl(url), { timeout: 30_000 });
+    const sessionId = new URL(page.url()).searchParams.get("session");
+    requireObservation(/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(sessionId ?? ""), "BROWSER_GENERATION_REQUEST_REJECTED");
 
     const terminalStatus = page.getByRole("status", { name: /Generation status: (Ready|Needs review)/ });
     await expect(terminalStatus).toBeVisible({ timeout: 120_000 });
     await expect(page.getByRole("status", { name: "Generation status: Needs your call" })).toHaveCount(0);
     await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(terminalStatus).toBeVisible({ timeout: 30_000 });
+    await page.getByRole("link", { name: instruction }).click();
+    await expect(page).toHaveURL(new RegExp(`^${escapeRegExp(certification.baseUrl)}/sessions\\?session=${sessionId}&generation=`));
     await expect(terminalStatus).toBeVisible({ timeout: 30_000 });
 
     const draft = page.getByRole("region", { name: "Cited draft" });
@@ -173,9 +197,15 @@ function validateGenerationRequest(input: unknown): void {
 
 function isGenerationRunUrl(url: URL): boolean {
   const runId = url.searchParams.get("generation");
+  const sessionId = url.searchParams.get("session");
   return url.origin === certification.baseUrl &&
     url.pathname === "/sessions" &&
+    /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(sessionId ?? "") &&
     /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(runId ?? "");
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 async function findCitedSentences(draft: Locator): Promise<Locator[]> {

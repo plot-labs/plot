@@ -1,5 +1,3 @@
-export type SessionRole = "user" | "agent";
-export type DocumentKind = "draft" | "reference";
 export type DraftStatus = "Draft ready" | "In progress" | "Needs your call" | "Approved";
 export type SourceStatus = "Used in draft" | "Not used" | "Needs context";
 
@@ -8,26 +6,6 @@ export type Workspace = {
   name: string;
   environment: string;
   connectionLabel: string;
-};
-
-export type SessionMessage = {
-  id: string;
-  role: SessionRole;
-  author: string;
-  timestamp: string;
-  content: string;
-};
-
-export type WorkSession = {
-  id: string;
-  title: string;
-  subtitle: string;
-  project: string;
-  updatedAt: string;
-  status: string;
-  messages: SessionMessage[];
-  draftIds: string[];
-  referenceIds: string[];
 };
 
 export type DraftDocument = {
@@ -76,7 +54,6 @@ export type VoiceGuidance = {
 
 export type DevContext = {
   workspace: Workspace;
-  sessions: WorkSession[];
   drafts: DraftDocument[];
   references: ReferenceDocument[];
   packs: SavedPack[];
@@ -91,54 +68,6 @@ export const devContext: DevContext = {
     environment: "Local dev",
     connectionLabel: "GitHub demo source",
   },
-  sessions: [
-    {
-      id: "session-changelog-july",
-      title: "July changelog",
-      subtitle: "Create a changelog for July 1-7",
-      project: "plot",
-      updatedAt: "18m ago",
-      status: "Draft ready",
-      draftIds: ["draft-changelog", "draft-customer-update"],
-      referenceIds: ["ref-pr-184", "ref-release-v04", "ref-issue-77"],
-      messages: [
-        {
-          id: "msg-1",
-          role: "user",
-          author: "You",
-          timestamp: "09:18",
-          content: "Create a changelog for July 1-7. Keep customer-facing wording conservative.",
-        },
-        {
-          id: "msg-2",
-          role: "agent",
-          author: "Plot",
-          timestamp: "09:19",
-          content:
-            "I drafted a changelog using the release tag, six merged PRs, and one issue that needs a product wording decision.",
-        },
-      ],
-    },
-    {
-      id: "session-launch-copy",
-      title: "Launch copy",
-      subtitle: "Turn the release notes into a short launch post",
-      project: "plot",
-      updatedAt: "2h ago",
-      status: "In progress",
-      draftIds: ["draft-launch-post"],
-      referenceIds: ["ref-release-v04", "ref-pr-179"],
-      messages: [
-        {
-          id: "msg-3",
-          role: "user",
-          author: "You",
-          timestamp: "07:42",
-          content: "Write a short launch post from the current release notes.",
-        },
-      ],
-    },
-  ],
   drafts: [
     {
       id: "draft-changelog",

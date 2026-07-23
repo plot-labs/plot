@@ -200,6 +200,16 @@ export interface WorkspaceSummary {
   role: string | null;
 }
 
+export interface WorkSessionSummary {
+  id: string;
+  title: string | null;
+  status: string;
+  latestGenerationId: string | null;
+  lastActivityAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export class PlotApiError extends Error {
   constructor(
     public readonly status: number,
@@ -221,6 +231,9 @@ export interface PlotApiClient {
   connectGitHubRepository(connectionId: string, externalRepositoryId: number, options?: RequestOptions): Promise<GitHubRepository>;
   importGitHubRepository(sourceScopeId: string, input: { from: string; to: string }, options?: RequestOptions): Promise<GitHubImport>;
   getWorkspace(id: string, options?: RequestOptions): Promise<WorkspaceSummary>;
+  listSessions(options?: RequestOptions): Promise<WorkSessionSummary[]>;
+  createSession(input: { title?: string | null }, options?: RequestOptions): Promise<WorkSessionSummary>;
+  updateSession(id: string, input: { title?: string; latestGenerationId?: string }, options?: RequestOptions): Promise<WorkSessionSummary>;
   listGenerationReferences(options?: RequestOptions): Promise<GenerationReference[]>;
   createGeneration(input: CreateGenerationInput, idempotencyKey: string, options?: RequestOptions): Promise<GenerationRun>;
   getGeneration(id: string, options?: RequestOptions): Promise<GenerationRun>;
@@ -281,6 +294,17 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
       { method: "POST", body: JSON.stringify(input), signal: requestOptions?.signal },
     ),
     getWorkspace: (id, requestOptions) => request(`/workspaces/${encodeURIComponent(id)}`, { signal: requestOptions?.signal }),
+    listSessions: (requestOptions) => request("/sessions", { signal: requestOptions?.signal }),
+    createSession: (input, requestOptions) => request("/sessions", {
+      method: "POST",
+      body: JSON.stringify(input),
+      signal: requestOptions?.signal,
+    }),
+    updateSession: (id, input, requestOptions) => request(`/sessions/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+      signal: requestOptions?.signal,
+    }),
     listGenerationReferences: async (requestOptions) => {
       const connections = await request<GitHubConnection[]>("/github/connections", { signal: requestOptions?.signal });
       const scopes = connections
