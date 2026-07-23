@@ -3,32 +3,23 @@
 import {
   Copy,
   Pencil,
-  ThumbsDown,
-  ThumbsUp,
 } from "lucide-react";
 import type { ReactNode } from "react";
 
-import type { DraftDocument, ReferenceDocument, SessionMessage } from "@/lib/api-client";
-import { cn } from "@/lib/utils";
-import { SessionFloatingSummary } from "@/features/sessions/session-floating-summary";
+export type SessionMessage = {
+  id: string;
+  role: "user";
+  timestamp: string;
+  content: string;
+};
 
 type SessionThreadProps = {
   messages: SessionMessage[];
-  drafts: DraftDocument[];
-  references: ReferenceDocument[];
-  floatingSummaryOpen: boolean;
-  rightPanelOpen: boolean;
-  onSelectDocument: (documentId: string) => void;
   generationPanel?: ReactNode;
 };
 
 export function SessionThread({
   messages,
-  drafts,
-  references,
-  floatingSummaryOpen,
-  rightPanelOpen,
-  onSelectDocument,
   generationPanel,
 }: SessionThreadProps) {
   return (
@@ -43,20 +34,6 @@ export function SessionThread({
         {generationPanel}
       </div>
 
-      {floatingSummaryOpen && (
-        <div
-          className={cn(
-            "fixed top-[76px] z-20 hidden",
-            rightPanelOpen ? "right-[484px] min-[2100px]:block" : "right-6 min-[1700px]:block",
-          )}
-        >
-          <SessionFloatingSummary
-            drafts={drafts}
-            references={references}
-            onSelectDocument={onSelectDocument}
-          />
-        </div>
-      )}
     </section>
   );
 }
@@ -66,25 +43,14 @@ function SessionThreadMessage({
 }: {
   message: SessionMessage;
 }) {
-  if (message.role === "user") {
-    return (
-      <article className="flex justify-end">
-        <div className="max-w-[min(720px,86%)]">
-          <div className="rounded-[22px] bg-black/[0.055] px-5 py-3 text-[15px] leading-7 text-black/84 dark:bg-white/10 dark:text-white/84">
-            <MessageContent content={message.content} compact />
-          </div>
-          <UserMessageActions timestamp={message.timestamp} />
-        </div>
-      </article>
-    );
-  }
-
   return (
-    <article className="space-y-4">
-      <div className="space-y-4 text-[15px] leading-7 text-black/82 dark:text-white/82">
-        <MessageContent content={message.content} />
+    <article className="flex justify-end">
+      <div className="max-w-[min(720px,86%)]">
+        <div className="rounded-[22px] bg-black/[0.055] px-5 py-3 text-[15px] leading-7 text-black/84 dark:bg-white/10 dark:text-white/84">
+          <MessageContent content={message.content} compact />
+        </div>
+        <UserMessageActions timestamp={message.timestamp} />
       </div>
-      <AgentMessageActions />
     </article>
   );
 }
@@ -106,22 +72,6 @@ function UserMessageActions({ timestamp }: { timestamp: string }) {
         aria-label="Edit message"
       >
         <Pencil className="size-4" />
-      </button>
-    </div>
-  );
-}
-
-function AgentMessageActions() {
-  return (
-    <div className="flex items-center gap-4 pt-1 text-black/42 dark:text-white/42">
-      <button type="button" className="transition hover:text-black/68 dark:hover:text-white/70" aria-label="Copy response">
-        <Copy className="size-4" />
-      </button>
-      <button type="button" className="transition hover:text-black/68 dark:hover:text-white/70" aria-label="Like response">
-        <ThumbsUp className="size-4" />
-      </button>
-      <button type="button" className="transition hover:text-black/68 dark:hover:text-white/70" aria-label="Dislike response">
-        <ThumbsDown className="size-4" />
       </button>
     </div>
   );

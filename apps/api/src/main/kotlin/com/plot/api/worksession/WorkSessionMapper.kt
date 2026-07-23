@@ -7,6 +7,7 @@ fun WorkSession.toResponse(): WorkSessionResponse {
 		id = id,
 		title = title,
 		status = status,
+		latestGenerationId = latestGenerationRunId,
 		lastActivityAt = lastActivityAt,
 		createdAt = createdAt,
 		updatedAt = updatedAt,
