@@ -1,128 +1,149 @@
 "use client";
 
 import Link from "next/link";
-import {
-  FileText,
-  GitPullRequest,
-  MessageSquareText,
-  MoreHorizontal,
-  PanelRightOpen,
-  SlidersHorizontal,
-} from "lucide-react";
+import { FileText, MessageSquareText, MoreHorizontal } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 
-import {
-  createDemoAgentReply,
-  getSelectedDocument,
-  getSessionsWorkspace,
-  type SelectedDocument,
-  type SessionMessage,
-  type WorkSession,
-  type ContentPack,
-  type GenerationRun,
-  type GenerationReference,
-  plotApiClient,
-} from "@/lib/api-client";
+import type { ContentPack, GenerationReference, GenerationRun, WorkSessionSummary } from "@/lib/api-client";
+import { plotApiClient } from "@/lib/api-client";
 import { createAndStreamGeneration, isTerminalGenerationStatus, streamGeneration } from "@/lib/generation-polling";
 import { CitedDraftEditor } from "@/features/citations/cited-draft-editor";
 import { ExportDialog } from "@/features/citations/export-dialog";
-import { SessionComposer } from "@/features/sessions/session-composer";
-import { SessionSidePanel } from "@/features/sessions/session-side-panel";
-import { SessionThread } from "@/features/sessions/session-thread";
 import { GenerationWorkLog } from "@/features/sessions/generation-work-log";
+import { SessionComposer } from "@/features/sessions/session-composer";
+import { SessionThread, type SessionMessage } from "@/features/sessions/session-thread";
 
 export function SessionsWorkspace() {
-  return (
-    <Suspense fallback={null}>
-      <SessionsWorkspaceContent />
-    </Suspense>
-  );
+  return <Suspense fallback={null}><SessionsWorkspaceContent /></Suspense>;
 }
 
 function SessionsWorkspaceContent() {
-  const data = getSessionsWorkspace();
   const searchParams = useSearchParams();
   const requestedSessionId = searchParams.get("session");
-  const activeSession = requestedSessionId
-    ? data.sessions.find((session) => session.id === requestedSessionId)
-    : null;
+  const [sessions, setSessions] = useState<WorkSessionSummary[]>([]);
+  const [references, setReferences] = useState<GenerationReference[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(true);
+  const [sessionsError, setSessionsError] = useState("");
+  const [referencesLoading, setReferencesLoading] = useState(true);
+  const [referencesError, setReferencesError] = useState("");
 
-  if (!activeSession) {
-    return <SessionsHome data={data} />;
+  useEffect(() => {
+    const controller = new AbortController();
+    void plotApiClient.listSessions({ signal: controller.signal })
+      .then((value) => { if (!controller.signal.aborted) setSessions(value); })
+      .catch((error) => { if (!controller.signal.aborted) setSessionsError(messageFor(error, "Sessions could not be loaded.")); })
+      .finally(() => { if (!controller.signal.aborted) setSessionsLoading(false); });
+    void plotApiClient.listGenerationReferences({ signal: controller.signal })
+      .then((value) => { if (!controller.signal.aborted) setReferences(value); })
+      .catch((error) => { if (!controller.signal.aborted) setReferencesError(messageFor(error, "Sources could not be loaded.")); })
+      .finally(() => { if (!controller.signal.aborted) setReferencesLoading(false); });
+    return () => controller.abort();
+  }, []);
+
+  const activeSession = requestedSessionId ? sessions.find((session) => session.id === requestedSessionId) : null;
+  if (activeSession) {
+    return <ActiveSessionWorkspace activeSession={activeSession} references={references} sourceError={referencesError} />;
   }
 
-  return (
-    <ActiveSessionWorkspace
-      key={activeSession.id}
-      activeSession={activeSession}
-      data={data}
-    />
-  );
+  return <SessionsHome
+    sessions={sessions}
+    references={references}
+    sessionsLoading={sessionsLoading}
+    sessionsError={sessionsError}
+    referencesLoading={referencesLoading}
+    referencesError={referencesError}
+    onSessionCreated={(session) => setSessions((current) => [session, ...current])}
+  />;
 }
 
-function SessionsHome({ data }: { data: ReturnType<typeof getSessionsWorkspace> }) {
-  const [submittedRequests, setSubmittedRequests] = useState<string[]>([]);
-  const recentRows = [
-    ...submittedRequests.map((request) => ({
-      id: `request-${request}`,
-      href: "/sessions",
-      icon: MessageSquareText,
-      label: request,
-      meta: "Just now",
-    })),
-    ...data.sessions.map((session) => ({
-      id: session.id,
-      href: `/sessions?session=${session.id}`,
-      icon: MessageSquareText,
-      label: session.subtitle,
-      meta: session.updatedAt,
-    })),
-    ...data.references.slice(0, 2).map((reference) => ({
-      id: reference.id,
-      href: `/sources`,
-      icon: GitPullRequest,
-      label: `Review ${reference.label}: ${reference.title}`,
-      meta: reference.date,
-    })),
-  ].slice(0, 5);
+function SessionsHome({
+  sessions,
+  references,
+  sessionsLoading,
+  sessionsError,
+  referencesLoading,
+  referencesError,
+  onSessionCreated,
+}: {
+  sessions: WorkSessionSummary[];
+  references: GenerationReference[];
+  sessionsLoading: boolean;
+  sessionsError: string;
+  referencesLoading: boolean;
+  referencesError: string;
+  onSessionCreated: (session: WorkSessionSummary) => void;
+}) {
+  const [startError, setStartError] = useState("");
+  const [starting, setStarting] = useState(false);
 
-  function submitHomeRequest(message: string) {
-    setSubmittedRequests((current) => [message, ...current].slice(0, 3));
+  async function submitHomeRequest(message: string, referenceIds: string[]) {
+    const selected = selectReferences(references, referenceIds);
+    const validationError = validateGenerationSelection(references, selected, referencesError);
+    if (validationError) {
+      setStartError(validationError);
+      return;
+    }
+
+    setStarting(true);
+    setStartError("");
+    let session: WorkSessionSummary;
+    try {
+      session = await plotApiClient.createSession({ title: message });
+      onSessionCreated(session);
+    } catch (error) {
+      setStarting(false);
+      setStartError(messageFor(error, "A session could not be created. Please try again."));
+      return;
+    }
+
+    try {
+      const run = await plotApiClient.createGeneration({
+        sourceScopeId: selected[0]!.sourceScopeId,
+        writingBlockIds: selected.map((reference) => reference.id),
+        instruction: message,
+      }, crypto.randomUUID());
+      try {
+        await plotApiClient.updateSession(session.id, { latestGenerationId: run.id });
+      } catch {
+        // The session screen restores the real run and retries this pointer once.
+      }
+      window.location.assign(sessionHref(session.id, run.id));
+    } catch (error) {
+      setStartError(messageFor(error, "The session was created, but generation could not start. Choose sources and try again."));
+      setStarting(false);
+    }
   }
 
   return (
     <div className="flex h-screen min-h-0 flex-col bg-white dark:bg-[#111113]">
       <div className="flex min-h-0 flex-1 items-center justify-center px-6 pb-24 pt-16">
         <div className="w-full max-w-[760px]">
-          <h1 className="text-center text-[28px] font-medium tracking-normal text-black/82 dark:text-white/88">
-            What should Plot create?
-          </h1>
-
+          <h1 className="text-center text-[28px] font-medium tracking-normal text-black/82 dark:text-white/88">What should Plot create?</h1>
           <div className="mt-9">
             <SessionComposer
+              key={references.map((reference) => reference.id).join(":") || "no-references"}
               variant="center"
               placeholder="Ask for a changelog, customer update, or source-backed draft..."
-              onSubmit={submitHomeRequest}
+              onSubmit={(message, ids) => void submitHomeRequest(message, ids)}
+              references={toComposerReferences(references)}
+              busy={starting || referencesLoading}
             />
           </div>
-
+          {referencesLoading ? <p className="mt-3 text-center text-sm text-black/45 dark:text-white/45">Loading sources…</p> : null}
+          {!referencesLoading && !referencesError && references.length === 0 ? <SourceEmptyState /> : null}
+          {referencesError ? <ErrorNotice message={referencesError} /> : null}
+          {startError ? <ErrorNotice message={startError} /> : null}
+          {sessionsError ? <ErrorNotice message={sessionsError} /> : null}
           <div className="mx-auto mt-5 max-w-[720px] text-sm">
-            {recentRows.map((row) => {
-              const Icon = row.icon;
-
-              return (
-                <Link
-                  key={row.id}
-                  href={row.href}
-                  className="flex items-center gap-3 border-b border-black/[0.06] px-3 py-3 text-black/45 transition hover:text-black/70 dark:border-white/10 dark:text-white/45 dark:hover:text-white/75"
-                >
-                  <Icon className="size-4 shrink-0" />
-                  <span className="min-w-0 flex-1 truncate">{row.label}</span>
-                  <span className="text-xs text-black/32 dark:text-white/35">{row.meta}</span>
-                </Link>
-              );
-            })}
+            {!sessionsLoading && !sessionsError && sessions.length === 0 ? <p className="px-3 py-3 text-black/42 dark:text-white/42">No sessions yet. Start with a source-backed request.</p> : null}
+            {sessions.map((session) => (
+              <Link key={session.id} href={sessionHref(session.id, session.latestGenerationId)} className="flex items-center gap-3 border-b border-black/[0.06] px-3 py-3 text-black/45 transition hover:text-black/70 dark:border-white/10 dark:text-white/45 dark:hover:text-white/75">
+                <MessageSquareText className="size-4 shrink-0" />
+                <span className="min-w-0 flex-1 truncate">{session.title || "Untitled session"}</span>
+                <span className="text-xs text-black/32 dark:text-white/35">{formatActivity(session.lastActivityAt)}</span>
+              </Link>
+            ))}
           </div>
         </div>
       </div>
@@ -130,65 +151,29 @@ function SessionsHome({ data }: { data: ReturnType<typeof getSessionsWorkspace> 
   );
 }
 
-function ActiveSessionWorkspace({
-  activeSession,
-  data,
-}: {
-  activeSession: WorkSession;
-  data: ReturnType<typeof getSessionsWorkspace>;
-}) {
+function ActiveSessionWorkspace({ activeSession, references, sourceError }: { activeSession: WorkSessionSummary; references: GenerationReference[]; sourceError: string }) {
   const searchParams = useSearchParams();
-  const requestedGenerationId = searchParams.get("generation");
-  const [messages, setMessages] = useState<SessionMessage[]>(activeSession.messages);
-  const [draftBodies, setDraftBodies] = useState<Record<string, string>>(() =>
-    Object.fromEntries(data.drafts.map((draft) => [draft.id, draft.body])),
-  );
-  const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(() =>
-    getInitialSelectedDocumentId(activeSession),
-  );
-  const [rightPanelOpen, setRightPanelOpen] = useState(false);
-  const [floatingSummaryOpen, setFloatingSummaryOpen] = useState(true);
-  const [openDocumentIds, setOpenDocumentIds] = useState<string[]>(() =>
-    getInitialOpenDocumentIds(activeSession),
-  );
+  const requestedGenerationId = searchParams.get("generation") ?? activeSession.latestGenerationId;
   const [generationRun, setGenerationRun] = useState<GenerationRun | null>(null);
   const [generatedPack, setGeneratedPack] = useState<ContentPack | null>(null);
   const [generationError, setGenerationError] = useState("");
-  const [generationReferences, setGenerationReferences] = useState<GenerationReference[]>([]);
   const [generating, setGenerating] = useState(false);
   const generationAbortRef = useRef<AbortController | null>(null);
   const activeGenerationIdRef = useRef<string | null>(null);
-
-  const sessionDrafts = data.drafts.filter((draft) => activeSession.draftIds.includes(draft.id));
-  const sessionReferences = data.references.filter((reference) =>
-    activeSession.referenceIds.includes(reference.id),
-  );
-
-  useEffect(() => {
-    const controller = new AbortController();
-    void plotApiClient.listGenerationReferences({ signal: controller.signal })
-      .then(setGenerationReferences)
-      .catch(() => {
-        // Source discovery is progressive enhancement; unrelated mock sessions remain available.
-      });
-    return () => {
-      controller.abort();
-      generationAbortRef.current?.abort();
-      generationAbortRef.current = null;
-      activeGenerationIdRef.current = null;
-    };
-  }, []);
+  const pointerRetryRef = useRef(new Set<string>());
+  const sessionUpdateRef = useRef(new Set<string>());
+  const messages: SessionMessage[] = [{
+    id: activeSession.id,
+    role: "user",
+    timestamp: "Request",
+    content: activeSession.title || "Untitled request",
+  }];
 
   useEffect(() => {
-    if (!requestedGenerationId) {
-      generationAbortRef.current?.abort();
-      generationAbortRef.current = null;
-      activeGenerationIdRef.current = null;
-      return;
-    }
-    if (activeGenerationIdRef.current === requestedGenerationId) return;
+    const generationId = requestedGenerationId;
+    if (!generationId || activeGenerationIdRef.current === generationId) return;
     const controller = new AbortController();
-    activeGenerationIdRef.current = requestedGenerationId;
+    activeGenerationIdRef.current = generationId;
     generationAbortRef.current?.abort();
     generationAbortRef.current = controller;
     setGenerationRun(null);
@@ -198,97 +183,46 @@ function ActiveSessionWorkspace({
 
     async function restoreGeneration() {
       try {
-        const current = await plotApiClient.getGeneration(requestedGenerationId!, { signal: controller.signal });
+        const current = await plotApiClient.getGeneration(generationId!, { signal: controller.signal });
         if (generationAbortRef.current !== controller) return;
+        const pointerKey = `${activeSession.id}:${current.id}`;
+        if (activeSession.latestGenerationId !== current.id && !pointerRetryRef.current.has(pointerKey)) {
+          pointerRetryRef.current.add(pointerKey);
+          void plotApiClient.updateSession(activeSession.id, { latestGenerationId: current.id }).catch(() => undefined);
+        }
         setGenerationRun(current);
-        const restored = isTerminalGenerationStatus(current.status)
-          ? current
-           : await streamGeneration(plotApiClient, current.id, {
-              signal: controller.signal,
-              onUpdate: (next) => {
-                if (generationAbortRef.current === controller) setGenerationRun(next);
-              },
-            });
+        const restored = isTerminalGenerationStatus(current.status) ? current : await streamGeneration(plotApiClient, current.id, {
+          signal: controller.signal,
+          onUpdate: (next) => { if (generationAbortRef.current === controller) setGenerationRun(next); },
+        });
         if (generationAbortRef.current !== controller) return;
         setGenerationRun(restored);
         setGeneratedPack(restored.contentPack);
       } catch (error) {
         if (generationAbortRef.current === controller && !(error instanceof DOMException && error.name === "AbortError")) {
-          setGenerationError("The saved generation could not be restored.");
+          setGenerationError(messageFor(error, "The saved generation could not be restored."));
         }
       } finally {
         if (generationAbortRef.current === controller) setGenerating(false);
       }
     }
-
     void restoreGeneration();
     return () => {
       controller.abort();
       if (generationAbortRef.current === controller) {
         generationAbortRef.current = null;
         activeGenerationIdRef.current = null;
-        setGenerating(false);
       }
     };
-  }, [requestedGenerationId]);
-
-  const selectedDocument = selectedDocumentId ? getSelectedDocument(selectedDocumentId) : null;
-
-  const openDocuments = useMemo(() => {
-    return openDocumentIds
-      .map((documentId) => getSelectedDocument(documentId))
-      .filter((item): item is SelectedDocument => Boolean(item));
-  }, [openDocumentIds]);
-
-  function selectDocument(documentId: string) {
-    setSelectedDocumentId(documentId);
-    setRightPanelOpen(true);
-    setOpenDocumentIds((current) =>
-      current.includes(documentId) ? current : [...current.slice(-2), documentId],
-    );
-  }
-
-  function updateDraftBody(draftId: string, body: string) {
-    setDraftBodies((current) => ({
-      ...current,
-      [draftId]: body,
-    }));
-  }
-
-  function appendConversation(message: string, includeDemoReply: boolean) {
-    setMessages((current) => {
-      const userMessage: SessionMessage = {
-        id: `user-message-${current.length + 1}`,
-        role: "user",
-        author: "You",
-        timestamp: "Now",
-        content: message,
-      };
-      return includeDemoReply
-        ? [...current, userMessage, createDemoAgentReply(message, current.length + 2)]
-        : [...current, userMessage];
-    });
-  }
+  }, [activeSession.id, activeSession.latestGenerationId, requestedGenerationId]);
 
   async function submitMessage(message: string, referenceIds: string[]) {
-    const imported = generationReferences
-      .filter((reference) => referenceIds.includes(reference.id))
-      .map((reference) => ({ sourceScopeId: reference.sourceScopeId, writingBlockId: reference.id }));
-    const selected = sessionReferences
-      .filter((reference) => referenceIds.includes(reference.id) && reference.sourceScopeId && reference.writingBlockId)
-      .map((reference) => ({ sourceScopeId: reference.sourceScopeId!, writingBlockId: reference.writingBlockId! }));
-    const generationReady = [...imported, ...selected];
-    if (!generationReady.length) {
-      appendConversation(message, true);
+    const selected = selectReferences(references, referenceIds);
+    const validationError = validateGenerationSelection(references, selected, sourceError);
+    if (validationError) {
+      setGenerationError(validationError);
       return;
     }
-    const scopeId = generationReady[0]!.sourceScopeId;
-    if (generationReady.some((reference) => reference.sourceScopeId !== scopeId)) {
-      setGenerationError("Selected references must belong to the same source scope.");
-      return;
-    }
-
-    appendConversation(message, false);
     generationAbortRef.current?.abort();
     const controller = new AbortController();
     generationAbortRef.current = controller;
@@ -296,29 +230,37 @@ function ActiveSessionWorkspace({
     setGenerationError("");
     setGeneratedPack(null);
     try {
-      const run = await createAndStreamGeneration(
-        plotApiClient,
-        { sourceScopeId: scopeId, writingBlockIds: generationReady.map((reference) => reference.writingBlockId), instruction: message },
-        crypto.randomUUID(),
-        {
-           signal: controller.signal,
-           onUpdate: (next) => {
-             if (generationAbortRef.current !== controller || controller.signal.aborted) return;
-             setGenerationRun(next);
-            if (activeGenerationIdRef.current === next.id) return;
+      const run = await createAndStreamGeneration(plotApiClient, {
+        sourceScopeId: selected[0]!.sourceScopeId,
+        writingBlockIds: selected.map((reference) => reference.id),
+        instruction: message,
+      }, crypto.randomUUID(), {
+        signal: controller.signal,
+        onUpdate: (next) => {
+          if (generationAbortRef.current !== controller || controller.signal.aborted) return;
+          setGenerationRun(next);
+          if (activeGenerationIdRef.current !== next.id) {
             activeGenerationIdRef.current = next.id;
-            const nextParams = new URLSearchParams(searchParams.toString());
-            nextParams.set("generation", next.id);
-            window.history.replaceState(null, "", `/sessions?${nextParams.toString()}`);
-          },
+            window.history.replaceState(null, "", sessionHref(activeSession.id, next.id));
+          }
+          const sessionUpdateKey = `${activeSession.id}:${next.id}`;
+          if (!sessionUpdateRef.current.has(sessionUpdateKey)) {
+            sessionUpdateRef.current.add(sessionUpdateKey);
+            void plotApiClient.updateSession(activeSession.id, { title: message, latestGenerationId: next.id })
+              .catch((error) => {
+                if (generationAbortRef.current === controller) {
+                  setGenerationError(messageFor(error, "The generation started, but this session could not be updated."));
+                }
+              });
+          }
         },
-       );
-       if (generationAbortRef.current !== controller || controller.signal.aborted) return;
-       setGenerationRun(run);
+      });
+      if (generationAbortRef.current !== controller || controller.signal.aborted) return;
+      setGenerationRun(run);
       setGeneratedPack(run.contentPack);
     } catch (error) {
       if (generationAbortRef.current === controller && !(error instanceof DOMException && error.name === "AbortError")) {
-        setGenerationError(error instanceof Error ? error.message : "Generation could not be completed.");
+        setGenerationError(messageFor(error, "Generation could not be completed."));
       }
     } finally {
       if (generationAbortRef.current === controller) setGenerating(false);
@@ -329,153 +271,67 @@ function ActiveSessionWorkspace({
     <div className="flex h-screen min-h-0 bg-white dark:bg-[#111113]">
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center justify-between bg-white px-4 dark:bg-[#111113] sm:px-6 lg:px-8">
-          <h1 className="sr-only">{activeSession.title}</h1>
+          <h1 className="sr-only">{activeSession.title || "Untitled session"}</h1>
           <div className="shell-session-heading flex min-w-0 items-center gap-2 text-sm font-semibold text-black/78 dark:text-white/82">
             <FileText className="size-4 shrink-0 text-black/50 dark:text-white/50" />
-            <span className="truncate">{activeSession.title}</span>
-            <button
-              type="button"
-              aria-label="Session actions"
-              className="inline-flex size-7 shrink-0 items-center justify-center rounded-xl text-black/45 transition hover:bg-black/5 hover:text-black/70 dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white/75"
-            >
-              <MoreHorizontal className="size-4" />
-            </button>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setFloatingSummaryOpen((open) => !open)}
-              aria-pressed={floatingSummaryOpen}
-              aria-label={floatingSummaryOpen ? "Hide session summary" : "Show session summary"}
-              className={`hidden size-9 shrink-0 items-center justify-center rounded-xl text-black/55 transition hover:bg-black/5 hover:text-black/75 dark:text-white/55 dark:hover:bg-white/10 dark:hover:text-white/75 ${
-                rightPanelOpen ? "min-[2100px]:inline-flex" : "min-[1700px]:inline-flex"
-              }`}
-            >
-              <SlidersHorizontal className="size-4" />
-            </button>
-            {!rightPanelOpen && (
-              <button
-                type="button"
-                onClick={() => setRightPanelOpen(true)}
-                disabled={!selectedDocument}
-                aria-label="Open document panel"
-                className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl text-black/55 transition hover:bg-black/5 hover:text-black/75 disabled:cursor-not-allowed disabled:opacity-35 dark:text-white/55 dark:hover:bg-white/10 dark:hover:text-white/75"
-              >
-                <PanelRightOpen className="size-4" />
-              </button>
-            )}
+            <span className="truncate">{activeSession.title || "Untitled session"}</span>
+            <MoreHorizontal className="size-4 shrink-0 text-black/45 dark:text-white/45" />
           </div>
         </header>
-
-        <SessionThread
-          messages={messages}
-          drafts={sessionDrafts}
-          references={sessionReferences}
-          floatingSummaryOpen={floatingSummaryOpen}
-          rightPanelOpen={rightPanelOpen}
-          onSelectDocument={selectDocument}
-          generationPanel={
-            <GenerationPanel
-              run={generationRun}
-              pack={generatedPack}
-              busy={generating}
-              error={generationError}
-              onPackChange={setGeneratedPack}
-            />
-          }
-        />
-        <SessionComposer
-          key={generationReferences.map((reference) => reference.id).join(":") || "mock-references"}
-          onSubmit={(message, referenceIds) => void submitMessage(message, referenceIds)}
-          references={generationReferences.length
-            ? generationReferences.map((reference) => ({
-                id: reference.id,
-                label: `${reference.repositoryLabel} · ${reference.sourceLabel}`,
-                available: true,
-                groupId: reference.sourceScopeId,
-              }))
-            : sessionReferences.map((reference) => ({
-                id: reference.id,
-                label: reference.label,
-                available: Boolean(reference.sourceScopeId && reference.writingBlockId),
-                groupId: reference.sourceScopeId,
-              }))}
-          busy={generating}
-        />
+        <SessionThread messages={messages} generationPanel={<GenerationPanel run={generationRun} pack={generatedPack} busy={generating} error={generationError} onPackChange={setGeneratedPack} />} />
+        <SessionComposer key={references.map((reference) => reference.id).join(":") || "no-references"} onSubmit={(message, ids) => void submitMessage(message, ids)} references={toComposerReferences(references)} busy={generating} />
       </div>
-
-      {rightPanelOpen && (
-        <SessionSidePanel
-          selectedDocument={selectedDocument}
-          openDocuments={openDocuments}
-          drafts={sessionDrafts}
-          references={sessionReferences}
-          draftBodies={draftBodies}
-          onDraftBodyChange={updateDraftBody}
-          onSelectDocument={selectDocument}
-          onClose={() => setRightPanelOpen(false)}
-        />
-      )}
     </div>
   );
 }
 
-function GenerationPanel({
-  run,
-  pack,
-  busy,
-  error,
-  onPackChange,
-}: {
-  run: GenerationRun | null;
-  pack: ContentPack | null;
-  busy: boolean;
-  error: string;
-  onPackChange: (pack: ContentPack) => void;
-}) {
+function GenerationPanel({ run, pack, busy, error, onPackChange }: { run: GenerationRun | null; pack: ContentPack | null; busy: boolean; error: string; onPackChange: (pack: ContentPack) => void }) {
   if (!run && !busy && !error) return null;
-  return (
-    <article className="space-y-3">
-      {run ? (
-        <p role="status" aria-label={`Generation status: ${generationStatusLabel(run.status)}`} className="sr-only">
-          Generation status: {generationStatusLabel(run.status)}
-        </p>
-      ) : null}
-      {run ? (
-        <GenerationWorkLog run={run} />
-      ) : busy ? (
-        <div className="rounded-xl border border-black/10 bg-black/[0.025] px-4 py-3 text-sm text-black/62 dark:border-white/10 dark:bg-white/[0.04] dark:text-white/62">
-          Plot is {stageLabel()}…
-        </div>
-      ) : null}
-      {error ? <div role="alert" className="rounded-xl border border-rose-300/60 bg-rose-50 px-4 py-3 text-sm text-rose-900 dark:border-rose-400/25 dark:bg-rose-400/[0.08] dark:text-rose-200">{error}</div> : null}
-      {run?.status === "FAILED" && !error ? (
-        <div role="alert" className="rounded-xl border border-rose-300/60 bg-rose-50 px-4 py-3 text-sm text-rose-900 dark:border-rose-400/25 dark:bg-rose-400/[0.08] dark:text-rose-200">
-          Generation stopped before a reviewable draft was produced{run.failureCode ? ` (${run.failureCode})` : ""}. Try again or adjust the selected references.
-        </div>
-      ) : null}
-      {run?.status === "NEEDS_REVIEW" && run.failureCode && !error ? (
-        <div role="alert" className="rounded-xl border border-rose-300/60 bg-rose-50 px-4 py-3 text-sm text-rose-900 dark:border-rose-400/25 dark:bg-rose-400/[0.08] dark:text-rose-200">
-          Review failed ({run.failureCode}). The latest draft is preserved, but its failed revision has not been verified.
-        </div>
-      ) : null}
-      {run?.status === "NEEDS_YOUR_CALL" && !error ? (
-        <div role="alert" className="rounded-xl border border-black/10 bg-black/[0.025] px-4 py-3 text-sm text-black/62 dark:border-white/10 dark:bg-white/[0.04] dark:text-white/62">
-          This saved draft predates automatic conflict handling. Generate it again to receive a single resolved result.
-        </div>
-      ) : null}
-      {pack ? (
-        <>
-          <CitedDraftEditor
-            pack={pack}
-            onEditSentence={(sentence, body) => plotApiClient.editSentence(pack.variant.id, sentence.id, { expectedRevisionNumber: sentence.revisionNumber, body })}
-            onPackChange={onPackChange}
-          />
-          <ExportDialog pack={pack} client={plotApiClient} />
-        </>
-      ) : null}
-    </article>
-  );
+  return <article className="space-y-3">
+    {run ? <p role="status" aria-label={`Generation status: ${generationStatusLabel(run.status)}`} className="sr-only">Generation status: {generationStatusLabel(run.status)}</p> : null}
+    {run ? <GenerationWorkLog run={run} /> : busy ? <div className="rounded-xl border border-black/10 bg-black/[0.025] px-4 py-3 text-sm text-black/62 dark:border-white/10 dark:bg-white/[0.04] dark:text-white/62">Plot is preparing the grounded draft…</div> : null}
+    {error ? <ErrorNotice message={error} /> : null}
+    {run?.status === "FAILED" && !error ? <ErrorNotice message={`Generation stopped before a reviewable draft was produced${run.failureCode ? ` (${run.failureCode})` : ""}. Try again or adjust the selected references.`} /> : null}
+    {run?.status === "NEEDS_REVIEW" && run.failureCode && !error ? <ErrorNotice message={`Review failed (${run.failureCode}). The latest draft is preserved, but its failed revision has not been verified.`} /> : null}
+    {run?.status === "NEEDS_YOUR_CALL" && !error ? <ErrorNotice message="This saved draft predates automatic conflict handling. Generate it again to receive a single resolved result." /> : null}
+    {pack ? <><CitedDraftEditor pack={pack} onEditSentence={(sentence, body) => plotApiClient.editSentence(pack.variant.id, sentence.id, { expectedRevisionNumber: sentence.revisionNumber, body })} onPackChange={onPackChange} /><ExportDialog pack={pack} client={plotApiClient} /></> : null}
+  </article>;
+}
+
+function SourceEmptyState() {
+  return <p className="mt-3 text-center text-sm text-black/50 dark:text-white/50">Connect and import a source in <Link href="/integrations" className="text-[#2563eb] hover:underline dark:text-[#93c5fd]">Integrations</Link> or <Link href="/sources" className="text-[#2563eb] hover:underline dark:text-[#93c5fd]">Sources</Link> before starting a session.</p>;
+}
+
+function ErrorNotice({ message }: { message: string }) {
+  return <div role="alert" className="mt-3 rounded-xl border border-rose-300/60 bg-rose-50 px-4 py-3 text-sm text-rose-900 dark:border-rose-400/25 dark:bg-rose-400/[0.08] dark:text-rose-200">{message}</div>;
+}
+
+function toComposerReferences(references: GenerationReference[]) {
+  return references.map((reference) => ({ id: reference.id, label: `${reference.repositoryLabel} · ${reference.sourceLabel}`, available: true, groupId: reference.sourceScopeId }));
+}
+
+function selectReferences(references: GenerationReference[], ids: string[]) {
+  return references.filter((reference) => ids.includes(reference.id));
+}
+
+function validateGenerationSelection(all: GenerationReference[], selected: GenerationReference[], sourceError: string) {
+  if (sourceError) return sourceError;
+  if (!all.length) return "Connect and import a source before starting a generation.";
+  if (!selected.length) return "Select at least one reference before starting a generation.";
+  if (selected.some((reference) => reference.sourceScopeId !== selected[0]!.sourceScopeId)) return "Selected references must belong to the same source scope.";
+  return "";
+}
+
+function sessionHref(sessionId: string, generationId: string | null) {
+  const params = new URLSearchParams({ session: sessionId });
+  if (generationId) params.set("generation", generationId);
+  return `/sessions?${params.toString()}`;
+}
+
+function formatActivity(value: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 function generationStatusLabel(status: GenerationRun["status"]) {
@@ -483,16 +339,6 @@ function generationStatusLabel(status: GenerationRun["status"]) {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-function stageLabel() {
-  return "preparing the grounded draft";
-}
-
-function getInitialSelectedDocumentId(session: WorkSession) {
-  return session.draftIds[0] ?? session.referenceIds[0] ?? null;
-}
-
-function getInitialOpenDocumentIds(session: WorkSession) {
-  return [session.draftIds[0], session.referenceIds[0]].filter(
-    (documentId): documentId is string => Boolean(documentId),
-  );
+function messageFor(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
 }
