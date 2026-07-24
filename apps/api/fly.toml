@@ -1,0 +1,47 @@
+app = "useplot-api"
+primary_region = "iad"
+kill_signal = "SIGTERM"
+kill_timeout = "45s"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  SERVER_PORT = "8080"
+  PLOT_AUTH_ENABLED = "true"
+  PLOT_AUTH_REQUIRED = "true"
+  PLOT_AUTH_ISSUER = "https://app.useplot.xyz"
+  PLOT_AUTH_AUDIENCE = "plot-api"
+  PLOT_AUTH_JWKSURI = "https://app.useplot.xyz/api/auth/jwks"
+  PLOT_GITHUB_ENABLED = "false"
+  PLOT_GITHUB_DEVONLY = "false"
+  PLOT_GITHUB_LOOPBACKONLY = "false"
+  PLOT_AI_ENABLED = "false"
+  SPRING_AI_MODEL_CHAT = "none"
+  MANAGEMENT_HEALTH_DB_ENABLED = "false"
+  SPRING_DATASOURCE_HIKARI_MAXIMUMPOOLSIZE = "5"
+  SPRING_DATASOURCE_HIKARI_MINIMUMIDLE = "0"
+  SPRING_DATASOURCE_HIKARI_IDLETIMEOUT = "60000"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 100
+    hard_limit = 150
+
+  [[http_service.checks]]
+    grace_period = "60s"
+    interval = "15s"
+    method = "GET"
+    path = "/actuator/health"
+    timeout = "5s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"
