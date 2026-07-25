@@ -22,6 +22,10 @@ dev-web:
 test-api:
     cd apps/api && ./gradlew test
 
+# Test the Next.js app
+test-web:
+    pnpm --filter @plot/web test
+
 # Run the explicit preflight plus scored two-model OpenRouter matrix (never part of normal CI)
 generation-contract-smoke:
     @test "${PLOT_AI_CONTRACT_SMOKE:-}" = "true" || (echo "Set PLOT_AI_CONTRACT_SMOKE=true to opt in" >&2; exit 2)
@@ -83,7 +87,7 @@ generation-certification-cleanup:
     cd apps/api && ./gradlew generationCertificationCleanup
 
 # Run all tests
-test: test-api
+test: test-api test-web
     @echo "Tests complete"
 
 # Lint the Next.js app
