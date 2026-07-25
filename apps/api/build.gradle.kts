@@ -109,6 +109,7 @@ tasks.withType<Test> {
 }
 
 tasks.named<Test>("test") {
+	environment("SPRING_PROFILES_ACTIVE", "test")
 	useJUnitPlatform { excludeTags("generation-certification-live") }
 }
 
