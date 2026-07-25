@@ -56,6 +56,7 @@ class ApiApplicationTests {
 			"generation_interventions",
 			"generation_intervention_resolutions",
 			"generation_export_events",
+			"polar_webhook_events",
 		)
 		val actualTables = jdbcTemplate.queryForList(
 			"""

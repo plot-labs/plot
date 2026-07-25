@@ -2,6 +2,7 @@ package com.plot.api.auth
 
 import com.plot.api.common.ApiException
 import com.plot.api.common.UuidGenerator
+import com.plot.api.entitlement.TrialPolicy
 import com.plot.api.workspace.User
 import com.plot.api.workspace.UserRepository
 import com.plot.api.workspace.Workspace
@@ -71,6 +72,8 @@ class AccountBootstrapService(
 					status = "ACTIVE",
 					createdAt = now,
 					updatedAt = now,
+					trialStartedAt = now,
+					trialEndsAt = now.plus(TrialPolicy.DURATION),
 				))
 				memberRepository.save(WorkspaceMember(
 					id = memberId,
@@ -102,4 +105,5 @@ class AccountBootstrapService(
 		?: throw ApiException(HttpStatus.FORBIDDEN, "ACCESS_DENIED", "Access denied")
 
 	private fun unauthorized(): ApiException = ApiException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Authentication is required")
+
 }

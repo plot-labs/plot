@@ -45,7 +45,7 @@ class SecurityConfig(
 			http
 				.csrf { it.ignoringRequestMatchers("/api/**") }
 				.authorizeHttpRequests { requests ->
-					requests.requestMatchers("/actuator/health", "/api/auth/**").permitAll()
+					requests.requestMatchers("/actuator/health", "/api/auth/**", "/api/polar/webhook").permitAll()
 						.requestMatchers("/api/account/bootstrap", "/api/me").authenticated()
 						.anyRequest().authenticated()
 				}
