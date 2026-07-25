@@ -5,6 +5,7 @@ import com.plot.api.contentpack.dto.ContentPackResponse
 import com.plot.api.contentpack.dto.ContentPackPageResponse
 import com.plot.api.contentpack.dto.EditSentenceRequest
 import com.plot.api.contentpack.dto.ExportContentVariantRequest
+import com.plot.api.entitlement.ReadOnlyAllowed
 import jakarta.validation.Valid
 import java.util.UUID
 import org.springframework.http.CacheControl
@@ -42,6 +43,7 @@ class ContentPackController(private val service: ContentPackService) {
 	)
 
 	@PostMapping("/content-variants/{variantId}/exports")
+	@ReadOnlyAllowed
 	fun export(
 		@PathVariable variantId: UUID,
 		@Valid @RequestBody request: ExportContentVariantRequest,

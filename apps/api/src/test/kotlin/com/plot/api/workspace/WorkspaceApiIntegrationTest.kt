@@ -37,6 +37,10 @@ class WorkspaceApiIntegrationTest {
 				status { isOk() }
 				jsonPath("$[0].id") { value(devContext.devWorkspaceId.toString()) }
 				jsonPath("$[0].status") { value("ACTIVE") }
+				jsonPath("$[0].plan") { value("founding") }
+				jsonPath("$[0].entitlementStatus") { value("active") }
+				jsonPath("$[0].accessMode") { value("full") }
+				jsonPath("$[0].trialEndsAt") { exists() }
 			}
 	}
 
@@ -47,6 +51,10 @@ class WorkspaceApiIntegrationTest {
 				status { isOk() }
 				jsonPath("$.id") { value(devContext.devWorkspaceId.toString()) }
 				jsonPath("$.status") { value("ACTIVE") }
+				jsonPath("$.plan") { value("founding") }
+				jsonPath("$.entitlementStatus") { value("active") }
+				jsonPath("$.accessMode") { value("full") }
+				jsonPath("$.trialEndsAt") { exists() }
 				jsonPath("$.role") { value("OWNER") }
 			}
 	}

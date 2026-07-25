@@ -1,5 +1,6 @@
 package com.plot.api.dev
 
+import com.plot.api.entitlement.TrialPolicy
 import com.plot.api.workspace.User
 import com.plot.api.workspace.UserRepository
 import com.plot.api.workspace.Workspace
@@ -63,12 +64,19 @@ class DevBootstrapService(
 				status = "ACTIVE",
 				createdAt = now,
 				updatedAt = now,
+				plan = "founding",
+				entitlementStatus = "active",
+				trialStartedAt = now,
+				trialEndsAt = now.plus(TrialPolicy.DURATION),
 			)
 		}
 		workspace.name = "Dev Workspace"
 		workspace.slug = "dev-workspace"
 		workspace.createdByUserId = devContext.devUserId
 		workspace.status = "ACTIVE"
+		workspace.plan = "founding"
+		workspace.entitlementStatus = "active"
+		workspace.accessMode = "full"
 		workspace.updatedAt = now
 		workspaceRepository.save(workspace)
 
@@ -98,4 +106,5 @@ class DevBootstrapService(
 		workspaceMember.updatedAt = now
 		workspaceMemberRepository.save(workspaceMember)
 	}
+
 }

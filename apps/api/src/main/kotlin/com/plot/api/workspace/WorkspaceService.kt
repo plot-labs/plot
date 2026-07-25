@@ -3,6 +3,7 @@ package com.plot.api.workspace
 import com.plot.api.common.ApiException
 import com.plot.api.auth.RequestActorResolver
 import com.plot.api.dev.DevContext
+import com.plot.api.entitlement.WorkspaceEntitlementReader
 import com.plot.api.workspace.dto.UpdateWorkspaceRequest
 import com.plot.api.workspace.dto.WorkspaceResponse
 import java.time.Instant
@@ -16,6 +17,7 @@ class WorkspaceService(
 	private val devContext: DevContext,
 	private val workspaceRepository: WorkspaceRepository,
 	private val memberRepository: WorkspaceMemberRepository,
+	private val entitlementReader: WorkspaceEntitlementReader,
 	private val actorResolver: RequestActorResolver? = null,
 ) {
 
@@ -23,7 +25,11 @@ class WorkspaceService(
 	fun list(): List<WorkspaceResponse> {
 		val memberships = memberRepository.findAllByUserIdAndStatusOrderByCreatedAtAsc(devContext.devUserId, "ACTIVE")
 		val workspaces = workspaceRepository.findAllByIdInAndStatus(memberships.map { it.workspaceId }, "ACTIVE").associateBy { it.id }
-		return memberships.mapNotNull { member -> workspaces[member.workspaceId]?.toResponse(member.role) }
+		return memberships.mapNotNull { member ->
+			workspaces[member.workspaceId]?.let { workspace ->
+				workspace.toResponse(entitlementReader.resolve(workspace), member.role)
+			}
+		}
 	}
 
 	@Transactional(readOnly = true)
@@ -31,7 +37,7 @@ class WorkspaceService(
 		val workspace = findDevWorkspace(id)
 		val membership = memberRepository.findByWorkspaceIdAndUserIdAndStatus(id, devContext.devUserId, "ACTIVE")
 			?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Workspace not found")
-		return workspace.toResponse(membership.role)
+		return workspace.toResponse(entitlementReader.resolve(workspace), membership.role)
 	}
 
 	@Transactional
@@ -48,7 +54,7 @@ class WorkspaceService(
 		workspace.name = trimmedName
 		workspace.slug = trimmedSlug
 		workspace.updatedAt = Instant.now()
-		return workspace.toResponse()
+		return workspace.toResponse(entitlementReader.resolve(workspace))
 	}
 
 	private fun findDevWorkspace(id: UUID): Workspace {

@@ -3,6 +3,8 @@ package com.plot.api.generation
 import com.plot.api.ai.provider.ModelCallMetadata
 import com.plot.api.ai.provider.ModelRole
 import com.plot.api.common.JdbcTime.timestamp
+import com.plot.api.common.ApiException
+import com.plot.api.entitlement.TrialPolicy
 import com.plot.api.common.UuidGenerator
 import com.plot.api.generation.model.EvidenceSnapshot
 import com.plot.api.generation.model.ReviewVerdict
@@ -15,6 +17,7 @@ import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.http.HttpStatus
 import org.springframework.transaction.support.TransactionTemplate
 import tools.jackson.databind.ObjectMapper
 
@@ -76,6 +79,7 @@ class GenerationPersistence(
 			if (existing.second != reservation.requestFingerprint) throw GenerationIdempotencyConflictException()
 			return@execute loadState(reservation.workspaceId, existing.first)
 		}
+		requireTrialGenerationCapacity(reservation.workspaceId)
 		val now = clock.instant()
 		val inserted = jdbcTemplate.update(
 			"""
@@ -104,6 +108,52 @@ class GenerationPersistence(
 		reservation.state.evidence.forEach { insertEvidence(reservation.workspaceId, it) }
 		insertCheckpoint(reservation.workspaceId, reservation.state, "EVIDENCE_SET", now)
 		reservation.state
+	}
+
+	private fun requireTrialGenerationCapacity(workspaceId: UUID) {
+		val entitlement = jdbcTemplate.query(
+			"select plan, entitlement_status, access_mode from workspaces where id = ? for update",
+			{ rs, _ -> Triple(rs.getString(1), rs.getString(2), rs.getString(3)) },
+			workspaceId,
+		).singleOrNull()
+			?: throw ApiException(HttpStatus.FORBIDDEN, "ACCESS_DENIED", "Access denied")
+		if (entitlement.third != "full") {
+			throw ApiException(
+				HttpStatus.FORBIDDEN,
+				"WORKSPACE_READ_ONLY",
+				"This workspace is read-only. Reactivate a subscription to make changes.",
+			)
+		}
+		if (entitlement.first != "trial" || entitlement.second != "trialing") return
+		val occupiedPackSlotCount = jdbcTemplate.queryForObject(
+			"""
+			select
+			  (select count(*) from content_packs where workspace_id = ?)
+			  +
+			  (
+			    select count(*)
+			    from generation_runs run
+			    where run.workspace_id = ?
+			      and run.status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING', 'NEEDS_YOUR_CALL')
+			      and not exists (
+			        select 1
+			        from content_packs pack
+			        where pack.workspace_id = run.workspace_id
+			          and pack.generation_run_id = run.id
+			      )
+			  )
+			""".trimIndent(),
+			Long::class.java,
+			workspaceId,
+			workspaceId,
+		) ?: 0
+		if (occupiedPackSlotCount >= TrialPolicy.PACK_LIMIT) {
+			throw ApiException(
+				HttpStatus.FORBIDDEN,
+				"TRIAL_PACK_LIMIT_REACHED",
+				"The trial already has three completed or in-progress pack generations. Wait for a failure to release capacity or subscribe.",
+			)
+		}
 	}
 
 	fun claimNext(workerId: String, staleBefore: Instant): ClaimedGenerationRun? = transactionTemplate.execute {

@@ -7,5 +7,6 @@ interface WorkspaceRepository : JpaRepository<Workspace, UUID> {
 	fun findByIdAndStatus(id: UUID, status: String): Workspace?
 	fun findAllByIdInAndStatus(ids: Collection<UUID>, status: String): List<Workspace>
 	fun findBySlug(slug: String): Workspace?
+	fun findByPolarSubscriptionId(polarSubscriptionId: String): Workspace?
 	fun existsBySlugAndIdNot(slug: String, id: UUID): Boolean
 }

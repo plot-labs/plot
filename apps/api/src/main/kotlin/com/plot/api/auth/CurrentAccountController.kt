@@ -1,5 +1,6 @@
 package com.plot.api.auth
 
+import com.plot.api.entitlement.WorkspaceEntitlementReader
 import com.plot.api.workspace.UserRepository
 import com.plot.api.workspace.WorkspaceMemberRepository
 import com.plot.api.workspace.WorkspaceRepository
@@ -11,7 +12,16 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
 data class CurrentAccountUser(val id: UUID, val email: String, val displayName: String)
-data class CurrentAccountWorkspace(val id: UUID, val name: String, val slug: String, val role: String)
+data class CurrentAccountWorkspace(
+	val id: UUID,
+	val name: String,
+	val slug: String,
+	val role: String,
+	val plan: String,
+	val entitlementStatus: String,
+	val accessMode: String,
+	val trialEndsAt: java.time.Instant,
+)
 data class CurrentAccountResponse(
 	val user: CurrentAccountUser,
 	val workspaces: List<CurrentAccountWorkspace>,
@@ -25,6 +35,7 @@ class CurrentAccountController(
 	private val userRepository: UserRepository,
 	private val memberRepository: WorkspaceMemberRepository,
 	private val workspaceRepository: WorkspaceRepository,
+	private val entitlementReader: WorkspaceEntitlementReader,
 ) {
 	@GetMapping
 	fun me(): ResponseEntity<CurrentAccountResponse> {
@@ -35,7 +46,17 @@ class CurrentAccountController(
 			.associateBy { it.id }
 		val response = memberships.mapNotNull { member ->
 			workspaces[member.workspaceId]?.let { workspace ->
-				CurrentAccountWorkspace(workspace.id, workspace.name, workspace.slug, member.role)
+				val entitlement = entitlementReader.resolve(workspace)
+				CurrentAccountWorkspace(
+					workspace.id,
+					workspace.name,
+					workspace.slug,
+					member.role,
+					workspace.plan,
+					entitlement.status,
+					entitlement.accessMode,
+					workspace.trialEndsAt,
+				)
 			}
 		}
 		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(
