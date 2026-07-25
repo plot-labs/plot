@@ -22,6 +22,9 @@ build/
 .idea/
 .vscode/
 
+# Local design sources
+design/
+
 # Logs
 *.log
 
