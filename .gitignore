@@ -39,3 +39,4 @@ apps/web/blob-report/
 apps/web/.playwright-artifacts/
 **/trace.zip
 **/*.webm
+.vercel/
