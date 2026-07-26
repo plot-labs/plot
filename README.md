@@ -8,10 +8,6 @@
     the speed of AI-assisted shipping.
   </p>
   <p>
-    <a href="docs/product/product-definition.md"><strong>Product Definition</strong></a>
-    ·
-    <a href="docs/product/agentic-ux.md"><strong>Agentic UX</strong></a>
-    ·
     <a href="docs/architecture/data-architecture.md"><strong>Data Architecture</strong></a>
   </p>
   <p>
@@ -101,9 +97,7 @@ infra/
   storage/     object storage notes/config
 
 docs/
-  product/       PRD and product notes
   architecture/  system and module docs
-  decisions/     architecture decision records
   api/           API notes
   operations/    local/dev/ops runbooks
 ```
@@ -130,8 +124,6 @@ just lint
 
 The optional GitHub App adapter's local validation procedure is documented in
 [`docs/operations/github-app-development-smoke-test.md`](docs/operations/github-app-development-smoke-test.md).
-The opt-in real-model contract and GitHub evidence-to-export procedure is in
-[`docs/operations/generation-citation-smoke-test.md`](docs/operations/generation-citation-smoke-test.md).
 API tests use Testcontainers by default; when Docker is unavailable, the same
 tests can target a temporary local PostgreSQL instance with
 `PLOT_TESTCONTAINERS_ENABLED=false`, `SPRING_DATASOURCE_URL`, and
@@ -142,11 +134,7 @@ wrappers for compatibility.
 
 ## Docs
 
-- [Product Definition](docs/product/product-definition.md)
-- [Agentic UX Direction](docs/product/agentic-ux.md)
 - [Project Structure](docs/architecture/project-structure.md)
 - [Data Architecture](docs/architecture/data-architecture.md)
 - [Data ERD](docs/architecture/data-erd.mmd)
 - [GitHub App development smoke test](docs/operations/github-app-development-smoke-test.md)
-- [Generation and citation smoke test](docs/operations/generation-citation-smoke-test.md)
-- [ADR 0001: Monorepo With Generated Apps](docs/decisions/0001-monorepo-generated-apps.md)

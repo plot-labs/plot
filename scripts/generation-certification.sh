@@ -160,8 +160,13 @@ validate_static_preflight() {
   export PLOT_CERTIFICATION_SAFE_ROOT="${PLOT_CERTIFICATION_OUTPUT_ROOT}.safe"
   prepare_artifact_root "$PLOT_CERTIFICATION_SAFE_ROOT" safe
   require_env PLOT_CERTIFICATION_REPORT_OUTPUT
+  case "$PLOT_CERTIFICATION_REPORT_OUTPUT" in
+    "$ROOT/.generation-certification/reports/"*) ;;
+    *) fail "report directory rejected" ;;
+  esac
+  mkdir -p "$ROOT/.generation-certification/reports"
   report_parent="$(cd "$(dirname "$PLOT_CERTIFICATION_REPORT_OUTPUT")" && pwd -P)"
-  test "$report_parent" = "$ROOT/docs/operations/certifications" || fail "report directory rejected"
+  test "$report_parent" = "$ROOT/.generation-certification/reports" || fail "report directory rejected"
   echo "$(basename "$PLOT_CERTIFICATION_REPORT_OUTPUT")" | grep -Eq '^20[0-9]{2}-[0-9]{2}-[0-9]{2}-[a-f0-9]{40}\.md$' || fail "report filename rejected"
   test ! -e "$PLOT_CERTIFICATION_REPORT_OUTPUT" || fail "report path must not already exist"
 
@@ -1037,8 +1042,7 @@ main() {
         rm -f "$PLOT_CERTIFICATION_REPORT_OUTPUT"
         fail "safe report-input purge failed; report removed"
       fi
-      expected_report_status="?? ${PLOT_CERTIFICATION_REPORT_OUTPUT#"$ROOT/"}"
-      test "$(git -C "$ROOT" status --porcelain)" = "$expected_report_status" || {
+      test -z "$(git -C "$ROOT" status --porcelain)" || {
         rm -f "$PLOT_CERTIFICATION_REPORT_OUTPUT"
         fail "unexpected worktree change after final report; report removed"
       }

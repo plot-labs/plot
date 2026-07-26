@@ -8,10 +8,6 @@
     workspace입니다.
   </p>
   <p>
-    <a href="docs/product/product-definition.md"><strong>Product Definition</strong></a>
-    ·
-    <a href="docs/product/agentic-ux.md"><strong>Agentic UX</strong></a>
-    ·
     <a href="docs/architecture/data-architecture.md"><strong>Data Architecture</strong></a>
   </p>
   <p>
@@ -98,9 +94,7 @@ infra/
   storage/     object storage notes/config
 
 docs/
-  product/       PRD and product notes
   architecture/  system and module docs
-  decisions/     architecture decision records
   api/           API notes
   operations/    local/dev/ops runbooks
 ```
@@ -129,20 +123,13 @@ just lint
 GitHub App adapter의 local 검증 절차는
 [`docs/operations/github-app-development-smoke-test.md`](docs/operations/github-app-development-smoke-test.md)에
 정리되어 있습니다.
-실제 모델 계약과 GitHub 근거부터 내보내기까지의 opt-in 검증 절차는
-[`docs/operations/generation-citation-smoke-test.md`](docs/operations/generation-citation-smoke-test.md)에
-정리되어 있습니다.
 API 테스트는 기본적으로 Testcontainers를 사용하며, Docker를 사용할 수 없는
 환경에서는 `PLOT_TESTCONTAINERS_ENABLED=false`, `SPRING_DATASOURCE_URL`,
 `SPRING_DATASOURCE_USERNAME`으로 임시 로컬 PostgreSQL을 지정할 수 있습니다.
 
 ## Docs
 
-- [Product Definition](docs/product/product-definition.md)
-- [Agentic UX Direction](docs/product/agentic-ux.md)
 - [Project Structure](docs/architecture/project-structure.md)
 - [Data Architecture](docs/architecture/data-architecture.md)
 - [Data ERD](docs/architecture/data-erd.mmd)
 - [GitHub App Development Smoke Test](docs/operations/github-app-development-smoke-test.md)
-- [Generation and Citation Smoke Test](docs/operations/generation-citation-smoke-test.md)
-- [ADR 0001: Monorepo With Generated Apps](docs/decisions/0001-monorepo-generated-apps.md)
