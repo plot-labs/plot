@@ -38,7 +38,8 @@ export const metadata: Metadata = {
       "Turn merged work into source-backed update packs your team approves.",
   },
   icons: {
-    icon: "/plot-favicon.svg",
+    icon:
+      process.env.VERCEL_ENV === "production" ? "/plot-favicon.svg" : "/plot-logo-favicon-non-prod.png",
   },
 };
 
