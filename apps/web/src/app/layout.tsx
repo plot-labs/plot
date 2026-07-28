@@ -19,7 +19,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://useplot.xyz"),
+  metadataBase: new URL("https://www.useplot.xyz"),
   title: "Plot — Autonomous update packs from shipped work",
   description:
     "For AI and devtool teams shipping every week. Plot turns merged PRs, releases, and issues into source-backed, on-style changelogs, docs updates, customer updates, and launch drafts — with human approval before publish.",
@@ -27,15 +27,24 @@ export const metadata: Metadata = {
     title: "Plot — Ship fast. Write less. Stay source-backed.",
     description:
       "Autonomous update packs from your repo. Docs, changelogs, and launch copy in your team's voice.",
-    url: "https://useplot.xyz",
+    url: "https://www.useplot.xyz",
     siteName: "Plot",
     type: "website",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Plot turns shipped work into source-backed update packs ready for approval.",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "Plot — Autonomous update packs from shipped work",
     description:
       "Turn merged work into source-backed update packs your team approves.",
+    images: ["/og-image.png"],
   },
   icons: {
     icon:
