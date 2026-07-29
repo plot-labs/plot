@@ -29,24 +29,15 @@ class DevelopmentAuthBypassTest {
 	}
 
 	@Test
-	fun `local test and loopback certification contexts allow the bypass and bootstrap`() {
+	fun `local and test contexts allow the bypass and bootstrap`() {
 		listOf(
 			"local" to "0.0.0.0",
 			"test" to "0.0.0.0",
-			"generation-certification" to "127.0.0.1",
 		).forEach { (profile, address) ->
 			assertTrue(environment(profile, address).allowsDevelopmentAuthBypass())
 			bootstrapContext(profile, address).run { context ->
 				assertTrue(context.containsBean("bootstrapMarker"))
 			}
-		}
-	}
-
-	@Test
-	fun `certification bypass and bootstrap require loopback`() {
-		assertFalse(environment("generation-certification", "0.0.0.0").allowsDevelopmentAuthBypass())
-		bootstrapContext("generation-certification", "0.0.0.0").run { context ->
-			assertFalse(context.containsBean("bootstrapMarker"))
 		}
 	}
 

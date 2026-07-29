@@ -2,7 +2,7 @@ package com.plot.api.billing
 
 import com.plot.api.auth.PlotAuthProperties
 import com.plot.api.common.ApiException
-import com.plot.api.common.JdbcTime.timestamp
+import java.sql.Timestamp
 import com.plot.api.workspace.User
 import com.plot.api.workspace.UserRepository
 import com.plot.api.workspace.Workspace
@@ -46,7 +46,7 @@ class PolarSubscriptionService(
 			webhookId,
 			eventType,
 			subscriptionId,
-			timestamp(clock.instant()),
+			Timestamp.from(clock.instant()),
 		)
 		if (inserted == 0 || eventType !in HANDLED_EVENTS) return
 		if (subscriptionId == null) {

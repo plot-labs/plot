@@ -1,140 +1,67 @@
 <div align="center">
   <img src="apps/web/public/plot-icon.svg" alt="Plot logo" width="88" />
   <h1>Plot</h1>
-  <p><strong>Ship fast. Write less. Stay in your team's voice.</strong></p>
-  <p>
-    Autonomous post-shipping update workspace for teams whose docs, release
-    notes, changelogs, customer updates, and launch content need to keep up with
-    the speed of AI-assisted shipping.
-  </p>
-  <p>
-    <a href="docs/architecture/data-architecture.md"><strong>Data Architecture</strong></a>
-  </p>
-  <p>
-    <img alt="Status: in development" src="https://img.shields.io/badge/status-in_development-030303?style=flat-square">
-    <img alt="Sources: connected" src="https://img.shields.io/badge/sources-connected-030303?style=flat-square">
-    <img alt="Publishing: human controlled" src="https://img.shields.io/badge/publishing-human_controlled-030303?style=flat-square">
-  </p>
+  <p><strong>Ship fast. Write less.</strong></p>
+  <p>Turn merged product work into an editable, source-cited changelog.</p>
 </div>
 
 [English](README.md) | [한국어](README.ko.md)
 
-## What Is Plot?
+## Current Product
 
-AI coding agents are making product and engineering teams ship faster, but the
-writing that follows shipped work still moves at the old speed.
-
-Plot starts from what actually shipped, turns connected source records into
-**Writing Blocks**, and prepares source-backed update packs in the team's voice.
-The product surface is the source-backed update workspace: sessions, sources,
-packs, voice, and source citations.
-
-Plot is not a generic AI writer or a company knowledge layer. Agents prepare the
-work; humans control what gets copied, edited, and published outside Plot.
-
-## Product Loop
+Plot currently supports one complete path:
 
 ```txt
-Ask for an update
-  -> choose shipping window and sources
-  -> inspect Writing Blocks
-  -> apply template and voice
-  -> generate an update pack
-  -> inspect source citations and style
-  -> copy, edit, or publish outside Plot
+Connect one GitHub repository
+  -> import merged pull requests
+  -> ask Plot for a changelog
+  -> review citations beside the draft
+  -> edit, copy, or download Markdown
 ```
 
-## What Plot Does
+Publishing remains under the user's control outside Plot.
 
-- Creates update packs from shipped product work, not from a blank page.
-- Keeps generated content linked to the source blocks that justify it.
-- Produces channel variants for changelogs, docs updates, customer updates,
-  launch drafts, and social copy.
-- Keeps voice/style explicit through examples, rules, templates, and visible
-  source citations.
-- Keeps publishing human-controlled.
-
-## Product Surface
-
-| Surface | Role |
-| --- | --- |
-| Sessions | Chat-like work sessions where a person or agent asks for an update pack and follows progress. |
-| Sources | Shipped-work timeline, source selection, imports, and coverage. |
-| Packs | Draft update packs with channel variants and source citations. |
-| Voice | Team voice, channel styles, samples, and explicit rules. |
-| Settings | Workspace, members, permissions, and source connections. |
-
-## How It Works
-
-- Connect shipped-work sources and choose the release window that needs an
-  update.
-- Writing Blocks for PRs, issues, commits, tags, releases, and comparison
-  ranges.
-- Direct model-provider API calls for initial generation.
-- Content templates and voice profiles for repeatable output.
-- Source citations and style guidance beside generated content.
-- Publishing stays human-controlled outside Plot.
-
-## Architecture
-
-Plot is a monorepo with a generated Next.js frontend and a backend service. The
-domain model is intentionally framework-neutral so the production backend can be
-chosen for cost, deployment, and operational fit.
+## Repository
 
 ```txt
 apps/
-  web/  Next.js app
-  api/  Kotlin Spring Boot backend and agent runtime
+  web/  Next.js application and same-origin API proxy
+  api/  Kotlin Spring Boot API and generation worker
 
 packages/
-  auth/        Better Auth server/client boundary and allowlist policy
-  api-client/  shared typed generation/citation client
-  ui/          shared UI components later
-  config/      shared frontend config later
-
-infra/
-  docker/      local development services
-  storage/     object storage notes/config
-
-docs/
-  architecture/  system and module docs
-  api/           API notes
-  operations/    local/dev/ops runbooks
+  auth/        Better Auth configuration and allowlist policy
+  api-client/  typed browser client for the Plot API
 ```
 
-The backend is intentionally kept as one service while the core update loop is
-being validated. Initial AI generation is a direct model-provider API call
-managed by that service; deeper orchestration, authenticated integrations, and
-automation can be added after the core update loop works.
+PostgreSQL is the system of record. Flyway migrations under
+`apps/api/src/main/resources/db/migration` are the authoritative schema.
 
 ## Development
 
-`just` is the root command runner. `pnpm` remains the JavaScript package manager
-and workspace manager.
+Requirements:
+
+- Java 21
+- Node.js and pnpm
+- Docker
+- `just`
 
 ```bash
-brew install just
-
+pnpm install
 just dev-api
 just dev-web
-just test
-just build
-just lint
 ```
 
-The optional GitHub App adapter's local validation procedure is documented in
-[`docs/operations/github-app-development-smoke-test.md`](docs/operations/github-app-development-smoke-test.md).
-API tests use Testcontainers by default; when Docker is unavailable, the same
-tests can target a temporary local PostgreSQL instance with
-`PLOT_TESTCONTAINERS_ENABLED=false`, `SPRING_DATASOURCE_URL`, and
-`SPRING_DATASOURCE_USERNAME` set.
+Validation:
 
-The existing `pnpm dev:api`, `pnpm build:web`, and related scripts are kept as
-wrappers for compatibility.
+```bash
+just lint
+just test
+just build
+```
 
-## Docs
+API integration tests use PostgreSQL through Testcontainers.
 
-- [Project Structure](docs/architecture/project-structure.md)
-- [Data Architecture](docs/architecture/data-architecture.md)
-- [Data ERD](docs/architecture/data-erd.mmd)
+## Operations
+
 - [GitHub App development smoke test](docs/operations/github-app-development-smoke-test.md)
+- [Polar subscription webhook](docs/operations/polar-subscription-webhook.md)

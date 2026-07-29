@@ -1,7 +1,7 @@
 package com.plot.api.github
 
 import com.plot.api.common.ApiException
-import com.plot.api.common.JdbcTime.timestamp
+import java.sql.Timestamp
 import com.plot.api.dev.DevContext
 import com.plot.api.writingblock.WritingBlockImportService
 import java.time.Duration
@@ -132,7 +132,7 @@ class GitHubImportService(
 					 observation_mode, generation, status, started_at, created_at
 					) values (?, ?, ?, ?, ?, 'pull_requests', 'PARTIAL', ?, 'RUNNING', ?, ?)
 					""".trimIndent(), observationId, devContext.devWorkspaceId, scope.id, scope.bindingId,
-					authority, generation, timestamp(now), timestamp(now),
+					authority, generation, Timestamp.from(now), Timestamp.from(now),
 				)
 				jdbcTemplate.update(
 				"""
@@ -146,13 +146,13 @@ class GitHubImportService(
 				devContext.devWorkspaceId,
 				scope.id,
 				observationId,
-				timestamp(request.from),
-				timestamp(request.to),
-				timestamp(now),
-				timestamp(now),
+				Timestamp.from(request.from),
+				Timestamp.from(request.to),
+				Timestamp.from(now),
+				Timestamp.from(now),
 			)
 				ReservedImport(id, observationId, now)
-			} ?: throw IllegalStateException("Import reservation transaction returned no result")
+			}
 		} catch (_: DuplicateKeyException) {
 			throw ApiException(HttpStatus.CONFLICT, "IMPORT_ALREADY_RUNNING", "A GitHub import is already running for this repository")
 		}
@@ -220,14 +220,14 @@ class GitHubImportPersistenceService(
 			created,
 			updated,
 			unchanged,
-			timestamp(completedAt),
+			Timestamp.from(completedAt),
 			devContext.devWorkspaceId,
 			importId,
 		)
 		if (updatedRows != 1) throw IllegalStateException("Import is no longer running")
 		jdbcTemplate.update(
 			"update source_observations set status = 'COMPLETED', completed_at = ? where workspace_id = ? and id = ? and status = 'RUNNING'",
-			timestamp(completedAt), devContext.devWorkspaceId, observationId,
+			Timestamp.from(completedAt), devContext.devWorkspaceId, observationId,
 		)
 		return GitHubImportResponse(
 			id = importId,
@@ -268,7 +268,7 @@ class GitHubImportFailureRecorder(
 			""".trimIndent(),
 			code.take(80),
 			message.take(500),
-			timestamp(completedAt),
+			Timestamp.from(completedAt),
 			devContext.devWorkspaceId,
 			importId,
 		)
@@ -278,7 +278,7 @@ class GitHubImportFailureRecorder(
 			from source_imports si
 			where si.workspace_id = so.workspace_id and si.observation_id = so.id
 			  and si.workspace_id = ? and si.id = ? and so.status = 'RUNNING'
-			""".trimIndent(), timestamp(completedAt), devContext.devWorkspaceId, importId,
+			""".trimIndent(), Timestamp.from(completedAt), devContext.devWorkspaceId, importId,
 		)
 		if (connectionId != null) {
 			jdbcTemplate.update(
@@ -287,7 +287,7 @@ class GitHubImportFailureRecorder(
 				set status = 'NEEDS_REAUTH', updated_at = ?
 				where workspace_id = ? and id = ? and status = 'ACTIVE'
 				""".trimIndent(),
-				timestamp(Instant.now()),
+				Timestamp.from(Instant.now()),
 				devContext.devWorkspaceId,
 				connectionId,
 			)

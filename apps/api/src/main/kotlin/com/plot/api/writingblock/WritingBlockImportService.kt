@@ -1,6 +1,6 @@
 package com.plot.api.writingblock
 
-import com.plot.api.common.JdbcTime.timestamp
+import java.sql.Timestamp
 import com.plot.api.dev.DevContext
 import com.plot.api.source.ImportedWritingBlock
 import tools.jackson.databind.ObjectMapper
@@ -86,7 +86,7 @@ class WritingBlockImportService(
 				normalizeJson(existing.metadataJson) != normalizeJson(metadata) ||
 				existing.sourceCreatedAt != block.sourceCreatedAt ||
 				existing.sourceUpdatedAt != block.sourceUpdatedAt
-			if (existing.sourceUpdatedAt != null && block.sourceUpdatedAt != null) {
+			if (existing.sourceUpdatedAt != null) {
 				if (block.sourceUpdatedAt.isBefore(existing.sourceUpdatedAt)) {
 					upsertMembership(block, existing.id, now)
 					return WritingBlockUpsertResult(existing.id, created = false, changed = false)
@@ -116,9 +116,9 @@ class WritingBlockImportService(
 				block.platform,
 				metadata,
 				hash,
-				timestamp(block.sourceCreatedAt),
-				timestamp(block.sourceUpdatedAt),
-				timestamp(now),
+				Timestamp.from(block.sourceCreatedAt),
+				Timestamp.from(block.sourceUpdatedAt),
+				Timestamp.from(now),
 				devContext.devWorkspaceId,
 				existing.id,
 			)
@@ -169,13 +169,13 @@ class WritingBlockImportService(
 				block.platform,
 				metadata,
 				hash,
-				timestamp(block.sourceCreatedAt),
-				timestamp(block.sourceUpdatedAt),
-				timestamp(now),
+				Timestamp.from(block.sourceCreatedAt),
+				Timestamp.from(block.sourceUpdatedAt),
+				Timestamp.from(now),
 				"ACTIVE",
 				devContext.devUserId,
-				timestamp(now),
-				timestamp(now),
+				Timestamp.from(now),
+				Timestamp.from(now),
 			),
 		)
 
@@ -199,8 +199,8 @@ class WritingBlockImportService(
 			block.sourceNamespaceId,
 			blockId,
 			block.sourceScopeId,
-			timestamp(now),
-			timestamp(now),
+			Timestamp.from(now),
+			Timestamp.from(now),
 			block.observationId,
 		)
 	}

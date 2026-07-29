@@ -171,18 +171,6 @@ class GenerationApiIntegrationTest {
 			jsonPath("$.contentPack.status") { value("READY") }
 			jsonPath("$.contentPack.variant.sentences.length()") { value(1) }
 		}
-		val events = mockMvc.get("/api/generations/$runId/events") {
-			accept(MediaType.TEXT_EVENT_STREAM)
-		}.andExpect {
-			status { isOk() }
-			content { contentTypeCompatibleWith(MediaType.TEXT_EVENT_STREAM) }
-		}.andReturn()
-		assertEquals(true, events.response.contentAsString.contains("\"runStatus\":\"READY\""))
-		assertEquals(0, jdbcTemplate.queryForObject(
-			"select count(*) from generation_interventions where generation_run_id = ?",
-			Int::class.java,
-			runId,
-		))
 		assertEquals("READY", jdbcTemplate.queryForObject(
 			"select status from generation_runs where id = ?",
 			String::class.java,

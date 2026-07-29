@@ -7,7 +7,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 
 import type { ContentPack, GenerationReference, GenerationRun, WorkSessionSummary } from "@/lib/api-client";
 import { plotApiClient } from "@/lib/api-client";
-import { isTerminalGenerationStatus, streamGeneration } from "@/lib/generation-polling";
+import { isTerminalGenerationStatus, pollGeneration } from "@/lib/generation-polling";
 import { CitedDraftEditor } from "@/features/citations/cited-draft-editor";
 import { ExportDialog } from "@/features/citations/export-dialog";
 import { GenerationWorkLog } from "@/features/sessions/generation-work-log";
@@ -188,8 +188,9 @@ function ActiveSessionWorkspace({ activeSession, references, sourceError }: { ac
           void plotApiClient.updateSession(activeSession.id, { latestGenerationId: current.id }).catch(() => undefined);
         }
         setGenerationRun(current);
-        const restored = isTerminalGenerationStatus(current.status) ? current : await streamGeneration(plotApiClient, current.id, {
+        const restored = isTerminalGenerationStatus(current.status) ? current : await pollGeneration(plotApiClient, current.id, {
           signal: controller.signal,
+          initialRun: current,
           onUpdate: (next) => { if (generationAbortRef.current === controller) setGenerationRun(next); },
         });
         if (generationAbortRef.current !== controller) return;
@@ -275,7 +276,6 @@ function GenerationPanel({ run, pack, busy, error, onPackChange }: { run: Genera
     {error ? <ErrorNotice message={error} /> : null}
     {run?.status === "FAILED" && !error ? <ErrorNotice message={`Generation stopped before a reviewable draft was produced${run.failureCode ? ` (${run.failureCode})` : ""}. Try again or adjust the selected references.`} /> : null}
     {run?.status === "NEEDS_REVIEW" && run.failureCode && !error ? <ErrorNotice message={`Review failed (${run.failureCode}). The latest draft is preserved, but its failed revision has not been verified.`} /> : null}
-    {run?.status === "NEEDS_YOUR_CALL" && !error ? <ErrorNotice message="This saved draft predates automatic conflict handling. Generate it again to receive a single resolved result." /> : null}
     {pack ? <><CitedDraftEditor pack={pack} onEditSentence={(sentence, body) => plotApiClient.editSentence(pack.variant.id, sentence.id, { expectedRevisionNumber: sentence.revisionNumber, body })} onPackChange={onPackChange} /><ExportDialog pack={pack} client={plotApiClient} /></> : null}
   </article>;
 }

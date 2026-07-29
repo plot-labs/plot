@@ -17,9 +17,7 @@ class SourceManagedAccessGuard(
 			actorResolver.requireWorkspace()
 			return
 		}
-		if (environment.activeProfiles.none {
-				it == "local" || it == "dev" || it == "test" || it == "generation-certification"
-			}) {
+		if (environment.activeProfiles.none { it == "local" || it == "dev" || it == "test" }) {
 			throw ApiException(HttpStatus.SERVICE_UNAVAILABLE, "SOURCE_AUTH_REQUIRED", "Source-managed blocks require product authentication")
 		}
 		if (environment.getProperty("server.address") !in setOf("localhost", "127.0.0.1", "::1")) {

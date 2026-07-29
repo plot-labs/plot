@@ -27,7 +27,6 @@ data class GenerationRunResponse(
 	val evidence: List<GenerationEvidenceResponse>,
 	val sentences: List<GenerationSentenceResponse>,
 	val artifacts: List<GenerationArtifactResponse>,
-	val pendingIntervention: GenerationInterventionResponse?,
 	val timing: GenerationRunTimingResponse? = null,
 	val contentPack: ContentPackResponse? = null,
 )
@@ -101,14 +100,6 @@ data class GenerationCitationResponse(
 	val snapshotExcerpt: String?,
 )
 
-data class GenerationInterventionResponse(
-	val id: UUID,
-	val sentenceId: UUID,
-	val version: Long,
-	val reason: String,
-	val evidenceIds: List<UUID>,
-)
-
 fun GenerationWorkflowState.toResponse(): GenerationRunResponse {
 	val reviewsBySentence = reviews.associateBy { it.sentenceId }
 	val evidenceById = evidence.associateBy { it.id }
@@ -156,9 +147,6 @@ fun GenerationWorkflowState.toResponse(): GenerationRunResponse {
 				artifact.reviews.map { GenerationArtifactReviewResponse(it.sentenceId, it.verdict, it.evidenceIds, it.reason) },
 				artifact.detail,
 			)
-		},
-		pendingIntervention = pendingIntervention?.let {
-			GenerationInterventionResponse(it.id, it.sentenceId, it.version, it.reason, it.evidenceIds)
 		},
 		contentPack = null,
 	)

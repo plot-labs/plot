@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { ArrowRight, Check } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { WAITLIST_PAIN_CHANNELS, WAITLIST_ROLES } from "@/lib/waitlist";
 
 type FormState = "idle" | "loading" | "success" | "error";
@@ -143,25 +142,21 @@ export function WaitlistForm() {
       />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <Button
-          className="h-14 rounded-full bg-foreground px-8 text-base text-background hover:bg-foreground/90 group"
+        <button
+          className="group inline-flex h-14 items-center justify-center gap-2 rounded-full bg-foreground px-8 text-base font-medium text-background transition-colors hover:bg-foreground/90 disabled:pointer-events-none disabled:opacity-50"
           disabled={state === "loading"}
-          size="lg"
           type="submit"
         >
           {state === "loading" ? "Joining..." : "Join waitlist"}
           <ArrowRight className="ml-2 size-4 transition-transform group-hover:translate-x-1" />
-        </Button>
+        </button>
 
-        <Button
-          asChild
-          className="h-14 rounded-full border-foreground/20 px-8 text-base hover:bg-foreground/5"
-          size="lg"
-          type="button"
-          variant="outline"
+        <a
+          className="inline-flex h-14 items-center justify-center rounded-full border border-foreground/20 bg-background px-8 text-base font-medium transition-colors hover:bg-foreground/5"
+          href="mailto:hello@useplot.xyz"
         >
-          <a href="mailto:hello@useplot.xyz">Talk to us</a>
-        </Button>
+          Talk to us
+        </a>
       </div>
 
       {state === "error" ? (

@@ -2,7 +2,7 @@ package com.plot.api.generation
 
 import com.plot.api.ai.provider.ModelCallMetadata
 import com.plot.api.ai.provider.ModelRole
-import com.plot.api.common.JdbcTime.timestamp
+import java.sql.Timestamp
 import com.plot.api.common.ApiException
 import com.plot.api.entitlement.TrialPolicy
 import com.plot.api.common.UuidGenerator
@@ -94,7 +94,7 @@ class GenerationPersistence(
 			reservation.state.runId, reservation.workspaceId, reservation.sourceScopeId,
 			reservation.createdByUserId, reservation.idempotencyKey, reservation.requestFingerprint,
 			reservation.provider, reservation.modelName, reservation.budgetJson, reservation.state.instruction,
-			timestamp(now), timestamp(now),
+			Timestamp.from(now), Timestamp.from(now),
 		)
 		if (inserted == 0) {
 			val raced = jdbcTemplate.query(
@@ -134,7 +134,7 @@ class GenerationPersistence(
 			    select count(*)
 			    from generation_runs run
 			    where run.workspace_id = ?
-			      and run.status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING', 'NEEDS_YOUR_CALL')
+			      and run.status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
 			      and not exists (
 			        select 1
 			        from content_packs pack
@@ -169,7 +169,7 @@ class GenerationPersistence(
 			limit 1
 			""".trimIndent(),
 			{ rs, _ -> Triple(rs.getObject(1, UUID::class.java), rs.getObject(2, UUID::class.java), rs.getLong(3)) },
-			timestamp(staleBefore),
+			Timestamp.from(staleBefore),
 		).firstOrNull() ?: return@execute null
 		val now = clock.instant()
 		val updated = jdbcTemplate.update(
@@ -178,7 +178,7 @@ class GenerationPersistence(
 			where workspace_id = ? and id = ? and transition_version = ?
 			  and (claimed_by is null or heartbeat_at < ?)
 			""".trimIndent(),
-			workerId, timestamp(now), timestamp(now), timestamp(now), row.first, row.second, row.third, timestamp(staleBefore),
+			workerId, Timestamp.from(now), Timestamp.from(now), Timestamp.from(now), row.first, row.second, row.third, Timestamp.from(staleBefore),
 		)
 		if (updated == 1) ClaimedGenerationRun(row.first, row.second, row.third, workerId) else null
 	}
@@ -217,7 +217,7 @@ class GenerationPersistence(
 			 semantic_attempt, status, started_at, created_at)
 			values (?, ?, ?, ?, ?, ?, 'RUNNING', ?, ?)
 			""".trimIndent(),
-			stepId, claim.workspaceId, claim.runId, role.name, sequence, attempt, timestamp(now), timestamp(now),
+			stepId, claim.workspaceId, claim.runId, role.name, sequence, attempt, Timestamp.from(now), Timestamp.from(now),
 		)
 		val providerModel = jdbcTemplate.queryForMap(
 			"select provider, model_name from generation_runs where workspace_id = ? and id = ?",
@@ -230,12 +230,12 @@ class GenerationPersistence(
 			values (?, ?, ?, ?, ?, ?, 'RUNNING', ?, ?, ?, ?)
 			""".trimIndent(),
 			invocationId, claim.workspaceId, claim.runId, stepId, role.name, callIndex,
-			providerModel["provider"], providerModel["model_name"], timestamp(now), timestamp(now),
+			providerModel["provider"], providerModel["model_name"], Timestamp.from(now), Timestamp.from(now),
 		)
 		val visibleStatus = if (role == ModelRole.WRITER) "WRITING" else if (role == ModelRole.REVIEWER) "REVIEWING" else "REWRITING"
 		jdbcTemplate.update(
 			"update generation_runs set status = ?, started_at = coalesce(started_at, ?), heartbeat_at = ?, updated_at = ? where workspace_id = ? and id = ? and claimed_by = ?",
-			visibleStatus, timestamp(now), timestamp(now), timestamp(now), claim.workspaceId, claim.runId, claim.workerId,
+			visibleStatus, Timestamp.from(now), Timestamp.from(now), Timestamp.from(now), claim.workspaceId, claim.runId, claim.workerId,
 		)
 		ModelInvocationLease(invocationId, stepId, role, callIndex)
 	}
@@ -288,11 +288,11 @@ class GenerationPersistence(
 				""".trimIndent(),
 				metadata?.responseId, objectMapper.writeValueAsString(metadata?.observationAttributes ?: emptyMap<String, String>()),
 				metadata?.promptTokens, metadata?.completionTokens, metadata?.totalTokens,
-				metadata?.latency?.toMillis()?.toInt(), timestamp(now), claim.workspaceId, lease.id,
+				metadata?.latency?.toMillis()?.toInt(), Timestamp.from(now), claim.workspaceId, lease.id,
 			)
 			jdbcTemplate.update(
 				"update generation_workflow_steps set status = 'SUCCEEDED', finished_at = ? where workspace_id = ? and id = ? and status = 'RUNNING'",
-				timestamp(now), claim.workspaceId, lease.stepId,
+				Timestamp.from(now), claim.workspaceId, lease.stepId,
 			)
 			insertCheckpoint(claim.workspaceId, state, state.artifactType, now, lease.stepId)
 			if (state.status == GenerationRunStatus.READY || state.status == GenerationRunStatus.NEEDS_REVIEW) {
@@ -307,7 +307,7 @@ class GenerationPersistence(
 				 finished_at = case when ? then ? else finished_at end, updated_at = ?
 				where workspace_id = ? and id = ? and claimed_by = ?
 				""".trimIndent(),
-				state.status.name, state.semanticRewriteAttempt, state.failureCode, terminal, timestamp(now), timestamp(now),
+				state.status.name, state.semanticRewriteAttempt, state.failureCode, terminal, Timestamp.from(now), Timestamp.from(now),
 				claim.workspaceId, claim.runId, claim.workerId,
 			)
 			check(updated == 1) { "Generation run claim was lost" }
@@ -332,42 +332,42 @@ class GenerationPersistence(
 				""".trimIndent(),
 				metadata?.responseId, objectMapper.writeValueAsString(metadata?.observationAttributes ?: emptyMap<String, String>()),
 				metadata?.promptTokens, metadata?.completionTokens, metadata?.totalTokens, metadata?.latency?.toMillis()?.toInt(),
-				code, timestamp(now), claim.workspaceId, lease.id,
+				code, Timestamp.from(now), claim.workspaceId, lease.id,
 			)
 			jdbcTemplate.update(
 				"update generation_workflow_steps set status = 'FAILED', failure_code = ?, finished_at = ? where workspace_id = ? and id = ? and status = 'RUNNING'",
-				code, timestamp(now), claim.workspaceId, lease.stepId,
+				code, Timestamp.from(now), claim.workspaceId, lease.stepId,
 			)
-			val failed = state.asFailure(code)
-			insertCheckpoint(claim.workspaceId, failed, "FINAL_OUTPUT", now, lease.stepId)
-			if (failed.status == GenerationRunStatus.NEEDS_REVIEW) materializeTerminal(claim.workspaceId, failed, now)
-			jdbcTemplate.update(
-				"""
-				update generation_runs set status = ?, error_code = ?, transition_version = transition_version + 1,
-				 claimed_by = null, claimed_at = null, heartbeat_at = null, finished_at = ?, updated_at = ?
-				where workspace_id = ? and id = ? and claimed_by = ?
-				""".trimIndent(),
-				failed.status.name, code, timestamp(now), timestamp(now), claim.workspaceId, claim.runId, claim.workerId,
-			)
+			failClaimedRun(claim, state, code, now, lease.stepId)
 		}
 	}
 
 	fun failClaim(claim: ClaimedGenerationRun, state: GenerationWorkflowState, code: String) {
 		transactionTemplate.executeWithoutResult {
 			requireClaim(claim)
-			val now = clock.instant()
-			val failed = state.asFailure(code)
-			insertCheckpoint(claim.workspaceId, failed, "FINAL_OUTPUT", now)
-			if (failed.status == GenerationRunStatus.NEEDS_REVIEW) materializeTerminal(claim.workspaceId, failed, now)
-			jdbcTemplate.update(
-				"""
-				update generation_runs set status = ?, error_code = ?, transition_version = transition_version + 1,
-				 claimed_by = null, claimed_at = null, heartbeat_at = null, finished_at = ?, updated_at = ?
-				where workspace_id = ? and id = ? and claimed_by = ?
-				""".trimIndent(),
-				failed.status.name, code, timestamp(now), timestamp(now), claim.workspaceId, claim.runId, claim.workerId,
-			)
+			failClaimedRun(claim, state, code, clock.instant())
 		}
+	}
+
+	private fun failClaimedRun(
+		claim: ClaimedGenerationRun,
+		state: GenerationWorkflowState,
+		code: String,
+		now: Instant,
+		stepId: UUID? = null,
+	) {
+		val failed = state.asFailure(code)
+		insertCheckpoint(claim.workspaceId, failed, "FINAL_OUTPUT", now, stepId)
+		if (failed.status == GenerationRunStatus.NEEDS_REVIEW) materializeTerminal(claim.workspaceId, failed, now)
+		val updated = jdbcTemplate.update(
+			"""
+			update generation_runs set status = ?, error_code = ?, transition_version = transition_version + 1,
+			 claimed_by = null, claimed_at = null, heartbeat_at = null, finished_at = ?, updated_at = ?
+			where workspace_id = ? and id = ? and claimed_by = ?
+			""".trimIndent(),
+			failed.status.name, code, Timestamp.from(now), Timestamp.from(now), claim.workspaceId, claim.runId, claim.workerId,
+		)
+		check(updated == 1) { "Generation run claim was lost" }
 	}
 
 	fun loadState(workspaceId: UUID, runId: UUID): GenerationWorkflowState {
@@ -440,7 +440,7 @@ class GenerationPersistence(
 		where claimed_by is not null and heartbeat_at < ?
 		  and status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
 		""".trimIndent(),
-		timestamp(clock.instant()), timestamp(staleBefore),
+		Timestamp.from(clock.instant()), Timestamp.from(staleBefore),
 	)
 
 	private fun insertEvidence(workspaceId: UUID, evidence: EvidenceSnapshot) {
@@ -454,8 +454,8 @@ class GenerationPersistence(
 			evidence.id, workspaceId, evidence.generationRunId, evidence.writingBlockId, evidence.orderIndex,
 			evidence.sourceProvider.name, evidence.sourceKind, evidence.sourceLabel, evidence.snapshotTitle,
 			evidence.snapshotBody, evidence.snapshotExcerpt, evidence.originalUrl,
-			evidence.sourceCreatedAt?.let(::timestamp), evidence.sourceUpdatedAt?.let(::timestamp),
-			evidence.contentHash, timestamp(evidence.capturedAt),
+			evidence.sourceCreatedAt?.let(Timestamp::from), evidence.sourceUpdatedAt?.let(Timestamp::from),
+			evidence.contentHash, Timestamp.from(evidence.capturedAt),
 		)
 	}
 
@@ -471,7 +471,7 @@ class GenerationPersistence(
 		jdbcTemplate.update(
 			"insert into generation_artifacts (id, workspace_id, generation_run_id, workflow_step_id, artifact_type, artifact_version, sequence_no, payload, created_at) values (?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?)",
 			uuidGenerator.next(), workspaceId, state.runId, stepId, type, version, sequence,
-			objectMapper.writeValueAsString(state), timestamp(now),
+			objectMapper.writeValueAsString(state), Timestamp.from(now),
 		)
 	}
 
@@ -482,18 +482,18 @@ class GenerationPersistence(
 		val status = if (state.status == GenerationRunStatus.READY) "READY" else "NEEDS_REVIEW"
 		jdbcTemplate.update(
 			"insert into content_packs (id, workspace_id, generation_run_id, title, status, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?)",
-			packId, workspaceId, state.runId, state.sentences.firstOrNull()?.body?.take(120), status, timestamp(now), timestamp(now),
+			packId, workspaceId, state.runId, state.sentences.firstOrNull()?.body?.take(120), status, Timestamp.from(now), Timestamp.from(now),
 		)
 		jdbcTemplate.update(
 			"insert into content_variants (id, workspace_id, generation_run_id, content_pack_id, variant_index, status, created_at, updated_at) values (?, ?, ?, ?, 0, ?, ?, ?)",
-			variantId, workspaceId, state.runId, packId, status, timestamp(now), timestamp(now),
+			variantId, workspaceId, state.runId, packId, status, Timestamp.from(now), Timestamp.from(now),
 		)
 		val revisions = state.artifacts.flatMap { it.sentences }.plus(state.sentences)
 			.distinctBy { it.revisionId }.groupBy { it.id }
 		state.sentences.sortedBy { it.orderIndex }.forEach { current ->
 			jdbcTemplate.update(
 				"insert into content_variant_sentences (id, workspace_id, generation_run_id, content_variant_id, stable_key, order_index, created_at) values (?, ?, ?, ?, ?, ?, ?)",
-				current.id, workspaceId, state.runId, variantId, current.id.toString(), current.orderIndex, timestamp(now),
+				current.id, workspaceId, state.runId, variantId, current.id.toString(), current.orderIndex, Timestamp.from(now),
 			)
 			revisions.getValue(current.id).sortedBy { it.revisionNumber }.forEach { revision ->
 				jdbcTemplate.update(
@@ -504,7 +504,7 @@ class GenerationPersistence(
 					""".trimIndent(),
 					revision.revisionId, workspaceId, state.runId, variantId, current.id, revision.revisionNumber,
 					revision.origin.name, revision.body, revision.revisionId == current.revisionId,
-					userModifiedBy.takeIf { revision.origin.name == "USER_MODIFIED" }, timestamp(now),
+					userModifiedBy.takeIf { revision.origin.name == "USER_MODIFIED" }, Timestamp.from(now),
 				)
 			}
 		}
@@ -516,7 +516,7 @@ class GenerationPersistence(
 				jdbcTemplate.update(
 					"insert into sentence_evaluations (id, workspace_id, generation_run_id, sentence_id, sentence_revision_id, review_attempt, verdict, reason, created_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
 					uuidGenerator.next(), workspaceId, state.runId, sentence.id, sentence.revisionId, reviewIndex + 1,
-					review.verdict.name, review.reason, timestamp(now),
+					review.verdict.name, review.reason, Timestamp.from(now),
 				)
 			}
 		}
@@ -526,7 +526,7 @@ class GenerationPersistence(
 				jdbcTemplate.update(
 					"insert into sentence_citations (id, workspace_id, generation_run_id, content_variant_id, sentence_id, sentence_revision_id, generation_input_id, citation_order, status, created_at) values (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?)",
 					uuidGenerator.next(), workspaceId, state.runId, variantId, sentence.id, sentence.revisionId,
-					evidenceId, citationIndex, timestamp(now),
+					evidenceId, citationIndex, Timestamp.from(now),
 				)
 			}
 		}
@@ -563,6 +563,5 @@ private val GenerationWorkflowState.artifactType: String
 		WorkflowArtifactKind.WRITER_OUTPUT -> "WRITER_OUTPUT"
 		WorkflowArtifactKind.REVIEWER_OUTPUT, WorkflowArtifactKind.CONFLICT -> "REVIEWER_OUTPUT"
 		WorkflowArtifactKind.REWRITER_OUTPUT -> "REWRITER_OUTPUT"
-		WorkflowArtifactKind.CONFLICT_DECISION -> "CONFLICT_DECISION"
 		null -> "FINAL_OUTPUT"
 	}

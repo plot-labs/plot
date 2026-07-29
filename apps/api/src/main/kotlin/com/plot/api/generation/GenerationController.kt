@@ -11,8 +11,6 @@ import java.net.URI
 import java.util.UUID
 import org.springframework.http.CacheControl
 import org.springframework.http.ResponseEntity
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
-import org.springframework.http.MediaType
 import org.springframework.transaction.annotation.Isolation
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.bind.annotation.GetMapping
@@ -29,8 +27,6 @@ class GenerationController(
 	private val runService: GenerationRunService,
 	private val accessGuard: SourceManagedAccessGuard,
 	private val contentPackService: ContentPackService,
-	private val eventPublisher: GenerationEventPublisher,
-	private val devContext: DevContext,
 ) {
 	@PostMapping
 	fun create(
@@ -52,16 +48,6 @@ class GenerationController(
 	fun get(@PathVariable id: UUID): ResponseEntity<GenerationRunResponse> = ResponseEntity.ok()
 		.cacheControl(CacheControl.noStore())
 		.body(runService.get(id).toResponse().withTiming(id).withPack())
-
-	@GetMapping("/{id}/events", produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
-	fun events(@PathVariable id: UUID): SseEmitter {
-		val state = runService.get(id)
-		val emitter = eventPublisher.subscribe(devContext.devWorkspaceId, id)
-		if (state.status in GenerationRunStatus.terminalOrPaused) {
-			eventPublisher.publish(devContext.devWorkspaceId, id, state.status)
-		}
-		return emitter
-	}
 
 	private fun GenerationRunResponse.withTiming(runId: UUID): GenerationRunResponse =
 		copy(timing = runService.getTiming(runId))

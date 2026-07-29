@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, MessageSquareText, Quote, SlidersHorizontal } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 
 const styleRules = [
   {
@@ -41,28 +41,7 @@ const channels = [
 ];
 
 export function StyleSection() {
-  const [isVisible, setIsVisible] = useState(false);
   const [activeChannel, setActiveChannel] = useState(0);
-  const sectionRef = useRef<HTMLElement>(null);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) setIsVisible(true);
-      },
-      { threshold: 0.16 },
-    );
-
-    if (sectionRef.current) observer.observe(sectionRef.current);
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setActiveChannel((prev) => (prev + 1) % channels.length);
-    }, 3200);
-    return () => clearInterval(interval);
-  }, []);
 
   const active = channels[activeChannel];
 
@@ -70,16 +49,11 @@ export function StyleSection() {
     <section
       className="relative overflow-hidden border-y border-foreground/10 py-24 lg:py-32"
       id="style"
-      ref={sectionRef}
     >
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgb(18_17_15_/_0.035)_1px,transparent_1px),linear-gradient(180deg,rgb(18_17_15_/_0.035)_1px,transparent_1px)] bg-[size:36px_36px]" />
       <div className="relative mx-auto max-w-[1400px] px-6 lg:px-12">
         <div className="grid gap-14 lg:grid-cols-[0.86fr_1.14fr] lg:gap-20 lg:items-start">
-          <div
-            className={`transition-all duration-700 ${
-              isVisible ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0"
-            }`}
-          >
+          <div className="landing-reveal">
               <span className="mb-6 inline-flex items-center gap-3 font-mono text-sm text-muted-foreground">
                 <span className="h-px w-8 bg-foreground/30" />
               Voice & Style
@@ -111,11 +85,7 @@ export function StyleSection() {
             </div>
           </div>
 
-          <div
-            className={`transition-all delay-150 duration-700 ${
-              isVisible ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
-            }`}
-          >
+          <div className="landing-reveal">
             <div className="overflow-hidden rounded-[24px] border border-foreground/10 bg-background/80 shadow-[0_30px_110px_rgb(18_17_15_/_0.06)]">
               <div className="flex flex-col gap-5 border-b border-foreground/10 px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
                 <div>

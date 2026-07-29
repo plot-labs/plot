@@ -63,40 +63,6 @@ describe("Plot same-origin proxy", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
-  it("allows the certification BFF bypass only on an explicit loopback run", async () => {
-    process.env.PLOT_CERTIFICATION_LOOPBACK_GUARD = "true";
-    try {
-      const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ ok: true }));
-      const response = await proxyPlotRequest(
-        new Request("http://127.0.0.1:3000/api/plot/sessions", { headers: { Host: "127.0.0.1:3000" } }),
-        ["sessions"],
-        { fetch: fetcher, baseUrl: "http://127.0.0.1:8080" },
-      );
-
-      expect(response.status).toBe(200);
-      expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).get("authorization")).toBe("Bearer certification-loopback");
-    } finally {
-      delete process.env.PLOT_CERTIFICATION_LOOPBACK_GUARD;
-    }
-  });
-
-  it("does not enable the certification BFF bypass for non-loopback authorities", async () => {
-    process.env.PLOT_CERTIFICATION_LOOPBACK_GUARD = "true";
-    try {
-      const fetcher = vi.fn<typeof fetch>();
-      const response = await proxyPlotRequest(
-        new Request("https://app.useplot.xyz/api/plot/sessions", { headers: { Host: "app.useplot.xyz" } }),
-        ["sessions"],
-        { fetch: fetcher, getSession: async () => null },
-      );
-
-      expect(response.status).toBe(401);
-      expect(fetcher).not.toHaveBeenCalled();
-    } finally {
-      delete process.env.PLOT_CERTIFICATION_LOOPBACK_GUARD;
-    }
-  });
-
   it("rejects cross-origin state changes", async () => {
     const fetcher = vi.fn<typeof fetch>();
     const request = new Request("http://web.test/api/plot/sessions", {
@@ -212,28 +178,6 @@ describe("Plot same-origin proxy", () => {
 
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe("http://web.test/integrations?githubError=invalid");
-  });
-
-  it("passes through generation event streams without buffering", async () => {
-    const body = new ReadableStream({
-      start(controller) {
-        controller.enqueue(new TextEncoder().encode("event: checkpoint\n\n"));
-        controller.close();
-      },
-    });
-    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(body, {
-      headers: { "Content-Type": "text/event-stream" },
-    }));
-
-    const response = await proxyPlotRequest(
-      new Request("http://web.test/api/plot/generations/run-1/events"),
-      ["generations", "run-1", "events"],
-      { fetch: fetcher, baseUrl: "http://127.0.0.1:8080" },
-    );
-
-    expect(response.headers.get("content-type")).toContain("text/event-stream");
-    expect(response.headers.get("x-accel-buffering")).toBe("no");
-    expect(response.body).toBe(body);
   });
 
   it.each([

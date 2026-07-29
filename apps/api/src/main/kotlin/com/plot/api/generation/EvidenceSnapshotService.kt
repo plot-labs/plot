@@ -51,8 +51,6 @@ class EvidenceSnapshotService(
 
 	private fun parseProvider(platform: String?): SourceProvider = when (platform?.trim()?.lowercase()) {
 		"github" -> SourceProvider.GITHUB
-		"slack" -> SourceProvider.SLACK
-		"linear" -> SourceProvider.LINEAR
 		else -> invalid("Unsupported evidence provider")
 	}
 

@@ -19,7 +19,6 @@ class GenerationRunWorker(
 	private val persistence: GenerationPersistence,
 	private val workflowService: GenerationWorkflowService,
 	private val modelGateway: GenerationModelGateway,
-	private val checkpointObserver: GenerationCheckpointObserver = GenerationCheckpointObserver.NO_OP,
 	private val clock: Clock = Clock.systemUTC(),
 	private val claimTimeout: Duration = Duration.ofMinutes(2),
 	private val workerId: String = "generation-${UUID.randomUUID()}",
@@ -34,7 +33,6 @@ class GenerationRunWorker(
 		val budgetFailure = persistence.budgetFailureCode(claim)
 		if (budgetFailure != null) {
 			persistence.failClaim(claim, state, budgetFailure)
-			checkpointObserver.afterRunStatus(claim.workspaceId, claim.runId, failureStatus(state))
 			return true
 		}
 		val role = state.nextRole ?: return false
@@ -46,26 +44,15 @@ class GenerationRunWorker(
 			advanced
 		} catch (failure: GenerationModelException) {
 			persistence.failCheckpoint(claim, lease, state, failure.code.name, recording.metadata)
-			checkpointObserver.afterRunStatus(claim.workspaceId, claim.runId, failureStatus(state))
 			return true
 		} catch (_: InvalidModelOutputException) {
 			persistence.failCheckpoint(claim, lease, state, "MALFORMED_OUTPUT", recording.metadata)
-			checkpointObserver.afterRunStatus(claim.workspaceId, claim.runId, failureStatus(state))
 			return true
 		} catch (failure: RuntimeException) {
 			lastFailure = failure
 			persistence.failCheckpoint(claim, lease, state, "WORKFLOW_FAILED", recording.metadata)
-			checkpointObserver.afterRunStatus(claim.workspaceId, claim.runId, failureStatus(state))
 			return true
 		}
-		checkpointObserver.afterDurableCheckpoint(DurableGenerationCheckpoint(
-			workspaceId = claim.workspaceId,
-			runId = claim.runId,
-			invocationId = lease.id,
-			role = lease.role,
-			artifactType = lease.role.checkpointArtifactType,
-			runStatus = advanced.status,
-		))
 		return true
 	}
 
@@ -76,16 +63,6 @@ class GenerationRunWorker(
 		return processed
 	}
 }
-
-private fun failureStatus(state: GenerationWorkflowState): GenerationRunStatus =
-	if (state.reviews.isEmpty()) GenerationRunStatus.FAILED else GenerationRunStatus.NEEDS_REVIEW
-
-private val ModelRole.checkpointArtifactType: String
-	get() = when (this) {
-		ModelRole.WRITER -> "WRITER_OUTPUT"
-		ModelRole.REVIEWER -> "REVIEWER_OUTPUT"
-		ModelRole.REWRITER -> "REWRITER_OUTPUT"
-	}
 
 private val GenerationWorkflowState.nextRole: ModelRole?
 	get() = when (status) {

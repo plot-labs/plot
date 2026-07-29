@@ -1,6 +1,5 @@
 "use client";
 
-import { motion } from "framer-motion";
 import {
   FileCode2,
   GitPullRequest,
@@ -9,7 +8,7 @@ import {
   Sparkles,
   Tags,
 } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useId } from "react";
 
 type CapabilityVisualType = "blocks" | "signals" | "style" | "pack";
 
@@ -164,26 +163,16 @@ function BlocksVisual() {
       <VisualStage>
         <div className="absolute inset-0">
           <div className="absolute left-[314px] top-[82px] h-[118px] w-[330px] -translate-x-1/2 rounded-full bg-foreground/[0.05] blur-2xl" />
-          {sources.map((source, index) => (
-            <motion.div
-              animate={{
-                y: [0, index < 3 ? -6 : 4, 0],
-                rotate: index % 2 === 0 ? [-8, -4, -8] : [6, 3, 6],
-              }}
+          {sources.map((source) => (
+            <div
               className={`absolute grid size-[76px] place-items-center rounded-[18px] border border-white/20 bg-black/80 shadow-[inset_0_1px_1px_rgba(255,255,255,0.25),inset_0_-1px_1px_rgba(0,0,0,0.1),0_8px_24px_rgba(0,0,0,0.12),0_2px_6px_rgba(0,0,0,0.08)] ${source.className}`}
               key={source.name}
-              transition={{
-                delay: index * 0.14,
-                duration: 3,
-                repeat: Infinity,
-                ease: "easeInOut",
-              }}
             >
               <source.Icon
                 aria-label={source.name}
                 className="size-8 text-background"
               />
-            </motion.div>
+            </div>
           ))}
         </div>
       </VisualStage>
@@ -228,17 +217,10 @@ function SignalsVisual() {
             </span>
           </div>
           <div className="space-y-2">
-            {signalRows.map((signal, index) => (
-              <motion.div
-                animate={{ x: [0, index === 0 ? -3 : 0, 0] }}
+            {signalRows.map((signal) => (
+              <div
                 className="rounded-md border border-foreground/10 bg-background p-2.5"
                 key={signal.label}
-                transition={{
-                  delay: index * 0.12,
-                  duration: 2.1,
-                  repeat: Infinity,
-                  ease: "easeInOut",
-                }}
               >
                 <div className="mb-1.5 flex items-center justify-between gap-3">
                   <span className="font-mono text-[10px] uppercase text-foreground">
@@ -254,7 +236,7 @@ function SignalsVisual() {
                     style={{ width: `${Number(signal.score)}%` }}
                   />
                 </div>
-              </motion.div>
+              </div>
             ))}
           </div>
         </div>
@@ -281,20 +263,13 @@ function StyleMemoryVisual() {
         </FlowLayer>
 
         <div className="absolute left-8 top-[47px] w-[140px] space-y-3">
-          {["Samples", "Rules", "Channels"].map((label, index) => (
-            <motion.div
-              animate={{ opacity: [0.55, 0.94, 0.55] }}
+          {["Samples", "Rules", "Channels"].map((label) => (
+            <div
               className="rounded-md border border-foreground/10 bg-background/90 px-3 py-3.5 text-center font-mono text-[10px] uppercase text-muted-foreground"
               key={label}
-              transition={{
-                delay: index * 0.18,
-                duration: 2.2,
-                repeat: Infinity,
-                ease: "easeInOut",
-              }}
             >
               {label}
-            </motion.div>
+            </div>
           ))}
         </div>
 
@@ -328,16 +303,8 @@ function StyleMemoryVisual() {
           </div>
         </div>
 
-        <motion.div
-          animate={{
-            borderColor: [
-              "rgb(18 17 15 / 0.16)",
-              "rgb(18 17 15 / 0.55)",
-              "rgb(18 17 15 / 0.16)",
-            ],
-          }}
+        <div
           className="absolute left-[394px] top-[42px] h-[166px] w-[144px] rounded-lg border border-foreground/15 bg-background/95 p-3.5 shadow-[0_24px_70px_rgb(18_17_15_/_0.08)]"
-          transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
         >
           <div className="mb-2.5 flex items-center gap-2 font-mono text-[10px] uppercase text-muted-foreground">
             <Sparkles className="size-3.5 text-foreground" />
@@ -357,7 +324,7 @@ function StyleMemoryVisual() {
               </div>
             ))}
           </div>
-        </motion.div>
+        </div>
       </VisualStage>
     </FeatureShell>
   );
@@ -400,17 +367,10 @@ function PackVisual() {
             Release pack
           </div>
           <div className="space-y-2">
-            {channels.map((channel, index) => (
-              <motion.div
-                animate={{ x: [0, index === 1 ? 4 : 2, 0] }}
+            {channels.map((channel) => (
+              <div
                 className="rounded-md border border-foreground/10 bg-background p-2.5"
                 key={channel}
-                transition={{
-                  delay: index * 0.16,
-                  duration: 2.1,
-                  repeat: Infinity,
-                  ease: "easeInOut",
-                }}
               >
                 <div className="mb-1.5 font-mono text-[10px] uppercase text-foreground">
                   {channel}
@@ -419,7 +379,7 @@ function PackVisual() {
                   <div className="h-1.5 w-full rounded-full bg-foreground/18" />
                   <div className="h-1.5 w-2/3 rounded-full bg-foreground/10" />
                 </div>
-              </motion.div>
+              </div>
             ))}
           </div>
         </div>
@@ -442,30 +402,11 @@ function FeatureCard({
   feature: CapabilityFeature;
   index: number;
 }) {
-  const [isVisible, setIsVisible] = useState(false);
-  const cardRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) setIsVisible(true);
-      },
-      { threshold: 0.18 },
-    );
-
-    if (cardRef.current) observer.observe(cardRef.current);
-    return () => observer.disconnect();
-  }, []);
-
   return (
     <article
-      ref={cardRef}
-      className={`min-h-[430px] border-foreground/10 bg-background/45 p-5 transition-all duration-700 sm:p-6 lg:p-6 ${
+      className={`landing-reveal min-h-[430px] border-foreground/10 bg-background/45 p-5 sm:p-6 lg:p-6 ${
         index % 2 === 0 ? "lg:border-r" : ""
-      } ${index < 2 ? "lg:border-b" : ""} ${
-        isVisible ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
-      }`}
-      style={{ transitionDelay: `${index * 90}ms` }}
+      } ${index < 2 ? "lg:border-b" : ""}`}
     >
       <div className="mb-5 flex items-start justify-between gap-5">
         <div>
@@ -491,23 +432,8 @@ function FeatureCard({
 }
 
 export function FeaturesSection() {
-  const [isVisible, setIsVisible] = useState(false);
-  const sectionRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) setIsVisible(true);
-      },
-      { threshold: 0.1 },
-    );
-
-    if (sectionRef.current) observer.observe(sectionRef.current);
-    return () => observer.disconnect();
-  }, []);
-
   return (
-    <section id="features" ref={sectionRef} className="relative py-24 lg:py-32">
+    <section id="features" className="relative py-24 lg:py-32">
       <div className="mx-auto max-w-[1400px] px-6 lg:px-12">
         <div className="mx-auto mb-16 max-w-4xl text-center lg:mb-20">
           <span className="mb-6 inline-flex items-center gap-3 font-mono text-sm text-muted-foreground">
@@ -515,11 +441,7 @@ export function FeaturesSection() {
             Capabilities
             <span className="h-px w-8 bg-foreground/30" />
           </span>
-          <h2
-            className={`text-5xl font-display tracking-tight transition-all duration-700 lg:text-7xl ${
-              isVisible ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
-            }`}
-          >
+          <h2 className="landing-reveal text-5xl font-display tracking-tight lg:text-7xl">
             From raw context
             <br />
             <span className="text-muted-foreground">to content that keeps up.</span>

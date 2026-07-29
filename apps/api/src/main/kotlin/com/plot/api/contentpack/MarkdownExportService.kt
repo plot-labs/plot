@@ -8,10 +8,12 @@ import com.plot.api.generation.model.MarkdownExport
 import com.plot.api.generation.model.SourceProvider
 import java.net.URI
 import java.util.UUID
+import org.springframework.stereotype.Service
 
 class UnresolvedExportException(val unresolvedCount: Int) :
 	IllegalStateException("Export requires explicit acknowledgement for $unresolvedCount unresolved sentences")
 
+@Service
 class MarkdownExportService {
 	fun render(
 		sentences: List<ExportSentence>,
@@ -101,11 +103,7 @@ class MarkdownExportService {
 			val uri = URI(value)
 			val host = uri.host?.lowercase() ?: return null
 			if (uri.scheme?.lowercase() != "https" || uri.isOpaque || uri.rawUserInfo != null || (uri.port != -1 && uri.port != 443)) return null
-			val approved = when (provider) {
-				SourceProvider.GITHUB -> host == "github.com"
-				SourceProvider.SLACK -> host == "slack.com" || host.endsWith(".slack.com")
-				SourceProvider.LINEAR -> host == "linear.app" || host.endsWith(".linear.app")
-			}
+			val approved = provider == SourceProvider.GITHUB && host == "github.com"
 			if (!approved) return null
 			uri.toASCIIString()
 				.replace("\\", "%5C")

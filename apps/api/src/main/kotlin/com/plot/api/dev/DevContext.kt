@@ -12,7 +12,7 @@ class DevContext(
 	private val fallbackWorkspaceId = UUID.fromString("018fd000-0000-7000-8000-000000000002")
 	private val fallbackWorkspaceMemberId = UUID.fromString("018fd000-0000-7000-8000-000000000003")
 
-	/** Compatibility surface for certification fixtures; authenticated requests resolve real actors. */
+	/** Local fallback for development; authenticated requests resolve real actors. */
 	val devUserId: UUID get() = actorResolver?.current()?.userId ?: fallbackUserId
 	val devWorkspaceId: UUID get() = actorResolver?.currentWorkspace()?.workspaceId ?: fallbackWorkspaceId
 	val devWorkspaceMemberId: UUID get() = actorResolver?.currentWorkspace()?.membership?.id ?: fallbackWorkspaceMemberId

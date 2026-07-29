@@ -60,10 +60,7 @@ class SecurityConfig(
 }
 
 internal fun Environment.allowsDevelopmentAuthBypass(): Boolean =
-	activeProfiles.any { it in setOf("local", "test") } ||
-		("generation-certification" in activeProfiles && getProperty("server.address") in LOOPBACK_ADDRESSES)
-
-private val LOOPBACK_ADDRESSES = setOf("localhost", "127.0.0.1", "::1")
+	activeProfiles.any { it in setOf("local", "test") }
 
 private class AudienceValidator(private val audience: String) : OAuth2TokenValidator<Jwt> {
 	private val error = OAuth2Error("invalid_token", "The required audience is missing", null)

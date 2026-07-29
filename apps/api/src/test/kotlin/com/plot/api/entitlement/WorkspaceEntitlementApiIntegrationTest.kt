@@ -65,9 +65,9 @@ class WorkspaceEntitlementApiIntegrationTest {
 			jsonPath("$.entitlementStatus") { value("revoked") }
 			jsonPath("$.accessMode") { value("read_only") }
 		}
-		mockMvc.patch("/api/workspaces/${devContext.devWorkspaceId}") {
+		mockMvc.patch("/api/sessions/${UUID.randomUUID()}") {
 			contentType = MediaType.APPLICATION_JSON
-			content = """{"name":"Blocked","slug":"blocked"}"""
+			content = """{"title":"Blocked"}"""
 		}.andExpect {
 			status { isForbidden() }
 			jsonPath("$.error") { value("WORKSPACE_READ_ONLY") }
@@ -96,9 +96,9 @@ class WorkspaceEntitlementApiIntegrationTest {
 		)
 		assertEquals("trialing", projectedOnly["entitlement_status"])
 		assertEquals("full", projectedOnly["access_mode"])
-		mockMvc.patch("/api/workspaces/${devContext.devWorkspaceId}") {
+		mockMvc.patch("/api/sessions/${UUID.randomUUID()}") {
 			contentType = MediaType.APPLICATION_JSON
-			content = """{"name":"Blocked","slug":"blocked"}"""
+			content = """{"title":"Blocked"}"""
 		}.andExpect {
 			status { isForbidden() }
 			jsonPath("$.error") { value("WORKSPACE_READ_ONLY") }
@@ -136,9 +136,9 @@ class WorkspaceEntitlementApiIntegrationTest {
 			}
 			repeat(2) { runIds += insertGenerationRun("FAILED") }
 
-			mockMvc.patch("/api/workspaces/${devContext.devWorkspaceId}") {
+			mockMvc.patch("/api/sessions/${UUID.randomUUID()}") {
 				contentType = MediaType.APPLICATION_JSON
-				content = """{"name":"Blocked","slug":"blocked"}"""
+				content = """{"title":"Blocked"}"""
 			}.andExpect {
 				status { isForbidden() }
 				jsonPath("$.error") { value("WORKSPACE_READ_ONLY") }

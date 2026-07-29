@@ -17,32 +17,31 @@ import kotlin.test.assertTrue
 class MarkdownExportServiceTest {
 	private val runId = UUID.fromString("00000000-0000-0000-0000-000000000001")
 	private val github = evidence("00000000-0000-0000-0000-000000000021", "GitHub PR #42", "https://github.com/acme/app/pull/42", "private github excerpt")
-	private val linear = evidence(
+	private val issue = evidence(
 		"00000000-0000-0000-0000-000000000022",
-		"Linear PLOT-9",
-		"https://linear.app/acme/issue/PLOT-9",
-		"private linear excerpt",
-		SourceProvider.LINEAR,
+		"GitHub issue #9",
+		"https://github.com/acme/app/issues/9",
+		"private issue excerpt",
 	)
 
 	@Test
 	fun rendersDeterministicNumericCitationsAndDeduplicatedSources() {
-		val first = sentence(0, "Search shipped.", github.id, linear.id)
+		val first = sentence(0, "Search shipped.", github.id, issue.id)
 		val second = sentence(1, "The editor shipped too.", github.id)
 
 		val result = MarkdownExportService().render(
 			sentences = listOf(second, first),
-			evidence = listOf(linear, github),
+			evidence = listOf(issue, github),
 			acknowledgeUnresolved = false,
 		)
 
 		assertEquals(
-			"Search shipped. [1][2]\n\nThe editor shipped too. [1]\n\n## Sources\n\n1. [GitHub PR #42](https://github.com/acme/app/pull/42)\n2. [Linear PLOT-9](https://linear.app/acme/issue/PLOT-9)\n",
+			"Search shipped. [1][2]\n\nThe editor shipped too. [1]\n\n## Sources\n\n1. [GitHub PR #42](https://github.com/acme/app/pull/42)\n2. [GitHub issue #9](https://github.com/acme/app/issues/9)\n",
 			result.markdown,
 		)
 		assertEquals(0, result.unresolvedCount)
 		assertFalse(result.markdown.contains("private github excerpt"))
-		assertFalse(result.markdown.contains("private linear excerpt"))
+		assertFalse(result.markdown.contains("private issue excerpt"))
 	}
 
 	@Test
@@ -52,16 +51,16 @@ class MarkdownExportServiceTest {
 			status = ExportSentenceStatus.SUPPORTED,
 			citations = listOf(
 				SentenceCitation(base.id, base.revisionId, github.id, 0, CitationStatus.STALE),
-				SentenceCitation(base.id, base.revisionId, linear.id, 1, CitationStatus.ACTIVE),
+				SentenceCitation(base.id, base.revisionId, issue.id, 1, CitationStatus.ACTIVE),
 			),
 		)
 
-		val result = MarkdownExportService().render(listOf(sentence), listOf(github, linear), false)
+		val result = MarkdownExportService().render(listOf(sentence), listOf(github, issue), false)
 
-		assertFalse(result.markdown.contains("github.com"))
-		assertEquals(true, result.markdown.contains("https://linear.app/acme/issue/PLOT-9"))
+		assertFalse(result.markdown.contains("https://github.com/acme/app/pull/42"))
+		assertEquals(true, result.markdown.contains("https://github.com/acme/app/issues/9"))
 		assertFalse(result.markdown.contains("attacker.example"))
-		assertFalse(result.markdown.contains("private linear excerpt"))
+		assertFalse(result.markdown.contains("private issue excerpt"))
 	}
 
 	@Test
@@ -117,27 +116,6 @@ class MarkdownExportServiceTest {
 		assertTrue(result.markdown.contains("link unavailable"))
 	}
 
-	@Test
-	fun allowsCanonicalHttpsLinksForEachSupportedProvider() {
-		val slack = evidence(
-			"00000000-0000-0000-0000-000000000024",
-			"Slack release thread",
-			"https://acme.slack.com/archives/C123/p456",
-			"private slack excerpt",
-			SourceProvider.SLACK,
-		)
-		val result = MarkdownExportService().render(
-			listOf(sentence(0, "Release context.", github.id, slack.id, linear.id)),
-			listOf(github, slack, linear),
-			false,
-		)
-
-		assertTrue(result.markdown.contains("](https://github.com/acme/app/pull/42)"))
-		assertTrue(result.markdown.contains("](https://acme.slack.com/archives/C123/p456)"))
-		assertTrue(result.markdown.contains("](https://linear.app/acme/issue/PLOT-9)"))
-		assertFalse(result.markdown.contains("private slack excerpt"))
-	}
-
 	private fun sentence(orderIndex: Int, body: String, vararg evidenceIds: UUID): ExportSentence {
 		val sentenceId = UUID.randomUUID()
 		val revisionId = UUID.randomUUID()
@@ -158,13 +136,12 @@ class MarkdownExportServiceTest {
 		label: String,
 		url: String,
 		excerpt: String,
-		provider: SourceProvider = SourceProvider.GITHUB,
 	) = EvidenceSnapshot(
 		id = UUID.fromString(id),
 		generationRunId = runId,
 		writingBlockId = UUID.randomUUID(),
 		orderIndex = 0,
-		sourceProvider = provider,
+		sourceProvider = SourceProvider.GITHUB,
 		sourceKind = "pull_request",
 		sourceLabel = label,
 		snapshotTitle = label,

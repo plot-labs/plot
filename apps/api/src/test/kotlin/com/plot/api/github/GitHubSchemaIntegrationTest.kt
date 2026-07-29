@@ -27,7 +27,6 @@ class GitHubSchemaIntegrationTest {
 	@BeforeEach
 	fun cleanSourceData() {
 		listOf(
-			"writing_block_relation_observations", "writing_block_relations", "writing_block_fragments",
 			"writing_block_scopes", "source_imports", "source_observations",
 		).forEach { jdbcTemplate.update("delete from $it where workspace_id = ?", devContext.devWorkspaceId) }
 		jdbcTemplate.update(

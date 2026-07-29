@@ -26,7 +26,7 @@ class ModelOutputValidatorTest {
 	private val sentenceOne = sentence("00000000-0000-0000-0000-000000000011", 0, "Shipped search.")
 	private val sentenceTwo = sentence("00000000-0000-0000-0000-000000000012", 1, "Thanks for reading.")
 	private val github = evidence("00000000-0000-0000-0000-000000000021", SourceProvider.GITHUB)
-	private val slack = evidence("00000000-0000-0000-0000-000000000022", SourceProvider.SLACK)
+	private val secondEvidence = evidence("00000000-0000-0000-0000-000000000022", SourceProvider.GITHUB)
 
 	@Test
 	fun assignsStableBackendSentenceIdsToOrderedWriterOutput() {
@@ -35,7 +35,7 @@ class ModelOutputValidatorTest {
 		val result = ModelOutputValidator().assignSentenceIds(
 			runId,
 			WriterOutput(listOf(WriterSentence("Shipped search."), WriterSentence("Thanks for reading."))),
-			setOf(github.id, slack.id),
+			setOf(github.id, secondEvidence.id),
 		) { ids.removeFirst() }
 
 		assertEquals(listOf(sentenceOne.id, sentenceTwo.id), result.map { it.id })
@@ -56,7 +56,7 @@ class ModelOutputValidatorTest {
 				validator.assignSentenceIds(
 					runId,
 					WriterOutput(listOf(WriterSentence(body))),
-					setOf(github.id, slack.id),
+					setOf(github.id, secondEvidence.id),
 				) { UUID.randomUUID() }
 			}
 			assertFailsWith<InvalidModelOutputException> {
@@ -80,50 +80,50 @@ class ModelOutputValidatorTest {
 					WriterSentence(
 						"The policies conflict.",
 						SentenceIntent.UNRESOLVED_CONFLICT,
-						listOf(github.id, slack.id),
+						listOf(github.id, secondEvidence.id),
 					),
 					WriterSentence(
 						"A user must choose.",
 						SentenceIntent.UNRESOLVED_CONFLICT,
-						listOf(github.id, slack.id),
+						listOf(github.id, secondEvidence.id),
 					),
 				)),
-				setOf(github.id, slack.id),
+				setOf(github.id, secondEvidence.id),
 			) { UUID.randomUUID() }
 		}
 
 		val conflictSentence = sentenceOne.copy(
 			body = "The export policies conflict and require a product decision.",
 			intent = SentenceIntent.UNRESOLVED_CONFLICT,
-			conflictEvidenceIds = listOf(github.id, slack.id),
+			conflictEvidenceIds = listOf(github.id, secondEvidence.id),
 		)
 		val downgraded = validator.validateReview(
 			runId,
 			listOf(conflictSentence),
-			listOf(github, slack),
+			listOf(github, secondEvidence),
 			ReviewerOutput(listOf(
 				SentenceReview(conflictSentence.id, ReviewVerdict.SUPPORTED, listOf(github.id)),
 			)),
 		)
 		assertEquals(ReviewVerdict.CONFLICT, downgraded.single().verdict)
-		assertEquals(listOf(github.id, slack.id), downgraded.single().evidenceIds)
+		assertEquals(listOf(github.id, secondEvidence.id), downgraded.single().evidenceIds)
 
 		val result = validator.validateReview(
 			runId,
 			listOf(conflictSentence),
-			listOf(github, slack),
+			listOf(github, secondEvidence),
 			ReviewerOutput(listOf(
 				SentenceReview(
 					conflictSentence.id,
 					ReviewVerdict.CONFLICT,
-					listOf(github.id, slack.id),
+					listOf(github.id, secondEvidence.id),
 					"Export policies disagree.",
 				),
 			)),
 		)
 
 		assertEquals(ReviewVerdict.CONFLICT, result.single().verdict)
-		assertEquals(listOf(github.id, slack.id), result.single().evidenceIds)
+		assertEquals(listOf(github.id, secondEvidence.id), result.single().evidenceIds)
 	}
 
 	@Test
@@ -144,7 +144,7 @@ class ModelOutputValidatorTest {
 						SentenceIntent.UNRESOLVED_CONFLICT,
 						conflictEvidenceIds,
 					))),
-					setOf(github.id, slack.id),
+					setOf(github.id, secondEvidence.id),
 				) { UUID.randomUUID() }
 			}
 		}
@@ -174,7 +174,7 @@ class ModelOutputValidatorTest {
 			SentenceReview(
 				sentenceOne.id,
 				ReviewVerdict.SUPPORTED,
-				listOf(github.id, slack.id),
+				listOf(github.id, secondEvidence.id),
 				modelSuppliedUrls = listOf("https://attacker.example/fake-source"),
 			),
 			SentenceReview(sentenceTwo.id, ReviewVerdict.NOT_REQUIRED),
@@ -183,11 +183,11 @@ class ModelOutputValidatorTest {
 		val result = ModelOutputValidator().validateReview(
 			runId,
 			listOf(sentenceOne, sentenceTwo),
-			listOf(github, slack),
+			listOf(github, secondEvidence),
 			output,
 		)
 
-		assertEquals(listOf(github.id, slack.id), result.first().evidenceIds)
+		assertEquals(listOf(github.id, secondEvidence.id), result.first().evidenceIds)
 		assertFalse(result.first().toString().contains("attacker.example"))
 		assertEquals(ReviewVerdict.NOT_REQUIRED, result.last().verdict)
 		assertFailsWith<InvalidModelOutputException> {
@@ -239,11 +239,11 @@ class ModelOutputValidatorTest {
 		val output = ReviewerOutput(
 			reviews = listOf(
 				SentenceReview(sentenceOne.id, ReviewVerdict.SUPPORTED, listOf(github.id)),
-				SentenceReview(sentenceTwo.id, ReviewVerdict.SUPPORTED, listOf(slack.id)),
+				SentenceReview(sentenceTwo.id, ReviewVerdict.SUPPORTED, listOf(secondEvidence.id)),
 			),
 			documentConflicts = listOf(DocumentConflict(
 				sentenceIds = listOf(sentenceOne.id, sentenceTwo.id),
-				evidenceIds = listOf(github.id, slack.id),
+				evidenceIds = listOf(github.id, secondEvidence.id),
 				reason = "The two supported policies are mutually exclusive.",
 			)),
 		)
@@ -251,13 +251,13 @@ class ModelOutputValidatorTest {
 		val result = ModelOutputValidator().validateReview(
 			runId,
 			listOf(sentenceOne, sentenceTwo),
-			listOf(github, slack),
+			listOf(github, secondEvidence),
 			output,
 		)
 
 		assertEquals(listOf(ReviewVerdict.CONFLICT, ReviewVerdict.CONFLICT), result.map { it.verdict })
-		assertEquals(listOf(github.id, slack.id), result.first().evidenceIds)
-		assertEquals(listOf(github.id, slack.id), result.last().evidenceIds)
+		assertEquals(listOf(github.id, secondEvidence.id), result.first().evidenceIds)
+		assertEquals(listOf(github.id, secondEvidence.id), result.last().evidenceIds)
 		assertEquals("The two supported policies are mutually exclusive.", result.first().reason)
 		assertEquals("The two supported policies are mutually exclusive.", result.last().reason)
 	}

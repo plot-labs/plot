@@ -18,16 +18,6 @@ class GitHubGuard(
 	private val actorResolver: RequestActorResolver? = null,
 ) {
 	fun requireReadAccess() {
-		if (environment.activeProfiles.any { it == "generation-certification" }) {
-			if (environment.getProperty("server.address") !in setOf("localhost", "127.0.0.1", "::1")) {
-				throw ApiException(
-					HttpStatus.SERVICE_UNAVAILABLE,
-					"GITHUB_DEV_EXPOSURE_INVALID",
-					"GitHub development routes require a loopback server address",
-				)
-			}
-			return
-		}
 		requireEnabled()
 	}
 

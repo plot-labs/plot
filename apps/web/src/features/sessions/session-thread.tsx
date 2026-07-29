@@ -1,9 +1,3 @@
-"use client";
-
-import {
-  Copy,
-  Pencil,
-} from "lucide-react";
 import type { ReactNode } from "react";
 
 export type SessionMessage = {
@@ -49,31 +43,9 @@ function SessionThreadMessage({
         <div className="rounded-[22px] bg-black/[0.055] px-5 py-3 text-[15px] leading-7 text-black/84 dark:bg-white/10 dark:text-white/84">
           <MessageContent content={message.content} compact />
         </div>
-        <UserMessageActions timestamp={message.timestamp} />
+        <div className="mt-3 text-right text-sm text-black/45 dark:text-white/45">{message.timestamp}</div>
       </div>
     </article>
-  );
-}
-
-function UserMessageActions({ timestamp }: { timestamp: string }) {
-  return (
-    <div className="mt-3 flex items-center justify-end gap-4 text-sm text-black/45 dark:text-white/45">
-      <span>{timestamp}</span>
-      <button
-        type="button"
-        className="inline-flex size-6 items-center justify-center rounded-lg transition hover:bg-black/5 hover:text-black/68 dark:hover:bg-white/10 dark:hover:text-white/70"
-        aria-label="Copy message"
-      >
-        <Copy className="size-4" />
-      </button>
-      <button
-        type="button"
-        className="inline-flex size-6 items-center justify-center rounded-lg transition hover:bg-black/5 hover:text-black/68 dark:hover:bg-white/10 dark:hover:text-white/70"
-        aria-label="Edit message"
-      >
-        <Pencil className="size-4" />
-      </button>
-    </div>
   );
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUp, ChevronDown, Mic, Plus, SlidersHorizontal, Sparkles } from "lucide-react";
+import { ArrowUp, ChevronDown, Sparkles } from "lucide-react";
 import { useState } from "react";
 
 import { cn } from "@/lib/utils";
@@ -62,13 +62,6 @@ export function SessionComposer({
           aria-label="Session message"
         />
         <div className="flex items-center gap-2 px-3 pb-3 text-xs text-black/45 dark:text-white/45">
-          <button
-            type="button"
-            className="inline-flex size-8 items-center justify-center rounded-xl transition hover:bg-black/5 dark:hover:bg-white/10"
-            aria-label="Attach source"
-          >
-            <Plus className="size-4" />
-          </button>
           <div className="relative">
             <button
               type="button"
@@ -104,21 +97,6 @@ export function SessionComposer({
           </div>
 
           <div className="ml-auto flex items-center gap-1.5">
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-xl px-2 py-1.5 transition hover:bg-black/5 dark:hover:bg-white/10"
-            >
-              <SlidersHorizontal className="size-3.5" />
-              Voice
-              <ChevronDown className="size-3.5" />
-            </button>
-            <button
-              type="button"
-              className="inline-flex size-8 items-center justify-center rounded-xl transition hover:bg-black/5 dark:hover:bg-white/10"
-              aria-label="Voice input"
-            >
-              <Mic className="size-3.5" />
-            </button>
             <button
               type="submit"
               disabled={busy}

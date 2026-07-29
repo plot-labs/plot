@@ -54,9 +54,6 @@ class GitHubConnectionApiIntegrationTest {
 
 	@BeforeEach
 	fun cleanData() {
-		jdbcTemplate.update("delete from writing_block_relation_observations where workspace_id = ?", devContext.devWorkspaceId)
-		jdbcTemplate.update("delete from writing_block_relations where workspace_id = ?", devContext.devWorkspaceId)
-		jdbcTemplate.update("delete from writing_block_fragments where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from writing_block_scopes where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from source_imports where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from source_observations where workspace_id = ?", devContext.devWorkspaceId)
@@ -124,14 +121,6 @@ class GitHubConnectionApiIntegrationTest {
 				jsonPath("$.items[0].id") { value(blockId.toString()) }
 				jsonPath("$.items[0].sourceManaged") { value(true) }
 			}
-		mockMvc.patch("/api/blocks/$blockId") {
-			contentType = MediaType.APPLICATION_JSON
-			content = "{\"sourceOrigin\":\"manual\",\"sourceKind\":\"note\",\"title\":\"changed\"}"
-		}.andExpect {
-			status { isConflict() }
-			jsonPath("$.error") { value("SOURCE_MANAGED") }
-		}
-
 		fakeClient.body = "Changed body"
 		fakeClient.updatedAt = Instant.parse("2026-01-03T00:00:00Z")
 		mockMvc.post("/api/github/repositories/$firstContainerId/imports") {

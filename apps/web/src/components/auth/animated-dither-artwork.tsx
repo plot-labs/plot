@@ -78,10 +78,6 @@ function loadImage(src: string) {
   });
 }
 
-function adaptPencilShaderForWebGl(source: string) {
-  return source;
-}
-
 type AnimatedDitherArtworkProps = {
   className?: string;
 };
@@ -149,9 +145,7 @@ export function AnimatedDitherArtwork({
         throw new Error("Unable to load dither shader");
       }
 
-      const fragmentSource = adaptPencilShaderForWebGl(
-        await shaderResponse.text(),
-      );
+      const fragmentSource = await shaderResponse.text();
       const sourceCanvas = document.createElement("canvas");
       const sourceContext = sourceCanvas.getContext("2d");
 
