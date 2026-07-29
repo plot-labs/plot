@@ -13,8 +13,8 @@ class TestcontainersConfiguration {
 	@Bean
 	@ServiceConnection
 	@ConditionalOnProperty(prefix = "plot.testcontainers", name = ["enabled"], havingValue = "true", matchIfMissing = true)
-	fun pgvectorContainer(): PostgreSQLContainer {
-		return PostgreSQLContainer(DockerImageName.parse("pgvector/pgvector:pg16"))
+	fun postgresContainer(): PostgreSQLContainer {
+		return PostgreSQLContainer(DockerImageName.parse("postgres:16"))
 	}
 
 }
