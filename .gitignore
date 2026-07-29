@@ -25,6 +25,12 @@ build/
 # Local design sources
 design/
 
+# Private docs
+docs/private/
+
+# Superpowers docs
+docs/superpowers
+
 # Logs
 *.log
 
