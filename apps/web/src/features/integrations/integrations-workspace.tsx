@@ -52,8 +52,11 @@ export function IntegrationsWorkspace() {
 
     async function load() {
       try {
+        const workspaceId = getSelectedWorkspaceId();
+        if (!workspaceId) throw new Error("No workspace is selected");
+
         const [workspace, nextConnections] = await Promise.all([
-          plotApiClient.getWorkspace(getSelectedWorkspaceId()),
+          plotApiClient.getWorkspace(workspaceId),
           plotApiClient.listGitHubConnections(),
         ]);
         if (cancelled) return;

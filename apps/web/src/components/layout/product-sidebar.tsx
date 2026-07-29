@@ -5,34 +5,28 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
-  CalendarClock,
   Check,
   ChevronDown,
   FileText,
   FolderOpen,
   LogOut,
-  Mic2,
   Monitor,
   Moon,
   PackageOpen,
   PanelLeftClose,
   Puzzle,
   Plus,
-  Search,
-  Settings,
   Sun,
   UserRound,
 } from "lucide-react";
 
-import { AccountSettingsModal } from "@/components/layout/account-settings-modal";
 import type { ProductTheme } from "@/components/layout/product-shell";
-import { getProductShellData, plotApiClient, type WorkSessionSummary } from "@/lib/api-client";
+import { plotApiClient, type WorkSessionSummary } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/sources", label: "Sources", icon: FolderOpen },
   { href: "/packs", label: "Packs", icon: PackageOpen },
-  { href: "/voice", label: "Voice", icon: Mic2 },
 ];
 
 type ProductSidebarProps = {
@@ -57,13 +51,11 @@ type Account = {
 
 export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: ProductSidebarProps) {
   const pathname = usePathname();
-  const { workspace } = getProductShellData();
   const [sessions, setSessions] = useState<WorkSessionSummary[]>([]);
   const [account, setAccount] = useState<Account | null>(null);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
-  const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
   const workspaceMenuRef = useRef<HTMLDivElement>(null);
   const profileMenuRef = useRef<HTMLDivElement>(null);
 
@@ -96,16 +88,15 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
   const currentWorkspace = account?.workspaces.find((item) => item.id === selectedWorkspaceId)
     ?? account?.workspaces.find((item) => item.id === account.defaultWorkspaceId)
     ?? account?.workspaces[0];
-  const currentWorkspaceId = currentWorkspace?.id ?? workspace.id;
-  const currentWorkspaceName = currentWorkspace?.name ?? workspace.name;
-  const workspaceSettingsHref = `/workspaces/${currentWorkspaceId}/settings`;
+  const currentWorkspaceId = currentWorkspace?.id ?? selectedWorkspaceId;
+  const currentWorkspaceName = currentWorkspace?.name ?? "Workspace";
   const integrationsActive = pathname === "/integrations" || pathname.startsWith("/integrations/");
   const workspaceItems = account?.workspaces.map((item) => ({
     ...item,
     detail: item.role,
     mark: item.name.slice(0, 1).toUpperCase(),
     selected: item.id === currentWorkspaceId,
-  })) ?? [{ id: workspace.id, name: workspace.name, detail: "OWNER", mark: "P", selected: true }];
+  })) ?? [];
 
   useEffect(() => {
     if (!workspaceMenuOpen) {
@@ -199,17 +190,6 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
             <Plus className="size-4" />
             New session
           </Link>
-          <button className="flex w-full items-center gap-2 rounded-xl px-2.5 py-1.5 text-left text-[13px] font-medium text-black/70 transition hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10">
-            <Search className="size-4" />
-            Search
-          </button>
-          <button className="flex w-full items-center gap-2 rounded-xl px-2.5 py-1.5 text-left text-[13px] font-medium text-black/70 transition hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10">
-            <CalendarClock className="size-4" />
-            Scheduled
-            <span className="ml-auto rounded-full bg-black/[0.06] px-2 py-0.5 text-xs text-black/45 dark:bg-white/10 dark:text-white/50">
-              3
-            </span>
-          </button>
           <Link
             href="/integrations"
             aria-current={integrationsActive ? "page" : undefined}
@@ -226,16 +206,7 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
         </div>
 
         <div ref={workspaceMenuRef} className="relative px-3 pb-4">
-          <div className="mb-2 flex items-center justify-between">
-            <div className="text-[11px] font-medium uppercase text-black/35 dark:text-white/35">Workspace</div>
-            <Link
-              href={workspaceSettingsHref}
-              aria-label="Workspace settings"
-              className="inline-flex size-7 items-center justify-center rounded-lg text-black/35 transition hover:bg-black/5 hover:text-black/60 dark:text-white/35 dark:hover:bg-white/10 dark:hover:text-white/65"
-            >
-              <Settings className="size-4" />
-            </Link>
-          </div>
+          <div className="mb-2 text-[11px] font-medium uppercase text-black/35 dark:text-white/35">Workspace</div>
 
           <button
             type="button"
@@ -278,17 +249,6 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
                     </div>
                   </div>
                 </div>
-
-                <div className="mt-3 grid grid-cols-1 gap-1.5">
-                  <Link
-                    href={workspaceSettingsHref}
-                    onClick={() => setWorkspaceMenuOpen(false)}
-                    className="inline-flex h-8 items-center justify-center gap-1.5 rounded-[8px] border border-black/[0.08] px-2 font-medium text-black/62 transition hover:bg-black/[0.04] dark:border-white/12 dark:text-white/62 dark:hover:bg-white/10"
-                  >
-                    <Settings className="size-3.5" />
-                    Settings
-                  </Link>
-                </div>
               </div>
 
               <div className="border-t border-black/[0.08] py-1 dark:border-white/10">
@@ -323,16 +283,6 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
                     {workspace.selected && <Check className="size-3.5 shrink-0 text-black/72 dark:text-white/76" />}
                   </button>
                 ))}
-              </div>
-
-              <div className="border-t border-black/[0.08] p-1.5 dark:border-white/10">
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-1.5 rounded-[8px] px-2 py-1.5 text-left font-medium text-[#1677ff] transition hover:bg-[#1677ff]/10 dark:text-[#6aa8ff] dark:hover:bg-[#6aa8ff]/12"
-                >
-                  <Plus className="size-3.5" />
-                  New workspace
-                </button>
               </div>
             </div>
           )}
@@ -421,17 +371,6 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
 
               <button
                 type="button"
-                onClick={() => {
-                  setProfileMenuOpen(false);
-                  setAccountSettingsOpen(true);
-                }}
-                className="flex w-full items-center gap-2 rounded-[8px] px-2 py-2 text-left transition hover:bg-black/[0.04] dark:hover:bg-white/10"
-              >
-                <UserRound className="size-4 text-black/45 dark:text-white/45" />
-                Account settings
-              </button>
-              <button
-                type="button"
                 onClick={async () => {
                   await fetch("/api/auth/sign-out", { method: "POST", credentials: "include" });
                   window.location.assign("/sign-in");
@@ -461,8 +400,6 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
           </button>
         </div>
       </aside>
-
-      {accountSettingsOpen && <AccountSettingsModal open onClose={() => setAccountSettingsOpen(false)} user={account?.user} />}
     </>
   );
 }

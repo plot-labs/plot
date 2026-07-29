@@ -1,54 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import { AnimatedPlotSignal } from "./animated-plot-signal";
 import { WaitlistForm } from "./waitlist-form";
 
 export function CtaSection() {
-  const [isVisible, setIsVisible] = useState(false);
-  const sectionRef = useRef<HTMLDivElement>(null);
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) setIsVisible(true);
-      },
-      { threshold: 0.2 }
-    );
-
-    if (sectionRef.current) observer.observe(sectionRef.current);
-    return () => observer.disconnect();
-  }, []);
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    setMousePosition({
-      x: ((e.clientX - rect.left) / rect.width) * 100,
-      y: ((e.clientY - rect.top) / rect.height) * 100,
-    });
-  };
-
   return (
     <section
       className="relative py-24 lg:py-32 overflow-hidden"
       id="waitlist"
-      ref={sectionRef}
     >
       <div className="max-w-[1400px] mx-auto px-6 lg:px-12">
-        <div
-          className={`relative border border-foreground transition-all duration-1000 ${
-            isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
-          }`}
-          onMouseMove={handleMouseMove}
-        >
-          {/* Spotlight effect */}
-          <div 
-            className="absolute inset-0 opacity-10 pointer-events-none transition-opacity duration-300"
-            style={{
-              background: `radial-gradient(600px circle at ${mousePosition.x}% ${mousePosition.y}%, rgba(0,0,0,0.15), transparent 40%)`
-            }}
-          />
+        <div className="landing-reveal relative border border-foreground">
+          <div className="absolute inset-0 bg-[radial-gradient(600px_circle_at_50%_50%,rgba(0,0,0,0.15),transparent_40%)] opacity-10 pointer-events-none" />
           
           <div className="relative z-10 px-8 lg:px-16 py-16 lg:py-24">
             <div className="flex flex-col lg:flex-row items-center justify-between gap-12">

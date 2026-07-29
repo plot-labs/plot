@@ -62,7 +62,7 @@ class GitHubRestClient(
 		while (next != null) {
 			pages++
 			if (pages > properties.repositoryPageCap.coerceAtLeast(1)) {
-				throw ApiException(HttpStatus.PAYLOAD_TOO_LARGE, "GITHUB_REPOSITORIES_TOO_LARGE", "GitHub returned too many repositories")
+				throw ApiException(HttpStatus.CONTENT_TOO_LARGE, "GITHUB_REPOSITORIES_TOO_LARGE", "GitHub returned too many repositories")
 			}
 			val response = request("GET", next, token)
 			val root = parse(response)
@@ -103,7 +103,7 @@ class GitHubRestClient(
 		while (next != null) {
 			pages++
 			if (pages > pageCap.coerceAtLeast(1)) {
-				throw ApiException(HttpStatus.PAYLOAD_TOO_LARGE, "IMPORT_TOO_LARGE", "GitHub pull-request page cap exceeded")
+				throw ApiException(HttpStatus.CONTENT_TOO_LARGE, "IMPORT_TOO_LARGE", "GitHub pull-request page cap exceeded")
 			}
 			val response = request("GET", next, token)
 			val root = parse(response)
@@ -132,7 +132,7 @@ class GitHubRestClient(
 			body,
 			bearerScheme = "Bearer",
 		)
-		val token = parse(response).path("token").textValue()
+		val token = parse(response).path("token").stringValue()
 		if (token.isNullOrBlank()) throw ApiException(HttpStatus.BAD_GATEWAY, "GITHUB_INVALID_RESPONSE", "GitHub did not return an installation token")
 		return token
 	}
@@ -244,8 +244,8 @@ class GitHubRestClient(
 
 	private fun parseRepository(node: JsonNode): GitHubRepository {
 		val id = node.path("id").longValue()
-		val owner = node.path("owner").path("login").textValue()
-		val name = node.path("name").textValue()
+		val owner = node.path("owner").path("login").stringValue()
+		val name = node.path("name").stringValue()
 		if (id == 0L || owner.isNullOrBlank() || name.isNullOrBlank()) {
 			throw ApiException(HttpStatus.BAD_GATEWAY, "GITHUB_INVALID_RESPONSE", "GitHub returned an invalid repository")
 		}
@@ -253,8 +253,8 @@ class GitHubRestClient(
 			id = id,
 			owner = owner,
 			name = name,
-			url = node.path("html_url").textValue().orEmpty(),
-			defaultBranch = node.path("default_branch").takeUnless { it.isMissingNode || it.isNull }?.textValue(),
+			url = node.path("html_url").stringValue().orEmpty(),
+			defaultBranch = node.path("default_branch").takeUnless { it.isMissingNode || it.isNull }?.stringValue(),
 			ownerId = node.path("owner").path("id").takeUnless { it.isMissingNode || it.isNull }
 				?.longValue()?.takeIf { it > 0L },
 		)
@@ -263,8 +263,8 @@ class GitHubRestClient(
 	private fun parsePullRequest(node: JsonNode): GitHubPullRequest {
 		val id = node.path("id").longValue()
 		val number = node.path("number").intValue()
-		val title = node.path("title").textValue().orEmpty()
-		val body = node.path("body").takeUnless { it.isNull }?.textValue()
+		val title = node.path("title").stringValue().orEmpty()
+		val body = node.path("body").takeUnless { it.isNull }?.stringValue()
 		val createdAt = instant(node.path("created_at"))
 		val updatedAt = instant(node.path("updated_at"))
 		if (id == 0L || number == 0 || createdAt == null || updatedAt == null || (title.isBlank() && body.isNullOrBlank())) {
@@ -275,18 +275,18 @@ class GitHubRestClient(
 			number = number,
 			title = title,
 			body = body,
-			author = node.path("user").path("login").textValue(),
-			url = node.path("html_url").textValue().orEmpty(),
-			baseBranch = node.path("base").path("ref").textValue(),
-			headBranch = node.path("head").path("ref").textValue(),
+			author = node.path("user").path("login").stringValue(),
+			url = node.path("html_url").stringValue().orEmpty(),
+			baseBranch = node.path("base").path("ref").stringValue(),
+			headBranch = node.path("head").path("ref").stringValue(),
 			createdAt = createdAt,
 			updatedAt = updatedAt,
 			mergedAt = instant(node.path("merged_at")),
 		)
 	}
 
-	private fun instant(node: JsonNode): Instant? = node.takeUnless { it.isMissingNode || it.isNull || it.textValue().isNullOrBlank() }
-		?.let { runCatching { Instant.parse(it.textValue()) }.getOrNull() }
+	private fun instant(node: JsonNode): Instant? = node.takeUnless { it.isMissingNode || it.isNull || it.stringValue().isNullOrBlank() }
+		?.let { runCatching { Instant.parse(it.stringValue()) }.getOrNull() }
 
 	private fun nextUri(response: GitHubHttpResponse): URI? {
 		val value = response.headers.entries

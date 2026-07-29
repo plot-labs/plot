@@ -1,23 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 import { HeroTerminal } from "./hero-terminal";
 
-const words = ["Docs", "Changelogs", "Customer updates", "Launch posts"];
-
 export function HeroSection() {
-  const isVisible = true;
-  const [wordIndex, setWordIndex] = useState(0);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setWordIndex((prev) => (prev + 1) % words.length);
-    }, 2500);
-    return () => clearInterval(interval);
-  }, []);
-
   return (
     <section className="relative flex min-h-screen flex-col justify-center overflow-hidden">
       <div className="pointer-events-none absolute right-16 top-[45%] hidden h-[440px] w-[530px] -translate-y-1/2 opacity-65 lg:block xl:right-20 xl:h-[500px] xl:w-[600px]">
@@ -51,11 +37,7 @@ export function HeroSection() {
 
       <div className="relative z-10 mx-auto w-full max-w-[1400px] px-6 py-32 lg:px-12 lg:py-40">
         <div className="hero-copy-lock max-w-[920px] text-left">
-        <div
-          className={`mb-8 transition-all duration-700 ${
-            isVisible ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
-          }`}
-        >
+        <div className="mb-8">
           <span className="inline-flex items-center gap-3 font-mono text-sm text-muted-foreground">
             <span className="h-px w-8 bg-foreground/30" />
             Ship fast. Write less. Stay source-backed and on-style.
@@ -63,32 +45,12 @@ export function HeroSection() {
         </div>
 
         <div className="mb-12">
-          <h1
-            className={`text-6xl font-display leading-[0.9] tracking-tight transition-all duration-1000 md:text-8xl lg:text-[8rem] xl:text-[8.75rem] ${
-              isVisible ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
-            }`}
-          >
+          <h1 className="text-6xl font-display leading-[0.9] tracking-tight md:text-8xl lg:text-[8rem] xl:text-[8.75rem]">
             <span className="block">AI made code</span>
             <span className="block">ship faster.</span>
             <span className="block">
               <span className="relative inline-block align-baseline">
-                <span className="inline-flex whitespace-nowrap" key={wordIndex}>
-                  {words[wordIndex].split("").map((char, i) =>
-                    char === " " ? (
-                      <span aria-hidden="true" className="inline-block w-[0.28em]" key={`${wordIndex}-${i}`} />
-                    ) : (
-                      <span
-                        className="inline-block animate-char-in"
-                        key={`${wordIndex}-${i}`}
-                        style={{
-                          animationDelay: `${i * 40}ms`,
-                        }}
-                      >
-                        {char}
-                      </span>
-                    ),
-                  )}
-                </span>
+                <span className="inline-flex whitespace-nowrap">Docs</span>
                 <span className="absolute -bottom-2 left-0 right-0 h-3 bg-foreground/10" />
               </span>{" "}
               lag.
@@ -97,40 +59,27 @@ export function HeroSection() {
         </div>
 
         <div className="max-w-xl">
-          <p
-            className={`max-w-xl text-xl leading-relaxed text-muted-foreground transition-all delay-200 duration-700 lg:text-2xl ${
-              isVisible ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
-            }`}
-          >
+          <p className="max-w-xl text-xl leading-relaxed text-muted-foreground lg:text-2xl">
             For AI and devtool teams shipping every week. Plot turns merged PRs,
             releases, and issues into source-backed, on-style changelogs, docs
             updates, customer updates, and launch drafts — so you can edit, copy,
             and publish outside Plot.
           </p>
 
-          <div
-            className={`mt-9 flex flex-col items-start gap-4 transition-all delay-300 duration-700 sm:flex-row ${
-              isVisible ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
-            }`}
-          >
-            <Button
-              asChild
-              className="h-14 rounded-full bg-foreground px-8 text-base text-background hover:bg-foreground/90 group"
-              size="lg"
+          <div className="mt-9 flex flex-col items-start gap-4 sm:flex-row">
+            <a
+              className="group inline-flex h-14 items-center justify-center gap-2 rounded-full bg-foreground px-8 text-base font-medium text-background transition-colors hover:bg-foreground/90"
+              href="#waitlist"
             >
-              <a href="#waitlist">
-                Join waitlist
-                <ArrowRight className="ml-2 size-4 transition-transform group-hover:translate-x-1" />
-              </a>
-            </Button>
-            <Button
-              asChild
-              className="h-14 rounded-full border-foreground/20 px-8 text-base hover:bg-foreground/5"
-              size="lg"
-              variant="outline"
+              Join waitlist
+              <ArrowRight className="ml-2 size-4 transition-transform group-hover:translate-x-1" />
+            </a>
+            <a
+              className="inline-flex h-14 items-center justify-center rounded-full border border-foreground/20 bg-background px-8 text-base font-medium transition-colors hover:bg-foreground/5"
+              href="#how-it-works"
             >
-              <a href="#how-it-works">See how it works</a>
-            </Button>
+              See how it works
+            </a>
           </div>
         </div>
         </div>

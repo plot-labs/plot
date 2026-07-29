@@ -118,7 +118,6 @@ class GenerationWorkflowServiceTest {
 
 		assertEquals(GenerationRunStatus.READY, terminal.status)
 		assertEquals(listOf("The export command supports JSON output."), terminal.sentences.map { it.body })
-		assertEquals(null, terminal.pendingIntervention)
 		assertEquals(1, terminal.artifacts.count { it.kind == WorkflowArtifactKind.CONFLICT })
 		assertEquals(0, gateway.rewriteCalls)
 	}

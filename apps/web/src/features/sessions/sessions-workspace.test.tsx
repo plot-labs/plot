@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   createGeneration: vi.fn(),
   updateSession: vi.fn(),
   getGeneration: vi.fn(),
-  stream: vi.fn(),
+  poll: vi.fn(),
   locationAssign: vi.fn(),
 }));
 
@@ -29,8 +29,8 @@ vi.mock("@/lib/api-client", () => ({
   },
 }));
 vi.mock("@/lib/generation-polling", () => ({
-  streamGeneration: mocks.stream,
-  isTerminalGenerationStatus: (status: string) => ["READY", "NEEDS_REVIEW", "NEEDS_YOUR_CALL", "FAILED"].includes(status),
+  pollGeneration: mocks.poll,
+  isTerminalGenerationStatus: (status: string) => ["READY", "NEEDS_REVIEW", "FAILED"].includes(status),
 }));
 vi.mock("@/features/sessions/session-composer", () => ({
   SessionComposer: ({ onSubmit, variant }: { onSubmit: (message: string, ids: string[]) => void; variant?: string }) => (
@@ -50,7 +50,7 @@ const session = { id: "session-1", title: "Release", status: "OPEN", latestGener
 const reference = { id: "block-1", sourceScopeId: "scope-1", provider: "GITHUB", sourceKind: "PULL_REQUEST", sourceLabel: "PR #1", repositoryLabel: "acme/plot", title: "Ship", body: "Evidence", originalUrl: "https://github.test/1", sourceCreatedAt: null };
 const terminalRun = {
   id: "run-1", status: "READY", semanticRewriteAttempt: 0, pollAfterMs: null, failureCode: null,
-  evidence: [], sentences: [], artifacts: [], pendingIntervention: null,
+  evidence: [], sentences: [], artifacts: [],
   contentPack: { id: "pack-1", generationRunId: "run-1", status: "READY", title: "Release", variant: { id: "variant-1", status: "READY", sentences: [] } },
 };
 

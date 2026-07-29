@@ -24,7 +24,6 @@ data class ReviewerModelRequest(
 	val generationRunId: UUID,
 	val sentences: List<SentenceArtifact>,
 	val evidence: List<EvidenceSnapshot>,
-	val resolutionInstruction: String? = null,
 )
 
 data class RewriteModelRequest(
@@ -32,7 +31,6 @@ data class RewriteModelRequest(
 	val sentences: List<SentenceArtifact>,
 	val targetSentenceIds: List<UUID>,
 	val evidence: List<EvidenceSnapshot>,
-	val resolutionInstruction: String?,
 )
 
 data class ModelCallResult<T : Any>(

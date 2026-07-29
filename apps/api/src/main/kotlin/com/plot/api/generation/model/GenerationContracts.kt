@@ -3,7 +3,7 @@ package com.plot.api.generation.model
 import java.time.Instant
 import java.util.UUID
 
-enum class SourceProvider { GITHUB, SLACK, LINEAR }
+enum class SourceProvider { GITHUB }
 
 data class EvidenceSnapshot(
 	val id: UUID,

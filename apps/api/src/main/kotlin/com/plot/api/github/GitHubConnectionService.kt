@@ -1,7 +1,7 @@
 package com.plot.api.github
 
 import com.plot.api.common.ApiException
-import com.plot.api.common.JdbcTime.timestamp
+import java.sql.Timestamp
 import com.plot.api.dev.DevContext
 import com.plot.api.auth.RequestActorResolver
 import java.net.URLEncoder
@@ -109,8 +109,8 @@ class GitHubConnectionService(
 			repositories.firstOrNull()?.owner,
 			objectMapper.writeValueAsString(mapOf("metadata" to "read", "pull_requests" to "read")),
 			state.userId,
-			timestamp(now),
-			timestamp(now),
+			Timestamp.from(now),
+			Timestamp.from(now),
 		) ?: throw ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "GitHub connection could not be saved")
 		return GitHubCallbackResponse(
 			connectionId = connectionId,
@@ -208,8 +208,8 @@ class GitHubConnectionService(
 			"${repository.owner}/${repository.name}",
 			repository.url,
 			objectMapper.writeValueAsString(mapOf("repositoryId" to repository.id, "defaultBranch" to repository.defaultBranch)),
-			timestamp(now),
-			timestamp(now),
+			Timestamp.from(now),
+			Timestamp.from(now),
 		) ?: throw ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "GitHub repository could not be saved")
 		return repository.toResponse(id, "ACTIVE")
 	}
@@ -224,7 +224,7 @@ class GitHubConnectionService(
 			set status = 'DISABLED', updated_at = ?
 			where workspace_id = ? and id = ? and provider = 'GITHUB' and scope_kind = 'REPOSITORY'
 			""".trimIndent(),
-			timestamp(Instant.now()),
+			Timestamp.from(Instant.now()),
 			devContext.devWorkspaceId,
 			id,
 		)
@@ -357,7 +357,7 @@ class GitHubConnectionService(
 			""".trimIndent(),
 			UUID::class.java,
 			UUID.randomUUID(), devContext.devWorkspaceId, "REPOSITORY", namespaceKey,
-			"${repository.owner}/${repository.name}", timestamp(now), timestamp(now),
+			"${repository.owner}/${repository.name}", Timestamp.from(now), Timestamp.from(now),
 		) ?: throw ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "GitHub namespace could not be saved")
 		jdbcTemplate.update(
 			"""
@@ -365,7 +365,7 @@ class GitHubConnectionService(
 			set status = 'REVOKED', valid_to = ?, updated_at = ?
 			where workspace_id = ? and provider = 'GITHUB' and source_namespace_id = ?
 			  and connection_id <> ? and status = 'ACTIVE'
-			""".trimIndent(), timestamp(now), timestamp(now), devContext.devWorkspaceId, namespaceId, connectionId,
+			""".trimIndent(), Timestamp.from(now), Timestamp.from(now), devContext.devWorkspaceId, namespaceId, connectionId,
 		)
 		jdbcTemplate.update(
 			"""
@@ -379,7 +379,7 @@ class GitHubConnectionService(
 			""".trimIndent(),
 			UUID.randomUUID(), devContext.devWorkspaceId, connectionId, namespaceId,
 			objectMapper.writeValueAsString(mapOf("metadata" to "read", "pull_requests" to "read")),
-			timestamp(now), timestamp(now), timestamp(now),
+			Timestamp.from(now), Timestamp.from(now), Timestamp.from(now),
 		)
 		return namespaceId
 	}
@@ -400,7 +400,7 @@ class GitHubConnectionStatusRecorder(
 			set status = 'NEEDS_REAUTH', updated_at = ?
 			where workspace_id = ? and id = ? and status = 'ACTIVE'
 			""".trimIndent(),
-			timestamp(Instant.now()),
+			Timestamp.from(Instant.now()),
 			devContext.devWorkspaceId,
 			connectionId,
 		)

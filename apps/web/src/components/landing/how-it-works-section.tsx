@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 
 const steps = [
   {
@@ -52,33 +52,10 @@ const lanes = [
 
 export function HowItWorksSection() {
   const [activeStep, setActiveStep] = useState(0);
-  const [isVisible, setIsVisible] = useState(false);
-  const sectionRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) setIsVisible(true);
-      },
-      { threshold: 0.1 },
-    );
-
-    if (sectionRef.current) observer.observe(sectionRef.current);
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setActiveStep((prev) => (prev + 1) % steps.length);
-    }, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
   return (
     <section
       className="relative overflow-hidden bg-foreground py-24 text-background lg:py-32"
       id="how-it-works"
-      ref={sectionRef}
     >
       <div className="pointer-events-none absolute inset-0 opacity-[0.035]">
         <div
@@ -97,11 +74,7 @@ export function HowItWorksSection() {
             <span className="h-px w-8 bg-background/30" />
             Process
           </span>
-          <h2
-            className={`font-display text-4xl tracking-tight transition-all duration-700 lg:text-6xl ${
-              isVisible ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
-            }`}
-          >
+          <h2 className="landing-reveal font-display text-4xl tracking-tight lg:text-6xl">
             Let the agent prepare
             <br />
             <span className="text-background/50">updates your team approves.</span>
@@ -133,11 +106,6 @@ export function HowItWorksSection() {
                     <p className="max-w-2xl leading-relaxed text-background/60">
                       {step.description}
                     </p>
-                    {activeStep === index ? (
-                      <div className="mt-4 h-px overflow-hidden bg-background/20">
-                        <div className="h-full w-0 bg-background how-progress" />
-                      </div>
-                    ) : null}
                   </div>
                 </div>
               </button>
@@ -206,21 +174,6 @@ export function HowItWorksSection() {
           </div>
         </div>
       </div>
-
-      <style jsx>{`
-        @keyframes howProgress {
-          from {
-            width: 0%;
-          }
-          to {
-            width: 100%;
-          }
-        }
-
-        .how-progress {
-          animation: howProgress 5s linear forwards;
-        }
-      `}</style>
     </section>
   );
 }

@@ -1,7 +1,7 @@
 package com.plot.api.github
 
 import com.plot.api.common.ApiException
-import com.plot.api.common.JdbcTime.timestamp
+import java.sql.Timestamp
 import com.plot.api.dev.DevContext
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
@@ -56,8 +56,8 @@ class GitHubInstallationStateService(
 			devContext.devWorkspaceId,
 			devContext.devUserId,
 			hash(nonce),
-			timestamp(expiresAt),
-			timestamp(now),
+			Timestamp.from(expiresAt),
+			Timestamp.from(now),
 		)
 		return GitHubInstallationState(id, "$payload.$signature", expiresAt)
 	}
@@ -80,11 +80,11 @@ class GitHubInstallationStateService(
 			where workspace_id = ? and user_id = ? and nonce_hash = ?
 			  and consumed_at is null and expires_at > ?
 			""".trimIndent(),
-			timestamp(now),
+			Timestamp.from(now),
 			workspaceId,
 			userId,
 			hash(nonce),
-			timestamp(now),
+			Timestamp.from(now),
 		)
 		if (updated != 1) invalid()
 		return GitHubInstallationStateBinding(userId, workspaceId)

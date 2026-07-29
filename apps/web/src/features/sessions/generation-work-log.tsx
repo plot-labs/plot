@@ -96,19 +96,19 @@ function findArtifact(step: GenerationStepTiming, steps: GenerationStepTiming[],
 
 function headerIcon(status: GenerationRun["status"]) {
   if (status === "FAILED") return <CircleX className="size-4 text-rose-600 dark:text-rose-400" aria-hidden="true" />;
-  if (status === "NEEDS_REVIEW" || status === "NEEDS_YOUR_CALL") return <CircleAlert className="size-4 text-amber-600 dark:text-amber-400" aria-hidden="true" />;
+  if (status === "NEEDS_REVIEW") return <CircleAlert className="size-4 text-amber-600 dark:text-amber-400" aria-hidden="true" />;
   if (!isTerminal(status)) return <LoaderCircle className="size-4 animate-spin text-black/45 dark:text-white/45" aria-hidden="true" />;
   return <Check className="size-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />;
 }
 
 function headerLabel(status: GenerationRun["status"], elapsedMs: number | null): string {
   if (status === "FAILED") return `Generation failed after ${formatDuration(elapsedMs)}`;
-  if (status === "NEEDS_REVIEW" || status === "NEEDS_YOUR_CALL") return `Review needed after ${formatDuration(elapsedMs)}`;
+  if (status === "NEEDS_REVIEW") return `Review needed after ${formatDuration(elapsedMs)}`;
   return `${isTerminal(status) ? "Worked" : "Working"} for ${formatDuration(elapsedMs)}`;
 }
 
 function isTerminal(status: GenerationRun["status"]): boolean {
-  return status === "READY" || status === "NEEDS_REVIEW" || status === "NEEDS_YOUR_CALL" || status === "FAILED";
+  return status === "READY" || status === "NEEDS_REVIEW" || status === "FAILED";
 }
 
 function countLabel(count: number, singular: string): string {

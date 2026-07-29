@@ -1,7 +1,7 @@
 package com.plot.api.contentpack
 
 import com.plot.api.common.ApiException
-import com.plot.api.common.JdbcTime.timestamp
+import java.sql.Timestamp
 import com.plot.api.common.UuidGenerator
 import com.plot.api.contentpack.dto.ContentCitationResponse
 import com.plot.api.contentpack.dto.ContentExportResponse
@@ -90,11 +90,11 @@ class ContentPackService(
 				values (?, ?, ?, ?, ?, ?, 'USER_MODIFIED', ?, true, ?, ?)
 				""".trimIndent(),
 				revisionId, devContext.devWorkspaceId, current[2], variantId, sentenceId, revisionNo + 1,
-				trimmed, devContext.devUserId, timestamp(now),
+				trimmed, devContext.devUserId, Timestamp.from(now),
 			)
 			jdbcTemplate.update(
 				"update sentence_citations set status = 'STALE', updated_at = ? where workspace_id = ? and sentence_id = ? and status = 'ACTIVE'",
-				timestamp(now), devContext.devWorkspaceId, sentenceId,
+				Timestamp.from(now), devContext.devWorkspaceId, sentenceId,
 			)
 			loadPack("cv.id = ?", variantId)
 		}
@@ -276,7 +276,7 @@ class ContentPackService(
 				""".trimIndent(),
 				id, devContext.devWorkspaceId, runId, variantId, disposition.name, status, unresolved, acknowledged,
 				outputHash, if (status == "REJECTED") "EXPORT_CONFIRMATION_REQUIRED" else null,
-				devContext.devUserId, timestamp(clock.instant()),
+				devContext.devUserId, Timestamp.from(clock.instant()),
 			)
 		}
 

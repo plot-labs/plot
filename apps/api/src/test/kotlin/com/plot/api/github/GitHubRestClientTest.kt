@@ -48,11 +48,11 @@ class GitHubRestClientTest {
 		val jwt = tokenAuthorization!!.removePrefix("Bearer ")
 		val parts = jwt.split('.')
 		assertEquals(3, parts.size)
-		assertEquals("RS256", decodeJwtPart(parts[0]).path("alg").textValue())
+		assertEquals("RS256", decodeJwtPart(parts[0]).path("alg").stringValue())
 		val claims = decodeJwtPart(parts[1])
 		assertEquals(now.epochSecond - 60, claims.path("iat").longValue())
 		assertEquals(now.epochSecond + 540, claims.path("exp").longValue())
-		assertEquals("123", claims.path("iss").textValue())
+		assertEquals("123", claims.path("iss").stringValue())
 		assertTrue(Signature.getInstance("SHA256withRSA").run {
 			initVerify(keyPair.public)
 			update("${parts[0]}.${parts[1]}".toByteArray())
@@ -60,8 +60,8 @@ class GitHubRestClientTest {
 		})
 		val request = objectMapper.readTree(tokenBody!!)
 		assertEquals(listOf(44L), request.path("repository_ids").toList().map { it.longValue() })
-		assertEquals("read", request.path("permissions").path("metadata").textValue())
-		assertEquals("read", request.path("permissions").path("pull_requests").textValue())
+		assertEquals("read", request.path("permissions").path("metadata").stringValue())
+		assertEquals("read", request.path("permissions").path("pull_requests").stringValue())
 		assertTrue(jwt.contains("PRIVATE KEY").not())
 	}
 
@@ -102,8 +102,8 @@ class GitHubRestClientTest {
 
 		val request = objectMapper.readTree(tokenBody!!)
 		assertEquals(false, request.has("repository_ids"))
-		assertEquals("read", request.path("permissions").path("metadata").textValue())
-		assertEquals("read", request.path("permissions").path("pull_requests").textValue())
+		assertEquals("read", request.path("permissions").path("metadata").stringValue())
+		assertEquals("read", request.path("permissions").path("pull_requests").stringValue())
 	}
 
 	@Test

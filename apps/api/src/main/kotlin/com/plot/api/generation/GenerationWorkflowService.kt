@@ -11,14 +11,14 @@ import com.plot.api.generation.model.ValidatedSentenceReview
 import java.util.UUID
 
 enum class GenerationRunStatus {
-	QUEUED, WRITING, REVIEWING, REWRITING, READY, NEEDS_YOUR_CALL, NEEDS_REVIEW, FAILED;
+	QUEUED, WRITING, REVIEWING, REWRITING, READY, NEEDS_REVIEW, FAILED;
 
 	companion object {
-		val terminalOrPaused = setOf(READY, NEEDS_YOUR_CALL, NEEDS_REVIEW, FAILED)
+		val terminalOrPaused = setOf(READY, NEEDS_REVIEW, FAILED)
 	}
 }
 
-enum class WorkflowArtifactKind { WRITER_OUTPUT, REVIEWER_OUTPUT, REWRITER_OUTPUT, CONFLICT, CONFLICT_DECISION }
+enum class WorkflowArtifactKind { WRITER_OUTPUT, REVIEWER_OUTPUT, REWRITER_OUTPUT, CONFLICT }
 
 data class WorkflowArtifact(
 	val kind: WorkflowArtifactKind,
@@ -26,14 +26,6 @@ data class WorkflowArtifact(
 	val sentences: List<SentenceArtifact> = emptyList(),
 	val reviews: List<ValidatedSentenceReview> = emptyList(),
 	val detail: String? = null,
-)
-
-data class ConflictIntervention(
-	val id: UUID,
-	val sentenceId: UUID,
-	val version: Long,
-	val reason: String,
-	val evidenceIds: List<UUID>,
 )
 
 data class GenerationWorkflowState(
@@ -46,8 +38,6 @@ data class GenerationWorkflowState(
 	val artifacts: List<WorkflowArtifact> = emptyList(),
 	val semanticRewriteAttempt: Int = 0,
 	val rewriteTargetSentenceIds: List<UUID> = emptyList(),
-	val resolutionInstruction: String? = null,
-	val pendingIntervention: ConflictIntervention? = null,
 	val failureCode: String? = null,
 )
 
@@ -95,7 +85,7 @@ class GenerationWorkflowService(
 
 	private fun review(state: GenerationWorkflowState, gateway: GenerationModelGateway): GenerationWorkflowState {
 		val output = gateway.review(
-			ReviewerModelRequest(state.runId, state.sentences, state.evidence, state.resolutionInstruction),
+			ReviewerModelRequest(state.runId, state.sentences, state.evidence),
 		).value
 		val reviews = validator.validateReview(state.runId, state.sentences, state.evidence, output)
 		val artifacts = state.artifacts + WorkflowArtifact(
@@ -131,8 +121,6 @@ class GenerationWorkflowService(
 			reviews = reviewedReviews,
 			artifacts = reviewedArtifacts,
 			rewriteTargetSentenceIds = targets,
-			resolutionInstruction = if (status == GenerationRunStatus.REWRITING) state.resolutionInstruction else null,
-			pendingIntervention = null,
 			failureCode = if (reviewedSentences.isEmpty()) "NO_PUBLISHABLE_SENTENCES" else null,
 		)
 	}
@@ -144,7 +132,6 @@ class GenerationWorkflowService(
 			state.sentences,
 			state.rewriteTargetSentenceIds,
 			state.evidence,
-			state.resolutionInstruction,
 		)).value
 		val sentences = validator.applyTargetedRewrite(
 			state.runId,

@@ -55,10 +55,7 @@ class WorkspaceSelectionOptionalApiIntegrationTest {
 		mockMvc.perform(get("/api/me").with(authenticated))
 			.andExpect(status().isOk)
 			.andExpect(jsonPath("$.defaultWorkspaceId").value(devContext.devWorkspaceId.toString()))
-
-		mockMvc.perform(get("/api/workspaces").with(authenticated))
-			.andExpect(status().isOk)
-			.andExpect(jsonPath("$[0].id").value(devContext.devWorkspaceId.toString()))
+			.andExpect(jsonPath("$.workspaces[0].id").value(devContext.devWorkspaceId.toString()))
 	}
 
 	private companion object {

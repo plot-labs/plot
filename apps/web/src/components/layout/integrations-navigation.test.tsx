@@ -16,7 +16,6 @@ vi.mock("@/lib/api-client", () => ({
   plotApiClient: { listSessions: sidebarMocks.listSessions },
 }));
 
-import WorkspaceSettingsPage from "@/app/(app)/workspaces/[workspaceId]/settings/page";
 import { ProductSidebar } from "./product-sidebar";
 
 describe("Integrations navigation", () => {
@@ -37,12 +36,6 @@ describe("Integrations navigation", () => {
     const link = screen.getByRole("link", { name: "Integrations" });
     expect(link).toHaveAttribute("href", "/integrations");
     expect(link).toHaveAttribute("aria-current", "page");
-  });
-
-  it("routes workspace GitHub management to Integrations", () => {
-    render(<WorkspaceSettingsPage />);
-
-    expect(screen.getByRole("link", { name: "Manage GitHub in Integrations" })).toHaveAttribute("href", "/integrations");
   });
 
   it("uses actual sessions and their latest generation in sidebar links", async () => {

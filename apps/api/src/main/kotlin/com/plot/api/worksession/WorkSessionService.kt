@@ -46,11 +46,6 @@ class WorkSessionService(
 		return workSessionRepository.save(workSession).toResponse()
 	}
 
-	@Transactional(readOnly = true)
-	fun get(id: UUID): WorkSessionResponse {
-		return requireSession(id).toResponse()
-	}
-
 	@Transactional
 	fun update(id: UUID, request: UpdateWorkSessionRequest): WorkSessionResponse {
 		val workSession = requireSession(id)
@@ -67,8 +62,7 @@ class WorkSessionService(
 		return workSession.toResponse()
 	}
 
-	@Transactional(readOnly = true)
-	fun requireSession(id: UUID): WorkSession {
+	private fun requireSession(id: UUID): WorkSession {
 		return workSessionRepository.findByWorkspaceIdAndId(devContext.devWorkspaceId, id)
 			?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Work session not found")
 	}

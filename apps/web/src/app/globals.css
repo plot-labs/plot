@@ -1,5 +1,4 @@
 @import 'tailwindcss';
-@import 'tw-animate-css';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -111,55 +110,19 @@
   .tracking-tight {
     letter-spacing: 0;
   }
-  
-  .text-stroke {
-    -webkit-text-stroke: 1.5px currentColor;
-    -webkit-text-fill-color: transparent;
-  }
-  
-  .line-reveal {
-    clip-path: inset(0 100% 0 0);
-    animation: line-reveal 0.8s cubic-bezier(0.77, 0, 0.175, 1) forwards;
-  }
-  
-  @keyframes line-reveal {
-    to { clip-path: inset(0 0 0 0); }
-  }
-  
-  .hover-lift {
-    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-  }
-  
-  .hover-lift:hover {
-    transform: translateY(-4px);
-  }
-  
-  .letter-spin {
-    display: inline-block;
-    transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
-  }
-  
-  .letter-spin:hover {
-    transform: rotateY(360deg);
-  }
-  
-  .animate-char-in {
-    animation: char-in 0.25s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-    opacity: 0;
-    filter: blur(0);
-    transform: translateY(12%);
-  }
-  
-  @keyframes char-in {
-    0% {
-      opacity: 0;
-      filter: blur(0);
-      transform: translateY(12%);
+
+  @media (prefers-reduced-motion: no-preference) {
+    .landing-reveal {
+      animation: landing-reveal 0.7s ease-out both;
+      animation-range: entry 0% cover 30%;
+      animation-timeline: view();
     }
-    100% {
-      opacity: 1;
-      filter: blur(0);
-      transform: translateY(0);
+  }
+
+  @keyframes landing-reveal {
+    from {
+      opacity: 0;
+      transform: translateY(1.5rem);
     }
   }
 
@@ -177,72 +140,4 @@
     z-index: 1;
   }
   
-  .border-sketch {
-    border: 1px solid transparent;
-    background: 
-      linear-gradient(var(--background), var(--background)) padding-box,
-      linear-gradient(135deg, var(--foreground) 25%, transparent 25%, transparent 50%, var(--foreground) 50%, var(--foreground) 75%, transparent 75%) border-box;
-    background-size: 100% 100%, 8px 8px;
-  }
-
-  .capability-panel {
-    border: 1px solid rgb(18 17 15 / 0.12);
-    border-radius: 6px;
-    background:
-      linear-gradient(180deg, rgb(255 255 255 / 0.55), rgb(255 255 255 / 0.12)),
-      linear-gradient(var(--background), var(--background));
-  }
-
-  .capability-grid {
-    position: absolute;
-    inset: 0;
-    background-image:
-      linear-gradient(rgb(18 17 15 / 0.05) 1px, transparent 1px),
-      linear-gradient(90deg, rgb(18 17 15 / 0.05) 1px, transparent 1px);
-    background-size: 22px 22px;
-    mask-image: radial-gradient(circle at 50% 50%, black, transparent 75%);
-    pointer-events: none;
-  }
-
-  .capability-node {
-    border: 1px solid rgb(18 17 15 / 0.22);
-    background: rgb(250 249 246 / 0.88);
-    color: rgb(18 17 15 / 0.72);
-    font-family: var(--font-mono);
-    font-size: 10px;
-    letter-spacing: 0;
-    line-height: 1;
-    padding: 11px 12px;
-    text-align: center;
-    text-transform: uppercase;
-    backdrop-filter: blur(10px);
-  }
-
-  .capability-node-primary {
-    border-color: rgb(18 17 15 / 0.9);
-    background: rgb(18 17 15);
-    color: var(--background);
-  }
-
-  .capability-track {
-    position: absolute;
-    height: 1px;
-    width: 120px;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      rgb(18 17 15 / 0.28),
-      transparent
-    );
-    transform-origin: left center;
-  }
-
-  .capability-dot {
-    position: absolute;
-    left: 0;
-    top: -3px;
-    height: 7px;
-    width: 7px;
-    background: rgb(18 17 15);
-  }
 }

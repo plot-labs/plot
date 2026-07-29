@@ -39,17 +39,13 @@ class WorkSessionApiIntegrationTest {
 	@BeforeEach
 	fun cleanDevSessions() {
 		jdbcTemplate.update(
-			"delete from tasks where workspace_id = ?",
-			devContext.devWorkspaceId,
-		)
-		jdbcTemplate.update(
 			"delete from work_sessions where workspace_id = ?",
 			devContext.devWorkspaceId,
 		)
 	}
 
 	@Test
-	fun createListDetailAndUpdateSession() {
+	fun createListAndUpdateSession() {
 		mockMvc.post("/api/sessions") {
 			contentType = MediaType.APPLICATION_JSON
 			content = """{"title":"  Draft Session  "}"""
@@ -74,16 +70,6 @@ class WorkSessionApiIntegrationTest {
 				jsonPath("$[0].status") { value("OPEN") }
 				jsonPath("$[0].latestGenerationId") { doesNotExist() }
 				jsonPath("$[0].workspaceId") { doesNotExist() }
-			}
-
-		mockMvc.get("/api/sessions/$sessionId")
-			.andExpect {
-				status { isOk() }
-				jsonPath("$.id") { value(sessionId.toString()) }
-				jsonPath("$.title") { value("Draft Session") }
-				jsonPath("$.status") { value("OPEN") }
-				jsonPath("$.latestGenerationId") { doesNotExist() }
-				jsonPath("$.workspaceId") { doesNotExist() }
 			}
 
 		mockMvc.patch("/api/sessions/$sessionId") {
@@ -170,44 +156,6 @@ class WorkSessionApiIntegrationTest {
 				status { isOk() }
 				jsonPath("$[0].id") { value(olderId.toString()) }
 				jsonPath("$[1].id") { value(newerId.toString()) }
-			}
-	}
-
-	@Test
-	fun getReturnsNotFoundForRandomUuid() {
-		val randomUuid = UUID.randomUUID()
-
-		mockMvc.get("/api/sessions/$randomUuid")
-			.andExpect {
-				status { isNotFound() }
-				jsonPath("$.error") { value("NOT_FOUND") }
-			}
-	}
-
-	@Test
-	fun getReturnsNotFoundForSessionInAnotherWorkspace() {
-		val otherWorkspaceId = insertOtherWorkspace()
-		val otherSessionId = UUID.randomUUID()
-		insertSession(
-			id = otherSessionId,
-			workspaceId = otherWorkspaceId,
-			title = "Other Workspace Session",
-			createdAt = Instant.parse("2026-01-03T00:00:00Z"),
-		)
-
-		mockMvc.get("/api/sessions/$otherSessionId")
-			.andExpect {
-				status { isNotFound() }
-				jsonPath("$.error") { value("NOT_FOUND") }
-			}
-	}
-
-	@Test
-	fun getReturnsBadRequestForMalformedSessionId() {
-		mockMvc.get("/api/sessions/not-a-uuid")
-			.andExpect {
-				status { isBadRequest() }
-				jsonPath("$.error") { value("BAD_REQUEST") }
 			}
 	}
 

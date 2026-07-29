@@ -1,5 +1,4 @@
 import { auth } from "@/lib/auth";
-import { isCertificationLoopbackRequest } from "@/lib/certification-loopback";
 import { isAllowedEmail, isUuid, parseAllowedEmails } from "@plot/auth/policy";
 
 const allowedRequestHeaders = new Set(["accept", "content-type", "idempotency-key", "x-plot-workspace-id"]);
@@ -122,9 +121,6 @@ export async function proxyPlotRequest(
       responseHeaders.delete("location");
     }
   }
-  if (request.method === "GET" && path.at(-1) === "events") {
-    responseHeaders.set("X-Accel-Buffering", "no");
-  }
   return new Response(upstreamResponse.body, { status: upstreamResponse.status, headers: responseHeaders });
 }
 
@@ -171,9 +167,7 @@ function isAllowed(method: string, path: string[]): boolean {
   const route = path.join("/");
   if (method === "GET" && route === "me") return true;
   if (method === "POST" && route === "account/bootstrap") return true;
-  if (method === "GET" && route === "workspaces") return true;
   if (method === "GET" && /^workspaces\/[0-9a-fA-F-]+$/.test(route)) return true;
-  if (method === "PATCH" && /^workspaces\/[0-9a-fA-F-]+$/.test(route)) return true;
   if (method === "GET" && route === "github/connections") return true;
 	if (method === "GET" && /^github\/connections\/[0-9a-fA-F-]+\/repositories$/.test(route)) return true;
   if (method === "POST" && route === "github/installations/requests") return true;
@@ -184,23 +178,13 @@ function isAllowed(method: string, path: string[]): boolean {
   if (method === "POST" && /^github\/repositories\/[^/]+\/imports$/.test(route)) return true;
   if (method === "GET" && /^github\/imports\/[^/]+$/.test(route)) return true;
   if (method === "GET" && route === "blocks") return true;
-  if (method === "POST" && route === "blocks") return true;
-  if (method === "GET" && /^blocks\/[^/]+$/.test(route)) return true;
-  if (method === "PATCH" && /^blocks\/[^/]+$/.test(route)) return true;
   if (method === "GET" && route === "sessions") return true;
   if (method === "POST" && route === "sessions") return true;
-  if (method === "GET" && /^sessions\/[^/]+$/.test(route)) return true;
   if (method === "PATCH" && /^sessions\/[^/]+$/.test(route)) return true;
-  if (method === "GET" && route === "tasks") return true;
-  if (method === "POST" && route === "tasks") return true;
-  if (method === "GET" && /^tasks\/[^/]+$/.test(route)) return true;
-  if (method === "PATCH" && /^tasks\/[^/]+$/.test(route)) return true;
   if (method === "POST" && route === "generations") return true;
   if (method === "GET" && /^generations\/[^/]+$/.test(route)) return true;
-  if (method === "GET" && /^generations\/[^/]+\/events$/.test(route)) return true;
   if (method === "GET" && route === "content-packs") return true;
   if (method === "GET" && /^content-packs\/[^/]+$/.test(route)) return true;
-  if (method === "POST" && /^generations\/[^/]+\/interventions\/[^/]+\/resolution$/.test(route)) return true;
   if (method === "PATCH" && /^content-variants\/[^/]+\/sentences\/[^/]+$/.test(route)) return true;
   return method === "POST" && /^content-variants\/[^/]+\/exports$/.test(route);
 }
@@ -208,9 +192,6 @@ function isAllowed(method: string, path: string[]): boolean {
 type AuthResult = { ok: true; jwt: string } | { ok: false; response: Response };
 
 async function authenticateRequest(request: Request, dependencies: ProxyDependencies): Promise<AuthResult> {
-  if (isCertificationLoopbackRequest(request)) {
-    return { ok: true, jwt: "certification-loopback" };
-  }
   // Existing route unit tests inject an upstream fetcher. Production requests
   // always take the Better Auth session path.
   if (process.env.NODE_ENV === "test" && dependencies.fetch && !dependencies.getSession && !dependencies.getServerJwt) {

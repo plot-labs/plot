@@ -75,17 +75,13 @@ class GenerationCitationSchemaIntegrationTest {
 	}
 
 	@Test
-	fun enforcesIdempotencySentenceOrderAndSinglePendingIntervention() {
+	fun enforcesIdempotencyAndSentenceOrder() {
 		val runId = insertRun("unique-contract")
 		assertFailsWith<DuplicateKeyException> { insertRun("unique-contract") }
 		val packId = insertPack(runId)
 		val variantId = insertVariant(runId, packId)
-		val sentenceId = insertSentence(runId, variantId, 0)
+		insertSentence(runId, variantId, 0)
 		assertFailsWith<DuplicateKeyException> { insertSentence(runId, variantId, 0) }
-
-		insertIntervention(runId, sentenceId, "PENDING")
-		assertFailsWith<DuplicateKeyException> { insertIntervention(runId, sentenceId, "PENDING") }
-		insertIntervention(runId, sentenceId, "RESOLVED", "OMIT_CLAIM")
 	}
 
 	@Test
@@ -122,22 +118,10 @@ class GenerationCitationSchemaIntegrationTest {
 	}
 
 	@Test
-	fun recordsVersionedConflictDecisionsAndExplicitExportAcknowledgments() {
-		val blockId = insertWritingBlock("decision-audit")
+	fun recordsExplicitExportAcknowledgments() {
 		val runId = insertRun("decision-audit")
-		val inputId = insertInput(runId, blockId, 0)
 		val packId = insertPack(runId)
 		val variantId = insertVariant(runId, packId)
-		val sentenceId = insertSentence(runId, variantId, 0)
-		val interventionId = insertIntervention(runId, sentenceId, "PENDING")
-		val resolutionId = insertResolution(runId, interventionId, 1, "PREFER_SOURCE", preferredInputId = inputId)
-
-		assertFailsWith<DuplicateKeyException> {
-			insertResolution(runId, interventionId, 1, "PREFER_SOURCE", preferredInputId = inputId)
-		}
-		assertFailsWith<DataIntegrityViolationException> {
-			jdbcTemplate.update("update generation_intervention_resolutions set action = 'OMIT_CLAIM' where id = ?", resolutionId)
-		}
 		assertFailsWith<DataIntegrityViolationException> {
 			insertExport(runId, variantId, "SUCCEEDED", unresolvedCount = 1, acknowledged = false)
 		}
@@ -158,7 +142,6 @@ class GenerationCitationSchemaIntegrationTest {
 		assertFailsWith<DataIntegrityViolationException> { insertRevision(runId, variantId, sentenceId, 1, "UNKNOWN") }
 		val revisionId = insertRevision(runId, variantId, sentenceId, 1, "GENERATED")
 		assertFailsWith<DataIntegrityViolationException> { insertEvaluation(runId, sentenceId, revisionId, 1, "UNKNOWN") }
-		assertFailsWith<DataIntegrityViolationException> { insertIntervention(runId, sentenceId, "UNKNOWN") }
 		assertFailsWith<DataIntegrityViolationException> { insertPack(insertRun("bad-pack"), status = "UNKNOWN") }
 		assertFailsWith<DataIntegrityViolationException> { insertVariant(runId, packId, status = "UNKNOWN", variantIndex = 1) }
 		assertFailsWith<DataIntegrityViolationException> { insertExport(runId, variantId, status = "UNKNOWN") }
@@ -281,31 +264,6 @@ class GenerationCitationSchemaIntegrationTest {
 			 sentence_id, sentence_revision_id, generation_input_id, citation_order, status, created_at)
 			values (?, ?, ?, ?, ?, ?, ?, 0, 'ACTIVE', now())
 		""".trimIndent(), id, devContext.devWorkspaceId, runId, variantId, sentenceId, revisionId, inputId)
-	}
-
-	private fun insertIntervention(runId: UUID, sentenceId: UUID, status: String, resolutionAction: String? = null): UUID = UUID.randomUUID().also { id ->
-		jdbcTemplate.update("""
-			insert into generation_interventions (id, workspace_id, generation_run_id, sentence_id, kind,
-			 status, version, resolution_action, resolved_at, created_at, updated_at)
-			values (?, ?, ?, ?, 'SOURCE_CONFLICT', ?, 1, ?, case when ? = 'PENDING' then null else now() end, now(), now())
-		""".trimIndent(), id, devContext.devWorkspaceId, runId, sentenceId, status, resolutionAction, status)
-	}
-
-	private fun insertResolution(
-		runId: UUID,
-		interventionId: UUID,
-		version: Int,
-		action: String,
-		preferredInputId: UUID? = null,
-		providedWording: String? = null,
-	): UUID = UUID.randomUUID().also { id ->
-		jdbcTemplate.update("""
-			insert into generation_intervention_resolutions (id, workspace_id, generation_run_id,
-			 intervention_id, version, action, preferred_generation_input_id, provided_wording,
-			 decided_by_user_id, created_at)
-			values (?, ?, ?, ?, ?, ?, ?, ?, ?, now())
-		""".trimIndent(), id, devContext.devWorkspaceId, runId, interventionId, version, action,
-			preferredInputId, providedWording, devContext.devUserId)
 	}
 
 	private fun insertExport(

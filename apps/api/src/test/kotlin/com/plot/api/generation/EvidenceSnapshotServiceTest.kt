@@ -19,24 +19,16 @@ class EvidenceSnapshotServiceTest {
 	)
 
 	@Test
-	fun snapshotsGitHubSlackAndLinearIntoOneImmutableContract() {
-		val fixtures = listOf(
-			Triple("github", "pull_request", SourceProvider.GITHUB),
-			Triple("slack", "message", SourceProvider.SLACK),
-			Triple("linear", "issue", SourceProvider.LINEAR),
-		)
+	fun snapshotsGitHubIntoAnImmutableContract() {
+		val block = writingBlock()
+		val result = service.snapshot(runId, 0, block)
 
-		fixtures.forEachIndexed { index, (platform, kind, provider) ->
-			val block = writingBlock(platform = platform, sourceKind = kind)
-			val result = service.snapshot(runId, index, block)
-
-			assertEquals(provider, result.sourceProvider)
-			assertEquals(kind, result.sourceKind)
-			assertEquals("Ship citations", result.sourceLabel)
-			assertEquals("https://example.com/canonical", result.originalUrl)
-			assertEquals(capturedAt, result.capturedAt)
-			assertEquals(block.contentHash, result.contentHash)
-		}
+		assertEquals(SourceProvider.GITHUB, result.sourceProvider)
+		assertEquals("pull_request", result.sourceKind)
+		assertEquals("Ship citations", result.sourceLabel)
+		assertEquals("https://example.com/canonical", result.originalUrl)
+		assertEquals(capturedAt, result.capturedAt)
+		assertEquals(block.contentHash, result.contentHash)
 	}
 
 	@Test
@@ -46,6 +38,11 @@ class EvidenceSnapshotServiceTest {
 		}
 		assertFailsWith<InvalidEvidenceSnapshotException> {
 			service.snapshot(runId, 0, writingBlock(platform = "notion"))
+		}
+		for (provider in listOf("slack", "linear")) {
+			assertFailsWith<InvalidEvidenceSnapshotException> {
+				service.snapshot(runId, 0, writingBlock(platform = provider))
+			}
 		}
 		for (url in listOf("javascript:alert(1)", "file:///tmp/source", " ")) {
 			assertFailsWith<InvalidEvidenceSnapshotException> {

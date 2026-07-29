@@ -28,11 +28,6 @@ class WorkSessionController(
 		return workSessionService.create(request)
 	}
 
-	@GetMapping("/{id}")
-	fun get(@PathVariable id: UUID): WorkSessionResponse {
-		return workSessionService.get(id)
-	}
-
 	@PatchMapping("/{id}")
 	fun update(
 		@PathVariable id: UUID,

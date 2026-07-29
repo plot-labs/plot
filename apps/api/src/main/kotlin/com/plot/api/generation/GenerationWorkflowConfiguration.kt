@@ -6,8 +6,6 @@ import com.plot.api.config.PlotAiProperties
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.core.task.TaskExecutor
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
@@ -30,9 +28,6 @@ class GenerationWorkflowConfiguration {
 	): GenerationWorkflowService = GenerationWorkflowService(validator, uuidGenerator::next)
 
 	@Bean
-	fun generationEventPublisher(): GenerationEventPublisher = GenerationEventPublisher()
-
-	@Bean
 	fun generationPersistence(
 		jdbcTemplate: JdbcTemplate,
 		objectMapper: ObjectMapper,
@@ -41,28 +36,15 @@ class GenerationWorkflowConfiguration {
 	): GenerationPersistence = GenerationPersistence(jdbcTemplate, objectMapper, transactionTemplate, uuidGenerator)
 
 	@Bean
-	@ConditionalOnMissingBean(GenerationCheckpointObserver::class)
-	@ConditionalOnProperty(
-		prefix = "plot.certification.restart",
-		name = ["enabled"],
-		havingValue = "false",
-		matchIfMissing = true,
-	)
-	fun generationCheckpointObserver(eventPublisher: GenerationEventPublisher): GenerationCheckpointObserver =
-		GenerationCheckpointEventObserver(eventPublisher)
-
-	@Bean
 	fun generationRunWorker(
 		persistence: GenerationPersistence,
 		workflowService: GenerationWorkflowService,
 		modelGateway: GenerationModelGateway,
-		checkpointObserver: GenerationCheckpointObserver,
 		properties: PlotAiProperties,
 	): GenerationRunWorker = GenerationRunWorker(
 		persistence,
 		workflowService,
 		modelGateway,
-		checkpointObserver = checkpointObserver,
 		claimTimeout = properties.claimTimeout,
 	)
 

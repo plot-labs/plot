@@ -3,7 +3,6 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
 import { Menu, X } from "lucide-react";
 
 const navLinks = [
@@ -73,13 +72,12 @@ export function Navigation() {
 
           {/* Desktop CTA */}
           <div className="hidden md:flex items-center gap-4">
-            <Button
-              asChild
-              size="sm"
-              className={`bg-foreground hover:bg-foreground/90 text-background rounded-full transition-all duration-500 ${isScrolled ? "px-4 h-8 text-xs" : "px-6"}`}
+            <a
+              className={`inline-flex items-center justify-center rounded-full bg-foreground font-medium text-background transition-all duration-500 hover:bg-foreground/90 ${isScrolled ? "h-8 px-4 text-xs" : "h-8 px-6 text-sm"}`}
+              href="#waitlist"
             >
-              <a href="#waitlist">Join waitlist</a>
-            </Button>
+              Join waitlist
+            </a>
           </div>
 
           {/* Mobile Menu Button */}
@@ -135,11 +133,13 @@ export function Navigation() {
           }`}
           style={{ transitionDelay: isMobileMenuOpen ? "300ms" : "0ms" }}
           >
-            <Button asChild className="w-full bg-foreground text-background rounded-full h-14 text-base">
-              <a href="#waitlist" onClick={() => setIsMobileMenuOpen(false)}>
-                Join waitlist
-              </a>
-            </Button>
+            <a
+              className="inline-flex h-14 w-full items-center justify-center rounded-full bg-foreground text-base font-medium text-background"
+              href="#waitlist"
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              Join waitlist
+            </a>
           </div>
         </div>
       </div>
