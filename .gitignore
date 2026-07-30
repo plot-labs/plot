@@ -27,6 +27,7 @@ design/
 
 # Private docs
 docs/private/
+/docs/decision/
 
 # Superpowers docs
 docs/superpowers
