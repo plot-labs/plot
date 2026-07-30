@@ -13,6 +13,7 @@ import {
   type GitHubImport,
   type GitHubReleaseActivity,
   type GitHubRepository,
+  type GitHubRepositoryMonitoring,
 } from "@/lib/api-client";
 
 type IntegrationAction = "install" | "import" | null;
@@ -35,6 +36,9 @@ export function IntegrationsWorkspace() {
   const [message, setMessage] = useState<string | null>(callbackError ? callbackMessage(callbackError) : null);
   const [messageRequestId, setMessageRequestId] = useState<string | null>(null);
   const [lastImport, setLastImport] = useState<GitHubImport | null>(null);
+  const [monitoring, setMonitoring] = useState<GitHubRepositoryMonitoring | null>(null);
+  const [monitoringRetrying, setMonitoringRetrying] = useState(false);
+  const [monitoringReloadNonce, setMonitoringReloadNonce] = useState(0);
   const [releaseActivity, setReleaseActivity] = useState<GitHubReleaseActivity | null>(null);
   const [releaseActivityError, setReleaseActivityError] = useState<{
     sourceScopeId: string;
@@ -91,6 +95,7 @@ export function IntegrationsWorkspace() {
         setIsOwner(owner);
         setConnections(nextConnections);
         setRepositories([]);
+        setMonitoring(null);
         setReleaseActivity(null);
         setReleaseActivityError(null);
         setConnectionNeedsReconnect(false);
@@ -151,6 +156,36 @@ export function IntegrationsWorkspace() {
     });
     return () => { cancelled = true; };
   }, [monitoredRepository?.id]);
+
+  useEffect(() => {
+    const sourceScopeId = monitoredRepository?.id;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    if (!sourceScopeId) return () => { cancelled = true; };
+
+    const load = async () => {
+      try {
+        const next = await plotApiClient.getGitHubRepositoryMonitoring(sourceScopeId);
+        if (cancelled) return;
+        setMonitoring(next);
+        if (next.analysisStatus === "QUEUED" || next.analysisStatus === "ANALYZING") {
+          timer = setTimeout(() => { void load(); }, 3000);
+        }
+      } catch (error) {
+        if (!cancelled && requiresReconnect(error)) setConnectionNeedsReconnect(true);
+      }
+    };
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setMonitoring(monitoredRepository.monitoring);
+      void load();
+    });
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [monitoredRepository?.id, monitoredRepository?.monitoring, monitoringReloadNonce]);
 
   const installGitHub = async () => {
     if (actionRef.current) return;
@@ -233,6 +268,20 @@ export function IntegrationsWorkspace() {
     } finally {
       releaseLoadActionRef.current = null;
       setReleaseLoadActionId(null);
+    }
+  };
+
+  const retryMonitoring = async (sourceScopeId: string) => {
+    if (monitoringRetrying) return;
+    setMonitoringRetrying(true);
+    try {
+      setMonitoring(await plotApiClient.retryGitHubRepositoryMonitoring(sourceScopeId));
+      setMonitoringReloadNonce((value) => value + 1);
+    } catch (error) {
+      if (requiresReconnect(error)) setConnectionNeedsReconnect(true);
+      setMessage(errorMessage(error));
+    } finally {
+      setMonitoringRetrying(false);
     }
   };
 
@@ -376,6 +425,14 @@ export function IntegrationsWorkspace() {
                   onReconnect={() => { void installGitHub(); }}
                 />
               )}
+              {monitoredRepository?.id && monitoring && (
+                <RepositoryMonitoring
+                  monitoring={monitoring}
+                  busy={monitoringRetrying || action === "install"}
+                  onRetry={() => { void retryMonitoring(monitoredRepository.id!); }}
+                  onReconnect={() => { void installGitHub(); }}
+                />
+              )}
               {monitoredRepository?.id && latestReleaseError !== null && latestReleaseError !== undefined && (
                 <ReleaseActivityLoadError
                   error={latestReleaseError}
@@ -390,6 +447,64 @@ export function IntegrationsWorkspace() {
       </div>
     </div>
   );
+}
+
+function RepositoryMonitoring({
+  monitoring,
+  busy,
+  onRetry,
+  onReconnect,
+}: {
+  monitoring: GitHubRepositoryMonitoring;
+  busy: boolean;
+  onRetry: () => void;
+  onReconnect: () => void;
+}) {
+  let content;
+  if (monitoring.analysisStatus === "QUEUED" || monitoring.analysisStatus === "ANALYZING") {
+    content = <span>Analyzing release convention…</span>;
+  } else if (monitoring.analysisStatus === "COMPLETED") {
+    content = (
+      <span>
+        {conventionLabel(monitoring)}
+        {monitoring.sampleSource && ` · ${monitoring.sampleSize} ${monitoring.sampleSource.toLowerCase()}`}
+      </span>
+    );
+  } else if (monitoring.lastErrorCode === "GITHUB_ACCESS_DENIED" || monitoring.lastErrorCode === "GITHUB_NOT_FOUND") {
+    content = (
+      <span>
+        GitHub permission lost ·{" "}
+        <button type="button" onClick={onReconnect} disabled={busy} className="font-semibold underline disabled:opacity-50">
+          Reconnect
+        </button>
+      </span>
+    );
+  } else {
+    content = (
+      <span>
+        Analysis failed ·{" "}
+        <button type="button" onClick={onRetry} disabled={busy} className="font-semibold underline disabled:opacity-50">
+          Retry
+        </button>
+      </span>
+    );
+  }
+  return (
+    <div role="status" aria-live="polite" className="mt-5 rounded-[10px] border border-black/[0.08] bg-black/[0.015] px-4 py-3 text-sm text-black/58 dark:border-white/10 dark:bg-white/[0.025] dark:text-white/58">
+      <div className="text-xs font-semibold uppercase tracking-[0.08em] text-black/38 dark:text-white/38">
+        Repository monitoring
+      </div>
+      <div className="mt-1.5">{content}</div>
+    </div>
+  );
+}
+
+function conventionLabel(monitoring: GitHubRepositoryMonitoring) {
+  if (monitoring.releaseConvention === "SEMVER_V") return "Release convention: v-prefixed SemVer";
+  if (monitoring.releaseConvention === "SEMVER") return "Release convention: SemVer";
+  if (monitoring.releaseConvention === "PREFIXED") return `Release convention: ${monitoring.tagPrefix ?? "prefixed"} SemVer`;
+  if (monitoring.releaseConvention === "NO_TAGS") return "No release tags found";
+  return "Mixed release tags";
 }
 
 function LatestRelease({

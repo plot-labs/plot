@@ -34,9 +34,9 @@ class GitHubSchemaIntegrationTest {
 			"delete from github_release_draft_requests where workspace_id = ?",
 			devContext.devWorkspaceId,
 		)
-		listOf(
-			"writing_block_scopes", "source_imports", "source_observations",
-		).forEach { jdbcTemplate.update("delete from $it where workspace_id = ?", devContext.devWorkspaceId) }
+			listOf(
+				"writing_block_scopes", "source_imports", "source_observations", "github_repository_monitoring",
+			).forEach { jdbcTemplate.update("delete from $it where workspace_id = ?", devContext.devWorkspaceId) }
 		jdbcTemplate.update(
 			"""
 			delete from writing_blocks b
@@ -98,12 +98,52 @@ class GitHubSchemaIntegrationTest {
 		}
 	}
 
+	@Test
+	fun monitoringIsUniquePerRepositoryAndCompletedAnalysisRequiresAConvention() {
+		val connectionId = insertConnection(4001)
+		val namespaceId = insertNamespace("4001")
+		insertBinding(connectionId, namespaceId)
+		val scopeId = insertScope(namespaceId, 5001)
+
+		insertMonitoring(scopeId)
+		assertFailsWith<DuplicateKeyException> { insertMonitoring(scopeId) }
+
+		val secondScopeId = insertScope(namespaceId, 5002)
+		assertFailsWith<DataIntegrityViolationException> {
+			jdbcTemplate.update(
+				"""
+				insert into github_repository_monitoring (
+				  id, workspace_id, source_scope_id, monitoring_status, analysis_status,
+				  sample_size, sample_truncated, attempt_count, transition_version, created_at, updated_at
+				) values (?, ?, ?, 'ACTIVE', 'COMPLETED', 0, false, 0, 0, now(), now())
+				""".trimIndent(),
+				UUID.randomUUID(),
+				devContext.devWorkspaceId,
+				secondScopeId,
+			)
+		}
+	}
+
 	private fun insertConnection(installationId: Long): UUID = UUID.randomUUID().also { id ->
 		jdbcTemplate.update("""
 			insert into connections (id, workspace_id, provider, connection_kind, external_connection_key,
 			 status, created_by_user_id, created_at, updated_at)
 			values (?, ?, 'GITHUB', 'GITHUB_APP_INSTALLATION', ?, 'ACTIVE', ?, now(), now())
 		""".trimIndent(), id, devContext.devWorkspaceId, installationId.toString(), devContext.devUserId)
+	}
+
+	private fun insertMonitoring(scopeId: UUID) {
+		jdbcTemplate.update(
+			"""
+			insert into github_repository_monitoring (
+			  id, workspace_id, source_scope_id, monitoring_status, analysis_status,
+			  sample_size, sample_truncated, attempt_count, transition_version, created_at, updated_at
+			) values (?, ?, ?, 'ACTIVE', 'QUEUED', 0, false, 0, 0, now(), now())
+			""".trimIndent(),
+			UUID.randomUUID(),
+			devContext.devWorkspaceId,
+			scopeId,
+		)
 	}
 
 	private fun insertNamespace(key: String): UUID = UUID.randomUUID().also { id ->

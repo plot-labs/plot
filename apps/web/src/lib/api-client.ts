@@ -12,6 +12,7 @@ export type {
   GitHubImport,
   GitHubReleaseActivity,
   GitHubRepository,
+  GitHubRepositoryMonitoring,
   PlotApiClient,
   WorkSessionSummary,
   WorkspaceSummary,

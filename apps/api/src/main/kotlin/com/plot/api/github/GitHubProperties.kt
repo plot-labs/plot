@@ -32,6 +32,10 @@ data class GitHubProperties(
 	val maxReleaseBodyCharacters: Int = 20_000,
 	val maxReleaseEvidenceCharacters: Int = 120_000,
 	val maxWebhookPayloadBytes: Int = 1_048_576,
+	val monitoringAnalysisPollDelay: Duration = Duration.ofSeconds(5),
+	val monitoringAnalysisLeaseTimeout: Duration = Duration.ofMinutes(2),
+	val monitoringAnalysisMaxAttempts: Int = 5,
+	val monitoringAnalysisSampleLimit: Int = 50,
 ) {
 	init {
 		require(!releaseWorkerPollDelay.isNegative && !releaseWorkerPollDelay.isZero) {
@@ -41,6 +45,18 @@ data class GitHubProperties(
 			"plot.github.release-worker-lease-timeout must be positive"
 		}
 		require(releaseWorkerMaxAttempts > 0) { "plot.github.release-worker-max-attempts must be positive" }
+		require(!monitoringAnalysisPollDelay.isNegative && !monitoringAnalysisPollDelay.isZero) {
+			"plot.github.monitoring-analysis-poll-delay must be positive"
+		}
+		require(!monitoringAnalysisLeaseTimeout.isNegative && !monitoringAnalysisLeaseTimeout.isZero) {
+			"plot.github.monitoring-analysis-lease-timeout must be positive"
+		}
+		require(monitoringAnalysisMaxAttempts > 0) {
+			"plot.github.monitoring-analysis-max-attempts must be positive"
+		}
+		require(monitoringAnalysisSampleLimit in 1..50) {
+			"plot.github.monitoring-analysis-sample-limit must be between 1 and 50"
+		}
 		require(maxReleasePullRequests > 0) { "plot.github.max-release-pull-requests must be positive" }
 		require(maxReleaseEvidenceBlocks > 0) { "plot.github.max-release-evidence-blocks must be positive" }
 		require(maxReleaseTitleCharacters > 0) { "plot.github.max-release-title-characters must be positive" }

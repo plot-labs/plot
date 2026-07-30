@@ -121,6 +121,24 @@ export interface GitHubInstallationRequest {
   expiresAt: string;
 }
 
+export type GitHubRepositoryMonitoringStatus = "ACTIVE" | "DISABLED";
+export type GitHubRepositoryAnalysisStatus = "QUEUED" | "ANALYZING" | "COMPLETED" | "FAILED";
+export type GitHubReleaseConvention = "SEMVER_V" | "SEMVER" | "PREFIXED" | "MIXED" | "NO_TAGS";
+export type GitHubReleaseSampleSource = "RELEASES" | "TAGS";
+
+export interface GitHubRepositoryMonitoring {
+  status: GitHubRepositoryMonitoringStatus;
+  analysisStatus: GitHubRepositoryAnalysisStatus;
+  releaseConvention: GitHubReleaseConvention | null;
+  tagPrefix: string | null;
+  sampleSource: GitHubReleaseSampleSource | null;
+  sampleSize: number;
+  sampleTruncated: boolean;
+  attemptCount: number;
+  lastErrorCode: string | null;
+  analyzedAt: string | null;
+}
+
 export interface GitHubRepository {
   id: string | null;
   externalRepositoryId: number;
@@ -129,6 +147,7 @@ export interface GitHubRepository {
   displayName: string;
   url: string;
   status: string | null;
+  monitoring: GitHubRepositoryMonitoring | null;
 }
 
 export interface GitHubConnection {
@@ -233,6 +252,8 @@ export interface PlotApiClient {
   listGitHubConnections(options?: RequestOptions): Promise<GitHubConnection[]>;
   listGitHubRepositories(connectionId: string, options?: RequestOptions): Promise<GitHubRepository[]>;
   connectGitHubRepository(connectionId: string, externalRepositoryId: number, options?: RequestOptions): Promise<GitHubRepository>;
+  getGitHubRepositoryMonitoring(sourceScopeId: string, options?: RequestOptions): Promise<GitHubRepositoryMonitoring>;
+  retryGitHubRepositoryMonitoring(sourceScopeId: string, options?: RequestOptions): Promise<GitHubRepositoryMonitoring>;
   importGitHubRepository(sourceScopeId: string, input: { from: string; to: string }, options?: RequestOptions): Promise<GitHubImport>;
   getGitHubReleaseActivity(sourceScopeId: string, options?: RequestOptions): Promise<GitHubReleaseActivity | null>;
   retryGitHubReleaseDraft(sourceScopeId: string, requestId: string, options?: RequestOptions): Promise<GitHubReleaseActivity>;
@@ -293,6 +314,14 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
     connectGitHubRepository: (connectionId, externalRepositoryId, requestOptions) => request(
       `/github/repositories/${encodeURIComponent(String(externalRepositoryId))}`,
       { method: "PUT", body: JSON.stringify({ connectionId }), signal: requestOptions?.signal },
+    ),
+    getGitHubRepositoryMonitoring: (sourceScopeId, requestOptions) => request(
+      `/github/repositories/${encodeURIComponent(sourceScopeId)}/monitoring`,
+      { signal: requestOptions?.signal },
+    ),
+    retryGitHubRepositoryMonitoring: (sourceScopeId, requestOptions) => request(
+      `/github/repositories/${encodeURIComponent(sourceScopeId)}/monitoring/retry`,
+      { method: "POST", signal: requestOptions?.signal },
     ),
     importGitHubRepository: (sourceScopeId, input, requestOptions) => request(
       `/github/repositories/${encodeURIComponent(sourceScopeId)}/imports`,
