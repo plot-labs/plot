@@ -28,12 +28,15 @@ export default function SignInPage() {
   async function signInWithGitHub() {
     setLoading(true);
     setError(null);
-    const result = await authClient.signIn.social({
-      provider: "github",
-      callbackURL: "/auth/complete",
-    });
-    if (result.error) {
-      setError("Access denied");
+    try {
+      const result = await authClient.signIn.social({
+        provider: "github",
+        callbackURL: "/auth/complete",
+      });
+      if (result.error) setError("Access denied");
+    } catch {
+      setError("GitHub sign-in could not start. Please try again.");
+    } finally {
       setLoading(false);
     }
   }

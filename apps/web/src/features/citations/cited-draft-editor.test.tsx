@@ -105,6 +105,17 @@ describe("CitedDraftEditor", () => {
     expect(citation).toHaveFocus();
   });
 
+  it("opens citation evidence without invalid nested paragraph markup", () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    render(<CitedDraftEditor pack={pack} onEditSentence={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /GitHub · PR #184/i }));
+
+    expect(screen.getByRole("region", { name: "PR #184 evidence" })).toBeVisible();
+    expect(consoleError).not.toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
   it("shows only publishable result copy and explicitly saves only the edited sentence", async () => {
     const updated: ContentPack = {
       ...pack,
@@ -118,7 +129,7 @@ describe("CitedDraftEditor", () => {
                 revisionNumber: 2,
                 origin: "USER_MODIFIED" as const,
                 verdict: "USER_MODIFIED" as const,
-                citations: [],
+                citations: sentence.citations.map((citation) => ({ ...citation, status: "STALE" as const })),
               }
             : sentence,
         ),
@@ -135,7 +146,11 @@ describe("CitedDraftEditor", () => {
 
     await waitFor(() => expect(onEditSentence).toHaveBeenCalledWith(pack.variant.sentences[0], "Recovery guidance now explains the next step."));
     expect(await screen.findByText("Recovery guidance now explains the next step.")).toBeVisible();
-    expect(screen.queryByRole("button", { name: /GitHub · PR #184/i })).not.toBeInTheDocument();
+    const citation = screen.getByRole("button", { name: /Unverified · GitHub · PR #184/i });
+    expect(citation).toBeVisible();
+    fireEvent.click(citation);
+    expect(screen.getByText(/Unverified after editing/)).toBeVisible();
+    expect(screen.getByText("Clarify recovery copy after failed sign-in.")).toBeVisible();
     expect(screen.queryByText("No source supports the automation claim.")).not.toBeInTheDocument();
   });
 

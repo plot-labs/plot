@@ -28,10 +28,12 @@ export function IntegrationsWorkspace() {
   const [selectedRepositoryId, setSelectedRepositoryId] = useState<number | null>(null);
   const [isOwner, setIsOwner] = useState<boolean | null>(null);
   const [connectionNeedsReconnect, setConnectionNeedsReconnect] = useState(false);
+  const [repositoryLoadFailed, setRepositoryLoadFailed] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [action, setAction] = useState<IntegrationAction>(null);
   const actionRef = useRef<IntegrationAction>(null);
   const [message, setMessage] = useState<string | null>(callbackError ? callbackMessage(callbackError) : null);
+  const [messageRequestId, setMessageRequestId] = useState<string | null>(null);
   const [lastImport, setLastImport] = useState<GitHubImport | null>(null);
   const [releaseActivity, setReleaseActivity] = useState<GitHubReleaseActivity | null>(null);
   const [releaseActivityError, setReleaseActivityError] = useState<{
@@ -62,6 +64,8 @@ export function IntegrationsWorkspace() {
 
   const refresh = () => {
     setMessage(null);
+    setMessageRequestId(null);
+    setRepositoryLoadFailed(false);
     setIsLoading(true);
     setReloadNonce((value) => value + 1);
   };
@@ -90,19 +94,29 @@ export function IntegrationsWorkspace() {
         setReleaseActivity(null);
         setReleaseActivityError(null);
         setConnectionNeedsReconnect(false);
+        setRepositoryLoadFailed(false);
 
         if (owner && preferredConnection?.status === "ACTIVE") {
-          const nextRepositories = await plotApiClient.listGitHubRepositories(preferredConnection.id);
-          if (cancelled) return;
-          setRepositories(nextRepositories);
-          setSelectedRepositoryId((current) => (
-            nextRepositories.some((repository) => repository.externalRepositoryId === current) ? current : null
-          ));
+          try {
+            const nextRepositories = await plotApiClient.listGitHubRepositories(preferredConnection.id);
+            if (cancelled) return;
+            setRepositories(nextRepositories);
+            setSelectedRepositoryId((current) => (
+              nextRepositories.some((repository) => repository.externalRepositoryId === current) ? current : null
+            ));
+          } catch (error) {
+            if (cancelled) return;
+            setConnectionNeedsReconnect(requiresReconnect(error));
+            setRepositoryLoadFailed(true);
+            setMessage(errorMessage(error));
+            setMessageRequestId(providerRequestId(error));
+          }
         }
       } catch (error) {
         if (!cancelled) {
           setConnectionNeedsReconnect(requiresReconnect(error));
           setMessage(errorMessage(error));
+          setMessageRequestId(providerRequestId(error));
         }
       } finally {
         if (!cancelled) setIsLoading(false);
@@ -143,6 +157,7 @@ export function IntegrationsWorkspace() {
     actionRef.current = "install";
     setAction("install");
     setMessage(null);
+    setMessageRequestId(null);
     try {
       const request = await plotApiClient.createGitHubInstallationRequest();
       window.location.assign(request.installUrl);
@@ -159,6 +174,7 @@ export function IntegrationsWorkspace() {
     actionRef.current = "import";
     setAction("import");
     setMessage(null);
+    setMessageRequestId(null);
     try {
       const connected = selectedRepository.id
         ? selectedRepository
@@ -192,6 +208,7 @@ export function IntegrationsWorkspace() {
     releaseActionRef.current = activity.id;
     setReleaseActionId(activity.id);
     setMessage(null);
+    setMessageRequestId(null);
     try {
       const next = await plotApiClient.retryGitHubReleaseDraft(activity.sourceScopeId, activity.id);
       setReleaseActivity(next);
@@ -243,11 +260,27 @@ export function IntegrationsWorkspace() {
               </p>
             </div>
             {!isLoading && (
-              <ConnectionBadge connected={Boolean(activeConnection) && !connectionNeedsReconnect} />
+              <ConnectionBadge
+                status={!activeConnection
+                  ? "disconnected"
+                  : repositoryLoadFailed || connectionNeedsReconnect
+                    ? "attention"
+                    : "connected"}
+              />
             )}
           </div>
 
-          {message && <StatusMessage message={message} onRetry={refresh} onDismiss={() => setMessage(null)} />}
+          {message && (
+            <StatusMessage
+              message={message}
+              requestId={messageRequestId}
+              onRetry={refresh}
+              onReconnect={activeConnection && repositoryLoadFailed && !connectionNeedsReconnect
+                ? () => { void installGitHub(); }
+                : undefined}
+              onDismiss={() => setMessage(null)}
+            />
+          )}
           {lastImport && <ImportSummary result={lastImport} />}
 
           {isLoading ? (
@@ -390,7 +423,7 @@ function LatestRelease({
   } else if (activity.status === "NO_ACTIVITY") {
     content = <span>No customer-facing changes found for {activity.tagName}</span>;
   } else if (activity.status === "NEEDS_RANGE") {
-    content = <span>A previous release boundary is required; use an explicit /changelog range</span>;
+    content = <span>Release baseline saved. The next release will prepare a changelog.</span>;
   } else if (activity.errorCode === "GITHUB_ACCESS_DENIED") {
     content = (
       <span>
@@ -469,10 +502,15 @@ function ReleaseActivityLoadError({
   );
 }
 
-function ConnectionBadge({ connected }: { connected: boolean }) {
+function ConnectionBadge({ status }: { status: "connected" | "attention" | "disconnected" }) {
+  const styles = status === "connected"
+    ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
+    : status === "attention"
+      ? "bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-200"
+      : "bg-black/[0.05] text-black/45 dark:bg-white/10 dark:text-white/48";
   return (
-    <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${connected ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300" : "bg-black/[0.05] text-black/45 dark:bg-white/10 dark:text-white/48"}`}>
-      {connected ? "Connected" : "Not connected"}
+    <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${styles}`}>
+      {status === "connected" ? "Connected" : status === "attention" ? "Needs attention" : "Not connected"}
     </span>
   );
 }
@@ -521,11 +559,36 @@ function Loading() {
   );
 }
 
-function StatusMessage({ message, onRetry, onDismiss }: { message: string; onRetry: () => void; onDismiss: () => void }) {
+function StatusMessage({
+  message,
+  requestId,
+  onRetry,
+  onReconnect,
+  onDismiss,
+}: {
+  message: string;
+  requestId: string | null;
+  onRetry: () => void;
+  onReconnect?: () => void;
+  onDismiss: () => void;
+}) {
   return (
     <div role="alert" className="mt-5 flex items-start gap-3 rounded-[10px] border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-100">
-      <span className="min-w-0 flex-1">{message}</span>
+      <div className="min-w-0 flex-1">
+        <p>{message}</p>
+        {requestId && (
+          <details className="mt-1 text-xs">
+            <summary className="cursor-pointer font-medium">Technical details</summary>
+            <code>GitHub request {requestId}</code>
+          </details>
+        )}
+      </div>
       <button type="button" onClick={onRetry} className="shrink-0 font-semibold underline underline-offset-2">Retry</button>
+      {onReconnect && (
+        <button type="button" onClick={onReconnect} className="shrink-0 font-semibold underline underline-offset-2">
+          Reconnect
+        </button>
+      )}
       <button type="button" onClick={onDismiss} aria-label="Dismiss message"><X className="size-4" /></button>
     </div>
   );
@@ -555,9 +618,14 @@ function errorMessage(error: unknown) {
     if (error.code === "FORBIDDEN") return "Workspace owner must connect GitHub.";
     if (error.code === "IMPORT_ALREADY_RUNNING") return "An import is already running for this repository. Wait for it to finish, then retry.";
     if (error.code === "GITHUB_PROVIDER_UNAVAILABLE") return "GitHub is temporarily unavailable. Try again shortly.";
-    return error.message;
+    return "GitHub request failed. Try again.";
   }
   return "Could not update the GitHub integration. Try again.";
+}
+
+function providerRequestId(error: unknown) {
+  if (!(error instanceof PlotApiError)) return null;
+  return error.message.match(/\brequest ([A-Za-z0-9_-]{1,100})\b/)?.[1] ?? null;
 }
 
 function requiresReconnect(error: unknown) {

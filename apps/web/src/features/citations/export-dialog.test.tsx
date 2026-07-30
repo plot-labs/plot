@@ -34,18 +34,26 @@ describe("ExportDialog", () => {
     click.mockRestore();
   });
 
-  it("warns with affected sentence IDs and exports only after explicit confirmation", async () => {
+  it("links affected sentence copy and exports only after explicit confirmation", async () => {
     const exportVariant = vi
       .fn()
       .mockRejectedValueOnce(new PlotApiError(409, "EXPORT_CONFIRMATION_REQUIRED", "Confirm", { sentenceIds: ["sentence-7"], revisionIds: ["rev-7"] }))
       .mockResolvedValueOnce({ exportId: "export-1", disposition: "COPY", filename: "changelog.md", mediaType: "text/markdown", text: "A claim.", unresolvedCount: 1, warningAcknowledged: true });
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
-    render(<ExportDialog pack={pack} client={{ exportVariant } as unknown as PlotApiClient} />);
+    render(
+      <>
+        <div id="sentence-sentence-7" tabIndex={-1}>Draft sentence</div>
+        <ExportDialog pack={pack} client={{ exportVariant } as unknown as PlotApiClient} />
+      </>,
+    );
 
     fireEvent.click(screen.getByRole("button", { name: /copy changelog/i }));
-    expect(await screen.findByText(/sentence-7/)).toBeVisible();
+    const affected = await screen.findByRole("button", { name: /Sentence 1 — “A claim\.”/ });
+    expect(screen.queryByText(/sentence-7/)).not.toBeInTheDocument();
     expect(writeText).not.toHaveBeenCalled();
+    fireEvent.click(affected);
+    expect(screen.getByText("Draft sentence")).toHaveFocus();
     fireEvent.click(screen.getByRole("button", { name: /confirm and copy/i }));
 
     await waitFor(() => expect(writeText).toHaveBeenCalledWith("A claim."));
