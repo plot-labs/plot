@@ -10,6 +10,7 @@ type EvidencePopoverProps = {
 
 export function EvidencePopover({ citation, id, onClose }: EvidencePopoverProps) {
   const originalUrl = safeHttpUrl(citation.originalUrl);
+  const stale = citation.status === "STALE";
 
   return (
     <div
@@ -36,6 +37,11 @@ export function EvidencePopover({ citation, id, onClose }: EvidencePopoverProps)
           <X className="size-4" />
         </button>
       </div>
+      {stale ? (
+        <p className="mt-3 rounded-lg bg-amber-50 p-2 text-xs leading-5 text-amber-900 dark:bg-amber-400/10 dark:text-amber-100">
+          Unverified after editing. Compare the sentence with this saved source before exporting.
+        </p>
+      ) : null}
       <p className="mt-3 text-sm leading-5 text-black/72 dark:text-white/72">
         {citation.snapshotExcerpt ?? "No snapshot excerpt is available."}
       </p>

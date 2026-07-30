@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowUp, ChevronDown, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -22,12 +22,14 @@ export function SessionComposer({
 }: SessionComposerProps) {
   const [message, setMessage] = useState("");
   const [referencesOpen, setReferencesOpen] = useState(false);
+  const submittingRef = useRef(false);
   const [selectedReferenceIds, setSelectedReferenceIds] = useState<string[]>(() => {
     const first = references.find((reference) => reference.available);
     return first
       ? references.filter((reference) => reference.available && reference.groupId === first.groupId).map((reference) => reference.id)
       : [];
   });
+  const canSubmit = !busy && Boolean(message.trim()) && selectedReferenceIds.length > 0;
 
   return (
     <form
@@ -38,14 +40,12 @@ export function SessionComposer({
       )}
       onSubmit={(event) => {
         event.preventDefault();
-        const trimmed = message.trim();
+        if (!canSubmit || submittingRef.current) return;
 
-        if (!trimmed) {
-          return;
-        }
-
-        onSubmit(trimmed, selectedReferenceIds);
+        submittingRef.current = true;
+        onSubmit(message.trim(), selectedReferenceIds);
         setMessage("");
+        queueMicrotask(() => { submittingRef.current = false; });
       }}
     >
       <div
@@ -99,8 +99,8 @@ export function SessionComposer({
           <div className="ml-auto flex items-center gap-1.5">
             <button
               type="submit"
-              disabled={busy}
-              className="inline-flex size-9 items-center justify-center rounded-full bg-black/35 text-white transition hover:bg-black/55 dark:bg-white/35 dark:hover:bg-white/55"
+              disabled={!canSubmit}
+              className="inline-flex size-9 items-center justify-center rounded-full bg-black/35 text-white transition hover:bg-black/55 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white/35 dark:hover:bg-white/55"
               aria-label="Send message"
             >
               <ArrowUp className="size-4" />

@@ -65,7 +65,13 @@ export function CitedDraftEditor({ pack, onEditSentence, onPackChange }: CitedDr
           const number = sentence.orderIndex + 1;
           const editing = editingId === sentence.id;
           return (
-            <li key={sentence.id} data-sentence-id={sentence.id} className="group">
+            <li
+              key={sentence.id}
+              id={`sentence-${sentence.id}`}
+              data-sentence-id={sentence.id}
+              tabIndex={-1}
+              className="group rounded-lg outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-4"
+            >
               {editing ? (
                 <div>
                   <label htmlFor={`sentence-edit-${sentence.id}`} className="text-xs font-semibold text-black/55 dark:text-white/55">
@@ -90,14 +96,12 @@ export function CitedDraftEditor({ pack, onEditSentence, onPackChange }: CitedDr
               ) : (
                 <div className="flex items-start gap-3">
                   <div className="min-w-0 flex-1">
-                    <p className="text-[15px] leading-7 text-black/82 dark:text-white/82">
+                    <div className="text-[15px] leading-7 text-black/82 dark:text-white/82">
                       {sentence.body}{" "}
-                      {sentence.verdict === "SUPPORTED"
-                        ? sentence.citations.filter((citation) => citation.status !== "REMOVED").map((citation) => (
-                            <InlineCitation key={citation.evidenceId} citation={citation} />
-                          ))
-                        : null}
-                    </p>
+                      {sentence.citations.filter((citation) => citation.status !== "REMOVED").map((citation) => (
+                        <InlineCitation key={citation.evidenceId} citation={citation} />
+                      ))}
+                    </div>
                   </div>
                   <button type="button" onClick={() => beginEdit(sentence)} className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg text-black/42 opacity-100 hover:bg-black/5 hover:text-black/75 dark:text-white/42 dark:hover:bg-white/10 dark:hover:text-white/75 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100" aria-label={`Edit sentence ${number}`}>
                     <Pencil className="size-4" />

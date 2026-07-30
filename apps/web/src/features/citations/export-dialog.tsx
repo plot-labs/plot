@@ -43,6 +43,10 @@ export function ExportDialog({ pack, client }: { pack: ContentPack; client: Plot
     }
   }
 
+  const affectedSentences = confirmation?.sentenceIds
+    .map((id) => pack.variant.sentences.find((sentence) => sentence.id === id))
+    .filter((sentence) => sentence !== undefined) ?? [];
+
   return (
     <section aria-label="Export changelog" className="rounded-xl border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-white/[0.04]">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -66,9 +70,26 @@ export function ExportDialog({ pack, client }: { pack: ContentPack; client: Plot
             <ShieldAlert className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-300" />
             <div className="min-w-0 flex-1">
               <h3 id="export-warning-title" className="text-sm font-semibold">Unresolved sentences will be exported</h3>
-              <p id="export-warning-description" className="mt-1 text-xs leading-5 text-black/62 dark:text-white/62">
-                Review affected sentence IDs: {confirmation.sentenceIds.length ? confirmation.sentenceIds.join(", ") : "unknown"}.
-              </p>
+              <div id="export-warning-description" className="mt-1 text-xs leading-5 text-black/62 dark:text-white/62">
+                <p>Review affected sentences before continuing.</p>
+                {affectedSentences.length ? (
+                  <ul className="mt-2 space-y-1">
+                    {affectedSentences.map((sentence) => (
+                      <li key={sentence.id}>
+                        <button
+                          type="button"
+                          onClick={() => focusSentence(sentence.id)}
+                          className="block max-w-full truncate text-left font-medium underline underline-offset-2"
+                        >
+                          Sentence {sentence.orderIndex + 1} — “{sentence.body}”
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-1">Affected sentence details are unavailable.</p>
+                )}
+              </div>
             </div>
             <button type="button" onClick={() => setConfirmation(null)} className="inline-flex size-9 items-center justify-center rounded-lg" aria-label="Cancel export warning"><X className="size-4" /></button>
           </div>
@@ -80,6 +101,12 @@ export function ExportDialog({ pack, client }: { pack: ContentPack; client: Plot
       {message ? <p role="status" className="mt-3 text-xs text-black/58 dark:text-white/58" aria-live="polite">{message}</p> : null}
     </section>
   );
+}
+
+function focusSentence(sentenceId: string) {
+  const sentence = document.getElementById(`sentence-${sentenceId}`);
+  sentence?.scrollIntoView?.({ block: "center", behavior: "smooth" });
+  sentence?.focus();
 }
 
 function downloadText(text: string, filename: string, mediaType: string) {

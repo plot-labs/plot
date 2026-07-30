@@ -151,15 +151,20 @@ describe("IntegrationsWorkspace", () => {
   it("offers a retry after repository discovery fails", async () => {
     mocks.listConnections.mockResolvedValue([connection]);
     mocks.listRepositories
-      .mockRejectedValueOnce(new PlotApiError(429, "GITHUB_RATE_LIMITED", "limited"))
+      .mockRejectedValueOnce(new PlotApiError(429, "GITHUB_RATE_LIMITED", "limited (request provider-id)"))
       .mockResolvedValueOnce([repository]);
 
     render(<IntegrationsWorkspace />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent("GitHub rate limit reached");
+    expect(screen.getByText("Needs attention")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Reconnect" })).toBeVisible();
+    expect(screen.getByText("Technical details").closest("details")).not.toHaveAttribute("open");
+    expect(screen.getByText("GitHub request provider-id")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
 
     expect(await screen.findByRole("radio", { name: /acme\/plot/i })).toBeVisible();
+    expect(screen.getByText("Connected")).toBeVisible();
     expect(mocks.listRepositories).toHaveBeenCalledTimes(2);
   });
 
@@ -173,7 +178,7 @@ describe("IntegrationsWorkspace", () => {
     render(<IntegrationsWorkspace />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent("previous GitHub installation was replaced or removed");
-    expect(screen.getByText("Not connected")).toBeVisible();
+    expect(screen.getByText("Needs attention")).toBeVisible();
     expect(screen.queryByText(/No repositories are currently granted/)).not.toBeInTheDocument();
 
     const reconnect = screen.getByRole("button", { name: "Reconnect GitHub" });
@@ -236,7 +241,7 @@ describe("IntegrationsWorkspace", () => {
 
   it.each([
     ["NO_ACTIVITY", "No customer-facing changes found for v1.2.0"],
-    ["NEEDS_RANGE", "A previous release boundary is required; use an explicit /changelog range"],
+    ["NEEDS_RANGE", "Release baseline saved. The next release will prepare a changelog."],
   ])("renders terminal %s guidance", async (status, copy) => {
     mocks.listConnections.mockResolvedValue([connection]);
     mocks.listRepositories.mockResolvedValue([{ ...repository, id: "scope-1", status: "ACTIVE" }]);
