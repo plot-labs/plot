@@ -6,6 +6,7 @@ import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.boot.test.context.TestConfiguration
@@ -165,6 +166,27 @@ class GitHubConnectionApiIntegrationTest {
 		val foreignConnectionId = UUID.randomUUID()
 		mockMvc.get("/api/github/connections/$foreignConnectionId/repositories")
 			.andExpect { status { isNotFound() } }
+	}
+
+	@Test
+	fun connectedRepositoryMarksWebhookMonitoringActiveWithoutStartingGeneration() {
+		val connectionId = completeInstallation()
+		val scopeId = connect(connectionId, 1001)
+
+		val capabilities = jdbcTemplate.queryForObject(
+			"""select b.capabilities::text from connection_namespace_bindings b
+				join source_scopes s on s.workspace_id = b.workspace_id and s.source_namespace_id = b.source_namespace_id
+				where s.workspace_id = ? and s.id = ?""".trimIndent(),
+			String::class.java,
+			devContext.devWorkspaceId,
+			scopeId,
+		)!!
+		assertTrue(capabilities.contains("\"metadata\": \"read\""))
+		assertTrue(capabilities.contains("\"pull_requests\": \"read\""))
+		assertTrue(capabilities.contains("\"contents\": \"read\""))
+		assertTrue(capabilities.contains("\"webhook_monitoring\": \"active\""))
+		assertEquals(0, jdbcTemplate.queryForObject("select count(*) from generation_runs where workspace_id = ?", Int::class.java, devContext.devWorkspaceId))
+		assertEquals(0, jdbcTemplate.queryForObject("select count(*) from model_invocations", Int::class.java))
 	}
 
 	@Test

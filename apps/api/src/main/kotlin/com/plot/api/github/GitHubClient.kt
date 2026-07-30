@@ -23,4 +23,30 @@ interface GitHubClient {
 		repository: String,
 		pageCap: Int,
 	): List<GitHubPullRequest>
+
+	fun resolveTagCommit(
+		installationId: Long,
+		repositoryId: Long,
+		owner: String,
+		repository: String,
+		tagName: String,
+	): String = throw UnsupportedOperationException("Git tag resolution is not implemented")
+
+	fun compareCommits(
+		installationId: Long,
+		repositoryId: Long,
+		owner: String,
+		repository: String,
+		baseSha: String,
+		headSha: String,
+		pageCap: Int,
+	): GitHubCompareResult = throw UnsupportedOperationException("Git commit comparison is not implemented")
+
+	fun listPullRequestsForCommit(
+		installationId: Long,
+		repositoryId: Long,
+		owner: String,
+		repository: String,
+		commitSha: String,
+	): List<GitHubPullRequest> = throw UnsupportedOperationException("Commit pull-request lookup is not implemented")
 }

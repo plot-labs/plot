@@ -1,6 +1,7 @@
 "use client";
 
 import { ExternalLink, GitBranch, LoaderCircle, RefreshCw, X } from "lucide-react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
@@ -10,6 +11,7 @@ import {
   PlotApiError,
   type GitHubConnection,
   type GitHubImport,
+  type GitHubReleaseActivity,
   type GitHubRepository,
 } from "@/lib/api-client";
 
@@ -31,6 +33,15 @@ export function IntegrationsWorkspace() {
   const actionRef = useRef<IntegrationAction>(null);
   const [message, setMessage] = useState<string | null>(callbackError ? callbackMessage(callbackError) : null);
   const [lastImport, setLastImport] = useState<GitHubImport | null>(null);
+  const [releaseActivity, setReleaseActivity] = useState<GitHubReleaseActivity | null>(null);
+  const [releaseActivityError, setReleaseActivityError] = useState<{
+    sourceScopeId: string;
+    error: unknown;
+  } | null>(null);
+  const [releaseActionId, setReleaseActionId] = useState<string | null>(null);
+  const releaseActionRef = useRef<string | null>(null);
+  const [releaseLoadActionId, setReleaseLoadActionId] = useState<string | null>(null);
+  const releaseLoadActionRef = useRef<string | null>(null);
   const [reloadNonce, setReloadNonce] = useState(0);
 
   const activeConnection = connections.find(
@@ -40,6 +51,14 @@ export function IntegrationsWorkspace() {
     (repository) => repository.externalRepositoryId === selectedRepositoryId,
   ) ?? null;
   const hasInactiveConnection = connections.some((connection) => connection.status !== "ACTIVE");
+  const monitoredRepository = selectedRepositoryId === null
+    ? repositories.find((repository) => repository.id) ?? null
+    : selectedRepository;
+  const latestRelease = monitoredRepository?.id === releaseActivity?.sourceScopeId ? releaseActivity : null;
+  const latestReleaseError = releaseActivityError &&
+    monitoredRepository?.id === releaseActivityError.sourceScopeId
+    ? releaseActivityError.error
+    : null;
 
   const refresh = () => {
     setMessage(null);
@@ -68,6 +87,8 @@ export function IntegrationsWorkspace() {
         setIsOwner(owner);
         setConnections(nextConnections);
         setRepositories([]);
+        setReleaseActivity(null);
+        setReleaseActivityError(null);
         setConnectionNeedsReconnect(false);
 
         if (owner && preferredConnection?.status === "ACTIVE") {
@@ -95,6 +116,27 @@ export function IntegrationsWorkspace() {
   useEffect(() => {
     if (callbackConnectionId || callbackError) router.replace("/integrations");
   }, [callbackConnectionId, callbackError, router]);
+
+  useEffect(() => {
+    const sourceScopeId = monitoredRepository?.id;
+    let cancelled = false;
+
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setReleaseActivity(null);
+      setReleaseActivityError(null);
+      if (!sourceScopeId) return;
+
+      void plotApiClient.getGitHubReleaseActivity(sourceScopeId)
+        .then((activity) => {
+          if (!cancelled) setReleaseActivity(activity);
+        })
+        .catch((error: unknown) => {
+          if (!cancelled) setReleaseActivityError({ sourceScopeId, error });
+        });
+    });
+    return () => { cancelled = true; };
+  }, [monitoredRepository?.id]);
 
   const installGitHub = async () => {
     if (actionRef.current) return;
@@ -142,6 +184,38 @@ export function IntegrationsWorkspace() {
     } finally {
       actionRef.current = null;
       setAction(null);
+    }
+  };
+
+  const retryRelease = async (activity: GitHubReleaseActivity) => {
+    if (releaseActionRef.current) return;
+    releaseActionRef.current = activity.id;
+    setReleaseActionId(activity.id);
+    setMessage(null);
+    try {
+      const next = await plotApiClient.retryGitHubReleaseDraft(activity.sourceScopeId, activity.id);
+      setReleaseActivity(next);
+    } catch (error) {
+      setMessage(errorMessage(error));
+    } finally {
+      releaseActionRef.current = null;
+      setReleaseActionId(null);
+    }
+  };
+
+  const retryReleaseActivityLoad = async (sourceScopeId: string) => {
+    if (releaseLoadActionRef.current) return;
+    releaseLoadActionRef.current = sourceScopeId;
+    setReleaseLoadActionId(sourceScopeId);
+    setReleaseActivityError(null);
+    try {
+      const activity = await plotApiClient.getGitHubReleaseActivity(sourceScopeId);
+      setReleaseActivity(activity);
+    } catch (error) {
+      setReleaseActivityError({ sourceScopeId, error });
+    } finally {
+      releaseLoadActionRef.current = null;
+      setReleaseLoadActionId(null);
     }
   };
 
@@ -260,10 +334,137 @@ export function IntegrationsWorkspace() {
                   {selectedRepository?.id ? "Import last 30 days" : "Connect and import last 30 days"}
                 </button>
               )}
+
+              {monitoredRepository?.id && latestRelease && (
+                <LatestRelease
+                  activity={latestRelease}
+                  busy={releaseActionId === latestRelease.id || action === "install"}
+                  onRetry={() => { void retryRelease(latestRelease); }}
+                  onReconnect={() => { void installGitHub(); }}
+                />
+              )}
+              {monitoredRepository?.id && latestReleaseError !== null && latestReleaseError !== undefined && (
+                <ReleaseActivityLoadError
+                  error={latestReleaseError}
+                  busy={releaseLoadActionId === monitoredRepository.id || action === "install"}
+                  onRetry={() => { void retryReleaseActivityLoad(monitoredRepository.id!); }}
+                  onReconnect={() => { void installGitHub(); }}
+                />
+              )}
             </div>
           )}
         </section>
       </div>
+    </div>
+  );
+}
+
+function LatestRelease({
+  activity,
+  busy,
+  onRetry,
+  onReconnect,
+}: {
+  activity: GitHubReleaseActivity;
+  busy: boolean;
+  onRetry: () => void;
+  onReconnect: () => void;
+}) {
+  let content;
+  if (activity.status === "QUEUED" || activity.status === "RESOLVING" || activity.status === "GENERATING") {
+    content = <span>Preparing {activity.tagName}…</span>;
+  } else if (activity.status === "READY" && activity.contentPackId) {
+    content = (
+      <span>
+        <span>Draft ready</span> ·{" "}
+        <Link
+          href={`/packs?pack=${encodeURIComponent(activity.contentPackId)}`}
+          className="font-semibold text-[#2563eb] hover:underline dark:text-[#93c5fd]"
+        >
+          Review changelog
+        </Link>
+      </span>
+    );
+  } else if (activity.status === "READY") {
+    content = <span>Draft ready</span>;
+  } else if (activity.status === "NO_ACTIVITY") {
+    content = <span>No customer-facing changes found for {activity.tagName}</span>;
+  } else if (activity.status === "NEEDS_RANGE") {
+    content = <span>A previous release boundary is required; use an explicit /changelog range</span>;
+  } else if (activity.errorCode === "GITHUB_ACCESS_DENIED") {
+    content = (
+      <span>
+        <span>GitHub permission lost</span> ·{" "}
+        <button
+          type="button"
+          onClick={onReconnect}
+          disabled={busy}
+          aria-label={`Reconnect GitHub for release ${activity.tagName}`}
+          className="font-semibold text-[#2563eb] hover:underline disabled:opacity-50 dark:text-[#93c5fd]"
+        >
+          Reconnect
+        </button>
+      </span>
+    );
+  } else {
+    content = (
+      <span>
+        Could not prepare {activity.tagName} ·{" "}
+        <button
+          type="button"
+          onClick={onRetry}
+          disabled={busy}
+          aria-label={`Retry release ${activity.tagName}`}
+          className="font-semibold text-[#2563eb] hover:underline disabled:opacity-50 dark:text-[#93c5fd]"
+        >
+          Retry
+        </button>
+      </span>
+    );
+  }
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="mt-5 rounded-[10px] border border-black/[0.08] bg-black/[0.015] px-4 py-3 text-sm text-black/58 dark:border-white/10 dark:bg-white/[0.025] dark:text-white/58"
+    >
+      <div className="text-xs font-semibold uppercase tracking-[0.08em] text-black/38 dark:text-white/38">
+        Latest release
+      </div>
+      <div className="mt-1.5">{content}</div>
+    </div>
+  );
+}
+
+function ReleaseActivityLoadError({
+  error,
+  busy,
+  onRetry,
+  onReconnect,
+}: {
+  error: unknown;
+  busy: boolean;
+  onRetry: () => void;
+  onReconnect: () => void;
+}) {
+  const reconnect = requiresReconnect(error);
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="mt-5 rounded-[10px] border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-100"
+    >
+      <span>{reconnect ? "GitHub permission lost" : "Could not load release activity"}</span> ·{" "}
+      <button
+        type="button"
+        onClick={reconnect ? onReconnect : onRetry}
+        disabled={busy}
+        aria-label={reconnect ? "Reconnect GitHub for release activity" : "Retry release activity"}
+        className="font-semibold underline underline-offset-2 disabled:opacity-50"
+      >
+        {reconnect ? "Reconnect" : "Retry"}
+      </button>
     </div>
   );
 }

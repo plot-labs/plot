@@ -51,6 +51,40 @@ describe("Plot API client", () => {
     expect(new Headers(fetcher.mock.calls[4]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
   });
 
+  it("loads nullable release activity and retries an exact failed request", async () => {
+    const activity = {
+      id: "request-1",
+      sourceScopeId: "scope-1",
+      tagName: "v1.2.0",
+      status: "FAILED",
+      baseSha: "base",
+      headSha: "head",
+      generationRunId: null,
+      contentPackId: null,
+      errorCode: "GENERATION_FAILED",
+      createdAt: "2026-07-30T00:00:00Z",
+      updatedAt: "2026-07-30T00:01:00Z",
+    };
+    const fetcher = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(Response.json({ ...activity, status: "QUEUED", errorCode: null }));
+    const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
+
+    await expect(client.getGitHubReleaseActivity("scope-1")).resolves.toBeNull();
+    await expect(client.retryGitHubReleaseDraft("scope-1", "request-1")).resolves.toMatchObject({
+      id: "request-1",
+      status: "QUEUED",
+      contentPackId: null,
+    });
+
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+      "/api/plot/github/repositories/scope-1/release-activity",
+      "/api/plot/github/repositories/scope-1/release-activity/request-1/retry",
+    ]);
+    expect(fetcher.mock.calls[1]?.[1]).toMatchObject({ method: "POST" });
+    expect(new Headers(fetcher.mock.calls[1]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
+  });
+
   it("hydrates provider-neutral generation references from connected source scopes", async () => {
     const fetcher = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(Response.json([{ id: "connection-1", installationId: 1, status: "ACTIVE", repositories: [

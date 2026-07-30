@@ -176,6 +176,8 @@ function isAllowed(method: string, path: string[]): boolean {
   if (method === "PUT" && /^github\/repositories\/[^/]+$/.test(route)) return true;
   if (method === "DELETE" && /^github\/repositories\/[^/]+$/.test(route)) return true;
   if (method === "POST" && /^github\/repositories\/[^/]+\/imports$/.test(route)) return true;
+  if (method === "GET" && /^github\/repositories\/[^/]+\/release-activity$/.test(route)) return true;
+  if (method === "POST" && /^github\/repositories\/[^/]+\/release-activity\/[^/]+\/retry$/.test(route)) return true;
   if (method === "GET" && /^github\/imports\/[^/]+$/.test(route)) return true;
   if (method === "GET" && route === "blocks") return true;
   if (method === "GET" && route === "sessions") return true;

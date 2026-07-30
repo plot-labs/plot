@@ -9,6 +9,7 @@ import java.time.ZoneOffset
 import java.util.Base64
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
 import tools.jackson.databind.ObjectMapper
@@ -138,6 +139,7 @@ class GitHubRestClientTest {
 			privateKey = testPrivateKey(),
 			stateSecret = "state-secret",
 			apiBaseUrl = "https://api.github.test",
+			webBaseUrl = "https://github.test",
 		)
 		val client = GitHubRestClient(properties, ObjectMapper(), Clock.fixed(Instant.parse("2026-01-10T00:00:00Z"), ZoneOffset.UTC), transport)
 
@@ -219,6 +221,381 @@ class GitHubRestClientTest {
 		val exception = assertFailsWith<ApiException> { client.listInstallationRepositories(77) }
 		assertEquals("GITHUB_NETWORK_ERROR", exception.error)
 		assertEquals("GitHub request failed", exception.message)
+	}
+
+	@Test
+	fun resolvesLightweightTagToCommitWithEncodedPathAndContentsPermission() {
+		var tokenBody: String? = null
+		var referenceRawPath: String? = null
+		val transport = GitHubHttpTransport { _, uri, _, body ->
+			when {
+				uri.path.endsWith("/access_tokens") -> {
+					tokenBody = body
+					GitHubHttpResponse(201, emptyMap(), """{"token":"installation-token"}""")
+				}
+				else -> {
+					referenceRawPath = uri.rawPath
+					GitHubHttpResponse(
+						200,
+						emptyMap(),
+						"""{"ref":"refs/tags/release/한 글","object":{"type":"commit","sha":"head-sha","url":"https://api.github.test/repos/acme/plot/git/commits/head-sha"}}""",
+					)
+				}
+			}
+		}
+		val client = GitHubRestClient(properties(), objectMapper, transport = transport)
+
+		val result = client.resolveTagCommit(77, 44, "ac me", "plot/repo", "release/한 글")
+
+		assertEquals("head-sha", result)
+		assertEquals(
+			"/repos/ac%20me/plot%2Frepo/git/ref/tags/release%2F%ED%95%9C%20%EA%B8%80",
+			referenceRawPath,
+		)
+		val permissions = objectMapper.readTree(tokenBody!!).path("permissions")
+		assertEquals("read", permissions.path("contents").stringValue())
+	}
+
+	@Test
+	fun dereferencesNestedAnnotatedTagsUntilACommit() {
+		val requestedPaths = mutableListOf<String>()
+		val transport = GitHubHttpTransport { _, uri, _, _ ->
+			when {
+				uri.path.endsWith("/access_tokens") -> GitHubHttpResponse(201, emptyMap(), """{"token":"installation-token"}""")
+				uri.rawPath.endsWith("/git/ref/tags/v1") -> GitHubHttpResponse(
+					200,
+					emptyMap(),
+					"""{"ref":"refs/tags/v1","object":{"type":"tag","sha":"tag-one","url":"https://api.github.test/repos/acme/plot/git/tags/tag-one"}}""",
+				)
+				uri.rawPath.endsWith("/git/tags/tag-one") -> GitHubHttpResponse(
+					200,
+					emptyMap(),
+					"""{"sha":"tag-one","object":{"type":"tag","sha":"tag-two","url":"https://api.github.test/repos/acme/plot/git/tags/tag-two"}}""",
+				)
+				else -> GitHubHttpResponse(
+					200,
+					emptyMap(),
+					"""{"sha":"tag-two","object":{"type":"commit","sha":"commit-sha","url":"https://api.github.test/repos/acme/plot/git/commits/commit-sha"}}""",
+				)
+			}.also { if (!uri.path.endsWith("/access_tokens")) requestedPaths += uri.rawPath }
+		}
+		val client = GitHubRestClient(properties(), objectMapper, transport = transport)
+
+		assertEquals("commit-sha", client.resolveTagCommit(77, 44, "acme", "plot", "v1"))
+		assertEquals(
+			listOf(
+				"/repos/acme/plot/git/ref/tags/v1",
+				"/repos/acme/plot/git/tags/tag-one",
+				"/repos/acme/plot/git/tags/tag-two",
+			),
+			requestedPaths,
+		)
+	}
+
+	@Test
+	fun rejectsWhenTheFifthAnnotatedTagPointsToASixthTag() {
+		var tagCalls = 0
+		val transport = GitHubHttpTransport { _, uri, _, _ ->
+			when {
+				uri.path.endsWith("/access_tokens") -> GitHubHttpResponse(201, emptyMap(), """{"token":"installation-token"}""")
+				uri.rawPath.contains("/git/ref/tags/") -> GitHubHttpResponse(
+					200,
+					emptyMap(),
+					"""{"object":{"type":"tag","sha":"tag-1","url":"https://api.github.test/tag-1"}}""",
+				)
+				else -> {
+					tagCalls++
+					GitHubHttpResponse(
+						200,
+						emptyMap(),
+						"""{"object":{"type":"tag","sha":"tag-${tagCalls + 1}","url":"https://api.github.test/tag-${tagCalls + 1}"}}""",
+					)
+				}
+			}
+		}
+		val client = GitHubRestClient(properties(), objectMapper, transport = transport)
+
+		val exception = assertFailsWith<ApiException> {
+			client.resolveTagCommit(77, 44, "acme", "plot", "v1")
+		}
+
+		assertEquals("GITHUB_TAG_DEREFERENCE_LIMIT", exception.error)
+		assertEquals(5, tagCalls)
+	}
+
+	@Test
+	fun resolvesACommitAtExactlyTheFifthAnnotatedTagDereference() {
+		var tagCalls = 0
+		val transport = GitHubHttpTransport { _, uri, _, _ ->
+			when {
+				uri.path.endsWith("/access_tokens") -> GitHubHttpResponse(201, emptyMap(), """{"token":"installation-token"}""")
+				uri.rawPath.contains("/git/ref/tags/") -> GitHubHttpResponse(
+					200,
+					emptyMap(),
+					"""{"object":{"type":"tag","sha":"tag-1","url":"https://api.github.test/tag-1"}}""",
+				)
+				else -> {
+					tagCalls++
+					val type = if (tagCalls == 5) "commit" else "tag"
+					GitHubHttpResponse(
+						200,
+						emptyMap(),
+						"""{"object":{"type":"$type","sha":"object-${tagCalls + 1}","url":"https://api.github.test/object-${tagCalls + 1}"}}""",
+					)
+				}
+			}
+		}
+		val client = GitHubRestClient(properties(), objectMapper, transport = transport)
+
+		assertEquals("object-6", client.resolveTagCommit(77, 44, "acme", "plot", "v1"))
+		assertEquals(5, tagCalls)
+	}
+
+	@Test
+	fun rejectsTagResolvingToANonCommitObjectPermanently() {
+		val transport = GitHubHttpTransport { _, uri, _, _ ->
+			when {
+				uri.path.endsWith("/access_tokens") -> GitHubHttpResponse(201, emptyMap(), """{"token":"installation-token"}""")
+				else -> GitHubHttpResponse(
+					200,
+					emptyMap(),
+					"""{"object":{"type":"tree","sha":"tree-sha","url":"https://api.github.test/tree-sha"}}""",
+				)
+			}
+		}
+		val client = GitHubRestClient(properties(), objectMapper, transport = transport)
+
+		val exception = assertFailsWith<ApiException> {
+			client.resolveTagCommit(77, 44, "acme", "plot", "v1")
+		}
+
+		assertEquals("GITHUB_TAG_INVALID_OBJECT", exception.error)
+	}
+
+	@Test
+	fun paginatesCompareCommitsAndUsesChangedFilesOnlyFromTheFirstPage() {
+		val compareUris = mutableListOf<String>()
+		val transport = GitHubHttpTransport { _, uri, _, _ ->
+			when {
+				uri.path.endsWith("/access_tokens") -> GitHubHttpResponse(201, emptyMap(), """{"token":"installation-token"}""")
+				Regex("(?:^|&)page=1(?:&|$)").containsMatchIn(uri.query.orEmpty()) -> GitHubHttpResponse(
+					200,
+					mapOf("Link" to listOf("<https://api.github.test/repos/acme/plot/compare/base%2Fsha...head%2Fsha?per_page=100&page=2>; rel=\"next\"")),
+					"""
+					{
+					  "status":"ahead",
+					  "ahead_by":2,
+					  "commits":[{
+					    "sha":"commit-1",
+					    "html_url":"https://github.com/acme/plot/commit/commit-1",
+					    "author":{"login":"ada"},
+					    "commit":{"message":"First","committer":{"date":"2026-01-01T00:00:00Z"}}
+					  }],
+					  "files":[{
+					    "filename":"new.kt","previous_filename":"old.kt","status":"renamed",
+					    "additions":3,"deletions":1,"patch":"@@ patch one"
+					  }]
+					}
+					""".trimIndent(),
+				)
+				else -> GitHubHttpResponse(
+					200,
+					emptyMap(),
+					"""
+					{
+					  "status":"ahead",
+					  "ahead_by":2,
+					  "commits":[{
+					    "sha":"commit-2",
+					    "html_url":"https://github.com/acme/plot/commit/commit-2",
+					    "author":null,
+					    "commit":{"message":"Second","author":{"name":"Grace"},"committer":{"date":"2026-01-02T00:00:00Z"}}
+					  }],
+					  "files":[{
+					    "filename":"ignored.kt","status":"modified","additions":99,"deletions":0,"patch":"ignored"
+					  }]
+					}
+					""".trimIndent(),
+				)
+			}.also { if (!uri.path.endsWith("/access_tokens")) compareUris += uri.toString() }
+		}
+		val client = GitHubRestClient(properties(), objectMapper, transport = transport)
+
+		val result = client.compareCommits(77, 44, "acme", "plot", "base/sha", "head/sha", 3)
+
+		assertEquals("ahead", result.status)
+		assertEquals(2, result.aheadBy)
+		assertEquals(listOf("commit-1", "commit-2"), result.commits.map { it.sha })
+		assertEquals(listOf("ada", "Grace"), result.commits.map { it.author })
+		assertEquals(
+			listOf(
+				"https://github.com/acme/plot/commit/commit-1",
+				"https://github.com/acme/plot/commit/commit-2",
+			),
+			result.commits.map { it.url },
+		)
+		assertEquals(listOf("new.kt"), result.files.map { it.filename })
+		assertEquals("old.kt", result.files.single().previousFilename)
+		assertFalse(result.filesTruncated)
+		assertTrue(compareUris.first().contains("/compare/base%2Fsha...head%2Fsha?per_page=100&page=1"))
+		assertTrue(compareUris.last().endsWith("page=2"))
+	}
+
+	@Test
+	fun marksExactlyThreeHundredChangedFilesAsConservativelyTruncated() {
+		val files = (1..300).joinToString(",") {
+			"""{"filename":"file-$it.kt","status":"modified","additions":1,"deletions":0,"patch":null}"""
+		}
+		val transport = GitHubHttpTransport { _, uri, _, _ ->
+			when {
+				uri.path.endsWith("/access_tokens") -> GitHubHttpResponse(201, emptyMap(), """{"token":"installation-token"}""")
+				else -> GitHubHttpResponse(
+					200,
+					emptyMap(),
+					"""
+					{
+					  "status":"ahead",
+					  "ahead_by":1,
+					  "commits":[{
+					    "sha":"commit-1",
+					    "html_url":"https://github.com/acme/plot/commit/commit-1",
+					    "author":{"login":"ada"},
+					    "commit":{"message":"First","committer":{"date":"2026-01-01T00:00:00Z"}}
+					  }],
+					  "files":[$files]
+					}
+					""".trimIndent(),
+				)
+			}
+		}
+		val client = GitHubRestClient(properties(), objectMapper, transport = transport)
+
+		val result = client.compareCommits(77, 44, "acme", "plot", "base", "head", 1)
+
+		assertEquals(300, result.files.size)
+		assertTrue(result.filesTruncated)
+	}
+
+	@Test
+	fun rejectsAheadComparisonWhenGitHubOmitsExpectedCommits() {
+		val transport = GitHubHttpTransport { _, uri, _, _ ->
+			when {
+				uri.path.endsWith("/access_tokens") -> GitHubHttpResponse(201, emptyMap(), """{"token":"installation-token"}""")
+				else -> GitHubHttpResponse(
+					200,
+					emptyMap(),
+					"""{"status":"ahead","ahead_by":1,"commits":[],"files":[]}""",
+				)
+			}
+		}
+		val client = GitHubRestClient(properties(), objectMapper, transport = transport)
+
+		val exception = assertFailsWith<ApiException> {
+			client.compareCommits(77, 44, "acme", "plot", "base", "head", 1)
+		}
+
+		assertEquals("GITHUB_INVALID_RESPONSE", exception.error)
+	}
+
+	@Test
+	fun rejectsDivergedComparisonWhenUniqueCommitCollectionIsPartial() {
+		val duplicateCommit = """
+			{
+			  "sha":"commit-1",
+			  "html_url":"https://github.com/acme/plot/commit/commit-1",
+			  "author":{"login":"ada"},
+			  "commit":{"message":"First","committer":{"date":"2026-01-01T00:00:00Z"}}
+			}
+		""".trimIndent()
+		val transport = GitHubHttpTransport { _, uri, _, _ ->
+			when {
+				uri.path.endsWith("/access_tokens") -> GitHubHttpResponse(201, emptyMap(), """{"token":"installation-token"}""")
+				else -> GitHubHttpResponse(
+					200,
+					emptyMap(),
+					"""{"status":"diverged","ahead_by":2,"commits":[$duplicateCommit,$duplicateCommit],"files":[]}""",
+				)
+			}
+		}
+		val client = GitHubRestClient(properties(), objectMapper, transport = transport)
+
+		val exception = assertFailsWith<ApiException> {
+			client.compareCommits(77, 44, "acme", "plot", "base", "head", 1)
+		}
+
+		assertEquals("GITHUB_INVALID_RESPONSE", exception.error)
+	}
+
+	@Test
+	fun returnsAssociatedPullRequestsDeduplicatedByProviderId() {
+		var pullUri: String? = null
+		val pull = """
+			{"id":81,"number":8,"title":"Release","body":"Body","html_url":"https://github.com/acme/plot/pull/8",
+			 "user":{"login":"ada"},"base":{"ref":"main"},"head":{"ref":"release"},
+			 "created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-02T00:00:00Z","merged_at":"2026-01-02T00:00:00Z"}
+		""".trimIndent()
+		val transport = GitHubHttpTransport { _, uri, _, _ ->
+			when {
+				uri.path.endsWith("/access_tokens") -> GitHubHttpResponse(201, emptyMap(), """{"token":"installation-token"}""")
+				else -> {
+					pullUri = uri.toString()
+					GitHubHttpResponse(200, emptyMap(), "[$pull,$pull]")
+				}
+			}
+		}
+		val client = GitHubRestClient(properties(), objectMapper, transport = transport)
+
+		val result = client.listPullRequestsForCommit(77, 44, "acme", "plot", "commit/sha")
+
+		assertEquals(listOf(81L), result.map { it.id })
+		assertTrue(pullUri!!.contains("/commits/commit%2Fsha/pulls?per_page=100&page=1"))
+	}
+
+	@Test
+	fun classifiesRateLimitAndProviderFailuresAsRetryableCodes() {
+		fun failure(response: GitHubHttpResponse): ApiException {
+			val transport = GitHubHttpTransport { _, uri, _, _ ->
+				if (uri.path.endsWith("/access_tokens")) {
+					GitHubHttpResponse(201, emptyMap(), """{"token":"installation-token"}""")
+				} else {
+					response
+				}
+			}
+			return assertFailsWith {
+				GitHubRestClient(properties(), objectMapper, transport = transport)
+					.resolveTagCommit(77, 44, "acme", "plot", "v1")
+			}
+		}
+
+		assertEquals(
+			"GITHUB_RATE_LIMITED",
+			failure(GitHubHttpResponse(403, mapOf("X-RateLimit-Remaining" to listOf("0")), "{}")).error,
+		)
+		assertEquals(
+			"GITHUB_PROVIDER_UNAVAILABLE",
+			failure(GitHubHttpResponse(503, emptyMap(), "provider secret")).error,
+		)
+	}
+
+	@Test
+	fun classifiesAccessLossNotFoundAndMalformedResponsesAsPermanentCodes() {
+		fun failure(response: GitHubHttpResponse): ApiException {
+			val transport = GitHubHttpTransport { _, uri, _, _ ->
+				if (uri.path.endsWith("/access_tokens")) {
+					GitHubHttpResponse(201, emptyMap(), """{"token":"installation-token"}""")
+				} else {
+					response
+				}
+			}
+			return assertFailsWith {
+				GitHubRestClient(properties(), objectMapper, transport = transport)
+					.resolveTagCommit(77, 44, "acme", "plot", "v1")
+			}
+		}
+
+		assertEquals("GITHUB_ACCESS_DENIED", failure(GitHubHttpResponse(403, emptyMap(), "{}")).error)
+		assertEquals("GITHUB_NOT_FOUND", failure(GitHubHttpResponse(404, emptyMap(), "{}")).error)
+		assertEquals("GITHUB_INVALID_RESPONSE", failure(GitHubHttpResponse(200, emptyMap(), "{")).error)
 	}
 
 	private fun properties(privateKey: String = testPrivateKey()) = GitHubProperties(

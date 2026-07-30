@@ -1,6 +1,7 @@
 package com.plot.api.generation
 
 import com.plot.api.TestcontainersConfiguration
+import com.plot.api.common.WorkspacePrincipal
 import com.plot.api.dev.DevContext
 import java.util.UUID
 import kotlin.test.assertEquals
@@ -48,6 +49,7 @@ class GenerationApiIntegrationTest {
 	@Autowired private lateinit var objectMapper: ObjectMapper
 	@Autowired private lateinit var persistence: GenerationPersistence
 	@Autowired private lateinit var workflow: GenerationWorkflowService
+	@Autowired private lateinit var generationRunService: GenerationRunService
 
 	@Test
 	fun `generation requires idempotency key and never caches errors`() {
@@ -207,20 +209,71 @@ class GenerationApiIntegrationTest {
 		))
 	}
 
-	private fun sourceFixture(): SourceFixture {
+	@Test
+	fun `background creation is workspace scoped rejects foreign blocks and preserves idempotency`() {
+		val principal = createPrincipal()
+		val fixture = sourceFixture(principal)
+		val foreign = sourceFixture()
+		val key = "release:${fixture.scopeId}:v1"
+
+		val first = generationRunService.createForPrincipal(
+			principal = principal,
+			sourceScopeId = fixture.scopeId,
+			writingBlockIds = listOf(fixture.blockId),
+			instruction = "Prepare the release changelog",
+			idempotencyKey = key,
+		)
+		val repeated = generationRunService.createForPrincipal(
+			principal = principal,
+			sourceScopeId = fixture.scopeId,
+			writingBlockIds = listOf(fixture.blockId),
+			instruction = "Prepare the release changelog",
+			idempotencyKey = key,
+		)
+
+		assertEquals(first.runId, repeated.runId)
+		assertEquals(principal.workspaceId, jdbcTemplate.queryForObject(
+			"select workspace_id from generation_runs where id = ?",
+			UUID::class.java,
+			first.runId,
+		))
+		assertEquals(principal.userId, jdbcTemplate.queryForObject(
+			"select created_by_user_id from generation_runs where id = ?",
+			UUID::class.java,
+			first.runId,
+		))
+		kotlin.test.assertFailsWith<GenerationSourceAccessException> {
+			generationRunService.createForPrincipal(
+				principal = principal,
+				sourceScopeId = fixture.scopeId,
+				writingBlockIds = listOf(foreign.blockId),
+				instruction = null,
+				idempotencyKey = "release:${fixture.scopeId}:foreign",
+			)
+		}
+		assertEquals(0, jdbcTemplate.queryForObject(
+			"select count(*) from generation_runs where workspace_id = ? and idempotency_key like '%:foreign'",
+			Int::class.java,
+			principal.workspaceId,
+		))
+	}
+
+	private fun sourceFixture(
+		principal: WorkspacePrincipal = WorkspacePrincipal(devContext.devWorkspaceId, devContext.devUserId),
+	): SourceFixture {
 		val namespaceId = UUID.randomUUID()
 		val scopeId = UUID.randomUUID()
 		val blockId = UUID.randomUUID()
 		jdbcTemplate.update(
 			"insert into source_namespaces (id, workspace_id, provider, namespace_kind, external_namespace_key, display_name, status, created_at, updated_at) values (?, ?, 'github', 'organization', ?, 'Acme', 'ACTIVE', now(), now())",
-			namespaceId, devContext.devWorkspaceId, "org-${UUID.randomUUID()}",
+			namespaceId, principal.workspaceId, "org-${UUID.randomUUID()}",
 		)
 		jdbcTemplate.update(
 			"""
 			insert into source_scopes (id, workspace_id, source_namespace_id, provider, scope_semantics, scope_kind,
 			 external_scope_key, display_name, status, created_at, updated_at)
 			values (?, ?, ?, 'github', 'CONTAINER', 'repository', ?, 'repo', 'ACTIVE', now(), now())
-			""".trimIndent(), scopeId, devContext.devWorkspaceId, namespaceId, "repo-${UUID.randomUUID()}",
+			""".trimIndent(), scopeId, principal.workspaceId, namespaceId, "repo-${UUID.randomUUID()}",
 		)
 		jdbcTemplate.update(
 			"""
@@ -228,16 +281,48 @@ class GenerationApiIntegrationTest {
 			 url, canonical_url, platform, content_hash, ingested_at, status, created_by_user_id, created_at, updated_at)
 			values (?, ?, ?, ?, 'github', 'pull_request', 'PR', 'ORIGINAL PRIVATE EVIDENCE',
 			 'https://github.test/acme/repo/pull/1', 'https://github.test/acme/repo/pull/1', 'github', 'hash', now(), 'ACTIVE', ?, now(), now())
-			""".trimIndent(), blockId, devContext.devWorkspaceId, namespaceId, "pr-${UUID.randomUUID()}", devContext.devUserId,
+			""".trimIndent(), blockId, principal.workspaceId, namespaceId, "pr-${UUID.randomUUID()}", principal.userId,
 		)
 		jdbcTemplate.update(
 			"""
 			insert into writing_block_scopes (id, workspace_id, source_namespace_id, writing_block_id, source_scope_id,
 			 membership_kind, status, first_seen_at, last_seen_at)
 			values (?, ?, ?, ?, ?, 'CONTAINED_IN', 'ACTIVE', now(), now())
-			""".trimIndent(), UUID.randomUUID(), devContext.devWorkspaceId, namespaceId, blockId, scopeId,
+			""".trimIndent(), UUID.randomUUID(), principal.workspaceId, namespaceId, blockId, scopeId,
 		)
 		return SourceFixture(scopeId, blockId)
+	}
+
+	private fun createPrincipal(): WorkspacePrincipal {
+		val principal = WorkspacePrincipal(UUID.randomUUID(), UUID.randomUUID())
+		jdbcTemplate.update(
+			"""
+			insert into users (id, email, display_name, status, created_at, updated_at)
+			values (?, ?, 'Release Worker', 'ACTIVE', now(), now())
+			""".trimIndent(),
+			principal.userId,
+			"release-${principal.userId}@example.test",
+		)
+		jdbcTemplate.update(
+			"""
+			insert into workspaces (
+			 id, name, slug, created_by_user_id, status, created_at, updated_at
+			) values (?, 'Release Workspace', ?, ?, 'ACTIVE', now(), now())
+			""".trimIndent(),
+			principal.workspaceId,
+			"release-${principal.workspaceId}",
+			principal.userId,
+		)
+		jdbcTemplate.update(
+			"""
+			insert into workspace_members (id, workspace_id, user_id, role, status, joined_at, created_at, updated_at)
+			values (?, ?, ?, 'OWNER', 'ACTIVE', now(), now(), now())
+			""".trimIndent(),
+			UUID.randomUUID(),
+			principal.workspaceId,
+			principal.userId,
+		)
+		return principal
 	}
 }
 

@@ -443,6 +443,73 @@ class GenerationPersistence(
 		Timestamp.from(clock.instant()), Timestamp.from(staleBefore),
 	)
 
+	fun createRetryAttempt(
+		workspaceId: UUID,
+		failedRunId: UUID,
+		newRunId: UUID,
+		attemptNo: Int,
+	): GenerationWorkflowState = checkNotNull(transactionTemplate.execute {
+		require(attemptNo > 0) { "Generation retry attempt must be positive" }
+		val source = jdbcTemplate.query(
+			"""
+			select source_scope_id, created_by_user_id, idempotency_key, request_fingerprint,
+				status, provider, model_name, budget_snapshot::text, user_instruction
+			from generation_runs
+			where workspace_id = ? and id = ?
+			for update
+			""".trimIndent(),
+			{ rs, _ ->
+				RetryGenerationSource(
+					sourceScopeId = rs.getObject("source_scope_id", UUID::class.java),
+					createdByUserId = rs.getObject("created_by_user_id", UUID::class.java),
+					idempotencyKey = rs.getString("idempotency_key"),
+					requestFingerprint = rs.getString("request_fingerprint"),
+					status = GenerationRunStatus.valueOf(rs.getString("status")),
+					provider = rs.getString("provider"),
+					modelName = rs.getString("model_name"),
+					budgetJson = rs.getString("budget_snapshot"),
+					instruction = rs.getString("user_instruction"),
+				)
+			},
+			workspaceId,
+			failedRunId,
+		).firstOrNull() ?: throw GenerationRunNotFoundException(failedRunId)
+		check(source.status == GenerationRunStatus.FAILED) { "Linked generation is not retryable" }
+		val packCount = jdbcTemplate.queryForObject(
+			"select count(*) from content_packs where workspace_id = ? and generation_run_id = ?",
+			Int::class.java,
+			workspaceId,
+			failedRunId,
+		) ?: 0
+		check(packCount == 0) { "A materialized generation cannot be retried" }
+		val previous = loadState(workspaceId, failedRunId)
+		val frozenEvidence = previous.evidence.map { evidence ->
+			evidence.copy(
+				id = uuidGenerator.next(),
+				generationRunId = newRunId,
+			)
+		}
+		val initial = GenerationWorkflowState(
+			runId = newRunId,
+			evidence = frozenEvidence,
+			instruction = source.instruction,
+			status = GenerationRunStatus.QUEUED,
+		)
+		createRun(
+			GenerationRunReservation(
+				workspaceId = workspaceId,
+				createdByUserId = source.createdByUserId,
+				sourceScopeId = source.sourceScopeId,
+				idempotencyKey = source.idempotencyKey.withAttempt(attemptNo),
+				requestFingerprint = source.requestFingerprint,
+				state = initial,
+				provider = source.provider,
+				modelName = source.modelName,
+				budgetJson = source.budgetJson,
+			),
+		)
+	})
+
 	private fun insertEvidence(workspaceId: UUID, evidence: EvidenceSnapshot) {
 		jdbcTemplate.update(
 			"""
@@ -480,9 +547,24 @@ class GenerationPersistence(
 		val packId = uuidGenerator.next()
 		val variantId = uuidGenerator.next()
 		val status = if (state.status == GenerationRunStatus.READY) "READY" else "NEEDS_REVIEW"
+		val releaseRequestId = jdbcTemplate.query(
+			"""
+			select request_id
+			from github_release_generation_attempts
+			where workspace_id = ? and generation_run_id = ?
+			""".trimIndent(),
+			{ rs, _ -> rs.getObject("request_id", UUID::class.java) },
+			workspaceId,
+			state.runId,
+		).firstOrNull()
 		jdbcTemplate.update(
-			"insert into content_packs (id, workspace_id, generation_run_id, title, status, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?)",
-			packId, workspaceId, state.runId, state.sentences.firstOrNull()?.body?.take(120), status, Timestamp.from(now), Timestamp.from(now),
+			"""
+			insert into content_packs (
+			 id, workspace_id, generation_run_id, release_request_id, title, status, created_at, updated_at
+			) values (?, ?, ?, ?, ?, ?, ?, ?)
+			""".trimIndent(),
+			packId, workspaceId, state.runId, releaseRequestId,
+			state.sentences.firstOrNull()?.body?.take(120), status, Timestamp.from(now), Timestamp.from(now),
 		)
 		jdbcTemplate.update(
 			"insert into content_variants (id, workspace_id, generation_run_id, content_pack_id, variant_index, status, created_at, updated_at) values (?, ?, ?, ?, 0, ?, ?, ?)",
@@ -549,6 +631,21 @@ private data class RunTimingRow(
 	val totalTokens: Long,
 	val totalLatencyMs: Long,
 )
+
+private data class RetryGenerationSource(
+	val sourceScopeId: UUID?,
+	val createdByUserId: UUID,
+	val idempotencyKey: String,
+	val requestFingerprint: String,
+	val status: GenerationRunStatus,
+	val provider: String,
+	val modelName: String,
+	val budgetJson: String,
+	val instruction: String?,
+)
+
+private fun String.withAttempt(attemptNo: Int): String =
+	replace(Regex(":attempt:\\d+$"), "") + ":attempt:$attemptNo"
 
 private fun GenerationWorkflowState.asFailure(code: String): GenerationWorkflowState = copy(
 	status = if (reviews.isEmpty()) GenerationRunStatus.FAILED else GenerationRunStatus.NEEDS_REVIEW,
