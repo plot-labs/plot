@@ -24,6 +24,22 @@ interface GitHubClient {
 		pageCap: Int,
 	): List<GitHubPullRequest>
 
+	fun listPublishedReleaseTags(
+		installationId: Long,
+		repositoryId: Long,
+		owner: String,
+		repository: String,
+		limit: Int,
+	): GitHubTagPage = throw UnsupportedOperationException("GitHub release listing is not implemented")
+
+	fun listRepositoryTags(
+		installationId: Long,
+		repositoryId: Long,
+		owner: String,
+		repository: String,
+		limit: Int,
+	): GitHubTagPage = throw UnsupportedOperationException("GitHub tag listing is not implemented")
+
 	fun resolveTagCommit(
 		installationId: Long,
 		repositoryId: Long,

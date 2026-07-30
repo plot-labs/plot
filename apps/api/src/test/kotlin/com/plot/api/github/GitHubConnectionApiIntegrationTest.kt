@@ -53,12 +53,16 @@ class GitHubConnectionApiIntegrationTest {
 	@Autowired
 	private lateinit var fakeClient: FakeGitHubClient
 
+	@Autowired
+	private lateinit var monitoringWorker: GitHubRepositoryMonitoringWorker
+
 	@BeforeEach
 	fun cleanData() {
 		jdbcTemplate.update("delete from writing_block_scopes where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from source_imports where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from source_observations where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from writing_blocks where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from github_repository_monitoring where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from source_scopes where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from connection_namespace_bindings where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from source_namespaces where workspace_id = ?", devContext.devWorkspaceId)
@@ -171,7 +175,15 @@ class GitHubConnectionApiIntegrationTest {
 	@Test
 	fun connectedRepositoryMarksWebhookMonitoringActiveWithoutStartingGeneration() {
 		val connectionId = completeInstallation()
-		val scopeId = connect(connectionId, 1001)
+		val response = mockMvc.put("/api/github/repositories/1001") {
+			contentType = MediaType.APPLICATION_JSON
+			content = "{\"connectionId\":\"$connectionId\"}"
+		}.andExpect {
+			status { isOk() }
+			jsonPath("$.monitoring.status") { value("ACTIVE") }
+			jsonPath("$.monitoring.analysisStatus") { value("QUEUED") }
+		}.andReturn().response.contentAsString
+		val scopeId = UUID.fromString(Regex("\"id\":\"([^\"]+)\"").find(response)!!.groupValues[1])
 
 		val capabilities = jdbcTemplate.queryForObject(
 			"""select b.capabilities::text from connection_namespace_bindings b
@@ -185,8 +197,99 @@ class GitHubConnectionApiIntegrationTest {
 		assertTrue(capabilities.contains("\"pull_requests\": \"read\""))
 		assertTrue(capabilities.contains("\"contents\": \"read\""))
 		assertTrue(capabilities.contains("\"webhook_monitoring\": \"active\""))
+		assertEquals(1, jdbcTemplate.queryForObject(
+			"select count(*) from github_repository_monitoring where workspace_id = ? and source_scope_id = ?",
+			Int::class.java,
+			devContext.devWorkspaceId,
+			scopeId,
+		))
 		assertEquals(0, jdbcTemplate.queryForObject("select count(*) from generation_runs where workspace_id = ?", Int::class.java, devContext.devWorkspaceId))
 		assertEquals(0, jdbcTemplate.queryForObject("select count(*) from model_invocations", Int::class.java))
+		assertEquals(0, jdbcTemplate.queryForObject("select count(*) from content_packs where workspace_id = ?", Int::class.java, devContext.devWorkspaceId))
+		assertEquals(0, jdbcTemplate.queryForObject("select count(*) from github_release_draft_requests where workspace_id = ?", Int::class.java, devContext.devWorkspaceId))
+	}
+
+	@Test
+	fun monitoringCompletesFromPublishedReleasesAndManualRetryReusesTheSameRow() {
+		fakeClient.releaseTags = listOf("v1.0.0", "v1.1.0")
+		val connectionId = completeInstallation()
+		val scopeId = connect(connectionId, 1001)
+
+		for (ignored in 1..100) {
+			val status = jdbcTemplate.queryForObject(
+				"select analysis_status from github_repository_monitoring where workspace_id = ? and source_scope_id = ?",
+				String::class.java,
+				devContext.devWorkspaceId,
+				scopeId,
+			)
+			if (status == "COMPLETED") break
+			Thread.sleep(20)
+		}
+		mockMvc.get("/api/github/repositories/$scopeId/monitoring")
+			.andExpect {
+				status { isOk() }
+				header { string("Cache-Control", "no-store") }
+				jsonPath("$.status") { value("ACTIVE") }
+				jsonPath("$.analysisStatus") { value("COMPLETED") }
+				jsonPath("$.releaseConvention") { value("SEMVER_V") }
+				jsonPath("$.sampleSource") { value("RELEASES") }
+				jsonPath("$.sampleSize") { value(2) }
+			}
+		assertEquals(0, fakeClient.tagListCalls.get())
+
+		jdbcTemplate.update(
+			"""
+			update github_repository_monitoring
+			set analysis_status = 'FAILED', release_convention = null, sample_source = null,
+			    tag_prefix = null, last_error_code = 'MONITORING_ANALYSIS_FAILED', analyzed_at = null
+			where workspace_id = ? and source_scope_id = ?
+			""".trimIndent(),
+			devContext.devWorkspaceId,
+			scopeId,
+		)
+		mockMvc.post("/api/github/repositories/$scopeId/monitoring/retry")
+			.andExpect {
+				status { isAccepted() }
+				jsonPath("$.analysisStatus") { value("QUEUED") }
+				jsonPath("$.attemptCount") { value(0) }
+			}
+		assertEquals(1, jdbcTemplate.queryForObject(
+			"select count(*) from github_repository_monitoring where workspace_id = ? and source_scope_id = ?",
+			Int::class.java,
+			devContext.devWorkspaceId,
+			scopeId,
+		))
+	}
+
+	@Test
+	fun staleMonitoringClaimFailsAfterTheMaximumAttempt() {
+		val scopeId = connect(completeInstallation(), 1001)
+		jdbcTemplate.update(
+			"""
+			update github_repository_monitoring
+			set analysis_status = 'ANALYZING', attempt_count = 5,
+			    claimed_by = 'dead-worker', claimed_at = now() - interval '10 minutes'
+			where workspace_id = ? and source_scope_id = ?
+			""".trimIndent(),
+			devContext.devWorkspaceId,
+			scopeId,
+		)
+
+		monitoringWorker.recover()
+
+		assertEquals(
+			"FAILED:MONITORING_STALE_CLAIM_LIMIT",
+			jdbcTemplate.queryForObject(
+				"""
+				select analysis_status || ':' || last_error_code
+				from github_repository_monitoring
+				where workspace_id = ? and source_scope_id = ?
+				""".trimIndent(),
+				String::class.java,
+				devContext.devWorkspaceId,
+				scopeId,
+			),
+		)
 	}
 
 	@Test
@@ -362,6 +465,10 @@ class GitHubConnectionApiIntegrationTest {
 class FakeGitHubClient : GitHubClient {
 	val repositoryListCalls = AtomicInteger()
 	val pullRequestCalls = AtomicInteger()
+	val releaseListCalls = AtomicInteger()
+	val tagListCalls = AtomicInteger()
+	var releaseTags: List<String> = emptyList()
+	var repositoryTags: List<String> = emptyList()
 	var body = "Body"
 	var updatedAt: Instant = Instant.parse("2026-01-02T00:00:00Z")
 	var failImports = false
@@ -384,6 +491,28 @@ class FakeGitHubClient : GitHubClient {
 
 	override fun verifyRepositoryAccess(installationId: Long, repositoryId: Long, owner: String, repository: String): GitHubRepository {
 		return repositories.first { it.id == repositoryId }
+	}
+
+	override fun listPublishedReleaseTags(
+		installationId: Long,
+		repositoryId: Long,
+		owner: String,
+		repository: String,
+		limit: Int,
+	): GitHubTagPage {
+		releaseListCalls.incrementAndGet()
+		return GitHubTagPage(releaseTags.take(limit), releaseTags.size > limit)
+	}
+
+	override fun listRepositoryTags(
+		installationId: Long,
+		repositoryId: Long,
+		owner: String,
+		repository: String,
+		limit: Int,
+	): GitHubTagPage {
+		tagListCalls.incrementAndGet()
+		return GitHubTagPage(repositoryTags.take(limit), repositoryTags.size > limit)
 	}
 
 	override fun listClosedPullRequests(
@@ -454,6 +583,10 @@ class FakeGitHubClient : GitHubClient {
 	fun reset() {
 		repositoryListCalls.set(0)
 		pullRequestCalls.set(0)
+		releaseListCalls.set(0)
+		tagListCalls.set(0)
+		releaseTags = emptyList()
+		repositoryTags = emptyList()
 		body = "Body"
 		updatedAt = Instant.parse("2026-01-02T00:00:00Z")
 		failImports = false

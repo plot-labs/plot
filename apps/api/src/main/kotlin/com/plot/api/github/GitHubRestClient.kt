@@ -114,6 +114,71 @@ class GitHubRestClient(
 		return pullRequests.distinctBy { it.id }
 	}
 
+	override fun listPublishedReleaseTags(
+		installationId: Long,
+		repositoryId: Long,
+		owner: String,
+		repository: String,
+		limit: Int,
+	): GitHubTagPage {
+		require(limit in 1..MAX_RELEASE_TAG_SAMPLE)
+		val token = installationToken(installationId, repositoryId)
+		val response = request(
+			"GET",
+			uri("/repos/${path(owner)}/${path(repository)}/releases?per_page=100&page=1"),
+			token,
+		)
+		val root = parse(response)
+		if (!root.isArray) invalidResponse("GitHub returned invalid releases")
+		val tags = buildList {
+			root.forEach { release ->
+				if (!release.isObject || !release.path("draft").isBoolean) {
+					invalidResponse("GitHub returned an invalid release")
+				}
+				if (!release.path("draft").booleanValue()) {
+					val publishedAt = release.path("published_at").stringValue()
+						?: invalidResponse("GitHub returned an invalid published release")
+					runCatching { Instant.parse(publishedAt) }
+						.getOrElse { invalidResponse("GitHub returned an invalid published release") }
+					add(
+						release.path("tag_name").stringValue()?.takeIf { it.isNotBlank() }
+							?: invalidResponse("GitHub returned an invalid release tag"),
+					)
+				}
+			}
+		}.distinct().take(limit + 1)
+		return GitHubTagPage(tags.take(limit), tags.size > limit)
+	}
+
+	override fun listRepositoryTags(
+		installationId: Long,
+		repositoryId: Long,
+		owner: String,
+		repository: String,
+		limit: Int,
+	): GitHubTagPage {
+		require(limit in 1..MAX_RELEASE_TAG_SAMPLE)
+		val token = installationToken(installationId, repositoryId)
+		val response = request(
+			"GET",
+			uri("/repos/${path(owner)}/${path(repository)}/tags?per_page=${limit + 1}&page=1"),
+			token,
+		)
+		val root = parse(response)
+		if (!root.isArray) invalidResponse("GitHub returned invalid repository tags")
+		val tags = buildList {
+			root.forEach { tag ->
+				val name = tag.path("name").stringValue()?.takeIf { it.isNotBlank() }
+				?: invalidResponse("GitHub returned an invalid repository tag")
+				val sha = tag.path("commit").path("sha").stringValue()?.takeIf { it.isNotBlank() }
+					?: invalidResponse("GitHub returned an invalid repository tag commit")
+				if (sha.length != 40) invalidResponse("GitHub returned an invalid repository tag commit")
+				add(name)
+			}
+		}.distinct().take(limit + 1)
+		return GitHubTagPage(tags.take(limit), tags.size > limit)
+	}
+
 	override fun resolveTagCommit(
 		installationId: Long,
 		repositoryId: Long,
@@ -526,6 +591,7 @@ class GitHubRestClient(
 
 	private companion object {
 		const val MAX_ANNOTATED_TAG_DEPTH = 5
+		const val MAX_RELEASE_TAG_SAMPLE = 50
 		const val GITHUB_COMPARE_FILE_LIMIT = 300
 		val COMPARE_STATUSES = setOf("ahead", "behind", "diverged", "identical")
 		val COMMIT_COUNT_STATUSES = setOf("ahead", "diverged")

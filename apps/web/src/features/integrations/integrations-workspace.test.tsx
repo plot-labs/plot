@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   createInstallationRequest: vi.fn(),
   connectRepository: vi.fn(),
   importRepository: vi.fn(),
+  getMonitoring: vi.fn(),
+  retryMonitoring: vi.fn(),
   getReleaseActivity: vi.fn(),
   retryReleaseDraft: vi.fn(),
 }));
@@ -33,6 +35,8 @@ vi.mock("@/lib/api-client", async () => {
       createGitHubInstallationRequest: mocks.createInstallationRequest,
       connectGitHubRepository: mocks.connectRepository,
       importGitHubRepository: mocks.importRepository,
+      getGitHubRepositoryMonitoring: mocks.getMonitoring,
+      retryGitHubRepositoryMonitoring: mocks.retryMonitoring,
       getGitHubReleaseActivity: mocks.getReleaseActivity,
       retryGitHubReleaseDraft: mocks.retryReleaseDraft,
     },
@@ -57,6 +61,7 @@ const repository = {
   displayName: "acme/plot",
   url: "https://github.com/acme/plot",
   status: null,
+  monitoring: null,
 };
 
 describe("IntegrationsWorkspace", () => {
@@ -73,6 +78,8 @@ describe("IntegrationsWorkspace", () => {
     mocks.createInstallationRequest.mockReset();
     mocks.connectRepository.mockReset();
     mocks.importRepository.mockReset();
+    mocks.getMonitoring.mockReset().mockResolvedValue(monitoring("COMPLETED"));
+    mocks.retryMonitoring.mockReset();
     mocks.getReleaseActivity.mockReset().mockResolvedValue(null);
     mocks.retryReleaseDraft.mockReset();
   });
@@ -224,6 +231,33 @@ describe("IntegrationsWorkspace", () => {
     expect(mocks.getReleaseActivity).toHaveBeenCalledWith("scope-1");
   });
 
+  it("shows the analyzed release convention for a connected repository", async () => {
+    mocks.listConnections.mockResolvedValue([connection]);
+    mocks.listRepositories.mockResolvedValue([{ ...repository, id: "scope-1", status: "ACTIVE" }]);
+    mocks.getMonitoring.mockResolvedValue(monitoring("COMPLETED"));
+
+    render(<IntegrationsWorkspace />);
+
+    expect(await screen.findByText("Release convention: v-prefixed SemVer · 2 releases")).toBeVisible();
+    expect(mocks.getMonitoring).toHaveBeenCalledWith("scope-1");
+  });
+
+  it("retries failed convention analysis without reconnecting the repository", async () => {
+    mocks.listConnections.mockResolvedValue([connection]);
+    mocks.listRepositories.mockResolvedValue([{ ...repository, id: "scope-1", status: "ACTIVE" }]);
+    mocks.getMonitoring
+      .mockResolvedValueOnce(monitoring("FAILED"))
+      .mockResolvedValueOnce(monitoring("COMPLETED"));
+    mocks.retryMonitoring.mockResolvedValue(monitoring("QUEUED"));
+
+    render(<IntegrationsWorkspace />);
+    fireEvent.click(await screen.findByRole("button", { name: "Retry" }));
+
+    await waitFor(() => expect(mocks.retryMonitoring).toHaveBeenCalledWith("scope-1"));
+    expect(await screen.findByText("Release convention: v-prefixed SemVer · 2 releases")).toBeVisible();
+    expect(mocks.getMonitoring).toHaveBeenCalledTimes(2);
+  });
+
   it("links a ready release to the existing changelog review surface", async () => {
     mocks.listConnections.mockResolvedValue([connection]);
     mocks.listRepositories.mockResolvedValue([{ ...repository, id: "scope-1", status: "ACTIVE" }]);
@@ -236,7 +270,7 @@ describe("IntegrationsWorkspace", () => {
       "href",
       "/packs?pack=pack-1",
     );
-    expect(screen.getByRole("status")).toHaveAttribute("aria-live", "polite");
+    expect(screen.getByText("Draft ready").closest('[role="status"]')).toHaveAttribute("aria-live", "polite");
   });
 
   it.each([
@@ -307,7 +341,7 @@ describe("IntegrationsWorkspace", () => {
 
     render(<IntegrationsWorkspace />);
 
-    const status = await screen.findByRole("status");
+    const status = (await screen.findByText("Could not load release activity")).closest('[role="status"]');
     expect(status).toHaveTextContent("Could not load release activity");
     expect(status).toHaveAttribute("aria-live", "polite");
     fireEvent.click(screen.getByRole("button", { name: "Retry release activity" }));
@@ -394,5 +428,20 @@ function releaseActivity(status: string, errorCode: string | null = null) {
     errorCode,
     createdAt: "2026-07-30T00:00:00Z",
     updatedAt: "2026-07-30T00:01:00Z",
+  };
+}
+
+function monitoring(analysisStatus: string) {
+  return {
+    status: "ACTIVE",
+    analysisStatus,
+    releaseConvention: analysisStatus === "COMPLETED" ? "SEMVER_V" : null,
+    tagPrefix: null,
+    sampleSource: analysisStatus === "COMPLETED" ? "RELEASES" : null,
+    sampleSize: analysisStatus === "COMPLETED" ? 2 : 0,
+    sampleTruncated: false,
+    attemptCount: analysisStatus === "FAILED" ? 5 : 1,
+    lastErrorCode: analysisStatus === "FAILED" ? "MONITORING_ANALYSIS_FAILED" : null,
+    analyzedAt: analysisStatus === "COMPLETED" ? "2026-07-30T00:00:00Z" : null,
   };
 }

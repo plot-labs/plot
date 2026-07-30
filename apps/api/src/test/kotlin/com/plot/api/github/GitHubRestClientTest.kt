@@ -108,6 +108,87 @@ class GitHubRestClientTest {
 	}
 
 	@Test
+	fun readsBoundedPublishedReleaseTagsAndIgnoresDrafts() {
+		var requestedPath: String? = null
+		var requestedQuery: String? = null
+		val releases = buildString {
+			append("[")
+			append("""{"tag_name":"draft","draft":true,"published_at":null},""")
+			(1..51).forEach { index ->
+				if (index > 1) append(",")
+				append("""{"tag_name":"v$index.0.0","draft":false,"published_at":"2026-01-01T00:00:00Z"}""")
+			}
+			append("]")
+		}
+		val transport = GitHubHttpTransport { _, uri, _, _ ->
+			when {
+				uri.path.endsWith("/access_tokens") ->
+					GitHubHttpResponse(201, emptyMap(), """{"token":"installation-token"}""")
+				else -> {
+					requestedPath = uri.rawPath
+					requestedQuery = uri.rawQuery
+					GitHubHttpResponse(200, emptyMap(), releases)
+				}
+			}
+		}
+		val client = GitHubRestClient(properties(), objectMapper, transport = transport)
+
+		val result = client.listPublishedReleaseTags(77, 44, "ac me", "plot/repo", 50)
+
+		assertEquals((1..50).map { "v$it.0.0" }, result.tags)
+		assertTrue(result.truncated)
+		assertEquals("/repos/ac%20me/plot%2Frepo/releases", requestedPath)
+		assertEquals("per_page=100&page=1", requestedQuery)
+	}
+
+	@Test
+	fun rejectsPublishedReleaseWithInvalidPublishedAt() {
+		val transport = GitHubHttpTransport { _, uri, _, _ ->
+			if (uri.path.endsWith("/access_tokens")) {
+				GitHubHttpResponse(201, emptyMap(), """{"token":"installation-token"}""")
+			} else {
+				GitHubHttpResponse(
+					200,
+					emptyMap(),
+					"""[{"tag_name":"v1.0.0","draft":false,"published_at":"not-an-instant"}]""",
+				)
+			}
+		}
+		val client = GitHubRestClient(properties(), objectMapper, transport = transport)
+
+		val exception = assertFailsWith<ApiException> {
+			client.listPublishedReleaseTags(77, 44, "acme", "plot", 50)
+		}
+
+		assertEquals("GITHUB_INVALID_RESPONSE", exception.error)
+	}
+
+	@Test
+	fun readsABoundedRepositoryTagFallbackSample() {
+		var requestedQuery: String? = null
+		val tags = (1..51).joinToString(prefix = "[", postfix = "]") { index ->
+			"""{"name":"v$index.0.0","commit":{"sha":"${index.toString().padStart(40, '0')}"}}"""
+		}
+		val transport = GitHubHttpTransport { _, uri, _, _ ->
+			when {
+				uri.path.endsWith("/access_tokens") ->
+					GitHubHttpResponse(201, emptyMap(), """{"token":"installation-token"}""")
+				else -> {
+					requestedQuery = uri.rawQuery
+					GitHubHttpResponse(200, emptyMap(), tags)
+				}
+			}
+		}
+		val client = GitHubRestClient(properties(), objectMapper, transport = transport)
+
+		val result = client.listRepositoryTags(77, 44, "acme", "plot", 50)
+
+		assertEquals((1..50).map { "v$it.0.0" }, result.tags)
+		assertTrue(result.truncated)
+		assertEquals("per_page=51&page=1", requestedQuery)
+	}
+
+	@Test
 	fun followsClosedPullRequestPagesAndUsesInstallationToken() {
 		val calls = mutableListOf<Triple<String, String, Map<String, String>>>()
 		val transport = GitHubHttpTransport { method, uri, headers, body ->

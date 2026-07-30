@@ -12,6 +12,8 @@ import org.springframework.http.HttpStatus
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionSynchronization
+import org.springframework.transaction.support.TransactionSynchronizationManager
 import tools.jackson.databind.ObjectMapper
 
 data class GitHubInstallationRequestResponse(
@@ -33,6 +35,7 @@ data class GitHubRepositoryResponse(
 	val displayName: String,
 	val url: String,
 	val status: String?,
+	val monitoring: GitHubRepositoryMonitoringResponse?,
 )
 
 data class GitHubCallbackResponse(
@@ -62,6 +65,8 @@ class GitHubConnectionService(
 	private val jdbcTemplate: JdbcTemplate,
 	private val objectMapper: ObjectMapper,
 	private val statusRecorder: GitHubConnectionStatusRecorder,
+	private val monitoringPersistence: GitHubRepositoryMonitoringPersistence,
+	private val monitoringDispatcher: GitHubRepositoryMonitoringDispatcher,
 	private val actorResolver: RequestActorResolver? = null,
 ) {
 	fun createInstallationRequest(): GitHubInstallationRequestResponse {
@@ -119,6 +124,9 @@ class GitHubConnectionService(
 			Timestamp.from(now),
 			Timestamp.from(now),
 		) ?: throw ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "GitHub connection could not be saved")
+		if (monitoringPersistence.requeueAuthenticationFailures(state.workspaceId, connectionId, now) > 0) {
+			dispatchMonitoringAfterCommit()
+		}
 		return GitHubCallbackResponse(
 			connectionId = connectionId,
 			installationId = request.installationId,
@@ -162,7 +170,7 @@ class GitHubConnectionService(
 				.sortedBy { it.id }
 				.map { repository ->
 					val scope = scopesByRepositoryId[repository.id]
-					repository.toResponse(scope?.id, scope?.status)
+					repository.toResponse(scope?.id, scope?.status, scope?.monitoring)
 				}
 		} catch (exception: ApiException) {
 			if (exception.error == "GITHUB_ACCESS_DENIED" || exception.error == "GITHUB_NOT_FOUND") {
@@ -218,7 +226,9 @@ class GitHubConnectionService(
 			Timestamp.from(now),
 			Timestamp.from(now),
 		) ?: throw ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "GitHub repository could not be saved")
-		return repository.toResponse(id, "ACTIVE")
+		val monitoring = monitoringPersistence.activate(devContext.devWorkspaceId, id, now)
+		dispatchMonitoringAfterCommit()
+		return repository.toResponse(id, "ACTIVE", monitoring.toResponse())
 	}
 
 	@Transactional
@@ -236,6 +246,37 @@ class GitHubConnectionService(
 			id,
 		)
 		if (updated != 1) throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "GitHub repository not found")
+		monitoringPersistence.disable(devContext.devWorkspaceId, id, Instant.now())
+	}
+
+	@Transactional(readOnly = true)
+	fun getMonitoring(sourceScopeId: UUID): GitHubRepositoryMonitoringResponse {
+		guard.requireReadAccess()
+		findScope(sourceScopeId)
+		return monitoringPersistence.find(devContext.devWorkspaceId, sourceScopeId)?.toResponse()
+			?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "GitHub repository monitoring not found")
+	}
+
+	@Transactional
+	fun retryMonitoring(sourceScopeId: UUID): GitHubRepositoryMonitoringResponse {
+		guard.requireEnabled()
+		requireOwner()
+		val scope = findScope(sourceScopeId)
+		requireScopeActive(scope)
+		val current = monitoringPersistence.find(devContext.devWorkspaceId, sourceScopeId)
+			?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "GitHub repository monitoring not found")
+		if (current.analysisStatus == GitHubRepositoryAnalysisStatus.QUEUED ||
+			current.analysisStatus == GitHubRepositoryAnalysisStatus.ANALYZING
+		) {
+			return current.toResponse()
+		}
+		if (current.analysisStatus != GitHubRepositoryAnalysisStatus.FAILED) {
+			throw ApiException(HttpStatus.CONFLICT, "MONITORING_NOT_RETRYABLE", "Repository monitoring is not retryable")
+		}
+		val retried = monitoringPersistence.retry(devContext.devWorkspaceId, sourceScopeId, Instant.now())
+			?: throw ApiException(HttpStatus.CONFLICT, "MONITORING_NOT_RETRYABLE", "Repository monitoring is not retryable")
+		dispatchMonitoringAfterCommit()
+		return retried.toResponse()
 	}
 
 	fun findScope(id: UUID): GitHubScopeRecord {
@@ -343,6 +384,10 @@ class GitHubConnectionService(
 					displayName = rs.getString(4),
 					url = rs.getString(5).orEmpty(),
 					status = rs.getString(6),
+					monitoring = monitoringPersistence.find(
+						devContext.devWorkspaceId,
+						rs.getObject(1, UUID::class.java),
+					)?.toResponse(),
 				)
 			},
 			devContext.devWorkspaceId,
@@ -398,6 +443,18 @@ class GitHubConnectionService(
 		return namespaceId
 	}
 
+	private fun dispatchMonitoringAfterCommit() {
+		if (TransactionSynchronizationManager.isSynchronizationActive()) {
+			TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+				override fun afterCommit() {
+					monitoringDispatcher.dispatch()
+				}
+			})
+		} else {
+			monitoringDispatcher.dispatch()
+		}
+	}
+
 	private fun notConfigured() = ApiException(HttpStatus.SERVICE_UNAVAILABLE, "GITHUB_NOT_CONFIGURED", "GitHub is not configured")
 }
 
@@ -408,6 +465,15 @@ class GitHubConnectionStatusRecorder(
 ) {
 	@Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
 	fun markNeedsReauth(connectionId: UUID) {
+		updateStatus(connectionId, devContext.devWorkspaceId)
+	}
+
+	@Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+	fun markNeedsReauthForWorkspace(connectionId: UUID, workspaceId: UUID) {
+		updateStatus(connectionId, workspaceId)
+	}
+
+	private fun updateStatus(connectionId: UUID, workspaceId: UUID) {
 		jdbcTemplate.update(
 			"""
 			update connections
@@ -415,7 +481,7 @@ class GitHubConnectionStatusRecorder(
 			where workspace_id = ? and id = ? and status = 'ACTIVE'
 			""".trimIndent(),
 			Timestamp.from(Instant.now()),
-			devContext.devWorkspaceId,
+			workspaceId,
 			connectionId,
 		)
 	}
@@ -437,7 +503,11 @@ data class GitHubScopeRecord(
 	val connectionStatus: String,
 )
 
-private fun GitHubRepository.toResponse(id: UUID?, status: String? = null): GitHubRepositoryResponse = GitHubRepositoryResponse(
+private fun GitHubRepository.toResponse(
+	id: UUID?,
+	status: String? = null,
+	monitoring: GitHubRepositoryMonitoringResponse? = null,
+): GitHubRepositoryResponse = GitHubRepositoryResponse(
 	id = id,
 	externalRepositoryId = this.id,
 	owner = owner,
@@ -445,4 +515,5 @@ private fun GitHubRepository.toResponse(id: UUID?, status: String? = null): GitH
 	displayName = "$owner/$name",
 	url = url,
 	status = status,
+	monitoring = monitoring,
 )

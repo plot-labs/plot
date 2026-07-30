@@ -63,6 +63,22 @@ class GitHubInstallationController(
 		return ResponseEntity.noContent().build()
 	}
 
+	@GetMapping("/repositories/{sourceScopeId}/monitoring")
+	fun getRepositoryMonitoring(
+		@PathVariable sourceScopeId: UUID,
+	): ResponseEntity<GitHubRepositoryMonitoringResponse> = ResponseEntity
+		.ok()
+		.cacheControl(CacheControl.noStore())
+		.body(connectionService.getMonitoring(sourceScopeId))
+
+	@PostMapping("/repositories/{sourceScopeId}/monitoring/retry")
+	fun retryRepositoryMonitoring(
+		@PathVariable sourceScopeId: UUID,
+	): ResponseEntity<GitHubRepositoryMonitoringResponse> = ResponseEntity
+		.accepted()
+		.cacheControl(CacheControl.noStore())
+		.body(connectionService.retryMonitoring(sourceScopeId))
+
 	@PostMapping("/repositories/{id}/imports")
 	fun importRepository(
 		@PathVariable id: UUID,
