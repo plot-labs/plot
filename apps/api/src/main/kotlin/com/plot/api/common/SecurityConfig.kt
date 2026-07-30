@@ -4,6 +4,7 @@ import com.plot.api.auth.PlotAuthProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.env.Environment
+import org.springframework.http.HttpMethod
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator
@@ -46,6 +47,7 @@ class SecurityConfig(
 				.csrf { it.ignoringRequestMatchers("/api/**") }
 				.authorizeHttpRequests { requests ->
 					requests.requestMatchers("/actuator/health", "/api/auth/**", "/api/polar/webhook").permitAll()
+						.requestMatchers(HttpMethod.POST, "/api/github/webhook").permitAll()
 						.requestMatchers("/api/account/bootstrap", "/api/me").authenticated()
 						.anyRequest().authenticated()
 				}

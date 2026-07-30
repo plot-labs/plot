@@ -10,6 +10,7 @@ export type {
   GenerationReference,
   GitHubConnection,
   GitHubImport,
+  GitHubReleaseActivity,
   GitHubRepository,
   PlotApiClient,
   WorkSessionSummary,

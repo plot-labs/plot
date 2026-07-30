@@ -26,6 +26,14 @@ class GitHubSchemaIntegrationTest {
 
 	@BeforeEach
 	fun cleanSourceData() {
+		jdbcTemplate.update(
+			"update content_packs set release_request_id = null where workspace_id = ? and release_request_id is not null",
+			devContext.devWorkspaceId,
+		)
+		jdbcTemplate.update(
+			"delete from github_release_draft_requests where workspace_id = ?",
+			devContext.devWorkspaceId,
+		)
 		listOf(
 			"writing_block_scopes", "source_imports", "source_observations",
 		).forEach { jdbcTemplate.update("delete from $it where workspace_id = ?", devContext.devWorkspaceId) }
@@ -58,7 +66,16 @@ class GitHubSchemaIntegrationTest {
 		val bindingId = insertBinding(connectionId, namespaceId)
 		val firstScopeId = insertScope(namespaceId, 2001)
 		val secondScopeId = insertScope(namespaceId, 2002)
-		assertEquals(2, jdbcTemplate.queryForObject("select count(*) from source_scopes where workspace_id = ?", Int::class.java, devContext.devWorkspaceId))
+		assertEquals(
+			2,
+			jdbcTemplate.queryForObject(
+				"select count(*) from source_scopes where workspace_id = ? and id in (?, ?)",
+				Int::class.java,
+				devContext.devWorkspaceId,
+				firstScopeId,
+				secondScopeId,
+			),
+		)
 
 		insertRunningImport(firstScopeId, bindingId, 0)
 		assertFailsWith<DuplicateKeyException> { insertRunningImport(firstScopeId, bindingId, 1) }

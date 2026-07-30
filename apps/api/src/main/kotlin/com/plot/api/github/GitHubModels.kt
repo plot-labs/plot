@@ -25,6 +25,31 @@ data class GitHubPullRequest(
 	val mergedAt: Instant?,
 )
 
+data class GitHubCommit(
+	val sha: String,
+	val message: String,
+	val author: String?,
+	val committedAt: Instant?,
+	val url: String,
+)
+
+data class GitHubChangedFile(
+	val filename: String,
+	val previousFilename: String?,
+	val status: String,
+	val additions: Int,
+	val deletions: Int,
+	val patch: String?,
+)
+
+data class GitHubCompareResult(
+	val status: String,
+	val aheadBy: Int,
+	val commits: List<GitHubCommit>,
+	val files: List<GitHubChangedFile>,
+	val filesTruncated: Boolean,
+)
+
 data class GitHubHttpResponse(
 	val status: Int,
 	val headers: Map<String, List<String>>,

@@ -114,9 +114,138 @@ class GitHubRestClient(
 		return pullRequests.distinctBy { it.id }
 	}
 
+	override fun resolveTagCommit(
+		installationId: Long,
+		repositoryId: Long,
+		owner: String,
+		repository: String,
+		tagName: String,
+	): String {
+		val token = installationToken(installationId, repositoryId)
+		val reference = request(
+			"GET",
+			uri("/repos/${path(owner)}/${path(repository)}/git/ref/tags/${path(tagName)}"),
+			token,
+		)
+		var target = parseGitObject(parse(reference).path("object"), "tag reference")
+		if (target.type == "commit") return target.sha
+		if (target.type != "tag") invalidTagObject(target.type)
+
+		repeat(MAX_ANNOTATED_TAG_DEPTH) {
+			val tag = request(
+				"GET",
+				uri("/repos/${path(owner)}/${path(repository)}/git/tags/${path(target.sha)}"),
+				token,
+			)
+			target = parseGitObject(parse(tag).path("object"), "annotated tag")
+			if (target.type == "commit") return target.sha
+			if (target.type != "tag") invalidTagObject(target.type)
+		}
+		throw ApiException(
+			HttpStatus.BAD_GATEWAY,
+			"GITHUB_TAG_DEREFERENCE_LIMIT",
+			"GitHub tag dereference limit exceeded",
+		)
+	}
+
+	override fun compareCommits(
+		installationId: Long,
+		repositoryId: Long,
+		owner: String,
+		repository: String,
+		baseSha: String,
+		headSha: String,
+		pageCap: Int,
+	): GitHubCompareResult {
+		val token = installationToken(installationId, repositoryId)
+		val commits = mutableListOf<GitHubCommit>()
+		var files = emptyList<GitHubChangedFile>()
+		var status: String? = null
+		var aheadBy: Int? = null
+		var next: URI? = uri(
+			"/repos/${path(owner)}/${path(repository)}/compare/${path(baseSha)}...${path(headSha)}?per_page=100&page=1",
+		)
+		var pages = 0
+		val effectivePageCap = minOf(pageCap, properties.comparePageCap).coerceAtLeast(1)
+		while (next != null) {
+			pages++
+			if (pages > effectivePageCap) {
+				throw ApiException(
+					HttpStatus.CONTENT_TOO_LARGE,
+					"GITHUB_COMPARE_TOO_LARGE",
+					"GitHub commit comparison page cap exceeded",
+				)
+			}
+			val response = request("GET", next, token)
+			val root = parse(response)
+			if (!root.isObject) invalidResponse("GitHub returned an invalid comparison response")
+			if (pages == 1) {
+				status = root.path("status").stringValue()?.takeIf { it in COMPARE_STATUSES }
+					?: invalidResponse("GitHub returned an invalid comparison status")
+				aheadBy = root.path("ahead_by").takeIf { it.canConvertToInt() }?.intValue()
+					?.takeIf { it >= 0 }
+					?: invalidResponse("GitHub returned an invalid comparison count")
+				val fileArray = root.path("files")
+				if (!fileArray.isMissingNode && !fileArray.isArray) {
+					invalidResponse("GitHub returned invalid changed files")
+				}
+				if (fileArray.isArray) {
+					files = buildList {
+						fileArray.forEach { add(parseChangedFile(it)) }
+					}
+				}
+			}
+			val commitArray = root.path("commits")
+			if (!commitArray.isArray) invalidResponse("GitHub returned invalid comparison commits")
+			commitArray.forEach { commits += parseCommit(it) }
+			next = nextUri(response)
+			if (next != null && pages == effectivePageCap) {
+				throw ApiException(
+					HttpStatus.CONTENT_TOO_LARGE,
+					"GITHUB_COMPARE_TOO_LARGE",
+					"GitHub commit comparison page cap exceeded",
+				)
+			}
+		}
+		val resolvedStatus = checkNotNull(status)
+		val resolvedAheadBy = checkNotNull(aheadBy)
+		val uniqueCommits = commits.distinctBy { it.sha }
+		if (resolvedStatus in COMMIT_COUNT_STATUSES && uniqueCommits.size != resolvedAheadBy) {
+			invalidResponse("GitHub returned an incomplete commit comparison")
+		}
+		return GitHubCompareResult(
+			status = resolvedStatus,
+			aheadBy = resolvedAheadBy,
+			commits = uniqueCommits,
+			files = files,
+			filesTruncated = files.size >= GITHUB_COMPARE_FILE_LIMIT,
+		)
+	}
+
+	override fun listPullRequestsForCommit(
+		installationId: Long,
+		repositoryId: Long,
+		owner: String,
+		repository: String,
+		commitSha: String,
+	): List<GitHubPullRequest> {
+		val token = installationToken(installationId, repositoryId)
+		val response = request(
+			"GET",
+			uri("/repos/${path(owner)}/${path(repository)}/commits/${path(commitSha)}/pulls?per_page=100&page=1"),
+			token,
+		)
+		val root = parse(response)
+		if (!root.isArray) invalidResponse("GitHub returned an invalid associated pull-request response")
+		return buildList {
+			root.forEach { add(parsePullRequest(it)) }
+		}.distinctBy { it.id }
+	}
+
 	private fun installationToken(installationId: Long, repositoryId: Long? = null): String {
 		val tokenRequest = mutableMapOf<String, Any>(
 			"permissions" to mapOf(
+				"contents" to "read",
 				"metadata" to "read",
 				"pull_requests" to "read",
 			),
@@ -225,9 +354,13 @@ class GitHubRestClient(
 			?.value?.firstOrNull()
 		val suffix = requestId?.let { " (request $it)" }.orEmpty()
 		val (status, code, message) = when {
-			(response.status == 403 || response.status == 429) && response.headers.entries.any {
-				it.key.equals("x-ratelimit-remaining", ignoreCase = true) && it.value.firstOrNull() == "0"
-			} -> Triple(HttpStatus.TOO_MANY_REQUESTS, "GITHUB_RATE_LIMITED", "GitHub rate limit exceeded$suffix")
+			response.status == 429 ||
+				(response.status == 403 && response.headers.entries.any {
+					(it.key.equals("x-ratelimit-remaining", ignoreCase = true) && it.value.firstOrNull() == "0") ||
+						it.key.equals("retry-after", ignoreCase = true)
+				}) ||
+				(response.status == 403 && response.body.contains("rate limit", ignoreCase = true)) ->
+				Triple(HttpStatus.TOO_MANY_REQUESTS, "GITHUB_RATE_LIMITED", "GitHub rate limit exceeded$suffix")
 			response.status == 401 || response.status == 403 -> Triple(HttpStatus.BAD_GATEWAY, "GITHUB_ACCESS_DENIED", "GitHub denied access$suffix")
 			response.status == 404 -> Triple(HttpStatus.BAD_GATEWAY, "GITHUB_NOT_FOUND", "GitHub resource was not found$suffix")
 			response.status >= 500 -> Triple(HttpStatus.BAD_GATEWAY, "GITHUB_PROVIDER_UNAVAILABLE", "GitHub is temporarily unavailable$suffix")
@@ -267,7 +400,11 @@ class GitHubRestClient(
 		val body = node.path("body").takeUnless { it.isNull }?.stringValue()
 		val createdAt = instant(node.path("created_at"))
 		val updatedAt = instant(node.path("updated_at"))
-		if (id == 0L || number == 0 || createdAt == null || updatedAt == null || (title.isBlank() && body.isNullOrBlank())) {
+		val url = canonicalWebUrl(node.path("html_url"))
+		if (
+			id == 0L || number == 0 || createdAt == null || updatedAt == null || url == null ||
+			(title.isBlank() && body.isNullOrBlank())
+		) {
 			throw ApiException(HttpStatus.BAD_GATEWAY, "GITHUB_INVALID_RESPONSE", "GitHub returned an invalid pull request")
 		}
 		return GitHubPullRequest(
@@ -276,13 +413,89 @@ class GitHubRestClient(
 			title = title,
 			body = body,
 			author = node.path("user").path("login").stringValue(),
-			url = node.path("html_url").stringValue().orEmpty(),
+			url = url,
 			baseBranch = node.path("base").path("ref").stringValue(),
 			headBranch = node.path("head").path("ref").stringValue(),
 			createdAt = createdAt,
 			updatedAt = updatedAt,
 			mergedAt = instant(node.path("merged_at")),
 		)
+	}
+
+	private fun parseCommit(node: JsonNode): GitHubCommit {
+		val sha = node.path("sha").stringValue()?.takeIf { it.isNotBlank() }
+		val details = node.path("commit")
+		val message = details.path("message").stringValue()
+		val author = node.path("author").path("login").takeUnless { it.isMissingNode || it.isNull }
+			?.stringValue()?.takeIf { it.isNotBlank() }
+			?: details.path("author").path("name").takeUnless { it.isMissingNode || it.isNull }
+				?.stringValue()?.takeIf { it.isNotBlank() }
+		val url = canonicalWebUrl(node.path("html_url"))
+		if (sha == null || message == null || url == null || !details.isObject) {
+			invalidResponse("GitHub returned an invalid commit")
+		}
+		return GitHubCommit(
+			sha = sha,
+			message = message,
+			author = author,
+			committedAt = instant(details.path("committer").path("date"))
+				?: instant(details.path("author").path("date")),
+			url = url,
+		)
+	}
+
+	private fun parseChangedFile(node: JsonNode): GitHubChangedFile {
+		val filename = node.path("filename").stringValue()?.takeIf { it.isNotBlank() }
+		val status = node.path("status").stringValue()?.takeIf { it.isNotBlank() }
+		val additions = node.path("additions").takeIf { it.canConvertToInt() }?.intValue()?.takeIf { it >= 0 }
+		val deletions = node.path("deletions").takeIf { it.canConvertToInt() }?.intValue()?.takeIf { it >= 0 }
+		if (filename == null || status == null || additions == null || deletions == null) {
+			invalidResponse("GitHub returned an invalid changed file")
+		}
+		return GitHubChangedFile(
+			filename = filename,
+			previousFilename = node.path("previous_filename").takeUnless { it.isMissingNode || it.isNull }
+				?.stringValue()?.takeIf { it.isNotBlank() },
+			status = status,
+			additions = additions,
+			deletions = deletions,
+			patch = node.path("patch").takeUnless { it.isMissingNode || it.isNull }?.stringValue(),
+		)
+	}
+
+	private fun parseGitObject(node: JsonNode, source: String): GitObjectTarget {
+		val type = node.path("type").stringValue()?.takeIf { it.isNotBlank() }
+		val sha = node.path("sha").stringValue()?.takeIf { it.isNotBlank() }
+		if (!node.isObject || type == null || sha == null) {
+			invalidResponse("GitHub returned an invalid $source")
+		}
+		return GitObjectTarget(type, sha)
+	}
+
+	private fun invalidTagObject(type: String): Nothing = throw ApiException(
+		HttpStatus.BAD_GATEWAY,
+		"GITHUB_TAG_INVALID_OBJECT",
+		"GitHub tag resolved to an invalid object type: $type",
+	)
+
+	private fun invalidResponse(message: String): Nothing = throw ApiException(
+		HttpStatus.BAD_GATEWAY,
+		"GITHUB_INVALID_RESPONSE",
+		message,
+	)
+
+	private fun canonicalWebUrl(node: JsonNode): String? {
+		val value = node.stringValue()?.takeIf { it.isNotBlank() } ?: return null
+		val candidate = runCatching { URI.create(value) }.getOrNull() ?: return null
+		val canonical = runCatching { URI.create(properties.webBaseUrl) }.getOrNull() ?: return null
+		val candidateHost = candidate.host ?: return null
+		val canonicalHost = canonical.host ?: return null
+		return value.takeIf {
+			candidate.scheme == canonical.scheme &&
+				candidateHost.equals(canonicalHost, ignoreCase = true) &&
+				candidate.port == canonical.port &&
+				candidate.userInfo == null
+		}
 	}
 
 	private fun instant(node: JsonNode): Instant? = node.takeUnless { it.isMissingNode || it.isNull || it.stringValue().isNullOrBlank() }
@@ -308,4 +521,13 @@ class GitHubRestClient(
 
 	private fun base64Json(value: Any): String = Base64.getUrlEncoder().withoutPadding()
 		.encodeToString(objectMapper.writeValueAsBytes(value))
+
+	private data class GitObjectTarget(val type: String, val sha: String)
+
+	private companion object {
+		const val MAX_ANNOTATED_TAG_DEPTH = 5
+		const val GITHUB_COMPARE_FILE_LIMIT = 300
+		val COMPARE_STATUSES = setOf("ahead", "behind", "diverged", "identical")
+		val COMMIT_COUNT_STATUSES = setOf("ahead", "diverged")
+	}
 }

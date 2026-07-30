@@ -1,6 +1,7 @@
 package com.plot.api.writingblock
 
 import java.sql.Timestamp
+import com.plot.api.common.WorkspacePrincipal
 import com.plot.api.dev.DevContext
 import com.plot.api.source.ImportedWritingBlock
 import tools.jackson.databind.ObjectMapper
@@ -38,11 +39,15 @@ class WritingBlockImportService(
 	private val objectMapper: ObjectMapper,
 ) {
 	@Transactional
-	fun upsert(block: ImportedWritingBlock, now: Instant = Instant.now()): WritingBlockUpsertResult {
+	fun upsert(
+		principal: WorkspacePrincipal,
+		block: ImportedWritingBlock,
+		now: Instant = Instant.now(),
+	): WritingBlockUpsertResult {
 		jdbcTemplate.query(
 			"select pg_advisory_xact_lock(hashtextextended(?, 0))",
 			{ _, _ -> Unit },
-			"${devContext.devWorkspaceId}:${block.sourceNamespaceId}:${block.sourceKind}:${block.externalObjectKey}",
+			"${principal.workspaceId}:${block.sourceNamespaceId}:${block.sourceKind}:${block.externalObjectKey}",
 		)
 		val existing = jdbcTemplate.query(
 			"""
@@ -67,7 +72,7 @@ class WritingBlockImportService(
 					sourceUpdatedAt = rs.getTimestamp("source_updated_at")?.toInstant(),
 				)
 			},
-			devContext.devWorkspaceId,
+			principal.workspaceId,
 			block.sourceNamespaceId,
 			block.sourceKind,
 			block.externalObjectKey,
@@ -88,7 +93,7 @@ class WritingBlockImportService(
 				existing.sourceUpdatedAt != block.sourceUpdatedAt
 			if (existing.sourceUpdatedAt != null) {
 				if (block.sourceUpdatedAt.isBefore(existing.sourceUpdatedAt)) {
-					upsertMembership(block, existing.id, now)
+					upsertMembership(principal, block, existing.id, now)
 					return WritingBlockUpsertResult(existing.id, created = false, changed = false)
 				}
 				if (changed && block.sourceUpdatedAt == existing.sourceUpdatedAt) {
@@ -96,7 +101,7 @@ class WritingBlockImportService(
 				}
 			}
 			if (!changed) {
-				upsertMembership(block, existing.id, now)
+				upsertMembership(principal, block, existing.id, now)
 				return WritingBlockUpsertResult(existing.id, created = false, changed = false)
 			}
 			jdbcTemplate.update(
@@ -119,10 +124,10 @@ class WritingBlockImportService(
 				Timestamp.from(block.sourceCreatedAt),
 				Timestamp.from(block.sourceUpdatedAt),
 				Timestamp.from(now),
-				devContext.devWorkspaceId,
+				principal.workspaceId,
 				existing.id,
 			)
-			upsertMembership(block, existing.id, now)
+			upsertMembership(principal, block, existing.id, now)
 			return WritingBlockUpsertResult(existing.id, created = false, changed = true)
 		}
 
@@ -156,7 +161,7 @@ class WritingBlockImportService(
 			RowMapper { rs, _ -> rs.getObject("id", UUID::class.java) to rs.getBoolean("inserted") },
 			*arrayOf<Any?>(
 				UUID.randomUUID(),
-				devContext.devWorkspaceId,
+				principal.workspaceId,
 				block.sourceNamespaceId,
 				block.externalObjectKey,
 				block.sourceOrigin,
@@ -173,17 +178,29 @@ class WritingBlockImportService(
 				Timestamp.from(block.sourceUpdatedAt),
 				Timestamp.from(now),
 				"ACTIVE",
-				devContext.devUserId,
+				principal.userId,
 				Timestamp.from(now),
 				Timestamp.from(now),
 			),
 		)
 
-		upsertMembership(block, result.first, now)
+		upsertMembership(principal, block, result.first, now)
 		return WritingBlockUpsertResult(result.first, created = result.second, changed = !result.second)
 	}
 
-	private fun upsertMembership(block: ImportedWritingBlock, blockId: UUID, now: Instant) {
+	@Transactional
+	fun upsert(
+		block: ImportedWritingBlock,
+		now: Instant = Instant.now(),
+	): WritingBlockUpsertResult =
+		upsert(WorkspacePrincipal(devContext.devWorkspaceId, devContext.devUserId), block, now)
+
+	private fun upsertMembership(
+		principal: WorkspacePrincipal,
+		block: ImportedWritingBlock,
+		blockId: UUID,
+		now: Instant,
+	) {
 		jdbcTemplate.update(
 			"""
 			insert into writing_block_scopes (
@@ -195,7 +212,7 @@ class WritingBlockImportService(
 			              last_observation_id = excluded.last_observation_id
 			""".trimIndent(),
 			UUID.randomUUID(),
-			devContext.devWorkspaceId,
+			principal.workspaceId,
 			block.sourceNamespaceId,
 			blockId,
 			block.sourceScopeId,

@@ -107,7 +107,14 @@ class GitHubConnectionService(
 			state.workspaceId,
 			request.installationId.toString(),
 			repositories.firstOrNull()?.owner,
-			objectMapper.writeValueAsString(mapOf("metadata" to "read", "pull_requests" to "read")),
+			objectMapper.writeValueAsString(
+				mapOf(
+					"metadata" to "read",
+					"pull_requests" to "read",
+					"contents" to "read",
+					"webhook_monitoring" to "active",
+				),
+			),
 			state.userId,
 			Timestamp.from(now),
 			Timestamp.from(now),
@@ -378,7 +385,14 @@ class GitHubConnectionService(
 			              updated_at = excluded.updated_at
 			""".trimIndent(),
 			UUID.randomUUID(), devContext.devWorkspaceId, connectionId, namespaceId,
-			objectMapper.writeValueAsString(mapOf("metadata" to "read", "pull_requests" to "read")),
+			objectMapper.writeValueAsString(
+				mapOf(
+					"metadata" to "read",
+					"pull_requests" to "read",
+					"contents" to "read",
+					"webhook_monitoring" to "active",
+				),
+			),
 			Timestamp.from(now), Timestamp.from(now), Timestamp.from(now),
 		)
 		return namespaceId

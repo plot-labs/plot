@@ -2,6 +2,7 @@ package com.plot.api.github
 
 import jakarta.validation.Valid
 import jakarta.validation.constraints.Min
+import java.time.Instant
 import java.util.UUID
 import org.springframework.http.CacheControl
 import org.springframework.http.ResponseEntity
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController
 class GitHubInstallationController(
 	private val connectionService: GitHubConnectionService,
 	private val importService: GitHubImportService,
+	private val releaseActivityService: GitHubReleaseActivityService,
 ) {
 	@PostMapping("/installations/requests")
 	fun createInstallationRequest(): ResponseEntity<GitHubInstallationRequestResponse> = ResponseEntity
@@ -69,4 +71,50 @@ class GitHubInstallationController(
 
 	@GetMapping("/imports/{id}")
 	fun getImport(@PathVariable id: UUID): GitHubImportResponse = importService.get(id)
+
+	@GetMapping("/repositories/{sourceScopeId}/release-activity")
+	fun getReleaseActivity(
+		@PathVariable sourceScopeId: UUID,
+	): ResponseEntity<GitHubReleaseActivityResponse> {
+		val activity = releaseActivityService.latest(sourceScopeId)
+			?: return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build()
+		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(activity)
+	}
+
+	@PostMapping("/repositories/{sourceScopeId}/release-activity/{requestId}/retry")
+	fun retryReleaseActivity(
+		@PathVariable sourceScopeId: UUID,
+		@PathVariable requestId: UUID,
+	): ResponseEntity<GitHubReleaseActivityResponse> = ResponseEntity
+		.ok()
+		.cacheControl(CacheControl.noStore())
+		.body(releaseActivityService.retry(sourceScopeId, requestId))
 }
+
+data class GitHubReleaseActivityResponse(
+	val id: UUID,
+	val sourceScopeId: UUID,
+	val tagName: String,
+	val status: GitHubReleaseDraftStatus,
+	val baseSha: String?,
+	val headSha: String?,
+	val generationRunId: UUID?,
+	val contentPackId: UUID?,
+	val errorCode: String?,
+	val createdAt: Instant,
+	val updatedAt: Instant,
+)
+
+internal fun GitHubReleaseActivityRecord.toResponse() = GitHubReleaseActivityResponse(
+	id = id,
+	sourceScopeId = sourceScopeId,
+	tagName = tagName,
+	status = status,
+	baseSha = baseSha,
+	headSha = headSha,
+	generationRunId = generationRunId,
+	contentPackId = contentPackId,
+	errorCode = errorCode,
+	createdAt = createdAt,
+	updatedAt = updatedAt,
+)

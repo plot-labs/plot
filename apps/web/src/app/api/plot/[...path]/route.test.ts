@@ -154,6 +154,47 @@ describe("Plot same-origin proxy", () => {
     expect(String(fetcher.mock.calls[0]?.[0])).toBe(`http://127.0.0.1:8080/api/${pathAndQuery}`);
   });
 
+  it.each([
+    [
+      "GET",
+      ["github", "repositories", "scope-1", "release-activity"],
+      "http://127.0.0.1:8080/api/github/repositories/scope-1/release-activity",
+    ],
+    [
+      "POST",
+      ["github", "repositories", "scope-1", "release-activity", "request-1", "retry"],
+      "http://127.0.0.1:8080/api/github/repositories/scope-1/release-activity/request-1/retry",
+    ],
+  ])("allows only the explicit release activity %s route", async (method, path, expectedUrl) => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ status: "QUEUED" }));
+    const response = await proxyPlotRequest(
+      new Request("http://web.test/api/plot/release", {
+        method,
+        headers: method === "POST" ? { Origin: "http://web.test" } : undefined,
+      }),
+      path,
+      { fetch: fetcher, baseUrl: "http://127.0.0.1:8080" },
+    );
+
+    expect(response.status).toBe(200);
+    expect(String(fetcher.mock.calls[0]?.[0])).toBe(expectedUrl);
+  });
+
+  it("does not expose a generic GitHub release activity proxy", async () => {
+    const fetcher = vi.fn<typeof fetch>();
+    const response = await proxyPlotRequest(
+      new Request("http://web.test/api/plot/github/repositories/scope-1/release-activity/request-1", {
+        method: "DELETE",
+        headers: { Origin: "http://web.test" },
+      }),
+      ["github", "repositories", "scope-1", "release-activity", "request-1"],
+      { fetch: fetcher },
+    );
+
+    expect(response.status).toBe(404);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it("turns a browser GitHub callback into a state-free Integrations redirect", async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ connectionId: "018fd000-0000-7000-8000-000000000002" }));
     const response = await proxyPlotRequest(

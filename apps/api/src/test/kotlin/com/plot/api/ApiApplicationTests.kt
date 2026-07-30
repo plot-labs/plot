@@ -1,5 +1,6 @@
 package com.plot.api
 
+import com.plot.api.github.GitHubWebhookParser
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -8,16 +9,19 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import org.springframework.jdbc.core.JdbcTemplate
+import tools.jackson.databind.ObjectMapper
 
 @SpringBootTest
 @Import(TestcontainersConfiguration::class)
 class ApiApplicationTests {
 	@Autowired private lateinit var jdbcTemplate: JdbcTemplate
+	@Autowired private lateinit var objectMapper: ObjectMapper
+	@Autowired private lateinit var webhookParser: GitHubWebhookParser
 
 	@Test
 	fun contextStartsAndAppliesFlywayMigrations() {
 		assertEquals(
-			"9",
+			"10",
 			jdbcTemplate.queryForObject(
 				"select version from flyway_schema_history where success order by installed_rank desc limit 1",
 				String::class.java,
@@ -48,5 +52,20 @@ class ApiApplicationTests {
 		).orEmpty()
 		assertTrue(statusConstraint.contains("NEEDS_REVIEW"))
 		assertFalse(statusConstraint.contains("NEEDS_YOUR_CALL"))
+	}
+
+	@Test
+	fun contextProvidesJackson3ToTheGitHubWebhookParser() {
+		val parsed = webhookParser.parse(
+			"jackson3-delivery",
+			"push",
+			objectMapper.writeValueAsBytes(mapOf(
+				"ref" to "refs/tags/v1.2.3",
+				"after" to "a".repeat(40),
+			)),
+		)
+
+		assertEquals("v1.2.3", parsed.tagName)
+		assertEquals("a".repeat(40), parsed.afterSha)
 	}
 }

@@ -2,6 +2,7 @@ package com.plot.api.generation
 
 import com.plot.api.common.ApiException
 import com.plot.api.common.UuidGenerator
+import com.plot.api.common.WorkspacePrincipal
 import com.plot.api.config.PlotAiProperties
 import com.plot.api.dev.DevContext
 import com.plot.api.source.SourceManagedAccessGuard
@@ -12,6 +13,8 @@ import java.util.UUID
 import com.plot.api.generation.dto.GenerationRunTimingResponse
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
+import org.springframework.transaction.support.TransactionSynchronization
+import org.springframework.transaction.support.TransactionSynchronizationManager
 import tools.jackson.databind.ObjectMapper
 
 @Service
@@ -32,6 +35,39 @@ class GenerationRunService(
 		writingBlockIds: List<UUID>,
 		instruction: String?,
 		idempotencyKey: String,
+	): GenerationWorkflowState =
+		createInternal(
+			principal = WorkspacePrincipal(devContext.devWorkspaceId, devContext.devUserId),
+			sourceScopeId = sourceScopeId,
+			writingBlockIds = writingBlockIds,
+			instruction = instruction,
+			idempotencyKey = idempotencyKey,
+			requireRequestSourceAccess = true,
+		)
+
+	fun createForPrincipal(
+		principal: WorkspacePrincipal,
+		sourceScopeId: UUID,
+		writingBlockIds: List<UUID>,
+		instruction: String?,
+		idempotencyKey: String,
+	): GenerationWorkflowState =
+		createInternal(
+			principal = principal,
+			sourceScopeId = sourceScopeId,
+			writingBlockIds = writingBlockIds,
+			instruction = instruction,
+			idempotencyKey = idempotencyKey,
+			requireRequestSourceAccess = false,
+		)
+
+	private fun createInternal(
+		principal: WorkspacePrincipal,
+		sourceScopeId: UUID,
+		writingBlockIds: List<UUID>,
+		instruction: String?,
+		idempotencyKey: String,
+		requireRequestSourceAccess: Boolean,
 	): GenerationWorkflowState {
 		require(idempotencyKey.isNotBlank()) { "Idempotency key is required" }
 		require(writingBlockIds.isNotEmpty()) { "At least one Writing Block is required" }
@@ -39,15 +75,20 @@ class GenerationRunService(
 		val normalizedKey = idempotencyKey.trim()
 		val requestFingerprint = fingerprint(sourceScopeId, writingBlockIds, instruction)
 		persistence.findIdempotentRun(
-			devContext.devWorkspaceId, devContext.devUserId, normalizedKey, requestFingerprint,
-		)?.let { return it }
+			principal.workspaceId, principal.userId, normalizedKey, requestFingerprint,
+		)?.let {
+			if (it.status !in GenerationRunStatus.terminalOrPaused) dispatchAfterCommit()
+			return it
+		}
 		val selected = writingBlockRepository.findSelectedReadable(
-			devContext.devWorkspaceId,
+			principal.workspaceId,
 			sourceScopeId,
 			writingBlockIds,
 		).associateBy { it.id }
 		if (selected.size != writingBlockIds.size) throw GenerationSourceAccessException()
-		if (selected.values.any { it.sourceNamespaceId != null }) sourceManagedAccessGuard.requireReadable()
+		if (requireRequestSourceAccess && selected.values.any { it.sourceNamespaceId != null }) {
+			sourceManagedAccessGuard.requireReadable()
+		}
 		val evidenceCharacters = selected.values.sumOf { it.title.orEmpty().length + it.body.orEmpty().length }
 		require(evidenceCharacters <= properties.maxEvidenceCharacters) {
 			"Selected evidence exceeds the ${properties.maxEvidenceCharacters} character limit"
@@ -58,8 +99,8 @@ class GenerationRunService(
 		}
 		val initialState = workflowService.start(runId, evidence, instruction)
 		val state = persistence.createRun(GenerationRunReservation(
-			workspaceId = devContext.devWorkspaceId,
-			createdByUserId = devContext.devUserId,
+			workspaceId = principal.workspaceId,
+			createdByUserId = principal.userId,
 			sourceScopeId = sourceScopeId,
 			idempotencyKey = normalizedKey,
 			requestFingerprint = requestFingerprint,
@@ -72,8 +113,23 @@ class GenerationRunService(
 				"maxRunDurationMillis" to properties.maxRunDuration.toMillis(),
 			)),
 		))
-		dispatcher.dispatch()
+		dispatchAfterCommit()
 		return state
+	}
+
+	private fun dispatchAfterCommit() {
+		if (
+			TransactionSynchronizationManager.isActualTransactionActive() &&
+			TransactionSynchronizationManager.isSynchronizationActive()
+		) {
+			TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+				override fun afterCommit() {
+					dispatcher.dispatch()
+				}
+			})
+		} else {
+			dispatcher.dispatch()
+		}
 	}
 
 	fun get(runId: UUID): GenerationWorkflowState = try {

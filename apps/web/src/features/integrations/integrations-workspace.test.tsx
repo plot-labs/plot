@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   createInstallationRequest: vi.fn(),
   connectRepository: vi.fn(),
   importRepository: vi.fn(),
+  getReleaseActivity: vi.fn(),
+  retryReleaseDraft: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -31,6 +33,8 @@ vi.mock("@/lib/api-client", async () => {
       createGitHubInstallationRequest: mocks.createInstallationRequest,
       connectGitHubRepository: mocks.connectRepository,
       importGitHubRepository: mocks.importRepository,
+      getGitHubReleaseActivity: mocks.getReleaseActivity,
+      retryGitHubReleaseDraft: mocks.retryReleaseDraft,
     },
   };
 });
@@ -69,6 +73,8 @@ describe("IntegrationsWorkspace", () => {
     mocks.createInstallationRequest.mockReset();
     mocks.connectRepository.mockReset();
     mocks.importRepository.mockReset();
+    mocks.getReleaseActivity.mockReset().mockResolvedValue(null);
+    mocks.retryReleaseDraft.mockReset();
   });
 
   it("starts GitHub App installation from the empty owner state", async () => {
@@ -201,4 +207,187 @@ describe("IntegrationsWorkspace", () => {
     expect(screen.queryByRole("button", { name: /Connect GitHub|Import last 30 days/ })).not.toBeInTheDocument();
     expect(mocks.listRepositories).not.toHaveBeenCalled();
   });
+
+  it("shows processing copy for an in-progress release", async () => {
+    mocks.listConnections.mockResolvedValue([connection]);
+    mocks.listRepositories.mockResolvedValue([{ ...repository, id: "scope-1", status: "ACTIVE" }]);
+    mocks.getReleaseActivity.mockResolvedValue(releaseActivity("GENERATING"));
+
+    render(<IntegrationsWorkspace />);
+
+    expect(await screen.findByText("Preparing v1.2.0…")).toBeVisible();
+    expect(mocks.getReleaseActivity).toHaveBeenCalledWith("scope-1");
+  });
+
+  it("links a ready release to the existing changelog review surface", async () => {
+    mocks.listConnections.mockResolvedValue([connection]);
+    mocks.listRepositories.mockResolvedValue([{ ...repository, id: "scope-1", status: "ACTIVE" }]);
+    mocks.getReleaseActivity.mockResolvedValue(releaseActivity("READY"));
+
+    render(<IntegrationsWorkspace />);
+
+    expect(await screen.findByText("Draft ready")).toBeVisible();
+    expect(screen.getByRole("link", { name: "Review changelog" })).toHaveAttribute(
+      "href",
+      "/packs?pack=pack-1",
+    );
+    expect(screen.getByRole("status")).toHaveAttribute("aria-live", "polite");
+  });
+
+  it.each([
+    ["NO_ACTIVITY", "No customer-facing changes found for v1.2.0"],
+    ["NEEDS_RANGE", "A previous release boundary is required; use an explicit /changelog range"],
+  ])("renders terminal %s guidance", async (status, copy) => {
+    mocks.listConnections.mockResolvedValue([connection]);
+    mocks.listRepositories.mockResolvedValue([{ ...repository, id: "scope-1", status: "ACTIVE" }]);
+    mocks.getReleaseActivity.mockResolvedValue(releaseActivity(status));
+
+    render(<IntegrationsWorkspace />);
+
+    expect(await screen.findByText(copy)).toBeVisible();
+  });
+
+  it("retries a failed release once and shows the returned processing state", async () => {
+    mocks.listConnections.mockResolvedValue([connection]);
+    mocks.listRepositories.mockResolvedValue([{ ...repository, id: "scope-1", status: "ACTIVE" }]);
+    mocks.getReleaseActivity.mockResolvedValue(releaseActivity("FAILED"));
+    mocks.retryReleaseDraft.mockResolvedValue(releaseActivity("QUEUED"));
+
+    render(<IntegrationsWorkspace />);
+    fireEvent.click(await screen.findByRole("button", { name: "Retry release v1.2.0" }));
+
+    await waitFor(() => expect(mocks.retryReleaseDraft).toHaveBeenCalledWith("scope-1", "request-1"));
+    expect(await screen.findByText("Preparing v1.2.0…")).toBeVisible();
+  });
+
+  it("submits a failed release retry only once for two same-tick clicks", async () => {
+    mocks.listConnections.mockResolvedValue([connection]);
+    mocks.listRepositories.mockResolvedValue([{ ...repository, id: "scope-1", status: "ACTIVE" }]);
+    mocks.getReleaseActivity.mockResolvedValue(releaseActivity("FAILED"));
+    mocks.retryReleaseDraft.mockReturnValue(new Promise(() => undefined));
+
+    render(<IntegrationsWorkspace />);
+    const retry = await screen.findByRole("button", { name: "Retry release v1.2.0" });
+
+    act(() => {
+      retry.click();
+      retry.click();
+    });
+
+    expect(mocks.retryReleaseDraft).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows reconnect when loading release activity loses GitHub permission", async () => {
+    mocks.listConnections.mockResolvedValue([connection]);
+    mocks.listRepositories.mockResolvedValue([{ ...repository, id: "scope-1", status: "ACTIVE" }]);
+    mocks.getReleaseActivity.mockRejectedValue(
+      new PlotApiError(502, "GITHUB_ACCESS_DENIED", "private provider detail"),
+    );
+    mocks.createInstallationRequest.mockReturnValue(new Promise(() => undefined));
+
+    render(<IntegrationsWorkspace />);
+
+    expect(await screen.findByText("GitHub permission lost")).toBeVisible();
+    const reconnect = screen.getByRole("button", { name: "Reconnect GitHub for release activity" });
+    fireEvent.click(reconnect);
+    await waitFor(() => expect(mocks.createInstallationRequest).toHaveBeenCalledTimes(1));
+  });
+
+  it("keeps a transient release activity load error visible and retries it", async () => {
+    mocks.listConnections.mockResolvedValue([connection]);
+    mocks.listRepositories.mockResolvedValue([{ ...repository, id: "scope-1", status: "ACTIVE" }]);
+    mocks.getReleaseActivity
+      .mockRejectedValueOnce(new PlotApiError(503, "GITHUB_UNAVAILABLE", "temporary"))
+      .mockResolvedValueOnce(releaseActivity("QUEUED"));
+
+    render(<IntegrationsWorkspace />);
+
+    const status = await screen.findByRole("status");
+    expect(status).toHaveTextContent("Could not load release activity");
+    expect(status).toHaveAttribute("aria-live", "polite");
+    fireEvent.click(screen.getByRole("button", { name: "Retry release activity" }));
+
+    expect(await screen.findByText("Preparing v1.2.0…")).toBeVisible();
+    expect(mocks.getReleaseActivity).toHaveBeenCalledTimes(2);
+  });
+
+  it("loads activity only for the selected connected repository and clears it for an unconnected selection", async () => {
+    const secondConnectedRepository = {
+      ...repository,
+      id: "scope-2",
+      externalRepositoryId: 43,
+      name: "second",
+      displayName: "acme/second",
+      status: "ACTIVE",
+    };
+    const unconnectedRepository = {
+      ...repository,
+      externalRepositoryId: 44,
+      name: "other",
+      displayName: "acme/other",
+    };
+    mocks.listConnections.mockResolvedValue([connection]);
+    mocks.listRepositories.mockResolvedValue([
+      { ...repository, id: "scope-1", status: "ACTIVE" },
+      secondConnectedRepository,
+      unconnectedRepository,
+    ]);
+    mocks.getReleaseActivity.mockImplementation((sourceScopeId: string) => Promise.resolve(
+      sourceScopeId === "scope-1"
+        ? releaseActivity("READY")
+        : { ...releaseActivity("READY"), sourceScopeId: "scope-2", contentPackId: "pack-2" },
+    ));
+
+    render(<IntegrationsWorkspace />);
+
+    expect(await screen.findByRole("link", { name: "Review changelog" })).toHaveAttribute(
+      "href",
+      "/packs?pack=pack-1",
+    );
+    expect(mocks.getReleaseActivity).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("radio", { name: /acme\/second/i }));
+    expect(await screen.findByRole("link", { name: "Review changelog" })).toHaveAttribute(
+      "href",
+      "/packs?pack=pack-2",
+    );
+    expect(mocks.getReleaseActivity).toHaveBeenCalledTimes(2);
+
+    fireEvent.click(screen.getByRole("radio", { name: /acme\/other/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("link", { name: "Review changelog" })).not.toBeInTheDocument();
+    });
+    expect(mocks.getReleaseActivity).toHaveBeenCalledTimes(2);
+  });
+
+  it("offers reconnect instead of retry when GitHub permission was lost", async () => {
+    mocks.listConnections.mockResolvedValue([connection]);
+    mocks.listRepositories.mockResolvedValue([{ ...repository, id: "scope-1", status: "ACTIVE" }]);
+    mocks.getReleaseActivity.mockResolvedValue(releaseActivity("FAILED", "GITHUB_ACCESS_DENIED"));
+    mocks.createInstallationRequest.mockReturnValue(new Promise(() => undefined));
+
+    render(<IntegrationsWorkspace />);
+
+    expect(await screen.findByText("GitHub permission lost")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Reconnect GitHub for release v1.2.0" }));
+    await waitFor(() => expect(mocks.createInstallationRequest).toHaveBeenCalledTimes(1));
+    expect(mocks.retryReleaseDraft).not.toHaveBeenCalled();
+  });
 });
+
+function releaseActivity(status: string, errorCode: string | null = null) {
+  return {
+    id: "request-1",
+    sourceScopeId: "scope-1",
+    tagName: "v1.2.0",
+    status,
+    baseSha: null,
+    headSha: null,
+    generationRunId: status === "READY" ? "generation-1" : null,
+    contentPackId: status === "READY" ? "pack-1" : null,
+    errorCode,
+    createdAt: "2026-07-30T00:00:00Z",
+    updatedAt: "2026-07-30T00:01:00Z",
+  };
+}

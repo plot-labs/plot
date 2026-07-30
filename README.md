@@ -13,13 +13,15 @@ Plot currently supports one complete path:
 
 ```txt
 Connect one GitHub repository
-  -> import merged pull requests
-  -> ask Plot for a changelog
-  -> review citations beside the draft
+  -> Plot monitors ordinary pushes without generating onboarding content
+  -> a later trustworthy GitHub release prepares a review-ready changelog
+  -> review citations beside each factual sentence
   -> edit, copy, or download Markdown
 ```
 
-Publishing remains under the user's control outside Plot.
+The first observed release establishes a trustworthy range boundary and may not
+generate a draft. A later release with an exact, non-empty range does. Publishing
+always remains under the user's control outside Plot.
 
 ## Repository
 
@@ -64,4 +66,5 @@ API integration tests use PostgreSQL through Testcontainers.
 ## Operations
 
 - [GitHub App development smoke test](docs/operations/github-app-development-smoke-test.md)
+- [GitHub release automation](docs/operations/github-release-automation.md)
 - [Polar subscription webhook](docs/operations/polar-subscription-webhook.md)

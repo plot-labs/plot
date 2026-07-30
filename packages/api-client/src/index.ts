@@ -154,6 +154,29 @@ export interface GitHubImport {
   completedAt: string | null;
 }
 
+export type GitHubReleaseDraftStatus =
+  | "QUEUED"
+  | "RESOLVING"
+  | "GENERATING"
+  | "READY"
+  | "NO_ACTIVITY"
+  | "NEEDS_RANGE"
+  | "FAILED";
+
+export interface GitHubReleaseActivity {
+  id: string;
+  sourceScopeId: string;
+  tagName: string;
+  status: GitHubReleaseDraftStatus;
+  baseSha: string | null;
+  headSha: string | null;
+  generationRunId: string | null;
+  contentPackId: string | null;
+  errorCode: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface WritingBlock {
   id: string;
   sourceKind: string;
@@ -211,6 +234,8 @@ export interface PlotApiClient {
   listGitHubRepositories(connectionId: string, options?: RequestOptions): Promise<GitHubRepository[]>;
   connectGitHubRepository(connectionId: string, externalRepositoryId: number, options?: RequestOptions): Promise<GitHubRepository>;
   importGitHubRepository(sourceScopeId: string, input: { from: string; to: string }, options?: RequestOptions): Promise<GitHubImport>;
+  getGitHubReleaseActivity(sourceScopeId: string, options?: RequestOptions): Promise<GitHubReleaseActivity | null>;
+  retryGitHubReleaseDraft(sourceScopeId: string, requestId: string, options?: RequestOptions): Promise<GitHubReleaseActivity>;
   getWorkspace(id: string, options?: RequestOptions): Promise<WorkspaceSummary>;
   listSessions(options?: RequestOptions): Promise<WorkSessionSummary[]>;
   createSession(input: { title?: string | null }, options?: RequestOptions): Promise<WorkSessionSummary>;
@@ -272,6 +297,14 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
     importGitHubRepository: (sourceScopeId, input, requestOptions) => request(
       `/github/repositories/${encodeURIComponent(sourceScopeId)}/imports`,
       { method: "POST", body: JSON.stringify(input), signal: requestOptions?.signal },
+    ),
+    getGitHubReleaseActivity: (sourceScopeId, requestOptions) => request(
+      `/github/repositories/${encodeURIComponent(sourceScopeId)}/release-activity`,
+      { signal: requestOptions?.signal },
+    ),
+    retryGitHubReleaseDraft: (sourceScopeId, requestId, requestOptions) => request(
+      `/github/repositories/${encodeURIComponent(sourceScopeId)}/release-activity/${encodeURIComponent(requestId)}/retry`,
+      { method: "POST", signal: requestOptions?.signal },
     ),
     getWorkspace: (id, requestOptions) => request(`/workspaces/${encodeURIComponent(id)}`, { signal: requestOptions?.signal }),
     listSessions: (requestOptions) => request("/sessions", { signal: requestOptions?.signal }),
