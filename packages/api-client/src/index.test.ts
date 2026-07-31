@@ -32,6 +32,7 @@ describe("Plot API client", () => {
       .mockResolvedValueOnce(Response.json({ id: "scope-1", externalRepositoryId: 42, owner: "acme", name: "plot", displayName: "acme/plot", url: "https://github.com/acme/plot", status: "ACTIVE" }))
       .mockResolvedValueOnce(Response.json({ status: "ACTIVE", analysisStatus: "COMPLETED", releaseConvention: "SEMVER_V" }))
       .mockResolvedValueOnce(Response.json({ status: "ACTIVE", analysisStatus: "QUEUED", releaseConvention: null }))
+      .mockResolvedValueOnce(Response.json({ sourceScopeId: "scope-1", status: "QUEUED", attemptCount: 0, errorCode: null, nextAttemptAt: null, verifiedAt: null }))
       .mockResolvedValueOnce(Response.json({ id: "import-1", sourceScopeId: "scope-1", status: "COMPLETED" }));
     const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
 
@@ -41,6 +42,7 @@ describe("Plot API client", () => {
     await client.connectGitHubRepository("connection-1", 42);
     await client.getGitHubRepositoryMonitoring("scope-1");
     await client.retryGitHubRepositoryMonitoring("scope-1");
+    await client.recheckGitHubRepositoryAccess("scope-1", "CHECK_AGAIN");
     await client.importGitHubRepository("scope-1", { from: "2026-06-01T00:00:00.000Z", to: "2026-07-01T00:00:00.000Z" });
 
     expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
@@ -50,12 +52,14 @@ describe("Plot API client", () => {
       "/api/plot/github/repositories/42",
       "/api/plot/github/repositories/scope-1/monitoring",
       "/api/plot/github/repositories/scope-1/monitoring/retry",
+      "/api/plot/github/repositories/scope-1/access-check?trigger=CHECK_AGAIN",
       "/api/plot/github/repositories/scope-1/imports",
     ]);
     expect(fetcher.mock.calls[3]?.[1]).toMatchObject({ method: "PUT", body: JSON.stringify({ connectionId: "connection-1" }) });
     expect(fetcher.mock.calls[5]?.[1]).toMatchObject({ method: "POST" });
-    expect(fetcher.mock.calls[6]?.[1]).toMatchObject({ method: "POST", body: JSON.stringify({ from: "2026-06-01T00:00:00.000Z", to: "2026-07-01T00:00:00.000Z" }) });
-    expect(new Headers(fetcher.mock.calls[6]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
+    expect(fetcher.mock.calls[6]?.[1]).toMatchObject({ method: "POST" });
+    expect(fetcher.mock.calls[7]?.[1]).toMatchObject({ method: "POST", body: JSON.stringify({ from: "2026-06-01T00:00:00.000Z", to: "2026-07-01T00:00:00.000Z" }) });
+    expect(new Headers(fetcher.mock.calls[7]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
   });
 
   it("loads nullable release activity and retries an exact failed request", async () => {

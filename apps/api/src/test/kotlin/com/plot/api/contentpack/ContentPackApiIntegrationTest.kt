@@ -180,6 +180,38 @@ class ContentPackApiIntegrationTest {
 			}
 		}
 
+	@Test
+	fun `retained citation reports lost source access without changing its snapshot`() {
+		val fixture = readyPack()
+		val namespaceId = UUID.randomUUID()
+		val scopeId = UUID.randomUUID()
+		jdbcTemplate.update(
+			"""
+			insert into source_namespaces (id, workspace_id, provider, namespace_kind, external_namespace_key, display_name, status, created_at, updated_at)
+			values (?, ?, 'GITHUB', 'ORGANIZATION', ?, 'acme', 'ERROR', now(), now())
+			""".trimIndent(),
+			namespaceId, devContext.devWorkspaceId, "org:${UUID.randomUUID()}",
+		)
+		jdbcTemplate.update(
+			"""
+			insert into source_scopes (id, workspace_id, source_namespace_id, provider, scope_semantics, scope_kind,
+			 external_scope_key, external_key, display_name, url, status, status_reason, created_at, updated_at)
+			values (?, ?, ?, 'GITHUB', 'CONTAINER', 'REPOSITORY', '9001', 'acme/plot', 'acme/plot', 'https://github.com/acme/plot', 'ERROR', 'GRANT_REMOVED', now(), now())
+			""".trimIndent(),
+			scopeId, devContext.devWorkspaceId, namespaceId,
+		)
+		jdbcTemplate.update(
+			"update generation_runs set source_scope_id = ? where workspace_id = ? and id = ?",
+			scopeId, devContext.devWorkspaceId, fixture.runId,
+		)
+
+		mockMvc.get("/api/content-packs/${fixture.packId}").andExpect {
+			status { isOk() }
+			jsonPath("$.variant.sentences[0].citations[0].sourceAccess") { value("LOST") }
+			jsonPath("$.variant.sentences[0].citations[0].snapshotExcerpt") { value("PRIVATE SNAPSHOT EXCERPT") }
+		}
+	}
+
 	private fun export(variantId: UUID, disposition: String): String {
 		val revisionIds = jdbcTemplate.queryForList(
 			"select id from content_variant_sentence_revisions where content_variant_id = ? and is_current and origin = 'USER_MODIFIED'",

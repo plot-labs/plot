@@ -66,6 +66,7 @@ data class ContentCitationResponse(
 	val originalUrl: String,
 	val snapshotExcerpt: String?,
 	val status: String,
+	val sourceAccess: String = "AVAILABLE",
 )
 
 data class ContentExportResponse(

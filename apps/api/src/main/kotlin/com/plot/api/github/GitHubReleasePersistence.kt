@@ -76,6 +76,12 @@ interface GitHubReleasePersistence {
 		nextAttemptAt: Instant,
 		errorCode: String,
 	)
+	fun fenceSourceScope(
+		workspaceId: UUID,
+		sourceScopeId: UUID,
+		now: Instant,
+		errorCode: String = "SOURCE_ACCESS_LOST",
+	): Int
 	fun recoverStaleClaims(now: Instant, leaseTimeout: Duration): Int
 	fun findGenerating(limit: Int): List<GitHubReleaseDraftRequest>
 	fun recordReconcileDiagnostic(
@@ -291,6 +297,13 @@ class JdbcGitHubReleasePersistence(
 				where candidate.status in ('QUEUED', 'RESOLVING')
 				  and (candidate.next_attempt_at is null or candidate.next_attempt_at <= ?)
 				  and (candidate.claimed_by is null or candidate.heartbeat_at is null or candidate.heartbeat_at < ?)
+				  and exists (
+				    select 1
+				    from source_scopes scope
+				    where scope.workspace_id = candidate.workspace_id
+				      and scope.id = candidate.source_scope_id
+				      and scope.status = 'ACTIVE'
+				  )
 				  and not exists (
 				    select 1
 				    from github_release_draft_requests predecessor
@@ -614,6 +627,31 @@ class JdbcGitHubReleasePersistence(
 			transitionVersion,
 		)
 		requireExactlyOne(updated, "Release request transition was lost")
+	}
+
+	override fun fenceSourceScope(
+		workspaceId: UUID,
+		sourceScopeId: UUID,
+		now: Instant,
+		errorCode: String,
+	): Int {
+		require(errorCode.isNotBlank()) { "Release fence error code is required" }
+		return jdbcTemplate.update(
+			"""
+			update github_release_draft_requests
+			set status = 'FAILED', error_code = ?, next_attempt_at = null,
+			    transition_version = transition_version + 1,
+			    claimed_by = null, claimed_at = null, heartbeat_at = null,
+			    finished_at = ?, updated_at = ?
+			where workspace_id = ? and source_scope_id = ?
+			  and status in ('QUEUED', 'RESOLVING', 'GENERATING')
+			""".trimIndent(),
+			errorCode,
+			Timestamp.from(now),
+			Timestamp.from(now),
+			workspaceId,
+			sourceScopeId,
+		)
 	}
 
 	override fun recoverStaleClaims(now: Instant, leaseTimeout: Duration): Int = transactionTemplate.execute {

@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   importRepository: vi.fn(),
   getMonitoring: vi.fn(),
   retryMonitoring: vi.fn(),
+  recheckAccess: vi.fn(),
   getReleaseActivity: vi.fn(),
   retryReleaseDraft: vi.fn(),
 }));
@@ -37,6 +38,7 @@ vi.mock("@/lib/api-client", async () => {
       importGitHubRepository: mocks.importRepository,
       getGitHubRepositoryMonitoring: mocks.getMonitoring,
       retryGitHubRepositoryMonitoring: mocks.retryMonitoring,
+      recheckGitHubRepositoryAccess: mocks.recheckAccess,
       getGitHubReleaseActivity: mocks.getReleaseActivity,
       retryGitHubReleaseDraft: mocks.retryReleaseDraft,
     },
@@ -80,6 +82,7 @@ describe("IntegrationsWorkspace", () => {
     mocks.importRepository.mockReset();
     mocks.getMonitoring.mockReset().mockResolvedValue(monitoring("COMPLETED"));
     mocks.retryMonitoring.mockReset();
+    mocks.recheckAccess.mockReset();
     mocks.getReleaseActivity.mockReset().mockResolvedValue(null);
     mocks.retryReleaseDraft.mockReset();
   });
@@ -193,6 +196,64 @@ describe("IntegrationsWorkspace", () => {
 
     await waitFor(() => expect(mocks.createInstallationRequest).toHaveBeenCalledTimes(1));
     expect(reconnect).toBeDisabled();
+  });
+
+  it("keeps an uninstalled repository visible and restores it after Check again", async () => {
+    const retainedRepository = {
+      ...repository,
+      id: "scope-1",
+      status: "DISABLED",
+      statusReason: "REPOSITORY_DELETED",
+    };
+    const restoredRepository = {
+      ...retainedRepository,
+      status: "ACTIVE",
+      statusReason: null,
+      accessCheckStatus: "VERIFIED",
+    };
+    let restored = false;
+    mocks.listConnections.mockImplementation(() => Promise.resolve([{
+      ...connection,
+      status: restored ? "ACTIVE" : "DISABLED",
+      statusReason: restored ? null : "INSTALLATION_UNINSTALLED",
+      repositories: [restored ? restoredRepository : retainedRepository],
+    }]));
+    mocks.listRepositories.mockResolvedValue([restoredRepository]);
+    mocks.recheckAccess.mockResolvedValue({
+      sourceScopeId: "scope-1",
+      status: "VERIFIED",
+      attemptCount: 1,
+      errorCode: null,
+      nextAttemptAt: null,
+      verifiedAt: "2026-07-31T00:00:00Z",
+    });
+
+    render(<IntegrationsWorkspace />);
+
+    expect(await screen.findByText("Disconnected")).toBeVisible();
+    expect(screen.getByText(/installation was removed/i)).toBeVisible();
+    fireEvent.click(await screen.findByRole("radio", { name: /acme\/plot/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+    expect(mocks.recheckAccess).toHaveBeenCalledWith("scope-1", "CHECK_AGAIN");
+
+    restored = true;
+    await waitFor(() => expect(screen.getAllByText("Connected").length).toBeGreaterThan(0));
+    expect(screen.queryByText("Disconnected")).not.toBeInTheDocument();
+  });
+
+  it("distinguishes a suspended installation as Needs attention", async () => {
+    mocks.listConnections.mockResolvedValue([{
+      ...connection,
+      status: "ERROR",
+      statusReason: "INSTALLATION_SUSPENDED",
+      repositories: [{ ...repository, id: "scope-1", status: "ERROR", statusReason: "PROVIDER_VERIFICATION_FAILED" }],
+    }]);
+
+    render(<IntegrationsWorkspace />);
+
+    expect((await screen.findAllByText("Needs attention")).length).toBeGreaterThan(0);
+    expect(screen.getByText(/installation is suspended/i)).toBeVisible();
+    expect(screen.getByRole("button", { name: "Reconnect GitHub" })).toBeVisible();
   });
 
   it("turns an overlapping import into a recoverable status message", async () => {

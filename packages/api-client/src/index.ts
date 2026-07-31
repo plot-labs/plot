@@ -34,6 +34,7 @@ export interface GenerationCitation {
   originalUrl: string;
   snapshotExcerpt: string | null;
   status?: CitationStatus;
+  sourceAccess?: "AVAILABLE" | "LOST";
 }
 
 export interface GenerationSentence {
@@ -125,6 +126,19 @@ export type GitHubRepositoryMonitoringStatus = "ACTIVE" | "DISABLED";
 export type GitHubRepositoryAnalysisStatus = "QUEUED" | "ANALYZING" | "COMPLETED" | "FAILED";
 export type GitHubReleaseConvention = "SEMVER_V" | "SEMVER" | "PREFIXED" | "MIXED" | "NO_TAGS";
 export type GitHubReleaseSampleSource = "RELEASES" | "TAGS";
+export type GitHubConnectionStatusReason =
+  | "AUTH_EXPIRED"
+  | "INSTALLATION_SUSPENDED"
+  | "INSTALLATION_UNINSTALLED"
+  | "PROVIDER_VERIFICATION_FAILED";
+export type GitHubRepositoryStatusReason =
+  | "GRANT_REMOVED"
+  | "REPOSITORY_TRANSFERRED"
+  | "REPOSITORY_DELETED"
+  | "USER_DISCONNECTED"
+  | "PROVIDER_VERIFICATION_FAILED";
+export type GitHubAccessCheckStatus = "QUEUED" | "CHECKING" | "VERIFIED" | "FAILED";
+export type GitHubAccessCheckTrigger = "RETRY" | "CHECK_AGAIN";
 
 export interface GitHubRepositoryMonitoring {
   status: GitHubRepositoryMonitoringStatus;
@@ -148,6 +162,8 @@ export interface GitHubRepository {
   url: string;
   status: string | null;
   monitoring: GitHubRepositoryMonitoring | null;
+  statusReason?: GitHubRepositoryStatusReason | string | null;
+  accessCheckStatus?: GitHubAccessCheckStatus | null;
 }
 
 export interface GitHubConnection {
@@ -155,6 +171,16 @@ export interface GitHubConnection {
   installationId: number;
   status: string;
   repositories: GitHubRepository[];
+  statusReason?: GitHubConnectionStatusReason | string | null;
+}
+
+export interface GitHubAccessCheck {
+  sourceScopeId: string;
+  status: GitHubAccessCheckStatus;
+  attemptCount: number;
+  errorCode: string | null;
+  nextAttemptAt: string | null;
+  verifiedAt: string | null;
 }
 
 export interface GitHubImport {
@@ -254,6 +280,7 @@ export interface PlotApiClient {
   connectGitHubRepository(connectionId: string, externalRepositoryId: number, options?: RequestOptions): Promise<GitHubRepository>;
   getGitHubRepositoryMonitoring(sourceScopeId: string, options?: RequestOptions): Promise<GitHubRepositoryMonitoring>;
   retryGitHubRepositoryMonitoring(sourceScopeId: string, options?: RequestOptions): Promise<GitHubRepositoryMonitoring>;
+  recheckGitHubRepositoryAccess(sourceScopeId: string, trigger: GitHubAccessCheckTrigger, options?: RequestOptions): Promise<GitHubAccessCheck>;
   importGitHubRepository(sourceScopeId: string, input: { from: string; to: string }, options?: RequestOptions): Promise<GitHubImport>;
   getGitHubReleaseActivity(sourceScopeId: string, options?: RequestOptions): Promise<GitHubReleaseActivity | null>;
   retryGitHubReleaseDraft(sourceScopeId: string, requestId: string, options?: RequestOptions): Promise<GitHubReleaseActivity>;
@@ -321,6 +348,10 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
     ),
     retryGitHubRepositoryMonitoring: (sourceScopeId, requestOptions) => request(
       `/github/repositories/${encodeURIComponent(sourceScopeId)}/monitoring/retry`,
+      { method: "POST", signal: requestOptions?.signal },
+    ),
+    recheckGitHubRepositoryAccess: (sourceScopeId, trigger, requestOptions) => request(
+      `/github/repositories/${encodeURIComponent(sourceScopeId)}/access-check?trigger=${encodeURIComponent(trigger)}`,
       { method: "POST", signal: requestOptions?.signal },
     ),
     importGitHubRepository: (sourceScopeId, input, requestOptions) => request(

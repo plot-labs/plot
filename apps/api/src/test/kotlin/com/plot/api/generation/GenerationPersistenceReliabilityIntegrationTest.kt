@@ -142,12 +142,44 @@ class GenerationPersistenceReliabilityIntegrationTest {
 		)
 	}
 
+	@Test
+	fun sourceAccessFenceFailsTheRunAndRejectsItsLateCheckpoint() {
+		val sourceScopeId = insertSourceScope("access-loss")
+		val state = reserve("access-loss", sourceScopeId)
+		val claim = assertNotNull(
+			persistence.claimNext("access-loss-worker", Instant.now().minusSeconds(120)),
+		)
+		val invocation = persistence.beginInvocation(claim, ModelRole.WRITER)
+
+		assertEquals(1, persistence.fenceSourceScope(devContext.devWorkspaceId, sourceScopeId, Instant.now()))
+		assertEquals(
+			"FAILED:SOURCE_ACCESS_LOST",
+			jdbcTemplate.queryForObject(
+				"select status || ':' || error_code from generation_runs where id = ?",
+				String::class.java,
+				state.runId,
+			),
+		)
+		assertEquals(
+			"FAILED:SOURCE_ACCESS_LOST",
+			jdbcTemplate.queryForObject(
+				"select status || ':' || failure_code from model_invocations where id = ?",
+				String::class.java,
+				invocation.id,
+			),
+		)
+
+		val before = runSnapshot(state.runId)
+		assertLost { persistence.completeCheckpoint(claim, invocation, state, null) }
+		assertEquals(before, runSnapshot(state.runId))
+	}
+
 	private fun assertLost(action: () -> Unit) {
 		val failure = assertFailsWith<IllegalStateException> { action() }
 		assertEquals("Generation run claim was lost", failure.message)
 	}
 
-	private fun reserve(key: String): GenerationWorkflowState {
+	private fun reserve(key: String, sourceScopeId: UUID? = null): GenerationWorkflowState {
 		val runId = UUID.randomUUID()
 		val blockId = insertWritingBlock(key)
 		val state = workflow.start(
@@ -177,7 +209,7 @@ class GenerationPersistenceReliabilityIntegrationTest {
 			GenerationRunReservation(
 				workspaceId = devContext.devWorkspaceId,
 				createdByUserId = devContext.devUserId,
-				sourceScopeId = null,
+				sourceScopeId = sourceScopeId,
 				idempotencyKey = "reliability-$key-${UUID.randomUUID()}",
 				requestFingerprint = "fingerprint-$key",
 				state = state,
@@ -202,6 +234,35 @@ class GenerationPersistenceReliabilityIntegrationTest {
 			"block-$key",
 			devContext.devUserId,
 		)
+	}
+
+	private fun insertSourceScope(key: String): UUID {
+		val namespaceId = UUID.randomUUID()
+		val scopeId = UUID.randomUUID()
+		jdbcTemplate.update(
+			"""
+			insert into source_namespaces
+			(id, workspace_id, provider, namespace_kind, external_namespace_key, status, created_at, updated_at)
+			values (?, ?, 'GITHUB', 'INSTALLATION', ?, 'ACTIVE', now(), now())
+			""".trimIndent(),
+			namespaceId,
+			devContext.devWorkspaceId,
+			"installation-$key-${UUID.randomUUID()}",
+		)
+		jdbcTemplate.update(
+			"""
+			insert into source_scopes
+			(id, workspace_id, source_namespace_id, provider, scope_semantics, scope_kind,
+			 external_scope_key, display_name, status, created_at, updated_at)
+			values (?, ?, ?, 'GITHUB', 'CONTAINER', 'REPOSITORY', ?, ?, 'ACTIVE', now(), now())
+			""".trimIndent(),
+			scopeId,
+			devContext.devWorkspaceId,
+			namespaceId,
+			"repository-$key",
+			"acme/$key",
+		)
+		return scopeId
 	}
 
 	private fun expireClaim(runId: UUID) {

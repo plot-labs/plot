@@ -165,6 +165,16 @@ class GenerationPersistence(
 			where status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
 			  and (next_attempt_at is null or next_attempt_at <= now())
 			  and (claimed_by is null or heartbeat_at < ?)
+			  and (
+			    source_scope_id is null
+			    or exists (
+			      select 1
+			      from source_scopes scope
+			      where scope.workspace_id = generation_runs.workspace_id
+			        and scope.id = generation_runs.source_scope_id
+			        and scope.status = 'ACTIVE'
+			    )
+			  )
 			order by created_at, id
 			for update skip locked
 			limit 1
@@ -185,6 +195,65 @@ class GenerationPersistence(
 			workerId, Timestamp.from(now), Timestamp.from(now), Timestamp.from(now), row.first, row.second, row.third, Timestamp.from(staleBefore),
 		)
 		if (updated == 1) ClaimedGenerationRun(row.first, row.second, row.third + 1, workerId) else null
+	}
+
+	fun fenceSourceScope(
+		workspaceId: UUID,
+		sourceScopeId: UUID,
+		now: Instant,
+		errorCode: String = "SOURCE_ACCESS_LOST",
+	): Int = transactionTemplate.execute {
+		require(errorCode.isNotBlank()) { "Generation fence error code is required" }
+		jdbcTemplate.update(
+			"""
+			update model_invocations
+			set status = 'FAILED', failure_code = ?, finished_at = ?
+			where workspace_id = ? and status = 'RUNNING'
+			  and generation_run_id in (
+			    select id from generation_runs
+			    where workspace_id = ? and source_scope_id = ?
+			      and status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
+			  )
+			""".trimIndent(),
+			errorCode,
+			Timestamp.from(now),
+			workspaceId,
+			workspaceId,
+			sourceScopeId,
+		)
+		jdbcTemplate.update(
+			"""
+			update generation_workflow_steps
+			set status = 'FAILED', failure_code = ?, finished_at = ?
+			where workspace_id = ? and status = 'RUNNING'
+			  and generation_run_id in (
+			    select id from generation_runs
+			    where workspace_id = ? and source_scope_id = ?
+			      and status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
+			  )
+			""".trimIndent(),
+			errorCode,
+			Timestamp.from(now),
+			workspaceId,
+			workspaceId,
+			sourceScopeId,
+		)
+		jdbcTemplate.update(
+			"""
+			update generation_runs
+			set status = 'FAILED', error_code = ?,
+			    claimed_by = null, claimed_at = null, heartbeat_at = null,
+			    next_attempt_at = null, finished_at = ?,
+			    transition_version = transition_version + 1, updated_at = ?
+			where workspace_id = ? and source_scope_id = ?
+			  and status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
+			""".trimIndent(),
+			errorCode,
+			Timestamp.from(now),
+			Timestamp.from(now),
+			workspaceId,
+			sourceScopeId,
+		)
 	}
 
 	fun renewClaim(claim: ClaimedGenerationRun, now: Instant): Boolean = jdbcTemplate.update(

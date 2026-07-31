@@ -712,6 +712,12 @@ class GitHubReleaseDraftOrchestratorTest {
 
 		override fun findGenerating(limit: Int): List<GitHubReleaseDraftRequest> = generating.take(limit)
 		override fun recoverStaleClaims(now: Instant, leaseTimeout: Duration): Int = 0
+		override fun fenceSourceScope(
+			workspaceId: UUID,
+			sourceScopeId: UUID,
+			now: Instant,
+			errorCode: String,
+		): Int = 0
 		override fun insertDelivery(delivery: GitHubWebhookDelivery): GitHubWebhookDelivery = error("not used")
 		override fun findDelivery(externalDeliveryId: String): GitHubWebhookDelivery? = error("not used")
 		override fun markDelivery(id: UUID, disposition: GitHubWebhookDisposition, errorCode: String?) = error("not used")

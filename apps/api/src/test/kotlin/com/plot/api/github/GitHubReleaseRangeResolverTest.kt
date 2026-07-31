@@ -291,6 +291,12 @@ class GitHubReleaseRangeResolverTest {
 		): GitHubReleaseActivityRecord? = error("not used")
 		override fun findLatest(sourceScopeId: UUID, workspaceId: UUID): GitHubReleaseDraftRequest? = error("not used")
 		override fun claimNext(workerId: String, now: Instant, leaseTimeout: Duration): GitHubReleaseDraftRequest? = error("not used")
+		override fun fenceSourceScope(
+			workspaceId: UUID,
+			sourceScopeId: UUID,
+			now: Instant,
+			errorCode: String,
+		): Int = 0
 		override fun linkGeneration(
 			requestId: UUID,
 			transitionVersion: Long,

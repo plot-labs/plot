@@ -57,7 +57,10 @@ class GitHubWebhookApiIntegrationTest {
 	fun clearDeliveries() {
 		devBootstrapService.bootstrap()
 		jdbcTemplate.update("delete from github_release_draft_requests where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from generation_runs where workspace_id = ? and source_scope_id is not null", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from github_repository_access_checks where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from github_webhook_deliveries")
+		jdbcTemplate.update("delete from github_repository_monitoring where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from source_scopes where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from connection_namespace_bindings where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from source_namespaces where workspace_id = ?", devContext.devWorkspaceId)
@@ -264,6 +267,179 @@ class GitHubWebhookApiIntegrationTest {
 	}
 
 	@Test
+	fun installationSuspendFencesTheConnectionAndItsRepositoryScope() {
+		val boundRepository = bindRepository(repositoryId = 99)
+		insertMonitoring(boundRepository.scopeId)
+
+		postWebhook(
+			"delivery-${UUID.randomUUID()}",
+			"installation",
+			"""{"action":"suspend","installation":{"id":77}}""",
+		).andExpect { status { isAccepted() } }
+
+		assertEquals("ERROR", jdbcTemplate.queryForObject(
+			"select status from connections where external_connection_key = '77'", String::class.java,
+		))
+		assertEquals("INSTALLATION_SUSPENDED", jdbcTemplate.queryForObject(
+			"select status_reason from connections where external_connection_key = '77'", String::class.java,
+		))
+		assertEquals("ERROR", scopeStatus(boundRepository.scopeId))
+		assertEquals("DISABLED", monitoringStatus(boundRepository.scopeId))
+		assertEquals("OBSERVED", latestDisposition())
+	}
+
+	@Test
+	fun installationSuspendFencesNonTerminalReleaseAndGenerationWork() {
+		val boundRepository = bindRepository(repositoryId = 99)
+		insertMonitoring(boundRepository.scopeId)
+		jdbcTemplate.update(
+			"""
+			update github_repository_monitoring
+			set analysis_status = 'ANALYZING', claimed_by = 'monitor-worker', claimed_at = now()
+			where source_scope_id = ?
+			""".trimIndent(),
+			boundRepository.scopeId,
+		)
+		val releaseRequestId = insertReleaseRequest(boundRepository.scopeId)
+		val generationRunId = insertGenerationRun(boundRepository.scopeId)
+
+		postWebhook(
+			"delivery-${UUID.randomUUID()}",
+			"installation",
+			"""{"action":"suspend","installation":{"id":77}}""",
+		).andExpect { status { isAccepted() } }
+
+		assertEquals(
+			"FAILED:SOURCE_ACCESS_LOST",
+			jdbcTemplate.queryForObject(
+				"select analysis_status || ':' || last_error_code from github_repository_monitoring where source_scope_id = ?",
+				String::class.java,
+				boundRepository.scopeId,
+			),
+		)
+		assertEquals(
+			"FAILED:SOURCE_ACCESS_LOST",
+			jdbcTemplate.queryForObject(
+				"select status || ':' || error_code from github_release_draft_requests where id = ?",
+				String::class.java,
+				releaseRequestId,
+			),
+		)
+		assertEquals(
+			"FAILED:SOURCE_ACCESS_LOST",
+			jdbcTemplate.queryForObject(
+				"select status || ':' || error_code from generation_runs where id = ?",
+				String::class.java,
+				generationRunId,
+			),
+		)
+		assertEquals(
+			0,
+			jdbcTemplate.queryForObject(
+				"select count(*) from github_release_draft_requests where id = ? and claimed_by is not null",
+				Int::class.java,
+				releaseRequestId,
+			),
+		)
+		assertEquals(
+			0,
+			jdbcTemplate.queryForObject(
+				"select count(*) from generation_runs where id = ? and claimed_by is not null",
+				Int::class.java,
+				generationRunId,
+			),
+		)
+	}
+
+	@Test
+	fun installationUninstallRevokesBindingsAndIsIdempotent() {
+		val boundRepository = bindRepository(repositoryId = 99)
+		val deliveryId = "delivery-${UUID.randomUUID()}"
+		val body = """{"action":"deleted","installation":{"id":77}}"""
+
+		postWebhook(deliveryId, "installation", body).andExpect { status { isAccepted() } }
+		postWebhook(deliveryId, "installation", body).andExpect { status { isAccepted() } }
+
+		assertEquals("DISABLED", jdbcTemplate.queryForObject(
+			"select status from connections where external_connection_key = '77'", String::class.java,
+		))
+		assertEquals("INSTALLATION_UNINSTALLED", jdbcTemplate.queryForObject(
+			"select status_reason from connections where external_connection_key = '77'", String::class.java,
+		))
+		assertEquals("REVOKED", jdbcTemplate.queryForObject(
+			"select status from connection_namespace_bindings where id = ?", String::class.java, boundRepository.bindingId,
+		))
+		assertEquals("DISABLED", scopeStatus(boundRepository.scopeId))
+		assertEquals(1, jdbcTemplate.queryForObject(
+			"select count(*) from github_webhook_deliveries where event_type = 'installation'", Int::class.java,
+		))
+	}
+
+	@Test
+	fun repositoryGrantRemovalOnlyProjectsTheAffectedScope() {
+		val affected = bindRepository(repositoryId = 99)
+		val unaffected = bindRepository(repositoryId = 100)
+
+		postWebhook(
+			"delivery-${UUID.randomUUID()}",
+			"installation_repositories",
+			"""{"action":"removed","installation":{"id":77},"repositories_removed":[{"id":99}]}""",
+		).andExpect { status { isAccepted() } }
+
+		assertEquals("ERROR", scopeStatus(affected.scopeId))
+		assertEquals("GRANT_REMOVED", scopeReason(affected.scopeId))
+		assertEquals("ACTIVE", scopeStatus(unaffected.scopeId))
+		assertEquals("REVOKED", jdbcTemplate.queryForObject(
+			"select status from connection_namespace_bindings where id = ?", String::class.java, affected.bindingId,
+		))
+		assertEquals("ACTIVE", jdbcTemplate.queryForObject(
+			"select status from connection_namespace_bindings where id = ?", String::class.java, unaffected.bindingId,
+		))
+	}
+
+	@Test
+	fun transferQueuesRecheckAndUnsuspendDoesNotReactivateBeforeVerification() {
+		val boundRepository = bindRepository(repositoryId = 99)
+
+		postWebhook(
+			"delivery-${UUID.randomUUID()}",
+			"repository",
+			"""{"action":"transferred","installation":{"id":77},"repository":{"id":99}}""",
+		).andExpect { status { isAccepted() } }
+
+		assertEquals("ERROR", scopeStatus(boundRepository.scopeId))
+		assertEquals("REPOSITORY_TRANSFERRED", scopeReason(boundRepository.scopeId))
+		assertEquals("QUEUED", accessCheckStatus(boundRepository.scopeId))
+
+		postWebhook(
+			"delivery-${UUID.randomUUID()}",
+			"installation",
+			"""{"action":"unsuspend","installation":{"id":77}}""",
+		).andExpect { status { isAccepted() } }
+
+		assertEquals("ERROR", scopeStatus(boundRepository.scopeId))
+		assertEquals(1, jdbcTemplate.queryForObject(
+			"select count(*) from github_repository_access_checks where source_scope_id = ?", Int::class.java, boundRepository.scopeId,
+		))
+	}
+
+	@Test
+	fun unsupportedLifecycleActionIsIgnored() {
+		bindRepository(repositoryId = 99)
+
+		postWebhook(
+			"delivery-${UUID.randomUUID()}",
+			"installation",
+			"""{"action":"created","installation":{"id":77}}""",
+		).andExpect { status { isAccepted() } }
+
+		assertEquals("IGNORED", latestDisposition())
+		assertEquals("ACTIVE", jdbcTemplate.queryForObject(
+			"select status from connections where external_connection_key = '77'", String::class.java,
+		))
+	}
+
+	@Test
 	fun ambiguousInstallationRepositoryBindingsAcrossWorkspacesAreIgnored() {
 		val foreignWorkspaceId = insertOtherWorkspace()
 		try {
@@ -411,16 +587,21 @@ class GitHubWebhookApiIntegrationTest {
 		workspaceId: UUID = devContext.devWorkspaceId,
 		createdByUserId: UUID = devContext.devUserId,
 	): BoundRepository {
-		val connectionId = UUID.randomUUID()
+		val connectionId = jdbcTemplate.query(
+			"select id from connections where workspace_id = ? and provider = 'GITHUB' and external_connection_key = '77'",
+			{ rs, _ -> rs.getObject(1, UUID::class.java) },
+			workspaceId,
+		).firstOrNull() ?: UUID.randomUUID().also { id ->
+			jdbcTemplate.update(
+				"""
+				insert into connections (id, workspace_id, provider, connection_kind, external_connection_key, status, created_by_user_id, created_at, updated_at)
+				values (?, ?, 'GITHUB', 'GITHUB_APP_INSTALLATION', '77', 'ACTIVE', ?, now(), now())
+				""".trimIndent(), id, workspaceId, createdByUserId,
+			)
+		}
 		val namespaceId = UUID.randomUUID()
 		val bindingId = UUID.randomUUID()
 		val scopeId = UUID.randomUUID()
-		jdbcTemplate.update(
-			"""
-			insert into connections (id, workspace_id, provider, connection_kind, external_connection_key, status, created_by_user_id, created_at, updated_at)
-			values (?, ?, 'GITHUB', 'GITHUB_APP_INSTALLATION', '77', 'ACTIVE', ?, now(), now())
-			""".trimIndent(), connectionId, workspaceId, createdByUserId,
-		)
 		jdbcTemplate.update(
 			"""
 			insert into source_namespaces (id, workspace_id, provider, namespace_kind, external_namespace_key, status, created_at, updated_at)
@@ -442,6 +623,69 @@ class GitHubWebhookApiIntegrationTest {
 		return BoundRepository(scopeId, bindingId)
 	}
 
+	private fun insertMonitoring(scopeId: UUID) {
+		jdbcTemplate.update(
+			"""
+			insert into github_repository_monitoring (
+			  id, workspace_id, source_scope_id, monitoring_status, analysis_status,
+			  sample_size, sample_truncated, attempt_count, transition_version, created_at, updated_at
+			) values (?, ?, ?, 'ACTIVE', 'QUEUED', 0, false, 0, 0, now(), now())
+			""".trimIndent(), UUID.randomUUID(), devContext.devWorkspaceId, scopeId,
+		)
+	}
+
+	private fun insertReleaseRequest(scopeId: UUID): UUID {
+		val deliveryId = UUID.randomUUID()
+		val requestId = UUID.randomUUID()
+		jdbcTemplate.update(
+			"""
+			insert into github_webhook_deliveries
+			(id, external_delivery_id, event_type, installation_id, repository_id, payload_hash, disposition, received_at)
+			values (?, ?, 'release', 77, 99, ?, 'QUEUED', now())
+			""".trimIndent(),
+			deliveryId,
+			"fixture-$deliveryId",
+			"a".repeat(64),
+		)
+		jdbcTemplate.update(
+			"""
+			insert into github_release_draft_requests
+			(id, workspace_id, source_scope_id, initial_delivery_id, tag_name, status,
+			 claimed_by, claimed_at, heartbeat_at, created_at, updated_at)
+			values (?, ?, ?, ?, ?, 'GENERATING', 'release-worker', now(), now(), now(), now())
+			""".trimIndent(),
+			requestId,
+			devContext.devWorkspaceId,
+			scopeId,
+			deliveryId,
+			"v-${UUID.randomUUID()}",
+		)
+		return requestId
+	}
+
+	private fun insertGenerationRun(scopeId: UUID): UUID {
+		val runId = UUID.randomUUID()
+		jdbcTemplate.update(
+			"""
+			insert into generation_runs
+			(id, workspace_id, source_scope_id, created_by_user_id, idempotency_key, request_fingerprint,
+			 status, workflow_version, prompt_version, output_schema_version, budget_version,
+			 provider, model_name, budget_snapshot, claimed_by, claimed_at, heartbeat_at,
+			 started_at, created_at, updated_at)
+			values (?, ?, ?, ?, ?, ?, 'WRITING', 'fixed-v1', 'changelog-v8', 'generation-v5',
+			 'budget-v1', 'OPENAI', 'test-model', '{"maxModelCalls":1}'::jsonb,
+			 'generation-worker', now(), now(), now(), now(), now())
+			""".trimIndent(),
+			runId,
+			devContext.devWorkspaceId,
+			scopeId,
+			devContext.devUserId,
+			"fixture-$runId",
+			"fingerprint-$runId",
+		)
+		return runId
+	}
+
 	private fun latestDisposition(): String = jdbcTemplate.queryForObject(
 		"select disposition from github_webhook_deliveries order by received_at desc, id desc limit 1", String::class.java,
 	)!!
@@ -452,6 +696,22 @@ class GitHubWebhookApiIntegrationTest {
 
 	private fun modelInvocationCount(): Int = jdbcTemplate.queryForObject(
 		"select count(*) from model_invocations", Int::class.java,
+	)!!
+
+	private fun scopeStatus(scopeId: UUID): String = jdbcTemplate.queryForObject(
+		"select status from source_scopes where id = ?", String::class.java, scopeId,
+	)!!
+
+	private fun scopeReason(scopeId: UUID): String = jdbcTemplate.queryForObject(
+		"select status_reason from source_scopes where id = ?", String::class.java, scopeId,
+	)!!
+
+	private fun monitoringStatus(scopeId: UUID): String = jdbcTemplate.queryForObject(
+		"select monitoring_status from github_repository_monitoring where source_scope_id = ?", String::class.java, scopeId,
+	)!!
+
+	private fun accessCheckStatus(scopeId: UUID): String = jdbcTemplate.queryForObject(
+		"select status from github_repository_access_checks where source_scope_id = ?", String::class.java, scopeId,
 	)!!
 
 	private data class BoundRepository(val scopeId: UUID, val bindingId: UUID)
@@ -467,6 +727,7 @@ class GitHubWebhookApiIntegrationTest {
 	}
 
 	private fun deleteWorkspaceBindings(workspaceId: UUID) {
+		jdbcTemplate.update("delete from github_repository_access_checks where workspace_id = ?", workspaceId)
 		jdbcTemplate.update("delete from source_scopes where workspace_id = ?", workspaceId)
 		jdbcTemplate.update("delete from connection_namespace_bindings where workspace_id = ?", workspaceId)
 		jdbcTemplate.update("delete from source_namespaces where workspace_id = ?", workspaceId)

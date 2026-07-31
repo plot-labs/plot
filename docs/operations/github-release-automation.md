@@ -20,6 +20,9 @@ Subscribe to:
 
 - Push
 - Release
+- Installation (suspend, unsuspend, deleted)
+- Installation repositories (added, removed)
+- Repository (deleted, transferred)
 
 Set the GitHub App webhook URL to:
 
@@ -71,6 +74,9 @@ spring.ai.openai.api-key=${SPRING_AI_OPENAI_API_KEY}
 
 plot.github.http-request-timeout=20s
 plot.github.monitoring-analysis-lease-timeout=2m
+plot.github.access-check-poll-delay=5s
+plot.github.access-check-lease-timeout=2m
+plot.github.access-check-max-attempts=3
 ```
 
 `openai/gpt-4o-mini-2024-07-18` is the other currently supported pinned model.
@@ -141,6 +147,38 @@ requests, not just the repository being investigated.
 A merge or branch push is not proof that a change is available to customers.
 Plot only generates from a later release boundary and always uses resolved
 commit SHAs, not a moving branch name.
+
+## Source access lifecycle
+
+Lifecycle webhooks change the local access gate before any worker fetches a
+provider resource. Webhook ingress does not call GitHub; it verifies the
+signature, deduplicates `X-GitHub-Delivery`, and records only the installation
+and repository identifiers needed for the projection.
+
+| Event | Local projection | Recovery |
+| --- | --- | --- |
+| `installation.suspend` | Connection `ERROR/INSTALLATION_SUSPENDED`; affected scopes become inactive; monitoring, release, and generation claims are fenced | `installation.unsuspend` or user Retry queues an access check |
+| `installation.unsuspend` | Existing inactive scopes remain inactive | Access check verifies the installation and grant before reactivation |
+| `installation.deleted` | Connection `DISABLED/INSTALLATION_UNINSTALLED`; bindings are revoked; scopes become disconnected | Reconnect through the GitHub App installation callback |
+| `installation_repositories.removed` | Only the matching scope is revoked with `GRANT_REMOVED` | `added`, Retry, or Reconnect; no new Plot source is created automatically |
+| `installation_repositories.added` | Existing inactive scopes are considered; unselected repositories stay unconnected | Access check verifies the existing repository ID |
+| `repository.deleted` | Scope is retained as a disconnected tombstone with `REPOSITORY_DELETED` | Check again after a GitHub restore, or connect another repository |
+| `repository.transferred` | Scope is inactive with `REPOSITORY_TRANSFERRED` and an access check is queued | Metadata is updated only after provider verification |
+
+Access checks use one durable row per workspace and repository scope:
+`QUEUED → CHECKING → VERIFIED`, or `QUEUED` with bounded retry and then
+`FAILED`. Automatic retry is limited to network, rate-limit, provider
+availability, and transient storage errors. Access denied and not-found are
+terminal until a user retries or reconnects. The worker starts at five seconds,
+uses exponential backoff, and never waits longer than fifteen minutes.
+
+An access check must verify the current installation, repository grant, and
+repository metadata before restoring the same namespace, scope, binding, and
+release boundary. It never creates a release for each event observed while
+access was lost, and it never polls deleted repositories in the background.
+Completed artifacts, citations, and immutable evidence remain readable to the
+original workspace; a citation can display `Source access lost` while retaining
+its saved label, URL, and excerpt.
 
 The first release for a scope has no trusted predecessor. `NEEDS_RANGE` is an
 intentional terminal state, not a worker failure. The recorded tag head becomes
@@ -359,13 +397,43 @@ its durable claim and transition version after the next process starts.
 
 1. Turn off the global release automation flag if continued processing is
    unsafe; this pauses every repository handled by that deployment.
-2. Verify the installation and repository grant in GitHub.
-3. Restore only Metadata, Pull requests, and Contents read permissions.
-4. Reconnect through the supported GitHub App flow; never copy installation
-   tokens into the database.
-5. Retry failed activity after scope resolution succeeds. Existing immutable
-   evidence and drafts remain inspectable according to workspace retention
-   policy, but Plot must not fetch new private content without a valid grant.
+2. In GitHub App settings, confirm the lifecycle event subscriptions and the
+   affected installation or repository grant.
+3. Inspect the connection, scope, and access-check state with the queries below;
+   do not edit status rows by hand.
+4. Restore only Metadata, Pull requests, and Contents read permissions, then
+   use the Integrations UI's Retry or Check again action. Reconnect only when
+   the installation was removed or the grant must be selected again.
+5. Confirm the access check reaches `VERIFIED` before retrying release work.
+   Existing immutable evidence and drafts remain inspectable according to
+   workspace retention policy, but Plot must not fetch new private content
+   without a valid grant.
+
+Access state and current recheck:
+
+```sql
+select c.status as connection_status, c.status_reason as connection_reason,
+       s.id as source_scope_id, s.status as scope_status, s.status_reason as scope_reason,
+       a.status as access_check_status, a.attempt_count, a.error_code,
+       a.next_attempt_at, a.verified_at
+from connections c
+join connection_namespace_bindings b
+  on b.workspace_id = c.workspace_id and b.connection_id = c.id and b.provider = 'GITHUB'
+join source_scopes s
+  on s.workspace_id = b.workspace_id and s.source_namespace_id = b.source_namespace_id
+left join github_repository_access_checks a
+  on a.workspace_id = s.workspace_id and a.source_scope_id = s.id
+where c.workspace_id = :'workspace_id'::uuid
+  and c.external_connection_key = :'installation_id'
+  and s.external_scope_key = :'repository_id'
+order by b.updated_at desc;
+```
+
+After a loss event, verify that non-terminal release and generation rows for
+the scope are `FAILED/SOURCE_ACCESS_LOST`, their claims are null, and no new
+request or run is created until access is verified. Never paste the returned
+private excerpt, raw webhook body, token, or provider error into an incident
+ticket.
 
 ### Unexpected model cost or content quality
 

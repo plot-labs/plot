@@ -245,11 +245,28 @@ class ContentPackService(
 
 	private fun loadCitations(variantId: UUID): Map<UUID, List<ContentCitationResponse>> = jdbcTemplate.query(
 		"""
-		select c.sentence_id, c.generation_input_id, i.source_provider, i.source_label, i.original_url, i.snapshot_excerpt, c.status
+		select c.sentence_id, c.generation_input_id, i.source_provider, i.source_label, i.original_url, i.snapshot_excerpt, c.status,
+		       case
+		         when gr.source_scope_id is null then 'AVAILABLE'
+		         when sc.status = 'ACTIVE' and exists (
+		           select 1
+		           from connection_namespace_bindings b
+		           join connections conn on conn.workspace_id = b.workspace_id and conn.id = b.connection_id
+		           where b.workspace_id = sc.workspace_id
+		             and b.source_namespace_id = sc.source_namespace_id
+		             and b.provider = sc.provider
+		             and b.status = 'ACTIVE'
+		             and conn.provider = sc.provider
+		             and conn.status = 'ACTIVE'
+		         ) then 'AVAILABLE'
+		         else 'LOST'
+		       end as source_access
 		from sentence_citations c join generation_inputs i on i.workspace_id=c.workspace_id and i.id=c.generation_input_id
+		join generation_runs gr on gr.workspace_id = c.workspace_id and gr.id = i.generation_run_id
+		left join source_scopes sc on sc.workspace_id = gr.workspace_id and sc.id = gr.source_scope_id
 		where c.workspace_id = ? and c.content_variant_id = ? order by c.sentence_id, c.citation_order
 		""".trimIndent(),
-		{ rs, _ -> rs.getObject(1, UUID::class.java) to ContentCitationResponse(rs.getObject(2, UUID::class.java), rs.getString(3), rs.getString(4), rs.getString(5), rs.getString(6), rs.getString(7)) },
+		{ rs, _ -> rs.getObject(1, UUID::class.java) to ContentCitationResponse(rs.getObject(2, UUID::class.java), rs.getString(3), rs.getString(4), rs.getString(5), rs.getString(6), rs.getString(7), rs.getString(8)) },
 		devContext.devWorkspaceId, variantId,
 	).groupBy({ it.first }, { it.second })
 

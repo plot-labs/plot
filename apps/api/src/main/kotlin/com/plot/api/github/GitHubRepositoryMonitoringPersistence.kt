@@ -74,6 +74,8 @@ class GitHubRepositoryMonitoringPersistence(
 			update github_repository_monitoring
 			set monitoring_status = 'DISABLED', analysis_status = case
 			      when analysis_status = 'ANALYZING' then 'FAILED' else analysis_status end,
+			    last_error_code = case
+			      when analysis_status = 'ANALYZING' then 'SOURCE_ACCESS_LOST' else last_error_code end,
 			    claimed_by = null, claimed_at = null, next_attempt_at = null,
 			    transition_version = transition_version + 1, updated_at = ?
 			where workspace_id = ? and source_scope_id = ?

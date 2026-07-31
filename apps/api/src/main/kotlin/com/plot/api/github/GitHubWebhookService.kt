@@ -13,6 +13,7 @@ class GitHubWebhookService(
 	private val scopeResolver: GitHubReleaseScopeResolver,
 	private val persistence: GitHubReleasePersistence,
 	private val dispatcher: GitHubReleaseDraftDispatcher,
+	private val lifecycleService: GitHubSourceAccessLifecycleService,
 ) {
 	@Transactional
 	fun accept(webhook: ParsedGitHubWebhook): GitHubWebhookDelivery {
@@ -39,6 +40,11 @@ class GitHubWebhookService(
 		)
 		val inserted = persistence.insertDelivery(delivery)
 		if (inserted.id != delivery.id) return inserted
+
+		if (lifecycleService.isLifecycle(webhook)) {
+			val projection = lifecycleService.project(webhook)
+			return mark(delivery, projection.disposition)
+		}
 
 		val context = webhook.installationId?.let { installationId ->
 			webhook.repositoryId?.let { repositoryId -> scopeResolver.resolve(installationId, repositoryId) }

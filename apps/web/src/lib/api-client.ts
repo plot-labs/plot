@@ -8,6 +8,7 @@ export type {
   CreateGenerationInput,
   GenerationRun,
   GenerationReference,
+  GitHubAccessCheckTrigger,
   GitHubConnection,
   GitHubImport,
   GitHubReleaseActivity,

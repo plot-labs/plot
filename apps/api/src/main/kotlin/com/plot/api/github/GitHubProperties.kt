@@ -37,6 +37,9 @@ data class GitHubProperties(
 	val monitoringAnalysisLeaseTimeout: Duration = Duration.ofMinutes(2),
 	val monitoringAnalysisMaxAttempts: Int = 5,
 	val monitoringAnalysisSampleLimit: Int = 50,
+	val accessCheckPollDelay: Duration = Duration.ofSeconds(5),
+	val accessCheckLeaseTimeout: Duration = Duration.ofMinutes(2),
+	val accessCheckMaxAttempts: Int = 3,
 ) {
 	init {
 		require(!releaseWorkerPollDelay.isNegative && !releaseWorkerPollDelay.isZero) {
@@ -63,6 +66,15 @@ data class GitHubProperties(
 		}
 		require(monitoringAnalysisSampleLimit in 1..50) {
 			"plot.github.monitoring-analysis-sample-limit must be between 1 and 50"
+		}
+		require(!accessCheckPollDelay.isNegative && !accessCheckPollDelay.isZero) {
+			"plot.github.access-check-poll-delay must be positive"
+		}
+		require(!accessCheckLeaseTimeout.isNegative && !accessCheckLeaseTimeout.isZero) {
+			"plot.github.access-check-lease-timeout must be positive"
+		}
+		require(accessCheckMaxAttempts in 1..3) {
+			"plot.github.access-check-max-attempts must be between one and three"
 		}
 		require(maxReleasePullRequests > 0) { "plot.github.max-release-pull-requests must be positive" }
 		require(maxReleaseEvidenceBlocks > 0) { "plot.github.max-release-evidence-blocks must be positive" }
