@@ -34,8 +34,9 @@ class GitHubRepositoryMonitoringConfiguration {
 		maxPoolSize = 1
 		queueCapacity = 1
 		setThreadNamePrefix("plot-github-monitoring-")
-		setWaitForTasksToCompleteOnShutdown(false)
 		setStrictEarlyShutdown(true)
+		setWaitForTasksToCompleteOnShutdown(true)
+		setAwaitTerminationSeconds(10)
 	}
 
 }

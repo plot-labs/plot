@@ -85,6 +85,30 @@ class GenerationCitationSchemaIntegrationTest {
 	}
 
 	@Test
+	fun allowsMultiplePhysicalAttemptsForOneLogicalCallButRejectsDuplicateAttemptNumbers() {
+		val runId = insertRun("physical-attempts")
+		val stepId = insertStep(runId, "WRITER", 0)
+
+		insertInvocation(runId, stepId, "WRITER", logicalIndex = 0, attemptNo = 1)
+		insertInvocation(runId, stepId, "WRITER", logicalIndex = 0, attemptNo = 2)
+
+		assertEquals(
+			2,
+			jdbcTemplate.queryForObject(
+				"select count(*) from model_invocations where generation_run_id = ? and logical_call_index = 0",
+				Int::class.java,
+				runId,
+			),
+		)
+		assertFailsWith<DuplicateKeyException> {
+			insertInvocation(runId, stepId, "WRITER", logicalIndex = 0, attemptNo = 2)
+		}
+		assertFailsWith<DataIntegrityViolationException> {
+			insertInvocation(runId, stepId, "WRITER", logicalIndex = 0, attemptNo = 0)
+		}
+	}
+
+	@Test
 	fun permitsRevisionAndReviewHistoryButKeepsHistoryImmutable() {
 		val runId = insertRun("immutable-history")
 		val packId = insertPack(runId)
@@ -198,14 +222,20 @@ class GenerationCitationSchemaIntegrationTest {
 		""".trimIndent(), id, devContext.devWorkspaceId, runId, kind, sequence, status)
 	}
 
-	private fun insertInvocation(runId: UUID, stepId: UUID, role: String, logicalIndex: Int): UUID = UUID.randomUUID().also { id ->
+	private fun insertInvocation(
+		runId: UUID,
+		stepId: UUID,
+		role: String,
+		logicalIndex: Int,
+		attemptNo: Int = 1,
+	): UUID = UUID.randomUUID().also { id ->
 		jdbcTemplate.update("""
 			insert into model_invocations (id, workspace_id, generation_run_id, workflow_step_id, role,
-			 logical_call_index, status, provider, model_name, request_metadata, result_metadata,
+			 logical_call_index, attempt_no, status, provider, model_name, request_metadata, result_metadata,
 			 prompt_token_count, completion_token_count, total_token_count, latency_ms, started_at, finished_at, created_at)
-			values (?, ?, ?, ?, ?, ?, 'SUCCEEDED', 'OPENAI', 'configured-model', '{}'::jsonb, '{}'::jsonb,
+			values (?, ?, ?, ?, ?, ?, ?, 'SUCCEEDED', 'OPENAI', 'configured-model', '{}'::jsonb, '{}'::jsonb,
 			 10, 20, 30, 100, now(), now(), now())
-		""".trimIndent(), id, devContext.devWorkspaceId, runId, stepId, role, logicalIndex)
+		""".trimIndent(), id, devContext.devWorkspaceId, runId, stepId, role, logicalIndex, attemptNo)
 	}
 
 	private fun insertArtifact(runId: UUID, stepId: UUID, type: String, version: Int): UUID = UUID.randomUUID().also { id ->

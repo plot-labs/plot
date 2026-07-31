@@ -33,8 +33,6 @@ class SpringAiOpenAiGenerationGatewayTest {
 		provider = "openrouter",
 		model = "openai/gpt-5.4-nano",
 		routingProvider = "openai",
-		transportRetries = 1,
-		schemaRetries = 1,
 	)
 	private val promptFactory = ChangelogPromptFactory(mapper)
 
@@ -144,42 +142,27 @@ class SpringAiOpenAiGenerationGatewayTest {
 	}
 
 	@Test
-	fun `transport and schema retries are separate and bounded`() {
+	fun `each gateway invocation performs exactly one transport exchange`() {
 		val transient = FixtureTransport(failures = ArrayDeque(listOf(TransientModelTransportException("temporary"))))
-		val transientResult = gateway(transient).write(WriterModelRequest(UUID.randomUUID(), null, listOf(evidence())))
-		assertEquals(2, transient.requests.size)
-		assertEquals(2, transientResult.metadata.physicalCallCount)
+		val transientFailure = assertFailsWith<GenerationModelException> {
+			gateway(transient).write(WriterModelRequest(UUID.randomUUID(), null, listOf(evidence())))
+		}
+		assertEquals(ModelFailureCode.PROVIDER_UNAVAILABLE, transientFailure.code)
+		assertEquals(1, transient.requests.size)
 
 		val malformed = FixtureTransport(failures = ArrayDeque(listOf(MalformedModelOutputException("bad json"))))
-		val malformedResult = gateway(malformed).write(WriterModelRequest(UUID.randomUUID(), null, listOf(evidence())))
-		assertEquals(2, malformed.requests.size)
-		assertEquals(2, malformedResult.metadata.physicalCallCount)
-
-		val permanent = FixtureTransport(failures = ArrayDeque(listOf(NonTransientModelTransportException("rejected"))))
-		val failure = assertFailsWith<GenerationModelException> {
-			gateway(permanent).write(WriterModelRequest(UUID.randomUUID(), null, listOf(evidence())))
-		}
-		assertEquals(ModelFailureCode.PROVIDER_REJECTED, failure.code)
-		assertEquals(1, permanent.requests.size)
-
-		val exhausted = FixtureTransport(failures = ArrayDeque(listOf(
-			MalformedModelOutputException("bad one"),
-			MalformedModelOutputException("bad two"),
-		)))
 		val malformedFailure = assertFailsWith<GenerationModelException> {
-			gateway(exhausted).write(WriterModelRequest(UUID.randomUUID(), null, listOf(evidence())))
+			gateway(malformed).write(WriterModelRequest(UUID.randomUUID(), null, listOf(evidence())))
 		}
 		assertEquals(ModelFailureCode.MALFORMED_OUTPUT, malformedFailure.code)
+		assertEquals(1, malformed.requests.size)
 
-		val unavailable = FixtureTransport(failures = ArrayDeque(listOf(
-			TransientModelTransportException("temporary one"),
-			TransientModelTransportException("temporary two"),
-		)))
-		val unavailableFailure = assertFailsWith<GenerationModelException> {
-			gateway(unavailable).write(WriterModelRequest(UUID.randomUUID(), null, listOf(evidence())))
+		val permanent = FixtureTransport(failures = ArrayDeque(listOf(NonTransientModelTransportException("rejected"))))
+		val permanentFailure = assertFailsWith<GenerationModelException> {
+			gateway(permanent).write(WriterModelRequest(UUID.randomUUID(), null, listOf(evidence())))
 		}
-		assertEquals(ModelFailureCode.PROVIDER_UNAVAILABLE, unavailableFailure.code)
-		assertEquals(2, unavailable.requests.size)
+		assertEquals(ModelFailureCode.PROVIDER_REJECTED, permanentFailure.code)
+		assertEquals(1, permanent.requests.size)
 	}
 
 	@Test
@@ -253,7 +236,6 @@ class SpringAiOpenAiGenerationGatewayTest {
 		transport = transport,
 		properties = properties,
 		promptFactory = promptFactory,
-		sleep = {},
 	)
 
 	private fun evidence(body: String = "Snapshot body") = EvidenceSnapshot(

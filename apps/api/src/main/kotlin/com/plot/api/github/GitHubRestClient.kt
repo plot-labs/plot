@@ -21,7 +21,7 @@ import tools.jackson.databind.JsonNode
 import tools.jackson.databind.ObjectMapper
 
 @Component
-class JavaGitHubHttpTransport : GitHubHttpTransport {
+class JavaGitHubHttpTransport(private val properties: GitHubProperties) : GitHubHttpTransport {
 	private val client: HttpClient = HttpClient.newBuilder()
 		.followRedirects(HttpClient.Redirect.NEVER)
 		.build()
@@ -32,17 +32,26 @@ class JavaGitHubHttpTransport : GitHubHttpTransport {
 		headers: Map<String, String>,
 		body: String?,
 	): GitHubHttpResponse {
-		val builder = HttpRequest.newBuilder(uri)
-			.timeout(java.time.Duration.ofSeconds(30))
-			.method(method, body?.let { HttpRequest.BodyPublishers.ofString(it) } ?: HttpRequest.BodyPublishers.noBody())
-		headers.forEach { (name, value) -> builder.header(name, value) }
 		val response = try {
-			client.send(builder.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
+			client.send(buildRequest(method, uri, headers, body), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
 		} catch (exception: InterruptedException) {
 			Thread.currentThread().interrupt()
 			throw exception
 		}
 		return GitHubHttpResponse(response.statusCode(), response.headers().map(), response.body())
+	}
+
+	internal fun buildRequest(
+		method: String,
+		uri: URI,
+		headers: Map<String, String>,
+		body: String?,
+	): HttpRequest {
+		val builder = HttpRequest.newBuilder(uri)
+			.timeout(properties.httpRequestTimeout)
+			.method(method, body?.let { HttpRequest.BodyPublishers.ofString(it) } ?: HttpRequest.BodyPublishers.noBody())
+		headers.forEach { (name, value) -> builder.header(name, value) }
+		return builder.build()
 	}
 }
 
@@ -51,7 +60,7 @@ class GitHubRestClient(
 	private val properties: GitHubProperties,
 	private val objectMapper: ObjectMapper,
 	private val clock: Clock = Clock.systemUTC(),
-	private val transport: GitHubHttpTransport = JavaGitHubHttpTransport(),
+	private val transport: GitHubHttpTransport = JavaGitHubHttpTransport(properties),
 ) : GitHubClient {
 
 	override fun listInstallationRepositories(installationId: Long): List<GitHubRepository> {

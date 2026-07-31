@@ -45,6 +45,7 @@ data class ModelInvocationLease(
 	val stepId: UUID,
 	val role: ModelRole,
 	val logicalCallIndex: Int,
+	val attemptNo: Int,
 )
 
 class GenerationPersistence(
@@ -174,70 +175,179 @@ class GenerationPersistence(
 		val now = clock.instant()
 		val updated = jdbcTemplate.update(
 			"""
-			update generation_runs set claimed_by = ?, claimed_at = ?, heartbeat_at = ?, updated_at = ?
+			update generation_runs
+			set claimed_by = ?, claimed_at = ?, heartbeat_at = ?,
+			    next_attempt_at = null, transition_version = transition_version + 1, updated_at = ?
 			where workspace_id = ? and id = ? and transition_version = ?
-			  and (claimed_by is null or heartbeat_at < ?)
+			  and status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
+			  and (claimed_by is null or heartbeat_at is null or heartbeat_at < ?)
 			""".trimIndent(),
 			workerId, Timestamp.from(now), Timestamp.from(now), Timestamp.from(now), row.first, row.second, row.third, Timestamp.from(staleBefore),
 		)
-		if (updated == 1) ClaimedGenerationRun(row.first, row.second, row.third, workerId) else null
+		if (updated == 1) ClaimedGenerationRun(row.first, row.second, row.third + 1, workerId) else null
 	}
+
+	fun renewClaim(claim: ClaimedGenerationRun, now: Instant): Boolean = jdbcTemplate.update(
+		"""
+		update generation_runs
+		set heartbeat_at = ?, updated_at = ?
+		where workspace_id = ? and id = ? and claimed_by = ? and transition_version = ?
+		  and status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
+		""".trimIndent(),
+		Timestamp.from(now),
+		Timestamp.from(now),
+		claim.workspaceId,
+		claim.runId,
+		claim.workerId,
+		claim.transitionVersion,
+	) == 1
 
 	fun beginInvocation(claim: ClaimedGenerationRun, role: ModelRole): ModelInvocationLease = transactionTemplate.execute {
 		requireClaim(claim)
-		val existing = jdbcTemplate.query(
+		val currentStep = jdbcTemplate.query(
 			"""
-			select mi.id, mi.workflow_step_id, mi.logical_call_index
-			from model_invocations mi
-			where mi.workspace_id = ? and mi.generation_run_id = ? and mi.role = ? and mi.status = 'RUNNING'
-			order by mi.logical_call_index desc limit 1
+			select id, sequence_no
+			from generation_workflow_steps
+			where workspace_id = ? and generation_run_id = ? and step_kind = ? and status = 'RUNNING'
+			order by sequence_no desc
+			limit 1
 			""".trimIndent(),
-			{ rs, _ -> ModelInvocationLease(rs.getObject(1, UUID::class.java), rs.getObject(2, UUID::class.java), role, rs.getInt(3)) },
+			{ rs, _ -> rs.getObject("id", UUID::class.java) to rs.getInt("sequence_no") },
 			claim.workspaceId, claim.runId, role.name,
 		).firstOrNull()
-		if (existing != null) return@execute existing
-		val sequence = jdbcTemplate.queryForObject(
-			"select coalesce(max(sequence_no), -1) + 1 from generation_workflow_steps where workspace_id = ? and generation_run_id = ?",
-			Int::class.java, claim.workspaceId, claim.runId,
-		) ?: 0
-		val callIndex = jdbcTemplate.queryForObject(
-			"select coalesce(max(logical_call_index), -1) + 1 from model_invocations where workspace_id = ? and generation_run_id = ?",
-			Int::class.java, claim.workspaceId, claim.runId,
-		) ?: 0
-		val stepId = uuidGenerator.next()
+		val stepId: UUID
+		val callIndex: Int
+		val attemptNo: Int
 		val invocationId = uuidGenerator.next()
 		val now = clock.instant()
-		val attempt = jdbcTemplate.queryForObject(
-			"select semantic_rewrite_attempt from generation_runs where workspace_id = ? and id = ?",
-			Int::class.java, claim.workspaceId, claim.runId,
-		) ?: 0
-		jdbcTemplate.update(
-			"""
-			insert into generation_workflow_steps (id, workspace_id, generation_run_id, step_kind, sequence_no,
-			 semantic_attempt, status, started_at, created_at)
-			values (?, ?, ?, ?, ?, ?, 'RUNNING', ?, ?)
-			""".trimIndent(),
-			stepId, claim.workspaceId, claim.runId, role.name, sequence, attempt, Timestamp.from(now), Timestamp.from(now),
-		)
+		if (currentStep == null) {
+			val sequence = jdbcTemplate.queryForObject(
+				"select coalesce(max(sequence_no), -1) + 1 from generation_workflow_steps where workspace_id = ? and generation_run_id = ?",
+				Int::class.java, claim.workspaceId, claim.runId,
+			) ?: 0
+			callIndex = jdbcTemplate.queryForObject(
+				"select coalesce(max(logical_call_index), -1) + 1 from model_invocations where workspace_id = ? and generation_run_id = ?",
+				Int::class.java, claim.workspaceId, claim.runId,
+			) ?: 0
+			stepId = uuidGenerator.next()
+			attemptNo = 1
+			val semanticAttempt = jdbcTemplate.queryForObject(
+				"select semantic_rewrite_attempt from generation_runs where workspace_id = ? and id = ?",
+				Int::class.java, claim.workspaceId, claim.runId,
+			) ?: 0
+			requireExactlyOne(jdbcTemplate.update(
+				"""
+				insert into generation_workflow_steps (id, workspace_id, generation_run_id, step_kind, sequence_no,
+				 semantic_attempt, status, started_at, created_at)
+				values (?, ?, ?, ?, ?, ?, 'RUNNING', ?, ?)
+				""".trimIndent(),
+				stepId, claim.workspaceId, claim.runId, role.name, sequence, semanticAttempt,
+				Timestamp.from(now), Timestamp.from(now),
+			), "Generation workflow step was not inserted")
+		} else {
+			stepId = currentStep.first
+			val invocationSequence = jdbcTemplate.queryForMap(
+				"""
+				select min(logical_call_index) as logical_call_index,
+				       coalesce(max(attempt_no), 0) + 1 as attempt_no
+				from model_invocations
+				where workspace_id = ? and generation_run_id = ? and workflow_step_id = ?
+				""".trimIndent(),
+				claim.workspaceId,
+				claim.runId,
+				stepId,
+			)
+			callIndex = (invocationSequence["logical_call_index"] as Number).toInt()
+			attemptNo = (invocationSequence["attempt_no"] as Number).toInt()
+		}
 		val providerModel = jdbcTemplate.queryForMap(
 			"select provider, model_name from generation_runs where workspace_id = ? and id = ?",
 			claim.workspaceId, claim.runId,
 		)
-		jdbcTemplate.update(
+		requireExactlyOne(jdbcTemplate.update(
 			"""
 			insert into model_invocations (id, workspace_id, generation_run_id, workflow_step_id, role,
-			 logical_call_index, status, provider, model_name, started_at, created_at)
-			values (?, ?, ?, ?, ?, ?, 'RUNNING', ?, ?, ?, ?)
+			 logical_call_index, attempt_no, status, provider, model_name, started_at, created_at)
+			values (?, ?, ?, ?, ?, ?, ?, 'RUNNING', ?, ?, ?, ?)
 			""".trimIndent(),
-			invocationId, claim.workspaceId, claim.runId, stepId, role.name, callIndex,
+			invocationId, claim.workspaceId, claim.runId, stepId, role.name, callIndex, attemptNo,
 			providerModel["provider"], providerModel["model_name"], Timestamp.from(now), Timestamp.from(now),
-		)
+		), "Generation model invocation was not inserted")
 		val visibleStatus = if (role == ModelRole.WRITER) "WRITING" else if (role == ModelRole.REVIEWER) "REVIEWING" else "REWRITING"
-		jdbcTemplate.update(
-			"update generation_runs set status = ?, started_at = coalesce(started_at, ?), heartbeat_at = ?, updated_at = ? where workspace_id = ? and id = ? and claimed_by = ?",
-			visibleStatus, Timestamp.from(now), Timestamp.from(now), Timestamp.from(now), claim.workspaceId, claim.runId, claim.workerId,
+		requireExactlyOne(
+			jdbcTemplate.update(
+				"""
+				update generation_runs
+				set status = ?, started_at = coalesce(started_at, ?), heartbeat_at = ?, updated_at = ?
+				where workspace_id = ? and id = ? and claimed_by = ? and transition_version = ?
+				  and status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
+				""".trimIndent(),
+				visibleStatus,
+				Timestamp.from(now),
+				Timestamp.from(now),
+				Timestamp.from(now),
+				claim.workspaceId,
+				claim.runId,
+				claim.workerId,
+				claim.transitionVersion,
+			),
+			"Generation run claim was lost",
 		)
-		ModelInvocationLease(invocationId, stepId, role, callIndex)
+		ModelInvocationLease(invocationId, stepId, role, callIndex, attemptNo)
+	}
+
+	fun scheduleInvocationRetry(
+		claim: ClaimedGenerationRun,
+		lease: ModelInvocationLease,
+		code: String,
+		nextAttemptAt: Instant,
+		metadata: ModelCallMetadata? = null,
+	) {
+		transactionTemplate.executeWithoutResult {
+			requireClaim(claim)
+			val now = clock.instant()
+			requireExactlyOne(
+				jdbcTemplate.update(
+					"""
+					update model_invocations
+					set status = 'FAILED', provider_request_id = ?, result_metadata = ?::jsonb,
+					    prompt_token_count = ?, completion_token_count = ?, total_token_count = ?,
+					    latency_ms = ?, failure_code = ?, finished_at = ?
+					where workspace_id = ? and generation_run_id = ? and id = ? and status = 'RUNNING'
+					""".trimIndent(),
+					metadata?.responseId,
+					objectMapper.writeValueAsString(metadata?.observationAttributes ?: emptyMap<String, String>()),
+					metadata?.promptTokens,
+					metadata?.completionTokens,
+					metadata?.totalTokens,
+					metadata?.latency?.toMillis()?.toInt(),
+					code,
+					Timestamp.from(now),
+					claim.workspaceId,
+					claim.runId,
+					lease.id,
+				),
+				"Generation model invocation retry was lost",
+			)
+			requireExactlyOne(
+				jdbcTemplate.update(
+					"""
+					update generation_runs
+					set next_attempt_at = ?, transition_version = transition_version + 1,
+					    claimed_by = null, claimed_at = null, heartbeat_at = null, updated_at = ?
+					where workspace_id = ? and id = ? and claimed_by = ? and transition_version = ?
+					  and status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
+					""".trimIndent(),
+					Timestamp.from(nextAttemptAt),
+					Timestamp.from(now),
+					claim.workspaceId,
+					claim.runId,
+					claim.workerId,
+					claim.transitionVersion,
+				),
+				"Generation run claim was lost",
+			)
+		}
 	}
 
 	fun budgetFailureCode(claim: ClaimedGenerationRun): String? {
@@ -256,7 +366,7 @@ class GenerationPersistence(
 			Int::class.java, claim.workspaceId, claim.runId,
 		) ?: 0
 		val tokens = jdbcTemplate.queryForObject(
-			"select coalesce(sum(total_token_count), 0) from model_invocations where workspace_id = ? and generation_run_id = ? and status = 'SUCCEEDED'",
+			"select coalesce(sum(total_token_count), 0) from model_invocations where workspace_id = ? and generation_run_id = ?",
 			Long::class.java, claim.workspaceId, claim.runId,
 		) ?: 0L
 		val maxCalls = (row["max_calls"] as Number?)?.toInt()
@@ -280,19 +390,26 @@ class GenerationPersistence(
 		transactionTemplate.executeWithoutResult {
 			requireClaim(claim)
 			val now = clock.instant()
-			jdbcTemplate.update(
+			requireExactlyOne(jdbcTemplate.update(
 				"""
 				update model_invocations set status = 'SUCCEEDED', provider_request_id = ?, result_metadata = ?::jsonb,
 				 prompt_token_count = ?, completion_token_count = ?, total_token_count = ?, latency_ms = ?, finished_at = ?
-				where workspace_id = ? and id = ? and status = 'RUNNING'
+				where workspace_id = ? and generation_run_id = ? and id = ? and status = 'RUNNING'
 				""".trimIndent(),
 				metadata?.responseId, objectMapper.writeValueAsString(metadata?.observationAttributes ?: emptyMap<String, String>()),
 				metadata?.promptTokens, metadata?.completionTokens, metadata?.totalTokens,
-				metadata?.latency?.toMillis()?.toInt(), Timestamp.from(now), claim.workspaceId, lease.id,
-			)
-			jdbcTemplate.update(
-				"update generation_workflow_steps set status = 'SUCCEEDED', finished_at = ? where workspace_id = ? and id = ? and status = 'RUNNING'",
-				Timestamp.from(now), claim.workspaceId, lease.stepId,
+				metadata?.latency?.toMillis()?.toInt(), Timestamp.from(now), claim.workspaceId, claim.runId, lease.id,
+			), "Generation model invocation completion was lost")
+			requireExactlyOne(
+				jdbcTemplate.update(
+					"""
+					update generation_workflow_steps
+					set status = 'SUCCEEDED', finished_at = ?
+					where workspace_id = ? and generation_run_id = ? and id = ? and status = 'RUNNING'
+					""".trimIndent(),
+					Timestamp.from(now), claim.workspaceId, claim.runId, lease.stepId,
+				),
+				"Generation workflow step completion was lost",
 			)
 			insertCheckpoint(claim.workspaceId, state, state.artifactType, now, lease.stepId)
 			if (state.status == GenerationRunStatus.READY || state.status == GenerationRunStatus.NEEDS_REVIEW) {
@@ -305,10 +422,11 @@ class GenerationPersistence(
 				update generation_runs set status = ?, semantic_rewrite_attempt = ?, transition_version = transition_version + 1,
 				 claimed_by = null, claimed_at = null, heartbeat_at = null, error_code = ?,
 				 finished_at = case when ? then ? else finished_at end, updated_at = ?
-				where workspace_id = ? and id = ? and claimed_by = ?
+				where workspace_id = ? and id = ? and claimed_by = ? and transition_version = ?
+				  and status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
 				""".trimIndent(),
 				state.status.name, state.semanticRewriteAttempt, state.failureCode, terminal, Timestamp.from(now), Timestamp.from(now),
-				claim.workspaceId, claim.runId, claim.workerId,
+				claim.workspaceId, claim.runId, claim.workerId, claim.transitionVersion,
 			)
 			check(updated == 1) { "Generation run claim was lost" }
 		}
@@ -324,19 +442,26 @@ class GenerationPersistence(
 		transactionTemplate.executeWithoutResult {
 			requireClaim(claim)
 			val now = clock.instant()
-			jdbcTemplate.update(
+			requireExactlyOne(jdbcTemplate.update(
 				"""
 				update model_invocations set status = 'FAILED', provider_request_id = ?, result_metadata = ?::jsonb,
 				 prompt_token_count = ?, completion_token_count = ?, total_token_count = ?, latency_ms = ?, failure_code = ?, finished_at = ?
-				where workspace_id = ? and id = ? and status = 'RUNNING'
+				where workspace_id = ? and generation_run_id = ? and id = ? and status = 'RUNNING'
 				""".trimIndent(),
 				metadata?.responseId, objectMapper.writeValueAsString(metadata?.observationAttributes ?: emptyMap<String, String>()),
 				metadata?.promptTokens, metadata?.completionTokens, metadata?.totalTokens, metadata?.latency?.toMillis()?.toInt(),
-				code, Timestamp.from(now), claim.workspaceId, lease.id,
-			)
-			jdbcTemplate.update(
-				"update generation_workflow_steps set status = 'FAILED', failure_code = ?, finished_at = ? where workspace_id = ? and id = ? and status = 'RUNNING'",
-				code, Timestamp.from(now), claim.workspaceId, lease.stepId,
+				code, Timestamp.from(now), claim.workspaceId, claim.runId, lease.id,
+			), "Generation model invocation failure was lost")
+			requireExactlyOne(
+				jdbcTemplate.update(
+					"""
+					update generation_workflow_steps
+					set status = 'FAILED', failure_code = ?, finished_at = ?
+					where workspace_id = ? and generation_run_id = ? and id = ? and status = 'RUNNING'
+					""".trimIndent(),
+					code, Timestamp.from(now), claim.workspaceId, claim.runId, lease.stepId,
+				),
+				"Generation workflow step failure was lost",
 			)
 			failClaimedRun(claim, state, code, now, lease.stepId)
 		}
@@ -363,9 +488,11 @@ class GenerationPersistence(
 			"""
 			update generation_runs set status = ?, error_code = ?, transition_version = transition_version + 1,
 			 claimed_by = null, claimed_at = null, heartbeat_at = null, finished_at = ?, updated_at = ?
-			where workspace_id = ? and id = ? and claimed_by = ?
+			where workspace_id = ? and id = ? and claimed_by = ? and transition_version = ?
+			  and status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
 			""".trimIndent(),
-			failed.status.name, code, Timestamp.from(now), Timestamp.from(now), claim.workspaceId, claim.runId, claim.workerId,
+			failed.status.name, code, Timestamp.from(now), Timestamp.from(now),
+			claim.workspaceId, claim.runId, claim.workerId, claim.transitionVersion,
 		)
 		check(updated == 1) { "Generation run claim was lost" }
 	}
@@ -382,8 +509,8 @@ class GenerationPersistence(
 		val run = jdbcTemplate.query(
 			"""
 			select gr.created_at, gr.started_at, gr.finished_at, gr.model_name,
-			       coalesce(sum(case when mi.status = 'SUCCEEDED' then coalesce(mi.total_token_count, 0) else 0 end), 0),
-			       coalesce(sum(case when mi.status = 'SUCCEEDED' then coalesce(mi.latency_ms, 0) else 0 end), 0)
+			       coalesce(sum(coalesce(mi.total_token_count, 0)), 0),
+			       coalesce(sum(coalesce(mi.latency_ms, 0)), 0)
 			from generation_runs gr
 			left join model_invocations mi on mi.workspace_id = gr.workspace_id and mi.generation_run_id = gr.id
 			where gr.workspace_id = ? and gr.id = ?
@@ -434,14 +561,62 @@ class GenerationPersistence(
 		)
 	}
 
-	fun recoverStaleClaims(staleBefore: Instant): Int = jdbcTemplate.update(
-		"""
-		update generation_runs set claimed_by = null, claimed_at = null, heartbeat_at = null, updated_at = ?
-		where claimed_by is not null and heartbeat_at < ?
-		  and status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
-		""".trimIndent(),
-		Timestamp.from(clock.instant()), Timestamp.from(staleBefore),
-	)
+	fun recoverStaleClaims(staleBefore: Instant): Int = transactionTemplate.execute {
+		val now = clock.instant()
+		val candidates = jdbcTemplate.query(
+			"""
+			select workspace_id, id, claimed_by, transition_version
+			from generation_runs
+			where claimed_by is not null and (heartbeat_at is null or heartbeat_at < ?)
+			  and status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
+			order by heartbeat_at nulls first, id
+			for update skip locked
+			""".trimIndent(),
+			{ rs, _ ->
+				StaleGenerationClaim(
+					workspaceId = rs.getObject("workspace_id", UUID::class.java),
+					runId = rs.getObject("id", UUID::class.java),
+					workerId = rs.getString("claimed_by"),
+					transitionVersion = rs.getLong("transition_version"),
+				)
+			},
+			Timestamp.from(staleBefore),
+		)
+		candidates.sumOf { candidate ->
+			jdbcTemplate.update(
+				"""
+				update model_invocations
+				set status = 'FAILED', failure_code = 'LEASE_LOST_OUTCOME_UNKNOWN', finished_at = ?
+				where workspace_id = ? and generation_run_id = ? and status = 'RUNNING'
+				""".trimIndent(),
+				Timestamp.from(now),
+				candidate.workspaceId,
+				candidate.runId,
+			)
+			val updated = jdbcTemplate.update(
+				"""
+				update generation_runs
+				set claimed_by = null, claimed_at = null, heartbeat_at = null, next_attempt_at = ?,
+				    transition_version = transition_version + 1, updated_at = ?
+				where workspace_id = ? and id = ? and claimed_by = ? and transition_version = ?
+				  and (heartbeat_at is null or heartbeat_at < ?)
+				  and status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
+				""".trimIndent(),
+				Timestamp.from(now),
+				Timestamp.from(now),
+				candidate.workspaceId,
+				candidate.runId,
+				candidate.workerId,
+				candidate.transitionVersion,
+				Timestamp.from(staleBefore),
+			)
+			when (updated) {
+				0 -> 0
+				1 -> 1
+				else -> error("Stale generation claim recovery updated $updated rows")
+			}
+		}
+	}
 
 	fun createRetryAttempt(
 		workspaceId: UUID,
@@ -615,13 +790,34 @@ class GenerationPersistence(
 	}
 
 	private fun requireClaim(claim: ClaimedGenerationRun) {
-		val count = jdbcTemplate.queryForObject(
-			"select count(*) from generation_runs where workspace_id = ? and id = ? and claimed_by = ?",
-			Int::class.java, claim.workspaceId, claim.runId, claim.workerId,
-		) ?: 0
-		check(count == 1) { "Generation run claim was lost" }
+		val ownedRun = jdbcTemplate.query(
+			"""
+			select id
+			from generation_runs
+			where workspace_id = ? and id = ? and claimed_by = ? and transition_version = ?
+			  and status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
+			for update
+			""".trimIndent(),
+			{ rs, _ -> rs.getObject("id", UUID::class.java) },
+			claim.workspaceId,
+			claim.runId,
+			claim.workerId,
+			claim.transitionVersion,
+		).singleOrNull()
+		check(ownedRun != null) { "Generation run claim was lost" }
+	}
+
+	private fun requireExactlyOne(updated: Int, message: String) {
+		check(updated == 1) { message }
 	}
 }
+
+private data class StaleGenerationClaim(
+	val workspaceId: UUID,
+	val runId: UUID,
+	val workerId: String,
+	val transitionVersion: Long,
+)
 
 private data class RunTimingRow(
 	val createdAt: Instant,

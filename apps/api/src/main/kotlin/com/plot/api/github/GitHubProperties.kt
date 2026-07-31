@@ -32,6 +32,7 @@ data class GitHubProperties(
 	val maxReleaseBodyCharacters: Int = 20_000,
 	val maxReleaseEvidenceCharacters: Int = 120_000,
 	val maxWebhookPayloadBytes: Int = 1_048_576,
+	val httpRequestTimeout: Duration = Duration.ofSeconds(20),
 	val monitoringAnalysisPollDelay: Duration = Duration.ofSeconds(5),
 	val monitoringAnalysisLeaseTimeout: Duration = Duration.ofMinutes(2),
 	val monitoringAnalysisMaxAttempts: Int = 5,
@@ -50,6 +51,12 @@ data class GitHubProperties(
 		}
 		require(!monitoringAnalysisLeaseTimeout.isNegative && !monitoringAnalysisLeaseTimeout.isZero) {
 			"plot.github.monitoring-analysis-lease-timeout must be positive"
+		}
+		require(!httpRequestTimeout.isNegative && !httpRequestTimeout.isZero) {
+			"plot.github.http-request-timeout must be positive"
+		}
+		require(httpRequestTimeout.multipliedBy(MAX_MONITORING_HTTP_REQUESTS) < monitoringAnalysisLeaseTimeout) {
+			"plot.github monitoring HTTP envelope must be shorter than the monitoring lease timeout"
 		}
 		require(monitoringAnalysisMaxAttempts > 0) {
 			"plot.github.monitoring-analysis-max-attempts must be positive"
@@ -71,5 +78,9 @@ data class GitHubProperties(
 		require(maxReleaseBodyCharacters <= maxReleaseEvidenceCharacters) {
 			"plot.github.max-release-body-characters cannot exceed max-release-evidence-characters"
 		}
+	}
+
+	private companion object {
+		const val MAX_MONITORING_HTTP_REQUESTS = 4L
 	}
 }

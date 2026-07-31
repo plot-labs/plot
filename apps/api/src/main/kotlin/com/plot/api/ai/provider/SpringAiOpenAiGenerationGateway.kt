@@ -59,7 +59,6 @@ class SpringAiOpenAiGenerationGateway(
 	private val transport: StructuredChatTransport,
 	private val properties: PlotAiProperties,
 	private val promptFactory: ChangelogPromptFactory,
-	private val sleep: (Duration) -> Unit = { Thread.sleep(it.toMillis()) },
 ) : GenerationModelGateway {
 	override fun write(request: WriterModelRequest): ModelCallResult<WriterOutput> = invoke(
 		role = ModelRole.WRITER,
@@ -80,38 +79,35 @@ class SpringAiOpenAiGenerationGateway(
 	)
 
 	private fun <T : Any> invoke(role: ModelRole, prompt: ChangelogPrompt, responseType: Class<T>): ModelCallResult<T> {
-		var transportFailures = 0
-		var schemaFailures = 0
 		val startedAt = Instant.now()
-		while (true) {
-			try {
-				val response = transport.exchange(StructuredChatRequest(role, prompt), responseType)
-				return ModelCallResult(
-					response.value,
-					response.toMetadata(
-						latency = Duration.between(startedAt, Instant.now()),
-						physicalCallCount = transportFailures + schemaFailures + 1,
-					),
-				)
-			} catch (failure: TransientModelTransportException) {
-				if (transportFailures++ >= properties.transportRetries) {
-					throw GenerationModelException(ModelFailureCode.PROVIDER_UNAVAILABLE, "The model provider is temporarily unavailable", failure)
-				}
-				sleep(properties.retryInitialDelay.multipliedBy(1L shl (transportFailures - 1).coerceAtMost(8)))
-			} catch (failure: MalformedModelOutputException) {
-				if (schemaFailures++ >= properties.schemaRetries) {
-					throw GenerationModelException(ModelFailureCode.MALFORMED_OUTPUT, "The model returned invalid structured output", failure)
-				}
-			} catch (failure: NonTransientModelTransportException) {
-				throw GenerationModelException(ModelFailureCode.PROVIDER_REJECTED, "The model provider rejected the request", failure)
-			}
+		try {
+			val response = transport.exchange(StructuredChatRequest(role, prompt), responseType)
+			return ModelCallResult(
+				response.value,
+				response.toMetadata(Duration.between(startedAt, Instant.now())),
+			)
+		} catch (failure: TransientModelTransportException) {
+			throw GenerationModelException(
+				ModelFailureCode.PROVIDER_UNAVAILABLE,
+				"The model provider is temporarily unavailable",
+				failure,
+			)
+		} catch (failure: MalformedModelOutputException) {
+			throw GenerationModelException(
+				ModelFailureCode.MALFORMED_OUTPUT,
+				"The model returned invalid structured output",
+				failure,
+			)
+		} catch (failure: NonTransientModelTransportException) {
+			throw GenerationModelException(
+				ModelFailureCode.PROVIDER_REJECTED,
+				"The model provider rejected the request",
+				failure,
+			)
 		}
 	}
 
-	private fun StructuredTransportResponse<*>.toMetadata(
-		latency: Duration,
-		physicalCallCount: Int,
-	) = ModelCallMetadata(
+	private fun StructuredTransportResponse<*>.toMetadata(latency: Duration) = ModelCallMetadata(
 		responseId = responseId,
 		actualModel = actualModel,
 		finishReason = finishReason,
@@ -128,7 +124,6 @@ class SpringAiOpenAiGenerationGateway(
 		),
 		gateway = PlotAiProperties.OPENROUTER_GATEWAY,
 		requestedModel = properties.model,
-		physicalCallCount = physicalCallCount,
 	)
 }
 
