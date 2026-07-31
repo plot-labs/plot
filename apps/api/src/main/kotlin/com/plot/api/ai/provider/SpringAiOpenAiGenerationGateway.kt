@@ -230,8 +230,10 @@ class GenerationModelGatewayConfiguration {
 		val loggingKeys = listOf(
 			"spring.ai.chat.observations.log-prompt",
 			"spring.ai.chat.observations.log-completion",
+			"spring.ai.chat.observations.include-error-logging",
 			"spring.ai.chat.client.observations.log-prompt",
 			"spring.ai.chat.client.observations.log-completion",
+			"spring.ai.chat.client.observations.include-error-logging",
 		)
 		require(loggingKeys.none { environment.getProperty(it, Boolean::class.java, false) }) {
 			"Spring AI prompt and completion logging must remain disabled"

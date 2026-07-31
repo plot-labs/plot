@@ -1,6 +1,7 @@
 package com.plot.api.github
 
 import com.plot.api.common.ApiException
+import com.plot.api.observability.stopSafely
 import io.micrometer.observation.Observation
 import io.micrometer.observation.ObservationRegistry
 import java.time.Clock
@@ -55,7 +56,7 @@ class GitHubReleaseDraftWorker(
 			throw failure
 		} finally {
 			observation.lowCardinalityKeyValue("plot.outcome", outcome)
-			observation.stop()
+			observation.stopSafely()
 		}
 		return 1
 	}

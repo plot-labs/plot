@@ -12,6 +12,7 @@ import com.plot.api.ai.provider.WriterModelRequest
 import com.plot.api.generation.model.ReviewerOutput
 import com.plot.api.generation.model.TargetedRewriteOutput
 import com.plot.api.generation.model.WriterOutput
+import com.plot.api.observability.stopSafely
 import io.micrometer.observation.Observation
 import io.micrometer.observation.ObservationRegistry
 import java.time.Clock
@@ -61,7 +62,7 @@ class GenerationRunWorker(
 			throw failure
 		} finally {
 			observation.lowCardinalityKeyValue("plot.outcome", outcome)
-			observation.stop()
+			observation.stopSafely()
 		}
 		return processed
 	}
@@ -144,7 +145,7 @@ class GenerationRunWorker(
 			}
 		} finally {
 			modelObservation.lowCardinalityKeyValue("plot.outcome", modelOutcome)
-			modelObservation.stop()
+			modelObservation.stopSafely()
 		}
 		return modelOutcome to true
 	}

@@ -1,5 +1,6 @@
 package com.plot.api.github
 
+import com.plot.api.observability.stopSafely
 import io.micrometer.observation.Observation
 import io.micrometer.observation.ObservationRegistry
 import java.time.Instant
@@ -32,7 +33,7 @@ class GitHubWebhookService(
 			observation.lowCardinalityKeyValue("plot.disposition", "FAILED")
 			throw failure
 		} finally {
-			observation.stop()
+			observation.stopSafely()
 		}
 	}
 

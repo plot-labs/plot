@@ -18,6 +18,10 @@ import com.plot.api.generation.model.SentenceReview
 import com.plot.api.generation.model.SourceProvider
 import com.plot.api.generation.model.TargetedRewriteOutput
 import com.plot.api.generation.model.WriterOutput
+import io.micrometer.observation.Observation
+import io.micrometer.observation.ObservationHandler
+import io.micrometer.observation.ObservationRegistry
+import io.micrometer.observation.tck.TestObservationRegistry
 import com.plot.api.generation.model.WriterSentence
 import java.time.Duration
 import java.time.Instant
@@ -89,6 +93,87 @@ class GenerationPhysicalAttemptIntegrationTest {
 		assertEquals(1, count("generation_workflow_steps", state.runId, "step_kind = 'WRITER'"))
 		assertEquals(1, count("generation_artifacts", state.runId, "artifact_type = 'WRITER_OUTPUT'"))
 		assertEquals(1, count("content_packs", state.runId))
+	}
+
+	@Test
+	fun claimedGenerationCreatesOneAttemptAndNestedModelObservation() {
+		val state = reserve("observed-success")
+		val observations = TestObservationRegistry.create()
+		val worker = GenerationRunWorker(
+			persistence = persistence,
+			workflowService = workflow,
+			modelGateway = RetryGateway(state.evidence.single().id, transientWriterFailures = 0),
+			workerId = "observed-worker",
+			observationRegistry = observations,
+		)
+
+		assertEquals(true, worker.processOne())
+		observations.assertThat().hasNumberOfObservationsWithNameEqualTo("plot.generation.attempt", 1)
+		observations.assertThat().hasNumberOfObservationsWithNameEqualTo("plot.generation.model_call", 1)
+		observations.assertThat().hasAnObservationWithAKeyValue("plot.generation_run_id", state.runId.toString())
+		observations.assertThat().forAllObservationsWithNameEqualTo("plot.generation.model_call") {
+			it.hasParentObservation()
+		}
+	}
+
+	@Test
+	fun retryCreatesAnIndependentAttemptObservationWithSafeOutcome() {
+		val state = reserve("observed-retry")
+		val observations = TestObservationRegistry.create()
+		val worker = GenerationRunWorker(
+			persistence = persistence,
+			workflowService = workflow,
+			modelGateway = RetryGateway(state.evidence.single().id, transientWriterFailures = 1),
+			workerId = "observed-retry-worker",
+			observationRegistry = observations,
+		)
+
+		assertEquals(true, worker.processOne())
+		makeRunnable(state.runId)
+		assertEquals(true, worker.processOne())
+
+		observations.assertThat().hasNumberOfObservationsWithNameEqualTo("plot.generation.attempt", 2)
+		observations.assertThat().hasAnObservationWithAKeyValue("plot.outcome", "RETRY_SCHEDULED")
+		observations.assertThat().hasAnObservationWithAKeyValue("plot.outcome", "SUCCEEDED")
+		observations.assertThat().hasAnObservationWithAKeyValue("plot.error_code", "PROVIDER_UNAVAILABLE")
+	}
+
+	@Test
+	fun emptyGenerationPollDoesNotCreateAnObservation() {
+		val observations = TestObservationRegistry.create()
+		val worker = GenerationRunWorker(
+			persistence = persistence,
+			workflowService = workflow,
+			modelGateway = RetryGateway(UUID.randomUUID(), transientWriterFailures = 0),
+			workerId = "empty-observed-worker",
+			observationRegistry = observations,
+		)
+
+		assertEquals(false, worker.processOne())
+		observations.assertThat().doesNotHaveAnyObservation()
+	}
+
+	@Test
+	fun exporterFailureDoesNotChangeGenerationCheckpoint() {
+		val state = reserve("observed-exporter-failure")
+		val registry = ObservationRegistry.create()
+		registry.observationConfig().observationHandler(object : ObservationHandler<Observation.Context> {
+			override fun supportsContext(context: Observation.Context): Boolean = true
+
+			override fun onStop(context: Observation.Context): Unit =
+				throw IllegalStateException("telemetry endpoint unavailable")
+		})
+		val worker = GenerationRunWorker(
+			persistence = persistence,
+			workflowService = workflow,
+			modelGateway = RetryGateway(state.evidence.single().id, transientWriterFailures = 0),
+			workerId = "exporter-failure-worker",
+			observationRegistry = registry,
+		)
+
+		assertEquals(true, worker.processOne())
+		assertEquals("REVIEWING", runStatus(state.runId))
+		assertEquals(1, count("model_invocations", state.runId))
 	}
 
 	@Test
@@ -204,6 +289,7 @@ class GenerationPhysicalAttemptIntegrationTest {
 	@Test
 	fun heartbeatFailureBeforeModelResponseDiscardsTheStaleResult() {
 		val state = reserve("heartbeat-loss")
+		val observations = TestObservationRegistry.create()
 		val openedLease = AtomicReference<GenerationRunLease>()
 		val leaseFactory = GenerationRunLeaseFactory { claim ->
 			val lease = GenerationRunLease(claim, renewClaim = { _, _ -> false }, java.time.Clock.systemUTC())
@@ -221,6 +307,7 @@ class GenerationPhysicalAttemptIntegrationTest {
 			modelGateway = gateway,
 			workerId = "heartbeat-loss-worker",
 			leaseFactory = leaseFactory,
+			observationRegistry = observations,
 		)
 
 		assertEquals(true, worker.processOne())
@@ -234,6 +321,7 @@ class GenerationPhysicalAttemptIntegrationTest {
 		)
 		assertEquals(0, count("generation_artifacts", state.runId, "artifact_type = 'WRITER_OUTPUT'"))
 		assertEquals(0, count("content_packs", state.runId))
+		observations.assertThat().hasAnObservationWithAKeyValue("plot.outcome", "LEASE_LOST")
 	}
 
 	private fun reserve(

@@ -1,6 +1,9 @@
 package com.plot.api
 
 import com.plot.api.github.GitHubWebhookParser
+import com.plot.api.observability.stopSafely
+import io.micrometer.observation.Observation
+import io.micrometer.observation.ObservationRegistry
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -19,6 +22,7 @@ class ApiApplicationTests {
 	@Autowired private lateinit var objectMapper: ObjectMapper
 	@Autowired private lateinit var webhookParser: GitHubWebhookParser
 	@Autowired private lateinit var environment: Environment
+	@Autowired private lateinit var observationRegistry: ObservationRegistry
 
 	@Test
 	fun contextStartsAndAppliesFlywayMigrations() {
@@ -81,5 +85,15 @@ class ApiApplicationTests {
 		assertEquals("false", environment.getProperty("spring.ai.chat.client.observations.log-prompt"))
 		assertEquals("false", environment.getProperty("spring.ai.chat.client.observations.log-completion"))
 		assertEquals("false", environment.getProperty("spring.ai.chat.client.observations.include-error-logging"))
+	}
+
+	@Test
+	fun runtimeObservationSanitizesProviderErrorDetails() {
+		val observation = Observation.start("plot.test.error", observationRegistry)
+		observation.error(IllegalStateException("private provider response"))
+
+		assertEquals("OBSERVATION_ERROR", observation.context.error?.message)
+		assertEquals(null, observation.context.error?.cause)
+		observation.stopSafely()
 	}
 }
