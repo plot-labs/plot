@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
+import org.springframework.core.env.Environment
 import org.springframework.jdbc.core.JdbcTemplate
 import tools.jackson.databind.ObjectMapper
 
@@ -17,6 +18,7 @@ class ApiApplicationTests {
 	@Autowired private lateinit var jdbcTemplate: JdbcTemplate
 	@Autowired private lateinit var objectMapper: ObjectMapper
 	@Autowired private lateinit var webhookParser: GitHubWebhookParser
+	@Autowired private lateinit var environment: Environment
 
 	@Test
 	fun contextStartsAndAppliesFlywayMigrations() {
@@ -67,5 +69,17 @@ class ApiApplicationTests {
 
 		assertEquals("v1.2.3", parsed.tagName)
 		assertEquals("a".repeat(40), parsed.afterSha)
+	}
+
+	@Test
+	fun testRuntimeDisablesExternalObservabilityAndSensitiveAiLogging() {
+		assertEquals("false", environment.getProperty("management.opentelemetry.enabled"))
+		assertEquals("false", environment.getProperty("management.otlp.metrics.export.enabled"))
+		assertEquals("false", environment.getProperty("spring.ai.chat.observations.log-prompt"))
+		assertEquals("false", environment.getProperty("spring.ai.chat.observations.log-completion"))
+		assertEquals("false", environment.getProperty("spring.ai.chat.observations.include-error-logging"))
+		assertEquals("false", environment.getProperty("spring.ai.chat.client.observations.log-prompt"))
+		assertEquals("false", environment.getProperty("spring.ai.chat.client.observations.log-completion"))
+		assertEquals("false", environment.getProperty("spring.ai.chat.client.observations.include-error-logging"))
 	}
 }
