@@ -1,10 +1,12 @@
 package com.plot.api.github
 
+import com.plot.api.common.ApiException
 import jakarta.validation.Valid
 import jakarta.validation.constraints.Min
 import java.time.Instant
 import java.util.UUID
 import org.springframework.http.CacheControl
+import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
@@ -78,6 +80,32 @@ class GitHubInstallationController(
 		.accepted()
 		.cacheControl(CacheControl.noStore())
 		.body(connectionService.retryMonitoring(sourceScopeId))
+
+	@PostMapping("/repositories/{sourceScopeId}/access-check")
+	fun recheckRepositoryAccess(
+		@PathVariable sourceScopeId: UUID,
+		@RequestParam(defaultValue = "RETRY") trigger: String,
+	): ResponseEntity<GitHubAccessCheckResponse> {
+		val normalizedTrigger = runCatching { GitHubAccessCheckTrigger.valueOf(trigger.uppercase()) }
+			.getOrElse {
+				throw ApiException(
+					HttpStatus.BAD_REQUEST,
+					"BAD_REQUEST",
+					"GitHub access check trigger is invalid",
+				)
+			}
+		if (normalizedTrigger == GitHubAccessCheckTrigger.LIFECYCLE_EVENT) {
+			throw ApiException(
+				HttpStatus.BAD_REQUEST,
+				"BAD_REQUEST",
+				"Lifecycle events cannot be requested by a user",
+			)
+		}
+		return ResponseEntity
+			.accepted()
+			.cacheControl(CacheControl.noStore())
+			.body(connectionService.recheckAccess(sourceScopeId, normalizedTrigger))
+	}
 
 	@PostMapping("/repositories/{id}/imports")
 	fun importRepository(

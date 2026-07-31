@@ -63,6 +63,7 @@ class GitHubConnectionApiIntegrationTest {
 		jdbcTemplate.update("delete from source_observations where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from writing_blocks where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from github_repository_monitoring where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from github_repository_access_checks where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from source_scopes where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from connection_namespace_bindings where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from source_namespaces where workspace_id = ?", devContext.devWorkspaceId)
@@ -152,6 +153,25 @@ class GitHubConnectionApiIntegrationTest {
 	}
 
 	@Test
+	fun userDisconnectPersistsItsReasonAndDoesNotQueueAutomaticRecovery() {
+		val connectionId = completeInstallation()
+		val scopeId = connect(connectionId, 1001)
+
+		mockMvc.delete("/api/github/repositories/$scopeId")
+			.andExpect { status { isNoContent() } }
+
+		mockMvc.get("/api/github/connections")
+			.andExpect {
+				status { isOk() }
+				jsonPath("$[0].repositories[0].status") { value("DISABLED") }
+				jsonPath("$[0].repositories[0].statusReason") { value("USER_DISCONNECTED") }
+			}
+
+		mockMvc.post("/api/github/repositories/$scopeId/access-check?trigger=CHECK_AGAIN")
+			.andExpect { status { isConflict() }; jsonPath("$.error") { value("REPOSITORY_DISCONNECTED") } }
+	}
+
+	@Test
 	fun listsCurrentInstallationGrantWithExistingScopeStatus() {
 		val connectionId = completeInstallation()
 		val scopeId = connect(connectionId, 1001)
@@ -170,6 +190,27 @@ class GitHubConnectionApiIntegrationTest {
 		val foreignConnectionId = UUID.randomUUID()
 		mockMvc.get("/api/github/connections/$foreignConnectionId/repositories")
 			.andExpect { status { isNotFound() } }
+	}
+
+	@Test
+	fun queuesAnExplicitRepositoryAccessRecheckWithoutChangingStateSynchronously() {
+		val connectionId = completeInstallation()
+		val scopeId = connect(connectionId, 1001)
+
+		mockMvc.post("/api/github/repositories/$scopeId/access-check?trigger=CHECK_AGAIN")
+			.andExpect {
+				status { isAccepted() }
+				header { string("Cache-Control", "no-store") }
+				jsonPath("$.sourceScopeId") { value(scopeId.toString()) }
+				jsonPath("$.status") { value("QUEUED") }
+			}
+
+		assertEquals("CHECK_AGAIN", jdbcTemplate.queryForObject(
+			"select trigger from github_repository_access_checks where workspace_id = ? and source_scope_id = ?",
+			String::class.java,
+			devContext.devWorkspaceId,
+			scopeId,
+		))
 	}
 
 	@Test

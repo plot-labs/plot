@@ -14,6 +14,8 @@ data class ParsedGitHubWebhook(
 	val eventAction: String?,
 	val installationId: Long?,
 	val repositoryId: Long?,
+	val repositoryIdsAdded: List<Long> = emptyList(),
+	val repositoryIdsRemoved: List<Long> = emptyList(),
 	val ref: String?,
 	val beforeSha: String?,
 	val afterSha: String?,
@@ -40,6 +42,8 @@ class GitHubWebhookParser(private val objectMapper: ObjectMapper) {
 			eventAction = root.text("action"),
 			installationId = root.path("installation").long("id"),
 			repositoryId = root.path("repository").long("id"),
+			repositoryIdsAdded = root.path("repositories_added").longIds(),
+			repositoryIdsRemoved = root.path("repositories_removed").longIds(),
 			ref = ref,
 			beforeSha = root.text("before"),
 			afterSha = root.text("after"),
@@ -64,6 +68,17 @@ class GitHubWebhookParser(private val objectMapper: ObjectMapper) {
 
 	private fun JsonNode.boolean(fieldName: String): Boolean? = path(fieldName)
 		.takeIf { it.isBoolean }?.booleanValue()
+
+	private fun JsonNode.longIds(): List<Long> = if (isArray) {
+		val ids = mutableListOf<Long>()
+		forEach { node ->
+			val id = node.path("id")
+			if (id.canConvertToLong()) ids += id.longValue()
+		}
+		ids
+	} else {
+		emptyList()
+	}
 
 	private fun ByteArray.toHex(): String = HexFormat.of().formatHex(this)
 

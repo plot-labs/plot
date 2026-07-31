@@ -22,6 +22,9 @@ plot.github.state-secret=<random 32-byte secret>
 plot.github.api-base-url=https://api.github.com
 plot.github.web-base-url=https://github.com
 plot.github.import-page-cap=20
+plot.github.access-check-poll-delay=5s
+plot.github.access-check-lease-timeout=2m
+plot.github.access-check-max-attempts=3
 ```
 
 Keep the API bound to loopback while `dev-only=true`. Do not commit the PEM,
@@ -49,6 +52,44 @@ Run the API with an explicit local profile, for example
    `SOURCE_MANAGED`.
 7. Submit the same callback state again. It must return `INVALID_GITHUB_STATE`
    and must not cause another GitHub token exchange.
+
+## Exercise the access lifecycle
+
+Use a disposable installation and repository. Keep the request and delivery
+identifiers, but never save the webhook body or a token in a ticket.
+
+1. In the GitHub App settings, subscribe to `Installation`, `Installation
+   repositories`, and `Repository` events in addition to Push and Release.
+2. Suspend the installation. Redeliver the signed `installation.suspend`
+   delivery and confirm HTTP `202`, connection `ERROR`, the typed reason
+   `INSTALLATION_SUSPENDED`, and no new release or generation claim.
+3. Unsuspend the installation. Confirm the UI remains `Needs attention` while
+   the durable access check is `QUEUED`/`CHECKING`, then becomes `Connected`
+   only after the provider grant and repository metadata verify.
+4. Remove the selected repository grant and redeliver
+   `installation_repositories.removed`. Confirm only that scope is inactive,
+   its reason is `GRANT_REMOVED`, and the UI offers Retry and Reconnect. Add
+   the grant again and verify the same scope ID and release boundary return;
+   no release is backfilled for the interruption.
+5. Transfer the repository and confirm `REPOSITORY_TRANSFERRED` queues one
+   access check. Verify owner, name, URL, and default branch change only after
+   a successful check.
+6. Delete and restore the repository. Confirm the tombstone is
+   `REPOSITORY_DELETED`, no background polling occurs, and Check again restores
+   the same identity when GitHub makes it available. Connect another repository
+   remains an independent option.
+7. Uninstall the GitHub App. Confirm `Disconnected`, revoked bindings, and a
+   Reconnect action. Reinstall and select the same repository; retained drafts,
+   citations, and the release boundary remain, and the lost-period releases
+   are not generated individually.
+8. Redeliver every lifecycle delivery once. State, access-check, release, and
+   generation counts must remain idempotent. Inspect logs and the UI to confirm
+   that raw payloads, credentials, private excerpts, and internal UUIDs are not
+   exposed.
+
+The production private-repository smoke is intentionally not part of this
+runbook's completion evidence; execute it under PON-99 with production-safe
+credentials and a disposable repository.
 
 ## Cleanup
 

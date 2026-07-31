@@ -180,6 +180,39 @@ describe("Plot same-origin proxy", () => {
     expect(String(fetcher.mock.calls[0]?.[0])).toBe(expectedUrl);
   });
 
+  it("allows the explicit GitHub access recheck route", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ status: "QUEUED" }));
+    const response = await proxyPlotRequest(
+      new Request("http://web.test/api/plot/github/repositories/scope-1/access-check?trigger=RETRY", {
+        method: "POST",
+        headers: { Origin: "http://web.test" },
+      }),
+      ["github", "repositories", "scope-1", "access-check"],
+      { fetch: fetcher, baseUrl: "http://127.0.0.1:8080" },
+    );
+
+    expect(response.status).toBe(200);
+    expect(String(fetcher.mock.calls[0]?.[0])).toBe("http://127.0.0.1:8080/api/github/repositories/scope-1/access-check?trigger=RETRY");
+  });
+
+  it.each([
+    ["GET", ["github", "repositories", "scope-1", "monitoring"]],
+    ["POST", ["github", "repositories", "scope-1", "monitoring", "retry"]],
+  ])("allows the explicit repository monitoring %s route", async (method, path) => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ status: "QUEUED" }));
+    const response = await proxyPlotRequest(
+      new Request("http://web.test/api/plot/github/repositories/scope-1/monitoring", {
+        method,
+        headers: method === "POST" ? { Origin: "http://web.test" } : undefined,
+      }),
+      path,
+      { fetch: fetcher, baseUrl: "http://127.0.0.1:8080" },
+    );
+
+    expect(response.status).toBe(200);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
   it("does not expose a generic GitHub release activity proxy", async () => {
     const fetcher = vi.fn<typeof fetch>();
     const response = await proxyPlotRequest(

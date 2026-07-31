@@ -10,6 +10,7 @@ import {
   plotApiClient,
   PlotApiError,
   type GitHubConnection,
+  type GitHubAccessCheckTrigger,
   type GitHubImport,
   type GitHubReleaseActivity,
   type GitHubRepository,
@@ -49,17 +50,37 @@ export function IntegrationsWorkspace() {
   const [releaseLoadActionId, setReleaseLoadActionId] = useState<string | null>(null);
   const releaseLoadActionRef = useRef<string | null>(null);
   const [reloadNonce, setReloadNonce] = useState(0);
+  const [accessCheckActionId, setAccessCheckActionId] = useState<string | null>(null);
+  const accessCheckActionRef = useRef<string | null>(null);
+  const [accessCheckReloadNonce, setAccessCheckReloadNonce] = useState(0);
 
-  const activeConnection = connections.find(
-    (connection) => connection.status === "ACTIVE" && connection.id === preferredConnectionId,
-  ) ?? connections.find((connection) => connection.status === "ACTIVE") ?? null;
+  const selectedConnection = connections.find((connection) => connection.id === preferredConnectionId)
+    ?? connections.find((connection) => connection.status === "ACTIVE")
+    ?? connections[0]
+    ?? null;
+  const activeConnection = selectedConnection?.status === "ACTIVE" ? selectedConnection : null;
   const selectedRepository = repositories.find(
     (repository) => repository.externalRepositoryId === selectedRepositoryId,
   ) ?? null;
   const hasInactiveConnection = connections.some((connection) => connection.status !== "ACTIVE");
-  const monitoredRepository = selectedRepositoryId === null
-    ? repositories.find((repository) => repository.id) ?? null
-    : selectedRepository;
+  const hasInactiveRepository = repositories.some((repository) => repository.id && repository.status !== "ACTIVE");
+  const selectedRepositoryDisconnected = selectedRepository?.statusReason === "REPOSITORY_DELETED";
+  const pendingAccessCheckId = repositories.find((repository) =>
+    repository.id && (repository.accessCheckStatus === "QUEUED" || repository.accessCheckStatus === "CHECKING"),
+  )?.id ?? null;
+  const connectionBadgeStatus: "connected" | "attention" | "disconnected" = !selectedConnection
+    || selectedConnection.status === "DISABLED"
+    || selectedConnection.statusReason === "INSTALLATION_UNINSTALLED"
+    || selectedRepositoryDisconnected
+    ? "disconnected"
+    : selectedConnection.status !== "ACTIVE" || repositoryLoadFailed || connectionNeedsReconnect || hasInactiveRepository
+      ? "attention"
+      : "connected";
+  const monitoredRepository = activeConnection && !connectionNeedsReconnect
+    ? selectedRepositoryId === null
+      ? repositories.find((repository) => repository.id && repository.status === "ACTIVE") ?? null
+      : selectedRepository?.status === "ACTIVE" ? selectedRepository : null
+    : null;
   const latestRelease = monitoredRepository?.id === releaseActivity?.sourceScopeId ? releaseActivity : null;
   const latestReleaseError = releaseActivityError &&
     monitoredRepository?.id === releaseActivityError.sourceScopeId
@@ -91,10 +112,11 @@ export function IntegrationsWorkspace() {
         const owner = workspace.role === "OWNER";
         const preferredConnection = nextConnections.find((connection) => connection.id === preferredConnectionId)
           ?? nextConnections.find((connection) => connection.status === "ACTIVE")
+          ?? nextConnections[0]
           ?? null;
         setIsOwner(owner);
         setConnections(nextConnections);
-        setRepositories([]);
+        setRepositories(preferredConnection?.repositories ?? []);
         setMonitoring(null);
         setReleaseActivity(null);
         setReleaseActivityError(null);
@@ -130,7 +152,13 @@ export function IntegrationsWorkspace() {
 
     queueMicrotask(() => { void load(); });
     return () => { cancelled = true; };
-  }, [preferredConnectionId, reloadNonce]);
+  }, [preferredConnectionId, reloadNonce, accessCheckReloadNonce]);
+
+  useEffect(() => {
+    if (!pendingAccessCheckId) return;
+    const timer = setTimeout(() => setAccessCheckReloadNonce((value) => value + 1), 2000);
+    return () => clearTimeout(timer);
+  }, [pendingAccessCheckId]);
 
   useEffect(() => {
     if (callbackConnectionId || callbackError) router.replace("/integrations");
@@ -285,6 +313,29 @@ export function IntegrationsWorkspace() {
     }
   };
 
+  const recheckRepositoryAccess = async (sourceScopeId: string, trigger: GitHubAccessCheckTrigger) => {
+    if (accessCheckActionRef.current) return;
+    accessCheckActionRef.current = sourceScopeId;
+    setAccessCheckActionId(sourceScopeId);
+    setMessage(null);
+    setMessageRequestId(null);
+    try {
+      const check = await plotApiClient.recheckGitHubRepositoryAccess(sourceScopeId, trigger);
+      setRepositories((current) => current.map((repository) => (
+        repository.id === sourceScopeId
+          ? { ...repository, accessCheckStatus: check.status }
+          : repository
+      )));
+      setAccessCheckReloadNonce((value) => value + 1);
+    } catch (error) {
+      setMessage(errorMessage(error));
+      setMessageRequestId(providerRequestId(error));
+    } finally {
+      accessCheckActionRef.current = null;
+      setAccessCheckActionId(null);
+    }
+  };
+
   return (
     <div className="h-screen overflow-y-auto bg-[#f8fafc] px-6 py-14 dark:bg-[#111113] lg:px-10">
       <div className="mx-auto max-w-4xl">
@@ -310,11 +361,7 @@ export function IntegrationsWorkspace() {
             </div>
             {!isLoading && (
               <ConnectionBadge
-                status={!activeConnection
-                  ? "disconnected"
-                  : repositoryLoadFailed || connectionNeedsReconnect
-                    ? "attention"
-                    : "connected"}
+                status={connectionBadgeStatus}
               />
             )}
           </div>
@@ -336,7 +383,7 @@ export function IntegrationsWorkspace() {
             <Loading />
           ) : isOwner === null ? null : !isOwner ? (
             <NonOwnerState connected={Boolean(activeConnection) && !connectionNeedsReconnect} />
-          ) : !activeConnection || connectionNeedsReconnect ? (
+          ) : !selectedConnection || (connectionNeedsReconnect && repositories.length === 0) ? (
             <ConnectState
               reconnect={hasInactiveConnection || connectionNeedsReconnect}
               busy={action === "install"}
@@ -344,6 +391,13 @@ export function IntegrationsWorkspace() {
             />
           ) : (
             <div className="mt-6 border-t border-black/[0.08] pt-6 dark:border-white/10">
+              {(!activeConnection || connectionNeedsReconnect) && (
+                <ConnectionRecoveryState
+                  connection={selectedConnection}
+                  busy={action === "install"}
+                  onReconnect={() => { void installGitHub(); }}
+                />
+              )}
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <h3 className="text-sm font-semibold text-black/80 dark:text-white/82">Repository access</h3>
@@ -384,7 +438,10 @@ export function IntegrationsWorkspace() {
                         {repository.displayName}
                       </span>
                       {repository.id && (
-                        <span className="text-xs text-emerald-700 dark:text-emerald-300">Connected</span>
+                        <RepositoryAccessLabel
+                          repository={repository}
+                          connectionActive={Boolean(activeConnection && !connectionNeedsReconnect)}
+                        />
                       )}
                       <a
                         href={repository.url}
@@ -409,12 +466,29 @@ export function IntegrationsWorkspace() {
                 <button
                   type="button"
                   onClick={() => { void importLast30Days(); }}
-                  disabled={!selectedRepository || action !== null}
+                  disabled={
+                    !selectedRepository
+                    || !activeConnection
+                    || repositoryLoadFailed
+                    || connectionNeedsReconnect
+                    || (selectedRepository.id !== null && selectedRepository.status !== "ACTIVE")
+                    || action !== null
+                  }
                   className="mt-5 inline-flex items-center gap-2 rounded-full bg-black px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-black"
                 >
                   {action === "import" && <LoaderCircle className="size-4 animate-spin" />}
                   {selectedRepository?.id ? "Import last 30 days" : "Connect and import last 30 days"}
                 </button>
+              )}
+
+              {selectedRepository?.id && selectedRepository.status !== "ACTIVE" && (
+                <RepositoryAccessRecovery
+                  repository={selectedRepository}
+                  busy={accessCheckActionId === selectedRepository.id || action === "install"}
+                  onCheckAgain={() => { void recheckRepositoryAccess(selectedRepository.id!, "CHECK_AGAIN"); }}
+                  onRetry={() => { void recheckRepositoryAccess(selectedRepository.id!, "RETRY"); }}
+                  onReconnect={() => { void installGitHub(); }}
+                />
               )}
 
               {monitoredRepository?.id && latestRelease && (
@@ -617,6 +691,108 @@ function ReleaseActivityLoadError({
   );
 }
 
+function ConnectionRecoveryState({
+  connection,
+  busy,
+  onReconnect,
+}: {
+  connection: GitHubConnection;
+  busy: boolean;
+  onReconnect: () => void;
+}) {
+  const uninstalled = connection.statusReason === "INSTALLATION_UNINSTALLED" || connection.status === "DISABLED";
+  const message = connection.statusReason === "INSTALLATION_SUSPENDED"
+    ? "GitHub installation is suspended. Restore it in GitHub, then check repository access again."
+    : connection.statusReason === "AUTH_EXPIRED"
+      ? "GitHub authentication expired. Reconnect GitHub to restore access."
+      : uninstalled
+        ? "The GitHub installation was removed. Reconnect GitHub to restore repository access."
+        : "GitHub access needs attention before new work can be fetched.";
+  return (
+    <div role="status" aria-live="polite" className="mb-5 rounded-[10px] border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-100">
+      <div>{message}</div>
+      <button
+        type="button"
+        onClick={onReconnect}
+        disabled={busy}
+        className="mt-2 font-semibold underline underline-offset-2 disabled:opacity-50"
+      >
+        Reconnect GitHub
+      </button>
+    </div>
+  );
+}
+
+function RepositoryAccessLabel({
+  repository,
+  connectionActive,
+}: {
+  repository: GitHubRepository;
+  connectionActive: boolean;
+}) {
+  const label = !connectionActive
+    ? "Needs attention"
+    : repository.status === "ACTIVE"
+      ? "Connected"
+      : repository.accessCheckStatus === "QUEUED" || repository.accessCheckStatus === "CHECKING"
+        ? "Checking…"
+        : repository.statusReason === "REPOSITORY_DELETED"
+          ? "Disconnected"
+          : "Needs attention";
+  const styles = label === "Connected"
+    ? "text-emerald-700 dark:text-emerald-300"
+    : label === "Disconnected"
+      ? "text-black/45 dark:text-white/48"
+      : "text-amber-700 dark:text-amber-300";
+  return <span className={`text-xs ${styles}`}>{label}</span>;
+}
+
+function RepositoryAccessRecovery({
+  repository,
+  busy,
+  onCheckAgain,
+  onRetry,
+  onReconnect,
+}: {
+  repository: GitHubRepository;
+  busy: boolean;
+  onCheckAgain: () => void;
+  onRetry: () => void;
+  onReconnect: () => void;
+}) {
+  const checking = repository.accessCheckStatus === "QUEUED" || repository.accessCheckStatus === "CHECKING";
+  const deleted = repository.statusReason === "REPOSITORY_DELETED";
+  const userDisconnected = repository.statusReason === "USER_DISCONNECTED";
+  const message = checking
+    ? "Checking current GitHub access…"
+    : userDisconnected
+      ? "This repository was disconnected from Plot. Reconnect GitHub to choose it again."
+    : deleted
+      ? "This repository is currently unavailable. Check again after restoring it, or connect another repository."
+      : repository.statusReason === "GRANT_REMOVED"
+        ? "GitHub no longer grants Plot access to this repository. Update the App installation, then retry."
+        : repository.statusReason === "REPOSITORY_TRANSFERRED"
+          ? "This repository moved. Check again to verify its current location and access."
+          : "This repository needs attention before Plot can fetch new work.";
+  return (
+    <div role="status" aria-live="polite" className="mt-5 rounded-[10px] border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-100">
+      <div>{message}</div>
+      {!checking && (
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+          {!userDisconnected && (
+            <button type="button" onClick={deleted ? onCheckAgain : onRetry} disabled={busy} className="font-semibold underline underline-offset-2 disabled:opacity-50">
+              {deleted ? "Check again" : "Retry"}
+            </button>
+          )}
+          <button type="button" onClick={onReconnect} disabled={busy} className="font-semibold underline underline-offset-2 disabled:opacity-50">
+            {deleted ? "Connect another repository" : "Reconnect"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ConnectionBadge({ status }: { status: "connected" | "attention" | "disconnected" }) {
   const styles = status === "connected"
     ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
@@ -625,7 +801,7 @@ function ConnectionBadge({ status }: { status: "connected" | "attention" | "disc
       : "bg-black/[0.05] text-black/45 dark:bg-white/10 dark:text-white/48";
   return (
     <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${styles}`}>
-      {status === "connected" ? "Connected" : status === "attention" ? "Needs attention" : "Not connected"}
+      {status === "connected" ? "Connected" : status === "attention" ? "Needs attention" : "Disconnected"}
     </span>
   );
 }

@@ -9,12 +9,14 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
+import org.springframework.dao.InvalidDataAccessApiUsageException
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.TestPropertySource
 
@@ -65,6 +67,41 @@ class GitHubReleasePersistenceIntegrationTest {
 		assertEquals(1, persistence.recoverStaleClaims(now, Duration.ofMinutes(5)))
 		assertEquals(ReleaseRow("QUEUED", 5, null), loadReleaseRow(staleRequestId))
 		assertEquals(ReleaseRow("RESOLVING", 9, "worker"), loadReleaseRow(freshRequestId))
+	}
+
+	@Test
+	fun sourceAccessFenceFailsTheClaimAndRejectsItsLateCompletion() {
+		val requestId = insertRequest(status = "QUEUED")
+		val sourceScopeId = jdbcTemplate.queryForObject(
+			"select source_scope_id from github_release_draft_requests where id = ?",
+			UUID::class.java,
+			requestId,
+		)!!
+		val claim = assertNotNull(
+			persistence.claimNext("access-loss-worker", Instant.now(), Duration.ofMinutes(5)),
+		)
+
+		assertEquals(1, persistence.fenceSourceScope(devContext.devWorkspaceId, sourceScopeId, Instant.now()))
+		assertEquals(ReleaseRow("FAILED", claim.transitionVersion + 1, null), loadReleaseRow(requestId))
+		assertEquals(
+			"SOURCE_ACCESS_LOST",
+			jdbcTemplate.queryForObject(
+				"select error_code from github_release_draft_requests where id = ?",
+				String::class.java,
+				requestId,
+			),
+		)
+
+		val failure = assertFailsWith<InvalidDataAccessApiUsageException> {
+			persistence.saveResolvedRange(
+				requestId,
+				claim.transitionVersion,
+				"stale-base",
+				"stale-head",
+				"STALE_WORKER",
+			)
+		}
+		assertEquals("Release request transition was lost", failure.mostSpecificCause.message)
 	}
 
 	@Test

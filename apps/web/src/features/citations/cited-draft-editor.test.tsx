@@ -116,6 +116,25 @@ describe("CitedDraftEditor", () => {
     consoleError.mockRestore();
   });
 
+  it("labels lost provider access while keeping the saved evidence reviewable", () => {
+    const lost: ContentPack = {
+      ...pack,
+      variant: {
+        ...pack.variant,
+        sentences: [{
+          ...pack.variant.sentences[0]!,
+          citations: [{ ...pack.variant.sentences[0]!.citations[0]!, sourceAccess: "LOST" }],
+        }],
+      },
+    };
+    render(<CitedDraftEditor pack={lost} onEditSentence={vi.fn()} />);
+
+    const citation = screen.getByRole("button", { name: /Source access lost · GitHub · PR #184/i });
+    fireEvent.click(citation);
+    expect(screen.getByText(/Source access lost\. This saved evidence remains available for review/i)).toBeVisible();
+    expect(screen.getByText("Clarify recovery copy after failed sign-in.")).toBeVisible();
+  });
+
   it("shows only publishable result copy and explicitly saves only the edited sentence", async () => {
     const updated: ContentPack = {
       ...pack,

@@ -34,8 +34,9 @@ class GitHubSchemaIntegrationTest {
 			"delete from github_release_draft_requests where workspace_id = ?",
 			devContext.devWorkspaceId,
 		)
-			listOf(
+		listOf(
 				"writing_block_scopes", "source_imports", "source_observations", "github_repository_monitoring",
+				"github_repository_access_checks",
 			).forEach { jdbcTemplate.update("delete from $it where workspace_id = ?", devContext.devWorkspaceId) }
 		jdbcTemplate.update(
 			"""
@@ -120,6 +121,75 @@ class GitHubSchemaIntegrationTest {
 				UUID.randomUUID(),
 				devContext.devWorkspaceId,
 				secondScopeId,
+			)
+		}
+	}
+
+	@Test
+	fun accessChecksAreUniqueAndKeepWorkspaceScopedLifecycleReasons() {
+		val connectionId = insertConnection(6001)
+		val namespaceId = insertNamespace("6001")
+		insertBinding(connectionId, namespaceId)
+		val scopeId = insertScope(namespaceId, 7001)
+		val checkId = UUID.randomUUID()
+
+		jdbcTemplate.update(
+			"""
+			insert into github_repository_access_checks (
+			  id, workspace_id, connection_id, source_scope_id, trigger, status,
+			  attempt_count, transition_version, created_at, updated_at
+			) values (?, ?, ?, ?, 'LIFECYCLE_EVENT', 'QUEUED', 0, 0, now(), now())
+			""".trimIndent(),
+			checkId, devContext.devWorkspaceId, connectionId, scopeId,
+		)
+
+		assertEquals(
+			1,
+			jdbcTemplate.queryForObject(
+				"select count(*) from github_repository_access_checks where workspace_id = ? and source_scope_id = ?",
+				Int::class.java,
+				devContext.devWorkspaceId,
+				scopeId,
+			),
+		)
+		assertFailsWith<DuplicateKeyException> {
+			jdbcTemplate.update(
+				"""
+				insert into github_repository_access_checks (
+				  id, workspace_id, connection_id, source_scope_id, trigger, status,
+				  attempt_count, transition_version, created_at, updated_at
+				) values (?, ?, ?, ?, 'RETRY', 'QUEUED', 0, 0, now(), now())
+				""".trimIndent(),
+				UUID.randomUUID(), devContext.devWorkspaceId, connectionId, scopeId,
+			)
+		}
+		assertFailsWith<DataIntegrityViolationException> {
+			jdbcTemplate.update(
+				"update connections set status_reason = 'GRANT_REMOVED' where id = ?",
+				connectionId,
+			)
+		}
+		assertFailsWith<DataIntegrityViolationException> {
+			jdbcTemplate.update(
+				"update source_scopes set status_reason = 'AUTH_EXPIRED' where id = ?",
+				scopeId,
+			)
+		}
+		assertFailsWith<DataIntegrityViolationException> {
+			jdbcTemplate.update(
+				"update github_repository_access_checks set status = 'CHECKING' where id = ?",
+				checkId,
+			)
+		}
+		assertFailsWith<DataIntegrityViolationException> {
+			jdbcTemplate.update(
+				"""
+				insert into github_repository_access_checks (
+				  id, workspace_id, connection_id, source_scope_id, trigger, status,
+				  attempt_count, transition_version, created_at, updated_at
+				) values (?, ?, ?, ?, 'CHECK_AGAIN', 'QUEUED', 0, 0, now(), now())
+				""".trimIndent(),
+				UUID.randomUUID(), UUID.randomUUID(), connectionId, scopeId,
 			)
 		}
 	}
