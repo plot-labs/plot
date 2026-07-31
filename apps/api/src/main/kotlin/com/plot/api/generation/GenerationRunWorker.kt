@@ -12,6 +12,8 @@ import com.plot.api.ai.provider.WriterModelRequest
 import com.plot.api.generation.model.ReviewerOutput
 import com.plot.api.generation.model.TargetedRewriteOutput
 import com.plot.api.generation.model.WriterOutput
+import io.micrometer.observation.Observation
+import io.micrometer.observation.ObservationRegistry
 import java.time.Clock
 import java.time.Duration
 import java.util.UUID
@@ -29,6 +31,7 @@ class GenerationRunWorker(
 			GenerationRunLease(claim, renewClaim = { _, _ -> true }, clock),
 		) {}
 	},
+	private val observationRegistry: ObservationRegistry = ObservationRegistry.NOOP,
 ) {
 	internal var lastFailure: RuntimeException? = null
 		private set
@@ -36,29 +39,73 @@ class GenerationRunWorker(
 	/** Processes one logical model call so every successful call becomes a durable checkpoint. */
 	fun processOne(): Boolean {
 		val claim = persistence.claimNext(workerId, clock.instant().minus(claimTimeout)) ?: return false
-		return leaseFactory.open(claim).use { handle ->
-			try {
-				processClaim(claim, handle.lease)
-			} catch (_: GenerationRunLeaseLostException) {
-				true
+		val observation = Observation.start("plot.generation.attempt", observationRegistry)
+			.lowCardinalityKeyValue("plot.operation", "generation")
+			.highCardinalityKeyValue("plot.generation_run_id", claim.runId.toString())
+		var outcome = "SUCCEEDED"
+		var processed = true
+		try {
+			observation.openScope().use {
+				leaseFactory.open(claim).use { handle ->
+					try {
+						val result = processClaim(claim, handle.lease, observation)
+						outcome = result.first
+						processed = result.second
+					} catch (_: GenerationRunLeaseLostException) {
+						outcome = "LEASE_LOST"
+					}
+				}
 			}
+		} catch (failure: RuntimeException) {
+			outcome = "FAILED"
+			throw failure
+		} finally {
+			observation.lowCardinalityKeyValue("plot.outcome", outcome)
+			observation.stop()
 		}
+		return processed
 	}
 
-	private fun processClaim(claim: ClaimedGenerationRun, runLease: GenerationRunLease): Boolean {
+	private fun processClaim(
+		claim: ClaimedGenerationRun,
+		runLease: GenerationRunLease,
+		attemptObservation: Observation,
+	): Pair<String, Boolean> {
 		val state = persistence.loadState(claim.workspaceId, claim.runId)
 		val budgetFailure = persistence.budgetFailureCode(claim)
 		if (budgetFailure != null) {
 			runLease.commit { persistence.failClaim(claim, state, budgetFailure) }
-			return true
+			attemptObservation.lowCardinalityKeyValue("plot.error_code", budgetFailure)
+			return "FAILED" to true
 		}
-		val role = state.nextRole ?: return false
+		val role = state.nextRole ?: return "NO_ACTIVITY" to false
+		attemptObservation.lowCardinalityKeyValue("plot.model_role", role.name)
 		val invocation = runLease.commit { persistence.beginInvocation(claim, role) }
+		attemptObservation.lowCardinalityKeyValue("plot.physical_attempt", invocation.attemptNo.toString())
 		val recording = RecordingGateway(modelGateway)
+		val modelObservation = Observation.start("plot.generation.model_call", observationRegistry)
+			.lowCardinalityKeyValue("plot.operation", "model_invocation")
+			.lowCardinalityKeyValue("plot.model_role", role.name)
+			.lowCardinalityKeyValue("plot.physical_attempt", invocation.attemptNo.toString())
+		var modelOutcome = "SUCCEEDED"
 		try {
-			val advanced = workflowService.advance(state, recording)
-			runLease.commit { persistence.completeCheckpoint(claim, invocation, advanced, recording.metadata) }
+			modelObservation.openScope().use {
+				val advanced = workflowService.advance(state, recording)
+				recording.metadata?.let { metadata ->
+					metadata.gateway?.let { modelObservation.highCardinalityKeyValue("plot.model_provider", it) }
+					metadata.requestedModel?.let { modelObservation.highCardinalityKeyValue("plot.requested_model", it) }
+					metadata.actualModel?.let { modelObservation.highCardinalityKeyValue("plot.served_model", it) }
+					metadata.responseId?.let { modelObservation.highCardinalityKeyValue("plot.provider_response_id", it) }
+					metadata.promptTokens?.let { modelObservation.highCardinalityKeyValue("plot.prompt_tokens", it.toString()) }
+					metadata.completionTokens?.let { modelObservation.highCardinalityKeyValue("plot.completion_tokens", it.toString()) }
+					metadata.totalTokens?.let { modelObservation.highCardinalityKeyValue("plot.total_tokens", it.toString()) }
+					modelObservation.highCardinalityKeyValue("plot.model_latency_ms", metadata.latency.toMillis().toString())
+				}
+				runLease.commit { persistence.completeCheckpoint(claim, invocation, advanced, recording.metadata) }
+			}
 		} catch (failure: GenerationModelException) {
+			attemptObservation.lowCardinalityKeyValue("plot.error_code", failure.code.name)
+			modelObservation.lowCardinalityKeyValue("plot.error_code", failure.code.name)
 			runLease.commit {
 				if (
 					failure.code == ModelFailureCode.PROVIDER_UNAVAILABLE &&
@@ -71,23 +118,35 @@ class GenerationRunWorker(
 						nextAttemptAt = clock.instant().plus(retryDelay(invocation.attemptNo)),
 						metadata = recording.metadata,
 					)
+					modelOutcome = "RETRY_SCHEDULED"
 				} else {
 					persistence.failCheckpoint(claim, invocation, state, failure.code.name, recording.metadata)
+					modelOutcome = "FAILED"
 				}
 			}
 		} catch (_: InvalidModelOutputException) {
+			attemptObservation.lowCardinalityKeyValue("plot.error_code", "MALFORMED_OUTPUT")
+			modelObservation.lowCardinalityKeyValue("plot.error_code", "MALFORMED_OUTPUT")
+			modelOutcome = "FAILED"
 			runLease.commit {
 				persistence.failCheckpoint(claim, invocation, state, "MALFORMED_OUTPUT", recording.metadata)
 			}
 		} catch (failure: GenerationRunLeaseLostException) {
+			modelOutcome = "LEASE_LOST"
 			throw failure
 		} catch (failure: RuntimeException) {
+			modelObservation.lowCardinalityKeyValue("plot.error_code", "WORKFLOW_FAILED")
+			modelOutcome = "FAILED"
 			lastFailure = failure
+			attemptObservation.lowCardinalityKeyValue("plot.error_code", "WORKFLOW_FAILED")
 			runLease.commit {
 				persistence.failCheckpoint(claim, invocation, state, "WORKFLOW_FAILED", recording.metadata)
 			}
+		} finally {
+			modelObservation.lowCardinalityKeyValue("plot.outcome", modelOutcome)
+			modelObservation.stop()
 		}
-		return true
+		return modelOutcome to true
 	}
 
 	fun drain(maxCheckpoints: Int = 16): Int {

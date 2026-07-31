@@ -1,5 +1,7 @@
 package com.plot.api.github
 
+import io.micrometer.observation.Observation
+import io.micrometer.observation.ObservationRegistry
 import java.time.Instant
 import java.util.UUID
 import org.springframework.stereotype.Service
@@ -14,9 +16,27 @@ class GitHubWebhookService(
 	private val persistence: GitHubReleasePersistence,
 	private val dispatcher: GitHubReleaseDraftDispatcher,
 	private val lifecycleService: GitHubSourceAccessLifecycleService,
+	private val observationRegistry: ObservationRegistry,
 ) {
 	@Transactional
 	fun accept(webhook: ParsedGitHubWebhook): GitHubWebhookDelivery {
+		val observation = Observation.start("plot.github.webhook", observationRegistry)
+			.highCardinalityKeyValue("plot.webhook_delivery_id", webhook.externalDeliveryId)
+		try {
+			observation.openScope().use {
+				val delivery = acceptInternal(webhook)
+				observation.lowCardinalityKeyValue("plot.disposition", delivery.disposition.name)
+				return delivery
+			}
+		} catch (failure: RuntimeException) {
+			observation.lowCardinalityKeyValue("plot.disposition", "FAILED")
+			throw failure
+		} finally {
+			observation.stop()
+		}
+	}
+
+	private fun acceptInternal(webhook: ParsedGitHubWebhook): GitHubWebhookDelivery {
 		persistence.findDelivery(webhook.externalDeliveryId)?.let { return it }
 		val delivery = GitHubWebhookDelivery(
 			id = UUID.randomUUID(),

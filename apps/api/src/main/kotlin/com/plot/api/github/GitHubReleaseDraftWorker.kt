@@ -1,6 +1,8 @@
 package com.plot.api.github
 
 import com.plot.api.common.ApiException
+import io.micrometer.observation.Observation
+import io.micrometer.observation.ObservationRegistry
 import java.time.Clock
 import java.time.Duration
 import java.util.UUID
@@ -16,19 +18,44 @@ class GitHubReleaseDraftWorker(
 	private val leaseFactory: GitHubReleaseLeaseFactory,
 	private val clock: Clock = Clock.systemUTC(),
 	private val workerId: String = "github-release-${UUID.randomUUID()}",
+	private val observationRegistry: ObservationRegistry = ObservationRegistry.NOOP,
 ) {
 	fun drain(): Int {
 		if (!properties.releaseAutomationEnabled) return 0
 		val request = persistence.claimNext(workerId, clock.instant(), properties.releaseWorkerLeaseTimeout)
 			?: return 0
+		val observation = Observation.start("plot.github.release.attempt", observationRegistry)
+			.lowCardinalityKeyValue("plot.operation", "release_draft")
+			.lowCardinalityKeyValue("plot.attempt", request.attemptCount.toString())
+			.highCardinalityKeyValue("plot.release_request_id", request.id.toString())
+			.highCardinalityKeyValue("plot.webhook_delivery_id", request.initialDeliveryId.toString())
+			.apply {
+				request.generationRunId?.let {
+					highCardinalityKeyValue("plot.generation_run_id", it.toString())
+				}
+			}
+		var outcome = "SUCCEEDED"
 		try {
-			leaseFactory.open(request, workerId).use { handle ->
-				orchestrator.process(request, handle.lease)
+			observation.openScope().use {
+				leaseFactory.open(request, workerId).use { handle ->
+					val status = orchestrator.process(request, handle.lease)
+					outcome = if (status == GitHubReleaseDraftStatus.NO_ACTIVITY) "NO_ACTIVITY" else "SUCCEEDED"
+				}
 			}
 		} catch (exception: GitHubReleaseDraftProcessingException) {
-			if (exception.cause !is GitHubReleaseLeaseLostException) {
-				handleFailure(exception)
+			if (exception.cause is GitHubReleaseLeaseLostException) {
+				outcome = "LEASE_LOST"
+			} else {
+				observation.lowCardinalityKeyValue("plot.error_code", safeErrorCode(exception.cause))
+				outcome = handleFailure(exception)
 			}
+		} catch (failure: RuntimeException) {
+			observation.lowCardinalityKeyValue("plot.error_code", "RELEASE_PROCESSING_FAILED")
+			outcome = "FAILED"
+			throw failure
+		} finally {
+			observation.lowCardinalityKeyValue("plot.outcome", outcome)
+			observation.stop()
 		}
 		return 1
 	}
@@ -44,7 +71,7 @@ class GitHubReleaseDraftWorker(
 		}
 	}
 
-	private fun handleFailure(exception: GitHubReleaseDraftProcessingException) {
+	private fun handleFailure(exception: GitHubReleaseDraftProcessingException): String {
 		val errorCode = safeErrorCode(exception.cause)
 		val attemptsRemain = exception.attemptCount < properties.releaseWorkerMaxAttempts
 		if (attemptsRemain && isRetryable(exception.cause)) {
@@ -54,7 +81,7 @@ class GitHubReleaseDraftWorker(
 				clock.instant().plus(retryDelay(exception.attemptCount)),
 				errorCode,
 			)
-			return
+			return "RETRY_SCHEDULED"
 		}
 		persistence.finish(
 			exception.requestId,
@@ -62,6 +89,7 @@ class GitHubReleaseDraftWorker(
 			GitHubReleaseDraftStatus.FAILED,
 			errorCode,
 		)
+		return "FAILED"
 	}
 
 	private fun retryDelay(attempt: Int): Duration {
