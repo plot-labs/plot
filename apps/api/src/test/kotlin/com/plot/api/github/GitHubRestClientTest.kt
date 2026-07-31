@@ -4,6 +4,7 @@ import com.plot.api.common.ApiException
 import java.security.KeyPairGenerator
 import java.security.Signature
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
 import java.util.Base64
@@ -16,6 +17,34 @@ import tools.jackson.databind.ObjectMapper
 
 class GitHubRestClientTest {
 	private val objectMapper = ObjectMapper()
+
+	@Test
+	fun javaTransportAppliesTheConfiguredRequestTimeout() {
+		val timeout = Duration.ofSeconds(7)
+		val request = JavaGitHubHttpTransport(
+			GitHubProperties(
+				httpRequestTimeout = timeout,
+				monitoringAnalysisLeaseTimeout = Duration.ofMinutes(1),
+			),
+		).buildRequest(
+			method = "GET",
+			uri = java.net.URI("https://api.github.test/repos/acme/plot"),
+			headers = mapOf("Accept" to "application/json"),
+			body = null,
+		)
+
+		assertEquals(timeout, request.timeout().orElseThrow())
+	}
+
+	@Test
+	fun monitoringHttpEnvelopeMustBeShorterThanTheLease() {
+		assertFailsWith<IllegalArgumentException> {
+			GitHubProperties(
+				httpRequestTimeout = Duration.ofSeconds(30),
+				monitoringAnalysisLeaseTimeout = Duration.ofMinutes(2),
+			)
+		}
+	}
 
 	@Test
 	fun signsBoundedRs256AppJwtAndRequestsLeastPrivilegeRepositoryToken() {

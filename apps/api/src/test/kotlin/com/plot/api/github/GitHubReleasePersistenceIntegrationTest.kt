@@ -98,6 +98,39 @@ class GitHubReleasePersistenceIntegrationTest {
 	}
 
 	@Test
+	fun recoveredWorkerCannotCompleteAfterAReplacementClaim() {
+		val requestId = insertRequest(status = "QUEUED")
+		val claimedAt = Instant.parse("2026-07-30T00:00:00Z")
+		val workerA = requireNotNull(
+			persistence.claimNext("worker-a", claimedAt, Duration.ofMinutes(2)),
+		)
+		jdbcTemplate.update(
+			"update github_release_draft_requests set heartbeat_at = ? where id = ?",
+			java.sql.Timestamp.from(claimedAt.minus(Duration.ofMinutes(10))),
+			requestId,
+		)
+		assertEquals(1, persistence.recoverStaleClaims(claimedAt, Duration.ofMinutes(2)))
+		val workerB = requireNotNull(
+			persistence.claimNext("worker-b", claimedAt, Duration.ofMinutes(2)),
+		)
+		val beforeLateCompletion = loadReleaseRow(requestId)
+
+		assertFailsWith<RuntimeException> {
+			persistence.saveResolvedRange(
+				requestId = requestId,
+				transitionVersion = workerA.transitionVersion,
+				baseSha = "stale-base",
+				headSha = "stale-head",
+				boundaryReason = "STALE_WORKER",
+			)
+		}
+
+		assertEquals(workerA.transitionVersion + 2, workerB.transitionVersion)
+		assertEquals(beforeLateCompletion, loadReleaseRow(requestId))
+		assertEquals(ReleaseRow("RESOLVING", workerB.transitionVersion, "worker-b"), beforeLateCompletion)
+	}
+
+	@Test
 	fun concurrentWorkersCannotClaimALaterRequestBeforeItsEarlierScopeRequestFinishes() {
 		jdbcTemplate.update(
 			"""

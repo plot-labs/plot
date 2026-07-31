@@ -3,9 +3,10 @@ package com.plot.api.generation
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
-import kotlin.test.assertTrue
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import org.springframework.core.task.SyncTaskExecutor
 
 class GenerationRunDispatcherTest {
@@ -20,7 +21,7 @@ class GenerationRunDispatcherTest {
 	}
 
 	@Test
-	fun `dispatch re-arms after an unexpected drain failure`() {
+	fun `unexpected drain failure stops the current dispatch turn`() {
 		val attempts = AtomicInteger()
 		val retried = CountDownLatch(1)
 		val dispatcher = GenerationRunDispatcher(SyncTaskExecutor()) {
@@ -29,9 +30,9 @@ class GenerationRunDispatcherTest {
 			false
 		}
 
-		dispatcher.dispatch()
+		assertFailsWith<IllegalStateException> { dispatcher.dispatch() }
 
-		assertTrue(retried.await(2, TimeUnit.SECONDS))
-		assertEquals(2, attempts.get())
+		assertFalse(retried.await(1200, TimeUnit.MILLISECONDS))
+		assertEquals(1, attempts.get())
 	}
 }

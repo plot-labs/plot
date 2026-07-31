@@ -20,6 +20,7 @@ class GitHubReleaseAutomationConfiguration {
 		maxPoolSize = 1
 		queueCapacity = 1
 		setThreadNamePrefix("plot-github-release-")
+		setStrictEarlyShutdown(true)
 		setWaitForTasksToCompleteOnShutdown(true)
 		setAwaitTerminationSeconds(10)
 	}

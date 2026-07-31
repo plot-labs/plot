@@ -63,8 +63,14 @@ plot.ai.model=openai/gpt-5.4-nano
 plot.ai.routing-provider=openai
 plot.ai.allow-fallbacks=false
 plot.ai.content-logging-enabled=false
+plot.ai.worker-poll-delay=5s
+plot.ai.claim-timeout=10m
+plot.ai.retry-initial-delay=250ms
 spring.ai.model.chat=openai
 spring.ai.openai.api-key=${SPRING_AI_OPENAI_API_KEY}
+
+plot.github.http-request-timeout=20s
+plot.github.monitoring-analysis-lease-timeout=2m
 ```
 
 `openai/gpt-4o-mini-2024-07-18` is the other currently supported pinned model.
@@ -74,6 +80,14 @@ The corresponding GitHub deployment secret names are
 `PLOT_GITHUB_PRIVATE_KEY`, `PLOT_GITHUB_STATE_SECRET`, and
 `PLOT_GITHUB_WEBHOOK_SECRET`. Do not use an OpenAI key for this OpenRouter
 endpoint, and do not commit any value.
+
+The generation worker polls durable work every `plot.ai.worker-poll-delay`.
+Claims expire after `plot.ai.claim-timeout`, and a retryable provider failure
+uses `plot.ai.retry-initial-delay` as the first durable backoff. Repository
+monitoring can make up to four HTTP requests when releases are empty and tag
+fallback is required. Configuration validation therefore requires four times
+`plot.github.http-request-timeout` to remain strictly shorter than
+`plot.github.monitoring-analysis-lease-timeout`.
 
 `plot.github.release-automation-enabled` is a process-wide flag. There is no
 workspace or repository allowlist: when true, each worker polls globally and
@@ -141,17 +155,21 @@ An exact range with no usable commit or pull-request evidence becomes
 
 ## Operational queries
 
-The following examples are executable in `psql`. Set all four values first;
-every query deliberately applies all four identity filters:
+The following examples are executable in `psql`. Set the release identity and
+generation run values first. Release queries apply workspace, scope,
+installation, and repository filters; generation queries apply workspace and
+generation-run filters:
 
 ```sql
 \set workspace_id '00000000-0000-0000-0000-000000000000'
 \set source_scope_id '00000000-0000-0000-0000-000000000000'
 \set installation_id '12345678'
 \set repository_id '987654321'
+\set generation_run_id '00000000-0000-0000-0000-000000000000'
 ```
 
-Never paste returned source bodies or raw payloads into tickets or chat.
+Use the identity variables applicable to each query. Never paste returned
+source bodies or raw payloads into tickets or chat.
 
 Recent webhook disposition:
 
@@ -232,6 +250,31 @@ where r.workspace_id = :'workspace_id'::uuid
 order by r.heartbeat_at;
 ```
 
+Stale generation claims:
+
+```sql
+select g.id, g.status, g.claimed_by, g.transition_version, g.claimed_at,
+       g.heartbeat_at, g.next_attempt_at, g.updated_at
+from generation_runs g
+where g.workspace_id = :'workspace_id'::uuid
+  and g.id = :'generation_run_id'::uuid
+  and g.claimed_by is not null
+  and g.status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
+  and g.heartbeat_at < now() - interval '10 minutes';
+```
+
+Physical model attempts for one generation run:
+
+```sql
+select i.logical_call_index, i.attempt_no, i.role, i.status,
+       i.failure_code, i.prompt_token_count, i.completion_token_count,
+       i.total_token_count, i.latency_ms, i.started_at, i.finished_at
+from model_invocations i
+where i.workspace_id = :'workspace_id'::uuid
+  and i.generation_run_id = :'generation_run_id'::uuid
+order by i.logical_call_index, i.attempt_no;
+```
+
 ## Test boundary
 
 `GitHubReleaseAutomationIntegrationTest` is a core-worker vertical slice. It
@@ -256,10 +299,47 @@ The periodic worker recovers claims whose heartbeat exceeded the configured
 lease timeout. Recovery advances the transition version and requeues the same
 request; fencing prevents the stale worker from committing afterward.
 
+Generation has two separate retry levels:
+
+- A logical-step retry repeats one writer, reviewer, or rewriter call within
+  the same generation run. Every physical provider exchange receives its own
+  `model_invocations` row and incremented `attempt_no`, while all attempts keep
+  the same `logical_call_index` and workflow step.
+- A release-level generation retry is a user-visible retry after the generation
+  run has failed. It keeps the release request and creates a separately numbered
+  generation attempt and run.
+
+There is no retry hidden inside the model gateway. One
+`StructuredChatTransport.exchange` maps to one `model_invocations` row. Failed
+and outcome-unknown rows consume the model-call budget; token and latency
+metadata also count whenever the provider returned them.
+
+`LEASE_LOST_OUTCOME_UNKNOWN` means Plot lost ownership while a provider
+exchange was in flight. The provider may have completed the call even though
+Plot cannot safely accept the response. Recovery closes that invocation as
+failed, leaves the logical workflow step resumable, and lets a replacement
+worker create the next physical attempt. Provider calls can therefore repeat
+after a lost lease, but transition-version fencing permits only the current
+owner to persist a checkpoint, artifact, or terminal content pack.
+
 For a user-visible `FAILED` activity, use the release activity retry action only
 after fixing the cause. A retry keeps the same release request and creates at
 most one new, explicitly numbered generation attempt. Do not retry by inserting
 database rows.
+
+## Shutdown
+
+Generation, repository-monitoring, and release executors reject new work as
+soon as Spring shutdown begins. Each executor then waits up to 10 seconds for
+in-flight work, while the generation and release heartbeat schedulers are
+stopped through bean destruction. The datasource must remain available during
+that wait so the current fenced transition can finish.
+
+Set the deployment platform's termination grace period above Spring's
+10-second executor await bound, with additional time for application and
+datasource teardown. Do not configure a platform hard-kill at or below 10
+seconds. A task that cannot finish before the bound remains recoverable through
+its durable claim and transition version after the next process starts.
 
 ## Incident response
 

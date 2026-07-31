@@ -50,13 +50,7 @@ data class ModelCallMetadata(
 	val observationAttributes: Map<String, String>,
 	val gateway: String? = null,
 	val requestedModel: String? = null,
-	/** Physical provider exchanges represented by this logical call, including successful retries. */
-	val physicalCallCount: Int = 1,
 ) {
-	init {
-		require(physicalCallCount > 0) { "physicalCallCount must be positive" }
-	}
-
 	val servedModel: String?
 		get() = actualModel
 }

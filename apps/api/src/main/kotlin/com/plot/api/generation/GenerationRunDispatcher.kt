@@ -2,8 +2,6 @@ package com.plot.api.generation
 
 import org.springframework.core.task.TaskExecutor
 import org.springframework.core.task.TaskRejectedException
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.TimeUnit
 
 class GenerationRunDispatcher(
 	private val taskExecutor: TaskExecutor,
@@ -12,12 +10,8 @@ class GenerationRunDispatcher(
 	fun dispatch() {
 		try {
 			taskExecutor.execute {
-				try {
-					while (drainBatch()) {
-						// Continue in bounded batches until no runnable checkpoint remains.
-					}
-				} catch (_: RuntimeException) {
-					CompletableFuture.delayedExecutor(1, TimeUnit.SECONDS).execute(::dispatch)
+				while (drainBatch()) {
+					// Continue in bounded batches until no runnable checkpoint remains.
 				}
 			}
 		} catch (_: TaskRejectedException) {

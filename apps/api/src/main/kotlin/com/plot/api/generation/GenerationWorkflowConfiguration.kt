@@ -11,6 +11,10 @@ import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
 import org.springframework.transaction.support.TransactionTemplate
 import tools.jackson.databind.ObjectMapper
+import java.time.Clock
+import java.time.Duration
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
 
 @Configuration(proxyBeanMethods = false)
 class GenerationWorkflowConfiguration {
@@ -41,11 +45,32 @@ class GenerationWorkflowConfiguration {
 		workflowService: GenerationWorkflowService,
 		modelGateway: GenerationModelGateway,
 		properties: PlotAiProperties,
+		leaseFactory: GenerationRunLeaseFactory,
 	): GenerationRunWorker = GenerationRunWorker(
 		persistence,
 		workflowService,
 		modelGateway,
 		claimTimeout = properties.claimTimeout,
+		retryInitialDelay = properties.retryInitialDelay,
+		leaseFactory = leaseFactory,
+	)
+
+	@Bean(destroyMethod = "shutdown")
+	fun generationHeartbeatExecutor(): ScheduledExecutorService =
+		Executors.newSingleThreadScheduledExecutor { task ->
+			Thread(task, "plot-generation-heartbeat").apply { isDaemon = true }
+		}
+
+	@Bean
+	fun generationRunLeaseFactory(
+		@Qualifier("generationHeartbeatExecutor") heartbeatExecutor: ScheduledExecutorService,
+		persistence: GenerationPersistence,
+		properties: PlotAiProperties,
+	): GenerationRunLeaseFactory = ScheduledGenerationRunLeaseFactory(
+		executor = heartbeatExecutor,
+		heartbeatInterval = heartbeatInterval(properties.claimTimeout),
+		clock = Clock.systemUTC(),
+		renewClaim = persistence::renewClaim,
 	)
 
 	@Bean
@@ -54,6 +79,7 @@ class GenerationWorkflowConfiguration {
 		maxPoolSize = 1
 		queueCapacity = 1
 		setThreadNamePrefix("plot-generation-")
+		setStrictEarlyShutdown(true)
 		setWaitForTasksToCompleteOnShutdown(true)
 		setAwaitTerminationSeconds(10)
 	}
@@ -70,4 +96,11 @@ class GenerationWorkflowConfiguration {
 		dispatcher: GenerationRunDispatcher,
 		properties: PlotAiProperties,
 	): GenerationRunRecovery = GenerationRunRecovery(persistence, dispatcher, claimTimeout = properties.claimTimeout)
+
+	private fun heartbeatInterval(claimTimeout: Duration): Duration =
+		Duration.ofMillis(maxOf(MINIMUM_HEARTBEAT_MILLIS, claimTimeout.toMillis() / 3))
+
+	private companion object {
+		const val MINIMUM_HEARTBEAT_MILLIS = 10L
+	}
 }
