@@ -5,38 +5,38 @@ import { useState } from "react";
 
 const styleRules = [
   {
-    label: "Voice",
-    detail: "Keep the team's tone intact even when the draft starts from an AI-assisted diff.",
+    label: "Docs impact",
+    detail: "Suggest which documentation may need attention after the release review loop is proven.",
   },
   {
-    label: "Terminology",
-    detail: "Use product words the team already uses. Flag vague or borrowed jargon.",
+    label: "Customer update",
+    detail: "Turn the approved changelog into a customer-facing variant when that workflow is available.",
   },
   {
-    label: "Source",
-    detail: "Tie each important statement back to a PR, issue, release, or commit group via citations.",
+    label: "Voice rules",
+    detail: "Apply team terminology and approved examples after the core review path is working.",
   },
   {
-    label: "Brand guardrails",
-    detail: "Avoid timelines and guarantees the brand would not stand behind.",
+    label: "More sources",
+    detail: "Connect additional shipped-work sources only when design partners need them.",
   },
 ];
 
 const channels = [
   {
-    name: "Release note",
-    tone: "concise, customer-facing",
-    sample: "We removed two setup steps from onboarding and kept migration guidance in the first run.",
+    name: "Docs impact",
+    tone: "planned surface",
+    sample: "Plot will suggest documentation changes after the release review loop is proven.",
   },
   {
-    name: "Help doc",
-    tone: "instructional, precise",
-    sample: "Use the migration checklist before inviting teammates, especially when importing legacy roles.",
+    name: "Customer update",
+    tone: "planned surface",
+    sample: "Plot will translate an approved changelog into a customer-facing update.",
   },
   {
-    name: "Launch draft",
-    tone: "context-rich, evidence-backed",
-    sample: "The strongest proof is reduced setup time, backed by beta calls and PR #482.",
+    name: "Voice rules",
+    tone: "planned surface",
+    sample: "Plot will learn the team's terminology and approved style after the core workflow.",
   },
 ];
 
@@ -55,25 +55,26 @@ export function StyleSection() {
         <div className="grid gap-14 lg:grid-cols-[0.86fr_1.14fr] lg:gap-20 lg:items-start">
           <div className="landing-reveal">
               <span className="mb-6 inline-flex items-center gap-3 font-mono text-sm text-muted-foreground">
-                <span className="h-px w-8 bg-foreground/30" />
-              Voice & Style
+              <span className="h-px w-8 bg-foreground/30" />
+              Coming next
             </span>
             <h2 className="mb-8 font-display text-4xl tracking-tight lg:text-6xl">
-              Keep every update
+              Extend the release loop
               <br />
-              in your team&apos;s voice.
+              when it earns its place.
             </h2>
             <p className="mb-10 max-w-xl text-xl leading-relaxed text-muted-foreground">
-              AI can make code move faster, but it does not know how your team
-              explains change. Plot keeps voice, source citations, implementation
-              caveats, and draft output in one inspectable pack.
+              The private beta stays focused on a source-cited changelog that a
+              human can review and hand off. Docs impact suggestions,
+              customer-update variants, voice and style rules, and more sources
+              come next.
             </p>
 
             <div className="grid gap-px overflow-hidden rounded-xl border border-foreground/10 bg-foreground/10 sm:grid-cols-3">
               {[
-                ["Voice", "tone and terminology"],
-                ["Citations", "sources and caveats"],
-                ["Formats", "docs, changelog, launch"],
+                ["Docs", "impact suggestions"],
+                ["Customers", "approved variants"],
+                ["Voice", "rules and examples"],
               ].map(([label, value]) => (
                 <div className="bg-background p-5" key={label}>
                   <div className="mb-2 font-mono text-[10px] uppercase text-muted-foreground">
@@ -90,15 +91,15 @@ export function StyleSection() {
               <div className="flex flex-col gap-5 border-b border-foreground/10 px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <div className="font-mono text-[10px] uppercase text-muted-foreground">
-                    Voice, source, and citations
+                    Coming next
                   </div>
                   <div className="mt-1 font-medium text-foreground">
-                    One inspectable pack
+                    Planned surfaces
                   </div>
                 </div>
                 <div className="flex items-center gap-2 font-mono text-[10px] uppercase text-muted-foreground">
                   <Check className="size-3.5 text-foreground" />
-                  Sources attached
+                  After core loop
                 </div>
               </div>
 
@@ -106,7 +107,7 @@ export function StyleSection() {
                 <div className="border-b border-foreground/10 p-5 lg:border-b-0 lg:border-r">
                   <div className="mb-4 flex items-center gap-2 font-mono text-[10px] uppercase text-muted-foreground">
                     <SlidersHorizontal className="size-3.5" />
-                    Style rules
+                    Planned scope
                   </div>
                   <div className="space-y-3">
                     {styleRules.map((rule) => (
@@ -129,7 +130,7 @@ export function StyleSection() {
                   <div className="mb-4 flex items-center justify-between gap-4">
                     <div className="flex items-center gap-2 font-mono text-[10px] uppercase text-muted-foreground">
                       <MessageSquareText className="size-3.5" />
-                      Output draft
+                      Future variant
                     </div>
                     <div className="font-mono text-[10px] uppercase text-muted-foreground">
                       {active.tone}
@@ -159,7 +160,7 @@ export function StyleSection() {
                       {active.sample}
                     </p>
                     <div className="space-y-2 border-t border-foreground/10 pt-4">
-                      {["Matches team voice", "Sources attached", "Ready to copy outside Plot"].map(
+                      {["Planned after core loop", "Customer-reviewed", "Human handoff"].map(
                         (check) => (
                           <div
                             className="flex items-center justify-between gap-3 text-sm"
