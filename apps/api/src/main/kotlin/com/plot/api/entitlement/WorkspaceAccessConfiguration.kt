@@ -16,6 +16,7 @@ class WorkspaceAccessConfiguration(
 				"/api/account/bootstrap",
 				"/api/me",
 				"/api/polar/webhook",
+				"/api/github/webhook",
 			)
 	}
 }

@@ -96,6 +96,29 @@ class GitHubWebhookApiIntegrationTest {
 	}
 
 	@Test
+	fun webhookDeliveryDoesNotRequireWritableWorkspaceEntitlement() {
+		jdbcTemplate.update(
+			"update workspaces set plan = 'founding', entitlement_status = 'revoked', access_mode = 'read_only' where id = ?",
+			devContext.devWorkspaceId,
+		)
+		try {
+			val deliveryId = "delivery-${UUID.randomUUID()}"
+			val body = """
+				{"action":"published","installation":{"id":77},"repository":{"id":99},"release":{"tag_name":"v1.2.3"}}
+			""".trimIndent()
+
+			postWebhook(deliveryId, "release", body).andExpect { status { isAccepted() } }
+
+			assertEquals("IGNORED", latestDisposition())
+		} finally {
+			jdbcTemplate.update(
+				"update workspaces set plan = 'founding', entitlement_status = 'active', access_mode = 'full' where id = ?",
+				devContext.devWorkspaceId,
+			)
+		}
+	}
+
+	@Test
 	fun defaultBranchPushIsObservedWithoutQueuingReleaseOrGeneration() {
 		bindRepository(repositoryId = 99)
 
