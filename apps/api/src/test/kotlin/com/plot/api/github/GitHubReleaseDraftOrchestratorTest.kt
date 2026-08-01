@@ -4,6 +4,7 @@ import com.plot.api.common.ApiException
 import com.plot.api.common.WorkspacePrincipal
 import com.plot.api.generation.GenerationRunStatus
 import com.plot.api.generation.GenerationWorkflowState
+import io.micrometer.observation.tck.TestObservationRegistry
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
@@ -27,6 +28,28 @@ class GitHubReleaseDraftOrchestratorTest {
 		assertEquals(0, fixture.generation.created.size)
 		assertEquals(0, fixture.persistence.finished.size)
 		assertNull(fixture.persistence.linkedGeneration)
+	}
+
+	@Test
+	fun claimedReleaseCreatesOneAttemptObservationWithOpaqueCorrelations() {
+		val observations = TestObservationRegistry.create()
+		val fixture = fixture(resolvedRange(), observationRegistry = observations)
+		fixture.persistence.claims += fixture.request
+
+		assertEquals(1, fixture.worker.drain())
+		observations.assertThat().hasNumberOfObservationsWithNameEqualTo("plot.github.release.attempt", 1)
+		observations.assertThat().hasAnObservationWithAKeyValue("plot.release_request_id", fixture.request.id.toString())
+		observations.assertThat().hasAnObservationWithAKeyValue("plot.webhook_delivery_id", fixture.request.initialDeliveryId.toString())
+		observations.assertThat().hasAnObservationWithAKeyValue("plot.outcome", "SUCCEEDED")
+	}
+
+	@Test
+	fun emptyReleasePollDoesNotCreateAnObservation() {
+		val observations = TestObservationRegistry.create()
+		val fixture = fixture(resolvedRange(), observationRegistry = observations)
+
+		assertEquals(0, fixture.worker.drain())
+		observations.assertThat().doesNotHaveAnyObservation()
 	}
 
 	@Test
@@ -378,6 +401,7 @@ class GitHubReleaseDraftOrchestratorTest {
 		rangeResult: GitHubReleaseRangeResult,
 		evidence: GitHubReleaseEvidence = GitHubReleaseEvidence(EVIDENCE_ID, listOf(WRITING_BLOCK_ID)),
 		properties: GitHubProperties = GitHubProperties(releaseAutomationEnabled = true),
+		observationRegistry: TestObservationRegistry = TestObservationRegistry.create(),
 	): Fixture {
 		val persistence = FakeReleasePersistence()
 		val context = context()
@@ -405,6 +429,7 @@ class GitHubReleaseDraftOrchestratorTest {
 			FakeReleaseLeaseFactory(lease),
 			Clock.fixed(NOW, ZoneOffset.UTC),
 			workerId = "release-test-worker",
+			observationRegistry = observationRegistry,
 		)
 		return Fixture(
 			persistence,
