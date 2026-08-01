@@ -54,7 +54,7 @@ class GitHubReleaseDraftOrchestrator(
 	private val generationGateway: GitHubReleaseGenerationGateway,
 	private val evidenceGenerationBinder: GitHubReleaseEvidenceGenerationBinder,
 ) {
-	fun process(request: GitHubReleaseDraftRequest, lease: GitHubReleaseLease) {
+	fun process(request: GitHubReleaseDraftRequest, lease: GitHubReleaseLease): GitHubReleaseDraftStatus {
 		require(lease.workerId.isNotBlank()) { "Release worker ID is required" }
 		require(lease.transitionVersion == request.transitionVersion) {
 			"Release lease version does not match the claimed request"
@@ -73,10 +73,10 @@ class GitHubReleaseDraftOrchestrator(
 					"Bound release evidence observation does not match its request"
 				}
 				startAndLinkGeneration(request, context, principal, previouslyBound, lease)
-				return
+				return GitHubReleaseDraftStatus.GENERATING
 			}
 			when (val rangeResult = rangeResolver.resolve(context, request)) {
-				is GitHubReleaseRangeResult.NeedsRange -> return
+				is GitHubReleaseRangeResult.NeedsRange -> return GitHubReleaseDraftStatus.NEEDS_RANGE
 				is GitHubReleaseRangeResult.NoActivity -> {
 					lease.checkpoint()
 					lease.transition { transitionVersion ->
@@ -93,7 +93,7 @@ class GitHubReleaseDraftOrchestrator(
 						lease.transitionVersion,
 						GitHubReleaseDraftStatus.NO_ACTIVITY,
 					)
-					return
+					return GitHubReleaseDraftStatus.NO_ACTIVITY
 				}
 				is GitHubReleaseRangeResult.Resolved -> {
 					lease.checkpoint()
@@ -115,7 +115,7 @@ class GitHubReleaseDraftOrchestrator(
 							lease.transitionVersion,
 							GitHubReleaseDraftStatus.NO_ACTIVITY,
 						)
-						return
+						return GitHubReleaseDraftStatus.NO_ACTIVITY
 					}
 					lease.checkpoint()
 					var generation: GenerationWorkflowState? = null
@@ -131,6 +131,7 @@ class GitHubReleaseDraftOrchestrator(
 					}
 					lease.checkpoint()
 					linkGeneration(request, evidence, checkNotNull(generation), lease)
+					return GitHubReleaseDraftStatus.GENERATING
 				}
 			}
 		} catch (exception: RuntimeException) {
