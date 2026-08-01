@@ -40,30 +40,28 @@ export function HeroSection() {
         <div className="mb-8">
           <span className="inline-flex items-center gap-3 font-mono text-sm text-muted-foreground">
             <span className="h-px w-8 bg-foreground/30" />
-            Ship fast. Write less. Stay source-backed and on-style.
+            Shipped work. Review-ready changelog.
           </span>
         </div>
 
         <div className="mb-12">
           <h1 className="text-6xl font-display leading-[0.9] tracking-tight md:text-8xl lg:text-[8rem] xl:text-[8.75rem]">
-            <span className="block">AI made code</span>
-            <span className="block">ship faster.</span>
+            <span className="block">From shipped</span>
+            <span className="block">release to</span>
             <span className="block">
               <span className="relative inline-block align-baseline">
-                <span className="inline-flex whitespace-nowrap">Docs</span>
+                <span className="inline-flex whitespace-nowrap">review-ready</span>
                 <span className="absolute -bottom-2 left-0 right-0 h-3 bg-foreground/10" />
-              </span>{" "}
-              lag.
+              </span>{" "}changelog.
             </span>
           </h1>
         </div>
 
         <div className="max-w-xl">
           <p className="max-w-xl text-xl leading-relaxed text-muted-foreground lg:text-2xl">
-            For AI and devtool teams shipping every week. Plot turns merged PRs,
-            releases, and issues into source-backed, on-style changelogs, docs
-            updates, customer updates, and launch drafts — so you can edit, copy,
-            and publish outside Plot.
+            Connect one GitHub repository and let Plot resolve each published
+            release range into a source-cited changelog you can edit, copy, or
+            download. Publishing stays outside Plot.
           </p>
 
           <div className="mt-9 flex flex-col items-start gap-4 sm:flex-row">

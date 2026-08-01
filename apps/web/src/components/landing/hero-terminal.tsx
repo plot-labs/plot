@@ -4,19 +4,19 @@ import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 
 const terminalLines = [
-  "$ plot agent run release-pack --watch=week-24",
-  "source/pr-482       -> selected",
-  "source/release-note -> docs delta",
-  "voice/profile       -> product-led",
+  "$ plot release review",
+  "repository          -> connected",
+  "release boundary    -> exact",
+  "citations           -> attached",
   "",
-  "$ plot pack checks",
-  "style match         92%",
-  "citations attached  7",
-  "source map          ready",
+  "$ plot changelog checks",
+  "source review       ready",
+  "sentence status     visible",
+  "human approval      required",
   "",
-  "$ plot draft pack --handoff=copy",
-  "changelog           ready",
-  "docs update         typing...",
+  "$ plot changelog review",
+  "markdown            ready",
+  "publish             outside Plot",
 ];
 
 function TypedTerminalLines() {
@@ -96,9 +96,9 @@ export function HeroTerminal() {
 
               <div className="space-y-1.5 pt-6">
                 {[
-                  ["Voice", "92%"],
+                  ["Range", "exact"],
                   ["Cites", "7"],
-                  ["Pack", "3"],
+                  ["Handoff", "MD"],
                 ].map(([label, value]) => (
                   <div
                     className="border border-[#e8e0c8]/12 bg-[#e8e0c8]/[0.035] px-2.5 py-1.5"

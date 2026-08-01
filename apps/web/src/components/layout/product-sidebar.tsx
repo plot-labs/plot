@@ -7,25 +7,21 @@ import { useEffect, useRef, useState } from "react";
 import {
   Check,
   ChevronDown,
-  FileText,
-  FolderOpen,
   LogOut,
   Monitor,
   Moon,
   PackageOpen,
   PanelLeftClose,
   Puzzle,
-  Plus,
   Sun,
   UserRound,
 } from "lucide-react";
 
 import type { ProductTheme } from "@/components/layout/product-shell";
-import { plotApiClient, type WorkSessionSummary } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { href: "/sources", label: "Sources", icon: FolderOpen },
+  { href: "/integrations", label: "Integrations", icon: Puzzle },
   { href: "/packs", label: "Packs", icon: PackageOpen },
 ];
 
@@ -41,7 +37,7 @@ const themeOptions = [
   { value: "dark", label: "Dark", icon: Moon },
 ] satisfies Array<{ value: ProductTheme; label: string; icon: typeof Monitor }>;
 
-const appHomeHref = "/sessions";
+const appHomeHref = "/integrations";
 
 type Account = {
   user: { id: string; email: string; displayName: string };
@@ -51,7 +47,6 @@ type Account = {
 
 export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: ProductSidebarProps) {
   const pathname = usePathname();
-  const [sessions, setSessions] = useState<WorkSessionSummary[]>([]);
   const [account, setAccount] = useState<Account | null>(null);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
@@ -77,20 +72,11 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
     return () => { cancelled = true; };
   }, []);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    void plotApiClient.listSessions({ signal: controller.signal })
-      .then((value) => { if (!controller.signal.aborted) setSessions(value); })
-      .catch(() => undefined);
-    return () => controller.abort();
-  }, []);
-
   const currentWorkspace = account?.workspaces.find((item) => item.id === selectedWorkspaceId)
     ?? account?.workspaces.find((item) => item.id === account.defaultWorkspaceId)
     ?? account?.workspaces[0];
   const currentWorkspaceId = currentWorkspace?.id ?? selectedWorkspaceId;
   const currentWorkspaceName = currentWorkspace?.name ?? "Workspace";
-  const integrationsActive = pathname === "/integrations" || pathname.startsWith("/integrations/");
   const workspaceItems = account?.workspaces.map((item) => ({
     ...item,
     detail: item.role,
@@ -180,29 +166,6 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
           >
             <PanelLeftClose className="size-4" />
           </button>
-        </div>
-
-        <div className="space-y-1 px-3 pb-4">
-          <Link
-            href={appHomeHref}
-            className="flex w-full items-center gap-2 rounded-xl px-2.5 py-1.5 text-left text-[13px] font-medium text-black/70 transition hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10"
-          >
-            <Plus className="size-4" />
-            New session
-          </Link>
-          <Link
-            href="/integrations"
-            aria-current={integrationsActive ? "page" : undefined}
-            className={cn(
-              "flex w-full items-center gap-2 rounded-xl px-2.5 py-1.5 text-left text-[13px] font-medium transition",
-              integrationsActive
-                ? "bg-white/75 text-[#18181b] shadow-sm shadow-black/[0.03] dark:bg-white/10 dark:text-white"
-                : "text-black/70 hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10",
-            )}
-          >
-            <Puzzle className="size-4" />
-            Integrations
-          </Link>
         </div>
 
         <div ref={workspaceMenuRef} className="relative px-3 pb-4">
@@ -312,26 +275,7 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
           })}
         </nav>
 
-        <div className="px-3 text-[11px] font-medium uppercase text-black/35 dark:text-white/35">
-          Sessions
-        </div>
-
-        <div className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-3">
-          {sessions.map((session) => {
-            return (
-              <Link
-                key={session.id}
-                href={session.latestGenerationId
-                  ? `/sessions?session=${encodeURIComponent(session.id)}&generation=${encodeURIComponent(session.latestGenerationId)}`
-                  : `/sessions?session=${encodeURIComponent(session.id)}`}
-                className="group flex items-center gap-2 rounded-xl px-2.5 py-1.5 text-[13px] text-black/65 transition hover:bg-black/5 dark:text-white/65 dark:hover:bg-white/10"
-              >
-                <FileText className="size-3.5 shrink-0 text-black/40 dark:text-white/40" />
-                <span className="min-w-0 flex-1 truncate">{session.title || "Untitled session"}</span>
-              </Link>
-            );
-          })}
-        </div>
+        <div className="min-h-0 flex-1" />
 
         <div ref={profileMenuRef} className="relative border-t border-black/[0.06] px-3 py-3 dark:border-white/10">
           {profileMenuOpen && (

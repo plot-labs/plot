@@ -4,26 +4,26 @@ const securityFeatures = [
   {
     icon: Shield,
     title: "Workspace boundaries",
-    description: "Every source watch, agent run, Writing Block, update pack, citation, and voice rule belongs to one workspace.",
+    description: "The connected repository, release boundary, changelog, citations, and delivery history stay inside the selected workspace.",
   },
   {
     icon: Lock,
-    title: "Selected source access",
-    description: "Plot starts with configured sources the workspace can access and only prepares drafts from selected watches.",
+    title: "Selected GitHub access",
+    description: "Plot reads the one GitHub repository the workspace owner connects and does not broaden access on its own.",
   },
   {
     icon: Eye,
     title: "Source citations",
-    description: "Important statements in generated content stay linked to source blocks so you can inspect why the draft says what it says.",
+    description: "Important changelog statements stay linked to saved source evidence so you can inspect why the draft says what it says.",
   },
   {
     icon: FileCheck,
-    title: "Human publish outside Plot",
-    description: "Plot prepares docs and release content autonomously. You edit, copy, and publish on your own channels.",
+    title: "Human-controlled handoff",
+    description: "You review, edit, copy, or download the Markdown. Plot never publishes the changelog for you.",
   },
 ];
 
-const certifications = ["SOURCE-CITED", "ON-STYLE", "WORKSPACE-SCOPED", "HUMAN HANDOFF", "NO AUTO-PUBLISH"];
+const certifications = ["SOURCE-CITED", "SELECTED-REPO", "WORKSPACE-SCOPED", "HUMAN REVIEW", "NO AUTO-PUBLISH"];
 
 export function SecuritySection() {
   return (
@@ -42,8 +42,8 @@ export function SecuritySection() {
               confident fiction.
             </h2>
             <p className="text-xl text-muted-foreground leading-relaxed mb-12">
-              Plot should not invent product story. It shows which sources support
-              a draft, which voice rules shaped the wording, and leaves publish
+              Plot should not invent a product story. It shows which saved
+              sources support a changelog draft and leaves review and publish
               decisions with you outside Plot.
             </p>
 

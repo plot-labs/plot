@@ -5,43 +5,43 @@ import { useState } from "react";
 const steps = [
   {
     number: "I",
-    label: "Configure",
-    title: "Set the window and voice.",
+    label: "Connect",
+    title: "Connect one GitHub repository.",
     description:
-      "Choose the shipping window, release cadence, and shipped-work sources. Add the examples and rules that define how your team writes.",
+      "Choose the repository Plot should monitor. The private beta keeps the customer path focused on one release source.",
   },
   {
     number: "II",
-    label: "Agent drafts",
-    title: "Let Plot prepare the pack.",
+    label: "Release",
+    title: "Let Plot resolve the exact range.",
     description:
-      "The update agent imports shipped changes, proposes what matters, attaches source citations, and drafts each channel in the right style.",
+      "When a published release arrives, Plot stores the release boundary, gathers the change evidence, and prepares the next changelog draft.",
   },
   {
     number: "III",
-    label: "Handoff",
-    title: "Inspect, then publish outside Plot.",
+    label: "Review + handoff",
+    title: "Inspect citations, then export Markdown.",
     description:
-      "Humans and coding agents see the same pack, citations, caveats, and style guidance. You edit, copy, and publish on your own channels.",
+      "Edit the sentences that need your judgment, inspect their saved sources, then Copy or Download. Publishing stays on your existing channel.",
   },
 ];
 
 const sourceRows = [
-  { name: "PR #482", detail: "Onboarding import flow changed", meta: "Repo" },
-  { name: "Issue thread", detail: "Migration guardrail requested", meta: "Tracker" },
-  { name: "Release note", detail: "Role setup shipped", meta: "Release" },
+  { name: "Published release", detail: "A release boundary was received", meta: "GitHub" },
+  { name: "Pull requests", detail: "Changes inside the exact range", meta: "GitHub" },
+  { name: "Source snapshot", detail: "Citations saved for review", meta: "Plot" },
 ];
 
 const signalRows = [
-  { name: "Agent-picked change", detail: "New onboarding path is live", score: "91" },
-  { name: "Docs gap", detail: "Role setup needs migration language", score: "84" },
-  { name: "Launch decision", detail: "Lead with reduced setup time", score: "78" },
+  { name: "Release boundary", detail: "Base and head are fixed", score: "91" },
+  { name: "Cited sentence", detail: "Source is ready to inspect", score: "84" },
+  { name: "Human review", detail: "Edit before handoff", score: "78" },
 ];
 
 const planRows = [
-  { name: "Release brief", detail: "Narrative, citations, and owners", meta: "7 cites" },
-  { name: "Docs update", detail: "Steps, caveats, and linked sources", meta: "help" },
-  { name: "Launch draft", detail: "Customer impact with source chips", meta: "draft" },
+  { name: "Changelog draft", detail: "Narrative with saved citations", meta: "review" },
+  { name: "Sentence review", detail: "Edit and verify the important claims", meta: "human" },
+  { name: "Markdown handoff", detail: "Copy or download when ready", meta: "outside" },
 ];
 
 const lanes = [
@@ -75,9 +75,9 @@ export function HowItWorksSection() {
             Process
           </span>
           <h2 className="landing-reveal font-display text-4xl tracking-tight lg:text-6xl">
-            Let the agent prepare
+            Let Plot prepare
             <br />
-            <span className="text-background/50">updates your team approves.</span>
+            <span className="text-background/50">the changelog your team approves.</span>
           </h2>
         </div>
 
@@ -120,7 +120,7 @@ export function HowItWorksSection() {
                     Workspace
                   </div>
                   <div className="mt-1 text-sm text-background/80">
-                    Onboarding release / week 24
+                    Release review
                   </div>
                 </div>
                   <div className="font-mono text-[10px] uppercase text-background/45">

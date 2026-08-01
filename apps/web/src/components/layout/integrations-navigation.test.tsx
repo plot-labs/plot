@@ -36,18 +36,21 @@ describe("Integrations navigation", () => {
     const link = screen.getByRole("link", { name: "Integrations" });
     expect(link).toHaveAttribute("href", "/integrations");
     expect(link).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Packs" })).toHaveAttribute("href", "/packs");
+    expect(screen.queryByRole("link", { name: "Sources" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "New session" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Sessions", { selector: "div" })).not.toBeInTheDocument();
   });
 
-  it("uses actual sessions and their latest generation in sidebar links", async () => {
+  it("does not load or render session history", async () => {
     sidebarMocks.listSessions.mockResolvedValue([{
       id: "session-1", title: "Release notes", status: "OPEN", latestGenerationId: "run-1",
       lastActivityAt: null, createdAt: "2026-07-01T00:00:00Z", updatedAt: "2026-07-01T00:00:00Z",
     }]);
     render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
 
-    expect(await screen.findByRole("link", { name: "Release notes" })).toHaveAttribute(
-      "href",
-      "/sessions?session=session-1&generation=run-1",
-    );
+    await Promise.resolve();
+    expect(sidebarMocks.listSessions).not.toHaveBeenCalled();
+    expect(screen.queryByRole("link", { name: "Release notes" })).not.toBeInTheDocument();
   });
 });

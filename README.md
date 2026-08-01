@@ -67,4 +67,5 @@ API integration tests use PostgreSQL through Testcontainers.
 
 - [GitHub App development smoke test](docs/operations/github-app-development-smoke-test.md)
 - [GitHub release automation](docs/operations/github-release-automation.md)
+- [Private repository production certification](docs/operations/private-repository-production-certification.md)
 - [Polar subscription webhook](docs/operations/polar-subscription-webhook.md)

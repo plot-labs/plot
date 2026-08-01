@@ -11,7 +11,6 @@ const mocks = vi.hoisted(() => ({
   listRepositories: vi.fn(),
   createInstallationRequest: vi.fn(),
   connectRepository: vi.fn(),
-  importRepository: vi.fn(),
   getMonitoring: vi.fn(),
   retryMonitoring: vi.fn(),
   recheckAccess: vi.fn(),
@@ -35,7 +34,6 @@ vi.mock("@/lib/api-client", async () => {
       listGitHubRepositories: mocks.listRepositories,
       createGitHubInstallationRequest: mocks.createInstallationRequest,
       connectGitHubRepository: mocks.connectRepository,
-      importGitHubRepository: mocks.importRepository,
       getGitHubRepositoryMonitoring: mocks.getMonitoring,
       retryGitHubRepositoryMonitoring: mocks.retryMonitoring,
       recheckGitHubRepositoryAccess: mocks.recheckAccess,
@@ -79,7 +77,6 @@ describe("IntegrationsWorkspace", () => {
     mocks.listRepositories.mockReset().mockResolvedValue([]);
     mocks.createInstallationRequest.mockReset();
     mocks.connectRepository.mockReset();
-    mocks.importRepository.mockReset();
     mocks.getMonitoring.mockReset().mockResolvedValue(monitoring("COMPLETED"));
     mocks.retryMonitoring.mockReset();
     mocks.recheckAccess.mockReset();
@@ -109,9 +106,7 @@ describe("IntegrationsWorkspace", () => {
     expect(mocks.replace).toHaveBeenCalledWith("/integrations");
   });
 
-  it("connects the selected repository and imports one exact 30-day UTC window once", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    vi.setSystemTime(new Date("2026-07-22T12:34:56.000Z"));
+  it("connects the selected repository without importing a historical window", async () => {
     mocks.listConnections.mockResolvedValue([connection]);
     mocks.listRepositories.mockResolvedValue([repository]);
     let resolveConnection: ((value: {
@@ -124,38 +119,18 @@ describe("IntegrationsWorkspace", () => {
       status: string;
     }) => void) | undefined;
     mocks.connectRepository.mockImplementation(() => new Promise((resolve) => { resolveConnection = resolve; }));
-    mocks.importRepository.mockResolvedValue({
-      id: "import-1",
-      sourceScopeId: "scope-1",
-      from: "2026-06-22T12:34:56.000Z",
-      to: "2026-07-22T12:34:56.000Z",
-      status: "COMPLETED",
-      eligibleCount: 3,
-      blockCreatedCount: 2,
-      blockUpdatedCount: 1,
-      blockUnchangedCount: 0,
-      errorCode: null,
-      errorMessage: null,
-      startedAt: "2026-07-22T12:34:56.000Z",
-      completedAt: "2026-07-22T12:35:00.000Z",
-    });
 
     render(<IntegrationsWorkspace />);
     fireEvent.click(await screen.findByRole("radio", { name: /acme\/plot/i }));
-    const submit = screen.getByRole("button", { name: "Connect and import last 30 days" });
+    const submit = screen.getByRole("button", { name: "Connect repository" });
     fireEvent.click(submit);
     fireEvent.click(submit);
 
     expect(mocks.connectRepository).toHaveBeenCalledTimes(1);
     resolveConnection?.({ ...repository, id: "scope-1", status: "ACTIVE" });
 
-    await waitFor(() => expect(mocks.importRepository).toHaveBeenCalledTimes(1));
-    const [sourceScopeId, window] = mocks.importRepository.mock.calls[0] ?? [];
-    expect(sourceScopeId).toBe("scope-1");
-    expect(window.from).toMatch(/^2026-06-22T12:34:56\.\d{3}Z$/);
-    expect(window.to).toMatch(/^2026-07-22T12:34:56\.\d{3}Z$/);
-    expect(Date.parse(window.to) - Date.parse(window.from)).toBe(30 * 24 * 60 * 60 * 1000);
-    expect(await screen.findByRole("status")).toHaveTextContent("2 created, 1 updated");
+    expect(await screen.findByText("Repository monitoring")).toBeVisible();
+    expect(screen.queryByText(/30 days/)).not.toBeInTheDocument();
   });
 
   it("offers a retry after repository discovery fails", async () => {
@@ -256,17 +231,16 @@ describe("IntegrationsWorkspace", () => {
     expect(screen.getByRole("button", { name: "Reconnect GitHub" })).toBeVisible();
   });
 
-  it("turns an overlapping import into a recoverable status message", async () => {
+  it("does not expose a manual import action for an already connected repository", async () => {
     mocks.listConnections.mockResolvedValue([connection]);
     mocks.listRepositories.mockResolvedValue([{ ...repository, id: "scope-1", status: "ACTIVE" }]);
-    mocks.importRepository.mockRejectedValue(new PlotApiError(409, "IMPORT_ALREADY_RUNNING", "busy"));
 
     render(<IntegrationsWorkspace />);
     fireEvent.click(await screen.findByRole("radio", { name: /acme\/plot/i }));
-    fireEvent.click(screen.getByRole("button", { name: "Import last 30 days" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("An import is already running");
-    expect(screen.getByRole("button", { name: "Retry" })).toBeVisible();
+    expect(await screen.findByText("Repository monitoring")).toBeVisible();
+    expect(screen.queryByRole("button", { name: /import/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/30 days/)).not.toBeInTheDocument();
   });
 
   it("shows connection state without owner controls for a non-owner", async () => {
@@ -277,7 +251,7 @@ describe("IntegrationsWorkspace", () => {
 
     expect(await screen.findByText("Workspace owner must connect GitHub.")).toBeVisible();
     expect(screen.getByText("GitHub is connected for this workspace")).toBeVisible();
-    expect(screen.queryByRole("button", { name: /Connect GitHub|Import last 30 days/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Connect GitHub|Connect repository|Import/ })).not.toBeInTheDocument();
     expect(mocks.listRepositories).not.toHaveBeenCalled();
   });
 

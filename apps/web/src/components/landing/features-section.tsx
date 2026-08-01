@@ -22,31 +22,31 @@ type CapabilityFeature = {
 const features: CapabilityFeature[] = [
   {
     number: "01",
-    title: "Autonomous Shipping Watch",
+    title: "Connect one release source",
     description:
-      "Choose a shipping window and release cadence. Plot uses connected shipped-work sources to prepare the changes that matter.",
+      "Connect one GitHub repository. Plot watches published releases and resolves the exact base and head range when a release arrives.",
     visual: "blocks",
   },
   {
     number: "02",
-    title: "Agent-prepared, human-led",
+    title: "Review the factual story",
     description:
-      "The update agent proposes meaningful shipped changes, docs gaps, customer impact, and caveats. You inspect the pack, then publish outside Plot.",
+      "Plot prepares a changelog draft with saved citations. Inspect the source behind each claim, edit the wording, and keep review in human hands.",
     visual: "signals",
   },
   {
     number: "03",
-    title: "Voice, Style, and Citations",
+    title: "Hand off when it is ready",
     description:
-      "Approved examples and explicit style rules guide tone and terminology, while important statements stay tied to source blocks through citations.",
-    visual: "style",
+      "Copy the reviewed draft or download it as Markdown. Plot prepares the handoff; you publish on the channel your team already uses.",
+    visual: "pack",
   },
   {
     number: "04",
-    title: "Source-backed Update Packs",
+    title: "Coming next",
     description:
-      "Generate on-style changelogs, release notes, docs updates, customer updates, and launch drafts from one shipped-change set.",
-    visual: "pack",
+      "Docs impact suggestions, customer-update variants, voice and style rules, and additional shipped-work sources are planned after the release review loop.",
+    visual: "style",
   },
 ];
 
@@ -132,27 +132,27 @@ function FlowPath({
 function BlocksVisual() {
   const sources = [
     {
-      name: "Repo",
+      name: "PRs",
       Icon: GitPullRequest,
       className: "left-[154px] top-[86px] -rotate-12 z-20",
     },
     {
-      name: "Issues",
+      name: "Release",
       Icon: MessageSquare,
       className: "left-[234px] top-[58px] rotate-4 z-40",
     },
     {
-      name: "Releases",
+      name: "Range",
       Icon: Tags,
       className: "left-[314px] top-[86px] rotate-12 z-20",
     },
     {
-      name: "Docs",
+      name: "Draft",
       Icon: ScrollText,
       className: "left-[194px] top-[126px] rotate-3 z-10",
     },
     {
-      name: "Notes",
+      name: "Cites",
       Icon: FileCode2,
       className: "left-[278px] top-[126px] -rotate-5 z-10",
     },
@@ -182,9 +182,9 @@ function BlocksVisual() {
 
 function SignalsVisual() {
   const signalRows = [
-    { label: "Agent-picked Change", score: "91" },
-    { label: "Docs Gap", score: "84" },
-    { label: "Customer Impact", score: "78" },
+    { label: "Release boundary", score: "91" },
+    { label: "Cited claim", score: "84" },
+    { label: "Needs review", score: "78" },
   ];
 
   return (
@@ -210,10 +210,10 @@ function SignalsVisual() {
         <div className="absolute left-[360px] top-5 w-[178px] rounded-lg border border-foreground/10 bg-background/95 p-3 shadow-sm">
           <div className="mb-2.5 flex items-center justify-between">
             <span className="font-mono text-[10px] uppercase text-muted-foreground">
-              Change queue
+            Review queue
             </span>
             <span className="rounded-full bg-foreground/5 px-2 py-1 font-mono text-[9px] text-muted-foreground">
-              agent
+              draft
             </span>
           </div>
           <div className="space-y-2">
@@ -247,9 +247,9 @@ function SignalsVisual() {
 
 function StyleMemoryVisual() {
   const rules = [
-    { label: "Cadence", score: 82, width: "62%" },
-    { label: "Vocabulary", score: 85, width: "70%" },
-    { label: "Proof", score: 88, width: "78%" },
+    { label: "Source", score: 82, width: "62%" },
+    { label: "Excerpt", score: 85, width: "70%" },
+    { label: "Status", score: 88, width: "78%" },
   ];
 
   return (
@@ -263,7 +263,7 @@ function StyleMemoryVisual() {
         </FlowLayer>
 
         <div className="absolute left-8 top-[47px] w-[140px] space-y-3">
-          {["Samples", "Rules", "Channels"].map((label) => (
+          {["Source", "Excerpt", "State"].map((label) => (
             <div
               className="rounded-md border border-foreground/10 bg-background/90 px-3 py-3.5 text-center font-mono text-[10px] uppercase text-muted-foreground"
               key={label}
@@ -276,10 +276,10 @@ function StyleMemoryVisual() {
         <div className="absolute left-[210px] top-[36px] h-[178px] w-[150px] overflow-hidden rounded-lg border border-foreground/15 bg-background p-3 shadow-[0_24px_70px_rgb(18_17_15_/_0.08)]">
           <div className="mb-2.5 flex items-center justify-between gap-3">
             <div className="font-mono text-[10px] uppercase text-foreground">
-              Voice + citations
+            Claim review
             </div>
             <div className="rounded-full bg-foreground/5 px-2 py-0.5 font-mono text-[8px] uppercase text-muted-foreground">
-              locked
+              saved
             </div>
           </div>
           <div className="space-y-1">
@@ -308,13 +308,13 @@ function StyleMemoryVisual() {
         >
           <div className="mb-2.5 flex items-center gap-2 font-mono text-[10px] uppercase text-muted-foreground">
             <Sparkles className="size-3.5 text-foreground" />
-            Style check
+            Review check
           </div>
           <p className="mb-3 text-[12px] font-medium leading-snug text-foreground">
-            On-style and source-backed.
+            Ready to review.
           </p>
           <div className="grid grid-cols-3 gap-1">
-            {["Terms", "Caveat", "Proof"].map((label, index) => (
+            {["Range", "Citation", "Edit"].map((label, index) => (
               <div
                 className="rounded-md border border-foreground/10 bg-foreground/[0.025] px-1 py-1.5 text-center font-mono text-[8px] uppercase text-muted-foreground"
                 key={label}
@@ -331,7 +331,7 @@ function StyleMemoryVisual() {
 }
 
 function PackVisual() {
-  const channels = ["Changelog", "Release note", "Help doc"];
+  const channels = ["Changelog", "Copy", "Download"];
 
   return (
     <FeatureShell>
@@ -344,10 +344,10 @@ function PackVisual() {
 
         <div className="absolute left-[42px] top-[70px] w-[190px] rounded-lg border border-foreground/15 bg-background p-4 shadow-[0_18px_54px_rgb(18_17_15_/_0.08)]">
           <div className="mb-3 font-mono text-[10px] uppercase text-muted-foreground">
-            Release narrative
+            Review-ready draft
           </div>
           <p className="mb-4 text-sm font-medium leading-snug text-foreground">
-            Source-backed product update.
+            Source-cited changelog.
           </p>
           <div className="flex gap-1.5">
             {["Brief", "3 sources"].map((chip) => (
@@ -364,7 +364,7 @@ function PackVisual() {
         <div className="absolute left-[350px] top-[28px] w-[182px] rounded-lg border border-foreground/10 bg-background/95 p-3 shadow-sm">
           <div className="mb-2.5 flex items-center gap-2 font-mono text-[10px] uppercase text-muted-foreground">
             <Sparkles className="size-3.5 text-foreground" />
-            Release pack
+            Handoff
           </div>
           <div className="space-y-2">
             {channels.map((channel) => (
@@ -438,13 +438,13 @@ export function FeaturesSection() {
         <div className="mx-auto mb-16 max-w-4xl text-center lg:mb-20">
           <span className="mb-6 inline-flex items-center gap-3 font-mono text-sm text-muted-foreground">
             <span className="h-px w-8 bg-foreground/30" />
-            Capabilities
+            Current product
             <span className="h-px w-8 bg-foreground/30" />
           </span>
           <h2 className="landing-reveal text-5xl font-display tracking-tight lg:text-7xl">
-            From raw context
+            From a shipped release
             <br />
-            <span className="text-muted-foreground">to content that keeps up.</span>
+            <span className="text-muted-foreground">to a changelog you can approve.</span>
           </h2>
         </div>
 

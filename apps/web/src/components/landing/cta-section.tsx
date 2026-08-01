@@ -24,9 +24,9 @@ export function CtaSection() {
 	                </h2>
 
 	                <p className="mb-10 max-w-xl text-xl leading-relaxed text-muted-foreground">
-	                  Pick the shipping window, set the release cadence, and let
-	                  Plot prepare source-backed, on-style docs, release notes,
-	                  customer updates, and launch drafts you publish outside Plot.
+                  Connect one GitHub repository. When a published release arrives,
+                  Plot prepares a source-cited changelog you can review, copy, or
+                  download and publish on your existing channel.
                 </p>
 
                 <WaitlistForm />
