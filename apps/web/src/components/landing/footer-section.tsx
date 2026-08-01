@@ -41,9 +41,8 @@ export function FooterSection() {
               </Link>
 
               <p className="text-muted-foreground leading-relaxed mb-8 max-w-xs">
-                AI coding made shipping faster than updates can follow. Plot is
-                the autonomous update agent for source-backed, on-style docs,
-                changelogs, customer updates, and launch drafts.
+                Plot turns a shipped GitHub release into a source-cited changelog
+                your team can review and hand off in Markdown.
               </p>
 
               {/* Social Links */}

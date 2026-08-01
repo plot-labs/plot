@@ -11,13 +11,12 @@ import {
   PlotApiError,
   type GitHubConnection,
   type GitHubAccessCheckTrigger,
-  type GitHubImport,
   type GitHubReleaseActivity,
   type GitHubRepository,
   type GitHubRepositoryMonitoring,
 } from "@/lib/api-client";
 
-type IntegrationAction = "install" | "import" | null;
+type IntegrationAction = "install" | "connect" | null;
 
 export function IntegrationsWorkspace() {
   const router = useRouter();
@@ -36,7 +35,6 @@ export function IntegrationsWorkspace() {
   const actionRef = useRef<IntegrationAction>(null);
   const [message, setMessage] = useState<string | null>(callbackError ? callbackMessage(callbackError) : null);
   const [messageRequestId, setMessageRequestId] = useState<string | null>(null);
-  const [lastImport, setLastImport] = useState<GitHubImport | null>(null);
   const [monitoring, setMonitoring] = useState<GitHubRepositoryMonitoring | null>(null);
   const [monitoringRetrying, setMonitoringRetrying] = useState(false);
   const [monitoringReloadNonce, setMonitoringReloadNonce] = useState(0);
@@ -232,29 +230,17 @@ export function IntegrationsWorkspace() {
     }
   };
 
-  const importLast30Days = async () => {
-    if (!activeConnection || !selectedRepository || actionRef.current) return;
-    actionRef.current = "import";
-    setAction("import");
+  const connectRepository = async () => {
+    if (!activeConnection || !selectedRepository || selectedRepository.id || actionRef.current) return;
+    actionRef.current = "connect";
+    setAction("connect");
     setMessage(null);
     setMessageRequestId(null);
     try {
-      const connected = selectedRepository.id
-        ? selectedRepository
-        : await plotApiClient.connectGitHubRepository(
-          activeConnection.id,
-          selectedRepository.externalRepositoryId,
-        );
-      const sourceScopeId = connected.id;
-      if (!sourceScopeId) throw new Error("GitHub repository was connected without a source scope");
-
-      const to = new Date();
-      const from = new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
-      const result = await plotApiClient.importGitHubRepository(sourceScopeId, {
-        from: from.toISOString(),
-        to: to.toISOString(),
-      });
-      setLastImport(result);
+      const connected = await plotApiClient.connectGitHubRepository(
+        activeConnection.id,
+        selectedRepository.externalRepositoryId,
+      );
       setRepositories((current) => current.map((repository) => (
         repository.externalRepositoryId === connected.externalRepositoryId ? connected : repository
       )));
@@ -356,7 +342,7 @@ export function IntegrationsWorkspace() {
             <div className="min-w-0 flex-1">
               <h2 className="text-lg font-semibold text-black/85 dark:text-white/88">GitHub</h2>
               <p className="mt-1 text-sm leading-5 text-black/50 dark:text-white/50">
-                Import merged pull requests from one repository for the previous 30 days.
+                Connect one repository to monitor its releases and prepare review-ready changelog drafts.
               </p>
             </div>
             {!isLoading && (
@@ -377,8 +363,6 @@ export function IntegrationsWorkspace() {
               onDismiss={() => setMessage(null)}
             />
           )}
-          {lastImport && <ImportSummary result={lastImport} />}
-
           {isLoading ? (
             <Loading />
           ) : isOwner === null ? null : !isOwner ? (
@@ -402,7 +386,7 @@ export function IntegrationsWorkspace() {
                 <div>
                   <h3 className="text-sm font-semibold text-black/80 dark:text-white/82">Repository access</h3>
                   <p className="mt-1 text-sm text-black/48 dark:text-white/48">
-                    Select one repository, then connect it and import the last 30 days.
+                    Select one repository to connect and monitor its releases.
                   </p>
                 </div>
                 <button
@@ -462,22 +446,20 @@ export function IntegrationsWorkspace() {
                 </div>
               )}
 
-              {repositories.length > 0 && (
+              {repositories.length > 0 && selectedRepository && !selectedRepository.id && (
                 <button
                   type="button"
-                  onClick={() => { void importLast30Days(); }}
+                  onClick={() => { void connectRepository(); }}
                   disabled={
-                    !selectedRepository
-                    || !activeConnection
+                    !activeConnection
                     || repositoryLoadFailed
                     || connectionNeedsReconnect
-                    || (selectedRepository.id !== null && selectedRepository.status !== "ACTIVE")
                     || action !== null
                   }
                   className="mt-5 inline-flex items-center gap-2 rounded-full bg-black px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-black"
                 >
-                  {action === "import" && <LoaderCircle className="size-4 animate-spin" />}
-                  {selectedRepository?.id ? "Import last 30 days" : "Connect and import last 30 days"}
+                  {action === "connect" && <LoaderCircle className="size-4 animate-spin" />}
+                  Connect repository
                 </button>
               )}
 
@@ -885,14 +867,6 @@ function StatusMessage({
   );
 }
 
-function ImportSummary({ result }: { result: GitHubImport }) {
-  return (
-    <div role="status" className="mt-5 rounded-[10px] border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 dark:border-emerald-400/30 dark:bg-emerald-500/10 dark:text-emerald-100">
-      Import complete: {result.blockCreatedCount} created, {result.blockUpdatedCount} updated, {result.blockUnchangedCount} unchanged, {result.eligibleCount} eligible.
-    </div>
-  );
-}
-
 function callbackMessage(value: string) {
   if (value === "invalid") return "The GitHub installation link expired. Try connecting again.";
   if (value === "unauthorized") return "Only the workspace owner can connect GitHub.";
@@ -907,7 +881,6 @@ function errorMessage(error: unknown) {
     if (error.code === "GITHUB_NOT_FOUND") return "The previous GitHub installation was replaced or removed. Reconnect GitHub to restore repository access.";
     if (error.code === "GITHUB_ACCESS_DENIED" || error.code === "CONNECTION_INACTIVE" || error.code === "REPOSITORY_INACTIVE") return "GitHub access was revoked. Reconnect GitHub, then retry.";
     if (error.code === "FORBIDDEN") return "Workspace owner must connect GitHub.";
-    if (error.code === "IMPORT_ALREADY_RUNNING") return "An import is already running for this repository. Wait for it to finish, then retry.";
     if (error.code === "GITHUB_PROVIDER_UNAVAILABLE") return "GitHub is temporarily unavailable. Try again shortly.";
     return "GitHub request failed. Try again.";
   }
