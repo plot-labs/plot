@@ -2,6 +2,8 @@
 
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { PanelLeftOpen } from "lucide-react";
 
 import { ProductSidebar } from "@/components/layout/product-sidebar";
@@ -10,6 +12,7 @@ import { cn } from "@/lib/utils";
 export type ProductTheme = "system" | "light" | "dark";
 
 export function ProductShell({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
   const [theme, setTheme] = useState<ProductTheme>("light");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [systemDark, setSystemDark] = useState(() => {
@@ -63,9 +66,43 @@ export function ProductShell({ children }: { children: ReactNode }) {
               <PanelLeftOpen className="size-4" />
             </button>
           )}
-          <main className="min-h-0 w-full flex-1 overflow-hidden">{children}</main>
+          <MobileProductNavigation pathname={pathname} />
+          <main className="min-h-0 w-full flex-1 overflow-y-auto lg:overflow-hidden">{children}</main>
         </div>
       </div>
     </div>
+  );
+}
+
+function MobileProductNavigation({ pathname }: { pathname: string }) {
+  const items = [
+    { href: "/integrations", label: "Integrations" },
+    { href: "/packs", label: "Packs" },
+  ];
+
+  return (
+    <nav
+      aria-label="Product navigation"
+      className="flex shrink-0 items-center gap-1 border-b border-black/[0.08] bg-white px-4 py-2 text-sm dark:border-white/10 dark:bg-[#111113] lg:hidden"
+    >
+      {items.map((item) => {
+        const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            aria-current={active ? "page" : undefined}
+            className={cn(
+              "rounded-full px-3 py-1.5 font-medium transition",
+              active
+                ? "bg-black text-white dark:bg-white dark:text-black"
+                : "text-black/55 hover:bg-black/[0.04] dark:text-white/55 dark:hover:bg-white/10",
+            )}
+          >
+            {item.label}
+          </Link>
+        );
+      })}
+    </nav>
   );
 }
