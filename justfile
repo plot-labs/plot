@@ -12,11 +12,15 @@ install:
 
 # Start the Spring Boot API
 dev-api:
-    cd apps/api && ./gradlew bootRun
+    cd apps/api && set -a && source .env.local && set +a && ./gradlew bootRun
 
 # Start the Next.js app
 dev-web:
     pnpm --filter @plot/web dev
+
+# Forward Polar sandbox webhooks to the local API
+polar-listen:
+    polar listen http://127.0.0.1:8080/api/polar/webhook
 
 # Test the Spring Boot API
 test-api:
