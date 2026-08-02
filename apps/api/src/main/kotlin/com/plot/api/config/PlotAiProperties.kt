@@ -69,8 +69,9 @@ data class PlotAiProperties(
 		const val OPENROUTER_GATEWAY = "openrouter"
 		const val OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 		const val GPT_5_4_NANO_MODEL = "openai/gpt-5.4-nano"
+		const val GPT_5_6_LUNA_PRO_MODEL = "openai/gpt-5.6-luna-pro"
 		const val GPT_4O_MINI_MODEL = "openai/gpt-4o-mini-2024-07-18"
-		val SUPPORTED_MODELS = setOf(GPT_5_4_NANO_MODEL, GPT_4O_MINI_MODEL)
+		val SUPPORTED_MODELS = setOf(GPT_5_4_NANO_MODEL, GPT_5_6_LUNA_PRO_MODEL, GPT_4O_MINI_MODEL)
 		private val ROUTING_PROVIDER_SLUG = Regex("[a-z0-9][a-z0-9._-]*(?:/[a-z0-9][a-z0-9._-]*)*")
 	}
 }

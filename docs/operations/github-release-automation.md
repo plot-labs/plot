@@ -62,7 +62,7 @@ plot.github.web-base-url=https://github.com
 
 plot.ai.enabled=true
 plot.ai.provider=openrouter
-plot.ai.model=openai/gpt-5.4-nano
+plot.ai.model=openai/gpt-5.6-luna-pro
 plot.ai.routing-provider=openai
 plot.ai.allow-fallbacks=false
 plot.ai.content-logging-enabled=false

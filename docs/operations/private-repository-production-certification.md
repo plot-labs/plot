@@ -56,7 +56,7 @@ secret values. The candidate must expose the following non-secret state:
 
 ```text
 PLOT_AI_ENABLED=true
-PLOT_AI_MODEL=openai/gpt-5.4-nano
+PLOT_AI_MODEL=openai/gpt-5.6-luna-pro
 PLOT_AI_ROUTINGPROVIDER=openai
 PLOT_AI_ALLOWFALLBACKS=false
 PLOT_AI_CONTENTLOGGINGENABLED=false
