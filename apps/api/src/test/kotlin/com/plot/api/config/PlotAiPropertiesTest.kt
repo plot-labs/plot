@@ -17,4 +17,13 @@ class PlotAiPropertiesTest {
 			PlotAiProperties(workerPollDelay = Duration.ZERO)
 		}
 	}
+
+	@Test
+	fun gpt56LunaProIsAnAllowedOpenRouterProfile() {
+		PlotAiProperties(
+			enabled = true,
+			model = PlotAiProperties.GPT_5_6_LUNA_PRO_MODEL,
+			routingProvider = "openai",
+		)
+	}
 }
