@@ -25,6 +25,8 @@ import java.time.Instant
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
@@ -61,12 +63,19 @@ class ContentPackApiIntegrationTest {
 				jsonPath("$.totalItems") { value(org.hamcrest.Matchers.greaterThanOrEqualTo(1)) }
 		}
 
-		mockMvc.get("/api/content-packs/${fixture.packId}").andExpect {
+		val initial = mockMvc.get("/api/content-packs/${fixture.packId}").andExpect {
 			status { isOk() }
 			header { string("Cache-Control", "no-store") }
-			jsonPath("$.variant.sentences[0].verdict") { value("SUPPORTED") }
-			jsonPath("$.variant.sentences[0].citations[0].snapshotExcerpt") { value("PRIVATE SNAPSHOT EXCERPT") }
-		}
+			jsonPath("$.variant.revisionNumber") { value(1) }
+			jsonPath("$.variant.revisionId") { exists() }
+			jsonPath("$.variant.sources.length()") { value(1) }
+			jsonPath("$.variant.sentences[0].body") { value("Supported sentence.") }
+			jsonPath("$.variant.sentences[0].citations[0].sourceLabel") { value("PR 1") }
+			jsonPath("$.variant.sentences[0].citations[0].snapshotExcerpt") { doesNotExist() }
+		}.andReturn().response.contentAsString
+		assertFalse(initial.contains("\"verdict\""))
+		assertFalse(initial.contains("PRIVATE SNAPSHOT EXCERPT"))
+		assertFalse(initial.contains("\"sourceAccess\""))
 
 		mockMvc.patch("/api/content-variants/${fixture.variantId}/sentences/${fixture.firstSentenceId}") {
 			contentType = MediaType.APPLICATION_JSON
@@ -74,9 +83,10 @@ class ContentPackApiIntegrationTest {
 		}.andExpect {
 			status { isOk() }
 			header { string("Cache-Control", "no-store") }
+			jsonPath("$.variant.revisionNumber") { value(2) }
 			jsonPath("$.variant.sentences[0].origin") { value("USER_MODIFIED") }
-			jsonPath("$.variant.sentences[0].verdict") { value("USER_MODIFIED") }
-			jsonPath("$.variant.sentences[0].citations[0].status") { value("STALE") }
+			jsonPath("$.variant.sentences[0].revisionNumber") { value(2) }
+			jsonPath("$.variant.sentences[0].citations.length()") { value(0) }
 			jsonPath("$.variant.sentences[1].body") { value("Stable sentence.") }
 		}
 
@@ -89,15 +99,17 @@ class ContentPackApiIntegrationTest {
 			jsonPath("$.error") { value("STALE_SENTENCE_REVISION") }
 		}
 
-		mockMvc.post("/api/content-variants/${fixture.variantId}/exports") {
+		val rejected = mockMvc.post("/api/content-variants/${fixture.variantId}/exports") {
 			contentType = MediaType.APPLICATION_JSON
-			content = """{"acknowledgeUnresolved":false,"disposition":"COPY"}"""
+			content = """{"expectedRevisionNumber":2,"acknowledgeUnresolved":false,"disposition":"COPY"}"""
 		}.andExpect {
 			status { isConflict() }
 			jsonPath("$.error") { value("EXPORT_CONFIRMATION_REQUIRED") }
-			jsonPath("$.details.sentenceIds[0]") { value(fixture.firstSentenceId.toString()) }
-			jsonPath("$.details.revisionIds.length()") { value(1) }
-		}
+			jsonPath("$.details.warnings[0].sentenceNumber") { value(1) }
+			jsonPath("$.details.warnings[0].excerpt") { value("User revised sentence.") }
+		}.andReturn().response.contentAsString
+		assertFalse(rejected.contains(fixture.firstSentenceId.toString()))
+		assertFalse(rejected.contains("revisionIds"))
 		val acknowledgedRevision = jdbcTemplate.queryForObject(
 			"select id from content_variant_sentence_revisions where sentence_id = ? and is_current",
 			UUID::class.java, fixture.firstSentenceId,
@@ -109,6 +121,7 @@ class ContentPackApiIntegrationTest {
 		mockMvc.post("/api/content-variants/${fixture.variantId}/exports") {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
+				"expectedRevisionNumber" to 3,
 				"acknowledgeUnresolved" to true,
 				"acknowledgedRevisionIds" to listOf(acknowledgedRevision),
 				"disposition" to "COPY",
@@ -122,6 +135,8 @@ class ContentPackApiIntegrationTest {
 		val download = export(fixture.variantId, "DOWNLOAD")
 		assertEquals(copy, download)
 		kotlin.test.assertFalse(copy.contains("PRIVATE SNAPSHOT EXCERPT"))
+		assertFalse(copy.contains("[1]"))
+		assertFalse(copy.contains("## Sources"))
 		assertEquals(2, jdbcTemplate.queryForObject(
 			"select count(*) from generation_export_events where generation_run_id = ? and status = 'SUCCEEDED'",
 			Int::class.java, fixture.runId,
@@ -133,55 +148,85 @@ class ContentPackApiIntegrationTest {
 	}
 
 	@Test
-	fun `current revision without reviewer result is review-failed and excluded from export`() {
+	fun `whole artifact save preserves stable sentence ids and rejects stale tabs`() {
 		val fixture = readyPack()
-		val currentRevisionId = jdbcTemplate.queryForObject(
-			"select id from content_variant_sentence_revisions where sentence_id = ? and is_current",
-			UUID::class.java,
+		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """
+				{"expectedRevisionNumber":1,"lexicalContent":{"root":{"children":[]}},"statements":[
+				 {"id":"${fixture.firstSentenceId}","orderIndex":0,"body":"Latest unreviewed rewrite."},
+				 {"id":"${fixture.secondSentenceId}","orderIndex":1,"body":"Stable sentence."}
+				]}
+			""".trimIndent()
+		}.andExpect {
+			status { isOk() }
+			jsonPath("$.variant.revisionNumber") { value(2) }
+			jsonPath("$.variant.sentences[0].id") { value(fixture.firstSentenceId.toString()) }
+			jsonPath("$.variant.sentences[0].revisionNumber") { value(2) }
+			jsonPath("$.variant.sentences[0].body") { value("Latest unreviewed rewrite.") }
+			jsonPath("$.variant.sentences[1].id") { value(fixture.secondSentenceId.toString()) }
+			jsonPath("$.variant.sentences[1].revisionNumber") { value(1) }
+			jsonPath("$.variant.sources.length()") { value(0) }
+		}
+		assertEquals(listOf("STALE", "STATEMENT_CHANGED"), jdbcTemplate.queryForObject(
+			"select status, stale_reason from sentence_citations where sentence_id = ? and status = 'STALE' limit 1",
+			{ rs, _ -> listOf(rs.getString(1), rs.getString(2)) },
 			fixture.firstSentenceId,
-		)!!
-		jdbcTemplate.update(
-			"update content_variant_sentence_revisions set is_current = false where id = ?",
-			currentRevisionId,
-		)
-		jdbcTemplate.update(
-			"""
-			insert into content_variant_sentence_revisions (
-				id, workspace_id, generation_run_id, content_variant_id, sentence_id,
-				revision_no, origin, body, is_current, created_at
-			) values (?, ?, ?, ?, ?, 2, 'REWRITTEN', 'Latest unreviewed rewrite.', true, now())
-			""".trimIndent(),
-			UUID.randomUUID(),
-			devContext.devWorkspaceId,
-			fixture.runId,
-			fixture.variantId,
-			fixture.firstSentenceId,
-		)
-		jdbcTemplate.update(
-			"update generation_runs set status = 'NEEDS_REVIEW', error_code = 'MALFORMED_OUTPUT' where id = ?",
-			fixture.runId,
-		)
+		))
 
-			mockMvc.get("/api/content-packs/${fixture.packId}").andExpect {
-				status { isOk() }
-				jsonPath("$.variant.sentences[0].verdict") { value("REVIEW_FAILED") }
-				jsonPath("$.variant.sentences[0].reason") { value("MALFORMED_OUTPUT") }
-			}
-			mockMvc.post("/api/content-variants/${fixture.variantId}/exports") {
-				contentType = MediaType.APPLICATION_JSON
-				content = objectMapper.writeValueAsString(mapOf(
-					"acknowledgeUnresolved" to false,
-					"disposition" to "COPY",
-				))
-			}.andExpect {
-				status { isOk() }
-				jsonPath("$.unresolvedCount") { value(0) }
-				jsonPath("$.text") { value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("Latest unreviewed rewrite."))) }
-			}
+		val latest = mockMvc.get("/api/content-variants/${fixture.variantId}").andExpect {
+			status { isOk() }
+			jsonPath("$.variant.sentences[0].body") { value("Latest unreviewed rewrite.") }
+		}.andReturn().response.contentAsString
+		assertFalse(latest.contains("\"verdict\""))
+		assertFalse(latest.contains("\"reason\""))
+
+		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"expectedRevisionNumber":1,"lexicalContent":{"root":{"children":[]}},"statements":[]}"""
+		}.andExpect {
+			status { isConflict() }
+			jsonPath("$.error") { value("STALE_ARTIFACT_REVISION") }
 		}
 
+		val rejected = mockMvc.post("/api/content-variants/${fixture.variantId}/exports") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"expectedRevisionNumber":2,"acknowledgeUnresolved":false,"disposition":"COPY"}"""
+		}.andExpect {
+			status { isConflict() }
+			jsonPath("$.error") { value("EXPORT_CONFIRMATION_REQUIRED") }
+			jsonPath("$.details.warnings[0].sentenceNumber") { value(1) }
+			jsonPath("$.details.warnings[0].excerpt") { value("Latest unreviewed rewrite.") }
+		}.andReturn().response.contentAsString
+		assertFalse(rejected.contains(fixture.firstSentenceId.toString()))
+		assertTrue(export(fixture.variantId, "COPY").contains("Latest unreviewed rewrite."))
+	}
+
 	@Test
-	fun `retained citation reports lost source access without changing its snapshot`() {
+	fun `empty whole artifact revision remains empty instead of falling back to legacy sentences`() {
+		val fixture = readyPack()
+		val emptySave = """{"expectedRevisionNumber":1,"lexicalContent":{"root":{"children":[]}},"statements":[]}"""
+		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = emptySave
+		}.andExpect {
+			status { isOk() }
+			jsonPath("$.variant.revisionNumber") { value(2) }
+			jsonPath("$.variant.sentences.length()") { value(0) }
+			jsonPath("$.variant.sources.length()") { value(0) }
+		}
+		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = emptySave.replace("\"expectedRevisionNumber\":1", "\"expectedRevisionNumber\":2")
+		}.andExpect {
+			status { isOk() }
+			jsonPath("$.variant.revisionNumber") { value(3) }
+			jsonPath("$.variant.sentences.length()") { value(0) }
+		}
+	}
+
+	@Test
+	fun `lost source access is retained internally but omitted from public sources`() {
 		val fixture = readyPack()
 		val namespaceId = UUID.randomUUID()
 		val scopeId = UUID.randomUUID()
@@ -207,12 +252,12 @@ class ContentPackApiIntegrationTest {
 
 		mockMvc.get("/api/content-packs/${fixture.packId}").andExpect {
 			status { isOk() }
-			jsonPath("$.variant.sentences[0].citations[0].sourceAccess") { value("LOST") }
-			jsonPath("$.variant.sentences[0].citations[0].snapshotExcerpt") { value("PRIVATE SNAPSHOT EXCERPT") }
+			jsonPath("$.variant.sources.length()") { value(0) }
+			jsonPath("$.variant.sentences[0].citations.length()") { value(0) }
 		}
 	}
 
-	private fun export(variantId: UUID, disposition: String): String {
+	private fun export(variantId: UUID, disposition: String, includeSources: Boolean = false): String {
 		val revisionIds = jdbcTemplate.queryForList(
 			"select id from content_variant_sentence_revisions where content_variant_id = ? and is_current and origin = 'USER_MODIFIED'",
 			UUID::class.java, variantId,
@@ -220,6 +265,12 @@ class ContentPackApiIntegrationTest {
 		val response = mockMvc.post("/api/content-variants/$variantId/exports") {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
+				"expectedRevisionNumber" to jdbcTemplate.queryForObject(
+					"select revision_no from content_variant_revisions where content_variant_id = ? and is_current",
+					Int::class.java,
+					variantId,
+				),
+				"includeSources" to includeSources,
 				"acknowledgeUnresolved" to true,
 				"acknowledgedRevisionIds" to revisionIds,
 				"disposition" to disposition,
@@ -264,11 +315,11 @@ class ContentPackApiIntegrationTest {
 			"select id from content_variant_sentences where generation_run_id = ? order by order_index",
 			{ rs, _ -> rs.getObject(1, UUID::class.java) }, runId,
 		)
-		return Fixture(runId, row["pack_id"] as UUID, row["variant_id"] as UUID, sentenceIds.first())
+		return Fixture(runId, row["pack_id"] as UUID, row["variant_id"] as UUID, sentenceIds.first(), sentenceIds[1])
 	}
 }
 
-private data class Fixture(val runId: UUID, val packId: UUID, val variantId: UUID, val firstSentenceId: UUID)
+private data class Fixture(val runId: UUID, val packId: UUID, val variantId: UUID, val firstSentenceId: UUID, val secondSentenceId: UUID)
 
 private class PackGateway(private val evidenceId: UUID) : GenerationModelGateway {
 	private lateinit var sentenceIds: List<UUID>
