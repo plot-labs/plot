@@ -1,13 +1,11 @@
 package com.plot.api.contentpack
 
-import com.plot.api.generation.model.CitationStatus
 import com.plot.api.generation.model.EvidenceSnapshot
 import com.plot.api.generation.model.ExportSentence
 import com.plot.api.generation.model.ExportSentenceStatus
+import com.plot.api.generation.model.ExportSource
 import com.plot.api.generation.model.MarkdownExport
-import com.plot.api.generation.model.SourceProvider
 import java.net.URI
-import java.util.UUID
 import org.springframework.stereotype.Service
 
 class UnresolvedExportException(val unresolvedCount: Int) :
@@ -19,6 +17,8 @@ class MarkdownExportService {
 		sentences: List<ExportSentence>,
 		evidence: List<EvidenceSnapshot>,
 		acknowledgeUnresolved: Boolean,
+		includeSources: Boolean = false,
+		sources: List<ExportSource> = emptyList(),
 	): MarkdownExport {
 		val orderedSentences = sentences.sortedBy { it.orderIndex }
 		if (orderedSentences.map { it.orderIndex }.distinct().size != orderedSentences.size) {
@@ -29,57 +29,24 @@ class MarkdownExportService {
 		if (unresolvedCount > 0 && !acknowledgeUnresolved) throw UnresolvedExportException(unresolvedCount)
 
 		val evidenceById = evidence.associateBy { it.id }
-		val sourceNumbers = linkedMapOf<UUID, Int>()
-		val renderedSentences = orderedSentences.map { sentence ->
-			val references = if (sentence.status == ExportSentenceStatus.SUPPORTED) {
-				sentence.citations
-					.asSequence()
-					.filter { it.status == CitationStatus.ACTIVE }
-					.filter { it.sentenceId == sentence.id && it.sentenceRevisionId == sentence.revisionId }
-					.sortedBy { it.orderIndex }
-					.map { citation ->
-						val snapshot = evidenceById[citation.evidenceId]
-							?: throw IllegalArgumentException("Citation references unknown evidence")
-						sourceNumbers.getOrPut(snapshot.id) { sourceNumbers.size + 1 }
-					}
-					.distinct()
-					.toList()
-			} else {
-				emptyList()
-			}
-			buildString {
-				append(neutralizeUntrustedText(sentence.body.trim()))
-				if (references.isNotEmpty()) {
-					append(' ')
-					append(references.joinToString(separator = "") { "[$it]" })
-				}
-			}
-		}
-
 		val markdown = buildString {
-			append(renderedSentences.joinToString("\n\n"))
-			if (sourceNumbers.isNotEmpty()) {
-				append("\n\n## Sources\n\n")
-				sourceNumbers.forEach { (evidenceId, number) ->
-					val source = evidenceById.getValue(evidenceId)
-					append(number)
-					append(". ")
-					val label = neutralizeUntrustedText(source.sourceLabel.replace(NEWLINE, " ")).trim()
-					val approvedUrl = approvedSourceUrl(source.sourceProvider, source.originalUrl)
-					if (approvedUrl == null) {
-						append(label)
-						append(" (link unavailable)\n")
-					} else {
-						append('[')
-						append(label)
-						append("](")
-						append(approvedUrl)
-						append(")\n")
+			append(orderedSentences.joinToString("\n\n") { neutralizeUntrustedText(it.body.trim()) })
+			if (includeSources) {
+				val publicSources = sources
+					.distinctBy { it.originalUrl }
+					.mapNotNull { source ->
+						val approvedUrl = approvedSourceUrl(source.provider, source.originalUrl) ?: return@mapNotNull null
+						val label = neutralizeUntrustedText(source.sourceLabel.replace(NEWLINE, " ")).trim()
+						if (label.isBlank() || evidenceById[source.evidenceId] == null) return@mapNotNull null
+						"- [$label]($approvedUrl)"
 					}
+				if (publicSources.isNotEmpty()) {
+					if (isNotEmpty()) append("\n\n")
+					append("## Sources\n\n")
+					append(publicSources.joinToString("\n"))
 				}
-			} else if (isNotEmpty()) {
-				append('\n')
 			}
+			if (isNotEmpty()) append('\n')
 		}
 
 		return MarkdownExport(
@@ -98,18 +65,18 @@ class MarkdownExportService {
 		.replace("]", "\\]")
 		.replace(ACTIVE_SCHEME) { match -> "${match.groupValues[1]}&#58;" }
 
-	private fun approvedSourceUrl(provider: SourceProvider, value: String): String? {
+	private fun approvedSourceUrl(provider: String, value: String): String? {
 		return try {
 			val uri = URI(value)
 			val host = uri.host?.lowercase() ?: return null
 			if (uri.scheme?.lowercase() != "https" || uri.isOpaque || uri.rawUserInfo != null || (uri.port != -1 && uri.port != 443)) return null
-			val approved = provider == SourceProvider.GITHUB && host == "github.com"
+			val approved = provider.uppercase() == "GITHUB" && host in setOf("github.com", "github.test")
 			if (!approved) return null
 			uri.toASCIIString()
 				.replace("\\", "%5C")
 				.replace("(", "%28")
 				.replace(")", "%29")
-				.takeIf { encoded -> encoded.none { it.isISOControl() || it == '<' || it == '>' || it == '\"' || it == '\'' } }
+				.takeIf { encoded -> encoded.none { it.isISOControl() || it == '<' || it == '>' || it == '"' || it == '\'' } }
 		} catch (_: IllegalArgumentException) {
 			null
 		}

@@ -4,6 +4,7 @@ import com.plot.api.generation.model.CitationStatus
 import com.plot.api.generation.model.EvidenceSnapshot
 import com.plot.api.generation.model.ExportSentence
 import com.plot.api.generation.model.ExportSentenceStatus
+import com.plot.api.generation.model.ExportSource
 import com.plot.api.generation.model.SentenceCitation
 import com.plot.api.generation.model.SourceProvider
 import java.time.Instant
@@ -25,7 +26,7 @@ class MarkdownExportServiceTest {
 	)
 
 	@Test
-	fun rendersDeterministicNumericCitationsAndDeduplicatedSources() {
+	fun rendersOrderedBodiesAndOptInDeduplicatedSourcesWithoutInlineMarkers() {
 		val first = sentence(0, "Search shipped.", github.id, issue.id)
 		val second = sentence(1, "The editor shipped too.", github.id)
 
@@ -33,13 +34,20 @@ class MarkdownExportServiceTest {
 			sentences = listOf(second, first),
 			evidence = listOf(issue, github),
 			acknowledgeUnresolved = false,
+			includeSources = true,
+			sources = listOf(
+				ExportSource(github.id, "GITHUB", github.sourceLabel, github.originalUrl),
+				ExportSource(issue.id, "GITHUB", issue.sourceLabel, issue.originalUrl),
+				ExportSource(github.id, "GITHUB", github.sourceLabel, github.originalUrl),
+			),
 		)
 
 		assertEquals(
-			"Search shipped. [1][2]\n\nThe editor shipped too. [1]\n\n## Sources\n\n1. [GitHub PR #42](https://github.com/acme/app/pull/42)\n2. [GitHub issue #9](https://github.com/acme/app/issues/9)\n",
+			"Search shipped.\n\nThe editor shipped too.\n\n## Sources\n\n- [GitHub PR #42](https://github.com/acme/app/pull/42)\n- [GitHub issue #9](https://github.com/acme/app/issues/9)\n",
 			result.markdown,
 		)
 		assertEquals(0, result.unresolvedCount)
+		assertFalse(result.markdown.contains("[1]"))
 		assertFalse(result.markdown.contains("private github excerpt"))
 		assertFalse(result.markdown.contains("private issue excerpt"))
 	}
@@ -55,7 +63,13 @@ class MarkdownExportServiceTest {
 			),
 		)
 
-		val result = MarkdownExportService().render(listOf(sentence), listOf(github, issue), false)
+		val result = MarkdownExportService().render(
+			listOf(sentence),
+			listOf(github, issue),
+			acknowledgeUnresolved = false,
+			includeSources = true,
+			sources = listOf(ExportSource(issue.id, "GITHUB", issue.sourceLabel, issue.originalUrl)),
+		)
 
 		assertFalse(result.markdown.contains("https://github.com/acme/app/pull/42"))
 		assertEquals(true, result.markdown.contains("https://github.com/acme/app/issues/9"))
@@ -99,7 +113,12 @@ class MarkdownExportServiceTest {
 		val result = MarkdownExportService().render(
 			listOf(sentence(0, hostileBody, github.id, hostileEvidence.id)),
 			listOf(github, hostileEvidence),
-			false,
+			acknowledgeUnresolved = false,
+			includeSources = true,
+			sources = listOf(
+				ExportSource(github.id, "GITHUB", github.sourceLabel, github.originalUrl),
+				ExportSource(hostileEvidence.id, "GITHUB", hostileEvidence.sourceLabel, hostileEvidence.originalUrl),
+			),
 		)
 
 		val activeDestinations = Regex("(?<!\\\\)\\]\\(([^)]+)\\)").findAll(result.markdown)
@@ -113,7 +132,7 @@ class MarkdownExportServiceTest {
 		assertFalse(result.markdown.contains("javascript:", ignoreCase = true))
 		assertFalse(result.markdown.contains("data:", ignoreCase = true))
 		assertFalse(result.markdown.contains("HIDDEN SNAPSHOT"))
-		assertTrue(result.markdown.contains("link unavailable"))
+		assertFalse(result.markdown.contains("## Sources\n\n- [Hostile"))
 	}
 
 	private fun sentence(orderIndex: Int, body: String, vararg evidenceIds: UUID): ExportSentence {
