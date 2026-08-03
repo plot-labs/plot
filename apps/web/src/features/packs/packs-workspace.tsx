@@ -156,15 +156,20 @@ function GeneratedPackDetail({
   return (
     <article className="mx-auto max-w-4xl space-y-4 pt-4 sm:pt-10">
       <div className="rounded-xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/[0.04]">
-        <div className="text-xs font-semibold uppercase tracking-[0.08em] text-black/42 dark:text-white/42">
-          Generated pack
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <div className="text-xs font-semibold uppercase tracking-[0.08em] text-black/42 dark:text-white/42">
+              Generated pack
+            </div>
+            <h1 className="mt-2 text-2xl font-semibold text-black/88 dark:text-white/90">
+              {pack.title ?? "Generated changelog"}
+            </h1>
+            <p className="mt-1 text-sm text-black/52 dark:text-white/52">
+              {pack.status}
+            </p>
+          </div>
+          <ExportDialog pack={pack} client={plotApiClient} />
         </div>
-        <h1 className="mt-2 text-2xl font-semibold text-black/88 dark:text-white/90">
-          {pack.title ?? "Generated changelog"}
-        </h1>
-        <p className="mt-1 text-sm text-black/52 dark:text-white/52">
-          {pack.status}
-        </p>
       </div>
       <CitedDraftEditor
         pack={pack}
@@ -176,7 +181,6 @@ function GeneratedPackDetail({
         }
         onPackChange={onPackChange}
       />
-      <ExportDialog pack={pack} client={plotApiClient} />
     </article>
   );
 }
