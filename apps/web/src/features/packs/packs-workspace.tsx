@@ -173,12 +173,7 @@ function GeneratedPackDetail({
       </div>
       <CitedDraftEditor
         pack={pack}
-        onEditSentence={(sentence, body) =>
-          plotApiClient.editSentence(pack.variant.id, sentence.id, {
-            expectedRevisionNumber: sentence.revisionNumber,
-            body,
-          })
-        }
+        onSaveArtifact={(input) => plotApiClient.saveContentVariant(pack.variant.id, input)}
         onPackChange={onPackChange}
       />
     </article>
