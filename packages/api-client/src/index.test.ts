@@ -177,10 +177,10 @@ describe("Plot API client", () => {
   it("preserves stable structured errors and details", async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
       Response.json(
-        {
-          error: "EXPORT_CONFIRMATION_REQUIRED",
-          message: "Confirm export",
-          details: { sentenceIds: ["sentence-1"] },
+		{
+			error: "EXPORT_CONFIRMATION_REQUIRED",
+			message: "Confirm export",
+			details: { warnings: [{ key: "warning-1", sentenceNumber: 2, excerpt: "A claim" }] },
         },
         { status: 409 },
       ),
@@ -188,10 +188,10 @@ describe("Plot API client", () => {
     const client = createPlotApiClient({ fetch: fetcher });
 
     await expect(client.exportVariant("variant-1", { acknowledgeUnresolved: false, disposition: "COPY" })).rejects.toMatchObject<PlotApiError>({
-      code: "EXPORT_CONFIRMATION_REQUIRED",
-      status: 409,
-      details: { sentenceIds: ["sentence-1"] },
-    });
+			code: "EXPORT_CONFIRMATION_REQUIRED",
+			status: 409,
+			details: { warnings: [{ key: "warning-1", sentenceNumber: 2, excerpt: "A claim" }] },
+		});
 
 		const modelClient = createPlotApiClient({
 			fetch: vi.fn<typeof fetch>().mockResolvedValue(
@@ -202,9 +202,62 @@ describe("Plot API client", () => {
 			code: "MODEL_NOT_CONFIGURED",
 			status: 503,
 		});
-  });
+	});
 
-  it("forwards edit and export contracts without provider fields", async () => {
+	it("loads and saves the whole artifact with revision-bound source export inputs", async () => {
+		const fetcher = vi.fn<typeof fetch>()
+			.mockResolvedValueOnce(Response.json({ id: "pack-1", variant: { id: "variant-1", revisionNumber: 3, sentences: [], sources: [] } }))
+			.mockResolvedValueOnce(Response.json({ id: "pack-1", variant: { id: "variant-1", revisionNumber: 4, sentences: [], sources: [] } }))
+			.mockResolvedValueOnce(Response.json({
+				exportId: "export-1",
+				artifactRevisionId: "artifact-4",
+				artifactRevisionNumber: 4,
+				disposition: "DOWNLOAD",
+				filename: "draft.md",
+				mediaType: "text/markdown;charset=UTF-8",
+				text: "Draft",
+				unresolvedCount: 0,
+				warningAcknowledged: false,
+				includeSources: true,
+			}));
+		const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
+		const controller = new AbortController();
+		const lexicalContent = { root: { children: [] } };
+		const statements = [{ id: "sentence-1", orderIndex: 0, body: "Draft" }];
+
+		await client.getContentVariant("variant-1", { signal: controller.signal });
+		await client.saveContentVariant("variant-1", { expectedRevisionNumber: 3, lexicalContent, statements });
+		await client.exportVariant("variant-1", {
+			expectedRevisionNumber: 4,
+			includeSources: true,
+			acknowledgeUnresolved: false,
+			acknowledgedWarningKeys: [],
+			disposition: "DOWNLOAD",
+		});
+
+		expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+			"/api/plot/content-variants/variant-1",
+			"/api/plot/content-variants/variant-1",
+			"/api/plot/content-variants/variant-1/exports",
+		]);
+		expect(fetcher.mock.calls[1]?.[1]).toMatchObject({
+			method: "PATCH",
+			body: JSON.stringify({ expectedRevisionNumber: 3, lexicalContent, statements }),
+		});
+		expect(fetcher.mock.calls[2]?.[1]).toMatchObject({
+			method: "POST",
+			body: JSON.stringify({
+				expectedRevisionNumber: 4,
+				includeSources: true,
+				acknowledgeUnresolved: false,
+				acknowledgedWarningKeys: [],
+				disposition: "DOWNLOAD",
+			}),
+		});
+		expect(new Headers(fetcher.mock.calls[1]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
+	});
+
+	it("forwards edit and export contracts without provider fields", async () => {
     const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => Response.json({ ok: true }));
     const client = createPlotApiClient({ fetch: fetcher });
 
