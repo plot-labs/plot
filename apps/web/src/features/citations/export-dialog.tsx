@@ -48,24 +48,32 @@ export function ExportDialog({ pack, client }: { pack: ContentPack; client: Plot
     .filter((sentence) => sentence !== undefined) ?? [];
 
   return (
-    <section aria-label="Export changelog" className="rounded-xl border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-white/[0.04]">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-sm font-semibold">Export changelog</h2>
-          <p className="mt-1 text-xs leading-5 text-black/52 dark:text-white/52">Copy and download use the same reviewed export.</p>
-        </div>
-        <div className="flex gap-2">
-          <button type="button" disabled={Boolean(pending)} onClick={() => void requestExport("COPY", false)} className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-black px-3 text-sm font-semibold text-white disabled:opacity-40 dark:bg-white dark:text-black sm:flex-none" aria-label="Copy changelog">
-            <Copy className="size-4" /> Copy
-          </button>
-          <button type="button" disabled={Boolean(pending)} onClick={() => void requestExport("DOWNLOAD", false)} className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg border border-black/12 px-3 text-sm font-semibold disabled:opacity-40 dark:border-white/15 sm:flex-none" aria-label="Download changelog">
-            <Download className="size-4" /> Download
-          </button>
-        </div>
+    <section aria-label="Export changelog" className="flex min-w-0 flex-col items-end gap-2 sm:max-w-[24rem]">
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          disabled={Boolean(pending)}
+          onClick={() => void requestExport("COPY", false)}
+          title="Copy changelog"
+          aria-label="Copy changelog"
+          className="inline-flex size-10 items-center justify-center rounded-lg text-black/45 transition hover:bg-black/5 hover:text-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:pointer-events-none disabled:opacity-40 dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white/75 dark:focus-visible:ring-offset-[#18181b]"
+        >
+          <Copy aria-hidden="true" className="size-4" />
+        </button>
+        <button
+          type="button"
+          disabled={Boolean(pending)}
+          onClick={() => void requestExport("DOWNLOAD", false)}
+          title="Download changelog"
+          aria-label="Download changelog"
+          className="inline-flex size-10 items-center justify-center rounded-lg text-black/45 transition hover:bg-black/5 hover:text-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:pointer-events-none disabled:opacity-40 dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white/75 dark:focus-visible:ring-offset-[#18181b]"
+        >
+          <Download aria-hidden="true" className="size-4" />
+        </button>
       </div>
 
       {confirmation ? (
-        <div role="alertdialog" aria-labelledby="export-warning-title" aria-describedby="export-warning-description" className="mt-4 rounded-lg border border-amber-300/70 bg-amber-50 p-3 dark:border-amber-400/25 dark:bg-amber-400/[0.07]">
+        <div role="alertdialog" aria-labelledby="export-warning-title" aria-describedby="export-warning-description" className="w-full rounded-lg border border-amber-300/70 bg-amber-50 p-3 dark:border-amber-400/25 dark:bg-amber-400/[0.07]">
           <div className="flex items-start gap-2">
             <ShieldAlert className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-300" />
             <div className="min-w-0 flex-1">
@@ -79,7 +87,7 @@ export function ExportDialog({ pack, client }: { pack: ContentPack; client: Plot
                         <button
                           type="button"
                           onClick={() => focusSentence(sentence.id)}
-                          className="block max-w-full truncate text-left font-medium underline underline-offset-2"
+                          className="block max-w-full truncate rounded-sm text-left font-medium underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1"
                         >
                           Sentence {sentence.orderIndex + 1} — “{sentence.body}”
                         </button>
@@ -91,14 +99,22 @@ export function ExportDialog({ pack, client }: { pack: ContentPack; client: Plot
                 )}
               </div>
             </div>
-            <button type="button" onClick={() => setConfirmation(null)} className="inline-flex size-9 items-center justify-center rounded-lg" aria-label="Cancel export warning"><X className="size-4" /></button>
+            <button
+              type="button"
+              onClick={() => setConfirmation(null)}
+              className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-black/55 transition hover:bg-black/5 hover:text-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1 dark:text-white/55 dark:hover:bg-white/10 dark:hover:text-white/85"
+              aria-label="Cancel export warning"
+              title="Cancel export warning"
+            >
+              <X aria-hidden="true" className="size-4" />
+            </button>
           </div>
-          <button autoFocus type="button" disabled={Boolean(pending)} onClick={() => void requestExport(confirmation.disposition, true, confirmation.revisionIds)} className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg bg-amber-950 px-3 text-sm font-semibold text-white disabled:opacity-40 dark:bg-amber-200 dark:text-amber-950">
-            <Check className="size-4" /> Confirm and {confirmation.disposition === "COPY" ? "copy" : "download"}
+          <button autoFocus type="button" disabled={Boolean(pending)} onClick={() => void requestExport(confirmation.disposition, true, confirmation.revisionIds)} className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg bg-amber-950 px-3 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-40 dark:bg-amber-200 dark:text-amber-950">
+            <Check aria-hidden="true" className="size-4" /> Confirm and {confirmation.disposition === "COPY" ? "copy" : "download"}
           </button>
         </div>
       ) : null}
-      {message ? <p role="status" className="mt-3 text-xs text-black/58 dark:text-white/58" aria-live="polite">{message}</p> : null}
+      {message ? <p role="status" className="max-w-full text-right text-xs text-black/58 dark:text-white/58" aria-live="polite">{message}</p> : null}
     </section>
   );
 }
