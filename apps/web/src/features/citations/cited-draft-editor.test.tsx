@@ -14,183 +14,100 @@ const pack: ContentPack = {
   variant: {
     id: "variant-1",
     status: "NEEDS_REVIEW",
+    revisionId: "artifact-revision-1",
+    revisionNumber: 1,
     sentences: [
       {
         id: "sentence-1",
-        revisionId: "revision-1",
+        revisionId: "sentence-revision-1",
         revisionNumber: 1,
         orderIndex: 0,
         body: "Sign-in recovery now explains the next step.",
         origin: "GENERATED",
-        verdict: "SUPPORTED",
-        reason: null,
-        citations: [
-          {
-            evidenceId: "evidence-1",
-            provider: "GITHUB",
-            sourceLabel: "PR #184",
-            originalUrl: "https://github.com/acme/plot/pull/184",
-            snapshotExcerpt: "Clarify recovery copy after failed sign-in.",
-          },
-        ],
+        citations: [],
       },
       {
         id: "sentence-2",
-        revisionId: "revision-2",
+        revisionId: "sentence-revision-2",
         revisionNumber: 1,
         orderIndex: 1,
         body: "The release is delightful.",
         origin: "GENERATED",
-        verdict: "NOT_REQUIRED",
-        reason: null,
         citations: [],
       },
+    ],
+    sources: [
       {
-        id: "sentence-3",
-        revisionId: "revision-3",
-        revisionNumber: 1,
-        orderIndex: 2,
-        body: "Updates are now fully automatic.",
-        origin: "GENERATED",
-        verdict: "NEEDS_SUPPORT",
-        reason: "No source supports the automation claim.",
-        citations: [],
+        evidenceId: "evidence-1",
+        provider: "GITHUB",
+        sourceLabel: "PR #184",
+        originalUrl: "https://github.com/acme/plot/pull/184",
+        statementIds: ["sentence-1"],
+      },
+      {
+        evidenceId: "evidence-2",
+        provider: "GITHUB",
+        sourceLabel: "PR #184",
+        originalUrl: "https://github.com/acme/plot/pull/184",
+        statementIds: ["sentence-2"],
       },
     ],
   },
 };
 
 describe("CitedDraftEditor", () => {
-  it("renders multiple label citations without numeric editor markers and rejects unsafe links", () => {
-    const multiple: ContentPack = {
-      ...pack,
-      variant: {
-        ...pack.variant,
-        sentences: [{
-          ...pack.variant.sentences[0]!,
-          citations: [
-            ...pack.variant.sentences[0]!.citations,
-            { evidenceId: "evidence-2", provider: "LINEAR", sourceLabel: "PLOT-77", originalUrl: "javascript:alert(1)", snapshotExcerpt: "A product wording decision is open." },
-          ],
-        }],
-      },
-    };
-    render(<CitedDraftEditor pack={multiple} onEditSentence={vi.fn()} />);
-    expect(screen.getByRole("button", { name: "GitHub · PR #184" })).toBeVisible();
-    const second = screen.getByRole("button", { name: "Linear · PLOT-77" });
+  it("uses Lexical for the whole artifact and keeps citation data out of editor content", async () => {
+    const onSaveArtifact = vi.fn().mockResolvedValue(pack);
+    render(<CitedDraftEditor pack={pack} onSaveArtifact={onSaveArtifact} />);
+
+    expect(screen.getByRole("textbox", { name: "Draft content" })).toBeVisible();
+    expect(screen.getByText("Sign-in recovery now explains the next step.")).toBeVisible();
+    expect(screen.getByText("The release is delightful.")).toBeVisible();
     expect(screen.queryByText("[1]")).not.toBeInTheDocument();
-    fireEvent.click(second);
-    expect(screen.getByText("A product wording decision is open.")).toBeVisible();
-    expect(screen.getByText("Original link unavailable")).toBeVisible();
+    expect(screen.queryByText(/verified|unverified|verdict/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Sources/ }));
+    expect(screen.getByRole("dialog", { name: "Sources" })).toBeVisible();
+    expect(screen.getAllByRole("doc-noteref", { name: /PR #184/ })).toHaveLength(1);
+    expect(screen.queryByText(/snapshot|excerpt/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+    await waitFor(() => expect(onSaveArtifact).toHaveBeenCalledWith(expect.objectContaining({
+      expectedRevisionNumber: 1,
+      statements: [
+        { id: "sentence-1", orderIndex: 0, body: "Sign-in recovery now explains the next step." },
+        { id: "sentence-2", orderIndex: 1, body: "The release is delightful." },
+      ],
+    })));
   });
 
-  it("opens a compact provider-label citation by click and Escape returns focus", () => {
-    render(<CitedDraftEditor pack={pack} onEditSentence={vi.fn()} />);
-
-    expect(screen.queryByText("July changelog")).not.toBeInTheDocument();
-    expect(screen.queryByText(/sentence review/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/^verified$/i)).not.toBeInTheDocument();
-    expect(screen.queryByText("Updates are now fully automatic.")).not.toBeInTheDocument();
-    expect(screen.queryByText(/citation not required/i)).not.toBeInTheDocument();
-    const citation = screen.getByRole("button", { name: /GitHub · PR #184/i });
-    fireEvent.click(citation);
-    expect(screen.getByText("Clarify recovery copy after failed sign-in.")).toBeVisible();
-    expect(screen.getByRole("link", { name: /open original/i })).toHaveAttribute(
-      "href",
-      "https://github.com/acme/plot/pull/184",
-    );
-
-    fireEvent.keyDown(document, { key: "Escape" });
-    expect(screen.queryByText("Clarify recovery copy after failed sign-in.")).not.toBeInTheDocument();
-    expect(citation).toHaveFocus();
+  it("focuses the stable application statement when a source is selected", () => {
+    render(<CitedDraftEditor pack={pack} onSaveArtifact={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Sources/ }));
+    fireEvent.click(screen.getByRole("doc-noteref", { name: /PR #184/ }));
+    const statement = document.querySelector<HTMLElement>('[data-statement-id="sentence-1"]');
+    expect(statement).toHaveFocus();
+    expect(statement).toHaveAttribute("data-statement-highlight", "true");
   });
 
-  it("opens citation evidence without invalid nested paragraph markup", () => {
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    render(<CitedDraftEditor pack={pack} onEditSentence={vi.fn()} />);
-
-    fireEvent.click(screen.getByRole("button", { name: /GitHub · PR #184/i }));
-
-    expect(screen.getByRole("region", { name: "PR #184 evidence" })).toBeVisible();
-    expect(consoleError).not.toHaveBeenCalled();
-    consoleError.mockRestore();
-  });
-
-  it("labels lost provider access while keeping the saved evidence reviewable", () => {
-    const lost: ContentPack = {
-      ...pack,
-      variant: {
-        ...pack.variant,
-        sentences: [{
-          ...pack.variant.sentences[0]!,
-          citations: [{ ...pack.variant.sentences[0]!.citations[0]!, sourceAccess: "LOST" }],
-        }],
-      },
-    };
-    render(<CitedDraftEditor pack={lost} onEditSentence={vi.fn()} />);
-
-    const citation = screen.getByRole("button", { name: /Source access lost · GitHub · PR #184/i });
-    fireEvent.click(citation);
-    expect(screen.getByText(/Source access lost\. This saved evidence remains available for review/i)).toBeVisible();
-    expect(screen.getByText("Clarify recovery copy after failed sign-in.")).toBeVisible();
-  });
-
-  it("shows only publishable result copy and explicitly saves only the edited sentence", async () => {
+  it("restores a changed artifact revision without replacing stable statement IDs", async () => {
     const updated: ContentPack = {
       ...pack,
       variant: {
         ...pack.variant,
-        sentences: pack.variant.sentences.map((sentence) =>
-          sentence.id === "sentence-1"
-            ? {
-                ...sentence,
-                body: "Recovery guidance now explains the next step.",
-                revisionNumber: 2,
-                origin: "USER_MODIFIED" as const,
-                verdict: "USER_MODIFIED" as const,
-                citations: sentence.citations.map((citation) => ({ ...citation, status: "STALE" as const })),
-              }
-            : sentence,
-        ),
+        revisionId: "artifact-revision-2",
+        revisionNumber: 2,
+        sentences: pack.variant.sentences.map((sentence) => sentence.id === "sentence-1"
+          ? { ...sentence, revisionId: "sentence-revision-3", revisionNumber: 2, body: "Recovery guidance now explains the next step." }
+          : sentence),
       },
     };
-    const onEditSentence = vi.fn().mockResolvedValue(updated);
-    render(<CitedDraftEditor pack={pack} onEditSentence={onEditSentence} />);
-
-    expect(screen.queryByText("No source supports the automation claim.")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /edit sentence 1/i }));
-    const input = screen.getByRole("textbox", { name: /sentence 1 text/i });
-    fireEvent.change(input, { target: { value: "Recovery guidance now explains the next step." } });
-    fireEvent.click(screen.getByRole("button", { name: /^save sentence 1$/i }));
-
-    await waitFor(() => expect(onEditSentence).toHaveBeenCalledWith(pack.variant.sentences[0], "Recovery guidance now explains the next step."));
+    const onSaveArtifact = vi.fn().mockResolvedValue(updated);
+    const { rerender } = render(<CitedDraftEditor pack={pack} onSaveArtifact={onSaveArtifact} />);
+    fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+    await waitFor(() => expect(onSaveArtifact).toHaveBeenCalled());
+    rerender(<CitedDraftEditor pack={updated} onSaveArtifact={onSaveArtifact} />);
     expect(await screen.findByText("Recovery guidance now explains the next step.")).toBeVisible();
-    const citation = screen.getByRole("button", { name: /Unverified · GitHub · PR #184/i });
-    expect(citation).toBeVisible();
-    fireEvent.click(citation);
-    expect(screen.getByText(/Unverified after editing/)).toBeVisible();
-    expect(screen.getByText("Clarify recovery copy after failed sign-in.")).toBeVisible();
-    expect(screen.queryByText("No source supports the automation claim.")).not.toBeInTheDocument();
-  });
-
-  it("does not place a failed reviewer revision in the generated result", () => {
-    const failed: ContentPack = {
-      ...pack,
-      variant: {
-        ...pack.variant,
-        sentences: [{
-          ...pack.variant.sentences[0]!,
-          verdict: "REVIEW_FAILED",
-          reason: "MALFORMED_OUTPUT",
-          citations: [],
-        }],
-      },
-    };
-
-    render(<CitedDraftEditor pack={failed} onEditSentence={vi.fn()} />);
-
-    expect(screen.queryByText("Sign-in recovery now explains the next step.")).not.toBeInTheDocument();
-    expect(screen.queryByText("MALFORMED_OUTPUT")).not.toBeInTheDocument();
-    expect(screen.getByText(/no source-backed claims were publishable/i)).toBeVisible();
+    expect(document.querySelector('[data-statement-id="sentence-1"]')).toBeInTheDocument();
   });
 });

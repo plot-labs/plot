@@ -111,6 +111,29 @@
     letter-spacing: 0;
   }
 
+  [data-statement-highlight='true'] {
+    outline: 2px solid rgb(245 158 11 / 0.82);
+    outline-offset: 5px;
+    border-radius: 0.35rem;
+    position: relative;
+  }
+
+  [data-statement-highlight='true']::after {
+    content: 'Focused statement';
+    position: absolute;
+    top: -1.4rem;
+    right: 0;
+    font-size: 0.6875rem;
+    line-height: 1;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: rgb(146 64 14);
+  }
+
+  .dark [data-statement-highlight='true']::after {
+    color: rgb(253 186 116);
+  }
+
   @media (prefers-reduced-motion: no-preference) {
     .landing-reveal {
       animation: landing-reveal 0.7s ease-out both;
