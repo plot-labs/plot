@@ -298,7 +298,7 @@ class GenerationPersistenceReliabilityIntegrationTest {
 				transitionVersion = rs.getLong(2),
 				claimedBy = rs.getString(3),
 				artifactCount = rs.getInt(4),
-				contentPackCount = rs.getInt(5),
+				artifactCount = rs.getInt(5),
 			)
 		},
 		runId,
@@ -310,5 +310,5 @@ private data class RunSnapshot(
 	val transitionVersion: Long,
 	val claimedBy: String?,
 	val artifactCount: Int,
-	val contentPackCount: Int,
+	val artifactCount: Int,
 )

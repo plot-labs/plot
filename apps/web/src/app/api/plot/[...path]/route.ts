@@ -188,10 +188,14 @@ function isAllowed(method: string, path: string[]): boolean {
   if (method === "PATCH" && /^sessions\/[^/]+$/.test(route)) return true;
   if (method === "POST" && route === "generations") return true;
   if (method === "GET" && /^generations\/[^/]+$/.test(route)) return true;
-  if (method === "GET" && route === "content-packs") return true;
-  if (method === "GET" && /^content-packs\/[^/]+$/.test(route)) return true;
-  if (method === "PATCH" && /^content-variants\/[^/]+\/sentences\/[^/]+$/.test(route)) return true;
-  return method === "POST" && /^content-variants\/[^/]+\/exports$/.test(route);
+  if (method === "GET" && route === "artifacts") return true;
+  if (method === "GET" && /^artifacts\/[^/]+$/.test(route)) return true;
+  if (method === "GET" && /^artifact-variants\/[^/]+$/.test(route)) return true;
+  if (method === "GET" && /^artifact-variants\/[^/]+\/history(?:\/[^/]+|\/at\/[^/]+)?$/.test(route)) return true;
+  if (method === "PATCH" && /^artifact-variants\/[^/]+$/.test(route)) return true;
+  if (method === "PUT" && /^artifact-variants\/[^/]+$/.test(route)) return true;
+  if (method === "PATCH" && /^artifact-variants\/[^/]+\/sentences\/[^/]+$/.test(route)) return true;
+  return method === "POST" && /^artifact-variants\/[^/]+\/exports$/.test(route);
 }
 
 type AuthResult = { ok: true; jwt: string } | { ok: false; response: Response };

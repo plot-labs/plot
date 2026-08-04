@@ -31,6 +31,7 @@ data class GenerationRunReservation(
 	val provider: String,
 	val modelName: String,
 	val budgetJson: String,
+	val workSessionId: UUID? = null,
 )
 
 data class ClaimedGenerationRun(
@@ -71,6 +72,17 @@ class GenerationPersistence(
 	}
 
 	fun createRun(reservation: GenerationRunReservation): GenerationWorkflowState = transactionTemplate.execute {
+		reservation.workSessionId?.let { sessionId ->
+			val sessionExists = jdbcTemplate.query(
+				"select id from work_sessions where workspace_id = ? and id = ? for update",
+				{ rs, _ -> rs.getObject(1, UUID::class.java) },
+				reservation.workspaceId,
+				sessionId,
+			).isNotEmpty()
+			if (!sessionExists) {
+				throw ApiException(HttpStatus.BAD_REQUEST, "INVALID_SESSION", "Work session is unavailable in this workspace")
+			}
+		}
 		val existing = jdbcTemplate.query(
 			"select id, request_fingerprint from generation_runs where workspace_id = ? and created_by_user_id = ? and idempotency_key = ?",
 			{ rs, _ -> rs.getObject(1, UUID::class.java) to rs.getString(2) },
@@ -85,14 +97,14 @@ class GenerationPersistence(
 		val inserted = jdbcTemplate.update(
 			"""
 			insert into generation_runs (
-			 id, workspace_id, source_scope_id, created_by_user_id, idempotency_key, request_fingerprint,
+			 id, workspace_id, work_session_id, source_scope_id, created_by_user_id, idempotency_key, request_fingerprint,
 			 status, workflow_version, prompt_version, output_schema_version, budget_version, provider,
 			 model_name, budget_snapshot, user_instruction, created_at, updated_at
-			) values (?, ?, ?, ?, ?, ?, 'QUEUED', 'fixed-v1', 'changelog-v8', 'generation-v5',
+			) values (?, ?, ?, ?, ?, ?, ?, 'QUEUED', 'fixed-v1', 'changelog-v8', 'generation-v5',
 			 'budget-v1', ?, ?, ?::jsonb, ?, ?, ?)
 			on conflict (workspace_id, created_by_user_id, idempotency_key) do nothing
 			""".trimIndent(),
-			reservation.state.runId, reservation.workspaceId, reservation.sourceScopeId,
+			reservation.state.runId, reservation.workspaceId, reservation.workSessionId, reservation.sourceScopeId,
 			reservation.createdByUserId, reservation.idempotencyKey, reservation.requestFingerprint,
 			reservation.provider, reservation.modelName, reservation.budgetJson, reservation.state.instruction,
 			Timestamp.from(now), Timestamp.from(now),
@@ -108,6 +120,17 @@ class GenerationPersistence(
 		}
 		reservation.state.evidence.forEach { insertEvidence(reservation.workspaceId, it) }
 		insertCheckpoint(reservation.workspaceId, reservation.state, "EVIDENCE_SET", now)
+		reservation.workSessionId?.let { sessionId ->
+			val updated = jdbcTemplate.update(
+				"update work_sessions set latest_generation_run_id = ?, last_activity_at = ?, updated_at = ? where workspace_id = ? and id = ?",
+				reservation.state.runId,
+				Timestamp.from(now),
+				Timestamp.from(now),
+				reservation.workspaceId,
+				sessionId,
+			)
+			check(updated == 1) { "Work session link was lost" }
+		}
 		reservation.state
 	}
 
@@ -696,7 +719,7 @@ class GenerationPersistence(
 		require(attemptNo > 0) { "Generation retry attempt must be positive" }
 		val source = jdbcTemplate.query(
 			"""
-			select source_scope_id, created_by_user_id, idempotency_key, request_fingerprint,
+			select work_session_id, source_scope_id, created_by_user_id, idempotency_key, request_fingerprint,
 				status, provider, model_name, budget_snapshot::text, user_instruction
 			from generation_runs
 			where workspace_id = ? and id = ?
@@ -704,6 +727,7 @@ class GenerationPersistence(
 			""".trimIndent(),
 			{ rs, _ ->
 				RetryGenerationSource(
+					workSessionId = rs.getObject("work_session_id", UUID::class.java),
 					sourceScopeId = rs.getObject("source_scope_id", UUID::class.java),
 					createdByUserId = rs.getObject("created_by_user_id", UUID::class.java),
 					idempotencyKey = rs.getString("idempotency_key"),
@@ -738,6 +762,7 @@ class GenerationPersistence(
 			evidence = frozenEvidence,
 			instruction = source.instruction,
 			status = GenerationRunStatus.QUEUED,
+			workSessionId = source.workSessionId,
 		)
 		createRun(
 			GenerationRunReservation(
@@ -750,6 +775,7 @@ class GenerationPersistence(
 				provider = source.provider,
 				modelName = source.modelName,
 				budgetJson = source.budgetJson,
+				workSessionId = source.workSessionId,
 			),
 		)
 	})
@@ -951,6 +977,7 @@ private data class RunTimingRow(
 )
 
 private data class RetryGenerationSource(
+	val workSessionId: UUID?,
 	val sourceScopeId: UUID?,
 	val createdByUserId: UUID,
 	val idempotencyKey: String,

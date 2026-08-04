@@ -2,7 +2,7 @@ package com.plot.api.common
 
 import com.plot.api.generation.GenerationIdempotencyConflictException
 import com.plot.api.generation.GenerationSourceAccessException
-import com.plot.api.contentpack.ExportConfirmationRequiredException
+import com.plot.api.artifact.ExportConfirmationRequiredException
 import org.springframework.http.CacheControl
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity

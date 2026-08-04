@@ -1,4 +1,4 @@
-package com.plot.api.contentpack
+package com.plot.api.artifact
 
 import com.plot.api.generation.model.CitationStatus
 import com.plot.api.generation.model.EvidenceSnapshot
@@ -15,7 +15,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-class MarkdownExportServiceTest {
+class ArtifactMarkdownExportServiceTest {
 	private val runId = UUID.fromString("00000000-0000-0000-0000-000000000001")
 	private val github = evidence("00000000-0000-0000-0000-000000000021", "GitHub PR #42", "https://github.com/acme/app/pull/42", "private github excerpt")
 	private val issue = evidence(
@@ -30,7 +30,7 @@ class MarkdownExportServiceTest {
 		val first = sentence(0, "Search shipped.", github.id, issue.id)
 		val second = sentence(1, "The editor shipped too.", github.id)
 
-		val result = MarkdownExportService().render(
+		val result = ArtifactMarkdownExportService().render(
 			sentences = listOf(second, first),
 			evidence = listOf(issue, github),
 			acknowledgeUnresolved = false,
@@ -63,7 +63,7 @@ class MarkdownExportServiceTest {
 			),
 		)
 
-		val result = MarkdownExportService().render(
+		val result = ArtifactMarkdownExportService().render(
 			listOf(sentence),
 			listOf(github, issue),
 			acknowledgeUnresolved = false,
@@ -85,11 +85,11 @@ class MarkdownExportServiceTest {
 		)
 
 		val error = assertFailsWith<UnresolvedExportException> {
-			MarkdownExportService().render(sentences, listOf(github), acknowledgeUnresolved = false, includeSources = false)
+			ArtifactMarkdownExportService().render(sentences, listOf(github), acknowledgeUnresolved = false, includeSources = false)
 		}
 		assertEquals(2, error.unresolvedCount)
 
-		val acknowledged = MarkdownExportService().render(sentences, listOf(github), acknowledgeUnresolved = true, includeSources = false)
+		val acknowledged = ArtifactMarkdownExportService().render(sentences, listOf(github), acknowledgeUnresolved = true, includeSources = false)
 		assertEquals(2, acknowledged.unresolvedCount)
 		assertEquals(true, acknowledged.warningAcknowledged)
 		assertTrue(acknowledged.markdown.contains("Unsupported claim."))
@@ -110,7 +110,7 @@ class MarkdownExportServiceTest {
 			"javascript:alert(1)",
 			"HIDDEN SNAPSHOT",
 		)
-		val result = MarkdownExportService().render(
+		val result = ArtifactMarkdownExportService().render(
 			listOf(sentence(0, hostileBody, github.id, hostileEvidence.id)),
 			listOf(github, hostileEvidence),
 			acknowledgeUnresolved = false,

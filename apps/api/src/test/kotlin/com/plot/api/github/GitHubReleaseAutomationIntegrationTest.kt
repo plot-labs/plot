@@ -246,7 +246,7 @@ class GitHubReleaseAutomationIntegrationTest {
 		releaseWorker.reconcile()
 		val ready = release("v1.1.0", fixture)
 		assertEquals(GitHubReleaseDraftStatus.READY, ready.status)
-		val contentPackId = assertNotNull(contentPackId(ready.id))
+		val artifactId = assertNotNull(artifactId(ready.id))
 		assertEquals(1, model.writerCalls.get())
 		assertEquals(1, model.reviewerCalls.get())
 		assertCounts(fixture, requests = 2, runs = 1, packs = 1)
@@ -255,7 +255,7 @@ class GitHubReleaseAutomationIntegrationTest {
 		assertEquals(ready.id, activity.id)
 		assertEquals(GitHubReleaseDraftStatus.READY, activity.status)
 		assertEquals(generationRunId, activity.generationRunId)
-		assertEquals(contentPackId, activity.contentPackId)
+		assertEquals(artifactId, activity.artifactId)
 
 		// Both a GitHub redelivery and the equivalent release.published event converge
 		// on the same workspace/scope/tag request and cannot invoke the model again.
@@ -543,7 +543,7 @@ class GitHubReleaseAutomationIntegrationTest {
 		requestId,
 	)
 
-	private fun contentPackId(requestId: UUID): UUID? = jdbcTemplate.query(
+	private fun artifactId(requestId: UUID): UUID? = jdbcTemplate.query(
 		"select id from content_packs where workspace_id = ? and release_request_id = ?",
 		{ rs, _ -> rs.getObject(1, UUID::class.java) },
 		devContext.devWorkspaceId,

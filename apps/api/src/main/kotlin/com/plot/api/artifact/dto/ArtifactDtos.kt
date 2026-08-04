@@ -1,4 +1,4 @@
-package com.plot.api.contentpack.dto
+package com.plot.api.artifact.dto
 
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Size
 import jakarta.validation.Valid
 import tools.jackson.databind.JsonNode
 import java.util.UUID
+import java.time.Instant
 
 data class ContentStatementInput(
 	val id: UUID?,
@@ -41,22 +42,22 @@ data class ExportContentVariantRequest(
 	val disposition: ExportDisposition = ExportDisposition.COPY,
 )
 
-data class ContentPackSummaryResponse(
+data class ArtifactSummaryResponse(
 	val id: UUID,
 	val generationRunId: UUID,
 	val status: String,
 	val title: String?,
 )
 
-data class ContentPackPageResponse(
-	val items: List<ContentPackSummaryResponse>,
+data class ArtifactPageResponse(
+	val items: List<ArtifactSummaryResponse>,
 	val page: Int,
 	val size: Int,
 	val totalItems: Long,
 	val totalPages: Int,
 )
 
-data class ContentPackResponse(
+data class ArtifactResponse(
 	val id: UUID,
 	val generationRunId: UUID,
 	val status: String,
@@ -72,6 +73,19 @@ data class ContentVariantResponse(
 	val lexicalContent: JsonNode,
 	val sentences: List<ContentSentenceResponse>,
 	val sources: List<ContentSourceResponse>,
+)
+
+data class ContentVariantHistoryItemResponse(
+	val position: Int,
+	val createdAt: Instant,
+	val cause: String,
+)
+
+data class ContentVariantHistoryDetailResponse(
+	val createdAt: Instant,
+	val cause: String,
+	val readOnly: Boolean,
+	val artifact: ArtifactResponse,
 )
 
 data class ContentSentenceResponse(

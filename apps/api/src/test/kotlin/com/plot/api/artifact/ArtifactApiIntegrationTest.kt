@@ -1,4 +1,4 @@
-package com.plot.api.contentpack
+package com.plot.api.artifact
 
 import com.plot.api.TestcontainersConfiguration
 import com.plot.api.ai.provider.GenerationModelGateway
@@ -47,7 +47,7 @@ import tools.jackson.databind.ObjectMapper
 @Import(TestcontainersConfiguration::class)
 @TestPropertySource(properties = ["plot.dev-bootstrap.enabled=true"])
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
-class ContentPackApiIntegrationTest {
+class ArtifactApiIntegrationTest {
 	@Autowired private lateinit var mockMvc: MockMvc
 	@Autowired private lateinit var persistence: GenerationPersistence
 	@Autowired private lateinit var workflow: GenerationWorkflowService
@@ -58,13 +58,13 @@ class ContentPackApiIntegrationTest {
 	@Test
 	fun `sentence-local edit stales citations and acknowledged exports share private-safe markdown`() {
 		val fixture = readyPack()
-		mockMvc.get("/api/content-packs?page=0&size=25").andExpect {
+		mockMvc.get("/api/artifacts?page=0&size=25").andExpect {
 			status { isOk() }
 			jsonPath("$.items[0].id") { value(fixture.packId.toString()) }
 				jsonPath("$.totalItems") { value(org.hamcrest.Matchers.greaterThanOrEqualTo(1)) }
 		}
 
-		val initial = mockMvc.get("/api/content-packs/${fixture.packId}").andExpect {
+		val initial = mockMvc.get("/api/artifacts/${fixture.packId}").andExpect {
 			status { isOk() }
 			header { string("Cache-Control", "no-store") }
 			jsonPath("$.variant.revisionNumber") { value(1) }
@@ -78,7 +78,7 @@ class ContentPackApiIntegrationTest {
 		assertFalse(initial.contains("PRIVATE SNAPSHOT EXCERPT"))
 		assertFalse(initial.contains("\"sourceAccess\""))
 
-		mockMvc.patch("/api/content-variants/${fixture.variantId}/sentences/${fixture.firstSentenceId}") {
+		mockMvc.patch("/api/artifact-variants/${fixture.variantId}/sentences/${fixture.firstSentenceId}") {
 			contentType = MediaType.APPLICATION_JSON
 			content = """{"expectedRevisionNumber":1,"body":"User revised sentence."}"""
 		}.andExpect {
@@ -92,7 +92,7 @@ class ContentPackApiIntegrationTest {
 			jsonPath("$.variant.sentences[1].body") { value("Stable sentence.") }
 		}
 
-		mockMvc.patch("/api/content-variants/${fixture.variantId}/sentences/${fixture.firstSentenceId}") {
+		mockMvc.patch("/api/artifact-variants/${fixture.variantId}/sentences/${fixture.firstSentenceId}") {
 			contentType = MediaType.APPLICATION_JSON
 			content = """{"expectedRevisionNumber":1,"body":"Stale update."}"""
 		}.andExpect {
@@ -101,7 +101,7 @@ class ContentPackApiIntegrationTest {
 			jsonPath("$.error") { value("STALE_SENTENCE_REVISION") }
 		}
 
-		val rejected = mockMvc.post("/api/content-variants/${fixture.variantId}/exports") {
+		val rejected = mockMvc.post("/api/artifact-variants/${fixture.variantId}/exports") {
 			contentType = MediaType.APPLICATION_JSON
 			content = """{"expectedRevisionNumber":2,"includeSources":false,"acknowledgeUnresolved":false,"disposition":"COPY"}"""
 		}.andExpect {
@@ -116,11 +116,11 @@ class ContentPackApiIntegrationTest {
 			"select id from content_variant_sentence_revisions where sentence_id = ? and is_current",
 			UUID::class.java, fixture.firstSentenceId,
 		)!!
-		mockMvc.patch("/api/content-variants/${fixture.variantId}/sentences/${fixture.firstSentenceId}") {
+		mockMvc.patch("/api/artifact-variants/${fixture.variantId}/sentences/${fixture.firstSentenceId}") {
 			contentType = MediaType.APPLICATION_JSON
 			content = """{"expectedRevisionNumber":2,"body":"Changed after warning."}"""
 		}.andExpect { status { isOk() } }
-		mockMvc.post("/api/content-variants/${fixture.variantId}/exports") {
+		mockMvc.post("/api/artifact-variants/${fixture.variantId}/exports") {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 3,
@@ -171,7 +171,7 @@ class ContentPackApiIntegrationTest {
 			String::class.java, fixture.runId,
 		).size)
 
-		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
+		mockMvc.patch("/api/artifact-variants/${fixture.variantId}") {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 1,
@@ -187,7 +187,7 @@ class ContentPackApiIntegrationTest {
 			Int::class.java, fixture.runId,
 		))
 
-		mockMvc.post("/api/content-variants/${fixture.variantId}/exports") {
+		mockMvc.post("/api/artifact-variants/${fixture.variantId}/exports") {
 			contentType = MediaType.APPLICATION_JSON
 			content = """{"expectedRevisionNumber":2,"acknowledgeUnresolved":false,"disposition":"COPY"}"""
 		}.andExpect { status { isBadRequest() } }
@@ -196,7 +196,7 @@ class ContentPackApiIntegrationTest {
 	@Test
 	fun `whole artifact save preserves stable sentence ids and rejects stale tabs`() {
 		val fixture = readyPack()
-		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
+		mockMvc.patch("/api/artifact-variants/${fixture.variantId}") {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 1,
@@ -222,13 +222,13 @@ class ContentPackApiIntegrationTest {
 			fixture.firstSentenceId,
 		))
 
-		val latest = mockMvc.get("/api/content-variants/${fixture.variantId}").andExpect {
+		val latest = mockMvc.get("/api/artifact-variants/${fixture.variantId}").andExpect {
 			status { isOk() }
 			jsonPath("$.variant.sentences[0].body") { value("Latest unreviewed rewrite.") }
 		}.andReturn().response.contentAsString
 		assertFalse(latest.contains("\"verdict\""))
 		assertFalse(latest.contains("\"reason\""))
-		mockMvc.post("/api/content-variants/${fixture.variantId}/exports") {
+		mockMvc.post("/api/artifact-variants/${fixture.variantId}/exports") {
 			contentType = MediaType.APPLICATION_JSON
 			content = """{"expectedRevisionNumber":1,"includeSources":false,"acknowledgeUnresolved":true,"disposition":"COPY"}"""
 		}.andExpect {
@@ -236,7 +236,7 @@ class ContentPackApiIntegrationTest {
 			jsonPath("$.error") { value("STALE_ARTIFACT_REVISION") }
 		}
 
-		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
+		mockMvc.patch("/api/artifact-variants/${fixture.variantId}") {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 1,
@@ -248,7 +248,7 @@ class ContentPackApiIntegrationTest {
 			jsonPath("$.error") { value("STALE_ARTIFACT_REVISION") }
 		}
 
-		val rejected = mockMvc.post("/api/content-variants/${fixture.variantId}/exports") {
+		val rejected = mockMvc.post("/api/artifact-variants/${fixture.variantId}/exports") {
 			contentType = MediaType.APPLICATION_JSON
 			content = """{"expectedRevisionNumber":2,"includeSources":false,"acknowledgeUnresolved":false,"disposition":"COPY"}"""
 		}.andExpect {
@@ -262,9 +262,61 @@ class ContentPackApiIntegrationTest {
 	}
 
 	@Test
+	fun `content history contains only initial and changed saves`() {
+		val fixture = readyPack()
+		val unchanged = objectMapper.writeValueAsString(mapOf(
+			"expectedRevisionNumber" to 1,
+			"lexicalContent" to lexicalContent("Supported sentence.", "Stable sentence."),
+			"statements" to listOf(
+				mapOf("id" to fixture.firstSentenceId, "orderIndex" to 0, "body" to "Supported sentence."),
+				mapOf("id" to fixture.secondSentenceId, "orderIndex" to 1, "body" to "Stable sentence."),
+			),
+		))
+		mockMvc.patch("/api/artifact-variants/${fixture.variantId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = unchanged
+		}.andExpect {
+			status { isOk() }
+			jsonPath("$.variant.revisionNumber") { value(1) }
+		}
+		assertEquals(1, jdbcTemplate.queryForObject(
+			"select count(*) from content_variant_revisions where content_variant_id = ?",
+			Int::class.java, fixture.variantId,
+		))
+
+		mockMvc.patch("/api/artifact-variants/${fixture.variantId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = unchanged.replace("Supported sentence.", "Edited sentence.")
+		}.andExpect {
+			status { isOk() }
+			jsonPath("$.variant.revisionNumber") { value(2) }
+		}
+		mockMvc.get("/api/artifact-variants/${fixture.variantId}/history").andExpect {
+			status { isOk() }
+			jsonPath("$.length()") { value(2) }
+			jsonPath("$[0].cause") { value("Edited by you") }
+			jsonPath("$[1].cause") { value("Initial generation") }
+			jsonPath("$[0].revisionNumber") { doesNotExist() }
+			jsonPath("$[0].revisionId") { doesNotExist() }
+		}
+
+		mockMvc.patch("/api/artifact-variants/${fixture.variantId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = unchanged.replace("Supported sentence.", "Edited sentence.").replace("\"expectedRevisionNumber\":1", "\"expectedRevisionNumber\":2")
+		}.andExpect {
+			status { isOk() }
+			jsonPath("$.variant.revisionNumber") { value(2) }
+		}
+		assertEquals(2, jdbcTemplate.queryForObject(
+			"select count(*) from content_variant_revisions where content_variant_id = ?",
+			Int::class.java, fixture.variantId,
+		))
+	}
+
+	@Test
 	fun `whole artifact save preserves ids through reorder and stales only deleted evidence`() {
 		val fixture = readyPack()
-		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
+		mockMvc.patch("/api/artifact-variants/${fixture.variantId}") {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 1,
@@ -283,7 +335,7 @@ class ContentPackApiIntegrationTest {
 			jsonPath("$.variant.sentences[1].revisionNumber") { value(1) }
 		}
 
-		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
+		mockMvc.patch("/api/artifact-variants/${fixture.variantId}") {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 2,
@@ -310,7 +362,7 @@ class ContentPackApiIntegrationTest {
 			"lexicalContent" to mapOf("root" to mapOf("children" to emptyList<Any>())),
 			"statements" to listOf(mapOf("id" to fixture.firstSentenceId, "orderIndex" to 0, "body" to "Supported sentence.")),
 		))
-		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
+		mockMvc.patch("/api/artifact-variants/${fixture.variantId}") {
 			contentType = MediaType.APPLICATION_JSON
 			content = malformed
 		}.andExpect { status { isBadRequest() } }
@@ -320,14 +372,14 @@ class ContentPackApiIntegrationTest {
 			"lexicalContent" to lexicalContent("Different body."),
 			"statements" to listOf(mapOf("id" to fixture.firstSentenceId, "orderIndex" to 0, "body" to "Supported sentence.")),
 		))
-		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
+		mockMvc.patch("/api/artifact-variants/${fixture.variantId}") {
 			contentType = MediaType.APPLICATION_JSON
 			content = mismatched
 		}.andExpect { status { isBadRequest() } }
 
 		val nodeKey = objectMapper.readTree(objectMapper.writeValueAsString(lexicalContent("Supported sentence.")))
 			.apply { get("root").asObject().put("key", "root-key") }
-		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
+		mockMvc.patch("/api/artifact-variants/${fixture.variantId}") {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 1,
@@ -338,7 +390,7 @@ class ContentPackApiIntegrationTest {
 
 		val unknownType = objectMapper.readTree(objectMapper.writeValueAsString(lexicalContent("Supported sentence.")))
 			.apply { get("root").get("children")[0].asObject().put("type", "heading") }
-		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
+		mockMvc.patch("/api/artifact-variants/${fixture.variantId}") {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 1,
@@ -349,7 +401,7 @@ class ContentPackApiIntegrationTest {
 
 		val unknownField = objectMapper.readTree(objectMapper.writeValueAsString(lexicalContent("Supported sentence.")))
 			.apply { get("root").get("children")[0].get("children")[0].asObject().put("key", "text-key") }
-		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
+		mockMvc.patch("/api/artifact-variants/${fixture.variantId}") {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 1,
@@ -363,15 +415,15 @@ class ContentPackApiIntegrationTest {
 			"lexicalContent" to lexicalContent("Supported sentence."),
 			"statements" to listOf(mapOf("id" to fixture.firstSentenceId, "orderIndex" to -1, "body" to "Supported sentence.")),
 		))
-		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
+		mockMvc.patch("/api/artifact-variants/${fixture.variantId}") {
 			contentType = MediaType.APPLICATION_JSON
 			content = negativeOrder
 		}.andExpect { status { isBadRequest() } }
-		mockMvc.post("/api/content-variants/${fixture.variantId}/exports") {
+		mockMvc.post("/api/artifact-variants/${fixture.variantId}/exports") {
 			contentType = MediaType.APPLICATION_JSON
 			content = """{"expectedRevisionNumber":1,"acknowledgeUnresolved":true,"disposition":"COPY"}"""
 		}.andExpect { status { isBadRequest() } }
-		mockMvc.post("/api/content-variants/${fixture.variantId}/exports") {
+		mockMvc.post("/api/artifact-variants/${fixture.variantId}/exports") {
 			contentType = MediaType.APPLICATION_JSON
 			content = """{"expectedRevisionNumber":1,"acknowledgeUnresolved":false,"disposition":"COPY"}"""
 		}.andExpect { status { isBadRequest() } }
@@ -388,7 +440,7 @@ class ContentPackApiIntegrationTest {
 		val fixture = readyPack()
 		val fractional = objectMapper.readTree(objectMapper.writeValueAsString(lexicalContent("Supported sentence.")))
 			.apply { get("root").get("children")[0].get("children")[0].asObject().put("detail", 0.5) }
-		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
+		mockMvc.patch("/api/artifact-variants/${fixture.variantId}") {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 1,
@@ -399,7 +451,7 @@ class ContentPackApiIntegrationTest {
 
 		val wrongRootVersion = objectMapper.readTree(objectMapper.writeValueAsString(lexicalContent("Supported sentence.")))
 			.apply { get("root").asObject().put("version", 2) }
-		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
+		mockMvc.patch("/api/artifact-variants/${fixture.variantId}") {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 1,
@@ -410,7 +462,7 @@ class ContentPackApiIntegrationTest {
 
 		val wrongTextVersion = objectMapper.readTree(objectMapper.writeValueAsString(lexicalContent("Supported sentence.")))
 			.apply { get("root").get("children")[0].get("children")[0].asObject().put("version", 2) }
-		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
+		mockMvc.patch("/api/artifact-variants/${fixture.variantId}") {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 1,
@@ -423,7 +475,7 @@ class ContentPackApiIntegrationTest {
 	@Test
 	fun `Lexical validation accepts linebreaks and rejects malformed linebreak fields`() {
 		val fixture = readyPack()
-		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
+		mockMvc.patch("/api/artifact-variants/${fixture.variantId}") {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 1,
@@ -438,7 +490,7 @@ class ContentPackApiIntegrationTest {
 		}
 
 		val unknownFieldFixture = readyPack()
-		mockMvc.patch("/api/content-variants/${unknownFieldFixture.variantId}") {
+		mockMvc.patch("/api/artifact-variants/${unknownFieldFixture.variantId}") {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 1,
@@ -448,7 +500,7 @@ class ContentPackApiIntegrationTest {
 		}.andExpect { status { isBadRequest() } }
 
 		val wrongVersionFixture = readyPack()
-		mockMvc.patch("/api/content-variants/${wrongVersionFixture.variantId}") {
+		mockMvc.patch("/api/artifact-variants/${wrongVersionFixture.variantId}") {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 1,
@@ -461,7 +513,7 @@ class ContentPackApiIntegrationTest {
 	@Test
 	fun `legacy sentence edit emits canonical Lexical JSON accepted by whole artifact save`() {
 		val fixture = readyPack()
-		val edited = mockMvc.patch("/api/content-variants/${fixture.variantId}/sentences/${fixture.firstSentenceId}") {
+		val edited = mockMvc.patch("/api/artifact-variants/${fixture.variantId}/sentences/${fixture.firstSentenceId}") {
 			contentType = MediaType.APPLICATION_JSON
 			content = """{"expectedRevisionNumber":1,"body":"Legacy edited sentence."}"""
 		}.andExpect {
@@ -473,7 +525,7 @@ class ContentPackApiIntegrationTest {
 		}.andReturn().response.contentAsString
 		val editedTree = objectMapper.readTree(edited)
 		val canonicalLexicalContent = editedTree.get("variant").get("lexicalContent")
-		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
+		mockMvc.patch("/api/artifact-variants/${fixture.variantId}") {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 2,
@@ -498,7 +550,7 @@ class ContentPackApiIntegrationTest {
 			"lexicalContent" to lexicalContent(),
 			"statements" to emptyList<Any>(),
 		))
-		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
+		mockMvc.patch("/api/artifact-variants/${fixture.variantId}") {
 			contentType = MediaType.APPLICATION_JSON
 			content = emptySave
 		}.andExpect {
@@ -507,7 +559,7 @@ class ContentPackApiIntegrationTest {
 			jsonPath("$.variant.sentences.length()") { value(0) }
 			jsonPath("$.variant.sources.length()") { value(0) }
 		}
-		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
+		mockMvc.patch("/api/artifact-variants/${fixture.variantId}") {
 			contentType = MediaType.APPLICATION_JSON
 			content = emptySave.replace("\"expectedRevisionNumber\":1", "\"expectedRevisionNumber\":2")
 		}.andExpect {
@@ -542,7 +594,7 @@ class ContentPackApiIntegrationTest {
 			scopeId, devContext.devWorkspaceId, fixture.runId,
 		)
 
-		mockMvc.get("/api/content-packs/${fixture.packId}").andExpect {
+		mockMvc.get("/api/artifacts/${fixture.packId}").andExpect {
 			status { isOk() }
 			jsonPath("$.variant.sources.length()") { value(0) }
 			jsonPath("$.variant.sentences[0].citations.length()") { value(0) }
@@ -552,7 +604,7 @@ class ContentPackApiIntegrationTest {
 	@Test
 	fun `unsafe source URL is omitted from public sources`() {
 		val fixture = readyPack("javascript:alert(1)")
-		mockMvc.get("/api/content-packs/${fixture.packId}").andExpect {
+		mockMvc.get("/api/artifacts/${fixture.packId}").andExpect {
 			status { isOk() }
 			jsonPath("$.variant.sources.length()") { value(0) }
 			jsonPath("$.variant.sentences[0].citations.length()") { value(0) }
@@ -564,7 +616,7 @@ class ContentPackApiIntegrationTest {
 			"select id from content_variant_sentence_revisions where content_variant_id = ? and is_current and origin = 'USER_MODIFIED'",
 			UUID::class.java, variantId,
 		)
-		val response = mockMvc.post("/api/content-variants/$variantId/exports") {
+		val response = mockMvc.post("/api/artifact-variants/$variantId/exports") {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to jdbcTemplate.queryForObject(

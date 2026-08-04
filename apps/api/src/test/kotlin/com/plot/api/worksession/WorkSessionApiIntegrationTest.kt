@@ -39,6 +39,10 @@ class WorkSessionApiIntegrationTest {
 	@BeforeEach
 	fun cleanDevSessions() {
 		jdbcTemplate.update(
+			"update generation_runs set work_session_id = null where workspace_id = ? and work_session_id is not null",
+			devContext.devWorkspaceId,
+		)
+		jdbcTemplate.update(
 			"delete from work_sessions where workspace_id = ?",
 			devContext.devWorkspaceId,
 		)
@@ -160,6 +164,36 @@ class WorkSessionApiIntegrationTest {
 	}
 
 	@Test
+	fun listSessionGenerationsReturnsEveryLinkedRunInChronologicalOrder() {
+		val sessionId = UUID.randomUUID()
+		insertSession(sessionId, title = "Artifact session", createdAt = Instant.parse("2026-01-01T00:00:00Z"))
+		val firstRun = UUID.randomUUID()
+		val secondRun = UUID.randomUUID()
+		insertGeneration(firstRun, createdAt = Instant.parse("2026-01-01T01:00:00Z"), workSessionId = sessionId, instruction = "Changelog")
+		insertGeneration(secondRun, createdAt = Instant.parse("2026-01-01T02:00:00Z"), workSessionId = sessionId, instruction = "Customer update")
+		val artifactId = UUID.randomUUID()
+		jdbcTemplate.update(
+			"""
+			insert into content_packs (id, workspace_id, generation_run_id, title, status, created_at, updated_at)
+			values (?, ?, ?, 'Customer update', 'READY', now(), now())
+			""".trimIndent(),
+			artifactId, devContext.devWorkspaceId, secondRun,
+		)
+
+		mockMvc.get("/api/sessions/$sessionId/generations")
+			.andExpect {
+				status { isOk() }
+				jsonPath("$[0].id") { value(firstRun.toString()) }
+				jsonPath("$[0].instruction") { value("Changelog") }
+				jsonPath("$[0].artifact") { doesNotExist() }
+				jsonPath("$[1].id") { value(secondRun.toString()) }
+				jsonPath("$[1].instruction") { value("Customer update") }
+				jsonPath("$[1].artifact.id") { value(artifactId.toString()) }
+				jsonPath("$[1].artifact.title") { value("Customer update") }
+			}
+	}
+
+	@Test
 	fun patchReturnsNotFoundForRandomUuid() {
 		val randomUuid = UUID.randomUUID()
 
@@ -246,22 +280,29 @@ class WorkSessionApiIntegrationTest {
 	private fun insertGeneration(
 		id: UUID,
 		workspaceId: UUID = devContext.devWorkspaceId,
+		createdAt: Instant = Instant.now(),
+		workSessionId: UUID? = null,
+		instruction: String? = null,
 	) {
 		jdbcTemplate.update(
 			"""
 			insert into generation_runs (
-				id, workspace_id, created_by_user_id, idempotency_key, request_fingerprint,
+				id, workspace_id, work_session_id, created_by_user_id, idempotency_key, request_fingerprint,
 				status, workflow_version, prompt_version, output_schema_version, budget_version,
-				provider, model_name, budget_snapshot, created_at, updated_at
+				provider, model_name, budget_snapshot, user_instruction, created_at, updated_at
 			)
-			values (?, ?, ?, ?, ?, 'QUEUED', 'fixed-v1', 'test-v1', 'generation-v5', 'budget-v1',
-				'TEST', 'test-model', '{}'::jsonb, now(), now())
+			values (?, ?, ?, ?, ?, ?, 'QUEUED', 'fixed-v1', 'test-v1', 'generation-v5', 'budget-v1',
+				'TEST', 'test-model', '{}'::jsonb, ?, ?, ?)
 			""".trimIndent(),
 			id,
 			workspaceId,
+			workSessionId,
 			devContext.devUserId,
 			"session-test-$id",
 			"fingerprint-$id",
+			instruction,
+			Timestamp.from(createdAt),
+			Timestamp.from(createdAt),
 		)
 	}
 }
