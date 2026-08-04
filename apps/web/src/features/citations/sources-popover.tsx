@@ -17,26 +17,55 @@ export function SourcesPopover({ sources }: SourcesPopoverProps) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
   const popoverId = useId();
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      const element = restoreFocusRef.current;
+      restoreFocusRef.current = null;
+      if (element && document.contains(element)) element.focus();
+      return;
+    }
+
+    restoreFocusRef.current = document.activeElement instanceof HTMLElement && document.activeElement !== document.body
+      ? document.activeElement
+      : triggerRef.current;
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    const focusable = () => focusableElements(dialog);
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key !== "Escape") return;
-      setOpen(false);
-      triggerRef.current?.focus();
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const elements = focusable();
+      if (!elements.length) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+      const currentIndex = elements.indexOf(document.activeElement as HTMLElement);
+      if (event.shiftKey) {
+        if (currentIndex <= 0) {
+          event.preventDefault();
+          elements[elements.length - 1]?.focus();
+        }
+      } else if (currentIndex === -1 || currentIndex === elements.length - 1) {
+        event.preventDefault();
+        elements[0]?.focus();
+      }
     }
     document.addEventListener("keydown", onKeyDown);
+    dialog.focus();
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open]);
-
-  useEffect(() => {
-    if (open) dialogRef.current?.focus();
   }, [open]);
 
   function close() {
     setOpen(false);
-    triggerRef.current?.focus();
   }
 
   return (
@@ -105,4 +134,10 @@ export function SourcesPopover({ sources }: SourcesPopoverProps) {
       ) : null}
     </div>
   );
+}
+
+function focusableElements(dialog: HTMLElement): HTMLElement[] {
+  return Array.from(dialog.querySelectorAll<HTMLElement>(
+    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+  )).filter((element) => element.getAttribute("aria-hidden") !== "true");
 }
