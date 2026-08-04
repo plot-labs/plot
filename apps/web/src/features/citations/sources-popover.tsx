@@ -45,7 +45,7 @@ export function SourcesPopover({ sources }: SourcesPopoverProps) {
       const elements = focusable();
       if (!elements.length) {
         event.preventDefault();
-        dialog.focus();
+        dialog?.focus();
         return;
       }
       const currentIndex = elements.indexOf(document.activeElement as HTMLElement);
