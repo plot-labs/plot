@@ -2,20 +2,22 @@ package com.plot.api.contentpack.dto
 
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
+import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.Size
+import jakarta.validation.Valid
 import tools.jackson.databind.JsonNode
 import java.util.UUID
 
 data class ContentStatementInput(
 	val id: UUID?,
-	@field:NotNull val orderIndex: Int?,
+	@field:NotNull @field:Min(0) val orderIndex: Int?,
 	@field:NotBlank @field:Size(max = 10_000) val body: String?,
 )
 
 data class SaveContentVariantRequest(
 	@field:NotNull val expectedRevisionNumber: Int?,
 	@field:NotNull val lexicalContent: JsonNode?,
-	@field:Size(max = 1_000) val statements: List<ContentStatementInput> = emptyList(),
+	@field:NotNull @field:Size(max = 1_000) @field:Valid val statements: List<ContentStatementInput>?,
 )
 
 /**
@@ -30,7 +32,7 @@ data class EditSentenceRequest(
 enum class ExportDisposition { COPY, DOWNLOAD }
 
 data class ExportContentVariantRequest(
-	val expectedRevisionNumber: Int? = null,
+	@field:NotNull val expectedRevisionNumber: Int?,
 	val includeSources: Boolean = false,
 	val acknowledgeUnresolved: Boolean = false,
 	@field:Size(max = 1_000) val acknowledgedWarningKeys: List<String> = emptyList(),

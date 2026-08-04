@@ -86,6 +86,7 @@ class ContentPackApiIntegrationTest {
 			jsonPath("$.variant.revisionNumber") { value(2) }
 			jsonPath("$.variant.sentences[0].origin") { value("USER_MODIFIED") }
 			jsonPath("$.variant.sentences[0].revisionNumber") { value(2) }
+			jsonPath("$.variant.lexicalContent.root.children[0].children[0].text") { value("User revised sentence.") }
 			jsonPath("$.variant.sentences[0].citations.length()") { value(0) }
 			jsonPath("$.variant.sentences[1].body") { value("Stable sentence.") }
 		}
@@ -133,14 +134,19 @@ class ContentPackApiIntegrationTest {
 
 		val copy = export(fixture.variantId, "COPY")
 		val download = export(fixture.variantId, "DOWNLOAD")
+		export(fixture.variantId, "COPY", includeSources = true)
 		assertEquals(copy, download)
 		kotlin.test.assertFalse(copy.contains("PRIVATE SNAPSHOT EXCERPT"))
 		assertFalse(copy.contains("[1]"))
 		assertFalse(copy.contains("## Sources"))
-		assertEquals(2, jdbcTemplate.queryForObject(
+		assertEquals(3, jdbcTemplate.queryForObject(
 			"select count(*) from generation_export_events where generation_run_id = ? and status = 'SUCCEEDED'",
 			Int::class.java, fixture.runId,
 		))
+		assertEquals(2, jdbcTemplate.queryForList(
+			"select distinct export_input_hash from generation_export_events where generation_run_id = ? and status = 'SUCCEEDED'",
+			String::class.java, fixture.runId,
+		).size)
 		assertEquals(setOf("COPY", "DOWNLOAD"), jdbcTemplate.queryForList(
 			"select disposition from generation_export_events where generation_run_id = ? and status = 'SUCCEEDED'",
 			String::class.java, fixture.runId,
@@ -152,12 +158,14 @@ class ContentPackApiIntegrationTest {
 		val fixture = readyPack()
 		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
 			contentType = MediaType.APPLICATION_JSON
-			content = """
-				{"expectedRevisionNumber":1,"lexicalContent":{"root":{"children":[]}},"statements":[
-				 {"id":"${fixture.firstSentenceId}","orderIndex":0,"body":"Latest unreviewed rewrite."},
-				 {"id":"${fixture.secondSentenceId}","orderIndex":1,"body":"Stable sentence."}
-				]}
-			""".trimIndent()
+			content = objectMapper.writeValueAsString(mapOf(
+				"expectedRevisionNumber" to 1,
+				"lexicalContent" to lexicalContent("Latest unreviewed rewrite.", "Stable sentence."),
+				"statements" to listOf(
+					mapOf("id" to fixture.firstSentenceId, "orderIndex" to 0, "body" to "Latest unreviewed rewrite."),
+					mapOf("id" to fixture.secondSentenceId, "orderIndex" to 1, "body" to "Stable sentence."),
+				),
+			))
 		}.andExpect {
 			status { isOk() }
 			jsonPath("$.variant.revisionNumber") { value(2) }
@@ -180,10 +188,21 @@ class ContentPackApiIntegrationTest {
 		}.andReturn().response.contentAsString
 		assertFalse(latest.contains("\"verdict\""))
 		assertFalse(latest.contains("\"reason\""))
+		mockMvc.post("/api/content-variants/${fixture.variantId}/exports") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"expectedRevisionNumber":1,"acknowledgeUnresolved":true,"disposition":"COPY"}"""
+		}.andExpect {
+			status { isConflict() }
+			jsonPath("$.error") { value("STALE_ARTIFACT_REVISION") }
+		}
 
 		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
 			contentType = MediaType.APPLICATION_JSON
-			content = """{"expectedRevisionNumber":1,"lexicalContent":{"root":{"children":[]}},"statements":[]}"""
+			content = objectMapper.writeValueAsString(mapOf(
+				"expectedRevisionNumber" to 1,
+				"lexicalContent" to lexicalContent(),
+				"statements" to emptyList<Any>(),
+			))
 		}.andExpect {
 			status { isConflict() }
 			jsonPath("$.error") { value("STALE_ARTIFACT_REVISION") }
@@ -203,9 +222,98 @@ class ContentPackApiIntegrationTest {
 	}
 
 	@Test
+	fun `whole artifact save preserves ids through reorder and stales only deleted evidence`() {
+		val fixture = readyPack()
+		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = objectMapper.writeValueAsString(mapOf(
+				"expectedRevisionNumber" to 1,
+				"lexicalContent" to lexicalContent("Stable sentence.", "Supported sentence."),
+				"statements" to listOf(
+					mapOf("id" to fixture.secondSentenceId, "orderIndex" to 0, "body" to "Stable sentence."),
+					mapOf("id" to fixture.firstSentenceId, "orderIndex" to 1, "body" to "Supported sentence."),
+				),
+			))
+		}.andExpect {
+			status { isOk() }
+			jsonPath("$.variant.sentences[0].id") { value(fixture.secondSentenceId.toString()) }
+			jsonPath("$.variant.sentences[1].id") { value(fixture.firstSentenceId.toString()) }
+			jsonPath("$.variant.sources[0].statementIds[0]") { value(fixture.firstSentenceId.toString()) }
+			jsonPath("$.variant.sentences[0].revisionNumber") { value(1) }
+			jsonPath("$.variant.sentences[1].revisionNumber") { value(1) }
+		}
+
+		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = objectMapper.writeValueAsString(mapOf(
+				"expectedRevisionNumber" to 2,
+				"lexicalContent" to lexicalContent("Stable sentence."),
+				"statements" to listOf(mapOf("id" to fixture.secondSentenceId, "orderIndex" to 0, "body" to "Stable sentence.")),
+			))
+		}.andExpect {
+			status { isOk() }
+			jsonPath("$.variant.sentences[0].id") { value(fixture.secondSentenceId.toString()) }
+			jsonPath("$.variant.sources.length()") { value(0) }
+		}
+		assertEquals(listOf("REMOVED", "STATEMENT_REMOVED"), jdbcTemplate.queryForObject(
+			"select status, stale_reason from sentence_citations where sentence_id = ? limit 1",
+			{ rs, _ -> listOf(rs.getString(1), rs.getString(2)) },
+			fixture.firstSentenceId,
+		))
+	}
+
+	@Test
+	fun `whole artifact save rejects malformed or mismatched Lexical payloads and nested invalid statements`() {
+		val fixture = readyPack()
+		val malformed = objectMapper.writeValueAsString(mapOf(
+			"expectedRevisionNumber" to 1,
+			"lexicalContent" to mapOf("root" to mapOf("children" to emptyList<Any>())),
+			"statements" to listOf(mapOf("id" to fixture.firstSentenceId, "orderIndex" to 0, "body" to "Supported sentence.")),
+		))
+		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = malformed
+		}.andExpect { status { isBadRequest() } }
+
+		val mismatched = objectMapper.writeValueAsString(mapOf(
+			"expectedRevisionNumber" to 1,
+			"lexicalContent" to lexicalContent("Different body."),
+			"statements" to listOf(mapOf("id" to fixture.firstSentenceId, "orderIndex" to 0, "body" to "Supported sentence.")),
+		))
+		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = mismatched
+		}.andExpect { status { isBadRequest() } }
+
+		val negativeOrder = objectMapper.writeValueAsString(mapOf(
+			"expectedRevisionNumber" to 1,
+			"lexicalContent" to lexicalContent("Supported sentence."),
+			"statements" to listOf(mapOf("id" to fixture.firstSentenceId, "orderIndex" to -1, "body" to "Supported sentence.")),
+		))
+		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = negativeOrder
+		}.andExpect { status { isBadRequest() } }
+		mockMvc.post("/api/content-variants/${fixture.variantId}/exports") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"acknowledgeUnresolved":true,"disposition":"COPY"}"""
+		}.andExpect { status { isBadRequest() } }
+
+		assertEquals(1, jdbcTemplate.queryForObject(
+			"select revision_no from content_variant_revisions where content_variant_id = ? and is_current",
+			Int::class.java,
+			fixture.variantId,
+		))
+	}
+
+	@Test
 	fun `empty whole artifact revision remains empty instead of falling back to legacy sentences`() {
 		val fixture = readyPack()
-		val emptySave = """{"expectedRevisionNumber":1,"lexicalContent":{"root":{"children":[]}},"statements":[]}"""
+		val emptySave = objectMapper.writeValueAsString(mapOf(
+			"expectedRevisionNumber" to 1,
+			"lexicalContent" to lexicalContent(),
+			"statements" to emptyList<Any>(),
+		))
 		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
 			contentType = MediaType.APPLICATION_JSON
 			content = emptySave
@@ -257,6 +365,16 @@ class ContentPackApiIntegrationTest {
 		}
 	}
 
+	@Test
+	fun `unsafe source URL is omitted from public sources`() {
+		val fixture = readyPack("javascript:alert(1)")
+		mockMvc.get("/api/content-packs/${fixture.packId}").andExpect {
+			status { isOk() }
+			jsonPath("$.variant.sources.length()") { value(0) }
+			jsonPath("$.variant.sentences[0].citations.length()") { value(0) }
+		}
+	}
+
 	private fun export(variantId: UUID, disposition: String, includeSources: Boolean = false): String {
 		val revisionIds = jdbcTemplate.queryForList(
 			"select id from content_variant_sentence_revisions where content_variant_id = ? and is_current and origin = 'USER_MODIFIED'",
@@ -283,20 +401,33 @@ class ContentPackApiIntegrationTest {
 		return objectMapper.readTree(response).get("text").stringValue()
 	}
 
-	private fun readyPack(): Fixture {
+	private fun lexicalContent(vararg bodies: String): Map<String, Any> = mapOf(
+		"root" to mapOf(
+			"children" to bodies.map { body ->
+				mapOf(
+					"children" to listOf(mapOf("text" to body, "type" to "text")),
+					"type" to "paragraph",
+				)
+			},
+			"type" to "root",
+			"version" to 1,
+		),
+	)
+
+	private fun readyPack(sourceUrl: String = "https://github.test/acme/repo/pull/1"): Fixture {
 		val runId = UUID.randomUUID()
 		val blockId = UUID.randomUUID()
 		jdbcTemplate.update(
 			"""
 			insert into writing_blocks (id, workspace_id, source_origin, source_kind, title, body, url,
 			 content_hash, ingested_at, status, created_by_user_id, created_at, updated_at)
-			values (?, ?, 'github', 'pull_request', 'PR', 'evidence', 'https://github.test/acme/repo/pull/1',
+			values (?, ?, 'github', 'pull_request', 'PR', 'evidence', ?,
 			 'block-hash', now(), 'ACTIVE', ?, now(), now())
-			""".trimIndent(), blockId, devContext.devWorkspaceId, devContext.devUserId,
+			""".trimIndent(), blockId, devContext.devWorkspaceId, sourceUrl, devContext.devUserId,
 		)
 		val evidence = EvidenceSnapshot(
 			UUID.randomUUID(), runId, blockId, 0, SourceProvider.GITHUB, "pull_request", "PR 1", "PR 1",
-			"Evidence body", "PRIVATE SNAPSHOT EXCERPT", "https://github.test/acme/repo/pull/1", null, null, "hash", Instant.now(),
+			"Evidence body", "PRIVATE SNAPSHOT EXCERPT", sourceUrl, null, null, "hash", Instant.now(),
 		)
 		val state = workflow.start(runId, listOf(evidence), null)
 		persistence.createRun(GenerationRunReservation(

@@ -107,12 +107,15 @@ class ContentPackService(
 			val statements = loadCurrentStatements(current.id, variantId).map { statement ->
 				ContentStatementInput(statement.id, statement.orderIndex, if (statement.id == sentenceId) replacement else statement.body)
 			}
-			saveVariantInTransaction(variantId, current.revisionNumber, current.lexicalContent, statements)
+			// This compatibility operation still goes through the whole-artifact
+			// contract. Rebuild the canonical Lexical projection so it cannot leave
+			// the stored document JSON out of sync with the edited sentence rows.
+			saveVariantInTransaction(variantId, current.revisionNumber, lexicalContentForStatements(statements), statements)
 		}
 
 	fun export(
 		variantId: UUID,
-		expectedRevisionNumber: Int?,
+		expectedRevisionNumber: Int,
 		includeSources: Boolean,
 		acknowledge: Boolean,
 		acknowledgedWarningKeys: List<String>,
@@ -127,7 +130,7 @@ class ContentPackService(
 				variantId,
 			).firstOrNull() ?: notFound()
 			val revision = ensureArtifactRevision(variantId)
-			if (expectedRevisionNumber != null && expectedRevisionNumber != revision.revisionNumber) {
+			if (expectedRevisionNumber != revision.revisionNumber) {
 				throw staleArtifactRevision(variantId)
 			}
 			val projection = loadPack("cv.id = ?", variantId)
@@ -223,9 +226,8 @@ class ContentPackService(
 		lexicalContent: JsonNode,
 		statements: List<ContentStatementInput>,
 	): ContentPackResponse {
-		if (!lexicalContent.isObject) {
-			throw ApiException(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "Lexical content must be a JSON object")
-		}
+		val normalized = normalizeStatements(statements)
+		validateLexicalContent(lexicalContent, normalized)
 		lockVariant(variantId)
 		val currentRevision = currentArtifactRevisionForUpdate(variantId)
 		if (currentRevision.revisionNumber != expectedRevisionNumber) throw staleArtifactRevision(variantId)
@@ -242,24 +244,7 @@ class ContentPackService(
 			{ rs, _ -> rs.getObject(1, UUID::class.java) to StatementRow(rs.getObject(1, UUID::class.java), rs.getObject(2, UUID::class.java), rs.getInt(3), 0, rs.getString(4), rs.getString(5)) },
 			devContext.devWorkspaceId, variantId,
 		).toMap()
-		val requested = statements
-		val normalized = requested.mapIndexed { index, input ->
-			val id = input.id ?: uuidGenerator.next()
-			val order = input.orderIndex ?: index
-			val body = input.body?.trim()?.takeIf { it.isNotBlank() }
-				?: throw ApiException(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "Statement body is required")
-			if (input.id != null && id !in allSentenceIds) {
-				throw ApiException(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "Statement belongs to another artifact", id)
-			}
-			NormalizedStatement(id, order, body)
-		}.also { rows ->
-			if (rows.map { it.id }.distinct().size != rows.size) {
-				throw ApiException(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "Statement IDs must be unique")
-			}
-			if (rows.map { it.orderIndex }.distinct().size != rows.size) {
-				throw ApiException(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "Statement order must be unique")
-			}
-		}
+		validateStatementOwnership(normalized, allSentenceIds)
 
 		val nextRevisionBySentence = linkedMapOf<UUID, UUID>()
 		normalized.sortedBy { it.orderIndex }.forEach { statement ->
@@ -339,6 +324,77 @@ class ContentPackService(
 		)
 		return loadPack("cv.id = ?", variantId)
 	}
+
+	private fun normalizeStatements(statements: List<ContentStatementInput>): List<NormalizedStatement> = statements.mapIndexed { index, input ->
+		val id = input.id ?: uuidGenerator.next()
+		val order = input.orderIndex ?: throw badRequest("Statement order is required")
+		if (order < 0) throw badRequest("Statement order must not be negative")
+		val body = input.body?.trim()?.takeIf { it.isNotBlank() }
+			?: throw badRequest("Statement body is required")
+		NormalizedStatement(id, order, body)
+	}.also { rows ->
+		if (rows.map { it.id }.distinct().size != rows.size) {
+			throw badRequest("Statement IDs must be unique")
+		}
+		if (rows.map { it.orderIndex }.distinct().size != rows.size) {
+			throw badRequest("Statement order must be unique")
+		}
+	}
+
+	private fun validateStatementOwnership(statements: List<NormalizedStatement>, allSentenceIds: Set<UUID>) {
+		statements.filter { it.id !in allSentenceIds }.forEach { statement ->
+			// New application-owned IDs are valid; only reject an ID that claims to
+			// belong to another artifact when its UUID already exists elsewhere.
+			val belongsToAnotherArtifact = jdbcTemplate.queryForObject(
+				"select exists (select 1 from content_variant_sentences where id = ?)",
+				Boolean::class.java,
+				statement.id,
+			) ?: false
+			if (belongsToAnotherArtifact) {
+				throw ApiException(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "Statement belongs to another artifact", statement.id)
+			}
+		}
+	}
+
+	private fun validateLexicalContent(lexicalContent: JsonNode, statements: List<NormalizedStatement>) {
+		if (!lexicalContent.isObject) throw badRequest("Lexical content must be a JSON object")
+		val root = lexicalContent.get("root")
+		if (root == null || !root.isObject || root.get("type")?.asText() != "root" || root.get("version")?.asInt(-1) != 1) {
+			throw badRequest("Lexical content must contain a version 1 root node")
+		}
+		val children = root.get("children")
+		if (children == null || !children.isArray) throw badRequest("Lexical root children must be an array")
+		val lexicalBodies = children.mapIndexed { index, child ->
+			if (!child.isObject || child.get("type")?.asText().isNullOrBlank() || child.get("type")?.asText() == "text") {
+				throw badRequest("Lexical statement block $index is malformed")
+			}
+			lexicalNodeText(child, "Lexical statement block $index")
+		}
+		val statementBodies = statements.sortedBy { it.orderIndex }.map { it.body }
+		if (lexicalBodies != statementBodies) {
+			throw badRequest("Lexical content must exactly match statement order and content")
+		}
+	}
+
+	private fun lexicalNodeText(node: JsonNode, path: String): String {
+		val type = node.get("type")?.asText()
+			?: throw badRequest("$path is missing a node type")
+		if (type == "text") {
+			val text = node.get("text")
+			if (text == null || !text.isTextual) throw badRequest("$path text node is malformed")
+			return text.asText()
+		}
+		if (type == "linebreak") return "\n"
+		val children = node.get("children")
+		if (children == null || !children.isArray) throw badRequest("$path children must be an array")
+		return children.mapIndexed { index, child ->
+			if (!child.isObject) throw badRequest("$path child $index is malformed")
+			lexicalNodeText(child, "$path child $index")
+		}.joinToString("")
+	}
+
+	private fun badRequest(message: String): ApiException =
+		ApiException(HttpStatus.BAD_REQUEST, "BAD_REQUEST", message)
 
 	private fun insertNewSentence(variantId: UUID, sentenceId: UUID, now: java.time.Instant) {
 		val generationRunId = jdbcTemplate.queryForObject(
@@ -688,6 +744,36 @@ class ContentPackService(
 			{ rs, _ -> StatementRow(rs.getObject(1, UUID::class.java), rs.getObject(2, UUID::class.java), rs.getInt(3), rs.getInt(4), rs.getString(5), rs.getString(6)) },
 			devContext.devWorkspaceId, variantId,
 		)
+	}
+
+	private fun lexicalContentForStatements(statements: List<ContentStatementInput>): JsonNode {
+		val root = objectMapper.createObjectNode()
+		val rootNode = root.putObject("root")
+		val children = rootNode.putArray("children")
+		statements.sortedBy { it.orderIndex ?: Int.MAX_VALUE }.forEach { statement ->
+			val paragraph = children.addObject()
+			val paragraphChildren = paragraph.putArray("children")
+			paragraphChildren.addObject().apply {
+				put("detail", 0)
+				put("format", 0)
+				put("mode", "normal")
+				put("style", "")
+				put("text", statement.body?.trim().orEmpty())
+				put("type", "text")
+				put("version", 1)
+			}
+			paragraph.putNull("direction")
+			paragraph.put("format", "")
+			paragraph.put("indent", 0)
+			paragraph.put("type", "paragraph")
+			paragraph.put("version", 1)
+		}
+		rootNode.putNull("direction")
+		rootNode.put("format", "")
+		rootNode.put("indent", 0)
+		rootNode.put("type", "root")
+		rootNode.put("version", 1)
+		return root
 	}
 
 	private fun lexicalContentFor(rows: List<StatementRow>): JsonNode {

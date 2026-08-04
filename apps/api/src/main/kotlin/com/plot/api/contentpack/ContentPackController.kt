@@ -48,7 +48,7 @@ class ContentPackController(private val service: ContentPackService) {
 			variantId,
 			requireNotNull(request.expectedRevisionNumber),
 			requireNotNull(request.lexicalContent),
-			request.statements,
+			requireNotNull(request.statements),
 		),
 	)
 
@@ -75,7 +75,7 @@ class ContentPackController(private val service: ContentPackService) {
 	): ResponseEntity<ContentExportResponse> = ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(
 		service.export(
 			variantId,
-			request.expectedRevisionNumber,
+			requireNotNull(request.expectedRevisionNumber),
 			request.includeSources,
 			request.acknowledgeUnresolved,
 			request.acknowledgedWarningKeys,
