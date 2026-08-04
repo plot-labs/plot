@@ -38,7 +38,7 @@ export function SourcesPopover({ sources }: SourcesPopoverProps) {
     function dismissIfOutside(event: Event) {
       const target = event.target;
       if (!(target instanceof Node)) return;
-      if (dialog.contains(target) || triggerRef.current?.contains(target)) return;
+      if (dialog?.contains(target) || triggerRef.current?.contains(target)) return;
       event.preventDefault();
       setOpen(false);
     }
