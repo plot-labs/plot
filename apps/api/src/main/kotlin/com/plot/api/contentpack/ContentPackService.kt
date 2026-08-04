@@ -227,7 +227,7 @@ class ContentPackService(
 		statements: List<ContentStatementInput>,
 	): ContentPackResponse {
 		val normalized = normalizeStatements(statements)
-		validateLexicalContent(lexicalContent, normalized)
+		val sanitizedLexicalContent = validateAndSanitizeLexicalContent(lexicalContent, normalized)
 		lockVariant(variantId)
 		val currentRevision = currentArtifactRevisionForUpdate(variantId)
 		if (currentRevision.revisionNumber != expectedRevisionNumber) throw staleArtifactRevision(variantId)
@@ -297,7 +297,7 @@ class ContentPackService(
 			currentRevision.generationRunId,
 			variantId,
 			nextRevisionNumber,
-			lexicalContent.toString(),
+			sanitizedLexicalContent.toString(),
 			devContext.devUserId,
 			Timestamp.from(now),
 		)
@@ -356,41 +356,176 @@ class ContentPackService(
 		}
 	}
 
-	private fun validateLexicalContent(lexicalContent: JsonNode, statements: List<NormalizedStatement>) {
+	private fun validateAndSanitizeLexicalContent(lexicalContent: JsonNode, statements: List<NormalizedStatement>): JsonNode {
 		if (!lexicalContent.isObject) throw badRequest("Lexical content must be a JSON object")
+		assertAllowedFields(lexicalContent, setOf("root"), "Lexical content")
 		val root = lexicalContent.get("root")
-		if (root == null || !root.isObject || root.get("type")?.asText() != "root" || root.get("version")?.asInt(-1) != 1) {
-			throw badRequest("Lexical content must contain a version 1 root node")
+			?: throw badRequest("Lexical content must contain a root node")
+		if (!root.isObject) throw badRequest("Lexical root must be an object")
+		assertAllowedFields(root, ROOT_FIELDS, "Lexical root")
+		requireNodeType(root, "root", "Lexical root")
+		requireNodeVersion(root, "Lexical root")
+		val children = requireArray(root, "children", "Lexical root")
+		val sanitizedRoot = objectMapper.createObjectNode()
+		val sanitizedChildren = sanitizedRoot.putArray("children")
+		val lexicalBodies = mutableListOf<String>()
+		children.forEachIndexed { index, child ->
+			val path = "Lexical statement block $index"
+			val sanitizedParagraph = sanitizeParagraph(child, path)
+			sanitizedChildren.add(sanitizedParagraph)
+			lexicalBodies += lexicalNodeText(sanitizedParagraph, path)
 		}
-		val children = root.get("children")
-		if (children == null || !children.isArray) throw badRequest("Lexical root children must be an array")
-		val lexicalBodies = children.mapIndexed { index, child ->
-			if (!child.isObject || child.get("type")?.asText().isNullOrBlank() || child.get("type")?.asText() == "text") {
-				throw badRequest("Lexical statement block $index is malformed")
-			}
-			lexicalNodeText(child, "Lexical statement block $index")
-		}
+		copyDirection(root, sanitizedRoot, "Lexical root")
+		sanitizedRoot.put("format", requireFormat(root, "Lexical root"))
+		sanitizedRoot.put("indent", requireNonNegativeInt(root, "indent", "Lexical root"))
+		sanitizedRoot.put("type", "root")
+		sanitizedRoot.put("version", 1)
+
 		val statementBodies = statements.sortedBy { it.orderIndex }.map { it.body }
 		if (lexicalBodies != statementBodies) {
 			throw badRequest("Lexical content must exactly match statement order and content")
 		}
+		return objectMapper.createObjectNode().set("root", sanitizedRoot)
+	}
+
+	private fun sanitizeParagraph(node: JsonNode, path: String): JsonNode {
+		if (!node.isObject) throw badRequest("$path must be an object")
+		assertAllowedFields(node, PARAGRAPH_FIELDS, path)
+		requireNodeType(node, "paragraph", path)
+		requireNodeVersion(node, path)
+		val children = requireArray(node, "children", path)
+		val sanitized = objectMapper.createObjectNode()
+		val sanitizedChildren = sanitized.putArray("children")
+		children.forEachIndexed { index, child ->
+			val childPath = "$path child $index"
+			if (!child.isObject) throw badRequest("$childPath must be an object")
+			val type = child.get("type")
+				?.takeIf { it.isTextual }
+				?.asText()
+				?: throw badRequest("$childPath is missing a node type")
+			when (type) {
+				"text" -> sanitizedChildren.add(sanitizeText(child, childPath))
+				"linebreak" -> sanitizedChildren.add(sanitizeLinebreak(child, childPath))
+				else -> throw badRequest("$childPath has unsupported type '$type'")
+			}
+		}
+		copyDirection(node, sanitized, path)
+		sanitized.put("format", requireFormat(node, path))
+		sanitized.put("indent", requireNonNegativeInt(node, "indent", path))
+		node.get("textFormat")?.let {
+			if (!it.isIntegralNumber || !it.canConvertToInt() || it.asInt() < 0) {
+				throw badRequest("$path textFormat must be a nonnegative integer")
+			}
+			sanitized.put("textFormat", it.asInt())
+		}
+		node.get("textStyle")?.let {
+			if (!it.isTextual) throw badRequest("$path textStyle must be a string")
+			sanitized.put("textStyle", it.asText())
+		}
+		sanitized.put("type", "paragraph")
+		sanitized.put("version", 1)
+		return sanitized
+	}
+
+	private fun sanitizeText(node: JsonNode, path: String): JsonNode {
+		assertAllowedFields(node, TEXT_FIELDS, path)
+		requireNodeType(node, "text", path)
+		requireNodeVersion(node, path)
+		val text = node.get("text")
+			?.takeIf { it.isTextual }
+			?.asText()
+			?: throw badRequest("$path text must be a string")
+		val detail = requireNonNegativeInt(node, "detail", path)
+		val format = requireNonNegativeInt(node, "format", path)
+		val mode = node.get("mode")
+			?.takeIf { it.isTextual }
+			?.asText()
+			?.takeIf { it in TEXT_MODES }
+			?: throw badRequest("$path mode must be normal, token, or segmented")
+		val style = node.get("style")
+			?.takeIf { it.isTextual }
+			?.asText()
+			?: throw badRequest("$path style must be a string")
+		return objectMapper.createObjectNode().apply {
+			put("detail", detail)
+			put("format", format)
+			put("mode", mode)
+			put("style", style)
+			put("text", text)
+			put("type", "text")
+			put("version", 1)
+		}
+	}
+
+	private fun sanitizeLinebreak(node: JsonNode, path: String): JsonNode {
+		assertAllowedFields(node, LINEBREAK_FIELDS, path)
+		requireNodeType(node, "linebreak", path)
+		requireNodeVersion(node, path)
+		return objectMapper.createObjectNode().apply {
+			put("type", "linebreak")
+			put("version", 1)
+		}
 	}
 
 	private fun lexicalNodeText(node: JsonNode, path: String): String {
-		val type = node.get("type")?.asText()
-			?: throw badRequest("$path is missing a node type")
-		if (type == "text") {
-			val text = node.get("text")
-			if (text == null || !text.isTextual) throw badRequest("$path text node is malformed")
-			return text.asText()
-		}
+		val type = node.get("type")?.asText() ?: throw badRequest("$path is missing a node type")
+		if (type == "text") return node.get("text")?.asText() ?: throw badRequest("$path text is missing")
 		if (type == "linebreak") return "\n"
-		val children = node.get("children")
-		if (children == null || !children.isArray) throw badRequest("$path children must be an array")
-		return children.mapIndexed { index, child ->
-			if (!child.isObject) throw badRequest("$path child $index is malformed")
-			lexicalNodeText(child, "$path child $index")
-		}.joinToString("")
+		val children = node.get("children") ?: throw badRequest("$path children are missing")
+		return children.mapIndexed { index, child -> lexicalNodeText(child, "$path child $index") }.joinToString("")
+	}
+
+	private fun assertAllowedFields(node: JsonNode, allowed: Set<String>, path: String) {
+		node.propertyNames().filter { it !in allowed }.firstOrNull()?.let { field ->
+			throw badRequest("$path contains unsupported field '$field'")
+		}
+	}
+
+	private fun requireArray(node: JsonNode, field: String, path: String): JsonNode {
+		val value = node.get(field)
+		if (value == null || !value.isArray) throw badRequest("$path $field must be an array")
+		return value
+	}
+
+	private fun requireNodeType(node: JsonNode, expected: String, path: String) {
+		val value = node.get("type")
+		if (value == null || !value.isTextual || value.asText() != expected) {
+			throw badRequest("$path must have type '$expected'")
+		}
+	}
+
+	private fun requireNodeVersion(node: JsonNode, path: String) {
+		val value = node.get("version")
+		if (value == null || !value.isIntegralNumber || !value.canConvertToInt() || value.asInt() != 1) {
+			throw badRequest("$path must have version 1")
+		}
+	}
+
+	private fun requireNonNegativeInt(node: JsonNode, field: String, path: String): Int {
+		val value = node.get(field)
+		if (value == null || !value.isIntegralNumber || !value.canConvertToInt() || value.asInt() < 0) {
+			throw badRequest("$path $field must be a nonnegative integer")
+		}
+		return value.asInt()
+	}
+
+	private fun requireFormat(node: JsonNode, path: String): String {
+		val value = node.get("format")
+		if (value == null || !value.isTextual || value.asText() !in ELEMENT_FORMATS) {
+			throw badRequest("$path format is unsupported")
+		}
+		return value.asText()
+	}
+
+	private fun copyDirection(node: JsonNode, target: tools.jackson.databind.node.ObjectNode, path: String) {
+		val value = node.get("direction") ?: throw badRequest("$path direction is required")
+		if (value.isNull) {
+			target.putNull("direction")
+		} else if (value.isTextual && value.asText() in DIRECTIONS) {
+			target.put("direction", value.asText())
+		} else {
+			throw badRequest("$path direction must be null, ltr, or rtl")
+		}
 	}
 
 	private fun badRequest(message: String): ApiException =
@@ -838,6 +973,13 @@ class ContentPackService(
 	private companion object {
 		const val MARKDOWN_RENDERER_VERSION = "markdown-v2"
 		const val MAX_WARNING_EXCERPT = 240
+		val ROOT_FIELDS = setOf("children", "direction", "format", "indent", "type", "version")
+		val PARAGRAPH_FIELDS = setOf("children", "direction", "format", "indent", "textFormat", "textStyle", "type", "version")
+		val TEXT_FIELDS = setOf("detail", "format", "mode", "style", "text", "type", "version")
+		val LINEBREAK_FIELDS = setOf("type", "version")
+		val DIRECTIONS = setOf("ltr", "rtl")
+		val ELEMENT_FORMATS = setOf("", "left", "start", "center", "right", "end", "justify")
+		val TEXT_MODES = setOf("normal", "token", "segmented")
 		val WHITESPACE = Regex("\\s+")
 	}
 }

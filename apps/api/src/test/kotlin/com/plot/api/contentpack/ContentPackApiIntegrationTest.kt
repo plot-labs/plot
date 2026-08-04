@@ -285,6 +285,39 @@ class ContentPackApiIntegrationTest {
 			content = mismatched
 		}.andExpect { status { isBadRequest() } }
 
+		val nodeKey = objectMapper.readTree(objectMapper.writeValueAsString(lexicalContent("Supported sentence.")))
+			.apply { get("root").asObject().put("key", "root-key") }
+		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = objectMapper.writeValueAsString(mapOf(
+				"expectedRevisionNumber" to 1,
+				"lexicalContent" to nodeKey,
+				"statements" to listOf(mapOf("id" to fixture.firstSentenceId, "orderIndex" to 0, "body" to "Supported sentence.")),
+			))
+		}.andExpect { status { isBadRequest() } }
+
+		val unknownType = objectMapper.readTree(objectMapper.writeValueAsString(lexicalContent("Supported sentence.")))
+			.apply { get("root").get("children")[0].asObject().put("type", "heading") }
+		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = objectMapper.writeValueAsString(mapOf(
+				"expectedRevisionNumber" to 1,
+				"lexicalContent" to unknownType,
+				"statements" to listOf(mapOf("id" to fixture.firstSentenceId, "orderIndex" to 0, "body" to "Supported sentence.")),
+			))
+		}.andExpect { status { isBadRequest() } }
+
+		val unknownField = objectMapper.readTree(objectMapper.writeValueAsString(lexicalContent("Supported sentence.")))
+			.apply { get("root").get("children")[0].get("children")[0].asObject().put("key", "text-key") }
+		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = objectMapper.writeValueAsString(mapOf(
+				"expectedRevisionNumber" to 1,
+				"lexicalContent" to unknownField,
+				"statements" to listOf(mapOf("id" to fixture.firstSentenceId, "orderIndex" to 0, "body" to "Supported sentence.")),
+			))
+		}.andExpect { status { isBadRequest() } }
+
 		val negativeOrder = objectMapper.writeValueAsString(mapOf(
 			"expectedRevisionNumber" to 1,
 			"lexicalContent" to lexicalContent("Supported sentence."),
@@ -304,6 +337,38 @@ class ContentPackApiIntegrationTest {
 			Int::class.java,
 			fixture.variantId,
 		))
+	}
+
+	@Test
+	fun `legacy sentence edit emits canonical Lexical JSON accepted by whole artifact save`() {
+		val fixture = readyPack()
+		val edited = mockMvc.patch("/api/content-variants/${fixture.variantId}/sentences/${fixture.firstSentenceId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"expectedRevisionNumber":1,"body":"Legacy edited sentence."}"""
+		}.andExpect {
+			status { isOk() }
+			jsonPath("$.variant.revisionNumber") { value(2) }
+			jsonPath("$.variant.lexicalContent.root.type") { value("root") }
+			jsonPath("$.variant.lexicalContent.root.children[0].type") { value("paragraph") }
+			jsonPath("$.variant.lexicalContent.root.children[0].children[0].detail") { value(0) }
+		}.andReturn().response.contentAsString
+		val editedTree = objectMapper.readTree(edited)
+		val canonicalLexicalContent = editedTree.get("variant").get("lexicalContent")
+		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = objectMapper.writeValueAsString(mapOf(
+				"expectedRevisionNumber" to 2,
+				"lexicalContent" to canonicalLexicalContent,
+				"statements" to listOf(
+					mapOf("id" to fixture.firstSentenceId, "orderIndex" to 0, "body" to "Legacy edited sentence."),
+					mapOf("id" to fixture.secondSentenceId, "orderIndex" to 1, "body" to "Stable sentence."),
+				),
+			))
+		}.andExpect {
+			status { isOk() }
+			jsonPath("$.variant.revisionNumber") { value(3) }
+			jsonPath("$.variant.sentences[0].body") { value("Legacy edited sentence.") }
+		}
 	}
 
 	@Test
@@ -405,10 +470,25 @@ class ContentPackApiIntegrationTest {
 		"root" to mapOf(
 			"children" to bodies.map { body ->
 				mapOf(
-					"children" to listOf(mapOf("text" to body, "type" to "text")),
+					"children" to listOf(mapOf(
+						"detail" to 0,
+						"format" to 0,
+						"mode" to "normal",
+						"style" to "",
+						"text" to body,
+						"type" to "text",
+						"version" to 1,
+					)),
+					"direction" to null,
+					"format" to "",
+					"indent" to 0,
 					"type" to "paragraph",
+					"version" to 1,
 				)
 			},
+			"direction" to null,
+			"format" to "",
+			"indent" to 0,
 			"type" to "root",
 			"version" to 1,
 		),
