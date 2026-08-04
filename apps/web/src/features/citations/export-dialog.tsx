@@ -138,7 +138,7 @@ export function ExportDialog({ pack, client }: { pack: ContentPack; client: Plot
 function focusStatement(pack: ContentPack, sentenceNumber: number) {
   const sentenceId = [...pack.variant.sentences].sort((a, b) => a.orderIndex - b.orderIndex)[sentenceNumber - 1]?.id;
   const sentence = sentenceId
-    ? document.querySelector<HTMLElement>(`[data-statement-id="${sentenceId}"]`) ?? document.getElementById(`sentence-${sentenceId}`)
+    ? document.querySelector<HTMLElement>(`[data-statement-id="${sentenceId}"]`)
     : null;
   sentence?.scrollIntoView?.({ block: "center", behavior: "smooth" });
   sentence?.focus();

@@ -3,7 +3,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { CitedDraftEditor } from "./cited-draft-editor";
+import { CitedDraftEditor, reconcileStatementBlocks } from "./cited-draft-editor";
 import type { ContentPack } from "@plot/api-client";
 
 const pack: ContentPack = {
@@ -16,6 +16,10 @@ const pack: ContentPack = {
     status: "NEEDS_REVIEW",
     revisionId: "artifact-revision-1",
     revisionNumber: 1,
+    lexicalContent: lexicalContent(
+      "Sign-in recovery now explains the next step.",
+      "The release is delightful.",
+    ),
     sentences: [
       {
         id: "sentence-1",
@@ -55,6 +59,26 @@ const pack: ContentPack = {
   },
 };
 
+function lexicalContent(...bodies: string[]) {
+  return {
+    root: {
+      children: bodies.map((body) => ({
+        children: [{ detail: 0, format: 0, mode: "normal", style: "", text: body, type: "text", version: 1 }],
+        direction: null,
+        format: "",
+        indent: 0,
+        type: "paragraph",
+        version: 1,
+      })),
+      direction: null,
+      format: "",
+      indent: 0,
+      type: "root",
+      version: 1,
+    },
+  };
+}
+
 describe("CitedDraftEditor", () => {
   it("uses Lexical for the whole artifact and keeps citation data out of editor content", async () => {
     const onSaveArtifact = vi.fn().mockResolvedValue(pack);
@@ -81,13 +105,39 @@ describe("CitedDraftEditor", () => {
     })));
   });
 
-  it("focuses the stable application statement when a source is selected", () => {
+  it("keeps source citations as original URL links without statement navigation", async () => {
     render(<CitedDraftEditor pack={pack} onSaveArtifact={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /Sources/ }));
-    fireEvent.click(screen.getByRole("doc-noteref", { name: /PR #184/ }));
+    const source = screen.getByRole("doc-noteref", { name: /PR #184/ });
+    expect(source).toHaveAttribute("href", "https://github.com/acme/plot/pull/184");
+    expect(source).toHaveAttribute("target", "_blank");
+    fireEvent.click(source);
     const statement = document.querySelector<HTMLElement>('[data-statement-id="sentence-1"]');
-    expect(statement).toHaveFocus();
-    expect(statement).toHaveAttribute("data-statement-highlight", "true");
+    expect(statement).not.toHaveFocus();
+    expect(statement).not.toHaveAttribute("data-statement-highlight");
+  });
+
+  it("preserves application IDs across reorder and isolates ambiguous structural edits", () => {
+    const previous = [
+      { id: "sentence-a", body: "A" },
+      { id: "sentence-b", body: "B" },
+      { id: "sentence-c", body: "C" },
+    ];
+    expect(reconcileStatementBlocks(previous, ["C", "A", "B"], () => "new")).toEqual([
+      { id: "sentence-c", body: "C" },
+      { id: "sentence-a", body: "A" },
+      { id: "sentence-b", body: "B" },
+    ]);
+    expect(reconcileStatementBlocks(previous, ["A", "C"], () => "new")).toEqual([
+      { id: "sentence-a", body: "A" },
+      { id: "sentence-c", body: "C" },
+    ]);
+    expect(reconcileStatementBlocks(previous, ["Inserted", "A", "B", "C"], () => "new")).toEqual([
+      { id: "new", body: "Inserted" },
+      { id: "sentence-a", body: "A" },
+      { id: "sentence-b", body: "B" },
+      { id: "sentence-c", body: "C" },
+    ]);
   });
 
   it("restores a changed artifact revision without replacing stable statement IDs", async () => {
@@ -97,6 +147,7 @@ describe("CitedDraftEditor", () => {
         ...pack.variant,
         revisionId: "artifact-revision-2",
         revisionNumber: 2,
+        lexicalContent: lexicalContent("Recovery guidance now explains the next step.", "The release is delightful."),
         sentences: pack.variant.sentences.map((sentence) => sentence.id === "sentence-1"
           ? { ...sentence, revisionId: "sentence-revision-3", revisionNumber: 2, body: "Recovery guidance now explains the next step." }
           : sentence),

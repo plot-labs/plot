@@ -7,10 +7,10 @@ import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
-import type { EditorState, LexicalEditor } from "lexical";
+import type { EditorState } from "lexical";
 import { $getRoot } from "lexical";
 import { Save } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   ContentPack,
@@ -31,7 +31,7 @@ type CitedDraftEditorProps = {
 };
 
 export function CitedDraftEditor(props: CitedDraftEditorProps) {
-  const revisionKey = `${props.pack.variant.revisionId ?? props.pack.variant.id}:${props.pack.variant.revisionNumber ?? 1}`;
+  const revisionKey = `${props.pack.variant.revisionId}:${props.pack.variant.revisionNumber}`;
   return <ArtifactEditor key={revisionKey} {...props} />;
 }
 
@@ -40,15 +40,14 @@ function ArtifactEditor({ pack, onSaveArtifact, onPackChange }: CitedDraftEditor
     () => [...pack.variant.sentences].sort((a, b) => a.orderIndex - b.orderIndex),
     [pack.variant.sentences],
   );
-  const revisionNumber = pack.variant.revisionNumber ?? 1;
-  const revisionKey = `${pack.variant.revisionId ?? pack.variant.id}:${revisionNumber}`;
-  const lexicalContent = useMemo(
-    () => pack.variant.lexicalContent ?? lexicalContentFor(sentences.map((sentence) => sentence.body)),
-    [pack.variant.lexicalContent, sentences],
-  );
+  const revisionNumber = pack.variant.revisionNumber;
+  const revisionKey = `${pack.variant.revisionId}:${revisionNumber}`;
+  const lexicalContent = useMemo(() => pack.variant.lexicalContent, [pack.variant.lexicalContent]);
+  const initialStatementBlocks = useMemo(() => statementBlocksFor(sentences), [sentences]);
+  const statementBlocksRef = useRef(initialStatementBlocks);
   const [draftState, setDraftState] = useState<Record<string, unknown>>(lexicalContent);
-  const [draftStatements, setDraftStatements] = useState<ContentStatementInput[]>(() => statementInputs(sentences));
-  const [editor, setEditor] = useState<LexicalEditor | null>(null);
+  const [draftStatements, setDraftStatements] = useState<ContentStatementInput[]>(() => statementInputs(initialStatementBlocks));
+  const [statementBlocks, setStatementBlocks] = useState<StatementBlock[]>(initialStatementBlocks);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -63,27 +62,12 @@ function ArtifactEditor({ pack, onSaveArtifact, onPackChange }: CitedDraftEditor
         statements: draftStatements,
       });
       onPackChange?.(updated);
-      setMessage(`Revision ${updated.variant.revisionNumber ?? revisionNumber + 1} saved.`);
+      setMessage(`Revision ${updated.variant.revisionNumber} saved.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "The draft could not be saved.");
     } finally {
       setSaving(false);
     }
-  }
-
-  function focusStatement(statementId: string) {
-    const element = editor
-      ? Array.from(editor.getRootElement()?.querySelectorAll<HTMLElement>("[data-statement-id]") ?? [])
-        .find((candidate) => candidate.dataset.statementId === statementId)
-      : null;
-    if (!element) return;
-    element.tabIndex = -1;
-    element.focus({ preventScroll: true });
-    element.scrollIntoView?.({ block: "center", behavior: "smooth" });
-    element.dataset.statementHighlight = "true";
-    window.setTimeout(() => {
-      if (element.isConnected) delete element.dataset.statementHighlight;
-    }, 2_000);
   }
 
   return (
@@ -95,7 +79,7 @@ function ArtifactEditor({ pack, onSaveArtifact, onPackChange }: CitedDraftEditor
             Edit the whole artifact. Sources stay outside the document and are bound to this revision.
           </p>
         </div>
-        <SourcesPopover sources={pack.variant.sources ?? []} onFocusStatement={focusStatement} />
+        <SourcesPopover sources={pack.variant.sources} />
       </div>
 
       <LexicalComposer
@@ -116,12 +100,15 @@ function ArtifactEditor({ pack, onSaveArtifact, onPackChange }: CitedDraftEditor
             ErrorBoundary={LexicalErrorBoundary}
           />
           <HistoryPlugin />
-          <EditorReferencePlugin onEditor={setEditor} />
-          <StatementDomPlugin statementIds={sentences.map((sentence) => sentence.id)} />
+          <StatementDomPlugin statementIds={statementBlocks.map((statement) => statement.id)} />
           <OnChangePlugin
             onChange={(nextState) => {
               setDraftState(nextState.toJSON() as unknown as Record<string, unknown>);
-              setDraftStatements(extractStatementInputs(nextState, sentences));
+              const nextBodies = extractBlockBodies(nextState);
+              const nextBlocks = reconcileStatementBlocks(statementBlocksRef.current, nextBodies);
+              statementBlocksRef.current = nextBlocks;
+              setStatementBlocks(nextBlocks);
+              setDraftStatements(statementInputs(nextBlocks));
             }}
           />
         </div>
@@ -148,15 +135,6 @@ function ArtifactEditor({ pack, onSaveArtifact, onPackChange }: CitedDraftEditor
   );
 }
 
-function EditorReferencePlugin({ onEditor }: { onEditor: (editor: LexicalEditor | null) => void }) {
-  const [editor] = useLexicalComposerContext();
-  useEffect(() => {
-    onEditor(editor);
-    return () => onEditor(null);
-  }, [editor, onEditor]);
-  return null;
-}
-
 function StatementDomPlugin({ statementIds }: { statementIds: string[] }) {
   const [editor] = useLexicalComposerContext();
   useEffect(() => {
@@ -169,6 +147,8 @@ function StatementDomPlugin({ statementIds }: { statementIds: string[] }) {
         if (statementId) element.dataset.statementId = statementId;
         else delete element.dataset.statementId;
         element.dataset.statementOrder = String(index + 1);
+        element.tabIndex = statementId ? -1 : 0;
+        element.dataset.statementBlock = statementId ? "true" : "false";
       });
     }
     sync();
@@ -179,43 +159,93 @@ function StatementDomPlugin({ statementIds }: { statementIds: string[] }) {
   return null;
 }
 
-function extractStatementInputs(state: EditorState, sentences: ContentPack["variant"]["sentences"]): ContentStatementInput[] {
-  const existing = [...sentences].sort((a, b) => a.orderIndex - b.orderIndex);
+function extractBlockBodies(state: EditorState): string[] {
   const texts: string[] = [];
   state.read(() => {
     $getRoot().getChildren().forEach((node) => {
       texts.push(node.getTextContent());
     });
   });
-  return texts.map((body, orderIndex) => ({
-    id: existing[orderIndex]?.id ?? null,
-    orderIndex,
-    body,
-  }));
+  return texts;
 }
 
-function statementInputs(sentences: ContentPack["variant"]["sentences"]): ContentStatementInput[] {
+export type StatementBlock = { id: string; body: string };
+
+function statementBlocksFor(sentences: ContentPack["variant"]["sentences"]): StatementBlock[] {
   return [...sentences]
     .sort((a, b) => a.orderIndex - b.orderIndex)
-    .map((sentence, orderIndex) => ({ id: sentence.id, orderIndex, body: sentence.body }));
+    .map((sentence) => ({ id: sentence.id, body: sentence.body }));
 }
 
-function lexicalContentFor(bodies: string[]): Record<string, unknown> {
-  return {
-    root: {
-      children: bodies.map((body) => ({
-        children: [{ detail: 0, format: 0, mode: "normal", style: "", text: body, type: "text", version: 1 }],
-        direction: null,
-        format: "",
-        indent: 0,
-        type: "paragraph",
-        version: 1,
-      })),
-      direction: null,
-      format: "",
-      indent: 0,
-      type: "root",
-      version: 1,
-    },
+function statementInputs(blocks: StatementBlock[]): ContentStatementInput[] {
+  return blocks.map((block, orderIndex) => ({ id: block.id, orderIndex, body: block.body }));
+}
+
+/**
+ * Reconciles Lexical's top-level blocks with application-owned statement IDs.
+ * Lexical node keys are intentionally not read or persisted here. Exact body
+ * matches preserve IDs across reorder; an equal-sized unmatched region is
+ * treated as edits; ambiguous insert/delete regions receive fresh IDs rather
+ * than moving evidence to a neighboring statement.
+ */
+export function reconcileStatementBlocks(
+  previous: StatementBlock[],
+  nextBodies: string[],
+  createId: () => string = newStatementId,
+): StatementBlock[] {
+  const assignments: Array<StatementBlock | null> = nextBodies.map(() => null);
+  const usedPrevious = new Set<number>();
+  const anchors: Array<{ nextIndex: number; previousIndex: number }> = [];
+
+  nextBodies.forEach((body, nextIndex) => {
+    const candidates = previous
+      .map((block, previousIndex) => ({ block, previousIndex }))
+      .filter(({ block, previousIndex }) => block.body === body && !usedPrevious.has(previousIndex))
+      .sort((left, right) => {
+        const distance = Math.abs(left.previousIndex - nextIndex) - Math.abs(right.previousIndex - nextIndex);
+        return distance || left.previousIndex - right.previousIndex;
+      });
+    const match = candidates[0];
+    if (!match) return;
+    usedPrevious.add(match.previousIndex);
+    assignments[nextIndex] = match.block;
+    anchors.push({ nextIndex, previousIndex: match.previousIndex });
+  });
+
+  anchors.sort((left, right) => left.nextIndex - right.nextIndex);
+  let previousCursor = -1;
+  let nextCursor = -1;
+  const fillRegion = (previousEnd: number, nextEnd: number) => {
+    const oldRegion = previous.slice(previousCursor + 1, previousEnd).filter((_, index) => !usedPrevious.has(previousCursor + 1 + index));
+    const newIndexes = Array.from({ length: nextEnd - nextCursor - 1 }, (_, index) => nextCursor + 1 + index)
+      .filter((index) => assignments[index] === null);
+    if (oldRegion.length === newIndexes.length) {
+      newIndexes.forEach((index, offset) => {
+        assignments[index] = { id: oldRegion[offset].id, body: nextBodies[index] };
+      });
+    } else {
+      newIndexes.forEach((index) => {
+        assignments[index] = { id: createId(), body: nextBodies[index] };
+      });
+    }
   };
+
+  anchors.forEach((anchor) => {
+    fillRegion(anchor.previousIndex, anchor.nextIndex);
+    previousCursor = anchor.previousIndex;
+    nextCursor = anchor.nextIndex;
+  });
+  fillRegion(previous.length, nextBodies.length);
+  return assignments.map((block, index) => block ?? { id: createId(), body: nextBodies[index] });
+}
+
+function newStatementId(): string {
+  if (typeof globalThis.crypto?.randomUUID === "function") return globalThis.crypto.randomUUID();
+  const bytes = new Uint8Array(16);
+  bytes.forEach((_, index) => { bytes[index] = Math.floor(Math.random() * 256); });
+  globalThis.crypto?.getRandomValues?.(bytes);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }

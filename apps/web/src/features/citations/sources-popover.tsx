@@ -8,10 +8,9 @@ import type { ContentSource } from "@plot/api-client";
 
 type SourcesPopoverProps = {
   sources: ContentSource[];
-  onFocusStatement: (statementId: string) => void;
 };
 
-export function SourcesPopover({ sources, onFocusStatement }: SourcesPopoverProps) {
+export function SourcesPopover({ sources }: SourcesPopoverProps) {
   const uniqueSources = sources.filter((source, index, all) =>
     all.findIndex((candidate) => candidate.originalUrl === source.originalUrl) === index,
   );
@@ -93,10 +92,6 @@ export function SourcesPopover({ sources, onFocusStatement }: SourcesPopoverProp
                     number={index + 1}
                     variant="label"
                     className="max-w-full"
-                    onClick={() => {
-                      const firstStatementId = source.statementIds[0];
-                      if (firstStatementId) onFocusStatement(firstStatementId);
-                    }}
                   />
                 </li>
               ))}
