@@ -74,7 +74,7 @@ class WorkspaceEntitlementApiIntegrationTest {
 		}
 		mockMvc.post("/api/content-variants/${UUID.randomUUID()}/exports") {
 			contentType = MediaType.APPLICATION_JSON
-			content = "{}"
+			content = "{\"expectedRevisionNumber\":1,\"includeSources\":false}"
 		}.andExpect {
 			status { isNotFound() }
 			jsonPath("$.error") { value("NOT_FOUND") }

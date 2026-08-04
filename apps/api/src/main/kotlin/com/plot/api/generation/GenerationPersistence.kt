@@ -856,6 +856,59 @@ class GenerationPersistence(
 				)
 			}
 		}
+		val artifactRevisionId = uuidGenerator.next()
+		jdbcTemplate.update(
+			"""
+			insert into content_variant_revisions (
+			 id, workspace_id, generation_run_id, content_variant_id, revision_no,
+			 lexical_content, is_current, created_at
+			) values (?, ?, ?, ?, 1, ?::jsonb, true, ?)
+			""".trimIndent(),
+			artifactRevisionId, workspaceId, state.runId, variantId,
+			lexicalContentFor(state.sentences).toString(), Timestamp.from(now),
+		)
+		state.sentences.sortedBy { it.orderIndex }.forEach { sentence ->
+			jdbcTemplate.update(
+				"""
+				insert into content_variant_revision_sentences (
+				 id, workspace_id, content_variant_revision_id, generation_run_id,
+				 content_variant_id, sentence_id, sentence_revision_id, order_index
+				) values (?, ?, ?, ?, ?, ?, ?, ?)
+				""".trimIndent(),
+				uuidGenerator.next(), workspaceId, artifactRevisionId, state.runId, variantId,
+				sentence.id, sentence.revisionId, sentence.orderIndex,
+			)
+		}
+	}
+
+	private fun lexicalContentFor(sentences: List<SentenceArtifact>): tools.jackson.databind.JsonNode {
+		val document = objectMapper.createObjectNode()
+		val root = document.putObject("root")
+		val children = root.putArray("children")
+		sentences.sortedBy { it.orderIndex }.forEach { sentence ->
+			val paragraph = children.addObject()
+			val paragraphChildren = paragraph.putArray("children")
+			paragraphChildren.addObject().apply {
+				put("detail", 0)
+				put("format", 0)
+				put("mode", "normal")
+				put("style", "")
+				put("text", sentence.body)
+				put("type", "text")
+				put("version", 1)
+			}
+			paragraph.putNull("direction")
+			paragraph.put("format", "")
+			paragraph.put("indent", 0)
+			paragraph.put("type", "paragraph")
+			paragraph.put("version", 1)
+		}
+		root.putNull("direction")
+		root.put("format", "")
+		root.put("indent", 0)
+		root.put("type", "root")
+		root.put("version", 1)
+		return document
 	}
 
 	private fun requireClaim(claim: ClaimedGenerationRun) {

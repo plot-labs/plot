@@ -275,8 +275,8 @@ function GenerationPanel({ run, pack, busy, error, onPackChange }: { run: Genera
     {run ? <GenerationWorkLog run={run} /> : busy ? <div className="rounded-xl border border-black/10 bg-black/[0.025] px-4 py-3 text-sm text-black/62 dark:border-white/10 dark:bg-white/[0.04] dark:text-white/62">Plot is preparing the grounded draft…</div> : null}
     {error ? <ErrorNotice message={error} /> : null}
     {run?.status === "FAILED" && !error ? <ErrorNotice message={`Generation stopped before a reviewable draft was produced${run.failureCode ? ` (${run.failureCode})` : ""}. Try again or adjust the selected references.`} /> : null}
-    {run?.status === "NEEDS_REVIEW" && run.failureCode && !error ? <ErrorNotice message={`Review failed (${run.failureCode}). The latest draft is preserved, but its failed revision has not been verified.`} /> : null}
-    {pack ? <><CitedDraftEditor pack={pack} onEditSentence={(sentence, body) => plotApiClient.editSentence(pack.variant.id, sentence.id, { expectedRevisionNumber: sentence.revisionNumber, body })} onPackChange={onPackChange} /><ExportDialog pack={pack} client={plotApiClient} /></> : null}
+    {run?.status === "NEEDS_REVIEW" && run.failureCode && !error ? <ErrorNotice message={`Source review failed (${run.failureCode}). The latest draft is preserved, but its review is incomplete.`} /> : null}
+    {pack ? <><CitedDraftEditor pack={pack} onSaveArtifact={(input) => plotApiClient.saveContentVariant(pack.variant.id, input)} onPackChange={onPackChange} /><ExportDialog pack={pack} client={plotApiClient} /></> : null}
   </article>;
 }
 

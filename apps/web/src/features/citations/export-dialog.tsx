@@ -6,18 +6,26 @@ import { useState } from "react";
 import { PlotApiError, type ContentPack, type PlotApiClient } from "@plot/api-client";
 
 type Disposition = "COPY" | "DOWNLOAD";
+type ExportWarning = { key: string; sentenceNumber: number; excerpt: string };
 
 export function ExportDialog({ pack, client }: { pack: ContentPack; client: PlotApiClient }) {
   const [pending, setPending] = useState<Disposition | null>(null);
-  const [confirmation, setConfirmation] = useState<{ disposition: Disposition; sentenceIds: string[]; revisionIds: string[] } | null>(null);
+  const [includeSources, setIncludeSources] = useState(false);
+  const [confirmation, setConfirmation] = useState<{ disposition: Disposition; warnings: ExportWarning[] } | null>(null);
   const [message, setMessage] = useState("");
 
-  async function requestExport(disposition: Disposition, acknowledgeUnresolved: boolean, acknowledgedRevisionIds: string[] = []) {
+  async function requestExport(disposition: Disposition, acknowledgeUnresolved: boolean, acknowledgedWarningKeys: string[] = []) {
     if (pending) return;
     setPending(disposition);
     setMessage("");
     try {
-      const result = await client.exportVariant(pack.variant.id, { acknowledgeUnresolved, acknowledgedRevisionIds, disposition });
+      const result = await client.exportVariant(pack.variant.id, {
+        expectedRevisionNumber: pack.variant.revisionNumber,
+        includeSources,
+        acknowledgeUnresolved,
+        acknowledgedWarningKeys,
+        disposition,
+      });
       if (disposition === "COPY") {
         await navigator.clipboard.writeText(result.text);
       } else {
@@ -27,13 +35,10 @@ export function ExportDialog({ pack, client }: { pack: ContentPack; client: Plot
       setMessage(disposition === "COPY" ? "Changelog copied." : "Changelog downloaded.");
     } catch (error) {
       if (error instanceof PlotApiError && error.code === "EXPORT_CONFIRMATION_REQUIRED") {
-        const sentenceIds = Array.isArray(error.details?.sentenceIds)
-          ? error.details.sentenceIds.filter((id): id is string => typeof id === "string")
+        const warnings = Array.isArray(error.details?.warnings)
+          ? error.details.warnings.filter(isExportWarning)
           : [];
-        const revisionIds = Array.isArray(error.details?.revisionIds)
-          ? error.details.revisionIds.filter((id): id is string => typeof id === "string")
-          : [];
-        setConfirmation({ disposition, sentenceIds, revisionIds });
+        setConfirmation({ disposition, warnings });
         setMessage("Explicit confirmation is required before export.");
       } else {
         setMessage(error instanceof Error ? error.message : "The changelog could not be exported.");
@@ -43,12 +48,17 @@ export function ExportDialog({ pack, client }: { pack: ContentPack; client: Plot
     }
   }
 
-  const affectedSentences = confirmation?.sentenceIds
-    .map((id) => pack.variant.sentences.find((sentence) => sentence.id === id))
-    .filter((sentence) => sentence !== undefined) ?? [];
-
   return (
     <section aria-label="Export changelog" className="flex min-w-0 flex-col items-end gap-2 sm:max-w-[24rem]">
+      <label className="inline-flex min-h-10 items-center gap-2 self-end text-xs font-medium text-black/58 dark:text-white/58">
+        <input
+          type="checkbox"
+          checked={includeSources}
+          onChange={(event) => setIncludeSources(event.target.checked)}
+          className="size-4 rounded border-black/20 accent-black dark:border-white/20 dark:accent-white"
+        />
+        Include Sources in Markdown
+      </label>
       <div className="flex items-center gap-1.5">
         <button
           type="button"
@@ -77,25 +87,25 @@ export function ExportDialog({ pack, client }: { pack: ContentPack; client: Plot
           <div className="flex items-start gap-2">
             <ShieldAlert className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-300" />
             <div className="min-w-0 flex-1">
-              <h3 id="export-warning-title" className="text-sm font-semibold">Unresolved sentences will be exported</h3>
+              <h3 id="export-warning-title" className="text-sm font-semibold">Unresolved statements will be exported</h3>
               <div id="export-warning-description" className="mt-1 text-xs leading-5 text-black/62 dark:text-white/62">
-                <p>Review affected sentences before continuing.</p>
-                {affectedSentences.length ? (
+                <p>Review affected statements before continuing.</p>
+                {confirmation.warnings.length ? (
                   <ul className="mt-2 space-y-1">
-                    {affectedSentences.map((sentence) => (
-                      <li key={sentence.id}>
+                    {confirmation.warnings.map((warning) => (
+                      <li key={warning.key}>
                         <button
                           type="button"
-                          onClick={() => focusSentence(sentence.id)}
+                          onClick={() => focusStatement(pack, warning.sentenceNumber)}
                           className="block max-w-full truncate rounded-sm text-left font-medium underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1"
                         >
-                          Sentence {sentence.orderIndex + 1} — “{sentence.body}”
+                          Statement {warning.sentenceNumber} — “{warning.excerpt}”
                         </button>
                       </li>
                     ))}
                   </ul>
                 ) : (
-                  <p className="mt-1">Affected sentence details are unavailable.</p>
+                  <p className="mt-1">Affected statement details are unavailable.</p>
                 )}
               </div>
             </div>
@@ -109,7 +119,13 @@ export function ExportDialog({ pack, client }: { pack: ContentPack; client: Plot
               <X aria-hidden="true" className="size-4" />
             </button>
           </div>
-          <button autoFocus type="button" disabled={Boolean(pending)} onClick={() => void requestExport(confirmation.disposition, true, confirmation.revisionIds)} className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg bg-amber-950 px-3 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-40 dark:bg-amber-200 dark:text-amber-950">
+          <button
+            autoFocus
+            type="button"
+            disabled={Boolean(pending)}
+            onClick={() => void requestExport(confirmation.disposition, true, confirmation.warnings.map((warning) => warning.key))}
+            className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg bg-amber-950 px-3 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-40 dark:bg-amber-200 dark:text-amber-950"
+          >
             <Check aria-hidden="true" className="size-4" /> Confirm and {confirmation.disposition === "COPY" ? "copy" : "download"}
           </button>
         </div>
@@ -119,10 +135,25 @@ export function ExportDialog({ pack, client }: { pack: ContentPack; client: Plot
   );
 }
 
-function focusSentence(sentenceId: string) {
-  const sentence = document.getElementById(`sentence-${sentenceId}`);
+function focusStatement(pack: ContentPack, sentenceNumber: number) {
+  const sentenceId = [...pack.variant.sentences].sort((a, b) => a.orderIndex - b.orderIndex)[sentenceNumber - 1]?.id;
+  const sentence = sentenceId
+    ? document.querySelector<HTMLElement>(`[data-statement-id="${sentenceId}"]`)
+    : null;
   sentence?.scrollIntoView?.({ block: "center", behavior: "smooth" });
   sentence?.focus();
+  if (sentence) {
+    sentence.dataset.statementHighlight = "true";
+    window.setTimeout(() => {
+      if (sentence.isConnected) delete sentence.dataset.statementHighlight;
+    }, 2_000);
+  }
+}
+
+function isExportWarning(value: unknown): value is ExportWarning {
+  if (!value || typeof value !== "object") return false;
+  const warning = value as Record<string, unknown>;
+  return typeof warning.key === "string" && typeof warning.sentenceNumber === "number" && typeof warning.excerpt === "string";
 }
 
 function downloadText(text: string, filename: string, mediaType: string) {
