@@ -715,7 +715,7 @@ class ArtifactApiIntegrationTest {
 			state, "OPENAI", "scripted", "{\"maxModelCalls\":12,\"maxTotalTokens\":1000,\"maxRunDurationMillis\":60000}",
 		))
 		val gateway = PackGateway(evidence.id)
-		GenerationRunWorker(persistence, workflow, gateway, workerId = "content-pack-test").drain()
+		GenerationRunWorker(persistence, workflow, gateway, workerId = "artifact-test").drain()
 		val row = jdbcTemplate.queryForMap(
 			"""
 			select cp.id pack_id, cv.id variant_id from content_packs cp join content_variants cv on cv.content_pack_id=cp.id
