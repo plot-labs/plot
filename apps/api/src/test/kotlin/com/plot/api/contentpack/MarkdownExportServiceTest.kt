@@ -85,11 +85,11 @@ class MarkdownExportServiceTest {
 		)
 
 		val error = assertFailsWith<UnresolvedExportException> {
-			MarkdownExportService().render(sentences, listOf(github), acknowledgeUnresolved = false)
+			MarkdownExportService().render(sentences, listOf(github), acknowledgeUnresolved = false, includeSources = false)
 		}
 		assertEquals(2, error.unresolvedCount)
 
-		val acknowledged = MarkdownExportService().render(sentences, listOf(github), acknowledgeUnresolved = true)
+		val acknowledged = MarkdownExportService().render(sentences, listOf(github), acknowledgeUnresolved = true, includeSources = false)
 		assertEquals(2, acknowledged.unresolvedCount)
 		assertEquals(true, acknowledged.warningAcknowledged)
 		assertTrue(acknowledged.markdown.contains("Unsupported claim."))

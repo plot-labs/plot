@@ -76,7 +76,7 @@ class ContentPackController(private val service: ContentPackService) {
 		service.export(
 			variantId,
 			requireNotNull(request.expectedRevisionNumber),
-			request.includeSources,
+			requireNotNull(request.includeSources),
 			request.acknowledgeUnresolved,
 			request.acknowledgedWarningKeys,
 			request.acknowledgedRevisionIds,

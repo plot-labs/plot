@@ -39,6 +39,7 @@ import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.patch
 import org.springframework.test.web.servlet.post
+import tools.jackson.databind.JsonNode
 import tools.jackson.databind.ObjectMapper
 
 @SpringBootTest
@@ -102,7 +103,7 @@ class ContentPackApiIntegrationTest {
 
 		val rejected = mockMvc.post("/api/content-variants/${fixture.variantId}/exports") {
 			contentType = MediaType.APPLICATION_JSON
-			content = """{"expectedRevisionNumber":2,"acknowledgeUnresolved":false,"disposition":"COPY"}"""
+			content = """{"expectedRevisionNumber":2,"includeSources":false,"acknowledgeUnresolved":false,"disposition":"COPY"}"""
 		}.andExpect {
 			status { isConflict() }
 			jsonPath("$.error") { value("EXPORT_CONFIRMATION_REQUIRED") }
@@ -123,6 +124,7 @@ class ContentPackApiIntegrationTest {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 3,
+				"includeSources" to false,
 				"acknowledgeUnresolved" to true,
 				"acknowledgedRevisionIds" to listOf(acknowledgedRevision),
 				"disposition" to "COPY",
@@ -132,8 +134,8 @@ class ContentPackApiIntegrationTest {
 			jsonPath("$.error") { value("EXPORT_CONFIRMATION_REQUIRED") }
 		}
 
-		val copy = export(fixture.variantId, "COPY")
-		val download = export(fixture.variantId, "DOWNLOAD")
+		val copy = export(fixture.variantId, "COPY", includeSources = false)
+		val download = export(fixture.variantId, "DOWNLOAD", includeSources = false)
 		export(fixture.variantId, "COPY", includeSources = true)
 		assertEquals(copy, download)
 		kotlin.test.assertFalse(copy.contains("PRIVATE SNAPSHOT EXCERPT"))
@@ -151,6 +153,44 @@ class ContentPackApiIntegrationTest {
 			"select disposition from generation_export_events where generation_run_id = ? and status = 'SUCCEEDED'",
 			String::class.java, fixture.runId,
 		).toSet())
+	}
+
+	@Test
+	fun `export requires explicit source choice and edits after delivery do not auto redeliver`() {
+		val fixture = readyPack()
+		val withoutSources = export(fixture.variantId, "COPY", includeSources = false, expectWarningAcknowledged = false)
+		assertFalse(withoutSources.contains("## Sources"))
+		val withSources = export(fixture.variantId, "COPY", includeSources = true, expectWarningAcknowledged = false)
+		assertTrue(withSources.contains("## Sources"))
+		assertEquals(setOf(false, true), jdbcTemplate.queryForList(
+			"select include_sources from generation_export_events where generation_run_id = ? and status = 'SUCCEEDED'",
+			Boolean::class.java, fixture.runId,
+		).toSet())
+		assertEquals(2, jdbcTemplate.queryForList(
+			"select distinct export_input_hash from generation_export_events where generation_run_id = ? and status = 'SUCCEEDED'",
+			String::class.java, fixture.runId,
+		).size)
+
+		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = objectMapper.writeValueAsString(mapOf(
+				"expectedRevisionNumber" to 1,
+				"lexicalContent" to lexicalContent("Delivered edit.", "Stable sentence."),
+				"statements" to listOf(
+					mapOf("id" to fixture.firstSentenceId, "orderIndex" to 0, "body" to "Delivered edit."),
+					mapOf("id" to fixture.secondSentenceId, "orderIndex" to 1, "body" to "Stable sentence."),
+				),
+			))
+		}.andExpect { status { isOk() } }
+		assertEquals(2, jdbcTemplate.queryForObject(
+			"select count(*) from generation_export_events where generation_run_id = ? and status = 'SUCCEEDED'",
+			Int::class.java, fixture.runId,
+		))
+
+		mockMvc.post("/api/content-variants/${fixture.variantId}/exports") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"expectedRevisionNumber":2,"acknowledgeUnresolved":false,"disposition":"COPY"}"""
+		}.andExpect { status { isBadRequest() } }
 	}
 
 	@Test
@@ -190,7 +230,7 @@ class ContentPackApiIntegrationTest {
 		assertFalse(latest.contains("\"reason\""))
 		mockMvc.post("/api/content-variants/${fixture.variantId}/exports") {
 			contentType = MediaType.APPLICATION_JSON
-			content = """{"expectedRevisionNumber":1,"acknowledgeUnresolved":true,"disposition":"COPY"}"""
+			content = """{"expectedRevisionNumber":1,"includeSources":false,"acknowledgeUnresolved":true,"disposition":"COPY"}"""
 		}.andExpect {
 			status { isConflict() }
 			jsonPath("$.error") { value("STALE_ARTIFACT_REVISION") }
@@ -210,7 +250,7 @@ class ContentPackApiIntegrationTest {
 
 		val rejected = mockMvc.post("/api/content-variants/${fixture.variantId}/exports") {
 			contentType = MediaType.APPLICATION_JSON
-			content = """{"expectedRevisionNumber":2,"acknowledgeUnresolved":false,"disposition":"COPY"}"""
+			content = """{"expectedRevisionNumber":2,"includeSources":false,"acknowledgeUnresolved":false,"disposition":"COPY"}"""
 		}.andExpect {
 			status { isConflict() }
 			jsonPath("$.error") { value("EXPORT_CONFIRMATION_REQUIRED") }
@@ -218,7 +258,7 @@ class ContentPackApiIntegrationTest {
 			jsonPath("$.details.warnings[0].excerpt") { value("Latest unreviewed rewrite.") }
 		}.andReturn().response.contentAsString
 		assertFalse(rejected.contains(fixture.firstSentenceId.toString()))
-		assertTrue(export(fixture.variantId, "COPY").contains("Latest unreviewed rewrite."))
+		assertTrue(export(fixture.variantId, "COPY", includeSources = false).contains("Latest unreviewed rewrite."))
 	}
 
 	@Test
@@ -329,7 +369,11 @@ class ContentPackApiIntegrationTest {
 		}.andExpect { status { isBadRequest() } }
 		mockMvc.post("/api/content-variants/${fixture.variantId}/exports") {
 			contentType = MediaType.APPLICATION_JSON
-			content = """{"acknowledgeUnresolved":true,"disposition":"COPY"}"""
+			content = """{"expectedRevisionNumber":1,"acknowledgeUnresolved":true,"disposition":"COPY"}"""
+		}.andExpect { status { isBadRequest() } }
+		mockMvc.post("/api/content-variants/${fixture.variantId}/exports") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"expectedRevisionNumber":1,"acknowledgeUnresolved":false,"disposition":"COPY"}"""
 		}.andExpect { status { isBadRequest() } }
 
 		assertEquals(1, jdbcTemplate.queryForObject(
@@ -337,6 +381,81 @@ class ContentPackApiIntegrationTest {
 			Int::class.java,
 			fixture.variantId,
 		))
+	}
+
+	@Test
+	fun `Lexical validation rejects fractional values and wrong node versions`() {
+		val fixture = readyPack()
+		val fractional = objectMapper.readTree(objectMapper.writeValueAsString(lexicalContent("Supported sentence.")))
+			.apply { get("root").get("children")[0].get("children")[0].asObject().put("detail", 0.5) }
+		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = objectMapper.writeValueAsString(mapOf(
+				"expectedRevisionNumber" to 1,
+				"lexicalContent" to fractional,
+				"statements" to listOf(mapOf("id" to fixture.firstSentenceId, "orderIndex" to 0, "body" to "Supported sentence.")),
+			))
+		}.andExpect { status { isBadRequest() } }
+
+		val wrongRootVersion = objectMapper.readTree(objectMapper.writeValueAsString(lexicalContent("Supported sentence.")))
+			.apply { get("root").asObject().put("version", 2) }
+		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = objectMapper.writeValueAsString(mapOf(
+				"expectedRevisionNumber" to 1,
+				"lexicalContent" to wrongRootVersion,
+				"statements" to listOf(mapOf("id" to fixture.firstSentenceId, "orderIndex" to 0, "body" to "Supported sentence.")),
+			))
+		}.andExpect { status { isBadRequest() } }
+
+		val wrongTextVersion = objectMapper.readTree(objectMapper.writeValueAsString(lexicalContent("Supported sentence.")))
+			.apply { get("root").get("children")[0].get("children")[0].asObject().put("version", 2) }
+		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = objectMapper.writeValueAsString(mapOf(
+				"expectedRevisionNumber" to 1,
+				"lexicalContent" to wrongTextVersion,
+				"statements" to listOf(mapOf("id" to fixture.firstSentenceId, "orderIndex" to 0, "body" to "Supported sentence.")),
+			))
+		}.andExpect { status { isBadRequest() } }
+	}
+
+	@Test
+	fun `Lexical validation accepts linebreaks and rejects malformed linebreak fields`() {
+		val fixture = readyPack()
+		mockMvc.patch("/api/content-variants/${fixture.variantId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = objectMapper.writeValueAsString(mapOf(
+				"expectedRevisionNumber" to 1,
+				"lexicalContent" to lexicalContentWithLinebreak(),
+				"statements" to listOf(mapOf("id" to fixture.firstSentenceId, "orderIndex" to 0, "body" to "First\nSecond")),
+			))
+		}.andExpect {
+			status { isOk() }
+			jsonPath("$.variant.revisionNumber") { value(2) }
+			jsonPath("$.variant.lexicalContent.root.children[0].children[1].type") { value("linebreak") }
+			jsonPath("$.variant.lexicalContent.root.children[0].children[1].version") { value(1) }
+		}
+
+		val unknownFieldFixture = readyPack()
+		mockMvc.patch("/api/content-variants/${unknownFieldFixture.variantId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = objectMapper.writeValueAsString(mapOf(
+				"expectedRevisionNumber" to 1,
+				"lexicalContent" to lexicalContentWithLinebreak(unknownField = true),
+				"statements" to listOf(mapOf("id" to unknownFieldFixture.firstSentenceId, "orderIndex" to 0, "body" to "First\nSecond")),
+			))
+		}.andExpect { status { isBadRequest() } }
+
+		val wrongVersionFixture = readyPack()
+		mockMvc.patch("/api/content-variants/${wrongVersionFixture.variantId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = objectMapper.writeValueAsString(mapOf(
+				"expectedRevisionNumber" to 1,
+				"lexicalContent" to lexicalContentWithLinebreak(linebreakVersion = 2),
+				"statements" to listOf(mapOf("id" to wrongVersionFixture.firstSentenceId, "orderIndex" to 0, "body" to "First\nSecond")),
+			))
+		}.andExpect { status { isBadRequest() } }
 	}
 
 	@Test
@@ -440,7 +559,7 @@ class ContentPackApiIntegrationTest {
 		}
 	}
 
-	private fun export(variantId: UUID, disposition: String, includeSources: Boolean = false): String {
+	private fun export(variantId: UUID, disposition: String, includeSources: Boolean, expectWarningAcknowledged: Boolean = true): String {
 		val revisionIds = jdbcTemplate.queryForList(
 			"select id from content_variant_sentence_revisions where content_variant_id = ? and is_current and origin = 'USER_MODIFIED'",
 			UUID::class.java, variantId,
@@ -461,7 +580,7 @@ class ContentPackApiIntegrationTest {
 		}.andExpect {
 			status { isOk() }
 			header { string("Cache-Control", "no-store") }
-			jsonPath("$.warningAcknowledged") { value(true) }
+			jsonPath("$.warningAcknowledged") { value(expectWarningAcknowledged) }
 		}.andReturn().response.contentAsString
 		return objectMapper.readTree(response).get("text").stringValue()
 	}
@@ -493,6 +612,35 @@ class ContentPackApiIntegrationTest {
 			"version" to 1,
 		),
 	)
+
+	private fun lexicalContentWithLinebreak(linebreakVersion: Int = 1, unknownField: Boolean = false): JsonNode {
+		val content = objectMapper.readTree(objectMapper.writeValueAsString(lexicalContent("First\nSecond")))
+		val children = content.get("root").get("children")[0].asObject().putArray("children")
+		children.add(objectMapper.createObjectNode().apply {
+			put("detail", 0)
+			put("format", 0)
+			put("mode", "normal")
+			put("style", "")
+			put("text", "First")
+			put("type", "text")
+			put("version", 1)
+		})
+		children.add(objectMapper.createObjectNode().apply {
+			put("type", "linebreak")
+			put("version", linebreakVersion)
+			if (unknownField) put("key", "linebreak-key")
+		})
+		children.add(objectMapper.createObjectNode().apply {
+			put("detail", 0)
+			put("format", 0)
+			put("mode", "normal")
+			put("style", "")
+			put("text", "Second")
+			put("type", "text")
+			put("version", 1)
+		})
+		return content
+	}
 
 	private fun readyPack(sourceUrl: String = "https://github.test/acme/repo/pull/1"): Fixture {
 		val runId = UUID.randomUUID()

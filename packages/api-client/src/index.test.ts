@@ -187,7 +187,7 @@ describe("Plot API client", () => {
     );
     const client = createPlotApiClient({ fetch: fetcher });
 
-    await expect(client.exportVariant("variant-1", { expectedRevisionNumber: 3, acknowledgeUnresolved: false, disposition: "COPY" })).rejects.toMatchObject<PlotApiError>({
+		await expect(client.exportVariant("variant-1", { expectedRevisionNumber: 3, includeSources: false, acknowledgeUnresolved: false, disposition: "COPY" })).rejects.toMatchObject<PlotApiError>({
 			code: "EXPORT_CONFIRMATION_REQUIRED",
 			status: 409,
 			details: { warnings: [{ key: "warning-1", sentenceNumber: 2, excerpt: "A claim" }] },
@@ -262,7 +262,7 @@ describe("Plot API client", () => {
     const client = createPlotApiClient({ fetch: fetcher });
 
     await client.editSentence("variant", "sentence", { expectedRevisionNumber: 2, body: "Edited" });
-    await client.exportVariant("variant", { expectedRevisionNumber: 2, acknowledgeUnresolved: true, disposition: "DOWNLOAD" });
+    await client.exportVariant("variant", { expectedRevisionNumber: 2, includeSources: false, acknowledgeUnresolved: true, disposition: "DOWNLOAD" });
 
     expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
       "/api/plot/content-variants/variant/sentences/sentence",

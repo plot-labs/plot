@@ -33,7 +33,7 @@ enum class ExportDisposition { COPY, DOWNLOAD }
 
 data class ExportContentVariantRequest(
 	@field:NotNull val expectedRevisionNumber: Int?,
-	val includeSources: Boolean = false,
+	@field:NotNull val includeSources: Boolean?,
 	val acknowledgeUnresolved: Boolean = false,
 	@field:Size(max = 1_000) val acknowledgedWarningKeys: List<String> = emptyList(),
 	/** @deprecated use acknowledgedWarningKeys; retained for old private clients. */

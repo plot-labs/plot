@@ -17,7 +17,7 @@ class MarkdownExportService {
 		sentences: List<ExportSentence>,
 		evidence: List<EvidenceSnapshot>,
 		acknowledgeUnresolved: Boolean,
-		includeSources: Boolean = false,
+		includeSources: Boolean,
 		sources: List<ExportSource> = emptyList(),
 	): MarkdownExport {
 		val orderedSentences = sentences.sortedBy { it.orderIndex }
