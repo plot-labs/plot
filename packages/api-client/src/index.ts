@@ -88,11 +88,11 @@ export interface ContentPack {
   variant: {
     id: string;
     status: string;
-    revisionId?: string;
-    revisionNumber?: number;
-    lexicalContent?: Record<string, unknown>;
+    revisionId: string;
+    revisionNumber: number;
+    lexicalContent: Record<string, unknown>;
     sentences: ContentSentence[];
-    sources?: ContentSource[];
+    sources: ContentSource[];
   };
 }
 
@@ -152,15 +152,15 @@ export interface ExportWarning {
 
 export interface ContentExport {
   exportId: string;
-  artifactRevisionId?: string;
-  artifactRevisionNumber?: number;
+  artifactRevisionId: string;
+  artifactRevisionNumber: number;
   disposition: "COPY" | "DOWNLOAD";
   filename: string;
   mediaType: string;
   text: string;
   unresolvedCount: number;
   warningAcknowledged: boolean;
-  includeSources?: boolean;
+  includeSources: boolean;
 }
 
 export interface CreateGenerationInput {
@@ -350,7 +350,7 @@ export interface PlotApiClient {
   listContentPacks(page?: number, size?: number, options?: RequestOptions): Promise<ContentPackPage>;
   saveContentVariant(variantId: string, input: { expectedRevisionNumber: number; lexicalContent: Record<string, unknown>; statements: ContentStatementInput[] }, options?: RequestOptions): Promise<ContentPack>;
   editSentence(variantId: string, sentenceId: string, input: { expectedRevisionNumber: number; body: string }, options?: RequestOptions): Promise<ContentPack>;
-  exportVariant(variantId: string, input: { expectedRevisionNumber?: number; includeSources?: boolean; acknowledgeUnresolved: boolean; acknowledgedWarningKeys?: string[]; acknowledgedRevisionIds?: string[]; disposition: "COPY" | "DOWNLOAD" }, options?: RequestOptions): Promise<ContentExport>;
+  exportVariant(variantId: string, input: { expectedRevisionNumber: number; includeSources?: boolean; acknowledgeUnresolved: boolean; acknowledgedWarningKeys?: string[]; acknowledgedRevisionIds?: string[]; disposition: "COPY" | "DOWNLOAD" }, options?: RequestOptions): Promise<ContentExport>;
 }
 
 export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof fetch; workspaceId?: string | (() => string | null) } = {}): PlotApiClient {
