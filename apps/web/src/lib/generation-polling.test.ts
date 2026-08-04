@@ -12,7 +12,7 @@ const run = (status: GenerationRun["status"], pollAfterMs: number | null = 10): 
   evidence: [],
   sentences: [],
   artifacts: [],
-  contentPack: null,
+  artifact: null,
 });
 
 describe("generation polling", () => {

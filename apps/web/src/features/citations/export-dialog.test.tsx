@@ -5,9 +5,9 @@ import { describe, expect, it, vi } from "vitest";
 
 import { ExportDialog } from "./export-dialog";
 import { CitedDraftEditor } from "./cited-draft-editor";
-import { PlotApiError, type ContentPack, type PlotApiClient } from "@plot/api-client";
+import { PlotApiError, type Artifact, type PlotApiClient } from "@plot/api-client";
 
-const pack: ContentPack = {
+const pack: Artifact = {
   id: "pack-1",
   generationRunId: "run-1",
   status: "NEEDS_REVIEW",
@@ -47,16 +47,16 @@ function lexicalContent(...bodies: string[]) {
 
 describe("ExportDialog", () => {
   it("uses the same revision-bound endpoint for download and can explicitly include sources", async () => {
-    const exportVariant = vi.fn().mockResolvedValue({ exportId: "export-2", disposition: "DOWNLOAD", filename: "changelog.md", mediaType: "text/markdown", text: "Ready.", unresolvedCount: 0, warningAcknowledged: false, includeSources: true });
+    const exportArtifactVariant = vi.fn().mockResolvedValue({ exportId: "export-2", disposition: "DOWNLOAD", filename: "changelog.md", mediaType: "text/markdown", text: "Ready.", unresolvedCount: 0, warningAcknowledged: false, includeSources: true });
     const createObjectURL = vi.fn().mockReturnValue("blob:export");
     const revokeObjectURL = vi.fn();
     Object.defineProperties(URL, { createObjectURL: { configurable: true, value: createObjectURL }, revokeObjectURL: { configurable: true, value: revokeObjectURL } });
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
-    render(<ExportDialog pack={pack} client={{ exportVariant } as unknown as PlotApiClient} />);
+    render(<ExportDialog pack={pack} client={{ exportArtifactVariant } as unknown as PlotApiClient} />);
     fireEvent.click(screen.getByRole("checkbox", { name: /include sources/i }));
     fireEvent.click(screen.getByRole("button", { name: /download changelog/i }));
     await waitFor(() => expect(click).toHaveBeenCalled());
-    expect(exportVariant).toHaveBeenCalledWith("variant-1", {
+    expect(exportArtifactVariant).toHaveBeenCalledWith("variant-1", {
       expectedRevisionNumber: 3,
       includeSources: true,
       acknowledgeUnresolved: false,
@@ -67,7 +67,7 @@ describe("ExportDialog", () => {
   });
 
   it("renders human-readable warnings without UUIDs and acknowledges the exact warning keys", async () => {
-    const exportVariant = vi
+    const exportArtifactVariant = vi
       .fn()
       .mockRejectedValueOnce(new PlotApiError(409, "EXPORT_CONFIRMATION_REQUIRED", "Confirm", {
         warnings: [{ key: "warning-key-1", sentenceNumber: 1, excerpt: "A claim." }],
@@ -78,7 +78,7 @@ describe("ExportDialog", () => {
     render(
       <>
         <div data-statement-id="sentence-7" tabIndex={-1}>Draft sentence</div>
-        <ExportDialog pack={pack} client={{ exportVariant } as unknown as PlotApiClient} />
+        <ExportDialog pack={pack} client={{ exportArtifactVariant } as unknown as PlotApiClient} />
       </>,
     );
 
@@ -91,18 +91,18 @@ describe("ExportDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: /confirm and copy/i }));
 
     await waitFor(() => expect(writeText).toHaveBeenCalledWith("A claim."));
-    expect(exportVariant).toHaveBeenNthCalledWith(1, "variant-1", expect.objectContaining({ expectedRevisionNumber: 3, includeSources: false, acknowledgedWarningKeys: [] }));
-    expect(exportVariant).toHaveBeenNthCalledWith(2, "variant-1", expect.objectContaining({ expectedRevisionNumber: 3, acknowledgedWarningKeys: ["warning-key-1"] }));
+    expect(exportArtifactVariant).toHaveBeenNthCalledWith(1, "variant-1", expect.objectContaining({ expectedRevisionNumber: 3, includeSources: false, acknowledgedWarningKeys: [] }));
+    expect(exportArtifactVariant).toHaveBeenNthCalledWith(2, "variant-1", expect.objectContaining({ expectedRevisionNumber: 3, acknowledgedWarningKeys: ["warning-key-1"] }));
   });
 
   it("focuses and highlights the real Lexical statement block from an export warning", async () => {
-    const exportVariant = vi.fn().mockRejectedValueOnce(new PlotApiError(409, "EXPORT_CONFIRMATION_REQUIRED", "Confirm", {
+    const exportArtifactVariant = vi.fn().mockRejectedValueOnce(new PlotApiError(409, "EXPORT_CONFIRMATION_REQUIRED", "Confirm", {
       warnings: [{ key: "warning-key-1", sentenceNumber: 1, excerpt: "A claim." }],
     }));
     render(
       <>
         <CitedDraftEditor pack={pack} onSaveArtifact={vi.fn()} />
-        <ExportDialog pack={pack} client={{ exportVariant } as unknown as PlotApiClient} />
+        <ExportDialog pack={pack} client={{ exportArtifactVariant } as unknown as PlotApiClient} />
       </>,
     );
     fireEvent.click(screen.getByRole("button", { name: /copy changelog/i }));

@@ -577,12 +577,12 @@ function LatestRelease({
   let content;
   if (activity.status === "QUEUED" || activity.status === "RESOLVING" || activity.status === "GENERATING") {
     content = <span>Preparing {activity.tagName}…</span>;
-  } else if (activity.status === "READY" && activity.contentPackId) {
+  } else if (activity.status === "READY" && activity.artifactId) {
     content = (
       <span>
         <span>Draft ready</span> ·{" "}
         <Link
-          href={`/packs?pack=${encodeURIComponent(activity.contentPackId)}`}
+          href={`/artifacts?artifact=${encodeURIComponent(activity.artifactId)}`}
           className="font-semibold text-[#2563eb] hover:underline dark:text-[#93c5fd]"
         >
           Review changelog

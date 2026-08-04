@@ -77,7 +77,7 @@ export function ProductShell({ children }: { children: ReactNode }) {
 function MobileProductNavigation({ pathname }: { pathname: string }) {
   const items = [
     { href: "/integrations", label: "Integrations" },
-    { href: "/packs", label: "Packs" },
+    { href: "/artifacts", label: "Artifacts" },
   ];
 
   return (

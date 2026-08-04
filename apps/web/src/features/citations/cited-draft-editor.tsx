@@ -13,29 +13,34 @@ import { Save } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 
 import type {
-  ContentPack,
+  Artifact,
   ContentStatementInput,
 } from "@plot/api-client";
 import { SourcesPopover } from "./sources-popover";
 
-type SaveArtifactInput = {
+export type SaveArtifactInput = {
   expectedRevisionNumber: number;
   lexicalContent: Record<string, unknown>;
   statements: ContentStatementInput[];
 };
 
 type CitedDraftEditorProps = {
-  pack: ContentPack;
-  onSaveArtifact: (input: SaveArtifactInput) => Promise<ContentPack>;
-  onPackChange?: (pack: ContentPack) => void;
+  pack: Artifact;
+  onSaveArtifact: (input: SaveArtifactInput) => Promise<Artifact>;
+  onPackChange?: (pack: Artifact) => void;
+  readOnly?: boolean;
+  embedded?: boolean;
+  onSaveStateChange?: (state: "saved" | "saving" | "dirty" | "error") => void;
+  initialDraft?: Omit<SaveArtifactInput, "expectedRevisionNumber">;
+  onDraftChange?: (draft: Omit<SaveArtifactInput, "expectedRevisionNumber">) => void;
 };
 
 export function CitedDraftEditor(props: CitedDraftEditorProps) {
-  const revisionKey = `${props.pack.variant.revisionId}:${props.pack.variant.revisionNumber}`;
+  const revisionKey = `${props.pack.variant.revisionId}:${props.pack.variant.revisionNumber}:${props.readOnly ? "read-only" : "editable"}`;
   return <ArtifactEditor key={revisionKey} {...props} />;
 }
 
-function ArtifactEditor({ pack, onSaveArtifact, onPackChange }: CitedDraftEditorProps) {
+function ArtifactEditor({ pack, onSaveArtifact, onPackChange, readOnly = false, embedded = false, onSaveStateChange, initialDraft, onDraftChange }: CitedDraftEditorProps) {
   const sentences = useMemo(
     () => [...pack.variant.sentences].sort((a, b) => a.orderIndex - b.orderIndex),
     [pack.variant.sentences],
@@ -43,20 +48,28 @@ function ArtifactEditor({ pack, onSaveArtifact, onPackChange }: CitedDraftEditor
   const revisionNumber = pack.variant.revisionNumber;
   const revisionKey = `${pack.variant.revisionId}:${revisionNumber}`;
   const lexicalContent = useMemo(() => pack.variant.lexicalContent, [pack.variant.lexicalContent]);
-  const initialStatementBlocks = useMemo(() => statementBlocksFor(sentences), [sentences]);
-  const statementIds = useMemo(() => sentences.map((sentence) => sentence.id), [sentences]);
+  const initialStatementBlocks = useMemo(
+    () => initialDraft ? statementBlocksForInputs(initialDraft.statements) : statementBlocksFor(sentences),
+    [initialDraft, sentences],
+  );
+  const statementIds = useMemo(() => initialStatementBlocks.map((statement) => statement.id), [initialStatementBlocks]);
   const statementIdentityMapRef = useRef<Map<string, string>>(new Map());
   const identityInitializedRef = useRef(false);
-  const [draftState, setDraftState] = useState<Record<string, unknown>>(lexicalContent);
-  const [draftStatements, setDraftStatements] = useState<ContentStatementInput[]>(() => statementInputs(initialStatementBlocks));
+  const [draftState, setDraftState] = useState<Record<string, unknown>>(initialDraft?.lexicalContent ?? lexicalContent);
+  const [draftStatements, setDraftStatements] = useState<ContentStatementInput[]>(() => initialDraft?.statements ?? statementInputs(initialStatementBlocks));
   const [statementBlocks, setStatementBlocks] = useState<StatementBlock[]>(initialStatementBlocks);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
+  useEffect(() => {
+    onSaveStateChange?.("saved");
+  }, [onSaveStateChange, revisionKey]);
+
   async function save() {
-    if (saving) return;
+    if (saving || readOnly) return;
     setSaving(true);
     setMessage("");
+    onSaveStateChange?.("saving");
     try {
       const updated = await onSaveArtifact({
         expectedRevisionNumber: revisionNumber,
@@ -64,21 +77,25 @@ function ArtifactEditor({ pack, onSaveArtifact, onPackChange }: CitedDraftEditor
         statements: draftStatements,
       });
       onPackChange?.(updated);
-      setMessage(`Revision ${updated.variant.revisionNumber} saved.`);
+      setMessage(`Saved ${new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date())}.`);
+      onSaveStateChange?.("saved");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "The draft could not be saved.");
+      onSaveStateChange?.("error");
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <section aria-label="Draft editor" className="rounded-xl border border-black/10 bg-white dark:border-white/10 dark:bg-white/[0.04]">
+    <section aria-label={readOnly ? "Historical artifact preview" : "Artifact editor"} className={embedded ? "min-w-0" : "rounded-xl border border-black/10 bg-white dark:border-white/10 dark:bg-white/[0.04]"}>
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-black/[0.07] px-4 py-4 dark:border-white/10 sm:px-6">
         <div>
-          <h2 className="text-sm font-semibold text-black/82 dark:text-white/88">Draft</h2>
+          <h2 className="text-sm font-semibold text-black/82 dark:text-white/88">{readOnly ? "Historical preview" : "Artifact document"}</h2>
           <p className="mt-1 text-xs text-black/50 dark:text-white/52">
-            Edit the whole artifact. Sources stay outside the document and are bound to this revision.
+            {readOnly
+              ? "This snapshot is read-only. Editing and delivery are disabled."
+              : "Edit the whole artifact. Sources stay outside the document and stay attached to it."}
           </p>
         </div>
         <SourcesPopover sources={pack.variant.sources} />
@@ -88,8 +105,8 @@ function ArtifactEditor({ pack, onSaveArtifact, onPackChange }: CitedDraftEditor
         key={revisionKey}
         initialConfig={{
           namespace: `plot-artifact-${pack.variant.id}`,
-          editable: true,
-          editorState: JSON.stringify(lexicalContent),
+          editable: !readOnly,
+          editorState: JSON.stringify(draftState),
           onError: (error) => {
             throw error;
           },
@@ -97,7 +114,7 @@ function ArtifactEditor({ pack, onSaveArtifact, onPackChange }: CitedDraftEditor
       >
         <div className="relative px-4 py-5 sm:px-6">
           <RichTextPlugin
-            contentEditable={<ContentEditable aria-label="Draft content" className="min-h-[260px] whitespace-pre-wrap rounded-lg border border-black/10 bg-white px-4 py-4 text-[15px] leading-7 text-black/84 outline-none focus-within:border-black/35 dark:border-white/12 dark:bg-[#18181b] dark:text-white/86 dark:focus-within:border-white/35" />}
+            contentEditable={<ContentEditable aria-label={readOnly ? "Historical artifact content" : "Draft content"} aria-readonly={readOnly} className={`min-h-[260px] whitespace-pre-wrap rounded-lg border border-black/10 px-4 py-4 text-[15px] leading-7 text-black/84 outline-none focus-within:border-black/35 dark:border-white/12 dark:text-white/86 dark:focus-within:border-white/35 ${readOnly ? "bg-black/[0.025] dark:bg-white/[0.025]" : "bg-white dark:bg-[#18181b]"}`} />}
             placeholder={<div className="pointer-events-none absolute left-8 top-9 text-sm text-black/35 dark:left-10 dark:text-white/35">Write the source-backed artifact…</div>}
             ErrorBoundary={LexicalErrorBoundary}
           />
@@ -123,22 +140,28 @@ function ArtifactEditor({ pack, onSaveArtifact, onPackChange }: CitedDraftEditor
               statementIdentityMapRef.current = projected.mapping;
               setStatementBlocks(projected.blocks);
               setDraftStatements(statementInputs(projected.blocks));
+              if (!readOnly) {
+                onDraftChange?.({ lexicalContent: nextState.toJSON() as unknown as Record<string, unknown>, statements: statementInputs(projected.blocks) });
+                onSaveStateChange?.("dirty");
+              }
             }}
           />
         </div>
       </LexicalComposer>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-black/[0.07] px-4 py-3 dark:border-white/10 sm:px-6">
-        <p className="text-xs text-black/48 dark:text-white/50">Revision {revisionNumber}</p>
-        <button
-          type="button"
-          disabled={saving}
-          onClick={() => void save()}
-          className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-black px-3 text-sm font-semibold text-white transition hover:bg-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-white/85"
-        >
-          <Save aria-hidden="true" className="size-4" />
-          {saving ? "Saving…" : "Save draft"}
-        </button>
+        <p className="text-xs text-black/48 dark:text-white/50">{readOnly ? "Saved snapshot" : saving ? "Saving…" : message || "Saved"}</p>
+        {!readOnly ? (
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => void save()}
+            className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-black px-3 text-sm font-semibold text-white transition hover:bg-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-white/85"
+          >
+            <Save aria-hidden="true" className="size-4" />
+            {saving ? "Saving…" : "Save draft"}
+          </button>
+        ) : null}
       </div>
       {message ? (
         <p role="status" aria-live="polite" className="border-t border-black/[0.07] px-4 py-3 text-xs text-black/58 dark:border-white/10 dark:text-white/58 sm:px-6">
@@ -212,7 +235,7 @@ function extractStatementNodes(state: EditorState): EphemeralLexicalStatementNod
 
 export type StatementBlock = { id: string; body: string };
 
-function statementBlocksFor(sentences: ContentPack["variant"]["sentences"]): StatementBlock[] {
+function statementBlocksFor(sentences: Artifact["variant"]["sentences"]): StatementBlock[] {
   return [...sentences]
     .sort((a, b) => a.orderIndex - b.orderIndex)
     .map((sentence) => ({ id: sentence.id, body: sentence.body }));
@@ -220,6 +243,13 @@ function statementBlocksFor(sentences: ContentPack["variant"]["sentences"]): Sta
 
 function statementInputs(blocks: StatementBlock[]): ContentStatementInput[] {
   return blocks.map((block, orderIndex) => ({ id: block.id, orderIndex, body: block.body }));
+}
+
+function statementBlocksForInputs(statements: ContentStatementInput[]): StatementBlock[] {
+  return statements
+    .slice()
+    .sort((left, right) => (left.orderIndex ?? Number.MAX_SAFE_INTEGER) - (right.orderIndex ?? Number.MAX_SAFE_INTEGER))
+    .flatMap((statement) => statement.id ? [{ id: statement.id, body: statement.body ?? "" }] : []);
 }
 
 /**
