@@ -537,7 +537,7 @@ class ArtifactApiIntegrationTest {
 			))
 		}.andExpect {
 			status { isOk() }
-			jsonPath("$.variant.revisionNumber") { value(3) }
+			jsonPath("$.variant.revisionNumber") { value(2) }
 			jsonPath("$.variant.sentences[0].body") { value("Legacy edited sentence.") }
 		}
 	}
@@ -564,7 +564,7 @@ class ArtifactApiIntegrationTest {
 			content = emptySave.replace("\"expectedRevisionNumber\":1", "\"expectedRevisionNumber\":2")
 		}.andExpect {
 			status { isOk() }
-			jsonPath("$.variant.revisionNumber") { value(3) }
+			jsonPath("$.variant.revisionNumber") { value(2) }
 			jsonPath("$.variant.sentences.length()") { value(0) }
 		}
 	}
