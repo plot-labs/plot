@@ -47,4 +47,69 @@ describe("SourcesPopover", () => {
     fireEvent.click(close);
     expect(trigger).toHaveFocus();
   });
+
+  it("keeps source link activation inside the open dialog", () => {
+    render(<SourcesPopover sources={sources} />);
+    const trigger = screen.getByRole("button", { name: /Sources/ });
+    trigger.focus();
+    fireEvent.click(trigger);
+    const dialog = screen.getByRole("dialog", { name: "Sources" });
+    const source = screen.getAllByRole("doc-noteref")[0];
+
+    expect(source).toHaveAttribute("href", "https://github.com/acme/plot/pull/184");
+    expect(source).toHaveAttribute("target", "_blank");
+    fireEvent.click(source);
+    expect(dialog).toBeInTheDocument();
+  });
+
+  it("dismisses on an outside pointer and restores focus to the trigger", () => {
+    render(
+      <>
+        <SourcesPopover sources={sources} />
+        <button type="button">Outside</button>
+      </>,
+    );
+    const trigger = screen.getByRole("button", { name: /Sources/ });
+    const outside = screen.getByRole("button", { name: "Outside" });
+    trigger.focus();
+    fireEvent.click(trigger);
+    expect(screen.getByRole("dialog", { name: "Sources" })).toBeInTheDocument();
+
+    fireEvent.pointerDown(outside);
+    expect(screen.queryByRole("dialog", { name: "Sources" })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it("dismisses on Escape and on the close button with focus restoration", () => {
+    render(<SourcesPopover sources={sources} />);
+    const trigger = screen.getByRole("button", { name: /Sources/ });
+    trigger.focus();
+    fireEvent.click(trigger);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Sources" })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole("button", { name: "Close sources" }));
+    expect(screen.queryByRole("dialog", { name: "Sources" })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it("keeps an empty source dialog keyboard-trapped and dismissible", () => {
+    render(<SourcesPopover sources={[]} />);
+    const trigger = screen.getByRole("button", { name: "Sources" });
+    trigger.focus();
+    fireEvent.click(trigger);
+    expect(screen.getByText("No current sources are available for this revision.")).toBeInTheDocument();
+
+    const dialog = screen.getByRole("dialog", { name: "Sources" });
+    const close = screen.getByRole("button", { name: "Close sources" });
+    expect(dialog).toHaveFocus();
+    fireEvent.keyDown(document, { key: "Tab" });
+    expect(close).toHaveFocus();
+    fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+    expect(close).toHaveFocus();
+    fireEvent.click(close);
+    expect(trigger).toHaveFocus();
+  });
 });

@@ -35,6 +35,13 @@ export function SourcesPopover({ sources }: SourcesPopoverProps) {
     if (!dialog) return;
 
     const focusable = () => focusableElements(dialog);
+    function dismissIfOutside(event: Event) {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (dialog.contains(target) || triggerRef.current?.contains(target)) return;
+      setOpen(false);
+    }
+
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -59,9 +66,15 @@ export function SourcesPopover({ sources }: SourcesPopoverProps) {
         elements[0]?.focus();
       }
     }
+    document.addEventListener("pointerdown", dismissIfOutside, true);
+    document.addEventListener("click", dismissIfOutside, true);
     document.addEventListener("keydown", onKeyDown);
     dialog.focus();
-    return () => document.removeEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", dismissIfOutside, true);
+      document.removeEventListener("click", dismissIfOutside, true);
+      document.removeEventListener("keydown", onKeyDown);
+    };
   }, [open]);
 
   function close() {
