@@ -10,7 +10,7 @@ import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext
 import type { EditorState } from "lexical";
 import { $getRoot } from "lexical";
 import { Save } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 
 import type {
   ContentPack,
@@ -44,7 +44,9 @@ function ArtifactEditor({ pack, onSaveArtifact, onPackChange }: CitedDraftEditor
   const revisionKey = `${pack.variant.revisionId}:${revisionNumber}`;
   const lexicalContent = useMemo(() => pack.variant.lexicalContent, [pack.variant.lexicalContent]);
   const initialStatementBlocks = useMemo(() => statementBlocksFor(sentences), [sentences]);
-  const statementBlocksRef = useRef(initialStatementBlocks);
+  const statementIds = useMemo(() => sentences.map((sentence) => sentence.id), [sentences]);
+  const statementIdentityMapRef = useRef<Map<string, string>>(new Map());
+  const identityInitializedRef = useRef(false);
   const [draftState, setDraftState] = useState<Record<string, unknown>>(lexicalContent);
   const [draftStatements, setDraftStatements] = useState<ContentStatementInput[]>(() => statementInputs(initialStatementBlocks));
   const [statementBlocks, setStatementBlocks] = useState<StatementBlock[]>(initialStatementBlocks);
@@ -100,15 +102,27 @@ function ArtifactEditor({ pack, onSaveArtifact, onPackChange }: CitedDraftEditor
             ErrorBoundary={LexicalErrorBoundary}
           />
           <HistoryPlugin />
+          <StatementIdentityPlugin
+            statementIds={statementIds}
+            identityMapRef={statementIdentityMapRef}
+            initializedRef={identityInitializedRef}
+          />
           <StatementDomPlugin statementIds={statementBlocks.map((statement) => statement.id)} />
           <OnChangePlugin
             onChange={(nextState) => {
               setDraftState(nextState.toJSON() as unknown as Record<string, unknown>);
-              const nextBodies = extractBlockBodies(nextState);
-              const nextBlocks = reconcileStatementBlocks(statementBlocksRef.current, nextBodies);
-              statementBlocksRef.current = nextBlocks;
-              setStatementBlocks(nextBlocks);
-              setDraftStatements(statementInputs(nextBlocks));
+              const nextNodes = extractStatementNodes(nextState);
+              if (!identityInitializedRef.current) {
+                statementIdentityMapRef.current = initializeStatementIdentityMap(
+                  nextNodes.map((node) => node.key),
+                  statementIds,
+                );
+                identityInitializedRef.current = true;
+              }
+              const projected = projectStatementBlocks(statementIdentityMapRef.current, nextNodes);
+              statementIdentityMapRef.current = projected.mapping;
+              setStatementBlocks(projected.blocks);
+              setDraftStatements(statementInputs(projected.blocks));
             }}
           />
         </div>
@@ -135,6 +149,31 @@ function ArtifactEditor({ pack, onSaveArtifact, onPackChange }: CitedDraftEditor
   );
 }
 
+function StatementIdentityPlugin({
+  statementIds,
+  identityMapRef,
+  initializedRef,
+}: {
+  statementIds: string[];
+  identityMapRef: MutableRefObject<Map<string, string>>;
+  initializedRef: MutableRefObject<boolean>;
+}) {
+  const [editor] = useLexicalComposerContext();
+
+  useEffect(() => {
+    editor.getEditorState().read(() => {
+      const nodes = $getRoot().getChildren();
+      identityMapRef.current = initializeStatementIdentityMap(
+        nodes.map((node) => node.getKey()),
+        statementIds,
+      );
+      initializedRef.current = true;
+    });
+  }, [editor, identityMapRef, initializedRef, statementIds]);
+
+  return null;
+}
+
 function StatementDomPlugin({ statementIds }: { statementIds: string[] }) {
   const [editor] = useLexicalComposerContext();
   useEffect(() => {
@@ -159,14 +198,16 @@ function StatementDomPlugin({ statementIds }: { statementIds: string[] }) {
   return null;
 }
 
-function extractBlockBodies(state: EditorState): string[] {
-  const texts: string[] = [];
+export type EphemeralLexicalStatementNode = { key: string; body: string };
+
+function extractStatementNodes(state: EditorState): EphemeralLexicalStatementNode[] {
+  const nodes: EphemeralLexicalStatementNode[] = [];
   state.read(() => {
     $getRoot().getChildren().forEach((node) => {
-      texts.push(node.getTextContent());
+      nodes.push({ key: node.getKey(), body: node.getTextContent() });
     });
   });
-  return texts;
+  return nodes;
 }
 
 export type StatementBlock = { id: string; body: string };
@@ -182,61 +223,39 @@ function statementInputs(blocks: StatementBlock[]): ContentStatementInput[] {
 }
 
 /**
- * Reconciles Lexical's top-level blocks with application-owned statement IDs.
- * Lexical node keys are intentionally not read or persisted here. Exact body
- * matches preserve IDs across reorder; an equal-sized unmatched region is
- * treated as edits; ambiguous insert/delete regions receive fresh IDs rather
- * than moving evidence to a neighboring statement.
+ * Builds the active-session correlation from the server-aligned revision.
+ * Lexical keys are ephemeral and never leave this in-memory map.
  */
-export function reconcileStatementBlocks(
-  previous: StatementBlock[],
-  nextBodies: string[],
+export function initializeStatementIdentityMap(
+  nodeKeys: string[],
+  statementIds: string[],
+): Map<string, string> {
+  return new Map(
+    nodeKeys.flatMap((key, index) => {
+      const statementId = statementIds[index];
+      return statementId ? [[key, statementId] as const] : [];
+    }),
+  );
+}
+
+/**
+ * Projects the current ordered Lexical blocks into application statements.
+ * Existing node keys retain their application IDs after edits and moves;
+ * only genuinely new keys receive a new UUID. Deleted keys disappear from
+ * the next map, so their evidence cannot be transferred to another block.
+ */
+export function projectStatementBlocks(
+  previous: ReadonlyMap<string, string>,
+  nodes: EphemeralLexicalStatementNode[],
   createId: () => string = newStatementId,
-): StatementBlock[] {
-  const assignments: Array<StatementBlock | null> = nextBodies.map(() => null);
-  const usedPrevious = new Set<number>();
-  const anchors: Array<{ nextIndex: number; previousIndex: number }> = [];
-
-  nextBodies.forEach((body, nextIndex) => {
-    const candidates = previous
-      .map((block, previousIndex) => ({ block, previousIndex }))
-      .filter(({ block, previousIndex }) => block.body === body && !usedPrevious.has(previousIndex))
-      .sort((left, right) => {
-        const distance = Math.abs(left.previousIndex - nextIndex) - Math.abs(right.previousIndex - nextIndex);
-        return distance || left.previousIndex - right.previousIndex;
-      });
-    const match = candidates[0];
-    if (!match) return;
-    usedPrevious.add(match.previousIndex);
-    assignments[nextIndex] = match.block;
-    anchors.push({ nextIndex, previousIndex: match.previousIndex });
+): { mapping: Map<string, string>; blocks: StatementBlock[] } {
+  const mapping = new Map<string, string>();
+  const blocks = nodes.map((node) => {
+    const id = previous.get(node.key) ?? createId();
+    mapping.set(node.key, id);
+    return { id, body: node.body };
   });
-
-  anchors.sort((left, right) => left.nextIndex - right.nextIndex);
-  let previousCursor = -1;
-  let nextCursor = -1;
-  const fillRegion = (previousEnd: number, nextEnd: number) => {
-    const oldRegion = previous.slice(previousCursor + 1, previousEnd).filter((_, index) => !usedPrevious.has(previousCursor + 1 + index));
-    const newIndexes = Array.from({ length: nextEnd - nextCursor - 1 }, (_, index) => nextCursor + 1 + index)
-      .filter((index) => assignments[index] === null);
-    if (oldRegion.length === newIndexes.length) {
-      newIndexes.forEach((index, offset) => {
-        assignments[index] = { id: oldRegion[offset].id, body: nextBodies[index] };
-      });
-    } else {
-      newIndexes.forEach((index) => {
-        assignments[index] = { id: createId(), body: nextBodies[index] };
-      });
-    }
-  };
-
-  anchors.forEach((anchor) => {
-    fillRegion(anchor.previousIndex, anchor.nextIndex);
-    previousCursor = anchor.previousIndex;
-    nextCursor = anchor.nextIndex;
-  });
-  fillRegion(previous.length, nextBodies.length);
-  return assignments.map((block, index) => block ?? { id: createId(), body: nextBodies[index] });
+  return { mapping, blocks };
 }
 
 function newStatementId(): string {
