@@ -3,9 +3,8 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
+import { ArtifactDocumentSurface } from "@/features/artifacts/artifact-document-surface";
 import { ArtifactHistoryPanel } from "@/features/citations/artifact-history-panel";
-import { CitedDraftEditor } from "@/features/citations/cited-draft-editor";
-import { ExportDialog } from "@/features/citations/export-dialog";
 import { plotApiClient, type ArtifactHistoryDetail, type Artifact, type ArtifactSummary } from "@/lib/api-client";
 
 export function ArtifactsWorkspace() {
@@ -81,32 +80,20 @@ function GeneratedArtifactDetail({ artifact }: { artifact: Artifact }) {
   const [currentArtifact, setCurrentArtifact] = useState(artifact);
   const [historical, setHistorical] = useState<ArtifactHistoryDetail | null>(null);
   const [historicalPosition, setHistoricalPosition] = useState<number | null>(null);
-  const shownArtifact = historical?.artifact ?? currentArtifact;
-  const readOnly = Boolean(historical);
 
   return (
-    <article aria-label="Artifact document surface" className="mx-auto grid max-w-6xl min-w-0 gap-5 pt-4 sm:pt-8 lg:grid-cols-[minmax(0,1fr)_minmax(250px,0.32fr)]">
-      <div className="min-w-0 overflow-hidden rounded-xl border border-black/10 bg-white dark:border-white/10 dark:bg-white/[0.04]">
-        <header className="flex flex-wrap items-start justify-between gap-4 border-b border-black/[0.07] px-4 py-5 dark:border-white/10 sm:px-6">
-          <div className="min-w-0">
-            <div className="text-xs font-semibold uppercase tracking-[0.08em] text-black/42 dark:text-white/45">Artifact</div>
-            <h1 className="mt-2 truncate text-2xl font-semibold text-black/88 dark:text-white/90">{shownArtifact.title ?? "Generated artifact"}</h1>
-            <p className="mt-1 text-sm text-black/52 dark:text-white/52">{historical ? `${historical.cause} · historical preview` : shownArtifact.status}</p>
-          </div>
-          {readOnly ? <p className="max-w-[240px] text-right text-xs text-black/48 dark:text-white/52">Editing and delivery are disabled for this snapshot.</p> : <ExportDialog pack={shownArtifact} client={plotApiClient} />}
-        </header>
-        <CitedDraftEditor
-          pack={shownArtifact}
-          embedded
-          readOnly={readOnly}
-          onSaveArtifact={(input) => plotApiClient.saveArtifactVariant(shownArtifact.variant.id, input)}
-          onPackChange={(next) => {
-            setCurrentArtifact(next);
-            setHistorical(null);
-            setHistoricalPosition(null);
-          }}
-        />
-      </div>
+    <div className="mx-auto grid max-w-6xl min-w-0 gap-5 pt-4 sm:pt-8 lg:grid-cols-[minmax(0,1fr)_minmax(250px,0.32fr)]">
+      <ArtifactDocumentSurface
+        pack={currentArtifact}
+        historical={historical}
+        client={plotApiClient}
+        onSaveArtifact={(input) => plotApiClient.saveArtifactVariant(currentArtifact.variant.id, input)}
+        onPackChange={(next) => {
+          setCurrentArtifact(next);
+          setHistorical(null);
+          setHistoricalPosition(null);
+        }}
+      />
       <aside className="min-w-0 rounded-xl border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-white/[0.04] lg:sticky lg:top-3 lg:h-fit">
         <ArtifactHistoryPanel
           variantId={currentArtifact.variant.id}
@@ -119,6 +106,6 @@ function GeneratedArtifactDetail({ artifact }: { artifact: Artifact }) {
           }}
         />
       </aside>
-    </article>
+    </div>
   );
 }

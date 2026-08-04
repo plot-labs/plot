@@ -13,9 +13,9 @@ import type {
   SessionGeneration,
   WorkSessionSummary,
 } from "@plot/api-client";
+import { ArtifactDocumentSurface } from "@/features/artifacts/artifact-document-surface";
 import { ArtifactHistoryPanel } from "@/features/citations/artifact-history-panel";
-import { CitedDraftEditor, type SaveArtifactInput } from "@/features/citations/cited-draft-editor";
-import { ExportDialog } from "@/features/citations/export-dialog";
+import type { SaveArtifactInput } from "@/features/citations/cited-draft-editor";
 import { GenerationWorkLog } from "@/features/sessions/generation-work-log";
 import { SessionComposer } from "@/features/sessions/session-composer";
 import { isTerminalGenerationStatus, pollGeneration } from "@/lib/generation-polling";
@@ -382,6 +382,7 @@ function ActiveSessionWorkspace({ activeSession, references, sourceError }: { ac
                   <ArtifactDocumentSurface
                     pack={currentArtifact}
                     historical={historicalArtifact}
+                    client={plotApiClient}
                     initialDraft={historicalArtifact ? undefined : drafts[currentArtifact.id]}
                     saveState={saveState}
                     onSaveStateChange={(state) => {
@@ -391,6 +392,7 @@ function ActiveSessionWorkspace({ activeSession, references, sourceError }: { ac
                       if (historicalArtifact || documentKeyRef.current !== documentKey) return;
                       setDrafts((current) => ({ ...current, [currentArtifact.id]: draft }));
                     }}
+                    onSaveArtifact={(input) => plotApiClient.saveArtifactVariant(currentArtifact.variant.id, input)}
                     onPackChange={(next) => {
                       setDrafts((current) => {
                         const nextDrafts = { ...current };
@@ -658,52 +660,6 @@ function GenerationActivityDetail({ run, busy, error }: { run: GenerationRun | n
   );
 }
 
-function ArtifactDocumentSurface({
-  pack,
-  historical,
-  initialDraft,
-  saveState,
-  onSaveStateChange,
-  onDraftChange,
-  onPackChange,
-}: {
-  pack: Artifact;
-  historical: ArtifactHistoryDetail | null;
-  initialDraft?: Omit<SaveArtifactInput, "expectedRevisionNumber">;
-  saveState: "saved" | "saving" | "dirty" | "error";
-  onSaveStateChange: (state: "saved" | "saving" | "dirty" | "error") => void;
-  onDraftChange: (draft: Omit<SaveArtifactInput, "expectedRevisionNumber">) => void;
-  onPackChange: (pack: Artifact) => void;
-}) {
-  const readOnly = Boolean(historical);
-  const shownPack = historical?.artifact ?? pack;
-  return (
-    <article aria-label="Artifact document surface" className="overflow-hidden rounded-xl border border-black/10 bg-white dark:border-white/10 dark:bg-white/[0.04]">
-      <header className="flex flex-wrap items-start justify-between gap-4 border-b border-black/[0.07] px-4 py-4 dark:border-white/10 sm:px-6">
-        <div className="min-w-0">
-          <div className="text-xs font-semibold uppercase tracking-[0.08em] text-black/42 dark:text-white/45">Artifact</div>
-          <h2 className="mt-1 truncate text-xl font-semibold text-black/88 dark:text-white/90">{shownPack.title || "Generated artifact"}</h2>
-          <p className="mt-1 text-sm text-black/52 dark:text-white/55">{historical ? `${historical.cause} · historical preview` : shownPack.status}</p>
-        </div>
-        <div className="flex min-w-0 flex-col items-end gap-2">
-          <span role="status" aria-live="polite" className="text-xs text-black/45 dark:text-white/48">{saveStateLabel(saveState, readOnly)}</span>
-          {!readOnly ? <ExportDialog pack={shownPack} client={plotApiClient} /> : <p className="text-right text-xs text-black/48 dark:text-white/52">Editing and delivery are disabled for this snapshot.</p>}
-        </div>
-      </header>
-      <CitedDraftEditor
-        pack={shownPack}
-        embedded
-        readOnly={readOnly}
-        initialDraft={readOnly ? undefined : initialDraft}
-        onSaveStateChange={onSaveStateChange}
-        onDraftChange={onDraftChange}
-        onSaveArtifact={(input) => plotApiClient.saveArtifactVariant(shownPack.variant.id, input)}
-        onPackChange={onPackChange}
-      />
-    </article>
-  );
-}
-
 function EmptyArtifactState({ hasSelection }: { hasSelection: boolean }) {
   return <div className="rounded-xl border border-dashed border-black/10 bg-black/[0.02] px-4 py-6 text-sm leading-6 text-black/48 dark:border-white/10 dark:bg-white/[0.03] dark:text-white/52">{hasSelection ? "This generation is still working or did not produce an artifact. Review its activity above." : "Select a generation to inspect its artifact."}</div>;
 }
@@ -752,14 +708,6 @@ function generationStatusLabel(status: GenerationRun["status"]) {
 
 function isActiveGenerationStatus(status: GenerationRun["status"]) {
   return !isTerminalGenerationStatus(status);
-}
-
-function saveStateLabel(state: "saved" | "saving" | "dirty" | "error", readOnly: boolean) {
-  if (readOnly) return "Saved snapshot";
-  if (state === "saving") return "Saving…";
-  if (state === "dirty") return "Unsaved changes";
-  if (state === "error") return "Save needs attention";
-  return "Saved";
 }
 
 function activityForRun(run: GenerationRun, instruction: string | null = null): SessionGeneration {
