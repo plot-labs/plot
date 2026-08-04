@@ -62,7 +62,7 @@ describe("SourcesPopover", () => {
     expect(dialog).toBeInTheDocument();
   });
 
-  it("dismisses on an outside pointer and restores focus to the trigger", () => {
+  it("dismisses on outside click or pointer and restores focus to the trigger", () => {
     render(
       <>
         <SourcesPopover sources={sources} />
@@ -75,6 +75,11 @@ describe("SourcesPopover", () => {
     fireEvent.click(trigger);
     expect(screen.getByRole("dialog", { name: "Sources" })).toBeInTheDocument();
 
+    fireEvent.click(outside);
+    expect(screen.queryByRole("dialog", { name: "Sources" })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+
+    fireEvent.click(trigger);
     fireEvent.pointerDown(outside);
     expect(screen.queryByRole("dialog", { name: "Sources" })).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
