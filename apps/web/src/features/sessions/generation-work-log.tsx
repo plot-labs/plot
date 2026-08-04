@@ -81,8 +81,7 @@ function stepLabel(step: GenerationStepTiming, artifact: GenerationArtifact | un
   if (step.kind === "WRITER") return `Drafted ${countLabel(artifact?.sentenceIds.length ?? 0, "sentence")}${suffix}`;
   if (step.kind === "REVIEWER") {
     const reviews = artifact?.reviews ?? [];
-    const supported = reviews.filter((review) => review.verdict === "SUPPORTED").length;
-    return `Checked source support — ${supported}/${reviews.length} supported${suffix}`;
+    return `Checked ${countLabel(reviews.length, "sentence")} against selected sources${suffix}`;
   }
   return `Rewrote ${countLabel(artifact?.sentenceIds.length ?? 0, "sentence")} (attempt ${run.semanticRewriteAttempt})${suffix}`;
 }

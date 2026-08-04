@@ -51,7 +51,7 @@ const reference = { id: "block-1", sourceScopeId: "scope-1", provider: "GITHUB",
 const terminalRun = {
   id: "run-1", status: "READY", semanticRewriteAttempt: 0, pollAfterMs: null, failureCode: null,
   evidence: [], sentences: [], artifacts: [],
-  contentPack: { id: "pack-1", generationRunId: "run-1", status: "READY", title: "Release", variant: { id: "variant-1", status: "READY", sentences: [] } },
+  contentPack: { id: "pack-1", generationRunId: "run-1", status: "READY", title: "Release", variant: { id: "variant-1", status: "READY", revisionId: "artifact-revision-1", revisionNumber: 1, lexicalContent: { root: { children: [], type: "root", version: 1 } }, sentences: [], sources: [] } },
 };
 
 describe("SessionsWorkspace", () => {

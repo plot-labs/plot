@@ -1,127 +1,270 @@
 "use client";
 
-import { Pencil, X } from "lucide-react";
-import { useState } from "react";
+import { ContentEditable } from "@lexical/react/LexicalContentEditable";
+import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin";
+import { LexicalComposer } from "@lexical/react/LexicalComposer";
+import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
+import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
+import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
+import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
+import type { EditorState } from "lexical";
+import { $getRoot } from "lexical";
+import { Save } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 
-import type { ContentPack, GenerationSentence } from "@plot/api-client";
-import { InlineCitation } from "./inline-citation";
+import type {
+  ContentPack,
+  ContentStatementInput,
+} from "@plot/api-client";
+import { SourcesPopover } from "./sources-popover";
+
+type SaveArtifactInput = {
+  expectedRevisionNumber: number;
+  lexicalContent: Record<string, unknown>;
+  statements: ContentStatementInput[];
+};
 
 type CitedDraftEditorProps = {
   pack: ContentPack;
-  onEditSentence: (sentence: GenerationSentence, body: string) => Promise<ContentPack>;
+  onSaveArtifact: (input: SaveArtifactInput) => Promise<ContentPack>;
   onPackChange?: (pack: ContentPack) => void;
 };
 
-export function CitedDraftEditor({ pack, onEditSentence, onPackChange }: CitedDraftEditorProps) {
-  const [editedPack, setEditedPack] = useState<ContentPack | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editBody, setEditBody] = useState("");
+export function CitedDraftEditor(props: CitedDraftEditorProps) {
+  const revisionKey = `${props.pack.variant.revisionId}:${props.pack.variant.revisionNumber}`;
+  return <ArtifactEditor key={revisionKey} {...props} />;
+}
+
+function ArtifactEditor({ pack, onSaveArtifact, onPackChange }: CitedDraftEditorProps) {
+  const sentences = useMemo(
+    () => [...pack.variant.sentences].sort((a, b) => a.orderIndex - b.orderIndex),
+    [pack.variant.sentences],
+  );
+  const revisionNumber = pack.variant.revisionNumber;
+  const revisionKey = `${pack.variant.revisionId}:${revisionNumber}`;
+  const lexicalContent = useMemo(() => pack.variant.lexicalContent, [pack.variant.lexicalContent]);
+  const initialStatementBlocks = useMemo(() => statementBlocksFor(sentences), [sentences]);
+  const statementIds = useMemo(() => sentences.map((sentence) => sentence.id), [sentences]);
+  const statementIdentityMapRef = useRef<Map<string, string>>(new Map());
+  const identityInitializedRef = useRef(false);
+  const [draftState, setDraftState] = useState<Record<string, unknown>>(lexicalContent);
+  const [draftStatements, setDraftStatements] = useState<ContentStatementInput[]>(() => statementInputs(initialStatementBlocks));
+  const [statementBlocks, setStatementBlocks] = useState<StatementBlock[]>(initialStatementBlocks);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
-  const currentPack = editedPack?.id === pack.id ? editedPack : pack;
-  const sentences = [...currentPack.variant.sentences]
-    .filter((sentence) =>
-      sentence.verdict === "SUPPORTED" ||
-      sentence.verdict === "NOT_REQUIRED" ||
-      sentence.verdict === "USER_MODIFIED"
-    )
-    .sort((a, b) => a.orderIndex - b.orderIndex);
-
-  function beginEdit(sentence: GenerationSentence) {
-    setEditingId(sentence.id);
-    setEditBody(sentence.body);
-    setMessage("");
-  }
-
-  function cancelEdit() {
-    setEditingId(null);
-    setEditBody("");
-    setMessage("Edit canceled.");
-  }
-
-  async function save(sentence: GenerationSentence) {
-    const body = editBody.trim();
-    if (!body || saving) return;
+  async function save() {
+    if (saving) return;
     setSaving(true);
     setMessage("");
     try {
-      const updated = await onEditSentence(sentence, body);
-      setEditedPack(updated);
+      const updated = await onSaveArtifact({
+        expectedRevisionNumber: revisionNumber,
+        lexicalContent: draftState,
+        statements: draftStatements,
+      });
       onPackChange?.(updated);
-      setEditingId(null);
-      setMessage(`Sentence ${sentence.orderIndex + 1} saved and marked unverified.`);
+      setMessage(`Revision ${updated.variant.revisionNumber} saved.`);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "The sentence could not be saved.");
+      setMessage(error instanceof Error ? error.message : "The draft could not be saved.");
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <section aria-label="Cited draft" className="rounded-xl border border-black/10 bg-white dark:border-white/10 dark:bg-white/[0.04]">
-      <ol className="space-y-4 px-4 py-5 sm:px-6">
-        {sentences.map((sentence) => {
-          const number = sentence.orderIndex + 1;
-          const editing = editingId === sentence.id;
-          return (
-            <li
-              key={sentence.id}
-              id={`sentence-${sentence.id}`}
-              data-sentence-id={sentence.id}
-              tabIndex={-1}
-              className="group rounded-lg outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-4"
-            >
-              {editing ? (
-                <div>
-                  <label htmlFor={`sentence-edit-${sentence.id}`} className="text-xs font-semibold text-black/55 dark:text-white/55">
-                    Sentence {number} text
-                  </label>
-                  <textarea
-                    id={`sentence-edit-${sentence.id}`}
-                    autoFocus
-                    value={editBody}
-                    onChange={(event) => setEditBody(event.target.value)}
-                    className="mt-2 min-h-24 w-full resize-y rounded-lg border border-black/15 bg-white p-3 text-[15px] leading-6 outline-none focus:border-black/45 dark:border-white/15 dark:bg-[#18181b] dark:focus:border-white/45"
-                  />
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <button type="button" disabled={saving || !editBody.trim()} onClick={() => void save(sentence)} className="min-h-10 rounded-lg bg-black px-3 text-sm font-semibold text-white disabled:opacity-40 dark:bg-white dark:text-black" aria-label={`Save sentence ${number}`}>
-                      {saving ? "Saving…" : "Save"}
-                    </button>
-                    <button type="button" disabled={saving} onClick={cancelEdit} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-black/10 px-3 text-sm font-medium dark:border-white/15" aria-label={`Cancel sentence ${number} edit`}>
-                      <X className="size-4" /> Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-start gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[15px] leading-7 text-black/82 dark:text-white/82">
-                      {sentence.body}{" "}
-                      {sentence.citations.filter((citation) => citation.status !== "REMOVED").map((citation) => (
-                        <InlineCitation key={citation.evidenceId} citation={citation} />
-                      ))}
-                    </div>
-                  </div>
-                  <button type="button" onClick={() => beginEdit(sentence)} className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg text-black/42 opacity-100 hover:bg-black/5 hover:text-black/75 dark:text-white/42 dark:hover:bg-white/10 dark:hover:text-white/75 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100" aria-label={`Edit sentence ${number}`}>
-                    <Pencil className="size-4" />
-                  </button>
-                </div>
-              )}
-            </li>
-          );
-        })}
-        {sentences.length === 0 ? (
-          <li className="text-sm leading-6 text-black/55 dark:text-white/55">
-            No source-backed claims were publishable from the selected references.
-          </li>
-        ) : null}
-      </ol>
+    <section aria-label="Draft editor" className="rounded-xl border border-black/10 bg-white dark:border-white/10 dark:bg-white/[0.04]">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-black/[0.07] px-4 py-4 dark:border-white/10 sm:px-6">
+        <div>
+          <h2 className="text-sm font-semibold text-black/82 dark:text-white/88">Draft</h2>
+          <p className="mt-1 text-xs text-black/50 dark:text-white/52">
+            Edit the whole artifact. Sources stay outside the document and are bound to this revision.
+          </p>
+        </div>
+        <SourcesPopover sources={pack.variant.sources} />
+      </div>
+
+      <LexicalComposer
+        key={revisionKey}
+        initialConfig={{
+          namespace: `plot-artifact-${pack.variant.id}`,
+          editable: true,
+          editorState: JSON.stringify(lexicalContent),
+          onError: (error) => {
+            throw error;
+          },
+        }}
+      >
+        <div className="relative px-4 py-5 sm:px-6">
+          <RichTextPlugin
+            contentEditable={<ContentEditable aria-label="Draft content" className="min-h-[260px] whitespace-pre-wrap rounded-lg border border-black/10 bg-white px-4 py-4 text-[15px] leading-7 text-black/84 outline-none focus-within:border-black/35 dark:border-white/12 dark:bg-[#18181b] dark:text-white/86 dark:focus-within:border-white/35" />}
+            placeholder={<div className="pointer-events-none absolute left-8 top-9 text-sm text-black/35 dark:left-10 dark:text-white/35">Write the source-backed artifact…</div>}
+            ErrorBoundary={LexicalErrorBoundary}
+          />
+          <HistoryPlugin />
+          <StatementIdentityPlugin
+            statementIds={statementIds}
+            identityMapRef={statementIdentityMapRef}
+            initializedRef={identityInitializedRef}
+          />
+          <StatementDomPlugin statementIds={statementBlocks.map((statement) => statement.id)} />
+          <OnChangePlugin
+            onChange={(nextState) => {
+              setDraftState(nextState.toJSON() as unknown as Record<string, unknown>);
+              const nextNodes = extractStatementNodes(nextState);
+              if (!identityInitializedRef.current) {
+                statementIdentityMapRef.current = initializeStatementIdentityMap(
+                  nextNodes.map((node) => node.key),
+                  statementIds,
+                );
+                identityInitializedRef.current = true;
+              }
+              const projected = projectStatementBlocks(statementIdentityMapRef.current, nextNodes);
+              statementIdentityMapRef.current = projected.mapping;
+              setStatementBlocks(projected.blocks);
+              setDraftStatements(statementInputs(projected.blocks));
+            }}
+          />
+        </div>
+      </LexicalComposer>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-black/[0.07] px-4 py-3 dark:border-white/10 sm:px-6">
+        <p className="text-xs text-black/48 dark:text-white/50">Revision {revisionNumber}</p>
+        <button
+          type="button"
+          disabled={saving}
+          onClick={() => void save()}
+          className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-black px-3 text-sm font-semibold text-white transition hover:bg-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-white/85"
+        >
+          <Save aria-hidden="true" className="size-4" />
+          {saving ? "Saving…" : "Save draft"}
+        </button>
+      </div>
       {message ? (
-        <p role="status" className="border-t border-black/[0.07] px-4 py-3 text-xs text-black/58 dark:border-white/10 dark:text-white/58 sm:px-6" aria-live="polite">
+        <p role="status" aria-live="polite" className="border-t border-black/[0.07] px-4 py-3 text-xs text-black/58 dark:border-white/10 dark:text-white/58 sm:px-6">
           {message}
         </p>
       ) : null}
     </section>
   );
+}
+
+function StatementIdentityPlugin({
+  statementIds,
+  identityMapRef,
+  initializedRef,
+}: {
+  statementIds: string[];
+  identityMapRef: MutableRefObject<Map<string, string>>;
+  initializedRef: MutableRefObject<boolean>;
+}) {
+  const [editor] = useLexicalComposerContext();
+
+  useEffect(() => {
+    editor.getEditorState().read(() => {
+      const nodes = $getRoot().getChildren();
+      identityMapRef.current = initializeStatementIdentityMap(
+        nodes.map((node) => node.getKey()),
+        statementIds,
+      );
+      initializedRef.current = true;
+    });
+  }, [editor, identityMapRef, initializedRef, statementIds]);
+
+  return null;
+}
+
+function StatementDomPlugin({ statementIds }: { statementIds: string[] }) {
+  const [editor] = useLexicalComposerContext();
+  useEffect(() => {
+    function sync() {
+      const root = editor.getRootElement();
+      if (!root) return;
+      const blocks = Array.from(root.children).filter((element): element is HTMLElement => element instanceof HTMLElement);
+      blocks.forEach((element, index) => {
+        const statementId = statementIds[index];
+        if (statementId) element.dataset.statementId = statementId;
+        else delete element.dataset.statementId;
+        element.dataset.statementOrder = String(index + 1);
+        element.tabIndex = statementId ? -1 : 0;
+        element.dataset.statementBlock = statementId ? "true" : "false";
+      });
+    }
+    sync();
+    return editor.registerUpdateListener(() => {
+      requestAnimationFrame(sync);
+    });
+  }, [editor, statementIds]);
+  return null;
+}
+
+export type EphemeralLexicalStatementNode = { key: string; body: string };
+
+function extractStatementNodes(state: EditorState): EphemeralLexicalStatementNode[] {
+  const nodes: EphemeralLexicalStatementNode[] = [];
+  state.read(() => {
+    $getRoot().getChildren().forEach((node) => {
+      nodes.push({ key: node.getKey(), body: node.getTextContent() });
+    });
+  });
+  return nodes;
+}
+
+export type StatementBlock = { id: string; body: string };
+
+function statementBlocksFor(sentences: ContentPack["variant"]["sentences"]): StatementBlock[] {
+  return [...sentences]
+    .sort((a, b) => a.orderIndex - b.orderIndex)
+    .map((sentence) => ({ id: sentence.id, body: sentence.body }));
+}
+
+function statementInputs(blocks: StatementBlock[]): ContentStatementInput[] {
+  return blocks.map((block, orderIndex) => ({ id: block.id, orderIndex, body: block.body }));
+}
+
+/**
+ * Builds the active-session correlation from the server-aligned revision.
+ * Lexical keys are ephemeral and never leave this in-memory map.
+ */
+export function initializeStatementIdentityMap(
+  nodeKeys: string[],
+  statementIds: string[],
+): Map<string, string> {
+  return new Map(
+    nodeKeys.flatMap((key, index) => {
+      const statementId = statementIds[index];
+      return statementId ? [[key, statementId] as const] : [];
+    }),
+  );
+}
+
+/**
+ * Projects the current ordered Lexical blocks into application statements.
+ * Existing node keys retain their application IDs after edits and moves;
+ * only genuinely new keys receive a new UUID. Deleted keys disappear from
+ * the next map, so their evidence cannot be transferred to another block.
+ */
+export function projectStatementBlocks(
+  previous: ReadonlyMap<string, string>,
+  nodes: EphemeralLexicalStatementNode[],
+  createId: () => string = newStatementId,
+): { mapping: Map<string, string>; blocks: StatementBlock[] } {
+  const mapping = new Map<string, string>();
+  const blocks = nodes.map((node) => {
+    const id = previous.get(node.key) ?? createId();
+    mapping.set(node.key, id);
+    return { id, body: node.body };
+  });
+  return { mapping, blocks };
+}
+
+function newStatementId(): string {
+  if (typeof globalThis.crypto?.randomUUID === "function") return globalThis.crypto.randomUUID();
+  const bytes = new Uint8Array(16);
+  bytes.forEach((_, index) => { bytes[index] = Math.floor(Math.random() * 256); });
+  globalThis.crypto?.getRandomValues?.(bytes);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }

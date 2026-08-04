@@ -110,3 +110,10 @@ data class MarkdownExport(
 	val unresolvedCount: Int,
 	val warningAcknowledged: Boolean,
 )
+
+data class ExportSource(
+	val evidenceId: UUID,
+	val provider: String,
+	val sourceLabel: String,
+	val originalUrl: String,
+)

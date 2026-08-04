@@ -142,6 +142,49 @@ class GenerationCitationSchemaIntegrationTest {
 	}
 
 	@Test
+	fun keepsArtifactRevisionHistoryAndSentenceProjectionAppendOnly() {
+		val runId = insertRun("artifact-immutable-history")
+		val packId = insertPack(runId)
+		val variantId = insertVariant(runId, packId)
+		val sentenceId = insertSentence(runId, variantId, 0)
+		val sentenceRevisionId = insertRevision(runId, variantId, sentenceId, 1, "GENERATED")
+		val artifactRevisionId = UUID.randomUUID()
+		jdbcTemplate.update(
+			"""
+			insert into content_variant_revisions
+			(id, workspace_id, generation_run_id, content_variant_id, revision_no, lexical_content, is_current, created_at)
+			values (?, ?, ?, ?, 1, '{"root":{"type":"root","version":1,"children":[]}}'::jsonb, true, now())
+			""".trimIndent(),
+			artifactRevisionId, devContext.devWorkspaceId, runId, variantId,
+		)
+		val projectionId = UUID.randomUUID()
+		jdbcTemplate.update(
+			"""
+			insert into content_variant_revision_sentences
+			(id, workspace_id, content_variant_revision_id, generation_run_id, content_variant_id, sentence_id, sentence_revision_id, order_index)
+			values (?, ?, ?, ?, ?, ?, ?, 0)
+			""".trimIndent(),
+			projectionId, devContext.devWorkspaceId, artifactRevisionId, runId, variantId, sentenceId, sentenceRevisionId,
+		)
+
+		assertFailsWith<DataIntegrityViolationException> {
+			jdbcTemplate.update(
+				"update content_variant_revisions set lexical_content = '{\"root\":{\"type\":\"root\",\"version\":1,\"children\":[]}}'::jsonb where id = ?",
+				artifactRevisionId,
+			)
+		}
+		assertFailsWith<DataIntegrityViolationException> {
+			jdbcTemplate.update("delete from content_variant_revisions where id = ?", artifactRevisionId)
+		}
+		assertFailsWith<DataIntegrityViolationException> {
+			jdbcTemplate.update("update content_variant_revision_sentences set order_index = 1 where id = ?", projectionId)
+		}
+		assertFailsWith<DataIntegrityViolationException> {
+			jdbcTemplate.update("delete from content_variant_revision_sentences where id = ?", projectionId)
+		}
+	}
+
+	@Test
 	fun recordsExplicitExportAcknowledgments() {
 		val runId = insertRun("decision-audit")
 		val packId = insertPack(runId)

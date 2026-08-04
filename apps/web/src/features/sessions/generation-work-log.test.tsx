@@ -56,7 +56,7 @@ describe("GenerationWorkLog", () => {
     expect(screen.getByText("Worked for 1m 12s")).toBeVisible();
     expect(screen.getByText("Loaded 1 reference")).toBeVisible();
     expect(screen.getByText("Drafted 2 sentences · 4s")).toBeVisible();
-    expect(screen.getByText("Checked source support — 1/2 supported · 55s")).toBeVisible();
+		expect(screen.getByText("Checked 2 sentences against selected sources · 55s")).toBeVisible();
     expect(screen.getByText("Rewrote 1 sentence (attempt 1) · 13s")).toBeVisible();
     expect(screen.getByText("gpt-5-mini · 12.4k tokens")).toBeVisible();
   });

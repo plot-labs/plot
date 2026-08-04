@@ -37,6 +37,27 @@ export interface GenerationCitation {
   sourceAccess?: "AVAILABLE" | "LOST";
 }
 
+export interface ContentCitation {
+  evidenceId: string;
+  provider: SourceProvider;
+  sourceLabel: string;
+  originalUrl: string;
+}
+
+export interface ContentSource {
+  evidenceId: string;
+  provider: SourceProvider;
+  sourceLabel: string;
+  originalUrl: string;
+  statementIds: string[];
+}
+
+export interface ContentStatementInput {
+  id: string | null;
+  orderIndex: number;
+  body: string;
+}
+
 export interface GenerationSentence {
   id: string;
   revisionId: string;
@@ -49,6 +70,16 @@ export interface GenerationSentence {
   citations: GenerationCitation[];
 }
 
+export interface ContentSentence {
+  id: string;
+  revisionId: string;
+  revisionNumber: number;
+  orderIndex: number;
+  body: string;
+  origin: SentenceOrigin;
+  citations: ContentCitation[];
+}
+
 export interface ContentPack {
   id: string;
   generationRunId: string;
@@ -57,7 +88,11 @@ export interface ContentPack {
   variant: {
     id: string;
     status: string;
-    sentences: GenerationSentence[];
+    revisionId: string;
+    revisionNumber: number;
+    lexicalContent: Record<string, unknown>;
+    sentences: ContentSentence[];
+    sources: ContentSource[];
   };
 }
 
@@ -108,6 +143,25 @@ export interface GenerationArtifact {
 
 export interface ContentPackSummary { id: string; generationRunId: string; status: string; title: string | null }
 export interface ContentPackPage { items: ContentPackSummary[]; page: number; size: number; totalItems: number; totalPages: number }
+
+export interface ExportWarning {
+  key: string;
+  sentenceNumber: number;
+  excerpt: string;
+}
+
+export interface ContentExport {
+  exportId: string;
+  artifactRevisionId: string;
+  artifactRevisionNumber: number;
+  disposition: "COPY" | "DOWNLOAD";
+  filename: string;
+  mediaType: string;
+  text: string;
+  unresolvedCount: number;
+  warningAcknowledged: boolean;
+  includeSources: boolean;
+}
 
 export interface CreateGenerationInput {
   sourceScopeId: string;
@@ -292,9 +346,11 @@ export interface PlotApiClient {
   createGeneration(input: CreateGenerationInput, idempotencyKey: string, options?: RequestOptions): Promise<GenerationRun>;
   getGeneration(id: string, options?: RequestOptions): Promise<GenerationRun>;
   getContentPack(id: string, options?: RequestOptions): Promise<ContentPack>;
+  getContentVariant(id: string, options?: RequestOptions): Promise<ContentPack>;
   listContentPacks(page?: number, size?: number, options?: RequestOptions): Promise<ContentPackPage>;
+  saveContentVariant(variantId: string, input: { expectedRevisionNumber: number; lexicalContent: Record<string, unknown>; statements: ContentStatementInput[] }, options?: RequestOptions): Promise<ContentPack>;
   editSentence(variantId: string, sentenceId: string, input: { expectedRevisionNumber: number; body: string }, options?: RequestOptions): Promise<ContentPack>;
-  exportVariant(variantId: string, input: { acknowledgeUnresolved: boolean; acknowledgedRevisionIds?: string[]; disposition: "COPY" | "DOWNLOAD" }, options?: RequestOptions): Promise<{ exportId: string; disposition: "COPY" | "DOWNLOAD"; filename: string; mediaType: string; text: string; unresolvedCount: number; warningAcknowledged: boolean }>;
+  exportVariant(variantId: string, input: { expectedRevisionNumber: number; includeSources: boolean; acknowledgeUnresolved: boolean; acknowledgedWarningKeys?: string[]; acknowledgedRevisionIds?: string[]; disposition: "COPY" | "DOWNLOAD" }, options?: RequestOptions): Promise<ContentExport>;
 }
 
 export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof fetch; workspaceId?: string | (() => string | null) } = {}): PlotApiClient {
@@ -413,7 +469,12 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
     }),
     getGeneration: (id, requestOptions) => request(`/generations/${encodeURIComponent(id)}`, { signal: requestOptions?.signal }),
     getContentPack: (id, requestOptions) => request(`/content-packs/${encodeURIComponent(id)}`, { signal: requestOptions?.signal }),
+    getContentVariant: (id, requestOptions) => request(`/content-variants/${encodeURIComponent(id)}`, { signal: requestOptions?.signal }),
     listContentPacks: (page = 0, size = 25, requestOptions) => request(`/content-packs?page=${page}&size=${size}`, { signal: requestOptions?.signal }),
+    saveContentVariant: (variantId, input, requestOptions) => request(
+      `/content-variants/${encodeURIComponent(variantId)}`,
+      { method: "PATCH", body: JSON.stringify(input), signal: requestOptions?.signal },
+    ),
     editSentence: (variantId, sentenceId, input, requestOptions) => request(
       `/content-variants/${encodeURIComponent(variantId)}/sentences/${encodeURIComponent(sentenceId)}`,
       { method: "PATCH", body: JSON.stringify(input), signal: requestOptions?.signal },
