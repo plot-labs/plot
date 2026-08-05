@@ -1,18 +1,20 @@
-package com.plot.api.contentpack
+package com.plot.api.artifact
 
 import com.plot.api.common.ApiException
 import com.plot.api.common.UuidGenerator
-import com.plot.api.contentpack.dto.ContentCitationResponse
-import com.plot.api.contentpack.dto.ContentExportResponse
-import com.plot.api.contentpack.dto.ContentPackPageResponse
-import com.plot.api.contentpack.dto.ContentPackResponse
-import com.plot.api.contentpack.dto.ContentPackSummaryResponse
-import com.plot.api.contentpack.dto.ContentSentenceResponse
-import com.plot.api.contentpack.dto.ContentSourceResponse
-import com.plot.api.contentpack.dto.ContentStatementInput
-import com.plot.api.contentpack.dto.ContentVariantResponse
-import com.plot.api.contentpack.dto.ExportDisposition
-import com.plot.api.contentpack.dto.ExportWarningResponse
+import com.plot.api.artifact.dto.ContentCitationResponse
+import com.plot.api.artifact.dto.ContentExportResponse
+import com.plot.api.artifact.dto.ArtifactPageResponse
+import com.plot.api.artifact.dto.ArtifactResponse
+import com.plot.api.artifact.dto.ArtifactSummaryResponse
+import com.plot.api.artifact.dto.ContentSentenceResponse
+import com.plot.api.artifact.dto.ContentSourceResponse
+import com.plot.api.artifact.dto.ContentStatementInput
+import com.plot.api.artifact.dto.ContentVariantResponse
+import com.plot.api.artifact.dto.ContentVariantHistoryItemResponse
+import com.plot.api.artifact.dto.ContentVariantHistoryDetailResponse
+import com.plot.api.artifact.dto.ExportDisposition
+import com.plot.api.artifact.dto.ExportWarningResponse
 import com.plot.api.dev.DevContext
 import com.plot.api.generation.model.CitationStatus
 import com.plot.api.generation.model.EvidenceSnapshot
@@ -35,16 +37,16 @@ import tools.jackson.databind.JsonNode
 import tools.jackson.databind.ObjectMapper
 
 @Service
-class ContentPackService(
+class ArtifactService(
 	private val jdbcTemplate: JdbcTemplate,
 	private val transactionTemplate: TransactionTemplate,
 	private val devContext: DevContext,
 	private val uuidGenerator: UuidGenerator,
-	private val markdownExportService: MarkdownExportService,
+	private val markdownExportService: ArtifactMarkdownExportService,
 	private val objectMapper: ObjectMapper,
 	private val clock: Clock = Clock.systemUTC(),
 ) {
-	fun list(page: Int, size: Int): ContentPackPageResponse {
+	fun list(page: Int, size: Int): ArtifactPageResponse {
 		require(page >= 0) { "Page must not be negative" }
 		require(size in 1..100) { "Size must be between 1 and 100" }
 		val total = jdbcTemplate.queryForObject(
@@ -55,17 +57,69 @@ class ContentPackService(
 			select id, generation_run_id, status, title from content_packs
 			where workspace_id = ? order by created_at desc, id desc limit ? offset ?
 			""".trimIndent(),
-			{ rs, _ -> ContentPackSummaryResponse(rs.getObject(1, UUID::class.java), rs.getObject(2, UUID::class.java), rs.getString(3), rs.getString(4)) },
+			{ rs, _ -> ArtifactSummaryResponse(rs.getObject(1, UUID::class.java), rs.getObject(2, UUID::class.java), rs.getString(3), rs.getString(4)) },
 			devContext.devWorkspaceId, size, page * size,
 		)
-		return ContentPackPageResponse(items, page, size, total, if (total == 0L) 0 else ((total + size - 1) / size).toInt())
+		return ArtifactPageResponse(items, page, size, total, if (total == 0L) 0 else ((total + size - 1) / size).toInt())
 	}
 
-	fun get(packId: UUID): ContentPackResponse = loadPack("cp.id = ?", packId)
+	fun get(packId: UUID): ArtifactResponse = loadPack("cp.id = ?", packId)
 
-	fun getVariant(variantId: UUID): ContentPackResponse = loadPack("cv.id = ?", variantId)
+	fun getVariant(variantId: UUID): ArtifactResponse = loadPack("cv.id = ?", variantId)
 
-	fun findByRun(runId: UUID): ContentPackResponse? = try {
+	fun history(variantId: UUID): List<ContentVariantHistoryItemResponse> {
+		ensureArtifactRevision(variantId)
+		return jdbcTemplate.query(
+			"""
+			select id, revision_no, created_by_user_id, created_at
+			from content_variant_revisions
+			where workspace_id = ? and content_variant_id = ?
+			order by created_at desc, revision_no desc, id desc
+			""".trimIndent(),
+			{ rs, index ->
+				ContentVariantHistoryItemResponse(
+					position = index,
+					createdAt = rs.getTimestamp("created_at").toInstant(),
+					cause = historyCause(rs.getInt("revision_no"), rs.getObject("created_by_user_id", UUID::class.java)),
+				)
+			},
+			devContext.devWorkspaceId,
+			variantId,
+		)
+	}
+
+	fun historyDetail(variantId: UUID, revisionId: UUID): ContentVariantHistoryDetailResponse {
+		val row = jdbcTemplate.query(
+			"select revision_no, created_by_user_id, created_at from content_variant_revisions where workspace_id = ? and id = ? and content_variant_id = ?",
+			{ rs, _ -> HistoryRevisionRow(rs.getInt(1), rs.getObject(2, UUID::class.java), rs.getTimestamp(3).toInstant()) },
+			devContext.devWorkspaceId,
+			revisionId,
+			variantId,
+		).firstOrNull() ?: notFound()
+		val cause = historyCause(row.revisionNumber, row.createdByUserId)
+		return ContentVariantHistoryDetailResponse(row.createdAt, cause, true, loadPackForRevision("cv.id = ?", variantId, revisionId))
+	}
+
+	fun historyDetailAt(variantId: UUID, position: Int): ContentVariantHistoryDetailResponse {
+		if (position < 0) throw ApiException(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "History position must not be negative")
+		val row = jdbcTemplate.query(
+			"""
+			select id, revision_no, created_by_user_id, created_at
+			from content_variant_revisions
+			where workspace_id = ? and content_variant_id = ?
+			order by created_at desc, revision_no desc, id desc
+			limit 1 offset ?
+			""".trimIndent(),
+			{ rs, _ -> HistoryRevisionRow(rs.getObject(1, UUID::class.java), rs.getInt(2), rs.getObject(3, UUID::class.java), rs.getTimestamp(4).toInstant()) },
+			devContext.devWorkspaceId,
+			variantId,
+			position,
+		).firstOrNull() ?: notFound()
+		val cause = historyCause(row.revisionNumber, row.createdByUserId)
+		return ContentVariantHistoryDetailResponse(row.createdAt, cause, true, loadPackForRevision("cv.id = ?", variantId, row.revisionId))
+	}
+
+	fun findByRun(runId: UUID): ArtifactResponse? = try {
 		loadPack("cp.generation_run_id = ?", runId)
 	} catch (_: ApiException) {
 		null
@@ -76,7 +130,7 @@ class ContentPackService(
 		expectedRevisionNumber: Int,
 		lexicalContent: JsonNode,
 		statements: List<ContentStatementInput>,
-	): ContentPackResponse = transactionTemplate.execute {
+	): ArtifactResponse = transactionTemplate.execute {
 		saveVariantInTransaction(variantId, expectedRevisionNumber, lexicalContent, statements)
 	}
 
@@ -85,7 +139,7 @@ class ContentPackService(
 	 * revision, so the old sentence operation cannot bypass optimistic locking
 	 * or the public-source projection.
 	 */
-	fun editSentence(variantId: UUID, sentenceId: UUID, expectedRevisionNumber: Int, body: String): ContentPackResponse =
+	fun editSentence(variantId: UUID, sentenceId: UUID, expectedRevisionNumber: Int, body: String): ArtifactResponse =
 		transactionTemplate.execute {
 			lockVariant(variantId)
 			val currentSentence = jdbcTemplate.query(
@@ -225,7 +279,7 @@ class ContentPackService(
 		expectedRevisionNumber: Int,
 		lexicalContent: JsonNode,
 		statements: List<ContentStatementInput>,
-	): ContentPackResponse {
+	): ArtifactResponse {
 		val normalized = normalizeStatements(statements)
 		val sanitizedLexicalContent = validateAndSanitizeLexicalContent(lexicalContent, normalized)
 		lockVariant(variantId)
@@ -245,6 +299,15 @@ class ContentPackService(
 			devContext.devWorkspaceId, variantId,
 		).toMap()
 		validateStatementOwnership(normalized, allSentenceIds)
+		val previousContent = previousStatements
+			.sortedBy { it.orderIndex }
+			.map { listOf(it.id, it.orderIndex, it.body) }
+		val nextContent = normalized
+			.sortedBy { it.orderIndex }
+			.map { listOf(it.id, it.orderIndex, it.body) }
+		if (sanitizedLexicalContent == currentRevision.lexicalContent && previousContent == nextContent) {
+			return loadPack("cv.id = ?", variantId)
+		}
 
 		val nextRevisionBySentence = linkedMapOf<UUID, UUID>()
 		normalized.sortedBy { it.orderIndex }.forEach { statement ->
@@ -600,7 +663,9 @@ class ContentPackService(
 		inputHash, outputHash, devContext.devUserId,
 	).firstOrNull()
 
-	private fun loadPack(predicate: String, id: UUID): ContentPackResponse {
+	private fun loadPack(predicate: String, id: UUID): ArtifactResponse = loadPackForRevision(predicate, id, null)
+
+	private fun loadPackForRevision(predicate: String, id: UUID, revisionId: UUID?): ArtifactResponse {
 		val header = jdbcTemplate.query(
 			"""
 			select cp.id, cp.generation_run_id, cp.status, cp.title, cv.id, cv.status
@@ -611,10 +676,18 @@ class ContentPackService(
 			devContext.devWorkspaceId, id,
 		).firstOrNull() ?: notFound()
 		val variantId = header[4] as UUID
-		val revision = currentArtifactRevision(variantId)
-		val citations = loadPublicCitations(variantId, revision.id)
+		val revision = revisionId?.let { requestedRevision ->
+			jdbcTemplate.query(
+				"select id, generation_run_id, revision_no, lexical_content::text from content_variant_revisions where workspace_id = ? and id = ? and content_variant_id = ?",
+				{ rs, _ -> CurrentArtifactRevision(rs.getObject(1, UUID::class.java), rs.getObject(2, UUID::class.java), rs.getInt(3), objectMapper.readTree(rs.getString(4))) },
+				devContext.devWorkspaceId,
+				requestedRevision,
+				variantId,
+			).firstOrNull() ?: notFound()
+		} ?: currentArtifactRevision(variantId)
+		val citations = loadPublicCitations(variantId, revision.id, includeHistoricalLifecycle = revisionId != null)
 		val sentences = loadSentences(variantId, revision.id, citations)
-		return ContentPackResponse(
+		return ArtifactResponse(
 			header[0] as UUID,
 			header[1] as UUID,
 			header[2] as String,
@@ -659,7 +732,11 @@ class ContentPackService(
 		devContext.devWorkspaceId, revisionId, variantId,
 	)
 
-	private fun loadPublicCitations(variantId: UUID, revisionId: UUID): Map<UUID, List<PublicCitation>> = jdbcTemplate.query(
+	private fun loadPublicCitations(
+		variantId: UUID,
+		revisionId: UUID,
+		includeHistoricalLifecycle: Boolean = false,
+	): Map<UUID, List<PublicCitation>> = jdbcTemplate.query(
 		"""
 		select rs.sentence_id, c.generation_input_id, i.source_provider, i.source_label, i.original_url,
 		       case
@@ -680,7 +757,8 @@ class ContentPackService(
 		from content_variant_revision_sentences rs
 		join sentence_citations c
 		  on c.workspace_id = rs.workspace_id and c.sentence_id = rs.sentence_id
-		 and c.sentence_revision_id = rs.sentence_revision_id and c.status = 'ACTIVE'
+		 and c.sentence_revision_id = rs.sentence_revision_id
+		 and c.status ${if (includeHistoricalLifecycle) "in ('ACTIVE', 'STALE', 'REMOVED')" else "= 'ACTIVE'"}
 		join generation_inputs i on i.workspace_id = c.workspace_id and i.id = c.generation_input_id
 		join generation_runs gr on gr.workspace_id = c.workspace_id and gr.id = i.generation_run_id
 		left join source_scopes sc on sc.workspace_id = gr.workspace_id and sc.id = gr.source_scope_id
@@ -944,6 +1022,19 @@ class ContentPackService(
 	private fun staleArtifactRevision(variantId: UUID): ApiException =
 		ApiException(HttpStatus.CONFLICT, "STALE_ARTIFACT_REVISION", "Artifact revision is stale", variantId)
 
+	private fun historyCause(revisionNumber: Int, createdByUserId: UUID?): String {
+		if (revisionNumber == 1) return "Initial generation"
+		if (createdByUserId == devContext.devUserId) return "Edited by you"
+		val displayName = createdByUserId?.let {
+			jdbcTemplate.query(
+				"select display_name from users where id = ?",
+				{ rs, _ -> rs.getString(1) },
+				it,
+			).firstOrNull()
+		}
+		return "Edited by ${displayName?.takeIf { it.isNotBlank() } ?: "someone"}"
+	}
+
 	private fun safeHttpUrl(value: String?): String? = try {
 		val uri = URI(value?.trim() ?: return null)
 		if (uri.scheme?.lowercase() !in setOf("http", "https") || uri.host.isNullOrBlank() || uri.isOpaque || uri.rawUserInfo != null) return null
@@ -990,6 +1081,20 @@ private data class CurrentArtifactRevision(
 	val revisionNumber: Int,
 	val lexicalContent: JsonNode,
 )
+
+private data class HistoryRevisionRow(
+	val revisionId: UUID,
+	val revisionNumber: Int,
+	val createdByUserId: UUID?,
+	val createdAt: java.time.Instant,
+) {
+	constructor(revisionNumber: Int, createdByUserId: UUID?, createdAt: java.time.Instant) : this(
+		revisionId = UUID(0, 0),
+		revisionNumber = revisionNumber,
+		createdByUserId = createdByUserId,
+		createdAt = createdAt,
+	)
+}
 
 private data class StatementRow(
 	val id: UUID,

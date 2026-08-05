@@ -155,6 +155,29 @@ describe("Plot same-origin proxy", () => {
   });
 
   it.each([
+    ["GET", ["artifacts"]],
+    ["GET", ["artifacts", "artifact-1"]],
+    ["GET", ["artifact-variants", "variant-1"]],
+    ["GET", ["artifact-variants", "variant-1", "history"]],
+    ["GET", ["artifact-variants", "variant-1", "history", "revision-1"]],
+    ["GET", ["artifact-variants", "variant-1", "history", "at", "0"]],
+    ["PATCH", ["artifact-variants", "variant-1"]],
+    ["PUT", ["artifact-variants", "variant-1"]],
+    ["PATCH", ["artifact-variants", "variant-1", "sentences", "sentence-1"]],
+    ["POST", ["artifact-variants", "variant-1", "exports"]],
+  ])("allows the explicit artifact route %s %o", async (method, path) => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ ok: true }));
+    const request = new Request(`http://web.test/api/plot/${path.join("/")}`, {
+      method,
+      ...(method === "GET" ? {} : { headers: { Origin: "http://web.test", "Content-Type": "application/json" }, body: "{}" }),
+    });
+    const response = await proxyPlotRequest(request, path, { fetch: fetcher, baseUrl: "http://127.0.0.1:8080" });
+
+    expect(response.status).toBe(200);
+    expect(String(fetcher.mock.calls[0]?.[0])).toBe(`http://127.0.0.1:8080/api/${path.join("/")}`);
+  });
+
+  it.each([
     [
       "GET",
       ["github", "repositories", "scope-1", "release-activity"],

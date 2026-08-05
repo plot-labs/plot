@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 type SessionComposerProps = {
   onSubmit: (message: string, referenceIds: string[]) => void;
   variant?: "center" | "dock";
+  id?: string;
   placeholder?: string;
   references?: { id: string; label: string; available: boolean; groupId?: string }[];
   busy?: boolean;
@@ -16,7 +17,8 @@ type SessionComposerProps = {
 export function SessionComposer({
   onSubmit,
   variant = "dock",
-  placeholder = "Ask Plot to revise, use another reference, or create another draft...",
+  id,
+  placeholder = "Ask Plot to create another source-backed artifact...",
   references = [],
   busy = false,
 }: SessionComposerProps) {
@@ -33,6 +35,7 @@ export function SessionComposer({
 
   return (
     <form
+      id={id}
       className={cn(
         variant === "dock"
           ? "bg-white/95 px-4 py-4 dark:bg-[#111113]/95 sm:px-8"

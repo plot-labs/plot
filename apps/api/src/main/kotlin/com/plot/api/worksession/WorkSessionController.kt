@@ -23,6 +23,9 @@ class WorkSessionController(
 		return workSessionService.list()
 	}
 
+	@GetMapping("/{id}/generations")
+	fun listGenerations(@PathVariable id: UUID) = workSessionService.listGenerations(id)
+
 	@PostMapping
 	fun create(@RequestBody request: CreateWorkSessionRequest): WorkSessionResponse {
 		return workSessionService.create(request)

@@ -35,6 +35,7 @@ class GenerationRunService(
 		writingBlockIds: List<UUID>,
 		instruction: String?,
 		idempotencyKey: String,
+		workSessionId: UUID? = null,
 	): GenerationWorkflowState =
 		createInternal(
 			principal = WorkspacePrincipal(devContext.devWorkspaceId, devContext.devUserId),
@@ -43,6 +44,7 @@ class GenerationRunService(
 			instruction = instruction,
 			idempotencyKey = idempotencyKey,
 			requireRequestSourceAccess = true,
+			workSessionId = workSessionId,
 		)
 
 	fun createForPrincipal(
@@ -51,6 +53,7 @@ class GenerationRunService(
 		writingBlockIds: List<UUID>,
 		instruction: String?,
 		idempotencyKey: String,
+		workSessionId: UUID? = null,
 	): GenerationWorkflowState =
 		createInternal(
 			principal = principal,
@@ -59,6 +62,7 @@ class GenerationRunService(
 			instruction = instruction,
 			idempotencyKey = idempotencyKey,
 			requireRequestSourceAccess = false,
+			workSessionId = workSessionId,
 		)
 
 	private fun createInternal(
@@ -68,12 +72,13 @@ class GenerationRunService(
 		instruction: String?,
 		idempotencyKey: String,
 		requireRequestSourceAccess: Boolean,
+		workSessionId: UUID?,
 	): GenerationWorkflowState {
 		require(idempotencyKey.isNotBlank()) { "Idempotency key is required" }
 		require(writingBlockIds.isNotEmpty()) { "At least one Writing Block is required" }
 		require(writingBlockIds.distinct().size == writingBlockIds.size) { "Writing Block IDs must be unique" }
 		val normalizedKey = idempotencyKey.trim()
-		val requestFingerprint = fingerprint(sourceScopeId, writingBlockIds, instruction)
+		val requestFingerprint = fingerprint(sourceScopeId, writingBlockIds, instruction, workSessionId)
 		persistence.findIdempotentRun(
 			principal.workspaceId, principal.userId, normalizedKey, requestFingerprint,
 		)?.let {
@@ -97,7 +102,7 @@ class GenerationRunService(
 		val evidence = writingBlockIds.mapIndexed { index, id ->
 			evidenceSnapshotService.snapshot(runId, index, selected.getValue(id))
 		}
-		val initialState = workflowService.start(runId, evidence, instruction)
+		val initialState = workflowService.start(runId, evidence, instruction).copy(workSessionId = workSessionId)
 		val state = persistence.createRun(GenerationRunReservation(
 			workspaceId = principal.workspaceId,
 			createdByUserId = principal.userId,
@@ -112,7 +117,8 @@ class GenerationRunService(
 				"maxTotalTokens" to properties.maxTotalTokens,
 				"maxRunDurationMillis" to properties.maxRunDuration.toMillis(),
 			)),
-		))
+			workSessionId = workSessionId,
+			))
 		dispatchAfterCommit()
 		return state
 	}
@@ -144,11 +150,12 @@ class GenerationRunService(
 		throw ApiException(HttpStatus.NOT_FOUND, "GENERATION_NOT_FOUND", "Generation run not found")
 	}
 
-	private fun fingerprint(sourceScopeId: UUID, ids: List<UUID>, instruction: String?): String {
+	private fun fingerprint(sourceScopeId: UUID, ids: List<UUID>, instruction: String?, workSessionId: UUID?): String {
 		val canonical = buildString {
 			append(sourceScopeId).append('\n')
 			ids.forEach { append(it).append('\n') }
 			append(instruction?.trim().orEmpty())
+			if (workSessionId != null) append('\n').append(workSessionId)
 		}
 		return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(canonical.toByteArray()))
 	}

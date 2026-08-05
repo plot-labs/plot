@@ -66,7 +66,7 @@ class GitHubReleaseActivityApiIntegrationTest {
 			baseSha = "a".repeat(40),
 			headSha = "b".repeat(40),
 		)
-		val (generationRunId, contentPackId) = attachReadyPack(requestId, sourceScopeId)
+		val (generationRunId, artifactId) = attachReadyPack(requestId, sourceScopeId)
 		val foreignWorkspaceId = insertWorkspace("foreign-release-activity")
 		val foreignScopeId = insertScope(foreignWorkspaceId)
 		insertRequest(foreignWorkspaceId, foreignScopeId, "FAILED", errorCode = "PRIVATE_PROVIDER_DETAIL")
@@ -81,7 +81,7 @@ class GitHubReleaseActivityApiIntegrationTest {
 				jsonPath("$.baseSha") { value("a".repeat(40)) }
 				jsonPath("$.headSha") { value("b".repeat(40)) }
 				jsonPath("$.generationRunId") { value(generationRunId.toString()) }
-				jsonPath("$.contentPackId") { value(contentPackId.toString()) }
+				jsonPath("$.artifactId") { value(artifactId.toString()) }
 				jsonPath("$.errorCode") { doesNotExist() }
 				jsonPath("$.createdAt") { value("2026-07-30T00:00:00Z") }
 				jsonPath("$.updatedAt") { value("2026-07-30T00:01:00Z") }
@@ -237,7 +237,7 @@ class GitHubReleaseActivityApiIntegrationTest {
 
 	private fun attachReadyPack(requestId: UUID, sourceScopeId: UUID): Pair<UUID, UUID> {
 		val generationRunId = UUID.randomUUID()
-		val contentPackId = UUID.randomUUID()
+		val artifactId = UUID.randomUUID()
 		jdbcTemplate.update(
 			"""
 			insert into generation_runs (
@@ -268,13 +268,13 @@ class GitHubReleaseActivityApiIntegrationTest {
 			 id, workspace_id, generation_run_id, title, status, created_at, updated_at, release_request_id
 			) values (?, ?, ?, 'Release v1.2.0', 'READY', ?, ?, ?)
 			""".trimIndent(),
-			contentPackId,
+			artifactId,
 			devContext.devWorkspaceId,
 			generationRunId,
 			Timestamp.from(Instant.parse("2026-07-30T00:01:00Z")),
 			Timestamp.from(Instant.parse("2026-07-30T00:01:00Z")),
 			requestId,
 		)
-		return generationRunId to contentPackId
+		return generationRunId to artifactId
 	}
 }

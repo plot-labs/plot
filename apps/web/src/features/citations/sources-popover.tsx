@@ -113,7 +113,7 @@ export function SourcesPopover({ sources }: SourcesPopoverProps) {
                 Sources
               </h2>
               <p className="mt-1 text-xs leading-5 text-black/50 dark:text-white/52">
-                Sources attached to this revision.
+                Sources attached to this artifact.
               </p>
             </div>
             <button
@@ -141,7 +141,7 @@ export function SourcesPopover({ sources }: SourcesPopoverProps) {
             </ol>
           ) : (
             <p className="mt-4 rounded-xl border border-dashed border-black/10 px-3 py-4 text-sm leading-6 text-black/52 dark:border-white/12 dark:text-white/55">
-              No current sources are available for this revision.
+              No current sources are available for this artifact.
             </p>
           )}
         </div>

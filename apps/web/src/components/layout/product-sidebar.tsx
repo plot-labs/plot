@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/integrations", label: "Integrations", icon: Puzzle },
-  { href: "/packs", label: "Packs", icon: PackageOpen },
+  { href: "/artifacts", label: "Artifacts", icon: PackageOpen },
 ];
 
 type ProductSidebarProps = {

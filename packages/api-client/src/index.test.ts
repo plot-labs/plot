@@ -71,7 +71,7 @@ describe("Plot API client", () => {
       baseSha: "base",
       headSha: "head",
       generationRunId: null,
-      contentPackId: null,
+      artifactId: null,
       errorCode: "GENERATION_FAILED",
       createdAt: "2026-07-30T00:00:00Z",
       updatedAt: "2026-07-30T00:01:00Z",
@@ -85,7 +85,7 @@ describe("Plot API client", () => {
     await expect(client.retryGitHubReleaseDraft("scope-1", "request-1")).resolves.toMatchObject({
       id: "request-1",
       status: "QUEUED",
-      contentPackId: null,
+      artifactId: null,
     });
 
     expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
@@ -149,14 +149,14 @@ describe("Plot API client", () => {
           },
         ],
         sentences: [],
-        contentPack: null,
+        artifact: null,
       }),
     );
     const client = createPlotApiClient({ fetch: fetcher });
     const controller = new AbortController();
 
     const result = await client.createGeneration(
-      { sourceScopeId: "scope-1", writingBlockIds: ["block-1"], instruction: "Notes" },
+      { sourceScopeId: "scope-1", writingBlockIds: ["block-1"], instruction: "Notes", workSessionId: "session-1" },
       "key-1",
       { signal: controller.signal },
     );
@@ -167,7 +167,7 @@ describe("Plot API client", () => {
       "/api/plot/generations",
       expect.objectContaining({
         method: "POST",
-        body: JSON.stringify({ sourceScopeId: "scope-1", writingBlockIds: ["block-1"], instruction: "Notes" }),
+        body: JSON.stringify({ sourceScopeId: "scope-1", writingBlockIds: ["block-1"], instruction: "Notes", workSessionId: "session-1" }),
         signal: controller.signal,
         headers: expect.objectContaining({ "Idempotency-Key": "key-1" }),
       }),
@@ -187,7 +187,7 @@ describe("Plot API client", () => {
     );
     const client = createPlotApiClient({ fetch: fetcher });
 
-		await expect(client.exportVariant("variant-1", { expectedRevisionNumber: 3, includeSources: false, acknowledgeUnresolved: false, disposition: "COPY" })).rejects.toMatchObject<PlotApiError>({
+		await expect(client.exportArtifactVariant("variant-1", { expectedRevisionNumber: 3, includeSources: false, acknowledgeUnresolved: false, disposition: "COPY" })).rejects.toMatchObject<PlotApiError>({
 			code: "EXPORT_CONFIRMATION_REQUIRED",
 			status: 409,
 			details: { warnings: [{ key: "warning-1", sentenceNumber: 2, excerpt: "A claim" }] },
@@ -202,6 +202,25 @@ describe("Plot API client", () => {
 			code: "MODEL_NOT_CONFIGURED",
 			status: 503,
 		});
+	});
+
+	it("loads ordered session generations and content-only artifact history", async () => {
+		const fetcher = vi.fn<typeof fetch>()
+			.mockResolvedValueOnce(Response.json([{ id: "run-1", status: "READY", instruction: "Changelog", createdAt: "2026-08-01T00:00:00Z", completedAt: "2026-08-01T00:01:00Z", failureCode: null, artifact: null }]))
+			.mockResolvedValueOnce(Response.json([{ position: 0, createdAt: "2026-08-01T00:01:00Z", cause: "Edited by you" }]))
+			.mockResolvedValueOnce(Response.json({ createdAt: "2026-08-01T00:01:00Z", cause: "Edited by you", readOnly: true, artifact: { id: "artifact-1" } }));
+		const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
+
+		await client.listSessionGenerations("session-1");
+		await client.listArtifactHistory("variant-1");
+		await client.getArtifactHistoryAt("variant-1", 0);
+
+		expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+			"/api/plot/sessions/session-1/generations",
+			"/api/plot/artifact-variants/variant-1/history",
+			"/api/plot/artifact-variants/variant-1/history/at/0",
+		]);
+		expect(new Headers(fetcher.mock.calls[2]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
 	});
 
 	it("loads and saves the whole artifact with revision-bound source export inputs", async () => {
@@ -225,9 +244,9 @@ describe("Plot API client", () => {
 		const lexicalContent = { root: { children: [] } };
 		const statements = [{ id: "sentence-1", orderIndex: 0, body: "Draft" }];
 
-		await client.getContentVariant("variant-1", { signal: controller.signal });
-		await client.saveContentVariant("variant-1", { expectedRevisionNumber: 3, lexicalContent, statements });
-		await client.exportVariant("variant-1", {
+		await client.getArtifactVariant("variant-1", { signal: controller.signal });
+		await client.saveArtifactVariant("variant-1", { expectedRevisionNumber: 3, lexicalContent, statements });
+		await client.exportArtifactVariant("variant-1", {
 			expectedRevisionNumber: 4,
 			includeSources: true,
 			acknowledgeUnresolved: false,
@@ -236,9 +255,9 @@ describe("Plot API client", () => {
 		});
 
 		expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
-			"/api/plot/content-variants/variant-1",
-			"/api/plot/content-variants/variant-1",
-			"/api/plot/content-variants/variant-1/exports",
+			"/api/plot/artifact-variants/variant-1",
+			"/api/plot/artifact-variants/variant-1",
+			"/api/plot/artifact-variants/variant-1/exports",
 		]);
 		expect(fetcher.mock.calls[1]?.[1]).toMatchObject({
 			method: "PATCH",
@@ -262,11 +281,11 @@ describe("Plot API client", () => {
     const client = createPlotApiClient({ fetch: fetcher });
 
     await client.editSentence("variant", "sentence", { expectedRevisionNumber: 2, body: "Edited" });
-    await client.exportVariant("variant", { expectedRevisionNumber: 2, includeSources: false, acknowledgeUnresolved: true, disposition: "DOWNLOAD" });
+    await client.exportArtifactVariant("variant", { expectedRevisionNumber: 2, includeSources: false, acknowledgeUnresolved: true, disposition: "DOWNLOAD" });
 
     expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
-      "/api/plot/content-variants/variant/sentences/sentence",
-      "/api/plot/content-variants/variant/exports",
+      "/api/plot/artifact-variants/variant/sentences/sentence",
+      "/api/plot/artifact-variants/variant/exports",
     ]);
   });
 

@@ -35,7 +35,7 @@ const run: GenerationRun = {
     ], detail: null },
     { kind: "REWRITER_OUTPUT", sequence: 2, sentenceIds: ["sentence-2"], reviews: [], detail: null },
   ],
-  contentPack: null,
+  artifact: null,
   timing: {
     createdAt: "2026-07-21T10:00:00Z",
     startedAt: "2026-07-21T10:00:01Z",

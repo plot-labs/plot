@@ -80,7 +80,7 @@ export interface ContentSentence {
   citations: ContentCitation[];
 }
 
-export interface ContentPack {
+export interface Artifact {
   id: string;
   generationRunId: string;
   status: string;
@@ -105,7 +105,8 @@ export interface GenerationRun {
   evidence: GenerationEvidence[];
   sentences: GenerationSentence[];
   artifacts: GenerationArtifact[];
-  contentPack: ContentPack | null;
+  artifact: Artifact | null;
+  workSessionId?: string | null;
   timing?: GenerationRunTiming | null;
 }
 
@@ -141,8 +142,8 @@ export interface GenerationArtifact {
   detail: string | null;
 }
 
-export interface ContentPackSummary { id: string; generationRunId: string; status: string; title: string | null }
-export interface ContentPackPage { items: ContentPackSummary[]; page: number; size: number; totalItems: number; totalPages: number }
+export interface ArtifactSummary { id: string; generationRunId: string; status: string; title: string | null }
+export interface ArtifactPage { items: ArtifactSummary[]; page: number; size: number; totalItems: number; totalPages: number }
 
 export interface ExportWarning {
   key: string;
@@ -167,6 +168,7 @@ export interface CreateGenerationInput {
   sourceScopeId: string;
   writingBlockIds: string[];
   instruction?: string;
+  workSessionId?: string;
 }
 
 export interface RequestOptions { signal?: AbortSignal }
@@ -270,7 +272,7 @@ export interface GitHubReleaseActivity {
   baseSha: string | null;
   headSha: string | null;
   generationRunId: string | null;
-  contentPackId: string | null;
+  artifactId: string | null;
   errorCode: string | null;
   createdAt: string;
   updatedAt: string;
@@ -313,6 +315,29 @@ export interface WorkSessionSummary {
   updatedAt: string;
 }
 
+export interface SessionGeneration {
+  id: string;
+  status: GenerationStatus;
+  instruction: string | null;
+  createdAt: string;
+  completedAt: string | null;
+  failureCode: string | null;
+  artifact: ArtifactSummary | null;
+}
+
+export interface ArtifactHistoryItem {
+  position: number;
+  createdAt: string;
+  cause: string;
+}
+
+export interface ArtifactHistoryDetail {
+  createdAt: string;
+  cause: string;
+  readOnly: true;
+  artifact: Artifact;
+}
+
 export class PlotApiError extends Error {
   constructor(
     public readonly status: number,
@@ -342,15 +367,18 @@ export interface PlotApiClient {
   listSessions(options?: RequestOptions): Promise<WorkSessionSummary[]>;
   createSession(input: { title?: string | null }, options?: RequestOptions): Promise<WorkSessionSummary>;
   updateSession(id: string, input: { title?: string; latestGenerationId?: string }, options?: RequestOptions): Promise<WorkSessionSummary>;
+  listSessionGenerations(id: string, options?: RequestOptions): Promise<SessionGeneration[]>;
   listGenerationReferences(options?: RequestOptions): Promise<GenerationReference[]>;
   createGeneration(input: CreateGenerationInput, idempotencyKey: string, options?: RequestOptions): Promise<GenerationRun>;
   getGeneration(id: string, options?: RequestOptions): Promise<GenerationRun>;
-  getContentPack(id: string, options?: RequestOptions): Promise<ContentPack>;
-  getContentVariant(id: string, options?: RequestOptions): Promise<ContentPack>;
-  listContentPacks(page?: number, size?: number, options?: RequestOptions): Promise<ContentPackPage>;
-  saveContentVariant(variantId: string, input: { expectedRevisionNumber: number; lexicalContent: Record<string, unknown>; statements: ContentStatementInput[] }, options?: RequestOptions): Promise<ContentPack>;
-  editSentence(variantId: string, sentenceId: string, input: { expectedRevisionNumber: number; body: string }, options?: RequestOptions): Promise<ContentPack>;
-  exportVariant(variantId: string, input: { expectedRevisionNumber: number; includeSources: boolean; acknowledgeUnresolved: boolean; acknowledgedWarningKeys?: string[]; acknowledgedRevisionIds?: string[]; disposition: "COPY" | "DOWNLOAD" }, options?: RequestOptions): Promise<ContentExport>;
+  getArtifact(id: string, options?: RequestOptions): Promise<Artifact>;
+  getArtifactVariant(id: string, options?: RequestOptions): Promise<Artifact>;
+  listArtifacts(page?: number, size?: number, options?: RequestOptions): Promise<ArtifactPage>;
+  saveArtifactVariant(variantId: string, input: { expectedRevisionNumber: number; lexicalContent: Record<string, unknown>; statements: ContentStatementInput[] }, options?: RequestOptions): Promise<Artifact>;
+  editSentence(variantId: string, sentenceId: string, input: { expectedRevisionNumber: number; body: string }, options?: RequestOptions): Promise<Artifact>;
+  exportArtifactVariant(variantId: string, input: { expectedRevisionNumber: number; includeSources: boolean; acknowledgeUnresolved: boolean; acknowledgedWarningKeys?: string[]; acknowledgedRevisionIds?: string[]; disposition: "COPY" | "DOWNLOAD" }, options?: RequestOptions): Promise<ContentExport>;
+  listArtifactHistory(variantId: string, options?: RequestOptions): Promise<ArtifactHistoryItem[]>;
+  getArtifactHistoryAt(variantId: string, position: number, options?: RequestOptions): Promise<ArtifactHistoryDetail>;
 }
 
 export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof fetch; workspaceId?: string | (() => string | null) } = {}): PlotApiClient {
@@ -434,6 +462,9 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
       body: JSON.stringify(input),
       signal: requestOptions?.signal,
     }),
+    listSessionGenerations: (id, requestOptions) => request(`/sessions/${encodeURIComponent(id)}/generations`, {
+      signal: requestOptions?.signal,
+    }),
     listGenerationReferences: async (requestOptions) => {
       const connections = await request<GitHubConnection[]>("/github/connections", { signal: requestOptions?.signal });
       const scopes = connections
@@ -468,20 +499,28 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
       headers: { "Idempotency-Key": idempotencyKey },
     }),
     getGeneration: (id, requestOptions) => request(`/generations/${encodeURIComponent(id)}`, { signal: requestOptions?.signal }),
-    getContentPack: (id, requestOptions) => request(`/content-packs/${encodeURIComponent(id)}`, { signal: requestOptions?.signal }),
-    getContentVariant: (id, requestOptions) => request(`/content-variants/${encodeURIComponent(id)}`, { signal: requestOptions?.signal }),
-    listContentPacks: (page = 0, size = 25, requestOptions) => request(`/content-packs?page=${page}&size=${size}`, { signal: requestOptions?.signal }),
-    saveContentVariant: (variantId, input, requestOptions) => request(
-      `/content-variants/${encodeURIComponent(variantId)}`,
+    getArtifact: (id, requestOptions) => request(`/artifacts/${encodeURIComponent(id)}`, { signal: requestOptions?.signal }),
+    getArtifactVariant: (id, requestOptions) => request(`/artifact-variants/${encodeURIComponent(id)}`, { signal: requestOptions?.signal }),
+    listArtifacts: (page = 0, size = 25, requestOptions) => request(`/artifacts?page=${page}&size=${size}`, { signal: requestOptions?.signal }),
+    saveArtifactVariant: (variantId, input, requestOptions) => request(
+      `/artifact-variants/${encodeURIComponent(variantId)}`,
       { method: "PATCH", body: JSON.stringify(input), signal: requestOptions?.signal },
     ),
     editSentence: (variantId, sentenceId, input, requestOptions) => request(
-      `/content-variants/${encodeURIComponent(variantId)}/sentences/${encodeURIComponent(sentenceId)}`,
+      `/artifact-variants/${encodeURIComponent(variantId)}/sentences/${encodeURIComponent(sentenceId)}`,
       { method: "PATCH", body: JSON.stringify(input), signal: requestOptions?.signal },
     ),
-    exportVariant: (variantId, input, requestOptions) => request(
-      `/content-variants/${encodeURIComponent(variantId)}/exports`,
+    exportArtifactVariant: (variantId, input, requestOptions) => request(
+      `/artifact-variants/${encodeURIComponent(variantId)}/exports`,
       { method: "POST", body: JSON.stringify(input), signal: requestOptions?.signal },
+    ),
+    listArtifactHistory: (variantId, requestOptions) => request(
+      `/artifact-variants/${encodeURIComponent(variantId)}/history`,
+      { signal: requestOptions?.signal },
+    ),
+    getArtifactHistoryAt: (variantId, position, requestOptions) => request(
+      `/artifact-variants/${encodeURIComponent(variantId)}/history/at/${encodeURIComponent(String(position))}`,
+      { signal: requestOptions?.signal },
     ),
   };
 }

@@ -36,7 +36,7 @@ describe("Integrations navigation", () => {
     const link = screen.getByRole("link", { name: "Integrations" });
     expect(link).toHaveAttribute("href", "/integrations");
     expect(link).toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("link", { name: "Packs" })).toHaveAttribute("href", "/packs");
+    expect(screen.getByRole("link", { name: "Artifacts" })).toHaveAttribute("href", "/artifacts");
     expect(screen.queryByRole("link", { name: "Sources" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "New session" })).not.toBeInTheDocument();
     expect(screen.queryByText("Sessions", { selector: "div" })).not.toBeInTheDocument();

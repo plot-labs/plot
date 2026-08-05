@@ -5,7 +5,7 @@ import com.plot.api.generation.dto.GenerationRunResponse
 import com.plot.api.generation.dto.toResponse
 import com.plot.api.dev.DevContext
 import com.plot.api.source.SourceManagedAccessGuard
-import com.plot.api.contentpack.ContentPackService
+import com.plot.api.artifact.ArtifactService
 import jakarta.validation.Valid
 import java.net.URI
 import java.util.UUID
@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.RestController
 class GenerationController(
 	private val runService: GenerationRunService,
 	private val accessGuard: SourceManagedAccessGuard,
-	private val contentPackService: ContentPackService,
+	private val artifactService: ArtifactService,
 ) {
 	@PostMapping
 	fun create(
@@ -35,7 +35,11 @@ class GenerationController(
 	): ResponseEntity<GenerationRunResponse> {
 		accessGuard.requireReadable()
 		val state = runService.create(
-			requireNotNull(request.sourceScopeId), request.writingBlockIds, request.instruction, idempotencyKey,
+			sourceScopeId = requireNotNull(request.sourceScopeId),
+			writingBlockIds = request.writingBlockIds,
+			instruction = request.instruction,
+			idempotencyKey = idempotencyKey,
+			workSessionId = request.workSessionId,
 		)
 		return ResponseEntity.accepted()
 			.location(URI.create("/api/generations/${state.runId}"))
@@ -52,5 +56,5 @@ class GenerationController(
 	private fun GenerationRunResponse.withTiming(runId: UUID): GenerationRunResponse =
 		copy(timing = runService.getTiming(runId))
 
-	private fun GenerationRunResponse.withPack(): GenerationRunResponse = copy(contentPack = contentPackService.findByRun(id))
+	private fun GenerationRunResponse.withPack(): GenerationRunResponse = copy(artifact = artifactService.findByRun(id))
 }

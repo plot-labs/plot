@@ -5,7 +5,7 @@ import com.plot.api.generation.GenerationWorkflowState
 import com.plot.api.generation.model.ReviewVerdict
 import com.plot.api.generation.model.SentenceOrigin
 import com.plot.api.generation.model.SourceProvider
-import com.plot.api.contentpack.dto.ContentPackResponse
+import com.plot.api.artifact.dto.ArtifactResponse
 import jakarta.validation.constraints.NotEmpty
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
@@ -16,6 +16,7 @@ data class CreateGenerationRequest(
 	@field:NotNull val sourceScopeId: UUID?,
 	@field:NotEmpty @field:Size(max = 20) val writingBlockIds: List<UUID>,
 	@field:Size(max = 2_000) val instruction: String? = null,
+	val workSessionId: UUID? = null,
 )
 
 data class GenerationRunResponse(
@@ -28,7 +29,8 @@ data class GenerationRunResponse(
 	val sentences: List<GenerationSentenceResponse>,
 	val artifacts: List<GenerationArtifactResponse>,
 	val timing: GenerationRunTimingResponse? = null,
-	val contentPack: ContentPackResponse? = null,
+	val artifact: ArtifactResponse? = null,
+	val workSessionId: UUID? = null,
 )
 
 data class GenerationRunTimingResponse(
@@ -148,6 +150,7 @@ fun GenerationWorkflowState.toResponse(): GenerationRunResponse {
 				artifact.detail,
 			)
 		},
-		contentPack = null,
+		artifact = null,
+		workSessionId = workSessionId,
 	)
 }

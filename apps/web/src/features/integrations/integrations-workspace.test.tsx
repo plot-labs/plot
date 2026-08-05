@@ -303,7 +303,7 @@ describe("IntegrationsWorkspace", () => {
     expect(await screen.findByText("Draft ready")).toBeVisible();
     expect(screen.getByRole("link", { name: "Review changelog" })).toHaveAttribute(
       "href",
-      "/packs?pack=pack-1",
+      "/artifacts?artifact=pack-1",
     );
     expect(screen.getByText("Draft ready").closest('[role="status"]')).toHaveAttribute("aria-live", "polite");
   });
@@ -409,21 +409,21 @@ describe("IntegrationsWorkspace", () => {
     mocks.getReleaseActivity.mockImplementation((sourceScopeId: string) => Promise.resolve(
       sourceScopeId === "scope-1"
         ? releaseActivity("READY")
-        : { ...releaseActivity("READY"), sourceScopeId: "scope-2", contentPackId: "pack-2" },
+        : { ...releaseActivity("READY"), sourceScopeId: "scope-2", artifactId: "pack-2" },
     ));
 
     render(<IntegrationsWorkspace />);
 
     expect(await screen.findByRole("link", { name: "Review changelog" })).toHaveAttribute(
       "href",
-      "/packs?pack=pack-1",
+      "/artifacts?artifact=pack-1",
     );
     expect(mocks.getReleaseActivity).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole("radio", { name: /acme\/second/i }));
     expect(await screen.findByRole("link", { name: "Review changelog" })).toHaveAttribute(
       "href",
-      "/packs?pack=pack-2",
+      "/artifacts?artifact=pack-2",
     );
     expect(mocks.getReleaseActivity).toHaveBeenCalledTimes(2);
 
@@ -459,7 +459,7 @@ function releaseActivity(status: string, errorCode: string | null = null) {
     baseSha: null,
     headSha: null,
     generationRunId: status === "READY" ? "generation-1" : null,
-    contentPackId: status === "READY" ? "pack-1" : null,
+    artifactId: status === "READY" ? "pack-1" : null,
     errorCode,
     createdAt: "2026-07-30T00:00:00Z",
     updatedAt: "2026-07-30T00:01:00Z",

@@ -1,35 +1,37 @@
 // @vitest-environment jsdom
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { StrictMode, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   search: "",
   listSessions: vi.fn(),
   listReferences: vi.fn(),
+  listSessionGenerations: vi.fn(),
   createSession: vi.fn(),
   createGeneration: vi.fn(),
-  updateSession: vi.fn(),
   getGeneration: vi.fn(),
-  poll: vi.fn(),
+  replace: vi.fn(),
   locationAssign: vi.fn(),
 }));
 
-vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams(mocks.search) }));
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams(mocks.search),
+  useRouter: () => ({ replace: mocks.replace }),
+}));
 vi.mock("@/lib/api-client", () => ({
   plotApiClient: {
     listSessions: mocks.listSessions,
     listGenerationReferences: mocks.listReferences,
+    listSessionGenerations: mocks.listSessionGenerations,
     createSession: mocks.createSession,
     createGeneration: mocks.createGeneration,
-    updateSession: mocks.updateSession,
     getGeneration: mocks.getGeneration,
-    editSentence: vi.fn(),
+    saveArtifactVariant: vi.fn(),
   },
 }));
 vi.mock("@/lib/generation-polling", () => ({
-  pollGeneration: mocks.poll,
+  pollGeneration: mocks.getGeneration,
   isTerminalGenerationStatus: (status: string) => ["READY", "NEEDS_REVIEW", "FAILED"].includes(status),
 }));
 vi.mock("@/features/sessions/session-composer", () => ({
@@ -39,19 +41,20 @@ vi.mock("@/features/sessions/session-composer", () => ({
     </button>
   ),
 }));
-vi.mock("@/features/sessions/session-thread", () => ({ SessionThread: ({ generationPanel }: { generationPanel: ReactNode }) => <div>Thread{generationPanel}</div> }));
-vi.mock("@/features/citations/cited-draft-editor", () => ({ CitedDraftEditor: () => <div>Reviewed draft</div> }));
+vi.mock("@/features/citations/cited-draft-editor", () => ({ CitedDraftEditor: () => <div>Reviewed artifact</div> }));
 vi.mock("@/features/citations/export-dialog", () => ({ ExportDialog: () => null }));
+vi.mock("@/features/citations/artifact-history-panel", () => ({ ArtifactHistoryPanel: () => <div>History</div> }));
 vi.mock("@/features/sessions/generation-work-log", () => ({ GenerationWorkLog: () => <div>Generation log</div> }));
 
 import { SessionsWorkspace } from "./sessions-workspace";
 
 const session = { id: "session-1", title: "Release", status: "OPEN", latestGenerationId: "run-1", lastActivityAt: "2026-07-01T00:00:00Z", createdAt: "2026-07-01T00:00:00Z", updatedAt: "2026-07-01T00:00:00Z" };
 const reference = { id: "block-1", sourceScopeId: "scope-1", provider: "GITHUB", sourceKind: "PULL_REQUEST", sourceLabel: "PR #1", repositoryLabel: "acme/plot", title: "Ship", body: "Evidence", originalUrl: "https://github.test/1", sourceCreatedAt: null };
+const artifactSummary = { id: "artifact-1", generationRunId: "run-1", status: "READY", title: "Release" };
 const terminalRun = {
   id: "run-1", status: "READY", semanticRewriteAttempt: 0, pollAfterMs: null, failureCode: null,
-  evidence: [], sentences: [], artifacts: [],
-  contentPack: { id: "pack-1", generationRunId: "run-1", status: "READY", title: "Release", variant: { id: "variant-1", status: "READY", revisionId: "artifact-revision-1", revisionNumber: 1, lexicalContent: { root: { children: [], type: "root", version: 1 } }, sentences: [], sources: [] } },
+  evidence: [], sentences: [], artifacts: [], workSessionId: "session-1",
+  artifact: { id: "artifact-1", generationRunId: "run-1", status: "READY", title: "Release", variant: { id: "variant-1", status: "READY", revisionId: "artifact-revision-1", revisionNumber: 1, lexicalContent: { root: { children: [], type: "root", version: 1 } }, sentences: [], sources: [] } },
 };
 
 describe("SessionsWorkspace", () => {
@@ -60,9 +63,9 @@ describe("SessionsWorkspace", () => {
     Object.values(mocks).forEach((value) => { if (typeof value === "function" && "mockReset" in value) value.mockReset(); });
     mocks.listSessions.mockResolvedValue([]);
     mocks.listReferences.mockResolvedValue([reference]);
-    mocks.updateSession.mockResolvedValue(session);
+    mocks.listSessionGenerations.mockResolvedValue([]);
+    mocks.replace.mockImplementation(() => undefined);
     window.sessionStorage.clear();
-    window.history.replaceState(null, "", "/sessions");
     Object.defineProperty(window, "location", { configurable: true, value: { ...window.location, assign: mocks.locationAssign } });
   });
 
@@ -72,18 +75,22 @@ describe("SessionsWorkspace", () => {
     expect(screen.queryByText("July changelog")).not.toBeInTheDocument();
   });
 
-  it("creates a real session before generation and stores the latest generation", async () => {
+  it("creates a session-owned generation without browser pointer repair", async () => {
     mocks.createSession.mockResolvedValue({ ...session, latestGenerationId: null });
-    mocks.createGeneration.mockResolvedValue({ ...terminalRun, id: "run-new" });
+    mocks.createGeneration.mockResolvedValue({ ...terminalRun, id: "run-new", artifact: null });
 
     render(<SessionsWorkspace />);
     await screen.findByRole("button", { name: "Start generation" });
     fireEvent.click(screen.getByRole("button", { name: "Start generation" }));
 
-    await waitFor(() => expect(mocks.updateSession).toHaveBeenCalledWith("session-1", { latestGenerationId: "run-new" }));
-    expect(mocks.createSession.mock.invocationCallOrder[0]).toBeLessThan(mocks.createGeneration.mock.invocationCallOrder[0]!);
-    expect(mocks.createGeneration.mock.invocationCallOrder[0]).toBeLessThan(mocks.updateSession.mock.invocationCallOrder[0]!);
+    await waitFor(() => expect(mocks.createGeneration).toHaveBeenCalledWith({
+      sourceScopeId: "scope-1",
+      writingBlockIds: ["block-1"],
+      instruction: "Write release notes",
+      workSessionId: "session-1",
+    }, expect.any(String)));
     expect(mocks.locationAssign).toHaveBeenCalledWith("/sessions?session=session-1&generation=run-new");
+    expect(window.sessionStorage.length).toBe(0);
   });
 
   it("keeps a created empty session and shows a retry error when generation cannot start", async () => {
@@ -93,78 +100,63 @@ describe("SessionsWorkspace", () => {
     await screen.findByRole("button", { name: "Start generation" });
     fireEvent.click(screen.getByRole("button", { name: "Start generation" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Source unavailable");
-    expect(mocks.updateSession).not.toHaveBeenCalled();
   });
 
-  it("rejects a home request when no sources are available", async () => {
-    mocks.listReferences.mockResolvedValue([]);
-    render(<SessionsWorkspace />);
-    await screen.findByText(/Connect and import a source/);
-    fireEvent.click(screen.getByRole("button", { name: "Start generation" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("Connect and import a source");
-    expect(mocks.createSession).not.toHaveBeenCalled();
-  });
-
-  it("restores the URL generation and retries a missing session pointer once", async () => {
-    mocks.search = "session=session-1&generation=run-1";
-    mocks.listSessions.mockResolvedValue([{ ...session, latestGenerationId: null }]);
-    mocks.getGeneration.mockResolvedValue(terminalRun);
-    window.sessionStorage.setItem("plot.session-pointer-repair:session-1", "run-1");
-    render(<SessionsWorkspace />);
-    expect(await screen.findByText("Reviewed draft")).toBeVisible();
-    expect(mocks.getGeneration).toHaveBeenCalledWith("run-1", expect.objectContaining({ signal: expect.any(AbortSignal) }));
-    expect(mocks.updateSession).toHaveBeenCalledWith("session-1", { latestGenerationId: "run-1" });
-    expect(window.sessionStorage.getItem("plot.session-pointer-repair:session-1")).toBeNull();
-  });
-
-  it("does not repoint a session from an arbitrary generation URL", async () => {
-    mocks.search = "session=session-1&generation=run-1";
-    mocks.listSessions.mockResolvedValue([{ ...session, latestGenerationId: null }]);
-    mocks.getGeneration.mockResolvedValue(terminalRun);
-    render(<SessionsWorkspace />);
-    expect(await screen.findByText("Reviewed draft")).toBeVisible();
-    expect(mocks.updateSession).not.toHaveBeenCalled();
-  });
-
-  it("starts a follow-up generation, updates the session, and reloads the saved run", async () => {
+  it("shows all session generations while rendering only artifacts for completed activity", async () => {
     mocks.search = "session=session-1&generation=run-1";
     mocks.listSessions.mockResolvedValue([session]);
+    mocks.listSessionGenerations.mockResolvedValue([
+      { id: "run-queued", status: "QUEUED", instruction: "Customer update", createdAt: "2026-07-01T00:00:00Z", completedAt: null, failureCode: null, artifact: null },
+      { id: "run-1", status: "READY", instruction: "Release notes", createdAt: "2026-07-01T00:01:00Z", completedAt: "2026-07-01T00:02:00Z", failureCode: null, artifact: artifactSummary },
+      { id: "run-failed", status: "FAILED", instruction: "Internal note", createdAt: "2026-07-01T00:03:00Z", completedAt: "2026-07-01T00:04:00Z", failureCode: "SOURCE_UNAVAILABLE", artifact: null },
+    ]);
     mocks.getGeneration.mockResolvedValue(terminalRun);
-    mocks.createGeneration.mockResolvedValue({ ...terminalRun, id: "run-2" });
     render(<SessionsWorkspace />);
-    expect(await screen.findByText("Reviewed draft")).toBeVisible();
+
+    expect(await screen.findByText("Reviewed artifact")).toBeVisible();
+    expect(screen.getAllByRole("button", { name: /Customer update/ })[0]).toBeVisible();
+    expect(screen.getAllByRole("button", { name: /Internal note/ })[0]).toHaveTextContent("No artifact produced");
+    expect(screen.getAllByText("1 artifact")[0]).toBeVisible();
+  });
+
+  it("starts a follow-up generation with the active session linkage and no pointer update", async () => {
+    mocks.search = "session=session-1&generation=run-1";
+    mocks.listSessions.mockResolvedValue([session]);
+    mocks.listSessionGenerations.mockResolvedValue([{ id: "run-1", status: "READY", instruction: "Release notes", createdAt: "2026-07-01T00:01:00Z", completedAt: "2026-07-01T00:02:00Z", failureCode: null, artifact: artifactSummary }]);
+    mocks.getGeneration.mockResolvedValue(terminalRun);
+    mocks.createGeneration.mockResolvedValue({ ...terminalRun, id: "run-2", artifact: null });
+    render(<SessionsWorkspace />);
+    expect(await screen.findByText("Reviewed artifact")).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "Generate again" }));
-
-    await waitFor(() => expect(mocks.updateSession).toHaveBeenCalledWith("session-1", {
-      title: "Write release notes",
-      latestGenerationId: "run-2",
-    }));
-    expect(mocks.createGeneration.mock.invocationCallOrder[0]).toBeLessThan(mocks.updateSession.mock.invocationCallOrder[0]!);
-    expect(mocks.locationAssign).toHaveBeenCalledWith("/sessions?session=session-1&generation=run-2");
+    await waitFor(() => expect(mocks.createGeneration).toHaveBeenCalledWith(expect.objectContaining({ workSessionId: "session-1" }), expect.any(String), expect.any(Object)));
+    expect(mocks.replace).toHaveBeenCalledWith("/sessions?session=session-1&generation=run-2", { scroll: false });
+    expect(window.sessionStorage.length).toBe(0);
   });
 
-  it("reloads a follow-up run and schedules pointer repair when the session update fails", async () => {
-    mocks.search = "session=session-1&generation=run-1";
+  it("does not render a generation from a different session", async () => {
+    mocks.search = "session=session-1&generation=run-other";
     mocks.listSessions.mockResolvedValue([session]);
-    mocks.getGeneration.mockResolvedValue(terminalRun);
-    mocks.createGeneration.mockResolvedValue({ ...terminalRun, id: "run-2" });
-    mocks.updateSession.mockRejectedValue(new Error("Session unavailable"));
+    mocks.listSessionGenerations.mockResolvedValue([]);
+    mocks.getGeneration.mockResolvedValue({ ...terminalRun, id: "run-other", workSessionId: "session-2" });
     render(<SessionsWorkspace />);
-    expect(await screen.findByText("Reviewed draft")).toBeVisible();
-
-    fireEvent.click(screen.getByRole("button", { name: "Generate again" }));
-
-    await waitFor(() => expect(mocks.locationAssign).toHaveBeenCalledWith("/sessions?session=session-1&generation=run-2"));
-    expect(window.sessionStorage.getItem("plot.session-pointer-repair:session-1")).toBe("run-2");
+    expect(await screen.findByRole("alert")).toHaveTextContent("not part of this session");
+    expect(screen.queryByText("Reviewed artifact")).not.toBeInTheDocument();
   });
 
-  it("restarts restoration after StrictMode effect replay", async () => {
+  it("opens the mobile History panel and restores focus when it closes", async () => {
     mocks.search = "session=session-1&generation=run-1";
     mocks.listSessions.mockResolvedValue([session]);
+    mocks.listSessionGenerations.mockResolvedValue([{ id: "run-1", status: "READY", instruction: "Release notes", createdAt: "2026-07-01T00:01:00Z", completedAt: "2026-07-01T00:02:00Z", failureCode: null, artifact: artifactSummary }]);
     mocks.getGeneration.mockResolvedValue(terminalRun);
-    render(<StrictMode><SessionsWorkspace /></StrictMode>);
-    expect(await screen.findByText("Reviewed draft")).toBeVisible();
-    expect(mocks.getGeneration.mock.calls.length).toBeGreaterThanOrEqual(1);
+    render(<SessionsWorkspace />);
+    await screen.findByText("Reviewed artifact");
+
+    const historyTrigger = screen.getAllByRole("tab", { name: "History" }).find((element) => element.getAttribute("aria-controls") === "mobile-session-history-panel");
+    expect(historyTrigger).toBeDefined();
+    fireEvent.click(historyTrigger!);
+    expect(await screen.findByRole("tabpanel", { name: "History panel" })).toBeVisible();
+    fireEvent.click(historyTrigger!);
+    await waitFor(() => expect(document.activeElement).toBe(historyTrigger));
   });
 });

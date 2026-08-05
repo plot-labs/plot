@@ -3,8 +3,9 @@ import { createPlotApiClient } from "@plot/api-client";
 export { PlotApiError } from "@plot/api-client";
 
 export type {
-  ContentPack,
-  ContentPackSummary,
+  ArtifactHistoryDetail,
+  Artifact,
+  ArtifactSummary,
   CreateGenerationInput,
   GenerationRun,
   GenerationReference,

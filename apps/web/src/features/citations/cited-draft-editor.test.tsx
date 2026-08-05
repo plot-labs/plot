@@ -9,9 +9,9 @@ import {
   initializeStatementIdentityMap,
   projectStatementBlocks,
 } from "./cited-draft-editor";
-import type { ContentPack } from "@plot/api-client";
+import type { Artifact } from "@plot/api-client";
 
-const pack: ContentPack = {
+const pack: Artifact = {
   id: "pack-1",
   generationRunId: "run-1",
   status: "NEEDS_REVIEW",
@@ -85,6 +85,13 @@ function lexicalContent(...bodies: string[]) {
 }
 
 describe("CitedDraftEditor", () => {
+  it("renders historical snapshots read-only without a delivery edit control", () => {
+    render(<CitedDraftEditor pack={pack} readOnly onSaveArtifact={vi.fn()} />);
+
+    expect(screen.getByRole("textbox", { name: "Historical artifact content" })).toHaveAttribute("contenteditable", "false");
+    expect(screen.queryByRole("button", { name: "Save draft" })).not.toBeInTheDocument();
+  });
+
   it("uses Lexical for the whole artifact and keeps citation data out of editor content", async () => {
     const onSaveArtifact = vi.fn().mockResolvedValue(pack);
     render(<CitedDraftEditor pack={pack} onSaveArtifact={onSaveArtifact} />);
@@ -109,6 +116,33 @@ describe("CitedDraftEditor", () => {
       ],
     })));
     expect(JSON.stringify(onSaveArtifact.mock.calls[0]?.[0].lexicalContent)).not.toContain('"key"');
+  });
+
+  it("restores an unsaved draft when an artifact is selected again", async () => {
+    const draft = lexicalContent("Unsaved recovery guidance.", "The release is delightful.");
+    const onSaveArtifact = vi.fn().mockResolvedValue(pack);
+    render(
+      <CitedDraftEditor
+        pack={pack}
+        initialDraft={{
+          lexicalContent: draft,
+          statements: [
+            { id: "sentence-1", orderIndex: 0, body: "Unsaved recovery guidance." },
+            { id: "sentence-2", orderIndex: 1, body: "The release is delightful." },
+          ],
+        }}
+        onSaveArtifact={onSaveArtifact}
+      />,
+    );
+
+    expect(await screen.findByText("Unsaved recovery guidance.")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+    await waitFor(() => expect(onSaveArtifact).toHaveBeenCalledWith(expect.objectContaining({
+      statements: [
+        { id: "sentence-1", orderIndex: 0, body: "Unsaved recovery guidance." },
+        { id: "sentence-2", orderIndex: 1, body: "The release is delightful." },
+      ],
+    })));
   });
 
   it("keeps source citations as original URL links without statement navigation", async () => {
@@ -200,7 +234,7 @@ describe("CitedDraftEditor", () => {
       const root = $getRoot();
       const [first, second, third] = root.getChildren();
       if (!first || !second || !third) return;
-      third.getFirstChild()?.replace($createTextNode("Tail edited"));
+      (third as ReturnType<typeof $createParagraphNode>).getFirstChild()?.replace($createTextNode("Tail edited"));
       const inserted = $createParagraphNode();
       inserted.append($createTextNode("Duplicate"));
       root.clear();
@@ -233,7 +267,7 @@ describe("CitedDraftEditor", () => {
   });
 
   it("restores a changed artifact revision without replacing stable statement IDs", async () => {
-    const updated: ContentPack = {
+    const updated: Artifact = {
       ...pack,
       variant: {
         ...pack.variant,
