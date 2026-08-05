@@ -3,12 +3,12 @@
 import { Check, Copy, Download, ShieldAlert, X } from "lucide-react";
 import { useState } from "react";
 
-import { PlotApiError, type ContentPack, type PlotApiClient } from "@plot/api-client";
+import { PlotApiError, type Artifact, type PlotApiClient } from "@plot/api-client";
 
 type Disposition = "COPY" | "DOWNLOAD";
 type ExportWarning = { key: string; sentenceNumber: number; excerpt: string };
 
-export function ExportDialog({ pack, client }: { pack: ContentPack; client: PlotApiClient }) {
+export function ExportDialog({ pack, client }: { pack: Artifact; client: PlotApiClient }) {
   const [pending, setPending] = useState<Disposition | null>(null);
   const [includeSources, setIncludeSources] = useState(false);
   const [confirmation, setConfirmation] = useState<{ disposition: Disposition; warnings: ExportWarning[] } | null>(null);
@@ -19,7 +19,7 @@ export function ExportDialog({ pack, client }: { pack: ContentPack; client: Plot
     setPending(disposition);
     setMessage("");
     try {
-      const result = await client.exportVariant(pack.variant.id, {
+      const result = await client.exportArtifactVariant(pack.variant.id, {
         expectedRevisionNumber: pack.variant.revisionNumber,
         includeSources,
         acknowledgeUnresolved,
@@ -32,7 +32,7 @@ export function ExportDialog({ pack, client }: { pack: ContentPack; client: Plot
         downloadText(result.text, result.filename, result.mediaType);
       }
       setConfirmation(null);
-      setMessage(disposition === "COPY" ? "Changelog copied." : "Changelog downloaded.");
+      setMessage(disposition === "COPY" ? "Artifact copied." : "Artifact downloaded.");
     } catch (error) {
       if (error instanceof PlotApiError && error.code === "EXPORT_CONFIRMATION_REQUIRED") {
         const warnings = Array.isArray(error.details?.warnings)
@@ -41,7 +41,7 @@ export function ExportDialog({ pack, client }: { pack: ContentPack; client: Plot
         setConfirmation({ disposition, warnings });
         setMessage("Explicit confirmation is required before export.");
       } else {
-        setMessage(error instanceof Error ? error.message : "The changelog could not be exported.");
+        setMessage(error instanceof Error ? error.message : "The artifact could not be exported.");
       }
     } finally {
       setPending(null);
@@ -49,7 +49,7 @@ export function ExportDialog({ pack, client }: { pack: ContentPack; client: Plot
   }
 
   return (
-    <section aria-label="Export changelog" className="flex min-w-0 flex-col items-end gap-2 sm:max-w-[24rem]">
+    <section aria-label="Export artifact" className="flex min-w-0 flex-col items-end gap-2 sm:max-w-[24rem]">
       <label className="inline-flex min-h-10 items-center gap-2 self-end text-xs font-medium text-black/58 dark:text-white/58">
         <input
           type="checkbox"
@@ -135,7 +135,7 @@ export function ExportDialog({ pack, client }: { pack: ContentPack; client: Plot
   );
 }
 
-function focusStatement(pack: ContentPack, sentenceNumber: number) {
+function focusStatement(pack: Artifact, sentenceNumber: number) {
   const sentenceId = [...pack.variant.sentences].sort((a, b) => a.orderIndex - b.orderIndex)[sentenceNumber - 1]?.id;
   const sentence = sentenceId
     ? document.querySelector<HTMLElement>(`[data-statement-id="${sentenceId}"]`)

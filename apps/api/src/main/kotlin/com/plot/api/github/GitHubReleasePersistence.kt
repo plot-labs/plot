@@ -844,7 +844,7 @@ private fun java.sql.ResultSet.toReleaseActivity(): GitHubReleaseActivityRecord 
 	headSha = getString("head_sha"),
 	boundaryReason = getString("boundary_reason"),
 	generationRunId = getObject("generation_run_id", UUID::class.java),
-	contentPackId = getObject("content_pack_id", UUID::class.java),
+	artifactId = getObject("content_pack_id", UUID::class.java),
 	errorCode = getString("error_code"),
 	transitionVersion = getLong("transition_version"),
 	createdAt = getTimestamp("created_at").toInstant(),

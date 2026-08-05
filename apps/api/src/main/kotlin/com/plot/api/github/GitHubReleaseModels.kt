@@ -64,7 +64,7 @@ data class GitHubReleaseActivityRecord(
 	val headSha: String?,
 	val boundaryReason: String?,
 	val generationRunId: UUID?,
-	val contentPackId: UUID?,
+	val artifactId: UUID?,
 	val errorCode: String?,
 	val transitionVersion: Long,
 	val createdAt: Instant,

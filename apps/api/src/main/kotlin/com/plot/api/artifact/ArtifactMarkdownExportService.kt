@@ -1,4 +1,4 @@
-package com.plot.api.contentpack
+package com.plot.api.artifact
 
 import com.plot.api.generation.model.EvidenceSnapshot
 import com.plot.api.generation.model.ExportSentence
@@ -12,7 +12,7 @@ class UnresolvedExportException(val unresolvedCount: Int) :
 	IllegalStateException("Export requires explicit acknowledgement for $unresolvedCount unresolved sentences")
 
 @Service
-class MarkdownExportService {
+class ArtifactMarkdownExportService {
 	fun render(
 		sentences: List<ExportSentence>,
 		evidence: List<EvidenceSnapshot>,

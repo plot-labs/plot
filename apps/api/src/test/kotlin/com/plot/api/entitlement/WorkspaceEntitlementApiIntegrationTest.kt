@@ -72,7 +72,7 @@ class WorkspaceEntitlementApiIntegrationTest {
 			status { isForbidden() }
 			jsonPath("$.error") { value("WORKSPACE_READ_ONLY") }
 		}
-		mockMvc.post("/api/content-variants/${UUID.randomUUID()}/exports") {
+		mockMvc.post("/api/artifact-variants/${UUID.randomUUID()}/exports") {
 			contentType = MediaType.APPLICATION_JSON
 			content = "{\"expectedRevisionNumber\":1,\"includeSources\":false}"
 		}.andExpect {

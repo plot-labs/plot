@@ -39,6 +39,7 @@ data class GenerationWorkflowState(
 	val semanticRewriteAttempt: Int = 0,
 	val rewriteTargetSentenceIds: List<UUID> = emptyList(),
 	val failureCode: String? = null,
+	val workSessionId: UUID? = null,
 )
 
 class GenerationWorkflowService(

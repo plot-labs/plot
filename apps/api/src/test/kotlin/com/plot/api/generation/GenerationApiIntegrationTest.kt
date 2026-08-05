@@ -52,6 +52,37 @@ class GenerationApiIntegrationTest {
 	@Autowired private lateinit var generationRunService: GenerationRunService
 
 	@Test
+	fun `interactive generation links to its session atomically without a browser repair`() {
+		val sessionId = UUID.randomUUID()
+		jdbcTemplate.update(
+			"""
+			insert into work_sessions (id, workspace_id, title, status, created_by_user_id, last_activity_at, created_at, updated_at)
+			values (?, ?, 'Session artifact workspace', 'OPEN', ?, now(), now(), now())
+			""".trimIndent(),
+			sessionId, devContext.devWorkspaceId, devContext.devUserId,
+		)
+		val fixture = sourceFixture()
+		val run = mockMvc.post("/api/generations") {
+			header("Idempotency-Key", "session-link-${UUID.randomUUID()}")
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"sourceScopeId":"${fixture.scopeId}","writingBlockIds":["${fixture.blockId}"],"instruction":"Customer update","workSessionId":"$sessionId"}"""
+		}.andExpect {
+			status { isAccepted() }
+			jsonPath("$.workSessionId") { value(sessionId.toString()) }
+		}.andReturn()
+		val runId = UUID.fromString(objectMapper.readTree(run.response.contentAsString).get("id").asText())
+
+		assertEquals(sessionId, jdbcTemplate.queryForObject(
+			"select work_session_id from generation_runs where workspace_id = ? and id = ?",
+			UUID::class.java, devContext.devWorkspaceId, runId,
+		))
+		assertEquals(runId, jdbcTemplate.queryForObject(
+			"select latest_generation_run_id from work_sessions where workspace_id = ? and id = ?",
+			UUID::class.java, devContext.devWorkspaceId, sessionId,
+		))
+	}
+
+	@Test
 	fun `generation requires idempotency key and never caches errors`() {
 		mockMvc.post("/api/generations") {
 			contentType = MediaType.APPLICATION_JSON
@@ -170,8 +201,8 @@ class GenerationApiIntegrationTest {
 			jsonPath("$.timing.steps[1].kind") { value("REVIEWER") }
 			jsonPath("$.timing.model.modelName") { value("scripted") }
 			jsonPath("$.timing.model.totalTokens") { value(4) }
-			jsonPath("$.contentPack.status") { value("READY") }
-			jsonPath("$.contentPack.variant.sentences.length()") { value(1) }
+			jsonPath("$.artifact.status") { value("READY") }
+			jsonPath("$.artifact.variant.sentences.length()") { value(1) }
 		}
 		assertEquals("READY", jdbcTemplate.queryForObject(
 			"select status from generation_runs where id = ?",
