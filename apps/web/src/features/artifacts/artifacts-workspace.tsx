@@ -3,9 +3,8 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
-import { ArtifactDocumentSurface } from "@/features/artifacts/artifact-document-surface";
-import { ArtifactHistoryPanel } from "@/features/citations/artifact-history-panel";
-import { plotApiClient, type ArtifactHistoryDetail, type Artifact, type ArtifactSummary } from "@/lib/api-client";
+import { ArtifactCanvasWorkspace } from "@/features/artifacts/artifact-canvas-workspace";
+import { plotApiClient, type Artifact, type ArtifactSummary } from "@/lib/api-client";
 
 export function ArtifactsWorkspace() {
   return <Suspense fallback={null}><ArtifactsWorkspaceContent /></Suspense>;
@@ -42,11 +41,23 @@ function ArtifactsWorkspaceContent() {
     return () => controller.abort();
   }, []);
 
+  if (requestedArtifactId) {
+    return (
+      <div className="h-full min-h-[calc(100dvh-49px)] lg:min-h-0">
+        {remoteArtifact ? <GeneratedArtifactDetail key={remoteArtifact.id} artifact={remoteArtifact} /> : remoteArtifactError ? (
+          <div className="flex h-full min-h-[inherit] items-center justify-center bg-[#eef0f3] px-6"><div role="alert" className="max-w-sm rounded-xl border border-rose-300/60 bg-rose-50 p-4 text-sm text-rose-900 dark:border-rose-400/25 dark:bg-rose-400/[0.08] dark:text-rose-200">{remoteArtifactError}</div></div>
+        ) : (
+          <div className="flex h-full min-h-[inherit] items-center justify-center bg-[#eef0f3] text-sm text-black/45 dark:bg-[#18181b] dark:text-white/45">Loading the selected artifact…</div>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div className="grid min-h-screen grid-cols-1 lg:h-screen lg:grid-cols-[360px_minmax(0,1fr)] lg:overflow-hidden">
+    <div className="grid min-h-[calc(100dvh-49px)] grid-cols-1 lg:h-full lg:min-h-0 lg:grid-cols-[360px_minmax(0,1fr)] lg:overflow-hidden">
       <section className="min-h-0 border-b border-black/10 bg-[#f6f7f9] px-6 pb-6 pt-14 dark:border-white/10 dark:bg-[#111113] lg:overflow-y-auto lg:border-r lg:border-b-0">
-        <h1 className="font-serif text-[32px] font-normal leading-none tracking-normal text-black/90 dark:text-white/92">Artifacts</h1>
-        <p className="mt-1 text-sm text-black/55 dark:text-white/55">Saved source-backed results from prior generations.</p>
+        <h1 className="font-display text-[32px] font-normal leading-none tracking-normal text-black/90 dark:text-white/92">Artifacts</h1>
+        <p className="mt-1 text-sm text-black/55 dark:text-white/55">Saved results from prior requests.</p>
         <div className="mt-7 space-y-2" role="listbox" aria-label="Artifacts">
           {artifacts.map((artifact) => (
             <button
@@ -66,46 +77,18 @@ function ArtifactsWorkspaceContent() {
       </section>
 
       <section className="min-h-0 min-w-0 overflow-y-auto bg-[#f8fafc] px-6 py-10 dark:bg-[#18181b] lg:px-10">
-        {remoteArtifact ? <GeneratedArtifactDetail key={remoteArtifact.id} artifact={remoteArtifact} /> : remoteArtifactError ? (
-          <div className="flex h-full items-center justify-center"><div role="alert" className="max-w-sm rounded-xl border border-rose-300/60 bg-rose-50 p-4 text-sm text-rose-900 dark:border-rose-400/25 dark:bg-rose-400/[0.08] dark:text-rose-200">{remoteArtifactError}</div></div>
-        ) : (
-          <div className="flex h-full items-center justify-center"><div className="max-w-[300px] rounded-[12px] border border-dashed border-black/10 bg-white/45 p-5 text-sm leading-6 text-black/45 dark:border-white/10 dark:bg-white/[0.03] dark:text-white/45">{requestedArtifactId ? "Loading the selected artifact…" : "Select an artifact to inspect its document and sources."}</div></div>
-        )}
+        <div className="flex h-full items-center justify-center"><div className="max-w-[300px] rounded-[12px] border border-dashed border-black/10 bg-white/45 p-5 text-sm leading-6 text-black/45 dark:border-white/10 dark:bg-white/[0.03] dark:text-white/45">Select an artifact to inspect its draft and citations.</div></div>
       </section>
     </div>
   );
 }
 
 function GeneratedArtifactDetail({ artifact }: { artifact: Artifact }) {
-  const [currentArtifact, setCurrentArtifact] = useState(artifact);
-  const [historical, setHistorical] = useState<ArtifactHistoryDetail | null>(null);
-  const [historicalPosition, setHistoricalPosition] = useState<number | null>(null);
-
   return (
-    <div className="mx-auto grid max-w-6xl min-w-0 gap-5 pt-4 sm:pt-8 lg:grid-cols-[minmax(0,1fr)_minmax(250px,0.32fr)]">
-      <ArtifactDocumentSurface
-        pack={currentArtifact}
-        historical={historical}
-        client={plotApiClient}
-        onSaveArtifact={(input) => plotApiClient.saveArtifactVariant(currentArtifact.variant.id, input)}
-        onPackChange={(next) => {
-          setCurrentArtifact(next);
-          setHistorical(null);
-          setHistoricalPosition(null);
-        }}
-      />
-      <aside className="min-w-0 rounded-xl border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-white/[0.04] lg:sticky lg:top-3 lg:h-fit">
-        <ArtifactHistoryPanel
-          variantId={currentArtifact.variant.id}
-          client={plotApiClient}
-          refreshKey={currentArtifact.variant.revisionId}
-          selectedPosition={historicalPosition}
-          onSelect={(detail, position) => {
-            setHistorical(detail);
-            setHistoricalPosition(position);
-          }}
-        />
-      </aside>
-    </div>
+    <ArtifactCanvasWorkspace
+      artifact={artifact}
+      client={plotApiClient}
+      onSaveArtifact={(input) => plotApiClient.saveArtifactVariant(artifact.variant.id, input)}
+    />
   );
 }

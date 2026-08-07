@@ -10,7 +10,7 @@ import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext
 import type { EditorState } from "lexical";
 import { $getRoot } from "lexical";
 import { Save } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 
 import type {
   Artifact,
@@ -33,6 +33,8 @@ type CitedDraftEditorProps = {
   onSaveStateChange?: (state: "saved" | "saving" | "dirty" | "error") => void;
   initialDraft?: Omit<SaveArtifactInput, "expectedRevisionNumber">;
   onDraftChange?: (draft: Omit<SaveArtifactInput, "expectedRevisionNumber">) => void;
+  presentation?: "panel" | "document";
+  saveRequestToken?: number;
 };
 
 export function CitedDraftEditor(props: CitedDraftEditorProps) {
@@ -40,7 +42,7 @@ export function CitedDraftEditor(props: CitedDraftEditorProps) {
   return <ArtifactEditor key={revisionKey} {...props} />;
 }
 
-function ArtifactEditor({ pack, onSaveArtifact, onPackChange, readOnly = false, embedded = false, onSaveStateChange, initialDraft, onDraftChange }: CitedDraftEditorProps) {
+function ArtifactEditor({ pack, onSaveArtifact, onPackChange, readOnly = false, embedded = false, onSaveStateChange, initialDraft, onDraftChange, presentation = "panel", saveRequestToken }: CitedDraftEditorProps) {
   const sentences = useMemo(
     () => [...pack.variant.sentences].sort((a, b) => a.orderIndex - b.orderIndex),
     [pack.variant.sentences],
@@ -60,12 +62,13 @@ function ArtifactEditor({ pack, onSaveArtifact, onPackChange, readOnly = false, 
   const [statementBlocks, setStatementBlocks] = useState<StatementBlock[]>(initialStatementBlocks);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const previousSaveRequestRef = useRef(saveRequestToken);
 
   useEffect(() => {
     onSaveStateChange?.("saved");
   }, [onSaveStateChange, revisionKey]);
 
-  async function save() {
+  const save = useCallback(async () => {
     if (saving || readOnly) return;
     setSaving(true);
     setMessage("");
@@ -85,11 +88,19 @@ function ArtifactEditor({ pack, onSaveArtifact, onPackChange, readOnly = false, 
     } finally {
       setSaving(false);
     }
-  }
+  }, [draftState, draftStatements, onPackChange, onSaveArtifact, onSaveStateChange, readOnly, revisionNumber, saving]);
+
+  useEffect(() => {
+    if (saveRequestToken === undefined || previousSaveRequestRef.current === saveRequestToken) return;
+    previousSaveRequestRef.current = saveRequestToken;
+    void save();
+  }, [save, saveRequestToken]);
+
+  const documentPresentation = presentation === "document";
 
   return (
     <section aria-label={readOnly ? "Historical artifact preview" : "Artifact editor"} className={embedded ? "min-w-0" : "rounded-xl border border-black/10 bg-white dark:border-white/10 dark:bg-white/[0.04]"}>
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-black/[0.07] px-4 py-4 dark:border-white/10 sm:px-6">
+      {!documentPresentation ? <div className="flex flex-wrap items-start justify-between gap-3 border-b border-black/[0.07] px-4 py-4 dark:border-white/10 sm:px-6">
         <div>
           <h2 className="text-sm font-semibold text-black/82 dark:text-white/88">{readOnly ? "Historical preview" : "Artifact document"}</h2>
           <p className="mt-1 text-xs text-black/50 dark:text-white/52">
@@ -99,7 +110,7 @@ function ArtifactEditor({ pack, onSaveArtifact, onPackChange, readOnly = false, 
           </p>
         </div>
         <SourcesPopover sources={pack.variant.sources} />
-      </div>
+      </div> : null}
 
       <LexicalComposer
         key={revisionKey}
@@ -112,10 +123,10 @@ function ArtifactEditor({ pack, onSaveArtifact, onPackChange, readOnly = false, 
           },
         }}
       >
-        <div className="relative px-4 py-5 sm:px-6">
+        <div className={documentPresentation ? "relative mt-[22px]" : "relative px-4 py-5 sm:px-6"}>
           <RichTextPlugin
-            contentEditable={<ContentEditable aria-label={readOnly ? "Historical artifact content" : "Draft content"} aria-readonly={readOnly} className={`min-h-[260px] whitespace-pre-wrap rounded-lg border border-black/10 px-4 py-4 text-[15px] leading-7 text-black/84 outline-none focus-within:border-black/35 dark:border-white/12 dark:text-white/86 dark:focus-within:border-white/35 ${readOnly ? "bg-black/[0.025] dark:bg-white/[0.025]" : "bg-white dark:bg-[#18181b]"}`} />}
-            placeholder={<div className="pointer-events-none absolute left-8 top-9 text-sm text-black/35 dark:left-10 dark:text-white/35">Write the source-backed artifact…</div>}
+            contentEditable={<ContentEditable aria-label={readOnly ? "Historical artifact content" : "Draft content"} aria-readonly={readOnly} className={documentPresentation ? "min-h-[720px] whitespace-pre-wrap text-[15px] leading-6 text-black/88 outline-none dark:text-white/88 [&_h1]:mb-[22px] [&_h1]:font-display [&_h1]:text-[30px] [&_h1]:leading-[38px] [&_h2]:mb-[22px] [&_h2]:text-[19px] [&_h2]:font-semibold [&_h2]:leading-[26px] [&_li]:mb-[22px] [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:mb-[22px] [&_ul]:list-disc [&_ul]:pl-5" : `min-h-[260px] whitespace-pre-wrap rounded-lg border border-black/10 px-4 py-4 text-[15px] leading-7 text-black/84 outline-none focus-within:border-black/35 dark:border-white/12 dark:text-white/86 dark:focus-within:border-white/35 ${readOnly ? "bg-black/[0.025] dark:bg-white/[0.025]" : "bg-white dark:bg-[#18181b]"}`} />}
+            placeholder={<div className={documentPresentation ? "pointer-events-none absolute left-0 top-0 text-sm text-black/35 dark:text-white/35" : "pointer-events-none absolute left-8 top-9 text-sm text-black/35 dark:left-10 dark:text-white/35"}>Write the source-backed artifact…</div>}
             ErrorBoundary={LexicalErrorBoundary}
           />
           <HistoryPlugin />
@@ -149,7 +160,7 @@ function ArtifactEditor({ pack, onSaveArtifact, onPackChange, readOnly = false, 
         </div>
       </LexicalComposer>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-black/[0.07] px-4 py-3 dark:border-white/10 sm:px-6">
+      {!documentPresentation ? <div className="flex flex-wrap items-center justify-between gap-3 border-t border-black/[0.07] px-4 py-3 dark:border-white/10 sm:px-6">
         <p className="text-xs text-black/48 dark:text-white/50">{readOnly ? "Saved snapshot" : saving ? "Saving…" : message || "Saved"}</p>
         {!readOnly ? (
           <button
@@ -162,9 +173,9 @@ function ArtifactEditor({ pack, onSaveArtifact, onPackChange, readOnly = false, 
             {saving ? "Saving…" : "Save draft"}
           </button>
         ) : null}
-      </div>
+      </div> : null}
       {message ? (
-        <p role="status" aria-live="polite" className="border-t border-black/[0.07] px-4 py-3 text-xs text-black/58 dark:border-white/10 dark:text-white/58 sm:px-6">
+        <p role="status" aria-live="polite" className={documentPresentation ? "sr-only" : "border-t border-black/[0.07] px-4 py-3 text-xs text-black/58 dark:border-white/10 dark:text-white/58 sm:px-6"}>
           {message}
         </p>
       ) : null}
