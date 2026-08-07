@@ -10,9 +10,7 @@ import {
   LogOut,
   Monitor,
   Moon,
-  PackageOpen,
   PanelLeftClose,
-  Puzzle,
   Sun,
   UserRound,
 } from "lucide-react";
@@ -21,8 +19,8 @@ import type { ProductTheme } from "@/components/layout/product-shell";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { href: "/integrations", label: "Integrations", icon: Puzzle },
-  { href: "/artifacts", label: "Artifacts", icon: PackageOpen },
+  { href: "/integrations", label: "Integrations", icon: IntegrationsIcon },
+  { href: "/artifacts", label: "Artifacts", icon: ArtifactsIcon },
 ];
 
 type ProductSidebarProps = {
@@ -146,7 +144,7 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
 
   return (
     <>
-      <aside className="hidden h-screen w-[252px] shrink-0 flex-col bg-[#eef0f3] text-[#2f3237] dark:bg-[#202126] dark:text-[#f4f4f5] lg:flex">
+      <aside className="hidden h-dvh w-[252px] shrink-0 flex-col border-r border-black/[0.08] bg-[#f6f7f9] pr-px text-[#2f3237] dark:border-white/10 dark:bg-[#202126] dark:text-[#f4f4f5] lg:flex">
         <div className="flex items-center gap-2 px-4 pb-4 pt-5">
           <Link
             href={appHomeHref}
@@ -162,7 +160,7 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
             type="button"
             onClick={onToggleSidebar}
             aria-label="Close sidebar"
-            className="inline-flex size-8 shrink-0 items-center justify-center rounded-xl text-black/35 transition hover:bg-black/5 hover:text-black/65 dark:text-white/38 dark:hover:bg-white/10 dark:hover:text-white/70"
+            className="inline-flex size-8 shrink-0 items-center justify-center rounded-[8px] text-black/35 transition hover:bg-black/5 hover:text-black/65 dark:text-white/38 dark:hover:bg-white/10 dark:hover:text-white/70"
           >
             <PanelLeftClose className="size-4" />
           </button>
@@ -180,7 +178,7 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
             aria-expanded={workspaceMenuOpen}
             aria-haspopup="menu"
             className={cn(
-              "flex h-10 w-full items-center gap-2 rounded-xl border px-2 text-left text-[13px] font-semibold transition",
+              "flex h-10 w-full items-center gap-2 rounded-[8px] border px-2 text-left text-[13px] font-semibold transition",
               workspaceMenuOpen
                 ? "border-black/20 bg-white text-black/82 shadow-sm dark:border-white/16 dark:bg-white/10 dark:text-white"
                 : "border-black/[0.12] bg-white/40 text-black/76 hover:bg-white/65 dark:border-white/12 dark:bg-white/5 dark:text-white/78 dark:hover:bg-white/10",
@@ -251,7 +249,7 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
           )}
         </div>
 
-        <nav className="space-y-1 px-3 pb-4">
+        <nav className="space-y-1 px-3 pb-4" aria-label="Product sidebar navigation">
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -262,13 +260,13 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex items-center gap-2 rounded-xl px-2.5 py-1.5 text-[13px] font-medium transition",
+                  "flex h-8 items-center gap-2 rounded-[8px] px-2.5 text-[13px] font-medium transition",
                   active
                     ? "bg-white/75 text-[#18181b] shadow-sm shadow-black/[0.03] dark:bg-white/10 dark:text-white"
                     : "text-black/65 hover:bg-black/5 dark:text-white/65 dark:hover:bg-white/10",
                 )}
               >
-                <Icon className="size-4" />
+                <Icon />
                 {item.label}
               </Link>
             );
@@ -332,7 +330,7 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
             onClick={() => setProfileMenuOpen((open) => !open)}
             aria-expanded={profileMenuOpen}
             aria-haspopup="menu"
-            className="flex w-full items-center gap-2 rounded-2xl px-1 py-1 text-left transition hover:bg-black/[0.04] dark:hover:bg-white/10"
+            className="flex w-full items-center gap-2 rounded-[16px] px-1 py-1 text-left transition hover:bg-black/[0.04] dark:hover:bg-white/10"
           >
             <div className="flex size-8 items-center justify-center rounded-full border border-black/10 bg-white text-xs font-semibold text-black/65 dark:border-white/10 dark:bg-white/10 dark:text-white/75">
               <UserRound className="size-4" />
@@ -345,5 +343,19 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
         </div>
       </aside>
     </>
+  );
+}
+
+function IntegrationsIcon() {
+  return <Image src="/icons/product-integrations.svg" alt="" width={16} height={16} className="size-4 shrink-0 dark:invert" />;
+}
+
+function ArtifactsIcon() {
+  return (
+    <span aria-hidden="true" className="relative size-4 shrink-0 dark:invert">
+      <Image src="/icons/product-artifacts-triangle.svg" alt="" width={8} height={7} className="absolute left-[5px] top-[1px] h-[7px] w-2" />
+      <Image src="/icons/product-artifacts-square.svg" alt="" width={6} height={6} className="absolute bottom-0.5 left-0.5 size-1.5" />
+      <Image src="/icons/product-artifacts-circle.svg" alt="" width={6} height={6} className="absolute bottom-0.5 right-0.5 size-1.5" />
+    </span>
   );
 }
