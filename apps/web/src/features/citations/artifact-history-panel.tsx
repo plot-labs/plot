@@ -11,9 +11,10 @@ type ArtifactHistoryPanelProps = {
   refreshKey?: string | number;
   selectedPosition?: number | null;
   onSelect: (detail: ArtifactHistoryDetail, position: number) => void;
+  presentation?: "panel" | "drawer";
 };
 
-export function ArtifactHistoryPanel({ variantId, client, refreshKey = "initial", selectedPosition = null, onSelect }: ArtifactHistoryPanelProps) {
+export function ArtifactHistoryPanel({ variantId, client, refreshKey = "initial", selectedPosition = null, onSelect, presentation = "panel" }: ArtifactHistoryPanelProps) {
   const [items, setItems] = useState<ArtifactHistoryItem[]>([]);
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [loadingPosition, setLoadingPosition] = useState<number | null>(null);
@@ -55,30 +56,27 @@ export function ArtifactHistoryPanel({ variantId, client, refreshKey = "initial"
 
   return (
     <section aria-label="Artifact history" className="min-w-0">
-      <div className="flex items-center gap-2 text-sm font-semibold text-black/80 dark:text-white/88">
+      {presentation === "panel" ? <><div className="flex items-center gap-2 text-sm font-semibold text-black/80 dark:text-white/88">
         <History aria-hidden="true" className="size-4" />
         History
       </div>
-      <p className="mt-1 text-xs leading-5 text-black/48 dark:text-white/52">Content snapshots only. Delivery and source views are not history.</p>
+      <p className="mt-1 text-xs leading-5 text-black/48 dark:text-white/52">Content snapshots only. Delivery and source views are not history.</p></> : null}
       {loading ? <p className="mt-4 text-sm text-black/48 dark:text-white/48">Loading history…</p> : null}
       {!loading && !items.length ? <p className="mt-4 rounded-lg border border-dashed border-black/10 px-3 py-4 text-sm text-black/48 dark:border-white/10 dark:text-white/48">No saved snapshots yet.</p> : null}
       {error ? <p role="alert" className="mt-3 text-sm text-rose-700 dark:text-rose-300">{error}</p> : null}
-      <ol className="mt-4 space-y-2" aria-label="Artifact content snapshots">
+      <ol className={presentation === "drawer" ? "space-y-2.5" : "mt-4 space-y-2"} aria-label="Artifact content snapshots">
         {items.map((item) => (
           <li key={`${item.position}-${item.createdAt}`}>
             <button
               type="button"
               aria-current={selectedPosition === item.position ? "true" : undefined}
               onClick={() => void select(item.position)}
-              className={`w-full rounded-lg border px-3 py-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${selectedPosition === item.position ? "border-black/25 bg-black/[0.04] dark:border-white/25 dark:bg-white/10" : "border-black/[0.08] hover:bg-black/[0.025] dark:border-white/10 dark:hover:bg-white/[0.06]"}`}
+              className={`${presentation === "drawer" ? "h-[76px] rounded-[8px] px-3.5 py-[13px]" : "rounded-lg px-3 py-2.5"} w-full border text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${selectedPosition === item.position ? "border-black/20 bg-[#eef0f3] dark:border-white/25 dark:bg-white/10" : "border-black/[0.08] hover:bg-black/[0.025] dark:border-white/10 dark:hover:bg-white/[0.06]"}`}
             >
-              <span className="flex items-center gap-2 text-sm font-medium text-black/76 dark:text-white/80">
+              {presentation === "drawer" ? <><time aria-label={formatSnapshotTime(item.createdAt)} dateTime={item.createdAt} className="flex items-center gap-2 text-[15px] font-semibold leading-5 text-black/88 dark:text-white/88">
                 {loadingPosition === item.position ? <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" /> : null}
-                {item.cause}
-              </span>
-              <time aria-label={formatSnapshotTime(item.createdAt)} dateTime={item.createdAt} className="mt-1 block text-xs text-black/48 dark:text-white/48">
                 {formatSnapshotTime(item.createdAt)}
-              </time>
+              </time><span className="mt-1 block truncate text-[13px] leading-[18px] text-black/52 dark:text-white/52">{item.cause}</span></> : <><span className="flex items-center gap-2 text-sm font-medium text-black/76 dark:text-white/80">{loadingPosition === item.position ? <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" /> : null}{item.cause}</span><time aria-label={formatSnapshotTime(item.createdAt)} dateTime={item.createdAt} className="mt-1 block text-xs text-black/48 dark:text-white/48">{formatSnapshotTime(item.createdAt)}</time></>}
             </button>
           </li>
         ))}

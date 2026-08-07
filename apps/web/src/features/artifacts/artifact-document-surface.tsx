@@ -15,6 +15,8 @@ type ArtifactDocumentSurfaceProps = {
   onDraftChange?: (draft: Omit<SaveArtifactInput, "expectedRevisionNumber">) => void;
   onSaveArtifact: (input: SaveArtifactInput) => Promise<Artifact>;
   onPackChange: (pack: Artifact) => void;
+  presentation?: "panel" | "canvas";
+  saveRequestToken?: number;
 };
 
 export function ArtifactDocumentSurface({
@@ -27,9 +29,31 @@ export function ArtifactDocumentSurface({
   onDraftChange,
   onSaveArtifact,
   onPackChange,
+  presentation = "panel",
+  saveRequestToken,
 }: ArtifactDocumentSurfaceProps) {
   const readOnly = Boolean(historical);
   const shownPack = historical?.artifact ?? pack;
+
+  if (presentation === "canvas") {
+    return (
+      <article aria-label="Artifact document surface" className="min-h-[min(956px,calc(100dvh-128px))] w-full max-w-[980px] overflow-hidden rounded-[8px] border border-black/10 bg-white px-[clamp(28px,7.35vw,72px)] pb-[52px] pt-16 shadow-[0_8px_20px_rgba(0,0,0,0.08)] dark:border-white/10 dark:bg-[#202024]">
+        <h1 className="font-display text-[30px] leading-[38px] text-black/88 dark:text-white/90">{shownPack.title || "Generated artifact"}</h1>
+        <CitedDraftEditor
+          pack={shownPack}
+          embedded
+          presentation="document"
+          saveRequestToken={saveRequestToken}
+          readOnly={readOnly}
+          initialDraft={readOnly ? undefined : initialDraft}
+          onSaveStateChange={onSaveStateChange}
+          onDraftChange={onDraftChange}
+          onSaveArtifact={onSaveArtifact}
+          onPackChange={onPackChange}
+        />
+      </article>
+    );
+  }
 
   return (
     <article aria-label="Artifact document surface" className="overflow-hidden rounded-xl border border-black/10 bg-white dark:border-white/10 dark:bg-white/[0.04]">
