@@ -70,7 +70,7 @@ function ArtifactsWorkspaceContent() {
     <section className="min-h-[calc(100dvh-49px)] overflow-y-auto bg-[#f8fafc] px-6 pb-16 pt-14 dark:bg-[#18181b] lg:h-full lg:min-h-0 lg:px-12">
       <div className="mx-auto max-w-[960px]">
         <header className="max-w-[620px]">
-          <h1 className="font-display text-[32px] font-normal leading-none tracking-normal text-black/90 dark:text-white/92">Artifacts</h1>
+          <h1 className="font-display text-[32px] font-normal leading-[1.08] tracking-[-0.025em] text-black/90 dark:text-white/92 sm:text-[36px]">Artifacts</h1>
           <p className="mt-2 text-sm leading-6 text-black/52 dark:text-white/52">Saved results from prior requests.</p>
         </header>
 
