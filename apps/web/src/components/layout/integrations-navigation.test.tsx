@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const sidebarMocks = vi.hoisted(() => ({ listSessions: vi.fn() }));
@@ -30,13 +30,17 @@ describe("Integrations navigation", () => {
     })));
   });
 
-  it("links the selected sidebar item to Integrations", () => {
+  it("moves Integrations from primary navigation into the workspace menu", async () => {
     render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
 
-    const link = screen.getByRole("link", { name: "Integrations" });
+    const primaryNavigation = screen.getByRole("navigation", { name: "Product sidebar navigation" });
+    expect(within(primaryNavigation).queryByRole("link", { name: "Integrations" })).not.toBeInTheDocument();
+    expect(within(primaryNavigation).getByRole("link", { name: "Artifacts" })).toHaveAttribute("href", "/artifacts");
+
+    fireEvent.click(await screen.findByRole("button", { name: /Personal/ }));
+    const link = screen.getByRole("menuitem", { name: "Integrations" });
     expect(link).toHaveAttribute("href", "/integrations");
     expect(link).toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("link", { name: "Artifacts" })).toHaveAttribute("href", "/artifacts");
     expect(screen.queryByRole("link", { name: "Sources" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "New session" })).not.toBeInTheDocument();
     expect(screen.queryByText("Sessions", { selector: "div" })).not.toBeInTheDocument();

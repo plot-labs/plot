@@ -21,7 +21,6 @@ import type { ProductTheme } from "@/components/layout/product-shell";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { href: "/integrations", label: "Integrations", icon: IntegrationsIcon },
   { href: "/artifacts", label: "Artifacts", icon: ArtifactsIcon },
 ];
 
@@ -37,7 +36,7 @@ const themeOptions = [
   { value: "dark", label: "Dark", icon: Moon },
 ] satisfies Array<{ value: ProductTheme; label: string; icon: typeof Monitor }>;
 
-const appHomeHref = "/integrations";
+const appHomeHref = "/artifacts";
 
 type Account = {
   user: { id: string; email: string; displayName: string };
@@ -199,7 +198,7 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
           </button>
 
           {workspaceMenuOpen && (
-            <div role="menu" aria-label="Workspaces" className="absolute left-3 top-[68px] z-50 w-[228px] overflow-hidden rounded-[10px] border border-black/[0.08] bg-white p-1 text-[13px] text-black/76 shadow-[0_10px_28px_rgb(15_23_42_/_0.06)] dark:border-white/10 dark:bg-[#292a2f] dark:text-white/80">
+            <div role="menu" aria-label="Workspace menu" className="absolute left-3 top-[68px] z-50 w-[228px] overflow-hidden rounded-[10px] border border-black/[0.08] bg-white p-1 text-[13px] text-black/76 shadow-[0_10px_28px_rgb(15_23_42_/_0.06)] dark:border-white/10 dark:bg-[#292a2f] dark:text-white/80">
               {workspaceItems.map((workspace) => (
                 <button
                   key={workspace.id}
@@ -232,6 +231,22 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
                   {workspace.selected && <Check className="size-3.5 shrink-0 text-black/45 dark:text-white/52" />}
                 </button>
               ))}
+              {workspaceItems.length > 0 && (
+                <div role="separator" className="mx-2 my-1 border-t border-black/[0.07] dark:border-white/10" />
+              )}
+              <Link
+                href="/integrations"
+                role="menuitem"
+                aria-current={pathname === "/integrations" ? "page" : undefined}
+                onClick={() => setWorkspaceMenuOpen(false)}
+                className={cn(
+                  "flex h-9 items-center gap-2 rounded-[7px] px-2 font-medium transition hover:bg-black/[0.04] focus-visible:bg-black/[0.04] focus-visible:outline-none dark:hover:bg-white/10 dark:focus-visible:bg-white/10",
+                  pathname === "/integrations" && "bg-black/[0.035] text-black/82 dark:bg-white/[0.07] dark:text-white/88",
+                )}
+              >
+                <IntegrationsIcon />
+                Integrations
+              </Link>
             </div>
           )}
         </div>
