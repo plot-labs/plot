@@ -1,6 +1,6 @@
 "use client";
 
-import { PlugSocketIcon, Shapes01Icon } from "@hugeicons/core-free-icons";
+import { Settings02Icon, Shapes01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import Image from "next/image";
 import Link from "next/link";
@@ -168,7 +168,27 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
         </div>
 
         <div ref={workspaceMenuRef} className="relative px-3 pb-4">
-          <div className="mb-2 text-[11px] font-medium uppercase text-black/35 dark:text-white/35">Workspace</div>
+          <div className="mb-2 flex h-7 items-center justify-between pl-0.5">
+            <div className="text-[11px] font-medium uppercase text-black/35 dark:text-white/35">Workspace</div>
+            <Link
+              href="/settings/integrations"
+              aria-label="Workspace settings"
+              title="Workspace settings"
+              aria-current={pathname.startsWith("/settings") ? "page" : undefined}
+              className={cn(
+                "group relative inline-flex size-7 items-center justify-center rounded-[7px] text-black/38 transition hover:bg-black/[0.05] hover:text-black/68 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 dark:text-white/40 dark:hover:bg-white/10 dark:hover:text-white/75 dark:focus-visible:ring-white/30",
+                pathname.startsWith("/settings") && "bg-black/[0.06] text-black/72 dark:bg-white/10 dark:text-white/80",
+              )}
+            >
+              <SettingsIcon />
+              <span
+                role="tooltip"
+                className="pointer-events-none absolute left-full z-50 ml-2.5 hidden whitespace-nowrap rounded-[7px] border border-black/10 bg-white px-2.5 py-1.5 text-[12px] font-medium normal-case text-black/78 opacity-0 shadow-[0_6px_18px_rgb(15_23_42_/_0.1)] transition-opacity group-hover:block group-hover:opacity-100 group-focus-visible:block group-focus-visible:opacity-100 dark:border-white/12 dark:bg-[#292a2f] dark:text-white/85"
+              >
+                Workspace settings
+              </span>
+            </Link>
+          </div>
 
           <button
             type="button"
@@ -198,7 +218,7 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
           </button>
 
           {workspaceMenuOpen && (
-            <div role="menu" aria-label="Workspace menu" className="absolute left-3 top-[68px] z-50 w-[228px] overflow-hidden rounded-[10px] border border-black/[0.08] bg-white p-1 text-[13px] text-black/76 shadow-[0_10px_28px_rgb(15_23_42_/_0.06)] dark:border-white/10 dark:bg-[#292a2f] dark:text-white/80">
+            <div role="menu" aria-label="Workspace menu" className="absolute left-3 top-[80px] z-50 w-[228px] overflow-hidden rounded-[10px] border border-black/[0.08] bg-white p-1 text-[13px] text-black/76 shadow-[0_10px_28px_rgb(15_23_42_/_0.06)] dark:border-white/10 dark:bg-[#292a2f] dark:text-white/80">
               {workspaceItems.map((workspace) => (
                 <button
                   key={workspace.id}
@@ -231,22 +251,6 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
                   {workspace.selected && <Check className="size-3.5 shrink-0 text-black/45 dark:text-white/52" />}
                 </button>
               ))}
-              {workspaceItems.length > 0 && (
-                <div role="separator" className="mx-2 my-1 border-t border-black/[0.07] dark:border-white/10" />
-              )}
-              <Link
-                href="/integrations"
-                role="menuitem"
-                aria-current={pathname === "/integrations" ? "page" : undefined}
-                onClick={() => setWorkspaceMenuOpen(false)}
-                className={cn(
-                  "flex h-9 items-center gap-2 rounded-[7px] px-2 font-medium transition hover:bg-black/[0.04] focus-visible:bg-black/[0.04] focus-visible:outline-none dark:hover:bg-white/10 dark:focus-visible:bg-white/10",
-                  pathname === "/integrations" && "bg-black/[0.035] text-black/82 dark:bg-white/[0.07] dark:text-white/88",
-                )}
-              >
-                <IntegrationsIcon />
-                Integrations
-              </Link>
             </div>
           )}
         </div>
@@ -348,10 +352,10 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
   );
 }
 
-function IntegrationsIcon() {
+function SettingsIcon() {
   return (
     <HugeiconsIcon
-      icon={PlugSocketIcon}
+      icon={Settings02Icon}
       size={16}
       color="currentColor"
       strokeWidth={1.5}

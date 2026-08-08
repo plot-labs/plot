@@ -1,11 +1,18 @@
-import { Suspense } from "react";
+import { redirect } from "next/navigation";
 
-import { IntegrationsWorkspace } from "@/features/integrations/integrations-workspace";
+type LegacyIntegrationsPageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
 
-export default function IntegrationsPage() {
-  return (
-    <Suspense fallback={<div className="h-screen bg-[#f8fafc] dark:bg-[#111113]" />}>
-      <IntegrationsWorkspace />
-    </Suspense>
-  );
+export default async function LegacyIntegrationsPage({ searchParams }: LegacyIntegrationsPageProps) {
+  const incoming = await searchParams;
+  const outgoing = new URLSearchParams();
+
+  for (const key of ["githubConnection", "githubError"] as const) {
+    const value = incoming[key];
+    if (typeof value === "string") outgoing.set(key, value);
+  }
+
+  const query = outgoing.toString();
+  redirect(`/settings/integrations${query ? `?${query}` : ""}`);
 }

@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const sidebarMocks = vi.hoisted(() => ({ listSessions: vi.fn() }));
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/integrations",
+  usePathname: () => "/settings/integrations",
 }));
 
 vi.mock("@/lib/api-client", () => ({
@@ -18,7 +18,7 @@ vi.mock("@/lib/api-client", () => ({
 
 import { ProductSidebar } from "./product-sidebar";
 
-describe("Integrations navigation", () => {
+describe("Workspace settings navigation", () => {
   beforeEach(() => {
     window.localStorage.clear();
     sidebarMocks.listSessions.mockReset();
@@ -30,17 +30,19 @@ describe("Integrations navigation", () => {
     })));
   });
 
-  it("moves Integrations from primary navigation into the workspace menu", async () => {
+  it("moves workspace configuration out of primary navigation and into a dedicated settings control", async () => {
     render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
 
     const primaryNavigation = screen.getByRole("navigation", { name: "Product sidebar navigation" });
     expect(within(primaryNavigation).queryByRole("link", { name: "Integrations" })).not.toBeInTheDocument();
     expect(within(primaryNavigation).getByRole("link", { name: "Artifacts" })).toHaveAttribute("href", "/artifacts");
 
-    fireEvent.click(await screen.findByRole("button", { name: /Personal/ }));
-    const link = screen.getByRole("menuitem", { name: "Integrations" });
-    expect(link).toHaveAttribute("href", "/integrations");
+    const link = screen.getByRole("link", { name: "Workspace settings" });
+    expect(link).toHaveAttribute("href", "/settings/integrations");
     expect(link).toHaveAttribute("aria-current", "page");
+
+    fireEvent.click(await screen.findByRole("button", { name: /Personal/ }));
+    expect(screen.queryByRole("menuitem", { name: "Settings" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Sources" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "New session" })).not.toBeInTheDocument();
     expect(screen.queryByText("Sessions", { selector: "div" })).not.toBeInTheDocument();
