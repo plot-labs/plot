@@ -27,11 +27,27 @@ export function ChatWorkspace() {
 
 function ChatWorkspaceContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const requestedChatId = searchParams.get("chat");
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [references, setReferences] = useState<GenerationReference[]>([]);
+  const [workspaceRevision, setWorkspaceRevision] = useState(0);
   const [referencesLoading, setReferencesLoading] = useState(true);
   const [referencesError, setReferencesError] = useState("");
+
+  useEffect(() => {
+    function handleWorkspaceChanged() {
+      setChats([]);
+      setReferences([]);
+      setReferencesError("");
+      setReferencesLoading(true);
+      setWorkspaceRevision((current) => current + 1);
+      router.replace("/chat", { scroll: false });
+    }
+
+    window.addEventListener("plot:workspace-changed", handleWorkspaceChanged);
+    return () => window.removeEventListener("plot:workspace-changed", handleWorkspaceChanged);
+  }, [router]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -43,7 +59,7 @@ function ChatWorkspaceContent() {
       .catch((error) => { if (!controller.signal.aborted) setReferencesError(messageFor(error, "Sources could not be loaded.")); })
       .finally(() => { if (!controller.signal.aborted) setReferencesLoading(false); });
     return () => controller.abort();
-  }, []);
+  }, [workspaceRevision]);
 
   const activeChat = requestedChatId ? chats.find((chat) => chat.id === requestedChatId) : null;
   if (activeChat) {

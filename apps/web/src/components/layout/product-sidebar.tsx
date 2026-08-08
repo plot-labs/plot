@@ -11,7 +11,7 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import type { WorkSessionSummary as ChatSummary } from "@plot/api-client";
@@ -74,6 +74,8 @@ type Account = {
 
 export function ProductSidebar({ collapsed = false, theme, onThemeChange, onToggleSidebar }: ProductSidebarProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const selectedChatId = pathname === "/chat" ? searchParams.get("chat") : null;
   const settingsMode = pathname === "/settings" || pathname.startsWith("/settings/");
   const [account, setAccount] = useState<Account | null>(null);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
@@ -424,7 +426,15 @@ export function ProductSidebar({ collapsed = false, theme, onThemeChange, onTogg
                 {group.items.map((item) => <SidebarNavLink key={item.href} collapsed={collapsed} item={item} pathname={pathname} />)}
               </div>
             </div>
-          )) : productNavItems.map((item) => <SidebarNavLink key={item.href} collapsed={collapsed} item={item} pathname={pathname} />)}
+          )) : productNavItems.map((item) => (
+            <SidebarNavLink
+              key={item.href}
+              collapsed={collapsed}
+              item={item}
+              pathname={pathname}
+              active={item.href === "/chat" ? !selectedChatId : undefined}
+            />
+          ))}
         </nav>
 
         {!settingsMode && recentChats.length ? (
@@ -440,11 +450,14 @@ export function ProductSidebar({ collapsed = false, theme, onThemeChange, onTogg
                 <Link
                   key={chat.id}
                   href={`/chat?chat=${encodeURIComponent(chat.id)}`}
+                  aria-current={selectedChatId === chat.id ? "page" : undefined}
                   title={chat.title || "Untitled chat"}
                   className={cn(
                     "flex h-8 w-full items-center gap-2 rounded-[8px] text-left text-[13px] transition",
                     collapsed ? "mx-auto w-9 justify-center px-0" : "px-2.5",
-                    "text-black/55 hover:bg-black/[0.04] hover:text-black/80 dark:text-white/55 dark:hover:bg-white/[0.08] dark:hover:text-white/85",
+                    selectedChatId === chat.id
+                      ? "bg-white/75 text-[#18181b] shadow-sm shadow-black/[0.03] dark:bg-white/10 dark:text-white"
+                      : "text-black/55 hover:bg-black/[0.04] hover:text-black/80 dark:text-white/55 dark:hover:bg-white/[0.08] dark:hover:text-white/85",
                   )}
                 >
                   <HugeiconsIcon
@@ -640,8 +653,8 @@ type SidebarNavItem = {
   icon: () => ReactNode;
 };
 
-function SidebarNavLink({ collapsed, item, pathname }: { collapsed: boolean; item: SidebarNavItem; pathname: string }) {
-  const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+function SidebarNavLink({ collapsed, item, pathname, active: activeOverride }: { collapsed: boolean; item: SidebarNavItem; pathname: string; active?: boolean }) {
+  const active = activeOverride ?? (pathname === item.href || pathname.startsWith(`${item.href}/`));
   const Icon = item.icon;
 
   return (
