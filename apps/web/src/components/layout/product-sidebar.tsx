@@ -107,6 +107,7 @@ export function ProductSidebar({ collapsed = false, theme, onThemeChange, onTogg
   const currentWorkspaceId = currentWorkspace?.id ?? selectedWorkspaceId;
   const currentWorkspaceName = currentWorkspace?.name ?? "Workspace";
   const currentWorkspaceMark = currentWorkspaceName.slice(0, 1).toUpperCase();
+  const workspaceLoading = !account;
   const workspaceItems = account?.workspaces.map((item) => ({
     ...item,
     mark: item.name.slice(0, 1).toUpperCase(),
@@ -123,10 +124,14 @@ export function ProductSidebar({ collapsed = false, theme, onThemeChange, onTogg
     try {
       const workspace = await plotApiClient.createWorkspace({ name });
       window.localStorage.setItem("plot.workspaceId", workspace.id);
+      setAccount((current) => current
+        ? { ...current, workspaces: [...current.workspaces, { ...workspace, role: workspace.role ?? "OWNER" }] }
+        : current);
+      setSelectedWorkspaceId(workspace.id);
       setWorkspaceMenuOpen(false);
       setCreatingWorkspace(false);
       setWorkspaceName("");
-      window.location.reload();
+      window.dispatchEvent(new CustomEvent("plot:workspace-changed", { detail: { id: workspace.id } }));
     } catch {
       setWorkspaceCreateError("Workspace could not be created.");
     } finally {
@@ -268,6 +273,9 @@ export function ProductSidebar({ collapsed = false, theme, onThemeChange, onTogg
                   setWorkspaceMenuOpen((open) => !open);
                   setProfileMenuOpen(false);
                 }}
+                disabled={workspaceLoading}
+                aria-label={workspaceLoading ? "Loading workspace" : currentWorkspaceName}
+                aria-busy={workspaceLoading}
                 aria-expanded={workspaceMenuOpen}
                 aria-haspopup="menu"
                 className={cn(
@@ -281,17 +289,24 @@ export function ProductSidebar({ collapsed = false, theme, onThemeChange, onTogg
                     : workspaceMenuOpen
                       ? "border-black/20 bg-white text-black/82 shadow-sm dark:border-white/16 dark:bg-white/10 dark:text-white"
                       : "border-black/[0.12] bg-white/40 text-black/76 hover:bg-white/65 dark:border-white/12 dark:bg-white/5 dark:text-white/78 dark:hover:bg-white/10",
+                  workspaceLoading && "cursor-wait opacity-80",
                 )}
               >
-                <WorkspaceAvatar logoUrl={currentWorkspace?.logoUrl} mark={currentWorkspaceMark} variant="trigger" />
-                <span className={cn("min-w-0 flex-1 truncate", collapsed && "sr-only")}>{currentWorkspaceName}</span>
-                <ChevronDown
-                  className={cn(
-                    "size-4 shrink-0 text-black/38 transition dark:text-white/40",
-                    collapsed && "hidden",
-                    workspaceMenuOpen && "rotate-180",
-                  )}
-                />
+                {workspaceLoading ? (
+                  <span aria-hidden="true" className="size-6 rounded-[7px] bg-black/[0.06] dark:bg-white/[0.08]" />
+                ) : (
+                  <>
+                    <WorkspaceAvatar logoUrl={currentWorkspace?.logoUrl} mark={currentWorkspaceMark} variant="trigger" />
+                    <span className={cn("min-w-0 flex-1 truncate", collapsed && "sr-only")}>{currentWorkspaceName}</span>
+                    <ChevronDown
+                      className={cn(
+                        "size-4 shrink-0 text-black/38 transition dark:text-white/40",
+                        collapsed && "hidden",
+                        workspaceMenuOpen && "rotate-180",
+                      )}
+                    />
+                  </>
+                )}
               </button>
 
               {workspaceMenuOpen && (
@@ -315,10 +330,14 @@ export function ProductSidebar({ collapsed = false, theme, onThemeChange, onTogg
                         aria-label={`${workspace.name} workspace`}
                         aria-checked={workspace.selected}
                         onClick={() => {
+                          if (workspace.id === currentWorkspaceId) {
+                            setWorkspaceMenuOpen(false);
+                            return;
+                          }
                           window.localStorage.setItem("plot.workspaceId", workspace.id);
                           setSelectedWorkspaceId(workspace.id);
                           setWorkspaceMenuOpen(false);
-                          window.location.reload();
+                          window.dispatchEvent(new CustomEvent("plot:workspace-changed", { detail: { id: workspace.id } }));
                         }}
                         className={cn(
                           "flex h-9 w-full items-center gap-2 rounded-[8px] px-2 text-left font-medium transition hover:bg-black/[0.04] focus-visible:bg-black/[0.04] focus-visible:outline-none dark:hover:bg-white/10 dark:focus-visible:bg-white/10",

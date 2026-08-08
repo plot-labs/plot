@@ -99,6 +99,21 @@ export function IntegrationsWorkspace() {
   };
 
   useEffect(() => {
+    function handleWorkspaceChanged() {
+      setConnections([]);
+      setIsOwner(null);
+      setConnectionNeedsReconnect(false);
+      setMessage(null);
+      setMessageRequestId(null);
+      setIsLoading(true);
+      setReloadNonce((value) => value + 1);
+    }
+
+    window.addEventListener("plot:workspace-changed", handleWorkspaceChanged);
+    return () => window.removeEventListener("plot:workspace-changed", handleWorkspaceChanged);
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function load() {
