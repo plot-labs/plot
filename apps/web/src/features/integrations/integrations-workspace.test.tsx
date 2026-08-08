@@ -170,7 +170,7 @@ describe("IntegrationsWorkspace", () => {
     render(<IntegrationsWorkspace />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent("GitHub rate limit reached");
-    expect(screen.getByText("Needs attention")).toBeVisible();
+    expect(screen.queryByText("Needs attention")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Reconnect" })).toBeVisible();
     expect(screen.queryByRole("heading", { name: "Repository access" })).not.toBeInTheDocument();
     expect(screen.getByText("Technical details").closest("details")).not.toHaveAttribute("open");
@@ -191,13 +191,13 @@ describe("IntegrationsWorkspace", () => {
 
     render(<IntegrationsWorkspace />);
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("previous GitHub installation was replaced or removed");
-    expect(screen.getByText("Needs attention")).toBeVisible();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByText("Needs attention")).not.toBeInTheDocument();
     expect(screen.queryByText(/No repositories are currently granted/)).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Repository access" })).not.toBeInTheDocument();
     expect(screen.queryByRole("radio", { name: /acme\/plot/i })).not.toBeInTheDocument();
 
-    const reconnect = screen.getByRole("button", { name: "Reconnect GitHub" });
+    const reconnect = await screen.findByRole("button", { name: "Reconnect GitHub" });
     fireEvent.click(reconnect);
 
     await waitFor(() => expect(mocks.createInstallationRequest).toHaveBeenCalledTimes(1));
@@ -214,8 +214,7 @@ describe("IntegrationsWorkspace", () => {
 
     render(<IntegrationsWorkspace />);
 
-    expect(await screen.findByText(/GitHub authentication expired/i)).toBeVisible();
-    expect(screen.getByRole("button", { name: "Reconnect GitHub" })).toBeVisible();
+    expect(await screen.findByRole("button", { name: "Reconnect GitHub" })).toBeVisible();
     expect(screen.queryByRole("heading", { name: "Repository access" })).not.toBeInTheDocument();
     expect(screen.queryByRole("radio", { name: /acme\/plot/i })).not.toBeInTheDocument();
   });
@@ -253,7 +252,7 @@ describe("IntegrationsWorkspace", () => {
     render(<IntegrationsWorkspace />);
 
     expect(await screen.findByText("Disconnected")).toBeVisible();
-    expect(screen.getByText(/installation was removed/i)).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Repository access" })).toBeVisible();
     fireEvent.click(await screen.findByRole("radio", { name: /acme\/plot/i }));
     fireEvent.click(screen.getByRole("button", { name: "Check again" }));
     expect(mocks.recheckAccess).toHaveBeenCalledWith("scope-1", "CHECK_AGAIN");
@@ -263,7 +262,7 @@ describe("IntegrationsWorkspace", () => {
     expect(screen.queryByText("Disconnected")).not.toBeInTheDocument();
   });
 
-  it("distinguishes a suspended installation as Needs attention", async () => {
+  it("offers reconnect without redundant status copy for a suspended installation", async () => {
     mocks.listConnections.mockResolvedValue([{
       ...connection,
       status: "ERROR",
@@ -273,9 +272,10 @@ describe("IntegrationsWorkspace", () => {
 
     render(<IntegrationsWorkspace />);
 
-    expect((await screen.findAllByText("Needs attention")).length).toBeGreaterThan(0);
-    expect(screen.getByText(/installation is suspended/i)).toBeVisible();
+    await screen.findByRole("button", { name: "Reconnect GitHub" });
+    expect(screen.queryByText("Needs attention")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Reconnect GitHub" })).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "Repository access" })).not.toBeInTheDocument();
   });
 
   it("does not expose a manual import action for an already connected repository", async () => {
