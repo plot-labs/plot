@@ -262,7 +262,7 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
 
         <div ref={profileMenuRef} className="relative border-t border-black/[0.06] px-3 py-3 dark:border-white/10">
           {profileMenuOpen && (
-            <div className="absolute bottom-[58px] left-16 right-3 z-50 rounded-[10px] border border-black/[0.08] bg-white p-2 text-[13px] text-black/80 shadow-[0_12px_34px_rgb(15_23_42_/_0.14)] dark:border-white/10 dark:bg-[#2a2b30] dark:text-white/85">
+            <div className="absolute bottom-[58px] left-3 right-3 z-50 rounded-[10px] border border-black/[0.08] bg-white p-2 text-[13px] text-black/80 shadow-[0_12px_34px_rgb(15_23_42_/_0.14)] dark:border-white/10 dark:bg-[#2a2b30] dark:text-white/85">
               <div className="flex items-center justify-between gap-3 px-2 py-2">
                 <div className="font-medium">Theme</div>
                 <div
