@@ -20,6 +20,7 @@ import {
   Monitor,
   Moon,
   PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   Sun,
   UserRound,
@@ -47,6 +48,7 @@ const workspaceSettingsNavGroups = [
 ];
 
 type ProductSidebarProps = {
+  collapsed?: boolean;
   theme: ProductTheme;
   onThemeChange: (theme: ProductTheme) => void;
   onToggleSidebar: () => void;
@@ -66,7 +68,7 @@ type Account = {
   defaultWorkspaceId: string;
 };
 
-export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: ProductSidebarProps) {
+export function ProductSidebar({ collapsed = false, theme, onThemeChange, onToggleSidebar }: ProductSidebarProps) {
   const pathname = usePathname();
   const settingsMode = pathname === "/settings" || pathname.startsWith("/settings/");
   const [account, setAccount] = useState<Account | null>(null);
@@ -186,12 +188,18 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
 
   return (
     <>
-      <aside className="hidden h-dvh w-[252px] shrink-0 flex-col border-r border-black/[0.08] bg-[#f6f7f9] pr-px text-[#2f3237] dark:border-white/10 dark:bg-[#202126] dark:text-[#f4f4f5] lg:flex">
-        <div className="flex items-center gap-2 px-4 pb-4 pt-5">
+      <aside className={cn(
+        "hidden h-dvh shrink-0 flex-col border-r border-black/[0.08] bg-[#f6f7f9] pr-px text-[#2f3237] transition-[width] duration-200 dark:border-white/10 dark:bg-[#202126] dark:text-[#f4f4f5] lg:flex",
+        collapsed ? "w-[72px]" : "w-[252px]",
+      )}>
+        <div className={cn(
+          "flex items-center gap-2",
+          collapsed ? "justify-center px-2 pb-3 pt-4" : "px-4 pb-4 pt-5",
+        )}>
           <Link
             href={appHomeHref}
             aria-label="Plot home"
-            className="flex min-w-0 flex-1 items-center gap-2"
+            className={cn("flex min-w-0 items-center gap-2", collapsed ? "hidden" : "flex-1")}
           >
             <Image src="/plot-icon.svg" alt="" width={24} height={24} className="size-6 shrink-0 dark:invert" />
             <div className="font-display text-[22px] leading-none tracking-normal text-black/85 dark:text-white/90">
@@ -201,15 +209,18 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
           <button
             type="button"
             onClick={onToggleSidebar}
-            aria-label="Close sidebar"
-            className="inline-flex size-8 shrink-0 items-center justify-center rounded-[8px] text-black/35 transition hover:bg-black/5 hover:text-black/65 dark:text-white/38 dark:hover:bg-white/10 dark:hover:text-white/70"
+            aria-label={collapsed ? "Open sidebar" : "Close sidebar"}
+            className={cn(
+              "inline-flex shrink-0 items-center justify-center rounded-[8px] text-black/35 transition hover:bg-black/5 hover:text-black/65 dark:text-white/38 dark:hover:bg-white/10 dark:hover:text-white/70",
+              collapsed ? "size-9" : "size-8",
+            )}
           >
-            <PanelLeftClose className="size-4" />
+            {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
           </button>
         </div>
 
-        <div ref={workspaceMenuRef} className="relative px-3 pb-4">
-              <div className="mb-2 flex h-7 items-center pl-0.5">
+        <div ref={workspaceMenuRef} className={cn("relative pb-4", collapsed ? "px-2" : "px-3")}>
+              <div className={cn("mb-2 flex h-7 items-center pl-0.5", collapsed && "hidden")}>
                 <div className="text-[11px] font-medium uppercase text-black/35 dark:text-white/35">Workspace</div>
               </div>
 
@@ -222,17 +233,24 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
                 aria-expanded={workspaceMenuOpen}
                 aria-haspopup="menu"
                 className={cn(
-                  "flex h-9 w-full items-center gap-2 rounded-[8px] border px-2 text-left text-[13px] font-semibold transition",
-                  workspaceMenuOpen
-                    ? "border-black/20 bg-white text-black/82 shadow-sm dark:border-white/16 dark:bg-white/10 dark:text-white"
-                    : "border-black/[0.12] bg-white/40 text-black/76 hover:bg-white/65 dark:border-white/12 dark:bg-white/5 dark:text-white/78 dark:hover:bg-white/10",
+                  collapsed
+                    ? "mx-auto flex size-10 items-center justify-center rounded-[12px] border-0 px-0 text-left transition"
+                    : "flex h-9 w-full items-center gap-2 rounded-[8px] border px-2 text-left text-[13px] font-semibold transition",
+                  collapsed
+                    ? workspaceMenuOpen
+                      ? "bg-white text-black/82 shadow-sm dark:bg-white/10 dark:text-white"
+                      : "hover:bg-white/65 dark:hover:bg-white/10"
+                    : workspaceMenuOpen
+                      ? "border-black/20 bg-white text-black/82 shadow-sm dark:border-white/16 dark:bg-white/10 dark:text-white"
+                      : "border-black/[0.12] bg-white/40 text-black/76 hover:bg-white/65 dark:border-white/12 dark:bg-white/5 dark:text-white/78 dark:hover:bg-white/10",
                 )}
               >
                 <WorkspaceAvatar logoUrl={currentWorkspace?.logoUrl} mark={currentWorkspaceMark} variant="trigger" />
-                <span className="min-w-0 flex-1 truncate">{currentWorkspaceName}</span>
+                <span className={cn("min-w-0 flex-1 truncate", collapsed && "sr-only")}>{currentWorkspaceName}</span>
                 <ChevronDown
                   className={cn(
                     "size-4 shrink-0 text-black/38 transition dark:text-white/40",
+                    collapsed && "hidden",
                     workspaceMenuOpen && "rotate-180",
                   )}
                 />
@@ -242,7 +260,10 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
                 <div
                   role="menu"
                   aria-label="Workspace menu"
-                  className="absolute left-3 top-[76px] z-50 w-[228px] overflow-hidden rounded-[12px] border border-black/[0.08] bg-white text-[13px] text-black/76 shadow-[0_12px_30px_rgb(15_23_42_/_0.1)] dark:border-white/10 dark:bg-[#292a2f] dark:text-white/80"
+                  className={cn(
+                    "absolute z-50 w-[228px] overflow-hidden rounded-[12px] border border-black/[0.08] bg-white text-[13px] text-black/76 shadow-[0_12px_30px_rgb(15_23_42_/_0.1)] dark:border-white/10 dark:bg-[#292a2f] dark:text-white/80",
+                    collapsed ? "left-2 top-[48px]" : "left-3 top-[76px]",
+                  )}
                 >
                   <div className="border-b border-black/[0.08] px-3 pb-1.5 pt-2.5 text-[12px] font-medium text-black/45 dark:border-white/10 dark:text-white/45">
                     Workspaces
@@ -289,10 +310,13 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
         </div>
 
         {settingsMode && (
-          <div className="px-3 pb-4">
+          <div className={cn("pb-4", collapsed ? "px-2" : "px-3")}>
             <Link
               href={appHomeHref}
-              className="flex h-8 items-center gap-2 rounded-[8px] px-2 text-[13px] font-medium text-black/52 transition hover:bg-black/[0.04] hover:text-black/78 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 dark:text-white/52 dark:hover:bg-white/[0.07] dark:hover:text-white/82 dark:focus-visible:ring-white/25"
+              className={cn(
+                "flex h-8 items-center gap-2 rounded-[8px] text-[13px] font-medium text-black/52 transition hover:bg-black/[0.04] hover:text-black/78 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 dark:text-white/52 dark:hover:bg-white/[0.07] dark:hover:text-white/82 dark:focus-visible:ring-white/25",
+                collapsed ? "justify-center px-0" : "px-2",
+              )}
             >
               <HugeiconsIcon
                 icon={ArrowLeft01Icon}
@@ -302,40 +326,41 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
                 aria-hidden="true"
                 className="shrink-0"
               />
-              Back to app
+              <span className={collapsed ? "sr-only" : undefined}>Back to app</span>
             </Link>
           </div>
         )}
 
         <nav
-          className="space-y-1 px-3 pb-4"
+          className={cn("space-y-1 pb-4", collapsed ? "px-2" : "px-3")}
           aria-label={settingsMode ? "Settings navigation" : "Product sidebar navigation"}
         >
           {settingsMode ? workspaceSettingsNavGroups.map((group) => (
             <div key={group.label}>
-              <div className="px-2 pb-1 pt-3 text-[11px] font-medium uppercase tracking-[0.08em] text-black/35 dark:text-white/35">
+              <div className={cn(
+                "px-2 pb-1 pt-3 text-[11px] font-medium uppercase tracking-[0.08em] text-black/35 dark:text-white/35",
+                collapsed && "sr-only",
+              )}>
                 {group.label}
               </div>
               <div className="space-y-1">
-                {group.items.map((item) => <SidebarNavLink key={item.href} item={item} pathname={pathname} />)}
+                {group.items.map((item) => <SidebarNavLink key={item.href} collapsed={collapsed} item={item} pathname={pathname} />)}
               </div>
             </div>
-          )) : productNavItems.map((item) => <SidebarNavLink key={item.href} item={item} pathname={pathname} />)}
+          )) : productNavItems.map((item) => <SidebarNavLink key={item.href} collapsed={collapsed} item={item} pathname={pathname} />)}
         </nav>
 
         <div className="min-h-0 flex-1" />
 
-        <div ref={profileMenuRef} className="relative border-t border-black/[0.06] px-3 py-3 dark:border-white/10">
+        <div ref={profileMenuRef} className={cn(
+          "relative border-t border-black/[0.06] py-3 dark:border-white/10",
+          collapsed ? "px-2" : "px-3",
+        )}>
           {profileMenuOpen && (
-            <div className="absolute bottom-[58px] left-3 right-3 z-50 rounded-[10px] border border-black/[0.08] bg-white p-2 text-[13px] text-black/80 shadow-[0_12px_34px_rgb(15_23_42_/_0.14)] dark:border-white/10 dark:bg-[#2a2b30] dark:text-white/85">
-              <Link
-                href="/settings/account"
-                onClick={() => setProfileMenuOpen(false)}
-                className="flex w-full items-center gap-2 rounded-[8px] px-2 py-2 text-left transition hover:bg-black/[0.04] dark:hover:bg-white/10"
-              >
-                <SettingsIcon />
-                Settings
-              </Link>
+            <div className={cn(
+              "absolute bottom-[58px] z-50 rounded-[10px] border border-black/[0.08] bg-white p-2 text-[13px] text-black/80 shadow-[0_12px_34px_rgb(15_23_42_/_0.14)] dark:border-white/10 dark:bg-[#2a2b30] dark:text-white/85",
+              collapsed ? "left-2 w-[228px]" : "left-3 right-3",
+            )}>
               <div className="flex items-center justify-between gap-3 px-2 py-2">
                 <div className="font-medium">Theme</div>
                 <div
@@ -369,6 +394,15 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
                 </div>
               </div>
 
+              <Link
+                href="/settings/account"
+                onClick={() => setProfileMenuOpen(false)}
+                className="flex w-full items-center gap-2 rounded-[8px] px-2 py-2 text-left transition hover:bg-black/[0.04] dark:hover:bg-white/10"
+              >
+                <SettingsIcon />
+                Settings
+              </Link>
+
               <button
                 type="button"
                 onClick={async () => {
@@ -388,12 +422,18 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
             onClick={() => setProfileMenuOpen((open) => !open)}
             aria-expanded={profileMenuOpen}
             aria-haspopup="menu"
-            className="flex w-full items-center gap-2 rounded-[16px] px-1 py-1 text-left transition hover:bg-black/[0.04] dark:hover:bg-white/10"
+            className={cn(
+              "flex w-full items-center gap-2 rounded-[16px] py-1 text-left transition hover:bg-black/[0.04] dark:hover:bg-white/10",
+              collapsed ? "justify-center px-0" : "px-1",
+            )}
           >
-            <div className="flex size-8 items-center justify-center rounded-full border border-black/10 bg-white text-xs font-semibold text-black/65 dark:border-white/10 dark:bg-white/10 dark:text-white/75">
+            <div className={cn(
+              "flex items-center justify-center border border-black/10 bg-white text-xs font-semibold text-black/65 dark:border-white/10 dark:bg-white/10 dark:text-white/75",
+              collapsed ? "size-9 rounded-[12px]" : "size-8 rounded-full",
+            )}>
               <UserRound className="size-4" />
             </div>
-            <div className="min-w-0 flex-1">
+            <div className={cn("min-w-0 flex-1", collapsed && "sr-only")}>
               <div className="truncate text-[13px] font-semibold">{account?.user.displayName ?? "Plot"}</div>
               <div className="truncate text-xs text-black/45 dark:text-white/45">{account?.user.email ?? currentWorkspaceName}</div>
             </div>
@@ -403,7 +443,7 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
               color="currentColor"
               strokeWidth={1.5}
               aria-hidden="true"
-              className="ml-auto shrink-0 text-black/38 dark:text-white/42"
+              className={cn("ml-auto shrink-0 text-black/38 dark:text-white/42", collapsed && "hidden")}
             />
           </button>
         </div>
@@ -435,7 +475,7 @@ type SidebarNavItem = {
   icon: () => ReactNode;
 };
 
-function SidebarNavLink({ item, pathname }: { item: SidebarNavItem; pathname: string }) {
+function SidebarNavLink({ collapsed, item, pathname }: { collapsed: boolean; item: SidebarNavItem; pathname: string }) {
   const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
   const Icon = item.icon;
 
@@ -444,14 +484,15 @@ function SidebarNavLink({ item, pathname }: { item: SidebarNavItem; pathname: st
       href={item.href}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "flex h-8 items-center gap-2 rounded-[8px] px-2.5 text-[13px] font-medium transition",
+        "flex h-8 items-center gap-2 rounded-[8px] text-[13px] font-medium transition",
+        collapsed ? "mx-auto w-9 justify-center px-0" : "px-2.5",
         active
           ? "bg-white/75 text-[#18181b] shadow-sm shadow-black/[0.03] dark:bg-white/10 dark:text-white"
           : "text-black/65 hover:bg-black/5 dark:text-white/65 dark:hover:bg-white/10",
       )}
     >
       <Icon />
-      {item.label}
+      <span className={collapsed ? "sr-only" : undefined}>{item.label}</span>
     </Link>
   );
 }

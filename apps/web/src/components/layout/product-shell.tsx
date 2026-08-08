@@ -6,7 +6,6 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { PanelLeftOpen } from "lucide-react";
 
 import { ProductSidebar } from "@/components/layout/product-sidebar";
 import { cn } from "@/lib/utils";
@@ -42,13 +41,12 @@ export function ProductShell({ children }: { children: ReactNode }) {
   return (
     <div className={darkMode ? "dark" : undefined}>
       <div className="flex min-h-dvh bg-[#eef0f3] text-[#18181b] dark:bg-[#202126] dark:text-[#f4f4f5] lg:h-dvh lg:overflow-hidden">
-        {sidebarOpen && (
-          <ProductSidebar
-            theme={theme}
-            onThemeChange={setTheme}
-            onToggleSidebar={() => setSidebarOpen(false)}
-          />
-        )}
+        <ProductSidebar
+          collapsed={!sidebarOpen}
+          theme={theme}
+          onThemeChange={setTheme}
+          onToggleSidebar={() => setSidebarOpen((open) => !open)}
+        />
 
         <div
           className={cn(
@@ -56,16 +54,6 @@ export function ProductShell({ children }: { children: ReactNode }) {
             !sidebarOpen && "shell-sidebar-closed",
           )}
         >
-          {!sidebarOpen && (
-            <button
-              type="button"
-              onClick={() => setSidebarOpen(true)}
-              aria-label="Open sidebar"
-              className="absolute left-4 top-3 z-40 hidden size-8 items-center justify-center rounded-xl text-black/42 transition hover:bg-black/5 hover:text-black/70 dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white/75 lg:inline-flex"
-            >
-              <PanelLeftOpen className="size-4" />
-            </button>
-          )}
           <MobileProductNavigation pathname={pathname} />
           <main className="min-h-0 w-full flex-1 overflow-y-auto lg:overflow-hidden">{children}</main>
         </div>
