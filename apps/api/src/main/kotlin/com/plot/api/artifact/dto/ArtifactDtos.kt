@@ -47,6 +47,7 @@ data class ArtifactSummaryResponse(
 	val generationRunId: UUID,
 	val status: String,
 	val title: String?,
+	val updatedAt: Instant,
 )
 
 data class ArtifactPageResponse(

@@ -711,15 +711,23 @@ function isActiveGenerationStatus(status: GenerationRun["status"]) {
 }
 
 function activityForRun(run: GenerationRun, instruction: string | null = null): SessionGeneration {
+  const createdAt = run.timing?.createdAt ?? new Date().toISOString();
+  const completedAt = run.timing?.finishedAt ?? null;
   return {
     id: run.id,
     status: run.status,
     instruction,
-    createdAt: run.timing?.createdAt ?? new Date().toISOString(),
-    completedAt: run.timing?.finishedAt ?? null,
+    createdAt,
+    completedAt,
     failureCode: run.failureCode,
     artifact: run.artifact
-      ? { id: run.artifact.id, generationRunId: run.artifact.generationRunId, status: run.artifact.status, title: run.artifact.title }
+      ? {
+          id: run.artifact.id,
+          generationRunId: run.artifact.generationRunId,
+          status: run.artifact.status,
+          title: run.artifact.title,
+          updatedAt: completedAt ?? createdAt,
+        }
       : null,
   };
 }

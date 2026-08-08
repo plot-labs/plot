@@ -142,7 +142,13 @@ export interface GenerationArtifact {
   detail: string | null;
 }
 
-export interface ArtifactSummary { id: string; generationRunId: string; status: string; title: string | null }
+export interface ArtifactSummary {
+  id: string;
+  generationRunId: string;
+  status: string;
+  title: string | null;
+  updatedAt: string;
+}
 export interface ArtifactPage { items: ArtifactSummary[]; page: number; size: number; totalItems: number; totalPages: number }
 
 export interface ExportWarning {

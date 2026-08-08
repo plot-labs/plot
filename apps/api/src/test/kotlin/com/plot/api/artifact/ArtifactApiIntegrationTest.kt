@@ -61,6 +61,7 @@ class ArtifactApiIntegrationTest {
 		mockMvc.get("/api/artifacts?page=0&size=25").andExpect {
 			status { isOk() }
 			jsonPath("$.items[0].id") { value(fixture.packId.toString()) }
+			jsonPath("$.items[0].updatedAt") { exists() }
 				jsonPath("$.totalItems") { value(org.hamcrest.Matchers.greaterThanOrEqualTo(1)) }
 		}
 
