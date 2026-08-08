@@ -380,13 +380,10 @@ export function IntegrationsWorkspace() {
     <div className="h-screen overflow-y-auto bg-[#f7f8fa] px-5 py-9 dark:bg-[#111113] sm:px-8 sm:py-12 lg:px-12">
       <div className="mx-auto max-w-[1040px] pb-16">
         <header className="max-w-[680px]">
-          <p className="mb-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-black/38 dark:text-white/38">
-            Workspace sources
-          </p>
-          <h1 className="font-serif text-[42px] font-normal leading-[1.08] tracking-[-0.02em] text-black/90 dark:text-white/92 sm:text-[48px]">
+          <h1 className="font-serif text-[36px] font-normal leading-[1.08] tracking-[-0.02em] text-black/90 dark:text-white/92 sm:text-[40px]">
             Integrations
           </h1>
-          <p className="mt-4 text-[15px] leading-6 text-black/52 dark:text-white/50">
+          <p className="mt-3 text-[15px] leading-6 text-black/52 dark:text-white/50">
             Connect the tools where product work happens. Plot turns their activity into source material for review-ready artifacts.
           </p>
         </header>
