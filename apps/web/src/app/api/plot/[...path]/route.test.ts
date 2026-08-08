@@ -262,7 +262,7 @@ describe("Plot same-origin proxy", () => {
     );
 
     expect(response.status).toBe(303);
-    expect(response.headers.get("location")).toBe("http://127.0.0.1:3000/integrations?githubConnection=018fd000-0000-7000-8000-000000000002");
+    expect(response.headers.get("location")).toBe("http://127.0.0.1:3000/settings/integrations?githubConnection=018fd000-0000-7000-8000-000000000002");
     expect(String(fetcher.mock.calls[0]?.[0])).toContain("state=private-state");
   });
 
@@ -274,7 +274,7 @@ describe("Plot same-origin proxy", () => {
     );
 
     expect(response.status).toBe(303);
-    expect(response.headers.get("location")).toBe("http://web.test/integrations?githubError=invalid");
+    expect(response.headers.get("location")).toBe("http://web.test/settings/integrations?githubError=invalid");
   });
 
   it.each([

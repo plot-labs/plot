@@ -133,7 +133,7 @@ describe("IntegrationsWorkspace", () => {
 
     expect(await screen.findByRole("radio", { name: /acme\/plot/i })).toBeVisible();
     expect(mocks.listRepositories).toHaveBeenCalledWith("connection-1");
-    expect(mocks.replace).toHaveBeenCalledWith("/integrations");
+    expect(mocks.replace).toHaveBeenCalledWith("/settings/integrations");
   });
 
   it("connects the selected repository without importing a historical window", async () => {

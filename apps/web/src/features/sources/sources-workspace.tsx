@@ -75,7 +75,7 @@ export function SourcesWorkspace() {
         ) : (
           <div className="mt-7 rounded-[12px] border border-dashed border-black/10 bg-white/60 p-5 text-sm leading-5 text-black/55 dark:border-white/10 dark:bg-white/5 dark:text-white/55">
             <div>No Writing Blocks have been collected yet.</div>
-            <Link href="/integrations" className="mt-3 inline-flex font-semibold text-black/72 underline underline-offset-4 dark:text-white/75">
+            <Link href="/settings/integrations" className="mt-3 inline-flex font-semibold text-black/72 underline underline-offset-4 dark:text-white/75">
               Set up GitHub in Integrations
             </Link>
           </div>

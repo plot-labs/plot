@@ -50,7 +50,7 @@ describe("SourcesWorkspace", () => {
     render(<SourcesWorkspace />);
 
     const link = await screen.findByRole("link", { name: "Set up GitHub in Integrations" });
-    expect(link).toHaveAttribute("href", "/integrations");
+    expect(link).toHaveAttribute("href", "/settings/integrations");
     expect(mocks.listReferences).toHaveBeenCalledTimes(1);
   });
 });

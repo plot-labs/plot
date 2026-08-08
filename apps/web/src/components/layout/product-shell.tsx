@@ -1,12 +1,12 @@
 "use client";
 
-import { PlugSocketIcon } from "@hugeicons/core-free-icons";
+import { Settings02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown, PanelLeftOpen } from "lucide-react";
+import { PanelLeftOpen } from "lucide-react";
 
 import { ProductSidebar } from "@/components/layout/product-sidebar";
 import { cn } from "@/lib/utils";
@@ -75,36 +75,8 @@ export function ProductShell({ children }: { children: ReactNode }) {
 }
 
 function MobileProductNavigation({ pathname }: { pathname: string }) {
-  const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
-  const workspaceMenuRef = useRef<HTMLDivElement>(null);
   const artifactsActive = pathname === "/artifacts" || pathname.startsWith("/artifacts/");
-  const integrationsActive = pathname === "/integrations" || pathname.startsWith("/integrations/");
-
-  useEffect(() => {
-    if (!workspaceMenuOpen) return;
-
-    function closeOnOutsidePointer(event: MouseEvent) {
-      if (
-        event.target instanceof Node &&
-        workspaceMenuRef.current &&
-        !workspaceMenuRef.current.contains(event.target)
-      ) {
-        setWorkspaceMenuOpen(false);
-      }
-    }
-
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") setWorkspaceMenuOpen(false);
-    }
-
-    document.addEventListener("mousedown", closeOnOutsidePointer);
-    document.addEventListener("keydown", closeOnEscape);
-
-    return () => {
-      document.removeEventListener("mousedown", closeOnOutsidePointer);
-      document.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [workspaceMenuOpen]);
+  const settingsActive = pathname === "/settings" || pathname.startsWith("/settings/");
 
   return (
     <nav
@@ -124,52 +96,26 @@ function MobileProductNavigation({ pathname }: { pathname: string }) {
         Artifacts
       </Link>
 
-      <div ref={workspaceMenuRef} className="relative ml-auto">
-        <button
-          type="button"
-          onClick={() => setWorkspaceMenuOpen((open) => !open)}
-          aria-expanded={workspaceMenuOpen}
-          aria-haspopup="menu"
-          className={cn(
-            "flex items-center gap-1 rounded-[8px] px-3 py-1.5 font-medium transition",
-            integrationsActive || workspaceMenuOpen
-              ? "bg-[#eef0f3] text-black dark:bg-white/12 dark:text-white"
-              : "text-black/55 hover:bg-black/[0.04] dark:text-white/55 dark:hover:bg-white/10",
-          )}
-        >
-          Workspace
-          <ChevronDown className={cn("size-3.5 transition", workspaceMenuOpen && "rotate-180")} />
-        </button>
-
-        {workspaceMenuOpen && (
-          <div
-            role="menu"
-            aria-label="Workspace menu"
-            className="absolute right-0 top-10 z-50 w-44 rounded-[10px] border border-black/[0.08] bg-white p-1 text-[13px] text-black/76 shadow-[0_10px_28px_rgb(15_23_42_/_0.08)] dark:border-white/10 dark:bg-[#292a2f] dark:text-white/80"
-          >
-            <Link
-              href="/integrations"
-              role="menuitem"
-              aria-current={integrationsActive ? "page" : undefined}
-              onClick={() => setWorkspaceMenuOpen(false)}
-              className={cn(
-                "flex h-9 items-center gap-2 rounded-[7px] px-2 font-medium transition hover:bg-black/[0.04] focus-visible:bg-black/[0.04] focus-visible:outline-none dark:hover:bg-white/10 dark:focus-visible:bg-white/10",
-                integrationsActive && "bg-black/[0.035] text-black/82 dark:bg-white/[0.07] dark:text-white/88",
-              )}
-            >
-              <HugeiconsIcon
-                icon={PlugSocketIcon}
-                size={16}
-                color="currentColor"
-                strokeWidth={1.5}
-                aria-hidden="true"
-                className="shrink-0"
-              />
-              Integrations
-            </Link>
-          </div>
+      <Link
+        href="/settings/integrations"
+        aria-label="Workspace settings"
+        title="Workspace settings"
+        aria-current={settingsActive ? "page" : undefined}
+        className={cn(
+          "ml-auto inline-flex size-8 items-center justify-center rounded-[8px] transition",
+          settingsActive
+            ? "bg-[#eef0f3] text-black dark:bg-white/12 dark:text-white"
+            : "text-black/55 hover:bg-black/[0.04] dark:text-white/55 dark:hover:bg-white/10",
         )}
-      </div>
+      >
+        <HugeiconsIcon
+          icon={Settings02Icon}
+          size={16}
+          color="currentColor"
+          strokeWidth={1.5}
+          aria-hidden="true"
+        />
+      </Link>
     </nav>
   );
 }

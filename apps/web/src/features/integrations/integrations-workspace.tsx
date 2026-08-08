@@ -213,7 +213,7 @@ export function IntegrationsWorkspace() {
   }, [pendingAccessCheckId]);
 
   useEffect(() => {
-    if (callbackConnectionId || callbackError) router.replace("/integrations");
+    if (callbackConnectionId || callbackError) router.replace("/settings/integrations");
   }, [callbackConnectionId, callbackError, router]);
 
   useEffect(() => {
@@ -377,7 +377,7 @@ export function IntegrationsWorkspace() {
   };
 
   return (
-    <div className="h-screen overflow-y-auto bg-[#f7f8fa] px-5 py-9 dark:bg-[#111113] sm:px-8 sm:py-12 lg:px-12">
+    <div className="h-full overflow-y-auto bg-[#f7f8fa] px-5 py-9 dark:bg-[#111113] sm:px-8 sm:py-10 lg:px-10">
       <div className="mx-auto max-w-[1040px] pb-16">
         <header className="max-w-[680px]">
           <h1 className="font-serif text-[36px] font-normal leading-[1.08] tracking-[-0.02em] text-black/90 dark:text-white/92 sm:text-[40px]">
