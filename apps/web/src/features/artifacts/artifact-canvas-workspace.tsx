@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { Citation } from "@astryxdesign/core/Citation";
 import { Copy, Ellipsis, History, Library } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
@@ -30,6 +31,7 @@ export function ArtifactCanvasWorkspace({ artifact, client, onSaveArtifact }: Ar
   const actionsRef = useRef<HTMLDivElement>(null);
   const overflowTriggerRef = useRef<HTMLButtonElement>(null);
   const shownArtifact = historical?.artifact ?? currentArtifact;
+  const artifactTitle = shownArtifact.title ?? "Untitled artifact";
   const readOnly = Boolean(historical);
   const closeDrawer = useCallback(() => setDrawer(null), []);
 
@@ -67,7 +69,19 @@ export function ArtifactCanvasWorkspace({ artifact, client, onSaveArtifact }: Ar
 
   return (
     <div className="relative flex h-full min-h-[calc(100dvh-49px)] min-w-0 flex-col overflow-hidden bg-[#eef0f3] dark:bg-[#18181b] lg:min-h-0">
-      <header className="flex h-14 shrink-0 items-center justify-end border-b border-black/[0.08] bg-[#f8fafc] px-5 dark:border-white/10 dark:bg-[#111113]">
+      <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-black/[0.08] bg-[#f8fafc] px-5 dark:border-white/10 dark:bg-[#111113]">
+        <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 font-sans text-[13px] leading-none">
+          <Link
+            href="/artifacts"
+            className="shrink-0 rounded-sm font-medium text-black/45 transition hover:text-black/72 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15 focus-visible:ring-offset-2 dark:text-white/45 dark:hover:text-white/75"
+          >
+            Artifacts
+          </Link>
+          <span aria-hidden="true" className="text-black/20 dark:text-white/22">/</span>
+          <span aria-current="page" title={artifactTitle} className="truncate font-medium text-black/72 dark:text-white/76">
+            {artifactTitle}
+          </span>
+        </nav>
         <div ref={actionsRef} className="relative flex h-9 items-center gap-2">
           <span role="status" aria-live="polite" className="mr-1 hidden text-xs text-black/45 dark:text-white/48 sm:inline">
             {saveStateLabel(saveState, readOnly)}
