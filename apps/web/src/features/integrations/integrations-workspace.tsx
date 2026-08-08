@@ -98,6 +98,10 @@ export function IntegrationsWorkspace() {
   const hasInactiveConnection = connections.some((connection) => connection.status !== "ACTIVE");
   const hasInactiveRepository = repositories.some((repository) => repository.id && repository.status !== "ACTIVE");
   const selectedRepositoryDisconnected = selectedRepository?.statusReason === "REPOSITORY_DELETED";
+  const repositoryAccessAvailable = !connectionNeedsReconnect
+    && !repositoryLoadFailed
+    && (selectedConnection?.status === "ACTIVE"
+      || selectedConnection?.statusReason === "INSTALLATION_UNINSTALLED");
   const pendingAccessCheckId = repositories.find((repository) =>
     repository.id && (repository.accessCheckStatus === "QUEUED" || repository.accessCheckStatus === "CHECKING"),
   )?.id ?? null;
@@ -459,120 +463,119 @@ export function IntegrationsWorkspace() {
                         onReconnect={() => { void installGitHub(); }}
                       />
                     )}
-                    <div className="flex items-center justify-between gap-4">
-                      <div>
-                        <h3 className="text-sm font-semibold text-black/80 dark:text-white/82">Repository access</h3>
-                        <p className="mt-1 text-sm text-black/48 dark:text-white/48">
-                          Select one repository to connect and monitor its releases.
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={refresh}
-                        disabled={action !== null}
-                        className="inline-flex shrink-0 items-center gap-2 rounded-full border border-black/10 px-3 py-1.5 text-sm font-medium text-black/60 transition hover:bg-black/[0.04] disabled:opacity-50 dark:border-white/12 dark:text-white/65 dark:hover:bg-white/10"
-                      >
-                        <RefreshCw className="size-3.5" />
-                        Refresh
-                      </button>
-                    </div>
-
-                    {repositories.length > 0 ? (
-                      <div
-                        className="mt-5 max-h-64 space-y-2 overflow-y-auto overscroll-contain pr-1"
-                        role="radiogroup"
-                        aria-label="Allowed GitHub repositories"
-                      >
-                        {repositories.map((repository) => (
-                          <label
-                            key={repository.externalRepositoryId}
-                            className="flex cursor-pointer items-center gap-3 rounded-[10px] border border-black/10 px-4 py-3 text-sm transition hover:bg-black/[0.02] dark:border-white/10 dark:hover:bg-white/5"
+                    {repositoryAccessAvailable && (
+                      <>
+                        <div className="flex items-center justify-between gap-4">
+                          <div>
+                            <h3 className="text-sm font-semibold text-black/80 dark:text-white/82">Repository access</h3>
+                            <p className="mt-1 text-sm text-black/48 dark:text-white/48">
+                              Select one repository to connect and monitor its releases.
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={refresh}
+                            disabled={action !== null}
+                            className="inline-flex shrink-0 items-center gap-2 rounded-full border border-black/10 px-3 py-1.5 text-sm font-medium text-black/60 transition hover:bg-black/[0.04] disabled:opacity-50 dark:border-white/12 dark:text-white/65 dark:hover:bg-white/10"
                           >
-                            <input
-                              type="radio"
-                              name="repository"
-                              checked={selectedRepositoryId === repository.externalRepositoryId}
-                              onChange={() => setSelectedRepositoryId(repository.externalRepositoryId)}
-                              disabled={action !== null}
-                            />
-                            <span className="min-w-0 flex-1 truncate font-medium text-black/78 dark:text-white/80">
-                              {repository.displayName}
-                            </span>
-                            {repository.id && (
-                              <RepositoryAccessLabel
-                                repository={repository}
-                                connectionActive={Boolean(activeConnection && !connectionNeedsReconnect)}
-                              />
-                            )}
-                            <a
-                              href={repository.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              aria-label={`Open ${repository.displayName} on GitHub`}
-                              className="text-black/38 hover:text-black/65 dark:text-white/38 dark:hover:text-white/70"
-                              onClick={(event) => event.stopPropagation()}
-                            >
-                              <ExternalLink className="size-3.5" />
-                            </a>
-                          </label>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="mt-5 rounded-[10px] border border-dashed border-black/10 bg-black/[0.015] p-4 text-sm leading-5 text-black/52 dark:border-white/10 dark:bg-white/[0.025] dark:text-white/52">
-                        No repositories are currently granted. Update this GitHub App installation&apos;s repository access, then refresh.
-                      </div>
-                    )}
+                            <RefreshCw className="size-3.5" />
+                            Refresh
+                          </button>
+                        </div>
 
-                    {repositories.length > 0 && selectedRepository && !selectedRepository.id && (
-                      <button
-                        type="button"
-                        onClick={() => { void connectRepository(); }}
-                        disabled={
-                          !activeConnection
-                          || repositoryLoadFailed
-                          || connectionNeedsReconnect
-                          || action !== null
-                        }
-                        className="mt-5 inline-flex items-center gap-2 rounded-full bg-black px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-black"
-                      >
-                        {action === "connect" && <LoaderCircle className="size-4 animate-spin" />}
-                        Connect repository
-                      </button>
-                    )}
+                        {repositories.length > 0 ? (
+                          <div
+                            className="mt-5 max-h-64 space-y-2 overflow-y-auto overscroll-contain pr-1"
+                            role="radiogroup"
+                            aria-label="Allowed GitHub repositories"
+                          >
+                            {repositories.map((repository) => (
+                              <label
+                                key={repository.externalRepositoryId}
+                                className="flex cursor-pointer items-center gap-3 rounded-[10px] border border-black/10 px-4 py-3 text-sm transition hover:bg-black/[0.02] dark:border-white/10 dark:hover:bg-white/5"
+                              >
+                                <input
+                                  type="radio"
+                                  name="repository"
+                                  checked={selectedRepositoryId === repository.externalRepositoryId}
+                                  onChange={() => setSelectedRepositoryId(repository.externalRepositoryId)}
+                                  disabled={action !== null}
+                                />
+                                <span className="min-w-0 flex-1 truncate font-medium text-black/78 dark:text-white/80">
+                                  {repository.displayName}
+                                </span>
+                                {repository.id && (
+                                  <RepositoryAccessLabel
+                                    repository={repository}
+                                    connectionActive={Boolean(activeConnection && !connectionNeedsReconnect)}
+                                  />
+                                )}
+                                <a
+                                  href={repository.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  aria-label={`Open ${repository.displayName} on GitHub`}
+                                  className="text-black/38 hover:text-black/65 dark:text-white/38 dark:hover:text-white/70"
+                                  onClick={(event) => event.stopPropagation()}
+                                >
+                                  <ExternalLink className="size-3.5" />
+                                </a>
+                              </label>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="mt-5 rounded-[10px] border border-dashed border-black/10 bg-black/[0.015] p-4 text-sm leading-5 text-black/52 dark:border-white/10 dark:bg-white/[0.025] dark:text-white/52">
+                            No repositories are currently granted. Update this GitHub App installation&apos;s repository access, then refresh.
+                          </div>
+                        )}
 
-                    {selectedRepository?.id && selectedRepository.status !== "ACTIVE" && (
-                      <RepositoryAccessRecovery
-                        repository={selectedRepository}
-                        busy={accessCheckActionId === selectedRepository.id || action === "install"}
-                        onCheckAgain={() => { void recheckRepositoryAccess(selectedRepository.id!, "CHECK_AGAIN"); }}
-                        onRetry={() => { void recheckRepositoryAccess(selectedRepository.id!, "RETRY"); }}
-                        onReconnect={() => { void installGitHub(); }}
-                      />
-                    )}
+                        {repositories.length > 0 && selectedRepository && !selectedRepository.id && (
+                          <button
+                            type="button"
+                            onClick={() => { void connectRepository(); }}
+                            disabled={!activeConnection || action !== null}
+                            className="mt-5 inline-flex items-center gap-2 rounded-full bg-black px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-black"
+                          >
+                            {action === "connect" && <LoaderCircle className="size-4 animate-spin" />}
+                            Connect repository
+                          </button>
+                        )}
 
-                    {monitoredRepository?.id && latestRelease && (
-                      <LatestRelease
-                        activity={latestRelease}
-                        busy={releaseActionId === latestRelease.id || action === "install"}
-                        onRetry={() => { void retryRelease(latestRelease); }}
-                        onReconnect={() => { void installGitHub(); }}
-                      />
-                    )}
-                    {monitoredRepository?.id && monitoring && (
-                      <RepositoryMonitoring
-                        monitoring={monitoring}
-                        busy={monitoringRetrying || action === "install"}
-                        onRetry={() => { void retryMonitoring(monitoredRepository.id!); }}
-                        onReconnect={() => { void installGitHub(); }}
-                      />
-                    )}
-                    {monitoredRepository?.id && latestReleaseError !== null && latestReleaseError !== undefined && (
-                      <ReleaseActivityLoadError
-                        error={latestReleaseError}
-                        busy={releaseLoadActionId === monitoredRepository.id || action === "install"}
-                        onRetry={() => { void retryReleaseActivityLoad(monitoredRepository.id!); }}
-                        onReconnect={() => { void installGitHub(); }}
-                      />
+                        {selectedRepository?.id && selectedRepository.status !== "ACTIVE" && (
+                          <RepositoryAccessRecovery
+                            repository={selectedRepository}
+                            busy={accessCheckActionId === selectedRepository.id || action === "install"}
+                            onCheckAgain={() => { void recheckRepositoryAccess(selectedRepository.id!, "CHECK_AGAIN"); }}
+                            onRetry={() => { void recheckRepositoryAccess(selectedRepository.id!, "RETRY"); }}
+                            onReconnect={() => { void installGitHub(); }}
+                          />
+                        )}
+
+                        {monitoredRepository?.id && latestRelease && (
+                          <LatestRelease
+                            activity={latestRelease}
+                            busy={releaseActionId === latestRelease.id || action === "install"}
+                            onRetry={() => { void retryRelease(latestRelease); }}
+                            onReconnect={() => { void installGitHub(); }}
+                          />
+                        )}
+                        {monitoredRepository?.id && monitoring && (
+                          <RepositoryMonitoring
+                            monitoring={monitoring}
+                            busy={monitoringRetrying || action === "install"}
+                            onRetry={() => { void retryMonitoring(monitoredRepository.id!); }}
+                            onReconnect={() => { void installGitHub(); }}
+                          />
+                        )}
+                        {monitoredRepository?.id && latestReleaseError !== null && latestReleaseError !== undefined && (
+                          <ReleaseActivityLoadError
+                            error={latestReleaseError}
+                            busy={releaseLoadActionId === monitoredRepository.id || action === "install"}
+                            onRetry={() => { void retryReleaseActivityLoad(monitoredRepository.id!); }}
+                            onReconnect={() => { void installGitHub(); }}
+                          />
+                        )}
+                      </>
                     )}
                   </div>
                 )}

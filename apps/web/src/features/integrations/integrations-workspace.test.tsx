@@ -172,6 +172,7 @@ describe("IntegrationsWorkspace", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("GitHub rate limit reached");
     expect(screen.getByText("Needs attention")).toBeVisible();
     expect(screen.getByRole("button", { name: "Reconnect" })).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "Repository access" })).not.toBeInTheDocument();
     expect(screen.getByText("Technical details").closest("details")).not.toHaveAttribute("open");
     expect(screen.getByText("GitHub request provider-id")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
@@ -182,7 +183,7 @@ describe("IntegrationsWorkspace", () => {
   });
 
   it("offers a stateful reconnect when the stored installation no longer exists", async () => {
-    mocks.listConnections.mockResolvedValue([connection]);
+    mocks.listConnections.mockResolvedValue([{ ...connection, repositories: [repository] }]);
     mocks.listRepositories.mockRejectedValue(
       new PlotApiError(502, "GITHUB_NOT_FOUND", "GitHub resource was not found (request provider-id)"),
     );
@@ -193,12 +194,30 @@ describe("IntegrationsWorkspace", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("previous GitHub installation was replaced or removed");
     expect(screen.getByText("Needs attention")).toBeVisible();
     expect(screen.queryByText(/No repositories are currently granted/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Repository access" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: /acme\/plot/i })).not.toBeInTheDocument();
 
     const reconnect = screen.getByRole("button", { name: "Reconnect GitHub" });
     fireEvent.click(reconnect);
 
     await waitFor(() => expect(mocks.createInstallationRequest).toHaveBeenCalledTimes(1));
     expect(reconnect).toBeDisabled();
+  });
+
+  it("hides stale repository access while stored GitHub authentication is expired", async () => {
+    mocks.listConnections.mockResolvedValue([{
+      ...connection,
+      status: "ERROR",
+      statusReason: "AUTH_EXPIRED",
+      repositories: [{ ...repository, id: "scope-1", status: "ACTIVE" }],
+    }]);
+
+    render(<IntegrationsWorkspace />);
+
+    expect(await screen.findByText(/GitHub authentication expired/i)).toBeVisible();
+    expect(screen.getByRole("button", { name: "Reconnect GitHub" })).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "Repository access" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: /acme\/plot/i })).not.toBeInTheDocument();
   });
 
   it("keeps an uninstalled repository visible and restores it after Check again", async () => {
