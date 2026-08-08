@@ -719,7 +719,7 @@ function ReconnectButton({
       aria-busy={busy}
       className="inline-flex size-8 items-center justify-center rounded-[9px] border border-black/10 text-black/50 transition hover:border-black/20 hover:bg-black/[0.04] hover:text-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:cursor-wait disabled:opacity-50 dark:border-white/12 dark:text-white/55 dark:hover:border-white/25 dark:hover:bg-white/10 dark:hover:text-white/85 dark:focus-visible:ring-white/35"
     >
-      {busy ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" /> : <RefreshCw className="size-3.5" aria-hidden="true" />}
+      {busy ? <LoaderCircle className="size-3.5 translate-y-px animate-spin" aria-hidden="true" /> : <RefreshCw className="size-3.5 translate-y-px" aria-hidden="true" />}
     </button>
   );
 }
