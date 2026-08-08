@@ -432,7 +432,7 @@ export function ProductSidebar({ collapsed = false, theme, onThemeChange, onTogg
               collapsed={collapsed}
               item={item}
               pathname={pathname}
-              active={item.href === "/chat" ? !selectedChatId : undefined}
+              active={item.href === "/chat" ? pathname === "/chat" && !selectedChatId : undefined}
             />
           ))}
         </nav>
