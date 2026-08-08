@@ -12,6 +12,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import {
   Check,
   ChevronDown,
@@ -31,9 +32,18 @@ const productNavItems = [
   { href: "/artifacts", label: "Artifacts", icon: ArtifactsIcon },
 ];
 
-const workspaceSettingsNavItems = [
-  { href: "/settings/general", label: "General", icon: SettingsIcon },
-  { href: "/settings/integrations", label: "Integrations", icon: IntegrationsIcon },
+const workspaceSettingsNavGroups = [
+  {
+    label: "Account",
+    items: [{ href: "/settings/account", label: "Account", icon: AccountIcon }],
+  },
+  {
+    label: "Workspace",
+    items: [
+      { href: "/settings/general", label: "General", icon: SettingsIcon },
+      { href: "/settings/integrations", label: "Integrations", icon: IntegrationsIcon },
+    ],
+  },
 ];
 
 type ProductSidebarProps = {
@@ -59,7 +69,6 @@ type Account = {
 export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: ProductSidebarProps) {
   const pathname = usePathname();
   const settingsMode = pathname === "/settings" || pathname.startsWith("/settings/");
-  const sidebarItems = settingsMode ? workspaceSettingsNavItems : productNavItems;
   const [account, setAccount] = useState<Account | null>(null);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
@@ -200,22 +209,8 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
         </div>
 
         <div ref={workspaceMenuRef} className="relative px-3 pb-4">
-              <div className="mb-2 flex h-7 items-center justify-between pl-0.5">
+              <div className="mb-2 flex h-7 items-center pl-0.5">
                 <div className="text-[11px] font-medium uppercase text-black/35 dark:text-white/35">Workspace</div>
-                <Link
-                  href="/settings/integrations"
-                  aria-label="Workspace settings"
-                  title="Workspace settings"
-                  className="group relative inline-flex size-7 items-center justify-center rounded-[7px] text-black/38 transition hover:bg-black/[0.05] hover:text-black/68 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 dark:text-white/40 dark:hover:bg-white/10 dark:hover:text-white/75 dark:focus-visible:ring-white/30"
-                >
-                  <SettingsIcon />
-                  <span
-                    role="tooltip"
-                    className="pointer-events-none absolute left-full z-50 ml-2.5 hidden whitespace-nowrap rounded-[7px] border border-black/10 bg-white px-2.5 py-1.5 text-[12px] font-medium normal-case text-black/78 opacity-0 shadow-[0_6px_18px_rgb(15_23_42_/_0.1)] transition-opacity group-hover:block group-hover:opacity-100 group-focus-visible:block group-focus-visible:opacity-100 dark:border-white/12 dark:bg-[#292a2f] dark:text-white/85"
-                  >
-                    Workspace settings
-                  </span>
-                </Link>
               </div>
 
               <button
@@ -314,29 +309,18 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
 
         <nav
           className="space-y-1 px-3 pb-4"
-          aria-label={settingsMode ? "Workspace settings navigation" : "Product sidebar navigation"}
+          aria-label={settingsMode ? "Settings navigation" : "Product sidebar navigation"}
         >
-          {sidebarItems.map((item) => {
-            const Icon = item.icon;
-            const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                aria-current={active ? "page" : undefined}
-                className={cn(
-                  "flex h-8 items-center gap-2 rounded-[8px] px-2.5 text-[13px] font-medium transition",
-                  active
-                    ? "bg-white/75 text-[#18181b] shadow-sm shadow-black/[0.03] dark:bg-white/10 dark:text-white"
-                    : "text-black/65 hover:bg-black/5 dark:text-white/65 dark:hover:bg-white/10",
-                )}
-              >
-                <Icon />
-                {item.label}
-              </Link>
-            );
-          })}
+          {settingsMode ? workspaceSettingsNavGroups.map((group) => (
+            <div key={group.label}>
+              <div className="px-2 pb-1 pt-3 text-[11px] font-medium uppercase tracking-[0.08em] text-black/35 dark:text-white/35">
+                {group.label}
+              </div>
+              <div className="space-y-1">
+                {group.items.map((item) => <SidebarNavLink key={item.href} item={item} pathname={pathname} />)}
+              </div>
+            </div>
+          )) : productNavItems.map((item) => <SidebarNavLink key={item.href} item={item} pathname={pathname} />)}
         </nav>
 
         <div className="min-h-0 flex-1" />
@@ -344,6 +328,14 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
         <div ref={profileMenuRef} className="relative border-t border-black/[0.06] px-3 py-3 dark:border-white/10">
           {profileMenuOpen && (
             <div className="absolute bottom-[58px] left-3 right-3 z-50 rounded-[10px] border border-black/[0.08] bg-white p-2 text-[13px] text-black/80 shadow-[0_12px_34px_rgb(15_23_42_/_0.14)] dark:border-white/10 dark:bg-[#2a2b30] dark:text-white/85">
+              <Link
+                href="/settings/account"
+                onClick={() => setProfileMenuOpen(false)}
+                className="flex w-full items-center gap-2 rounded-[8px] px-2 py-2 text-left transition hover:bg-black/[0.04] dark:hover:bg-white/10"
+              >
+                <SettingsIcon />
+                Settings
+              </Link>
               <div className="flex items-center justify-between gap-3 px-2 py-2">
                 <div className="font-medium">Theme</div>
                 <div
@@ -430,6 +422,37 @@ function SettingsIcon() {
       aria-hidden="true"
       className="shrink-0"
     />
+  );
+}
+
+function AccountIcon() {
+  return <UserRound className="size-4 shrink-0" />;
+}
+
+type SidebarNavItem = {
+  href: string;
+  label: string;
+  icon: () => ReactNode;
+};
+
+function SidebarNavLink({ item, pathname }: { item: SidebarNavItem; pathname: string }) {
+  const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+  const Icon = item.icon;
+
+  return (
+    <Link
+      href={item.href}
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        "flex h-8 items-center gap-2 rounded-[8px] px-2.5 text-[13px] font-medium transition",
+        active
+          ? "bg-white/75 text-[#18181b] shadow-sm shadow-black/[0.03] dark:bg-white/10 dark:text-white"
+          : "text-black/65 hover:bg-black/5 dark:text-white/65 dark:hover:bg-white/10",
+      )}
+    >
+      <Icon />
+      {item.label}
+    </Link>
   );
 }
 

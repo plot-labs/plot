@@ -21,7 +21,7 @@ vi.mock("@/lib/api-client", () => ({
 
 import { ProductSidebar } from "./product-sidebar";
 
-describe("Workspace settings navigation", () => {
+describe("Settings navigation", () => {
   beforeEach(() => {
     sidebarMocks.pathname = "/settings/integrations";
     window.localStorage.clear();
@@ -40,7 +40,7 @@ describe("Workspace settings navigation", () => {
 
     const productNavigation = screen.getByRole("navigation", { name: "Product sidebar navigation" });
     expect(within(productNavigation).getByRole("link", { name: "Artifacts" })).toHaveAttribute("aria-current", "page");
-    expect(screen.queryByRole("navigation", { name: "Workspace settings navigation" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "Settings navigation" })).not.toBeInTheDocument();
     expect(await screen.findByRole("button", { name: /Personal/ })).toBeVisible();
   });
 
@@ -50,9 +50,13 @@ describe("Workspace settings navigation", () => {
     expect(screen.getByRole("link", { name: "Back to app" })).toHaveAttribute("href", "/artifacts");
     expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Plot home" })).toHaveAttribute("href", "/artifacts");
+    expect(screen.queryByRole("link", { name: "Workspace settings" })).not.toBeInTheDocument();
     expect(await screen.findByRole("button", { name: /Personal/ })).toBeVisible();
 
-    const settingsNavigation = screen.getByRole("navigation", { name: "Workspace settings navigation" });
+    const settingsNavigation = screen.getByRole("navigation", { name: "Settings navigation" });
+    expect(within(settingsNavigation).getByText("Account", { selector: "div" })).toBeInTheDocument();
+    expect(within(settingsNavigation).getByText("Workspace", { selector: "div" })).toBeInTheDocument();
+    expect(within(settingsNavigation).getByRole("link", { name: "Account" })).toHaveAttribute("href", "/settings/account");
     expect(within(settingsNavigation).getByRole("link", { name: "General" })).toHaveAttribute("href", "/settings/general");
     expect(within(settingsNavigation).getByRole("link", { name: "Integrations" })).toHaveAttribute("href", "/settings/integrations");
     expect(within(settingsNavigation).getByRole("link", { name: "Integrations" })).toHaveAttribute("aria-current", "page");
@@ -62,6 +66,9 @@ describe("Workspace settings navigation", () => {
     expect(screen.queryByRole("link", { name: "Sources" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "New session" })).not.toBeInTheDocument();
     expect(screen.queryByText("Sessions", { selector: "div" })).not.toBeInTheDocument();
+
+    fireEvent.click(await screen.findByRole("button", { name: /Owner.*owner@example.com/ }));
+    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings/account");
   });
 
   it("does not load or render session history", async () => {

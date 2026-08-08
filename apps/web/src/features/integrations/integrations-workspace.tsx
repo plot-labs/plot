@@ -179,7 +179,7 @@ export function IntegrationsWorkspace() {
 
   return (
     <div className="h-full overflow-y-auto bg-[#f4f6f8] px-5 py-8 dark:bg-[#101112] sm:px-8 sm:py-10 lg:px-10">
-      <div className="mx-auto max-w-[980px] pb-16">
+      <div className="mx-auto max-w-[760px] pb-16">
         <header className="max-w-[720px]">
           <h1 className="font-serif text-[32px] font-normal leading-[1.08] tracking-[-0.025em] text-black/90 dark:text-white/92 sm:text-[36px]">
             Integrations
