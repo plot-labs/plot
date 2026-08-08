@@ -64,6 +64,7 @@ describe("Workspace settings navigation", () => {
     render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
 
     const trigger = await screen.findByRole("button", { name: /Personal/ });
+    expect(trigger).toHaveClass("h-9");
     fireEvent.click(trigger);
 
     const option = screen.getByRole("menuitemradio", { name: "Personal workspace" });

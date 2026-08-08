@@ -199,13 +199,13 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
             aria-expanded={workspaceMenuOpen}
             aria-haspopup="menu"
             className={cn(
-              "flex h-10 w-full items-center gap-2 rounded-[8px] border px-2 text-left text-[13px] font-semibold transition",
+              "flex h-9 w-full items-center gap-2 rounded-[8px] border px-2 text-left text-[13px] font-semibold transition",
               workspaceMenuOpen
                 ? "border-black/20 bg-white text-black/82 shadow-sm dark:border-white/16 dark:bg-white/10 dark:text-white"
                 : "border-black/[0.12] bg-white/40 text-black/76 hover:bg-white/65 dark:border-white/12 dark:bg-white/5 dark:text-white/78 dark:hover:bg-white/10",
             )}
           >
-            <span className="flex size-7 shrink-0 items-center justify-center rounded-[8px] bg-[#ef3f2c] font-serif text-[15px] font-semibold leading-none text-white">
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-[7px] bg-[#ef3f2c] font-serif text-[14px] font-semibold leading-none text-white">
               {currentWorkspaceMark}
             </span>
             <span className="min-w-0 flex-1 truncate">{currentWorkspaceName}</span>
@@ -218,7 +218,7 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
           </button>
 
           {workspaceMenuOpen && (
-            <div role="menu" aria-label="Workspace menu" className="absolute left-3 top-[80px] z-50 w-[228px] overflow-hidden rounded-[10px] border border-black/[0.08] bg-white p-1 text-[13px] text-black/76 shadow-[0_10px_28px_rgb(15_23_42_/_0.06)] dark:border-white/10 dark:bg-[#292a2f] dark:text-white/80">
+            <div role="menu" aria-label="Workspace menu" className="absolute left-3 top-[76px] z-50 w-[228px] overflow-hidden rounded-[10px] border border-black/[0.08] bg-white p-1 text-[13px] text-black/76 shadow-[0_10px_28px_rgb(15_23_42_/_0.06)] dark:border-white/10 dark:bg-[#292a2f] dark:text-white/80">
               {workspaceItems.map((workspace) => (
                 <button
                   key={workspace.id}
