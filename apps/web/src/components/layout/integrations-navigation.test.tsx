@@ -44,13 +44,13 @@ describe("Workspace settings navigation", () => {
     expect(await screen.findByRole("button", { name: /Personal/ })).toBeVisible();
   });
 
-  it("uses the existing sidebar for workspace settings navigation", async () => {
+  it("keeps shared workspace context above workspace settings navigation", async () => {
     render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
 
     expect(screen.getByRole("link", { name: "Back to app" })).toHaveAttribute("href", "/artifacts");
     expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Plot home" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Personal/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Plot home" })).toHaveAttribute("href", "/artifacts");
+    expect(await screen.findByRole("button", { name: /Personal/ })).toBeVisible();
 
     const settingsNavigation = screen.getByRole("navigation", { name: "Workspace settings navigation" });
     expect(within(settingsNavigation).getByRole("link", { name: "Integrations" })).toHaveAttribute("href", "/settings/integrations");
@@ -84,8 +84,10 @@ describe("Workspace settings navigation", () => {
     fireEvent.click(trigger);
 
     const option = screen.getByRole("menuitemradio", { name: "Personal workspace" });
-    expect(option).toHaveClass("h-9");
+    expect(screen.getByText("Workspaces")).toBeInTheDocument();
+    expect(option).toHaveClass("h-12");
     expect(option).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("button", { name: "Create workspace" })).toBeDisabled();
     expect(screen.queryByText("OWNER")).not.toBeInTheDocument();
   });
 

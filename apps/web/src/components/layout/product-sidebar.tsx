@@ -19,6 +19,7 @@ import {
   Monitor,
   Moon,
   PanelLeftClose,
+  Plus,
   Sun,
   UserRound,
 } from "lucide-react";
@@ -158,48 +159,28 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
   return (
     <>
       <aside className="hidden h-dvh w-[252px] shrink-0 flex-col border-r border-black/[0.08] bg-[#f6f7f9] pr-px text-[#2f3237] dark:border-white/10 dark:bg-[#202126] dark:text-[#f4f4f5] lg:flex">
-        {settingsMode ? (
-          <div className="px-3 pb-5 pt-5">
-            <Link
-              href={appHomeHref}
-              className="flex h-8 items-center gap-2 rounded-[8px] px-2 text-[13px] font-medium text-black/52 transition hover:bg-black/[0.04] hover:text-black/78 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 dark:text-white/52 dark:hover:bg-white/[0.07] dark:hover:text-white/82 dark:focus-visible:ring-white/25"
-            >
-              <HugeiconsIcon
-                icon={ArrowLeft01Icon}
-                size={16}
-                color="currentColor"
-                strokeWidth={1.5}
-                aria-hidden="true"
-                className="shrink-0"
-              />
-              Back to app
-            </Link>
-
-          </div>
-        ) : (
-          <>
-            <div className="flex items-center gap-2 px-4 pb-4 pt-5">
-              <Link
-                href={appHomeHref}
-                aria-label="Plot home"
-                className="flex min-w-0 flex-1 items-center gap-2"
-              >
-                <Image src="/plot-icon.svg" alt="" width={24} height={24} className="size-6 shrink-0 dark:invert" />
-                <div className="font-display text-[22px] leading-none tracking-normal text-black/85 dark:text-white/90">
-                  Plot
-                </div>
-              </Link>
-              <button
-                type="button"
-                onClick={onToggleSidebar}
-                aria-label="Close sidebar"
-                className="inline-flex size-8 shrink-0 items-center justify-center rounded-[8px] text-black/35 transition hover:bg-black/5 hover:text-black/65 dark:text-white/38 dark:hover:bg-white/10 dark:hover:text-white/70"
-              >
-                <PanelLeftClose className="size-4" />
-              </button>
+        <div className="flex items-center gap-2 px-4 pb-4 pt-5">
+          <Link
+            href={appHomeHref}
+            aria-label="Plot home"
+            className="flex min-w-0 flex-1 items-center gap-2"
+          >
+            <Image src="/plot-icon.svg" alt="" width={24} height={24} className="size-6 shrink-0 dark:invert" />
+            <div className="font-display text-[22px] leading-none tracking-normal text-black/85 dark:text-white/90">
+              Plot
             </div>
+          </Link>
+          <button
+            type="button"
+            onClick={onToggleSidebar}
+            aria-label="Close sidebar"
+            className="inline-flex size-8 shrink-0 items-center justify-center rounded-[8px] text-black/35 transition hover:bg-black/5 hover:text-black/65 dark:text-white/38 dark:hover:bg-white/10 dark:hover:text-white/70"
+          >
+            <PanelLeftClose className="size-4" />
+          </button>
+        </div>
 
-            <div ref={workspaceMenuRef} className="relative px-3 pb-4">
+        <div ref={workspaceMenuRef} className="relative px-3 pb-4">
               <div className="mb-2 flex h-7 items-center justify-between pl-0.5">
                 <div className="text-[11px] font-medium uppercase text-black/35 dark:text-white/35">Workspace</div>
                 <Link
@@ -246,43 +227,81 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
               </button>
 
               {workspaceMenuOpen && (
-                <div role="menu" aria-label="Workspace menu" className="absolute left-3 top-[76px] z-50 w-[228px] overflow-hidden rounded-[10px] border border-black/[0.08] bg-white p-1 text-[13px] text-black/76 shadow-[0_10px_28px_rgb(15_23_42_/_0.06)] dark:border-white/10 dark:bg-[#292a2f] dark:text-white/80">
-                  {workspaceItems.map((workspace) => (
-                    <button
-                      key={workspace.id}
-                      type="button"
-                      role="menuitemradio"
-                      aria-label={`${workspace.name} workspace`}
-                      aria-checked={workspace.selected}
-                      onClick={() => {
-                        window.localStorage.setItem("plot.workspaceId", workspace.id);
-                        setSelectedWorkspaceId(workspace.id);
-                        setWorkspaceMenuOpen(false);
-                        window.location.reload();
-                      }}
-                      className={cn(
-                        "flex h-9 w-full items-center gap-2 rounded-[7px] px-2 text-left font-medium transition hover:bg-black/[0.04] focus-visible:bg-black/[0.04] focus-visible:outline-none dark:hover:bg-white/10 dark:focus-visible:bg-white/10",
-                        workspace.selected && "bg-black/[0.035] text-black/82 dark:bg-white/[0.07] dark:text-white/88",
-                      )}
-                    >
-                      <span
+                <div
+                  role="menu"
+                  aria-label="Workspace menu"
+                  className="absolute left-3 top-[76px] z-50 w-[228px] overflow-hidden rounded-[12px] border border-black/[0.08] bg-white text-[13px] text-black/76 shadow-[0_12px_30px_rgb(15_23_42_/_0.1)] dark:border-white/10 dark:bg-[#292a2f] dark:text-white/80"
+                >
+                  <div className="border-b border-black/[0.08] px-3 pb-2 pt-3 text-[13px] font-medium text-black/45 dark:border-white/10 dark:text-white/45">
+                    Workspaces
+                  </div>
+                  <div className="p-1.5">
+                    {workspaceItems.map((workspace) => (
+                      <button
+                        key={workspace.id}
+                        type="button"
+                        role="menuitemradio"
+                        aria-label={`${workspace.name} workspace`}
+                        aria-checked={workspace.selected}
+                        onClick={() => {
+                          window.localStorage.setItem("plot.workspaceId", workspace.id);
+                          setSelectedWorkspaceId(workspace.id);
+                          setWorkspaceMenuOpen(false);
+                          window.location.reload();
+                        }}
                         className={cn(
-                          "flex size-6 shrink-0 items-center justify-center rounded-[6px] font-serif text-[12px] font-semibold leading-none",
-                          workspace.selected
-                            ? "bg-[#ef3f2c] text-white"
-                            : "bg-black/[0.06] text-black/48 dark:bg-white/10 dark:text-white/52",
+                          "flex h-12 w-full items-center gap-3 rounded-[8px] px-2 text-left font-medium transition hover:bg-black/[0.04] focus-visible:bg-black/[0.04] focus-visible:outline-none dark:hover:bg-white/10 dark:focus-visible:bg-white/10",
+                          workspace.selected && "bg-black/[0.035] text-black/82 dark:bg-white/[0.07] dark:text-white/88",
                         )}
                       >
-                        {workspace.mark}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate">{workspace.name}</span>
-                      {workspace.selected && <Check className="size-3.5 shrink-0 text-black/45 dark:text-white/52" />}
+                        <span
+                          className={cn(
+                            "flex size-9 shrink-0 items-center justify-center rounded-[9px] font-serif text-[16px] font-semibold leading-none",
+                            workspace.selected
+                              ? "bg-[#ef3f2c] text-white"
+                              : "bg-black/[0.06] text-black/48 dark:bg-white/10 dark:text-white/52",
+                          )}
+                        >
+                          {workspace.mark}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-[15px]">{workspace.name}</span>
+                        {workspace.selected && <Check className="size-4 shrink-0 text-black/55 dark:text-white/60" />}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="border-t border-black/[0.08] p-1.5 dark:border-white/10">
+                    <button
+                      type="button"
+                      disabled
+                      aria-label="Create workspace"
+                      title="Workspace creation coming soon"
+                      className="flex h-11 w-full items-center gap-3 rounded-[8px] px-2 text-left text-[15px] font-medium text-black/40 dark:text-white/40"
+                    >
+                      <Plus className="size-5 shrink-0" />
+                      Create workspace
                     </button>
-                  ))}
+                  </div>
                 </div>
               )}
-            </div>
-          </>
+        </div>
+
+        {settingsMode && (
+          <div className="px-3 pb-4">
+            <Link
+              href={appHomeHref}
+              className="flex h-8 items-center gap-2 rounded-[8px] px-2 text-[13px] font-medium text-black/52 transition hover:bg-black/[0.04] hover:text-black/78 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 dark:text-white/52 dark:hover:bg-white/[0.07] dark:hover:text-white/82 dark:focus-visible:ring-white/25"
+            >
+              <HugeiconsIcon
+                icon={ArrowLeft01Icon}
+                size={16}
+                color="currentColor"
+                strokeWidth={1.5}
+                aria-hidden="true"
+                className="shrink-0"
+              />
+              Back to app
+            </Link>
+          </div>
         )}
 
         <nav
