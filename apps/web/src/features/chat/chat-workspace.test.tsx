@@ -69,10 +69,11 @@ describe("ChatWorkspace", () => {
     Object.defineProperty(window, "location", { configurable: true, value: { ...window.location, assign: mocks.locationAssign } });
   });
 
-  it("shows only actual chats and the empty state", async () => {
+  it("keeps the chat home focused on starting a request", async () => {
     render(<ChatWorkspace />);
-    expect(await screen.findByText("No chats yet. Start with a source-backed request.")).toBeVisible();
-    expect(screen.queryByText("July changelog")).not.toBeInTheDocument();
+    await screen.findByRole("button", { name: "Start generation" });
+    expect(screen.getByRole("button", { name: "Start generation" })).toBeVisible();
+    expect(screen.queryByText("No chats yet. Start with a source-backed request.")).not.toBeInTheDocument();
   });
 
   it("creates a chat-owned generation without browser pointer repair", async () => {

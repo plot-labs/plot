@@ -14,6 +14,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
+import type { WorkSessionSummary as ChatSummary } from "@plot/api-client";
 import {
   Check,
   ChevronDown,
@@ -76,6 +77,7 @@ export function ProductSidebar({ collapsed = false, theme, onThemeChange, onTogg
   const settingsMode = pathname === "/settings" || pathname.startsWith("/settings/");
   const [account, setAccount] = useState<Account | null>(null);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
+  const [recentChats, setRecentChats] = useState<ChatSummary[]>([]);
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const [creatingWorkspace, setCreatingWorkspace] = useState(false);
   const [workspaceName, setWorkspaceName] = useState("");
@@ -102,6 +104,18 @@ export function ProductSidebar({ collapsed = false, theme, onThemeChange, onTogg
       .catch(() => undefined);
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    if (settingsMode || !selectedWorkspaceId) return;
+
+    const controller = new AbortController();
+    void plotApiClient.listSessions({ signal: controller.signal })
+      .then((value) => {
+        if (!controller.signal.aborted) setRecentChats(value.slice(0, 8));
+      })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [settingsMode, selectedWorkspaceId]);
 
   const currentWorkspace = account?.workspaces.find((item) => item.id === selectedWorkspaceId)
     ?? account?.workspaces.find((item) => item.id === account.defaultWorkspaceId)
@@ -413,7 +427,40 @@ export function ProductSidebar({ collapsed = false, theme, onThemeChange, onTogg
           )) : productNavItems.map((item) => <SidebarNavLink key={item.href} collapsed={collapsed} item={item} pathname={pathname} />)}
         </nav>
 
-        <div className="min-h-0 flex-1" />
+        {!settingsMode && recentChats.length ? (
+          <div className={cn("min-h-0 flex-1 overflow-y-auto", collapsed ? "px-2" : "px-3")}>
+            <div className={cn(
+              "px-2 pb-1 pt-2 text-[11px] font-medium uppercase tracking-[0.08em] text-black/35 dark:text-white/35",
+              collapsed && "sr-only",
+            )}>
+              History
+            </div>
+            <div className="space-y-1">
+              {recentChats.map((chat) => (
+                <Link
+                  key={chat.id}
+                  href={`/chat?chat=${encodeURIComponent(chat.id)}`}
+                  title={chat.title || "Untitled chat"}
+                  className={cn(
+                    "flex h-8 w-full items-center gap-2 rounded-[8px] text-left text-[13px] transition",
+                    collapsed ? "mx-auto w-9 justify-center px-0" : "px-2.5",
+                    "text-black/55 hover:bg-black/[0.04] hover:text-black/80 dark:text-white/55 dark:hover:bg-white/[0.08] dark:hover:text-white/85",
+                  )}
+                >
+                  <HugeiconsIcon
+                    icon={MessageMultiple01Icon}
+                    size={14}
+                    color="currentColor"
+                    strokeWidth={1.5}
+                    aria-hidden="true"
+                    className="shrink-0"
+                  />
+                  <span className={cn("min-w-0 flex-1 truncate", collapsed && "sr-only")}>{chat.title || "Untitled chat"}</span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        ) : <div className="min-h-0 flex-1" />}
 
         <div ref={profileMenuRef} className={cn(
           "relative border-t border-black/[0.06] py-3 dark:border-white/10",
