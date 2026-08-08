@@ -1,11 +1,15 @@
 package com.plot.api.workspace
 
 import com.plot.api.common.ApiException
+import com.plot.api.common.UuidGenerator
 import com.plot.api.auth.RequestActorResolver
 import com.plot.api.dev.DevContext
+import com.plot.api.entitlement.TrialPolicy
 import com.plot.api.entitlement.WorkspaceEntitlementReader
+import com.plot.api.workspace.dto.CreateWorkspaceRequest
 import com.plot.api.workspace.dto.WorkspaceResponse
 import com.plot.api.workspace.dto.UpdateWorkspaceRequest
+import java.time.Instant
 import java.util.UUID
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
@@ -17,8 +21,39 @@ class WorkspaceService(
 	private val workspaceRepository: WorkspaceRepository,
 	private val memberRepository: WorkspaceMemberRepository,
 	private val entitlementReader: WorkspaceEntitlementReader,
+	private val uuidGenerator: UuidGenerator,
 	private val actorResolver: RequestActorResolver? = null,
 ) {
+
+	@Transactional
+	fun create(request: CreateWorkspaceRequest): WorkspaceResponse {
+		val actor = actorResolver?.current()
+		val userId = actor?.userId ?: devContext.devUserId
+		val now = Instant.now()
+		val workspaceId = uuidGenerator.next()
+		val workspace = workspaceRepository.saveAndFlush(Workspace(
+			id = workspaceId,
+			name = request.name.trim(),
+			slug = "workspace-${workspaceId.toString().take(8)}",
+			createdByUserId = userId,
+			status = "ACTIVE",
+			createdAt = now,
+			updatedAt = now,
+			trialStartedAt = now,
+			trialEndsAt = now.plus(TrialPolicy.DURATION),
+		))
+		memberRepository.saveAndFlush(WorkspaceMember(
+			id = uuidGenerator.next(),
+			workspaceId = workspace.id,
+			userId = userId,
+			role = "OWNER",
+			status = "ACTIVE",
+			joinedAt = now,
+			createdAt = now,
+			updatedAt = now,
+		))
+		return workspace.toResponse(entitlementReader.resolve(workspace), "OWNER")
+	}
 
 	@Transactional(readOnly = true)
 	fun get(id: UUID): WorkspaceResponse {

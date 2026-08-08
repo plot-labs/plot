@@ -11,21 +11,26 @@ import { getSelectedWorkspaceId, plotApiClient, type WorkspaceSummary } from "@/
 const maxLogoBytes = 400_000;
 
 export function WorkspaceGeneral() {
-  const workspaceId = getSelectedWorkspaceId();
   const [workspace, setWorkspace] = useState<WorkspaceSummary | null>(null);
   const [name, setName] = useState("");
   const [savedName, setSavedName] = useState("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [savedLogoUrl, setSavedLogoUrl] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(() => Boolean(workspaceId));
+  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(() => workspaceId ? null : "Select a workspace to edit its settings.");
+  const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let cancelled = false;
+    const workspaceId = getSelectedWorkspaceId();
     if (!workspaceId) {
+      queueMicrotask(() => {
+        if (cancelled) return;
+        setError("Select a workspace to edit its settings.");
+        setIsLoading(false);
+      });
       return () => { cancelled = true; };
     }
 
@@ -47,7 +52,7 @@ export function WorkspaceGeneral() {
       });
 
     return () => { cancelled = true; };
-  }, [workspaceId]);
+  }, []);
 
   const dirty = name.trim() !== savedName || logoUrl !== savedLogoUrl;
   const canEdit = workspace?.role === "OWNER";

@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const sidebarMocks = vi.hoisted(() => ({
   listSessions: vi.fn(),
+  createWorkspace: vi.fn(),
   pathname: "/settings/integrations",
 }));
 
@@ -16,7 +17,7 @@ vi.mock("@/lib/api-client", () => ({
   getProductShellData: () => ({
     workspace: { id: "workspace-1", name: "Personal" },
   }),
-  plotApiClient: { listSessions: sidebarMocks.listSessions },
+  plotApiClient: { listSessions: sidebarMocks.listSessions, createWorkspace: sidebarMocks.createWorkspace },
 }));
 
 import { ProductSidebar } from "./product-sidebar";
@@ -27,6 +28,7 @@ describe("Settings navigation", () => {
     window.localStorage.clear();
     sidebarMocks.listSessions.mockReset();
     sidebarMocks.listSessions.mockResolvedValue([]);
+    sidebarMocks.createWorkspace.mockReset();
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({
       user: { id: "user-1", email: "owner@example.com", displayName: "Owner" },
       workspaces: [{ id: "workspace-1", name: "Personal", slug: "personal", role: "OWNER" }],
@@ -95,7 +97,11 @@ describe("Settings navigation", () => {
     expect(screen.getByText("Workspaces")).toBeInTheDocument();
     expect(option).toHaveClass("h-9");
     expect(option).toHaveAttribute("aria-checked", "true");
-    expect(screen.getByRole("button", { name: "Create workspace" })).toBeDisabled();
+    const createButton = screen.getByRole("button", { name: "Create workspace" });
+    expect(createButton).toBeEnabled();
+    fireEvent.click(createButton);
+    expect(screen.getByRole("dialog", { name: "Create workspace" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Workspace name" })).toBeInTheDocument();
     expect(screen.queryByText("OWNER")).not.toBeInTheDocument();
   });
 

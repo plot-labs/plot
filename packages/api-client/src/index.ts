@@ -371,6 +371,7 @@ export interface PlotApiClient {
   importGitHubRepository(sourceScopeId: string, input: { from: string; to: string }, options?: RequestOptions): Promise<GitHubImport>;
   getGitHubReleaseActivity(sourceScopeId: string, options?: RequestOptions): Promise<GitHubReleaseActivity | null>;
   retryGitHubReleaseDraft(sourceScopeId: string, requestId: string, options?: RequestOptions): Promise<GitHubReleaseActivity>;
+  createWorkspace(input: { name: string }, options?: RequestOptions): Promise<WorkspaceSummary>;
   getWorkspace(id: string, options?: RequestOptions): Promise<WorkspaceSummary>;
   updateWorkspace(id: string, input: { name?: string; logoUrl?: string }, options?: RequestOptions): Promise<WorkspaceSummary>;
   listSessions(options?: RequestOptions): Promise<WorkSessionSummary[]>;
@@ -463,6 +464,11 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
       `/github/repositories/${encodeURIComponent(sourceScopeId)}/release-activity/${encodeURIComponent(requestId)}/retry`,
       { method: "POST", signal: requestOptions?.signal },
     ),
+    createWorkspace: (input, requestOptions) => request("/workspaces", {
+      method: "POST",
+      body: JSON.stringify(input),
+      signal: requestOptions?.signal,
+    }),
     getWorkspace: (id, requestOptions) => request(`/workspaces/${encodeURIComponent(id)}`, { signal: requestOptions?.signal }),
     updateWorkspace: (id, input, requestOptions) => request(`/workspaces/${encodeURIComponent(id)}`, {
       method: "PATCH",
