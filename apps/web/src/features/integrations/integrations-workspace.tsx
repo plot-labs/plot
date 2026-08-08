@@ -1,7 +1,13 @@
 "use client";
 
-import { ExternalLink, LoaderCircle, RefreshCw, Search, X } from "lucide-react";
-import Link from "next/link";
+import { LoaderCircle } from "lucide-react";
+import {
+  Cancel01Icon,
+  Link01Icon,
+  Search01Icon,
+  Unlink04Icon,
+} from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
@@ -10,43 +16,34 @@ import {
   plotApiClient,
   PlotApiError,
   type GitHubConnection,
-  type GitHubAccessCheckTrigger,
-  type GitHubReleaseActivity,
-  type GitHubRepository,
-  type GitHubRepositoryMonitoring,
 } from "@/lib/api-client";
 
-type IntegrationAction = "install" | "connect" | null;
+type IntegrationAction = "install" | "disconnect" | null;
 
 type IntegrationBrand = "figma" | "github" | "linear" | "notion" | "slack";
 
 const plannedIntegrations: Array<{
   brand: Exclude<IntegrationBrand, "github">;
-  category: string;
   description: string;
   name: string;
 }> = [
   {
     brand: "linear",
-    category: "Planning",
     description: "Bring product decisions, issue context, and project momentum into Plot.",
     name: "Linear",
   },
   {
     brand: "slack",
-    category: "Collaboration",
     description: "Turn important team conversations into durable source material.",
     name: "Slack",
   },
   {
     brand: "notion",
-    category: "Knowledge",
     description: "Reference the documents and decisions your workspace already maintains.",
     name: "Notion",
   },
   {
     brand: "figma",
-    category: "Design",
     description: "Keep design context close to the artifacts it helped shape.",
     name: "Figma",
   },
@@ -59,90 +56,44 @@ export function IntegrationsWorkspace() {
   const callbackError = searchParams.get("githubError");
   const [preferredConnectionId] = useState(callbackConnectionId);
   const [connections, setConnections] = useState<GitHubConnection[]>([]);
-  const [repositories, setRepositories] = useState<GitHubRepository[]>([]);
-  const [selectedRepositoryId, setSelectedRepositoryId] = useState<number | null>(null);
   const [isOwner, setIsOwner] = useState<boolean | null>(null);
   const [connectionNeedsReconnect, setConnectionNeedsReconnect] = useState(false);
-  const [repositoryLoadFailed, setRepositoryLoadFailed] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [action, setAction] = useState<IntegrationAction>(null);
   const actionRef = useRef<IntegrationAction>(null);
   const [message, setMessage] = useState<string | null>(callbackError ? callbackMessage(callbackError) : null);
   const [messageRequestId, setMessageRequestId] = useState<string | null>(null);
-  const [monitoring, setMonitoring] = useState<GitHubRepositoryMonitoring | null>(null);
-  const [monitoringRetrying, setMonitoringRetrying] = useState(false);
-  const [monitoringReloadNonce, setMonitoringReloadNonce] = useState(0);
-  const [releaseActivity, setReleaseActivity] = useState<GitHubReleaseActivity | null>(null);
-  const [releaseActivityError, setReleaseActivityError] = useState<{
-    sourceScopeId: string;
-    error: unknown;
-  } | null>(null);
-  const [releaseActionId, setReleaseActionId] = useState<string | null>(null);
-  const releaseActionRef = useRef<string | null>(null);
-  const [releaseLoadActionId, setReleaseLoadActionId] = useState<string | null>(null);
-  const releaseLoadActionRef = useRef<string | null>(null);
   const [reloadNonce, setReloadNonce] = useState(0);
-  const [accessCheckActionId, setAccessCheckActionId] = useState<string | null>(null);
-  const accessCheckActionRef = useRef<string | null>(null);
-  const [accessCheckReloadNonce, setAccessCheckReloadNonce] = useState(0);
   const [integrationQuery, setIntegrationQuery] = useState("");
 
   const selectedConnection = connections.find((connection) => connection.id === preferredConnectionId)
     ?? connections.find((connection) => connection.status === "ACTIVE")
     ?? connections[0]
     ?? null;
-  const activeConnection = selectedConnection?.status === "ACTIVE" ? selectedConnection : null;
-  const selectedRepository = repositories.find(
-    (repository) => repository.externalRepositoryId === selectedRepositoryId,
-  ) ?? null;
-  const hasInactiveConnection = connections.some((connection) => connection.status !== "ACTIVE");
-  const hasInactiveRepository = repositories.some((repository) => repository.id && repository.status !== "ACTIVE");
-  const selectedRepositoryDisconnected = selectedRepository?.statusReason === "REPOSITORY_DELETED";
-  const repositoryAccessAvailable = !connectionNeedsReconnect
-    && !repositoryLoadFailed
-    && (selectedConnection?.status === "ACTIVE"
-      || selectedConnection?.statusReason === "INSTALLATION_UNINSTALLED");
-  const showStatusMessage = Boolean(message && !connectionNeedsReconnect);
-  const showGitHubDetails = isLoading
-    || isOwner === null
-    || !isOwner
-    || !selectedConnection
-    || (connectionNeedsReconnect && repositories.length === 0)
-    || showStatusMessage
-    || repositoryAccessAvailable;
-  const pendingAccessCheckId = repositories.find((repository) =>
-    repository.id && (repository.accessCheckStatus === "QUEUED" || repository.accessCheckStatus === "CHECKING"),
-  )?.id ?? null;
+  const selectedRepository = selectedConnection?.repositories.find((repository) => Boolean(repository.id)) ?? null;
+  const selectedRepositoryDisconnected = selectedRepository?.statusReason === "REPOSITORY_DELETED"
+    || selectedRepository?.statusReason === "USER_DISCONNECTED";
+  const connectedRepository = selectedRepository?.status === "ACTIVE" ? selectedRepository : null;
   const connectionBadgeStatus: "connected" | "attention" | "disconnected" = !selectedConnection
     || selectedConnection.status === "DISABLED"
     || selectedConnection.statusReason === "INSTALLATION_UNINSTALLED"
-    || selectedRepositoryDisconnected
     ? "disconnected"
-    : selectedConnection.status !== "ACTIVE" || repositoryLoadFailed || connectionNeedsReconnect || hasInactiveRepository
+    : selectedConnection.status !== "ACTIVE" || connectionNeedsReconnect
       ? "attention"
+      : selectedRepositoryDisconnected
+        ? "disconnected"
       : "connected";
-  const monitoredRepository = activeConnection && !connectionNeedsReconnect
-    ? selectedRepositoryId === null
-      ? repositories.find((repository) => repository.id && repository.status === "ACTIVE") ?? null
-      : selectedRepository?.status === "ACTIVE" ? selectedRepository : null
-    : null;
-  const latestRelease = monitoredRepository?.id === releaseActivity?.sourceScopeId ? releaseActivity : null;
-  const latestReleaseError = releaseActivityError &&
-    monitoredRepository?.id === releaseActivityError.sourceScopeId
-    ? releaseActivityError.error
-    : null;
   const normalizedIntegrationQuery = integrationQuery.trim().toLowerCase();
-  const githubMatchesQuery = ["github", "engineering", "repository", "release", "changelog"]
+  const githubMatchesQuery = ["github", "repository", "release", "changelog"]
     .some((term) => term.includes(normalizedIntegrationQuery));
   const matchingPlannedIntegrations = plannedIntegrations.filter((integration) => (
-    [integration.name, integration.category, integration.description]
+    [integration.name, integration.description]
       .some((term) => term.toLowerCase().includes(normalizedIntegrationQuery))
   ));
 
   const refresh = () => {
     setMessage(null);
     setMessageRequestId(null);
-    setRepositoryLoadFailed(false);
     setIsLoading(true);
     setReloadNonce((value) => value + 1);
   };
@@ -162,35 +113,9 @@ export function IntegrationsWorkspace() {
         if (cancelled) return;
 
         const owner = workspace.role === "OWNER";
-        const preferredConnection = nextConnections.find((connection) => connection.id === preferredConnectionId)
-          ?? nextConnections.find((connection) => connection.status === "ACTIVE")
-          ?? nextConnections[0]
-          ?? null;
         setIsOwner(owner);
         setConnections(nextConnections);
-        setRepositories(preferredConnection?.repositories ?? []);
-        setMonitoring(null);
-        setReleaseActivity(null);
-        setReleaseActivityError(null);
         setConnectionNeedsReconnect(false);
-        setRepositoryLoadFailed(false);
-
-        if (owner && preferredConnection?.status === "ACTIVE") {
-          try {
-            const nextRepositories = await plotApiClient.listGitHubRepositories(preferredConnection.id);
-            if (cancelled) return;
-            setRepositories(nextRepositories);
-            setSelectedRepositoryId((current) => (
-              nextRepositories.some((repository) => repository.externalRepositoryId === current) ? current : null
-            ));
-          } catch (error) {
-            if (cancelled) return;
-            setConnectionNeedsReconnect(requiresReconnect(error));
-            setRepositoryLoadFailed(true);
-            setMessage(errorMessage(error));
-            setMessageRequestId(providerRequestId(error));
-          }
-        }
       } catch (error) {
         if (!cancelled) {
           setConnectionNeedsReconnect(requiresReconnect(error));
@@ -204,68 +129,11 @@ export function IntegrationsWorkspace() {
 
     queueMicrotask(() => { void load(); });
     return () => { cancelled = true; };
-  }, [preferredConnectionId, reloadNonce, accessCheckReloadNonce]);
-
-  useEffect(() => {
-    if (!pendingAccessCheckId) return;
-    const timer = setTimeout(() => setAccessCheckReloadNonce((value) => value + 1), 2000);
-    return () => clearTimeout(timer);
-  }, [pendingAccessCheckId]);
+  }, [preferredConnectionId, reloadNonce]);
 
   useEffect(() => {
     if (callbackConnectionId || callbackError) router.replace("/settings/integrations");
   }, [callbackConnectionId, callbackError, router]);
-
-  useEffect(() => {
-    const sourceScopeId = monitoredRepository?.id;
-    let cancelled = false;
-
-    queueMicrotask(() => {
-      if (cancelled) return;
-      setReleaseActivity(null);
-      setReleaseActivityError(null);
-      if (!sourceScopeId) return;
-
-      void plotApiClient.getGitHubReleaseActivity(sourceScopeId)
-        .then((activity) => {
-          if (!cancelled) setReleaseActivity(activity);
-        })
-        .catch((error: unknown) => {
-          if (!cancelled) setReleaseActivityError({ sourceScopeId, error });
-        });
-    });
-    return () => { cancelled = true; };
-  }, [monitoredRepository?.id]);
-
-  useEffect(() => {
-    const sourceScopeId = monitoredRepository?.id;
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-
-    if (!sourceScopeId) return () => { cancelled = true; };
-
-    const load = async () => {
-      try {
-        const next = await plotApiClient.getGitHubRepositoryMonitoring(sourceScopeId);
-        if (cancelled) return;
-        setMonitoring(next);
-        if (next.analysisStatus === "QUEUED" || next.analysisStatus === "ANALYZING") {
-          timer = setTimeout(() => { void load(); }, 3000);
-        }
-      } catch (error) {
-        if (!cancelled && requiresReconnect(error)) setConnectionNeedsReconnect(true);
-      }
-    };
-    queueMicrotask(() => {
-      if (cancelled) return;
-      setMonitoring(monitoredRepository.monitoring);
-      void load();
-    });
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-    };
-  }, [monitoredRepository?.id, monitoredRepository?.monitoring, monitoringReloadNonce]);
 
   const installGitHub = async () => {
     if (actionRef.current) return;
@@ -284,112 +152,45 @@ export function IntegrationsWorkspace() {
     }
   };
 
-  const connectRepository = async () => {
-    if (!activeConnection || !selectedRepository || selectedRepository.id || actionRef.current) return;
-    actionRef.current = "connect";
-    setAction("connect");
+  const disconnectRepository = async () => {
+    if (!connectedRepository?.id || actionRef.current) return;
+    actionRef.current = "disconnect";
+    setAction("disconnect");
     setMessage(null);
     setMessageRequestId(null);
     try {
-      const connected = await plotApiClient.connectGitHubRepository(
-        activeConnection.id,
-        selectedRepository.externalRepositoryId,
-      );
-      setRepositories((current) => current.map((repository) => (
-        repository.externalRepositoryId === connected.externalRepositoryId ? connected : repository
-      )));
+      await plotApiClient.disconnectGitHubRepository(connectedRepository.id);
+      setConnections((current) => current.map((connection) => connection.id === selectedConnection?.id
+        ? {
+          ...connection,
+          repositories: connection.repositories.map((repository) => repository.id === connectedRepository.id
+            ? { ...repository, status: "DISABLED", statusReason: "USER_DISCONNECTED" }
+            : repository),
+        }
+        : connection));
     } catch (error) {
       setMessage(errorMessage(error));
+      setMessageRequestId(providerRequestId(error));
     } finally {
       actionRef.current = null;
       setAction(null);
     }
   };
 
-  const retryRelease = async (activity: GitHubReleaseActivity) => {
-    if (releaseActionRef.current) return;
-    releaseActionRef.current = activity.id;
-    setReleaseActionId(activity.id);
-    setMessage(null);
-    setMessageRequestId(null);
-    try {
-      const next = await plotApiClient.retryGitHubReleaseDraft(activity.sourceScopeId, activity.id);
-      setReleaseActivity(next);
-    } catch (error) {
-      setMessage(errorMessage(error));
-    } finally {
-      releaseActionRef.current = null;
-      setReleaseActionId(null);
-    }
-  };
-
-  const retryReleaseActivityLoad = async (sourceScopeId: string) => {
-    if (releaseLoadActionRef.current) return;
-    releaseLoadActionRef.current = sourceScopeId;
-    setReleaseLoadActionId(sourceScopeId);
-    setReleaseActivityError(null);
-    try {
-      const activity = await plotApiClient.getGitHubReleaseActivity(sourceScopeId);
-      setReleaseActivity(activity);
-    } catch (error) {
-      setReleaseActivityError({ sourceScopeId, error });
-    } finally {
-      releaseLoadActionRef.current = null;
-      setReleaseLoadActionId(null);
-    }
-  };
-
-  const retryMonitoring = async (sourceScopeId: string) => {
-    if (monitoringRetrying) return;
-    setMonitoringRetrying(true);
-    try {
-      setMonitoring(await plotApiClient.retryGitHubRepositoryMonitoring(sourceScopeId));
-      setMonitoringReloadNonce((value) => value + 1);
-    } catch (error) {
-      if (requiresReconnect(error)) setConnectionNeedsReconnect(true);
-      setMessage(errorMessage(error));
-    } finally {
-      setMonitoringRetrying(false);
-    }
-  };
-
-  const recheckRepositoryAccess = async (sourceScopeId: string, trigger: GitHubAccessCheckTrigger) => {
-    if (accessCheckActionRef.current) return;
-    accessCheckActionRef.current = sourceScopeId;
-    setAccessCheckActionId(sourceScopeId);
-    setMessage(null);
-    setMessageRequestId(null);
-    try {
-      const check = await plotApiClient.recheckGitHubRepositoryAccess(sourceScopeId, trigger);
-      setRepositories((current) => current.map((repository) => (
-        repository.id === sourceScopeId
-          ? { ...repository, accessCheckStatus: check.status }
-          : repository
-      )));
-      setAccessCheckReloadNonce((value) => value + 1);
-    } catch (error) {
-      setMessage(errorMessage(error));
-      setMessageRequestId(providerRequestId(error));
-    } finally {
-      accessCheckActionRef.current = null;
-      setAccessCheckActionId(null);
-    }
-  };
-
   return (
-    <div className="h-full overflow-y-auto bg-[#f7f8fa] px-5 py-9 dark:bg-[#111113] sm:px-8 sm:py-10 lg:px-10">
-      <div className="mx-auto max-w-[1040px] pb-16">
-        <header className="max-w-[680px]">
-          <h1 className="font-serif text-[36px] font-normal leading-[1.08] tracking-[-0.02em] text-black/90 dark:text-white/92 sm:text-[40px]">
+    <div className="h-full overflow-y-auto bg-[#f4f6f8] px-5 py-8 dark:bg-[#101112] sm:px-8 sm:py-10 lg:px-10">
+      <div className="mx-auto max-w-[980px] pb-16">
+        <header className="max-w-[720px]">
+          <h1 className="font-serif text-[32px] font-normal leading-[1.08] tracking-[-0.025em] text-black/90 dark:text-white/92 sm:text-[36px]">
             Integrations
           </h1>
-          <p className="mt-3 text-[15px] leading-6 text-black/52 dark:text-white/50">
-            Connect the tools where product work happens. Plot turns their activity into source material for review-ready artifacts.
+          <p className="mt-2 max-w-[620px] text-[14px] leading-6 text-black/52 dark:text-white/50">
+            Connect the tools that feed Plot with the context behind your product work.
           </p>
         </header>
 
-        <label className="mt-8 flex h-11 max-w-[560px] items-center gap-3 rounded-[11px] border border-black/10 bg-white px-3.5 shadow-[0_1px_1px_rgb(15_23_42_/_0.02)] transition focus-within:border-black/25 focus-within:ring-2 focus-within:ring-black/[0.04] dark:border-white/10 dark:bg-white/[0.05] dark:focus-within:border-white/25">
-          <Search className="size-4 shrink-0 text-black/35 dark:text-white/35" aria-hidden="true" />
+        <label className="mt-7 flex h-11 max-w-[720px] items-center gap-3 rounded-[10px] border border-black/10 bg-white px-3.5 shadow-[0_1px_2px_rgb(15_23_42_/_0.025)] transition focus-within:border-black/25 focus-within:ring-2 focus-within:ring-black/[0.04] dark:border-white/10 dark:bg-white/[0.045] dark:focus-within:border-white/25">
+          <HugeiconsIcon icon={Search01Icon} size={17} color="currentColor" strokeWidth={1.5} className="shrink-0 text-black/35 dark:text-white/35" aria-hidden="true" />
           <span className="sr-only">Search integrations</span>
           <input
             type="search"
@@ -405,234 +206,101 @@ export function IntegrationsWorkspace() {
               aria-label="Clear integration search"
               className="rounded-md p-1 text-black/35 transition hover:bg-black/[0.05] hover:text-black/65 dark:text-white/35 dark:hover:bg-white/10 dark:hover:text-white/70"
             >
-              <X className="size-3.5" />
+              <HugeiconsIcon icon={Cancel01Icon} size={15} color="currentColor" strokeWidth={1.5} aria-hidden="true" />
             </button>
           )}
         </label>
 
         {githubMatchesQuery && (
-          <section className="mt-12" aria-labelledby="available-now-heading">
+          <section className="mt-8" aria-labelledby="essentials-heading">
             <SectionHeading
-              id="available-now-heading"
-              title="Available now"
-              description={selectedConnection ? "Configured for this workspace" : "Ready to connect"}
+              id="essentials-heading"
+              title="Available integrations"
+              description={connectionBadgeStatus === "connected" ? "Configured for this workspace" : "Ready to connect"}
             />
 
-            <div className="mt-4 overflow-hidden rounded-[16px] border border-black/[0.09] bg-white shadow-[0_1px_2px_rgb(15_23_42_/_0.025)] dark:border-white/10 dark:bg-white/[0.04]">
-              <div className="flex items-center gap-4 px-5 py-5 sm:px-6">
-                <BrandIcon brand="github" />
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                    <h2 className="text-[16px] font-semibold tracking-[-0.01em] text-black/85 dark:text-white/88">
-                      GitHub
-                    </h2>
-                    <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-black/38 dark:text-white/38">
-                      Engineering
-                    </span>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <article className="min-h-[160px] rounded-[14px] border border-black/[0.09] bg-white p-4 shadow-[0_1px_2px_rgb(15_23_42_/_0.025)] transition duration-200 hover:-translate-y-0.5 hover:border-black/[0.16] hover:shadow-[0_8px_24px_rgb(15_23_42_/_0.06)] dark:border-white/10 dark:bg-white/[0.045] dark:hover:border-white/20 dark:hover:bg-white/[0.065]">
+                <div className="flex items-center gap-3">
+                  <BrandIcon brand="github" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <h2 className="shrink-0 text-[16px] font-semibold tracking-[-0.01em] text-black/84 dark:text-white/88">GitHub</h2>
+                    </div>
                   </div>
-                  <p className="mt-1.5 max-w-2xl text-sm leading-5 text-black/50 dark:text-white/50">
-                    Monitor one repository&apos;s releases and prepare review-ready changelog drafts.
-                  </p>
+                  {isOwner && connectionBadgeStatus === "connected" && connectedRepository?.id && (
+                    <button
+                      type="button"
+                      onClick={() => { void disconnectRepository(); }}
+                      disabled={action !== null}
+                      aria-label="Disconnect GitHub"
+                      title="Disconnect GitHub"
+                      className="inline-flex size-8 shrink-0 items-center justify-center rounded-[9px] border border-black/10 text-black/50 transition hover:border-black/20 hover:bg-black/[0.04] hover:text-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 disabled:cursor-wait disabled:opacity-50 dark:border-white/12 dark:text-white/55 dark:hover:border-white/25 dark:hover:bg-white/10 dark:hover:text-white/85 dark:focus-visible:ring-white/25"
+                    >
+                      {action === "disconnect" ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" /> : <HugeiconsIcon icon={Unlink04Icon} size={16} color="currentColor" strokeWidth={1.5} aria-hidden="true" />}
+                    </button>
+                  )}
+                  {isOwner && connectionBadgeStatus !== "connected" && (
+                    <button
+                      type="button"
+                      onClick={() => { void installGitHub(); }}
+                      disabled={action !== null}
+                      aria-label={connectionBadgeStatus === "attention" ? "Reconnect GitHub" : "Connect GitHub"}
+                      title={connectionBadgeStatus === "attention" ? "Reconnect GitHub" : "Connect GitHub"}
+                      className="inline-flex size-8 shrink-0 items-center justify-center rounded-[9px] border border-black/10 text-black/50 transition hover:border-black/20 hover:bg-black/[0.04] hover:text-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 disabled:cursor-wait disabled:opacity-50 dark:border-white/12 dark:text-white/55 dark:hover:border-white/25 dark:hover:bg-white/10 dark:hover:text-white/85 dark:focus-visible:ring-white/25"
+                    >
+                      {action === "install" ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" /> : <HugeiconsIcon icon={Link01Icon} size={16} color="currentColor" strokeWidth={1.5} aria-hidden="true" />}
+                    </button>
+                  )}
                 </div>
-                {!isLoading && (
-                  <div className="flex shrink-0 items-center gap-2">
-                    {selectedConnection && <ConnectionBadge status={connectionBadgeStatus} />}
-                    {isOwner && !selectedConnection && (
-                      <button
-                        type="button"
-                        onClick={() => { void installGitHub(); }}
-                        disabled={action === "install"}
-                        className="inline-flex items-center gap-2 rounded-full bg-black px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:cursor-wait disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-white/85 dark:focus-visible:ring-white/35"
-                      >
-                        {action === "install" && <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />}
-                        Connect GitHub
-                      </button>
-                    )}
-                    {isOwner && selectedConnection && (selectedConnection.status !== "ACTIVE" || connectionNeedsReconnect) && (
-                      <ReconnectButton
-                        busy={action === "install"}
-                        onReconnect={() => { void installGitHub(); }}
-                      />
-                    )}
+                <p className="mt-4 text-[13px] leading-5 text-black/50 dark:text-white/50">
+                  Connect GitHub to bring source context into your artifacts.
+                </p>
+                {selectedConnection && (
+                  <div className="mt-3 flex min-w-0 items-center gap-2">
+                    <ConnectionBadge status={connectionBadgeStatus} />
                   </div>
                 )}
-              </div>
-
-              {showGitHubDetails && (
-                <div className="border-t border-black/[0.07] px-5 pb-6 dark:border-white/[0.08] sm:px-6">
-                {showStatusMessage && message && (
+                {isLoading && <Loading />}
+                {!isLoading && isOwner === false && <NonOwnerState connected={connectionBadgeStatus === "connected" && !connectionNeedsReconnect} />}
+                {!isLoading && message && (
                   <StatusMessage
                     message={message}
                     requestId={messageRequestId}
                     onRetry={refresh}
-                    onReconnect={activeConnection && repositoryLoadFailed && !connectionNeedsReconnect
-                      ? () => { void installGitHub(); }
-                      : undefined}
                     onDismiss={() => setMessage(null)}
                   />
                 )}
-                {isLoading ? (
-                  <Loading />
-                ) : isOwner === null ? null : !isOwner ? (
-                  <NonOwnerState connected={Boolean(activeConnection) && !connectionNeedsReconnect} />
-                ) : !selectedConnection || (connectionNeedsReconnect && repositories.length === 0) ? (
-                  <ConnectState
-                    reconnect={hasInactiveConnection || connectionNeedsReconnect}
-                  />
-                ) : (
-                  <div className="pt-6">
-                    {repositoryAccessAvailable && (
-                      <>
-                        <div className="flex items-center justify-between gap-4">
-                          <div>
-                            <h3 className="text-sm font-semibold text-black/80 dark:text-white/82">Repository access</h3>
-                            <p className="mt-1 text-sm text-black/48 dark:text-white/48">
-                              Select one repository to connect and monitor its releases.
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={refresh}
-                            disabled={action !== null}
-                            className="inline-flex shrink-0 items-center gap-2 rounded-full border border-black/10 px-3 py-1.5 text-sm font-medium text-black/60 transition hover:bg-black/[0.04] disabled:opacity-50 dark:border-white/12 dark:text-white/65 dark:hover:bg-white/10"
-                          >
-                            <RefreshCw className="size-3.5" />
-                            Refresh
-                          </button>
-                        </div>
-
-                        {repositories.length > 0 ? (
-                          <div
-                            className="mt-5 max-h-64 space-y-2 overflow-y-auto overscroll-contain pr-1"
-                            role="radiogroup"
-                            aria-label="Allowed GitHub repositories"
-                          >
-                            {repositories.map((repository) => (
-                              <label
-                                key={repository.externalRepositoryId}
-                                className="flex cursor-pointer items-center gap-3 rounded-[10px] border border-black/10 px-4 py-3 text-sm transition hover:bg-black/[0.02] dark:border-white/10 dark:hover:bg-white/5"
-                              >
-                                <input
-                                  type="radio"
-                                  name="repository"
-                                  checked={selectedRepositoryId === repository.externalRepositoryId}
-                                  onChange={() => setSelectedRepositoryId(repository.externalRepositoryId)}
-                                  disabled={action !== null}
-                                />
-                                <span className="min-w-0 flex-1 truncate font-medium text-black/78 dark:text-white/80">
-                                  {repository.displayName}
-                                </span>
-                                {repository.id && (
-                                  <RepositoryAccessLabel
-                                    repository={repository}
-                                    connectionActive={Boolean(activeConnection && !connectionNeedsReconnect)}
-                                  />
-                                )}
-                                <a
-                                  href={repository.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  aria-label={`Open ${repository.displayName} on GitHub`}
-                                  className="text-black/38 hover:text-black/65 dark:text-white/38 dark:hover:text-white/70"
-                                  onClick={(event) => event.stopPropagation()}
-                                >
-                                  <ExternalLink className="size-3.5" />
-                                </a>
-                              </label>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="mt-5 rounded-[10px] border border-dashed border-black/10 bg-black/[0.015] p-4 text-sm leading-5 text-black/52 dark:border-white/10 dark:bg-white/[0.025] dark:text-white/52">
-                            No repositories are currently granted. Update this GitHub App installation&apos;s repository access, then refresh.
-                          </div>
-                        )}
-
-                        {repositories.length > 0 && selectedRepository && !selectedRepository.id && (
-                          <button
-                            type="button"
-                            onClick={() => { void connectRepository(); }}
-                            disabled={!activeConnection || action !== null}
-                            className="mt-5 inline-flex items-center gap-2 rounded-full bg-black px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-black"
-                          >
-                            {action === "connect" && <LoaderCircle className="size-4 animate-spin" />}
-                            Connect repository
-                          </button>
-                        )}
-
-                        {selectedRepository?.id && selectedRepository.status !== "ACTIVE" && (
-                          <RepositoryAccessRecovery
-                            repository={selectedRepository}
-                            busy={accessCheckActionId === selectedRepository.id || action === "install"}
-                            onCheckAgain={() => { void recheckRepositoryAccess(selectedRepository.id!, "CHECK_AGAIN"); }}
-                            onRetry={() => { void recheckRepositoryAccess(selectedRepository.id!, "RETRY"); }}
-                            onReconnect={() => { void installGitHub(); }}
-                          />
-                        )}
-
-                        {monitoredRepository?.id && latestRelease && (
-                          <LatestRelease
-                            activity={latestRelease}
-                            busy={releaseActionId === latestRelease.id || action === "install"}
-                            onRetry={() => { void retryRelease(latestRelease); }}
-                            onReconnect={() => { void installGitHub(); }}
-                          />
-                        )}
-                        {monitoredRepository?.id && monitoring && (
-                          <RepositoryMonitoring
-                            monitoring={monitoring}
-                            busy={monitoringRetrying || action === "install"}
-                            onRetry={() => { void retryMonitoring(monitoredRepository.id!); }}
-                            onReconnect={() => { void installGitHub(); }}
-                          />
-                        )}
-                        {monitoredRepository?.id && latestReleaseError !== null && latestReleaseError !== undefined && (
-                          <ReleaseActivityLoadError
-                            error={latestReleaseError}
-                            busy={releaseLoadActionId === monitoredRepository.id || action === "install"}
-                            onRetry={() => { void retryReleaseActivityLoad(monitoredRepository.id!); }}
-                            onReconnect={() => { void installGitHub(); }}
-                          />
-                        )}
-                      </>
-                    )}
-                  </div>
-                )}
-                </div>
-              )}
+              </article>
             </div>
           </section>
         )}
 
         {matchingPlannedIntegrations.length > 0 && (
-          <section className="mt-12" aria-labelledby="planned-integrations-heading">
+          <section className="mt-11" aria-labelledby="more-integrations-heading">
             <SectionHeading
-              id="planned-integrations-heading"
-              title="On the horizon"
-              description="The next sources we are shaping for Plot"
+              id="more-integrations-heading"
+              title="More integrations"
+              description="Sources we are shaping next"
             />
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {matchingPlannedIntegrations.map((integration) => (
                 <article
                   key={integration.name}
-                  className="group flex min-h-36 items-start gap-4 rounded-[14px] border border-black/[0.08] bg-white/70 p-5 transition hover:border-black/[0.14] hover:bg-white dark:border-white/[0.09] dark:bg-white/[0.035] dark:hover:border-white/15 dark:hover:bg-white/[0.055]"
+                  className="group min-h-[168px] rounded-[14px] border border-black/[0.08] bg-white/75 p-5 transition duration-200 hover:-translate-y-0.5 hover:border-black/[0.15] hover:bg-white hover:shadow-[0_6px_18px_rgb(15_23_42_/_0.05)] dark:border-white/[0.09] dark:bg-white/[0.035] dark:hover:border-white/15 dark:hover:bg-white/[0.055]"
                 >
-                  <BrandIcon brand={integration.brand} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h3 className="text-[15px] font-semibold tracking-[-0.01em] text-black/82 dark:text-white/86">
-                          {integration.name}
-                        </h3>
-                        <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.12em] text-black/38 dark:text-white/38">
-                          {integration.category}
-                        </p>
-                      </div>
-                      <span className="shrink-0 pt-0.5 text-[12px] text-black/38 dark:text-white/38">Planned</span>
-                    </div>
-                    <p className="mt-3 text-[13px] leading-5 text-black/50 dark:text-white/50">
-                      {integration.description}
-                    </p>
+                  <div className="flex items-start justify-between gap-3">
+                    <BrandIcon brand={integration.brand} />
+                    <span className="pt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-black/35 dark:text-white/38">
+                      Coming soon
+                    </span>
                   </div>
+                  <h3 className="mt-5 text-[15px] font-semibold tracking-[-0.01em] text-black/82 dark:text-white/86">
+                    {integration.name}
+                  </h3>
+                  <p className="mt-3 text-[13px] leading-5 text-black/50 dark:text-white/50">
+                    {integration.description}
+                  </p>
                 </article>
               ))}
             </div>
@@ -640,12 +308,13 @@ export function IntegrationsWorkspace() {
         )}
 
         {!githubMatchesQuery && matchingPlannedIntegrations.length === 0 && (
-          <div className="mt-12 rounded-[14px] border border-dashed border-black/10 px-5 py-10 text-center dark:border-white/10">
+          <div className="mt-11 rounded-[14px] border border-dashed border-black/10 px-5 py-12 text-center dark:border-white/10">
             <p className="text-sm font-medium text-black/65 dark:text-white/68">No integrations found</p>
-            <p className="mt-1 text-sm text-black/42 dark:text-white/42">Try another tool or category.</p>
+            <p className="mt-1 text-sm text-black/42 dark:text-white/42">Try another search term.</p>
           </div>
         )}
       </div>
+
     </div>
   );
 }
@@ -708,265 +377,6 @@ function BrandIcon({ brand }: { brand: IntegrationBrand }) {
   );
 }
 
-function ReconnectButton({
-  busy,
-  onReconnect,
-}: {
-  busy: boolean;
-  onReconnect: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onReconnect}
-      disabled={busy}
-      aria-label="Reconnect GitHub"
-      title="Reconnect GitHub"
-      aria-busy={busy}
-      className="inline-flex size-8 items-center justify-center rounded-[9px] border border-black/10 text-black/50 transition hover:border-black/20 hover:bg-black/[0.04] hover:text-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:cursor-wait disabled:opacity-50 dark:border-white/12 dark:text-white/55 dark:hover:border-white/25 dark:hover:bg-white/10 dark:hover:text-white/85 dark:focus-visible:ring-white/35"
-    >
-      {busy ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" /> : <RefreshCw className="size-3.5" aria-hidden="true" />}
-    </button>
-  );
-}
-
-function RepositoryMonitoring({
-  monitoring,
-  busy,
-  onRetry,
-  onReconnect,
-}: {
-  monitoring: GitHubRepositoryMonitoring;
-  busy: boolean;
-  onRetry: () => void;
-  onReconnect: () => void;
-}) {
-  let content;
-  if (monitoring.analysisStatus === "QUEUED" || monitoring.analysisStatus === "ANALYZING") {
-    content = <span>Analyzing release convention…</span>;
-  } else if (monitoring.analysisStatus === "COMPLETED") {
-    content = (
-      <span>
-        {conventionLabel(monitoring)}
-        {monitoring.sampleSource && ` · ${monitoring.sampleSize} ${monitoring.sampleSource.toLowerCase()}`}
-      </span>
-    );
-  } else if (monitoring.lastErrorCode === "GITHUB_ACCESS_DENIED" || monitoring.lastErrorCode === "GITHUB_NOT_FOUND") {
-    content = (
-      <span>
-        GitHub permission lost ·{" "}
-        <button type="button" onClick={onReconnect} disabled={busy} className="font-semibold underline disabled:opacity-50">
-          Reconnect
-        </button>
-      </span>
-    );
-  } else {
-    content = (
-      <span>
-        Analysis failed ·{" "}
-        <button type="button" onClick={onRetry} disabled={busy} className="font-semibold underline disabled:opacity-50">
-          Retry
-        </button>
-      </span>
-    );
-  }
-  return (
-    <div role="status" aria-live="polite" className="mt-5 rounded-[10px] border border-black/[0.08] bg-black/[0.015] px-4 py-3 text-sm text-black/58 dark:border-white/10 dark:bg-white/[0.025] dark:text-white/58">
-      <div className="text-xs font-semibold uppercase tracking-[0.08em] text-black/38 dark:text-white/38">
-        Repository monitoring
-      </div>
-      <div className="mt-1.5">{content}</div>
-    </div>
-  );
-}
-
-function conventionLabel(monitoring: GitHubRepositoryMonitoring) {
-  if (monitoring.releaseConvention === "SEMVER_V") return "Release convention: v-prefixed SemVer";
-  if (monitoring.releaseConvention === "SEMVER") return "Release convention: SemVer";
-  if (monitoring.releaseConvention === "PREFIXED") return `Release convention: ${monitoring.tagPrefix ?? "prefixed"} SemVer`;
-  if (monitoring.releaseConvention === "NO_TAGS") return "No release tags found";
-  return "Mixed release tags";
-}
-
-function LatestRelease({
-  activity,
-  busy,
-  onRetry,
-  onReconnect,
-}: {
-  activity: GitHubReleaseActivity;
-  busy: boolean;
-  onRetry: () => void;
-  onReconnect: () => void;
-}) {
-  let content;
-  if (activity.status === "QUEUED" || activity.status === "RESOLVING" || activity.status === "GENERATING") {
-    content = <span>Preparing {activity.tagName}…</span>;
-  } else if (activity.status === "READY" && activity.artifactId) {
-    content = (
-      <span>
-        <span>Draft ready</span> ·{" "}
-        <Link
-          href={`/artifacts?artifact=${encodeURIComponent(activity.artifactId)}`}
-          className="font-semibold text-[#2563eb] hover:underline dark:text-[#93c5fd]"
-        >
-          Review changelog
-        </Link>
-      </span>
-    );
-  } else if (activity.status === "READY") {
-    content = <span>Draft ready</span>;
-  } else if (activity.status === "NO_ACTIVITY") {
-    content = <span>No customer-facing changes found for {activity.tagName}</span>;
-  } else if (activity.status === "NEEDS_RANGE") {
-    content = <span>Release baseline saved. The next release will prepare a changelog.</span>;
-  } else if (activity.errorCode === "GITHUB_ACCESS_DENIED") {
-    content = (
-      <span>
-        <span>GitHub permission lost</span> ·{" "}
-        <button
-          type="button"
-          onClick={onReconnect}
-          disabled={busy}
-          aria-label={`Reconnect GitHub for release ${activity.tagName}`}
-          className="font-semibold text-[#2563eb] hover:underline disabled:opacity-50 dark:text-[#93c5fd]"
-        >
-          Reconnect
-        </button>
-      </span>
-    );
-  } else {
-    content = (
-      <span>
-        Could not prepare {activity.tagName} ·{" "}
-        <button
-          type="button"
-          onClick={onRetry}
-          disabled={busy}
-          aria-label={`Retry release ${activity.tagName}`}
-          className="font-semibold text-[#2563eb] hover:underline disabled:opacity-50 dark:text-[#93c5fd]"
-        >
-          Retry
-        </button>
-      </span>
-    );
-  }
-
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="mt-5 rounded-[10px] border border-black/[0.08] bg-black/[0.015] px-4 py-3 text-sm text-black/58 dark:border-white/10 dark:bg-white/[0.025] dark:text-white/58"
-    >
-      <div className="text-xs font-semibold uppercase tracking-[0.08em] text-black/38 dark:text-white/38">
-        Latest release
-      </div>
-      <div className="mt-1.5">{content}</div>
-    </div>
-  );
-}
-
-function ReleaseActivityLoadError({
-  error,
-  busy,
-  onRetry,
-  onReconnect,
-}: {
-  error: unknown;
-  busy: boolean;
-  onRetry: () => void;
-  onReconnect: () => void;
-}) {
-  const reconnect = requiresReconnect(error);
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="mt-5 rounded-[10px] border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-100"
-    >
-      <span>{reconnect ? "GitHub permission lost" : "Could not load release activity"}</span> ·{" "}
-      <button
-        type="button"
-        onClick={reconnect ? onReconnect : onRetry}
-        disabled={busy}
-        aria-label={reconnect ? "Reconnect GitHub for release activity" : "Retry release activity"}
-        className="font-semibold underline underline-offset-2 disabled:opacity-50"
-      >
-        {reconnect ? "Reconnect" : "Retry"}
-      </button>
-    </div>
-  );
-}
-
-function RepositoryAccessLabel({
-  repository,
-  connectionActive,
-}: {
-  repository: GitHubRepository;
-  connectionActive: boolean;
-}) {
-  const label = !connectionActive
-    ? "Needs attention"
-    : repository.status === "ACTIVE"
-      ? "Connected"
-      : repository.accessCheckStatus === "QUEUED" || repository.accessCheckStatus === "CHECKING"
-        ? "Checking…"
-        : repository.statusReason === "REPOSITORY_DELETED"
-          ? "Disconnected"
-          : "Needs attention";
-  const styles = label === "Connected"
-    ? "text-emerald-700 dark:text-emerald-300"
-    : label === "Disconnected"
-      ? "text-black/45 dark:text-white/48"
-      : "text-amber-700 dark:text-amber-300";
-  return <span className={`text-xs ${styles}`}>{label}</span>;
-}
-
-function RepositoryAccessRecovery({
-  repository,
-  busy,
-  onCheckAgain,
-  onRetry,
-  onReconnect,
-}: {
-  repository: GitHubRepository;
-  busy: boolean;
-  onCheckAgain: () => void;
-  onRetry: () => void;
-  onReconnect: () => void;
-}) {
-  const checking = repository.accessCheckStatus === "QUEUED" || repository.accessCheckStatus === "CHECKING";
-  const deleted = repository.statusReason === "REPOSITORY_DELETED";
-  const userDisconnected = repository.statusReason === "USER_DISCONNECTED";
-  const message = checking
-    ? "Checking current GitHub access…"
-    : userDisconnected
-      ? "This repository was disconnected from Plot. Reconnect GitHub to choose it again."
-    : deleted
-      ? "This repository is currently unavailable. Check again after restoring it, or connect another repository."
-      : repository.statusReason === "GRANT_REMOVED"
-        ? "GitHub no longer grants Plot access to this repository. Update the App installation, then retry."
-        : repository.statusReason === "REPOSITORY_TRANSFERRED"
-          ? "This repository moved. Check again to verify its current location and access."
-          : "This repository needs attention before Plot can fetch new work.";
-  return (
-    <div role="status" aria-live="polite" className="mt-5 rounded-[10px] border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-100">
-      <div>{message}</div>
-      {!checking && (
-        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
-          {!userDisconnected && (
-            <button type="button" onClick={deleted ? onCheckAgain : onRetry} disabled={busy} className="font-semibold underline underline-offset-2 disabled:opacity-50">
-              {deleted ? "Check again" : "Retry"}
-            </button>
-          )}
-          <button type="button" onClick={onReconnect} disabled={busy} className="font-semibold underline underline-offset-2 disabled:opacity-50">
-            {deleted ? "Connect another repository" : "Reconnect"}
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
 
 function ConnectionBadge({ status }: { status: "connected" | "attention" | "disconnected" }) {
   if (status === "attention") return null;
@@ -978,21 +388,6 @@ function ConnectionBadge({ status }: { status: "connected" | "attention" | "disc
     <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${styles}`}>
       {status === "connected" ? "Connected" : "Disconnected"}
     </span>
-  );
-}
-
-function ConnectState({ reconnect }: { reconnect: boolean }) {
-  return (
-    <div className="mt-6 pt-6">
-      <h3 className="text-sm font-semibold text-black/80 dark:text-white/82">
-        {reconnect ? "GitHub access needs to be restored" : "Connect GitHub to get started"}
-      </h3>
-      <p className="mt-1 max-w-xl text-sm leading-5 text-black/50 dark:text-white/50">
-        {reconnect
-          ? "The previous installation is no longer active. Reinstall the GitHub App to choose repository access again."
-          : "Plot requests read-only repository metadata and pull requests. You will choose a repository after installation."}
-      </p>
-    </div>
   );
 }
 
@@ -1020,13 +415,11 @@ function StatusMessage({
   message,
   requestId,
   onRetry,
-  onReconnect,
   onDismiss,
 }: {
   message: string;
   requestId: string | null;
   onRetry: () => void;
-  onReconnect?: () => void;
   onDismiss: () => void;
 }) {
   return (
@@ -1041,12 +434,9 @@ function StatusMessage({
         )}
       </div>
       <button type="button" onClick={onRetry} className="shrink-0 font-semibold underline underline-offset-2">Retry</button>
-      {onReconnect && (
-        <button type="button" onClick={onReconnect} className="shrink-0 font-semibold underline underline-offset-2">
-          Reconnect
-        </button>
-      )}
-      <button type="button" onClick={onDismiss} aria-label="Dismiss message"><X className="size-4" /></button>
+      <button type="button" onClick={onDismiss} aria-label="Dismiss message">
+        <HugeiconsIcon icon={Cancel01Icon} size={16} aria-hidden="true" />
+      </button>
     </div>
   );
 }
@@ -1062,7 +452,7 @@ function errorMessage(error: unknown) {
   if (error instanceof PlotApiError) {
     if (error.code === "GITHUB_NOT_CONFIGURED") return "GitHub is not configured for this environment. Try again after an administrator enables it.";
     if (error.code === "GITHUB_RATE_LIMITED") return "GitHub rate limit reached. Wait a moment, then retry.";
-    if (error.code === "GITHUB_NOT_FOUND") return "The previous GitHub installation was replaced or removed. Reconnect GitHub to restore repository access.";
+    if (error.code === "GITHUB_NOT_FOUND") return "The previous GitHub installation was replaced or removed. Reconnect GitHub to restore access.";
     if (error.code === "GITHUB_ACCESS_DENIED" || error.code === "CONNECTION_INACTIVE" || error.code === "REPOSITORY_INACTIVE") return "GitHub access was revoked. Reconnect GitHub, then retry.";
     if (error.code === "FORBIDDEN") return "Workspace owner must connect GitHub.";
     if (error.code === "GITHUB_PROVIDER_UNAVAILABLE") return "GitHub is temporarily unavailable. Try again shortly.";

@@ -62,6 +62,16 @@ describe("Plot API client", () => {
     expect(new Headers(fetcher.mock.calls[7]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
   });
 
+  it("disconnects a GitHub repository scope", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }));
+    const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
+
+    await client.disconnectGitHubRepository("scope-1");
+
+    expect(fetcher).toHaveBeenCalledWith("/api/plot/github/repositories/scope-1", expect.objectContaining({ method: "DELETE" }));
+    expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
+  });
+
   it("loads nullable release activity and retries an exact failed request", async () => {
     const activity = {
       id: "request-1",

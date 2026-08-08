@@ -363,6 +363,7 @@ export interface PlotApiClient {
   listGitHubConnections(options?: RequestOptions): Promise<GitHubConnection[]>;
   listGitHubRepositories(connectionId: string, options?: RequestOptions): Promise<GitHubRepository[]>;
   connectGitHubRepository(connectionId: string, externalRepositoryId: number, options?: RequestOptions): Promise<GitHubRepository>;
+  disconnectGitHubRepository(sourceScopeId: string, options?: RequestOptions): Promise<void>;
   getGitHubRepositoryMonitoring(sourceScopeId: string, options?: RequestOptions): Promise<GitHubRepositoryMonitoring>;
   retryGitHubRepositoryMonitoring(sourceScopeId: string, options?: RequestOptions): Promise<GitHubRepositoryMonitoring>;
   recheckGitHubRepositoryAccess(sourceScopeId: string, trigger: GitHubAccessCheckTrigger, options?: RequestOptions): Promise<GitHubAccessCheck>;
@@ -431,6 +432,10 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
     connectGitHubRepository: (connectionId, externalRepositoryId, requestOptions) => request(
       `/github/repositories/${encodeURIComponent(String(externalRepositoryId))}`,
       { method: "PUT", body: JSON.stringify({ connectionId }), signal: requestOptions?.signal },
+    ),
+    disconnectGitHubRepository: (sourceScopeId, requestOptions) => request(
+      `/github/repositories/${encodeURIComponent(sourceScopeId)}`,
+      { method: "DELETE", signal: requestOptions?.signal },
     ),
     getGitHubRepositoryMonitoring: (sourceScopeId, requestOptions) => request(
       `/github/repositories/${encodeURIComponent(sourceScopeId)}/monitoring`,
