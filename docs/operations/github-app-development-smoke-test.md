@@ -6,8 +6,8 @@ fake `GitHubClient` and never call GitHub.
 
 ## Configure the local API
 
-Register an unlisted GitHub App with repository **Metadata: read-only** and
-**Pull requests: read-only**. Configure the App callback shape used by the
+Register an unlisted GitHub App with repository **Contents: read-only**,
+**Metadata: read-only**, and **Pull requests: read-only**. Configure the App callback shape used by the
 frontend handoff, then provide secrets only through the local process
 environment/configuration:
 
