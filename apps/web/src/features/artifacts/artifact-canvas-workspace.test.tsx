@@ -61,6 +61,16 @@ function client() {
 }
 
 describe("ArtifactCanvasWorkspace", () => {
+  it("renders a linked artifact breadcrumb", () => {
+    render(<ArtifactCanvasWorkspace artifact={artifact} client={client()} onSaveArtifact={vi.fn()} />);
+
+    const breadcrumb = screen.getByRole("navigation", { name: "Breadcrumb" });
+    expect(breadcrumb).toContainElement(screen.getByRole("link", { name: "Artifacts" }));
+    expect(screen.getByRole("link", { name: "Artifacts" })).toHaveAttribute("href", "/artifacts");
+    expect(breadcrumb).toHaveTextContent("Artifacts/OpenRouter summary provider");
+    expect(screen.getByText("OpenRouter summary provider", { selector: '[aria-current="page"]' })).toBeVisible();
+  });
+
   it("saves from the contextual toolbar", async () => {
     const onSaveArtifact = vi.fn().mockResolvedValue(artifact);
     render(<ArtifactCanvasWorkspace artifact={artifact} client={client()} onSaveArtifact={onSaveArtifact} />);
