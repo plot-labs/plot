@@ -3,15 +3,15 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { SessionComposer } from "./session-composer";
+import { ChatComposer } from "./chat-composer";
 
 const references = [{ id: "source-1", label: "PR #1", available: true }];
 
-describe("SessionComposer", () => {
+describe("ChatComposer", () => {
   it("enables send only for a trimmed prompt with a selected source", () => {
     const onSubmit = vi.fn();
-    render(<SessionComposer references={references} onSubmit={onSubmit} />);
-    const prompt = screen.getByRole("textbox", { name: "Session message" });
+    render(<ChatComposer references={references} onSubmit={onSubmit} />);
+    const prompt = screen.getByRole("textbox", { name: "Chat message" });
     const send = screen.getByRole("button", { name: "Send message" });
 
     expect(send).toBeDisabled();
@@ -29,12 +29,12 @@ describe("SessionComposer", () => {
   });
 
   it("stays disabled without a selected source or while busy", () => {
-    const { unmount } = render(<SessionComposer references={[]} onSubmit={vi.fn()} />);
+    const { unmount } = render(<ChatComposer references={[]} onSubmit={vi.fn()} />);
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "Write release notes" } });
     expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
 
     unmount();
-    render(<SessionComposer references={references} onSubmit={vi.fn()} busy />);
+    render(<ChatComposer references={references} onSubmit={vi.fn()} busy />);
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "Write release notes" } });
     expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
   });

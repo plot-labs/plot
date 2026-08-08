@@ -63,6 +63,7 @@ export function ProductShell({ children }: { children: ReactNode }) {
 }
 
 function MobileProductNavigation({ pathname }: { pathname: string }) {
+  const chatActive = pathname === "/chat" || pathname.startsWith("/chat/");
   const artifactsActive = pathname === "/artifacts" || pathname.startsWith("/artifacts/");
   const settingsActive = pathname === "/settings" || pathname.startsWith("/settings/");
 
@@ -71,6 +72,19 @@ function MobileProductNavigation({ pathname }: { pathname: string }) {
       aria-label="Product navigation"
       className="flex h-[49px] shrink-0 items-center gap-1 border-b border-black/[0.08] bg-white px-4 py-2 text-sm dark:border-white/10 dark:bg-[#111113] lg:hidden"
     >
+      <Link
+        href="/chat"
+        aria-current={chatActive ? "page" : undefined}
+        className={cn(
+          "rounded-[8px] px-3 py-1.5 font-medium transition",
+          chatActive
+            ? "bg-[#eef0f3] text-black dark:bg-white/12 dark:text-white"
+            : "text-black/55 hover:bg-black/[0.04] dark:text-white/55 dark:hover:bg-white/10",
+        )}
+      >
+        Chat
+      </Link>
+
       <Link
         href="/artifacts"
         aria-current={artifactsActive ? "page" : undefined}

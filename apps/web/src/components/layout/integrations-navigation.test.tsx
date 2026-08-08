@@ -41,6 +41,7 @@ describe("Settings navigation", () => {
     render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
 
     const productNavigation = screen.getByRole("navigation", { name: "Product sidebar navigation" });
+    expect(within(productNavigation).getByRole("link", { name: "Chat" })).toHaveAttribute("href", "/chat");
     expect(within(productNavigation).getByRole("link", { name: "Artifacts" })).toHaveAttribute("aria-current", "page");
     expect(screen.queryByRole("navigation", { name: "Settings navigation" })).not.toBeInTheDocument();
     expect(await screen.findByRole("button", { name: /Personal/ })).toBeVisible();
@@ -49,9 +50,9 @@ describe("Settings navigation", () => {
   it("keeps shared workspace context above workspace settings navigation", async () => {
     render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
 
-    expect(screen.getByRole("link", { name: "Back to app" })).toHaveAttribute("href", "/artifacts");
+    expect(screen.getByRole("link", { name: "Back to app" })).toHaveAttribute("href", "/chat");
     expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Plot home" })).toHaveAttribute("href", "/artifacts");
+    expect(screen.getByRole("link", { name: "Plot home" })).toHaveAttribute("href", "/chat");
     expect(screen.queryByRole("link", { name: "Workspace settings" })).not.toBeInTheDocument();
     expect(await screen.findByRole("button", { name: /Personal/ })).toBeVisible();
 
@@ -66,16 +67,16 @@ describe("Settings navigation", () => {
     expect(screen.queryByRole("navigation", { name: "Product sidebar navigation" })).not.toBeInTheDocument();
 
     expect(screen.queryByRole("link", { name: "Sources" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "New session" })).not.toBeInTheDocument();
-    expect(screen.queryByText("Sessions", { selector: "div" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "New chat" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Chats", { selector: "div" })).not.toBeInTheDocument();
 
     fireEvent.click(await screen.findByRole("button", { name: /Owner.*owner@example.com/ }));
     expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings/account");
   });
 
-  it("does not load or render session history", async () => {
+  it("does not load or render chat history", async () => {
     sidebarMocks.listSessions.mockResolvedValue([{
-      id: "session-1", title: "Release notes", status: "OPEN", latestGenerationId: "run-1",
+      id: "chat-1", title: "Release notes", status: "OPEN", latestGenerationId: "run-1",
       lastActivityAt: null, createdAt: "2026-07-01T00:00:00Z", updatedAt: "2026-07-01T00:00:00Z",
     }]);
     render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
