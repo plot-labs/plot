@@ -145,6 +145,19 @@ describe("ChatWorkspace", () => {
     expect(screen.queryByText("Reviewed artifact")).not.toBeInTheDocument();
   });
 
+  it("returns to the chat home when the workspace changes", async () => {
+    mocks.search = "chat=chat-1&generation=run-1";
+    mocks.listSessions.mockResolvedValue([chat]);
+    mocks.listSessionGenerations.mockResolvedValue([]);
+    mocks.getGeneration.mockResolvedValue(terminalRun);
+    render(<ChatWorkspace />);
+    await screen.findByText("Reviewed artifact");
+
+    window.dispatchEvent(new CustomEvent("plot:workspace-changed", { detail: { id: "workspace-2" } }));
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/chat", { scroll: false }));
+  });
+
   it("opens the mobile History panel and restores focus when it closes", async () => {
     mocks.search = "chat=chat-1&generation=run-1";
     mocks.listSessions.mockResolvedValue([chat]);

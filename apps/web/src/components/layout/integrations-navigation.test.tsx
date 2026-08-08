@@ -7,10 +7,12 @@ const sidebarMocks = vi.hoisted(() => ({
   listSessions: vi.fn(),
   createWorkspace: vi.fn(),
   pathname: "/settings/integrations",
+  search: "",
 }));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => sidebarMocks.pathname,
+  useSearchParams: () => new URLSearchParams(sidebarMocks.search),
 }));
 
 vi.mock("@/lib/api-client", () => ({
@@ -25,6 +27,7 @@ import { ProductSidebar } from "./product-sidebar";
 describe("Settings navigation", () => {
   beforeEach(() => {
     sidebarMocks.pathname = "/settings/integrations";
+    sidebarMocks.search = "";
     window.localStorage.clear();
     sidebarMocks.listSessions.mockReset();
     sidebarMocks.listSessions.mockResolvedValue([]);
@@ -96,6 +99,20 @@ describe("Settings navigation", () => {
 
     expect(await screen.findByText("History")).toBeVisible();
     expect(screen.getByRole("link", { name: "Release notes" })).toHaveAttribute("href", "/chat?chat=chat-1");
+  });
+
+  it("selects the history item instead of the Chat tab", async () => {
+    sidebarMocks.pathname = "/chat";
+    sidebarMocks.search = "chat=chat-1";
+    sidebarMocks.listSessions.mockResolvedValue([{
+      id: "chat-1", title: "Release notes", status: "OPEN", latestGenerationId: "run-1",
+      lastActivityAt: null, createdAt: "2026-07-01T00:00:00Z", updatedAt: "2026-07-01T00:00:00Z",
+    }]);
+    render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
+
+    const historyItem = await screen.findByRole("link", { name: "Release notes" });
+    expect(historyItem).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Chat" })).not.toHaveAttribute("aria-current", "page");
   });
 
   it("renders a compact selector when only one workspace is available", async () => {
