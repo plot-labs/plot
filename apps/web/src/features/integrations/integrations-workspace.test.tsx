@@ -84,6 +84,34 @@ describe("IntegrationsWorkspace", () => {
     mocks.retryReleaseDraft.mockReset();
   });
 
+  it("presents a searchable source catalog with real provider marks", async () => {
+    render(<IntegrationsWorkspace />);
+
+    expect(screen.getByRole("img", { name: "GitHub" })).toBeVisible();
+    expect(screen.getByRole("img", { name: "Linear" })).toBeVisible();
+    expect(screen.getByRole("img", { name: "Slack" })).toBeVisible();
+    expect(screen.getByRole("img", { name: "Notion" })).toBeVisible();
+    expect(screen.getByRole("img", { name: "Figma" })).toBeVisible();
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search integrations" }), {
+      target: { value: "collaboration" },
+    });
+
+    expect(screen.getByRole("img", { name: "Slack" })).toBeVisible();
+    expect(screen.queryByRole("img", { name: "GitHub" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: "Linear" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: "Notion" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: "Figma" })).not.toBeInTheDocument();
+  });
+
+  it("does not expose unavailable integrations as connectable", () => {
+    render(<IntegrationsWorkspace />);
+
+    expect(screen.getAllByText("Planned")).toHaveLength(4);
+    expect(screen.queryByRole("button", { name: /connect linear|connect slack|connect notion|connect figma/i }))
+      .not.toBeInTheDocument();
+  });
+
   it("starts GitHub App installation from the empty owner state", async () => {
     mocks.createInstallationRequest.mockReturnValue(new Promise(() => undefined));
 
