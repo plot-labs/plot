@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
@@ -14,7 +14,7 @@ vi.mock("@/components/layout/product-sidebar", () => ({
 import { ProductShell } from "./product-shell";
 
 describe("ProductShell mobile navigation", () => {
-  it("links Integrations and Artifacts and marks the current page", () => {
+  it("keeps Integrations in the workspace menu and marks Artifacts as current", () => {
     vi.stubGlobal("matchMedia", () => ({
       matches: false,
       addEventListener: vi.fn(),
@@ -29,7 +29,9 @@ describe("ProductShell mobile navigation", () => {
 
     const navigation = screen.getByRole("navigation", { name: "Product navigation" });
     expect(navigation).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Integrations" })).toHaveAttribute("href", "/integrations");
     expect(screen.getByRole("link", { name: "Artifacts" })).toHaveAttribute("aria-current", "page");
+
+    fireEvent.click(screen.getByRole("button", { name: "Workspace" }));
+    expect(screen.getByRole("menuitem", { name: "Integrations" })).toHaveAttribute("href", "/integrations");
   });
 });
