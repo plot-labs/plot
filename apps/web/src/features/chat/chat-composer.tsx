@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUp, ChevronDown, Sparkles } from "lucide-react";
+import { ArrowUp } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
@@ -23,9 +23,8 @@ export function ChatComposer({
   busy = false,
 }: ChatComposerProps) {
   const [message, setMessage] = useState("");
-  const [referencesOpen, setReferencesOpen] = useState(false);
   const submittingRef = useRef(false);
-  const [selectedReferenceIds, setSelectedReferenceIds] = useState<string[]>(() => {
+  const [selectedReferenceIds] = useState<string[]>(() => {
     const first = references.find((reference) => reference.available);
     return first
       ? references.filter((reference) => reference.available && reference.groupId === first.groupId).map((reference) => reference.id)
@@ -64,42 +63,8 @@ export function ChatComposer({
           placeholder={placeholder}
           aria-label="Chat message"
         />
-        <div className="flex items-center gap-2 px-3 pb-3 text-xs text-black/45 dark:text-white/45">
-          <div className="relative">
-            <button
-              type="button"
-              aria-expanded={referencesOpen}
-              onClick={() => setReferencesOpen((open) => !open)}
-              className="inline-flex min-h-8 items-center gap-1.5 rounded-xl px-2 py-1.5 font-medium text-[#2563eb] transition hover:bg-[#2563eb]/5 dark:text-[#93c5fd] dark:hover:bg-white/10"
-            >
-              <Sparkles className="size-3.5" />
-              References{selectedReferenceIds.length ? ` · ${selectedReferenceIds.length}` : ""}
-              <ChevronDown className="size-3.5" />
-            </button>
-            {referencesOpen && references.length ? (
-              <div className="absolute bottom-[calc(100%+8px)] left-0 z-30 w-[min(300px,calc(100vw-32px))] rounded-xl border border-black/10 bg-white p-2 shadow-xl dark:border-white/15 dark:bg-[#232326]">
-                <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-black/42 dark:text-white/42">Use current references</div>
-                {references.map((reference) => (
-                  <label key={reference.id} className="flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm hover:bg-black/5 dark:hover:bg-white/10">
-                    <input
-                      type="checkbox"
-                      disabled={!reference.available || busy}
-                      checked={selectedReferenceIds.includes(reference.id)}
-                      onChange={(event) => setSelectedReferenceIds((current) => {
-                        if (!event.target.checked) return current.filter((id) => id !== reference.id);
-                        const currentGroup = references.find((item) => current.includes(item.id))?.groupId;
-                        return currentGroup !== undefined && currentGroup !== reference.groupId ? [reference.id] : [...current, reference.id];
-                      })}
-                    />
-                    <span className="min-w-0 flex-1 truncate">{reference.label}</span>
-                    {!reference.available ? <span className="text-[10px] text-black/40 dark:text-white/40">Preview only</span> : null}
-                  </label>
-                ))}
-              </div>
-            ) : null}
-          </div>
-
-          <div className="ml-auto flex items-center gap-1.5">
+        <div className="flex items-center justify-end px-3 pb-3 text-xs text-black/45 dark:text-white/45">
+          <div className="flex items-center gap-1.5">
             <button
               type="submit"
               disabled={!canSubmit}
