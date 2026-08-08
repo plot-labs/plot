@@ -47,21 +47,32 @@ describe("Workspace settings navigation", () => {
   it("uses the existing sidebar for workspace settings navigation", async () => {
     render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
 
+    expect(screen.getByRole("link", { name: "Back to app" })).toHaveAttribute("href", "/artifacts");
+    expect(screen.getByRole("searchbox", { name: "Search workspace settings" })).toHaveAttribute("placeholder", "Search...");
+    expect(screen.queryByRole("link", { name: "Plot home" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Personal/ })).not.toBeInTheDocument();
+
     const settingsNavigation = screen.getByRole("navigation", { name: "Workspace settings navigation" });
     expect(within(settingsNavigation).getByRole("link", { name: "Integrations" })).toHaveAttribute("href", "/settings/integrations");
     expect(within(settingsNavigation).getByRole("link", { name: "Integrations" })).toHaveAttribute("aria-current", "page");
     expect(within(settingsNavigation).queryByRole("link", { name: "Artifacts" })).not.toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "Product sidebar navigation" })).not.toBeInTheDocument();
 
-    const link = screen.getByRole("link", { name: "Workspace settings" });
-    expect(link).toHaveAttribute("href", "/settings/integrations");
-    expect(link).toHaveAttribute("aria-current", "page");
-
-    fireEvent.click(await screen.findByRole("button", { name: /Personal/ }));
-    expect(screen.queryByRole("menuitem", { name: "Settings" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Sources" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "New session" })).not.toBeInTheDocument();
     expect(screen.queryByText("Sessions", { selector: "div" })).not.toBeInTheDocument();
+  });
+
+  it("filters workspace settings navigation", () => {
+    render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
+
+    const search = screen.getByRole("searchbox", { name: "Search workspace settings" });
+    fireEvent.change(search, { target: { value: "billing" } });
+    expect(screen.queryByRole("link", { name: "Integrations" })).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("No settings found");
+
+    fireEvent.change(search, { target: { value: "integ" } });
+    expect(screen.getByRole("link", { name: "Integrations" })).toBeVisible();
   });
 
   it("does not load or render session history", async () => {
@@ -77,6 +88,7 @@ describe("Workspace settings navigation", () => {
   });
 
   it("renders a compact selector when only one workspace is available", async () => {
+    sidebarMocks.pathname = "/artifacts";
     render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
 
     const trigger = await screen.findByRole("button", { name: /Personal/ });
@@ -90,6 +102,7 @@ describe("Workspace settings navigation", () => {
   });
 
   it("keeps workspace switching when multiple workspaces are available", async () => {
+    sidebarMocks.pathname = "/artifacts";
     vi.mocked(fetch).mockResolvedValueOnce(Response.json({
       user: { id: "user-1", email: "owner@example.com", displayName: "Owner" },
       workspaces: [
