@@ -1,5 +1,7 @@
 "use client";
 
+import { PlugSocketIcon, Shapes01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -332,15 +334,27 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
 }
 
 function IntegrationsIcon() {
-  return <Image src="/icons/product-integrations.svg" alt="" width={16} height={16} className="size-4 shrink-0 dark:invert" />;
+  return (
+    <HugeiconsIcon
+      icon={PlugSocketIcon}
+      size={16}
+      color="currentColor"
+      strokeWidth={1.5}
+      aria-hidden="true"
+      className="shrink-0"
+    />
+  );
 }
 
 function ArtifactsIcon() {
   return (
-    <span aria-hidden="true" className="relative size-4 shrink-0 dark:invert">
-      <Image src="/icons/product-artifacts-triangle.svg" alt="" width={8} height={7} className="absolute left-[5px] top-[1px] h-[7px] w-2" />
-      <Image src="/icons/product-artifacts-square.svg" alt="" width={6} height={6} className="absolute bottom-0.5 left-0.5 size-1.5" />
-      <Image src="/icons/product-artifacts-circle.svg" alt="" width={6} height={6} className="absolute bottom-0.5 right-0.5 size-1.5" />
-    </span>
+    <HugeiconsIcon
+      icon={Shapes01Icon}
+      size={16}
+      color="currentColor"
+      strokeWidth={1.5}
+      aria-hidden="true"
+      className="shrink-0"
+    />
   );
 }
