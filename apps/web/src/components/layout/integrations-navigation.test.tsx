@@ -3,10 +3,13 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const sidebarMocks = vi.hoisted(() => ({ listSessions: vi.fn() }));
+const sidebarMocks = vi.hoisted(() => ({
+  listSessions: vi.fn(),
+  pathname: "/settings/integrations",
+}));
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/settings/integrations",
+  usePathname: () => sidebarMocks.pathname,
 }));
 
 vi.mock("@/lib/api-client", () => ({
@@ -20,6 +23,7 @@ import { ProductSidebar } from "./product-sidebar";
 
 describe("Workspace settings navigation", () => {
   beforeEach(() => {
+    sidebarMocks.pathname = "/settings/integrations";
     window.localStorage.clear();
     sidebarMocks.listSessions.mockReset();
     sidebarMocks.listSessions.mockResolvedValue([]);
@@ -30,12 +34,24 @@ describe("Workspace settings navigation", () => {
     })));
   });
 
-  it("moves workspace configuration out of primary navigation and into a dedicated settings control", async () => {
+  it("restores product navigation outside workspace settings", async () => {
+    sidebarMocks.pathname = "/artifacts";
     render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
 
-    const primaryNavigation = screen.getByRole("navigation", { name: "Product sidebar navigation" });
-    expect(within(primaryNavigation).queryByRole("link", { name: "Integrations" })).not.toBeInTheDocument();
-    expect(within(primaryNavigation).getByRole("link", { name: "Artifacts" })).toHaveAttribute("href", "/artifacts");
+    const productNavigation = screen.getByRole("navigation", { name: "Product sidebar navigation" });
+    expect(within(productNavigation).getByRole("link", { name: "Artifacts" })).toHaveAttribute("aria-current", "page");
+    expect(screen.queryByRole("navigation", { name: "Workspace settings navigation" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /Personal/ })).toBeVisible();
+  });
+
+  it("uses the existing sidebar for workspace settings navigation", async () => {
+    render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
+
+    const settingsNavigation = screen.getByRole("navigation", { name: "Workspace settings navigation" });
+    expect(within(settingsNavigation).getByRole("link", { name: "Integrations" })).toHaveAttribute("href", "/settings/integrations");
+    expect(within(settingsNavigation).getByRole("link", { name: "Integrations" })).toHaveAttribute("aria-current", "page");
+    expect(within(settingsNavigation).queryByRole("link", { name: "Artifacts" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "Product sidebar navigation" })).not.toBeInTheDocument();
 
     const link = screen.getByRole("link", { name: "Workspace settings" });
     expect(link).toHaveAttribute("href", "/settings/integrations");
