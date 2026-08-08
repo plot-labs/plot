@@ -74,7 +74,7 @@ describe("Settings navigation", () => {
     expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings/account");
   });
 
-  it("does not load or render chat history", async () => {
+  it("does not load chat history in workspace settings", async () => {
     sidebarMocks.listSessions.mockResolvedValue([{
       id: "chat-1", title: "Release notes", status: "OPEN", latestGenerationId: "run-1",
       lastActivityAt: null, createdAt: "2026-07-01T00:00:00Z", updatedAt: "2026-07-01T00:00:00Z",
@@ -84,6 +84,18 @@ describe("Settings navigation", () => {
     await Promise.resolve();
     expect(sidebarMocks.listSessions).not.toHaveBeenCalled();
     expect(screen.queryByRole("link", { name: "Release notes" })).not.toBeInTheDocument();
+  });
+
+  it("renders recent chats in the product sidebar history", async () => {
+    sidebarMocks.pathname = "/artifacts";
+    sidebarMocks.listSessions.mockResolvedValue([{
+      id: "chat-1", title: "Release notes", status: "OPEN", latestGenerationId: "run-1",
+      lastActivityAt: null, createdAt: "2026-07-01T00:00:00Z", updatedAt: "2026-07-01T00:00:00Z",
+    }]);
+    render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
+
+    expect(await screen.findByText("History")).toBeVisible();
+    expect(screen.getByRole("link", { name: "Release notes" })).toHaveAttribute("href", "/chat?chat=chat-1");
   });
 
   it("renders a compact selector when only one workspace is available", async () => {

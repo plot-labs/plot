@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FileText, LoaderCircle, MessageSquareText, MoreHorizontal } from "lucide-react";
+import { FileText, LoaderCircle, MoreHorizontal } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 
@@ -30,8 +30,6 @@ function ChatWorkspaceContent() {
   const requestedChatId = searchParams.get("chat");
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [references, setReferences] = useState<GenerationReference[]>([]);
-  const [chatsLoading, setChatsLoading] = useState(true);
-  const [chatsError, setChatsError] = useState("");
   const [referencesLoading, setReferencesLoading] = useState(true);
   const [referencesError, setReferencesError] = useState("");
 
@@ -39,8 +37,7 @@ function ChatWorkspaceContent() {
     const controller = new AbortController();
     void plotApiClient.listSessions({ signal: controller.signal })
       .then((value) => { if (!controller.signal.aborted) setChats(value); })
-      .catch((error) => { if (!controller.signal.aborted) setChatsError(messageFor(error, "Chats could not be loaded.")); })
-      .finally(() => { if (!controller.signal.aborted) setChatsLoading(false); });
+      .catch(() => undefined);
     void plotApiClient.listGenerationReferences({ signal: controller.signal })
       .then((value) => { if (!controller.signal.aborted) setReferences(value); })
       .catch((error) => { if (!controller.signal.aborted) setReferencesError(messageFor(error, "Sources could not be loaded.")); })
@@ -53,33 +50,17 @@ function ChatWorkspaceContent() {
     return <ActiveChatWorkspace activeChat={activeChat} references={references} sourceError={referencesError} />;
   }
 
-  return <ChatHome
-    chats={chats}
-    references={references}
-    chatsLoading={chatsLoading}
-    chatsError={chatsError}
-    referencesLoading={referencesLoading}
-    referencesError={referencesError}
-    onChatCreated={(chat) => setChats((current) => [chat, ...current])}
-  />;
+  return <ChatHome references={references} referencesLoading={referencesLoading} referencesError={referencesError} />;
 }
 
 function ChatHome({
-  chats,
   references,
-  chatsLoading,
-  chatsError,
   referencesLoading,
   referencesError,
-  onChatCreated,
 }: {
-  chats: ChatSummary[];
   references: GenerationReference[];
-  chatsLoading: boolean;
-  chatsError: string;
   referencesLoading: boolean;
   referencesError: string;
-  onChatCreated: (chat: ChatSummary) => void;
 }) {
   const [startError, setStartError] = useState("");
   const [starting, setStarting] = useState(false);
@@ -97,7 +78,6 @@ function ChatHome({
     let chat: ChatSummary;
     try {
       chat = await plotApiClient.createSession({ title: message });
-      onChatCreated(chat);
     } catch (error) {
       setStarting(false);
       setStartError(messageFor(error, "A chat could not be created. Please try again."));
@@ -137,17 +117,6 @@ function ChatHome({
           {!referencesLoading && !referencesError && references.length === 0 ? <SourceEmptyState /> : null}
           {referencesError ? <ErrorNotice message={referencesError} /> : null}
           {startError ? <ErrorNotice message={startError} /> : null}
-          {chatsError ? <ErrorNotice message={chatsError} /> : null}
-          <div className="mx-auto mt-5 max-w-[720px] text-sm">
-            {!chatsLoading && !chatsError && chats.length === 0 ? <p className="px-3 py-3 text-black/42 dark:text-white/42">No chats yet. Start with a source-backed request.</p> : null}
-            {chats.map((chat) => (
-              <Link key={chat.id} href={chatHref(chat.id, chat.latestGenerationId)} className="flex items-center gap-3 border-b border-black/[0.06] px-3 py-3 text-black/45 transition hover:text-black/70 dark:border-white/10 dark:text-white/45 dark:hover:text-white/75">
-                <MessageSquareText aria-hidden="true" className="size-4 shrink-0" />
-                <span className="min-w-0 flex-1 truncate">{chat.title || "Untitled chat"}</span>
-                <span className="text-xs text-black/32 dark:text-white/35">{formatActivity(chat.lastActivityAt)}</span>
-              </Link>
-            ))}
-          </div>
         </div>
       </div>
     </div>
@@ -170,7 +139,6 @@ function ActiveChatWorkspace({ activeChat, references, sourceError }: { activeCh
   const [generating, setGenerating] = useState(false);
   const [saveState, setSaveState] = useState<"saved" | "saving" | "dirty" | "error">("saved");
   const [drafts, setDrafts] = useState<Record<string, Omit<SaveArtifactInput, "expectedRevisionNumber">>>({});
-  const [desktopPanel, setDesktopPanel] = useState<"assistant" | "history">("assistant");
   const [mobilePanel, setMobilePanel] = useState<"assistant" | "history" | null>("assistant");
   const mobileAssistantTriggerRef = useRef<HTMLButtonElement>(null);
   const mobileHistoryTriggerRef = useRef<HTMLButtonElement>(null);
@@ -351,82 +319,59 @@ function ActiveChatWorkspace({ activeChat, references, sourceError }: { activeCh
   return (
     <div className="flex h-screen min-h-0 bg-white dark:bg-[#111113]">
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex min-h-14 shrink-0 items-center justify-between gap-4 bg-white px-4 py-3 dark:bg-[#111113] sm:px-6 lg:px-8">
+        <header className="flex min-h-14 shrink-0 items-center gap-4 bg-white px-4 py-3 dark:bg-[#111113] sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-black/78 dark:text-white/82">
             <FileText aria-hidden="true" className="size-4 shrink-0 text-black/50 dark:text-white/50" />
             <h1 className="truncate">{activeChat.title || "Untitled chat"}</h1>
             <MoreHorizontal aria-hidden="true" className="size-4 shrink-0 text-black/45 dark:text-white/45" />
           </div>
-          <div className="flex shrink-0 items-center gap-3 text-xs text-black/42 dark:text-white/45">
-            <span>Chat activity</span>
-            <a href="#chat-composer" className="rounded-md px-2 py-1 font-semibold text-black/65 transition hover:bg-black/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 dark:text-white/70 dark:hover:bg-white/[0.06]">New artifact</a>
-          </div>
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 pt-4 sm:px-6 lg:px-8 lg:pt-6">
           <div className="mx-auto max-w-7xl space-y-5">
-            <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(250px,0.32fr)]">
-              <div className="min-w-0">
-                <section aria-label="Chat conversation" className="mb-5 space-y-3">
-                  {messages.map((message) => (
-                    <article key={message.id} className="flex justify-end">
-                      <div className="max-w-[min(720px,92%)] rounded-[20px] bg-black/[0.055] px-4 py-3 text-sm leading-6 text-black/80 dark:bg-white/10 dark:text-white/82">
-                        <p>{message.content}</p>
-                        <time dateTime={message.createdAt ?? undefined} className="mt-1 block text-right text-xs text-black/40 dark:text-white/42">{message.timestamp}</time>
-                      </div>
-                    </article>
-                  ))}
-                </section>
-                <GenerationActivityDetail run={generationRun} busy={generating} error={generationError} />
-                {currentArtifact ? (
-                  <ArtifactDocumentSurface
-                    pack={currentArtifact}
-                    historical={historicalArtifact}
-                    client={plotApiClient}
-                    initialDraft={historicalArtifact ? undefined : drafts[currentArtifact.id]}
-                    saveState={saveState}
-                    onSaveStateChange={(state) => {
-                      if (documentKeyRef.current === documentKey) setSaveState(state);
-                    }}
-                    onDraftChange={(draft) => {
-                      if (historicalArtifact || documentKeyRef.current !== documentKey) return;
-                      setDrafts((current) => ({ ...current, [currentArtifact.id]: draft }));
-                    }}
-                    onSaveArtifact={(input) => plotApiClient.saveArtifactVariant(currentArtifact.variant.id, input)}
-                    onPackChange={(next) => {
-                      setDrafts((current) => {
-                        const nextDrafts = { ...current };
-                        delete nextDrafts[next.id];
-                        return nextDrafts;
-                      });
-                      if (documentKeyRef.current !== documentKey) return;
-                      setGeneratedArtifact(next);
-                      setGenerationRun((current) => current ? { ...current, artifact: next } : current);
-                      setHistoricalArtifact(null);
-                      setHistoricalPosition(null);
-                    }}
-                  />
-                ) : !activitiesLoading ? (
-                  <EmptyArtifactState hasSelection={Boolean(selectedActivity)} />
-                ) : null}
-              </div>
-
-              <WorkspaceSidePanel
-                activePanel={desktopPanel}
-                onPanelChange={setDesktopPanel}
-                activities={activities}
-                selectedActivityId={selectedActivity?.id ?? null}
-                loading={activitiesLoading}
-                error={activitiesError}
-                onSelectActivity={selectActivity}
-                currentArtifact={currentArtifact}
-                selectedHistoryPosition={historicalPosition}
-                onSelectHistory={(detail, position) => {
-                  if (documentKeyRef.current !== documentKey) return;
-                  setHistoricalArtifact(detail);
-                  setHistoricalPosition(position);
-                }}
-              />
+            <div className="min-w-0">
+              <section aria-label="Chat conversation" className="mb-5 space-y-3">
+                {messages.map((message) => (
+                  <article key={message.id} className="flex justify-end">
+                    <div className="max-w-[min(720px,92%)] rounded-[20px] bg-black/[0.055] px-4 py-3 text-sm leading-6 text-black/80 dark:bg-white/10 dark:text-white/82">
+                      <p>{message.content}</p>
+                      <time dateTime={message.createdAt ?? undefined} className="mt-1 block text-right text-xs text-black/40 dark:text-white/42">{message.timestamp}</time>
+                    </div>
+                  </article>
+                ))}
+              </section>
+              <GenerationActivityDetail run={generationRun} busy={generating} error={generationError} />
+              {currentArtifact ? (
+                <ArtifactDocumentSurface
+                  pack={currentArtifact}
+                  historical={historicalArtifact}
+                  client={plotApiClient}
+                  initialDraft={historicalArtifact ? undefined : drafts[currentArtifact.id]}
+                  saveState={saveState}
+                  onSaveStateChange={(state) => {
+                    if (documentKeyRef.current === documentKey) setSaveState(state);
+                  }}
+                  onDraftChange={(draft) => {
+                    if (historicalArtifact || documentKeyRef.current !== documentKey) return;
+                    setDrafts((current) => ({ ...current, [currentArtifact.id]: draft }));
+                  }}
+                  onSaveArtifact={(input) => plotApiClient.saveArtifactVariant(currentArtifact.variant.id, input)}
+                  onPackChange={(next) => {
+                    setDrafts((current) => {
+                      const nextDrafts = { ...current };
+                      delete nextDrafts[next.id];
+                      return nextDrafts;
+                    });
+                    if (documentKeyRef.current !== documentKey) return;
+                    setGeneratedArtifact(next);
+                    setGenerationRun((current) => current ? { ...current, artifact: next } : current);
+                    setHistoricalArtifact(null);
+                    setHistoricalPosition(null);
+                  }}
+                />
+              ) : !activitiesLoading ? (
+                <EmptyArtifactState hasSelection={Boolean(selectedActivity)} />
+              ) : null}
             </div>
 
             <div className="lg:hidden">
@@ -496,81 +441,6 @@ function ActiveChatWorkspace({ activeChat, references, sourceError }: { activeCh
         />
       </div>
     </div>
-  );
-}
-
-function WorkspaceSidePanel({
-  activePanel,
-  onPanelChange,
-  activities,
-  selectedActivityId,
-  loading,
-  error,
-  onSelectActivity,
-  currentArtifact,
-  selectedHistoryPosition,
-  onSelectHistory,
-}: {
-  activePanel: "assistant" | "history";
-  onPanelChange: (panel: "assistant" | "history") => void;
-  activities: ChatGeneration[];
-  selectedActivityId: string | null;
-  loading: boolean;
-  error: string;
-  onSelectActivity: (activity: ChatGeneration) => void;
-  currentArtifact: Artifact | null;
-  selectedHistoryPosition: number | null;
-  onSelectHistory: (detail: ArtifactHistoryDetail, position: number) => void;
-}) {
-  return (
-    <aside className="hidden min-w-0 rounded-xl border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-white/[0.04] lg:sticky lg:top-3 lg:block lg:h-fit">
-      <div role="tablist" aria-label="Chat workspace panels" className="flex gap-1 rounded-lg bg-black/[0.04] p-1 dark:bg-white/[0.06]">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activePanel === "assistant"}
-          aria-controls="desktop-chat-assistant-panel"
-          onClick={() => onPanelChange("assistant")}
-          className={`min-h-10 flex-1 rounded-md px-3 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${activePanel === "assistant" ? "bg-white text-black shadow-sm dark:bg-white/15 dark:text-white" : "text-black/55 hover:text-black/75 dark:text-white/58 dark:hover:text-white/80"}`}
-        >
-          Assistant
-        </button>
-        <button
-          type="button"
-          role="tab"
-          disabled={!currentArtifact}
-          aria-selected={activePanel === "history"}
-          aria-controls="desktop-chat-history-panel"
-          onClick={() => onPanelChange("history")}
-          className={`min-h-10 flex-1 rounded-md px-3 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-40 ${activePanel === "history" ? "bg-white text-black shadow-sm dark:bg-white/15 dark:text-white" : "text-black/55 hover:text-black/75 dark:text-white/58 dark:hover:text-white/80"}`}
-        >
-          History
-        </button>
-      </div>
-      {activePanel === "assistant" ? (
-        <div id="desktop-chat-assistant-panel" role="tabpanel" aria-label="Assistant panel" className="mt-4">
-          <ChatActivityPanel
-            activities={activities}
-            selectedActivityId={selectedActivityId}
-            loading={loading}
-            error={error}
-            onSelect={onSelectActivity}
-          />
-        </div>
-      ) : currentArtifact ? (
-        <div id="desktop-chat-history-panel" role="tabpanel" aria-label="History panel" className="mt-4">
-          <ArtifactHistoryPanel
-            variantId={currentArtifact.variant.id}
-            client={plotApiClient}
-            refreshKey={currentArtifact.variant.revisionId}
-            selectedPosition={selectedHistoryPosition}
-            onSelect={onSelectHistory}
-          />
-        </div>
-      ) : (
-        <p className="mt-4 text-sm leading-6 text-black/48 dark:text-white/52">Select a completed artifact to inspect its content history.</p>
-      )}
-    </aside>
   );
 }
 
