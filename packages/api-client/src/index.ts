@@ -308,6 +308,7 @@ export interface WorkspaceSummary {
   name: string;
   slug: string;
   status: string;
+  logoUrl: string | null;
   role: string | null;
 }
 
@@ -371,6 +372,7 @@ export interface PlotApiClient {
   getGitHubReleaseActivity(sourceScopeId: string, options?: RequestOptions): Promise<GitHubReleaseActivity | null>;
   retryGitHubReleaseDraft(sourceScopeId: string, requestId: string, options?: RequestOptions): Promise<GitHubReleaseActivity>;
   getWorkspace(id: string, options?: RequestOptions): Promise<WorkspaceSummary>;
+  updateWorkspace(id: string, input: { name?: string; logoUrl?: string }, options?: RequestOptions): Promise<WorkspaceSummary>;
   listSessions(options?: RequestOptions): Promise<WorkSessionSummary[]>;
   createSession(input: { title?: string | null }, options?: RequestOptions): Promise<WorkSessionSummary>;
   updateSession(id: string, input: { title?: string; latestGenerationId?: string }, options?: RequestOptions): Promise<WorkSessionSummary>;
@@ -462,6 +464,11 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
       { method: "POST", signal: requestOptions?.signal },
     ),
     getWorkspace: (id, requestOptions) => request(`/workspaces/${encodeURIComponent(id)}`, { signal: requestOptions?.signal }),
+    updateWorkspace: (id, input, requestOptions) => request(`/workspaces/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+      signal: requestOptions?.signal,
+    }),
     listSessions: (requestOptions) => request("/sessions", { signal: requestOptions?.signal }),
     createSession: (input, requestOptions) => request("/sessions", {
       method: "POST",

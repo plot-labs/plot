@@ -17,6 +17,7 @@ class Workspace(
 	var status: String,
 	var createdAt: Instant,
 	var updatedAt: Instant,
+	var logoUrl: String? = null,
 	var plan: String = "trial",
 	var polarSubscriptionId: String? = null,
 	var polarCustomerId: String? = null,

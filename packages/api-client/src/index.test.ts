@@ -3,6 +3,26 @@ import { describe, expect, it, vi } from "vitest";
 import { PlotApiError, createPlotApiClient } from "./index";
 
 describe("Plot API client", () => {
+  it("reads and updates a workspace profile with workspace scoping", async () => {
+    const fetcher = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ id: "workspace-1", name: "Personal", slug: "personal", status: "ACTIVE", logoUrl: null, role: "OWNER" }))
+      .mockResolvedValueOnce(Response.json({ id: "workspace-1", name: "Product", slug: "personal", status: "ACTIVE", logoUrl: "data:image/png;base64,abc", role: "OWNER" }));
+    const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
+
+    await client.getWorkspace("workspace-1");
+    await client.updateWorkspace("workspace-1", { name: "Product", logoUrl: "data:image/png;base64,abc" });
+
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+      "/api/plot/workspaces/workspace-1",
+      "/api/plot/workspaces/workspace-1",
+    ]);
+    expect(fetcher.mock.calls[1]?.[1]).toMatchObject({
+      method: "PATCH",
+      body: JSON.stringify({ name: "Product", logoUrl: "data:image/png;base64,abc" }),
+    });
+    expect(new Headers(fetcher.mock.calls[1]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
+  });
+
   it("uses the session contracts with workspace scoping", async () => {
     const fetcher = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(Response.json([]))
