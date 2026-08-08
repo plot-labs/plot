@@ -102,6 +102,14 @@ export function IntegrationsWorkspace() {
     && !repositoryLoadFailed
     && (selectedConnection?.status === "ACTIVE"
       || selectedConnection?.statusReason === "INSTALLATION_UNINSTALLED");
+  const showStatusMessage = Boolean(message && !connectionNeedsReconnect);
+  const showGitHubDetails = isLoading
+    || isOwner === null
+    || !isOwner
+    || !selectedConnection
+    || (connectionNeedsReconnect && repositories.length === 0)
+    || showStatusMessage
+    || repositoryAccessAvailable;
   const pendingAccessCheckId = repositories.find((repository) =>
     repository.id && (repository.accessCheckStatus === "QUEUED" || repository.accessCheckStatus === "CHECKING"),
   )?.id ?? null;
@@ -429,11 +437,22 @@ export function IntegrationsWorkspace() {
                     Monitor one repository&apos;s releases and prepare review-ready changelog drafts.
                   </p>
                 </div>
-                {!isLoading && <ConnectionBadge status={connectionBadgeStatus} />}
+                {!isLoading && (
+                  <div className="flex shrink-0 items-center gap-2">
+                    <ConnectionBadge status={connectionBadgeStatus} />
+                    {isOwner && selectedConnection && (selectedConnection.status !== "ACTIVE" || connectionNeedsReconnect) && (
+                      <ReconnectButton
+                        busy={action === "install"}
+                        onReconnect={() => { void installGitHub(); }}
+                      />
+                    )}
+                  </div>
+                )}
               </div>
 
-              <div className="border-t border-black/[0.07] px-5 pb-6 dark:border-white/[0.08] sm:px-6">
-                {message && (
+              {showGitHubDetails && (
+                <div className="border-t border-black/[0.07] px-5 pb-6 dark:border-white/[0.08] sm:px-6">
+                {showStatusMessage && message && (
                   <StatusMessage
                     message={message}
                     requestId={messageRequestId}
@@ -456,13 +475,6 @@ export function IntegrationsWorkspace() {
                   />
                 ) : (
                   <div className="pt-6">
-                    {(!activeConnection || connectionNeedsReconnect) && (
-                      <ConnectionRecoveryState
-                        connection={selectedConnection}
-                        busy={action === "install"}
-                        onReconnect={() => { void installGitHub(); }}
-                      />
-                    )}
                     {repositoryAccessAvailable && (
                       <>
                         <div className="flex items-center justify-between gap-4">
@@ -579,7 +591,8 @@ export function IntegrationsWorkspace() {
                     )}
                   </div>
                 )}
-              </div>
+                </div>
+              )}
             </div>
           </section>
         )}
@@ -686,6 +699,28 @@ function BrandIcon({ brand }: { brand: IntegrationBrand }) {
         </svg>
       )}
     </div>
+  );
+}
+
+function ReconnectButton({
+  busy,
+  onReconnect,
+}: {
+  busy: boolean;
+  onReconnect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onReconnect}
+      disabled={busy}
+      aria-label="Reconnect GitHub"
+      title="Reconnect GitHub"
+      aria-busy={busy}
+      className="inline-flex size-8 items-center justify-center rounded-[9px] border border-black/10 text-black/50 transition hover:border-black/20 hover:bg-black/[0.04] hover:text-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:cursor-wait disabled:opacity-50 dark:border-white/12 dark:text-white/55 dark:hover:border-white/25 dark:hover:bg-white/10 dark:hover:text-white/85 dark:focus-visible:ring-white/35"
+    >
+      {busy ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" /> : <RefreshCw className="size-3.5" aria-hidden="true" />}
+    </button>
   );
 }
 
@@ -857,38 +892,6 @@ function ReleaseActivityLoadError({
   );
 }
 
-function ConnectionRecoveryState({
-  connection,
-  busy,
-  onReconnect,
-}: {
-  connection: GitHubConnection;
-  busy: boolean;
-  onReconnect: () => void;
-}) {
-  const uninstalled = connection.statusReason === "INSTALLATION_UNINSTALLED" || connection.status === "DISABLED";
-  const message = connection.statusReason === "INSTALLATION_SUSPENDED"
-    ? "GitHub installation is suspended. Restore it in GitHub, then check repository access again."
-    : connection.statusReason === "AUTH_EXPIRED"
-      ? "GitHub authentication expired. Reconnect GitHub to restore access."
-      : uninstalled
-        ? "The GitHub installation was removed. Reconnect GitHub to restore repository access."
-        : "GitHub access needs attention before new work can be fetched.";
-  return (
-    <div role="status" aria-live="polite" className="mb-5 rounded-[10px] border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-100">
-      <div>{message}</div>
-      <button
-        type="button"
-        onClick={onReconnect}
-        disabled={busy}
-        className="mt-2 font-semibold underline underline-offset-2 disabled:opacity-50"
-      >
-        Reconnect GitHub
-      </button>
-    </div>
-  );
-}
-
 function RepositoryAccessLabel({
   repository,
   connectionActive,
@@ -960,14 +963,14 @@ function RepositoryAccessRecovery({
 }
 
 function ConnectionBadge({ status }: { status: "connected" | "attention" | "disconnected" }) {
+  if (status === "attention") return null;
+
   const styles = status === "connected"
     ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
-    : status === "attention"
-      ? "bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-200"
-      : "bg-black/[0.05] text-black/45 dark:bg-white/10 dark:text-white/48";
+    : "bg-black/[0.05] text-black/45 dark:bg-white/10 dark:text-white/48";
   return (
     <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${styles}`}>
-      {status === "connected" ? "Connected" : status === "attention" ? "Needs attention" : "Disconnected"}
+      {status === "connected" ? "Connected" : "Disconnected"}
     </span>
   );
 }
