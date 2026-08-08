@@ -2,6 +2,7 @@
 
 import {
   ArrowLeft01Icon,
+  MoreVerticalIcon,
   PlugSocketIcon,
   Settings02Icon,
   Shapes01Icon,
@@ -373,10 +374,18 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
             <div className="flex size-8 items-center justify-center rounded-full border border-black/10 bg-white text-xs font-semibold text-black/65 dark:border-white/10 dark:bg-white/10 dark:text-white/75">
               <UserRound className="size-4" />
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="truncate text-[13px] font-semibold">{account?.user.displayName ?? "Plot"}</div>
               <div className="truncate text-xs text-black/45 dark:text-white/45">{account?.user.email ?? currentWorkspaceName}</div>
             </div>
+            <HugeiconsIcon
+              icon={MoreVerticalIcon}
+              size={16}
+              color="currentColor"
+              strokeWidth={1.5}
+              aria-hidden="true"
+              className="ml-auto shrink-0 text-black/38 dark:text-white/42"
+            />
           </button>
         </div>
       </aside>
