@@ -1,6 +1,6 @@
 "use client";
 
-import { Settings02Icon, Shapes01Icon } from "@hugeicons/core-free-icons";
+import { PlugSocketIcon, Settings02Icon, Shapes01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import Image from "next/image";
 import Link from "next/link";
@@ -20,8 +20,12 @@ import {
 import type { ProductTheme } from "@/components/layout/product-shell";
 import { cn } from "@/lib/utils";
 
-const navItems = [
+const productNavItems = [
   { href: "/artifacts", label: "Artifacts", icon: ArtifactsIcon },
+];
+
+const workspaceSettingsNavItems = [
+  { href: "/settings/integrations", label: "Integrations", icon: IntegrationsIcon },
 ];
 
 type ProductSidebarProps = {
@@ -46,6 +50,8 @@ type Account = {
 
 export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: ProductSidebarProps) {
   const pathname = usePathname();
+  const settingsMode = pathname === "/settings" || pathname.startsWith("/settings/");
+  const sidebarItems = settingsMode ? workspaceSettingsNavItems : productNavItems;
   const [account, setAccount] = useState<Account | null>(null);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
@@ -255,8 +261,11 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
           )}
         </div>
 
-        <nav className="space-y-1 px-3 pb-4" aria-label="Product sidebar navigation">
-          {navItems.map((item) => {
+        <nav
+          className="space-y-1 px-3 pb-4"
+          aria-label={settingsMode ? "Workspace settings navigation" : "Product sidebar navigation"}
+        >
+          {sidebarItems.map((item) => {
             const Icon = item.icon;
             const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
 
@@ -369,6 +378,19 @@ function ArtifactsIcon() {
   return (
     <HugeiconsIcon
       icon={Shapes01Icon}
+      size={16}
+      color="currentColor"
+      strokeWidth={1.5}
+      aria-hidden="true"
+      className="shrink-0"
+    />
+  );
+}
+
+function IntegrationsIcon() {
+  return (
+    <HugeiconsIcon
+      icon={PlugSocketIcon}
       size={16}
       color="currentColor"
       strokeWidth={1.5}
