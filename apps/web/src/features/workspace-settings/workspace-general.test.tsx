@@ -49,4 +49,13 @@ describe("WorkspaceGeneral", () => {
     }));
     expect(await screen.findByRole("status")).toHaveTextContent("Workspace settings saved.");
   });
+
+  it("reloads the profile when the selected workspace changes", async () => {
+    render(<WorkspaceGeneral />);
+
+    await screen.findByRole("textbox", { name: "Workspace name" });
+    window.dispatchEvent(new CustomEvent("plot:workspace-changed", { detail: { id: "workspace-2" } }));
+
+    await waitFor(() => expect(mocks.getWorkspace).toHaveBeenCalledTimes(2));
+  });
 });

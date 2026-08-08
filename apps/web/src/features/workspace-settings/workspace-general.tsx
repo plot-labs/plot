@@ -20,7 +20,25 @@ export function WorkspaceGeneral() {
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reloadNonce, setReloadNonce] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    function handleWorkspaceChanged() {
+      setWorkspace(null);
+      setName("");
+      setSavedName("");
+      setLogoUrl(null);
+      setSavedLogoUrl(null);
+      setMessage(null);
+      setError(null);
+      setIsLoading(true);
+      setReloadNonce((value) => value + 1);
+    }
+
+    window.addEventListener("plot:workspace-changed", handleWorkspaceChanged);
+    return () => window.removeEventListener("plot:workspace-changed", handleWorkspaceChanged);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -52,7 +70,7 @@ export function WorkspaceGeneral() {
       });
 
     return () => { cancelled = true; };
-  }, []);
+  }, [reloadNonce]);
 
   const dirty = name.trim() !== savedName || logoUrl !== savedLogoUrl;
   const canEdit = workspace?.role === "OWNER";

@@ -113,6 +113,17 @@ describe("IntegrationsWorkspace", () => {
     expect(connect).toBeDisabled();
   });
 
+  it("reloads the connection state when the selected workspace changes", async () => {
+    mocks.listConnections.mockResolvedValueOnce([]).mockResolvedValueOnce([connection]);
+
+    render(<IntegrationsWorkspace />);
+    await screen.findByRole("button", { name: "Connect GitHub" });
+    window.dispatchEvent(new CustomEvent("plot:workspace-changed", { detail: { id: "workspace-2" } }));
+
+    expect(await screen.findByText("Connected")).toBeVisible();
+    expect(mocks.listConnections).toHaveBeenCalledTimes(2);
+  });
+
   it("keeps the connected state compact after the GitHub installation loads", async () => {
     mocks.listConnections.mockResolvedValue([connection]);
 
