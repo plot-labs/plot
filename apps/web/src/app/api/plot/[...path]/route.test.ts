@@ -155,6 +155,7 @@ describe("Plot same-origin proxy", () => {
   });
 
   it.each([
+    ["POST", ["workspaces"]],
     ["PATCH", ["workspaces", "018fd000-0000-7000-8000-000000000002"]],
     ["GET", ["artifacts"]],
     ["GET", ["artifacts", "artifact-1"]],

@@ -13,6 +13,7 @@ import org.springframework.test.context.TestPropertySource
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.patch
+import org.springframework.test.web.servlet.post
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -47,6 +48,19 @@ class WorkspaceApiIntegrationTest {
 				status { isNotFound() }
 				jsonPath("$.error") { value("NOT_FOUND") }
 			}
+	}
+
+	@Test
+	fun ownerCanCreateWorkspace() {
+		mockMvc.post("/api/workspaces") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"name":"Studio"}"""
+		}.andExpect {
+			status { isOk() }
+			jsonPath("$.name") { value("Studio") }
+			jsonPath("$.status") { value("ACTIVE") }
+			jsonPath("$.role") { value("OWNER") }
+		}
 	}
 
 	@Test

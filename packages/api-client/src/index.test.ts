@@ -3,6 +3,21 @@ import { describe, expect, it, vi } from "vitest";
 import { PlotApiError, createPlotApiClient } from "./index";
 
 describe("Plot API client", () => {
+  it("creates a workspace with workspace-independent authentication", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json({
+      id: "workspace-2", name: "Product", slug: "workspace-12345678", status: "ACTIVE", logoUrl: null, role: "OWNER",
+    }));
+    const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
+
+    await client.createWorkspace({ name: "Product" });
+
+    expect(fetcher).toHaveBeenCalledWith("/api/plot/workspaces", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ name: "Product" }),
+    }));
+    expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
+  });
+
   it("reads and updates a workspace profile with workspace scoping", async () => {
     const fetcher = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(Response.json({ id: "workspace-1", name: "Personal", slug: "personal", status: "ACTIVE", logoUrl: null, role: "OWNER" }))

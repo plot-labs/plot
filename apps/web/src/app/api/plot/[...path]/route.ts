@@ -165,8 +165,9 @@ function callbackErrorKind(status: number, code: unknown): "invalid" | "unauthor
 function isAllowed(method: string, path: string[]): boolean {
   if (path.length === 0 || path.some((segment) => !safeSegment.test(segment))) return false;
   const route = path.join("/");
-  if (method === "GET" && route === "me") return true;
-  if (method === "POST" && route === "account/bootstrap") return true;
+	if (method === "GET" && route === "me") return true;
+	if (method === "POST" && route === "account/bootstrap") return true;
+	if (method === "POST" && route === "workspaces") return true;
   if (method === "GET" && /^workspaces\/[0-9a-fA-F-]+$/.test(route)) return true;
   if (method === "PATCH" && /^workspaces\/[0-9a-fA-F-]+$/.test(route)) return true;
   if (method === "GET" && route === "github/connections") return true;
