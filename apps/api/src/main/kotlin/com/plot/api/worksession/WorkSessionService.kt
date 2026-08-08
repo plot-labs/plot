@@ -36,7 +36,7 @@ class WorkSessionService(
 		return jdbcTemplate.query(
 			"""
 			select gr.id, gr.status, gr.user_instruction, gr.created_at, gr.finished_at, gr.error_code,
-			       cp.id, cp.status, cp.title
+			       cp.id, cp.status, cp.title, cp.updated_at
 			from generation_runs gr
 			left join content_packs cp
 			  on cp.workspace_id = gr.workspace_id and cp.generation_run_id = gr.id
@@ -54,7 +54,13 @@ class WorkSessionService(
 					completedAt = rs.getTimestamp(5)?.toInstant(),
 					failureCode = rs.getString(6),
 					artifact = artifactId?.let {
-						ArtifactSummaryResponse(it, generationId, rs.getString(8), rs.getString(9))
+						ArtifactSummaryResponse(
+							id = it,
+							generationRunId = generationId,
+							status = rs.getString(8),
+							title = rs.getString(9),
+							updatedAt = rs.getTimestamp(10).toInstant(),
+						)
 					},
 				)
 			},

@@ -190,6 +190,7 @@ class WorkSessionApiIntegrationTest {
 				jsonPath("$[1].instruction") { value("Customer update") }
 				jsonPath("$[1].artifact.id") { value(artifactId.toString()) }
 				jsonPath("$[1].artifact.title") { value("Customer update") }
+				jsonPath("$[1].artifact.updatedAt") { exists() }
 			}
 	}
 

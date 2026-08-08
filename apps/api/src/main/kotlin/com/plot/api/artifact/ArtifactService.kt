@@ -54,10 +54,18 @@ class ArtifactService(
 		) ?: 0L
 		val items = jdbcTemplate.query(
 			"""
-			select id, generation_run_id, status, title from content_packs
-			where workspace_id = ? order by created_at desc, id desc limit ? offset ?
+			select id, generation_run_id, status, title, updated_at from content_packs
+			where workspace_id = ? order by updated_at desc, id desc limit ? offset ?
 			""".trimIndent(),
-			{ rs, _ -> ArtifactSummaryResponse(rs.getObject(1, UUID::class.java), rs.getObject(2, UUID::class.java), rs.getString(3), rs.getString(4)) },
+			{ rs, _ ->
+				ArtifactSummaryResponse(
+					id = rs.getObject(1, UUID::class.java),
+					generationRunId = rs.getObject(2, UUID::class.java),
+					status = rs.getString(3),
+					title = rs.getString(4),
+					updatedAt = rs.getTimestamp(5).toInstant(),
+				)
+			},
 			devContext.devWorkspaceId, size, page * size,
 		)
 		return ArtifactPageResponse(items, page, size, total, if (total == 0L) 0 else ((total + size - 1) / size).toInt())
