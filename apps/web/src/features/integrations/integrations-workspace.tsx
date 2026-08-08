@@ -418,7 +418,7 @@ export function IntegrationsWorkspace() {
             <SectionHeading
               id="available-now-heading"
               title="Available now"
-              description="Configured for this workspace"
+              description={selectedConnection ? "Configured for this workspace" : "Ready to connect"}
             />
 
             <div className="mt-4 overflow-hidden rounded-[16px] border border-black/[0.09] bg-white shadow-[0_1px_2px_rgb(15_23_42_/_0.025)] dark:border-white/10 dark:bg-white/[0.04]">
@@ -439,7 +439,18 @@ export function IntegrationsWorkspace() {
                 </div>
                 {!isLoading && (
                   <div className="flex shrink-0 items-center gap-2">
-                    <ConnectionBadge status={connectionBadgeStatus} />
+                    {selectedConnection && <ConnectionBadge status={connectionBadgeStatus} />}
+                    {isOwner && !selectedConnection && (
+                      <button
+                        type="button"
+                        onClick={() => { void installGitHub(); }}
+                        disabled={action === "install"}
+                        className="inline-flex items-center gap-2 rounded-full bg-black px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:cursor-wait disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-white/85 dark:focus-visible:ring-white/35"
+                      >
+                        {action === "install" && <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />}
+                        Connect GitHub
+                      </button>
+                    )}
                     {isOwner && selectedConnection && (selectedConnection.status !== "ACTIVE" || connectionNeedsReconnect) && (
                       <ReconnectButton
                         busy={action === "install"}
@@ -470,8 +481,6 @@ export function IntegrationsWorkspace() {
                 ) : !selectedConnection || (connectionNeedsReconnect && repositories.length === 0) ? (
                   <ConnectState
                     reconnect={hasInactiveConnection || connectionNeedsReconnect}
-                    busy={action === "install"}
-                    onConnect={() => { void installGitHub(); }}
                   />
                 ) : (
                   <div className="pt-6">
@@ -975,9 +984,9 @@ function ConnectionBadge({ status }: { status: "connected" | "attention" | "disc
   );
 }
 
-function ConnectState({ reconnect, busy, onConnect }: { reconnect: boolean; busy: boolean; onConnect: () => void }) {
+function ConnectState({ reconnect }: { reconnect: boolean }) {
   return (
-    <div className="mt-6 border-t border-black/[0.08] pt-6 dark:border-white/10">
+    <div className="mt-6 pt-6">
       <h3 className="text-sm font-semibold text-black/80 dark:text-white/82">
         {reconnect ? "GitHub access needs to be restored" : "Connect GitHub to get started"}
       </h3>
@@ -986,15 +995,6 @@ function ConnectState({ reconnect, busy, onConnect }: { reconnect: boolean; busy
           ? "The previous installation is no longer active. Reinstall the GitHub App to choose repository access again."
           : "Plot requests read-only repository metadata and pull requests. You will choose a repository after installation."}
       </p>
-      <button
-        type="button"
-        onClick={onConnect}
-        disabled={busy}
-        className="mt-5 inline-flex items-center gap-2 rounded-full bg-black px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 dark:bg-white dark:text-black"
-      >
-        {busy && <LoaderCircle className="size-4 animate-spin" />}
-        {reconnect ? "Reconnect GitHub" : "Connect GitHub"}
-      </button>
     </div>
   );
 }

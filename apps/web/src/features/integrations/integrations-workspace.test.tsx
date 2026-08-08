@@ -116,10 +116,12 @@ describe("IntegrationsWorkspace", () => {
     mocks.createInstallationRequest.mockReturnValue(new Promise(() => undefined));
 
     render(<IntegrationsWorkspace />);
-    fireEvent.click(await screen.findByRole("button", { name: "Connect GitHub" }));
+    const connect = await screen.findByRole("button", { name: "Connect GitHub" });
+    expect(screen.getAllByRole("button", { name: "Connect GitHub" })).toHaveLength(1);
+    fireEvent.click(connect);
 
     await waitFor(() => expect(mocks.createInstallationRequest).toHaveBeenCalledTimes(1));
-    expect(screen.getByRole("button", { name: "Connect GitHub" })).toBeDisabled();
+    expect(connect).toBeDisabled();
   });
 
   it("loads callback repositories and immediately removes callback query parameters", async () => {
