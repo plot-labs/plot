@@ -48,7 +48,7 @@ describe("Workspace settings navigation", () => {
     render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
 
     expect(screen.getByRole("link", { name: "Back to app" })).toHaveAttribute("href", "/artifacts");
-    expect(screen.getByRole("searchbox", { name: "Search workspace settings" })).toHaveAttribute("placeholder", "Search...");
+    expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Plot home" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Personal/ })).not.toBeInTheDocument();
 
@@ -61,18 +61,6 @@ describe("Workspace settings navigation", () => {
     expect(screen.queryByRole("link", { name: "Sources" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "New session" })).not.toBeInTheDocument();
     expect(screen.queryByText("Sessions", { selector: "div" })).not.toBeInTheDocument();
-  });
-
-  it("filters workspace settings navigation", () => {
-    render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
-
-    const search = screen.getByRole("searchbox", { name: "Search workspace settings" });
-    fireEvent.change(search, { target: { value: "billing" } });
-    expect(screen.queryByRole("link", { name: "Integrations" })).not.toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("No settings found");
-
-    fireEvent.change(search, { target: { value: "integ" } });
-    expect(screen.getByRole("link", { name: "Integrations" })).toBeVisible();
   });
 
   it("does not load or render session history", async () => {
