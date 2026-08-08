@@ -53,6 +53,7 @@ describe("Workspace settings navigation", () => {
     expect(await screen.findByRole("button", { name: /Personal/ })).toBeVisible();
 
     const settingsNavigation = screen.getByRole("navigation", { name: "Workspace settings navigation" });
+    expect(within(settingsNavigation).getByRole("link", { name: "General" })).toHaveAttribute("href", "/settings/general");
     expect(within(settingsNavigation).getByRole("link", { name: "Integrations" })).toHaveAttribute("href", "/settings/integrations");
     expect(within(settingsNavigation).getByRole("link", { name: "Integrations" })).toHaveAttribute("aria-current", "page");
     expect(within(settingsNavigation).queryByRole("link", { name: "Artifacts" })).not.toBeInTheDocument();
@@ -85,7 +86,7 @@ describe("Workspace settings navigation", () => {
 
     const option = screen.getByRole("menuitemradio", { name: "Personal workspace" });
     expect(screen.getByText("Workspaces")).toBeInTheDocument();
-    expect(option).toHaveClass("h-12");
+    expect(option).toHaveClass("h-9");
     expect(option).toHaveAttribute("aria-checked", "true");
     expect(screen.getByRole("button", { name: "Create workspace" })).toBeDisabled();
     expect(screen.queryByText("OWNER")).not.toBeInTheDocument();

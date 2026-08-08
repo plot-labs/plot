@@ -12,6 +12,7 @@ fun Workspace.toResponse(
 		name = name,
 		slug = slug,
 		status = status,
+		logoUrl = logoUrl,
 		plan = plan,
 		entitlementStatus = entitlement.status,
 		accessMode = entitlement.accessMode,

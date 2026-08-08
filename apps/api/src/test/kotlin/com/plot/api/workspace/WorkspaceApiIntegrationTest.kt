@@ -3,6 +3,7 @@ package com.plot.api.workspace
 import com.plot.api.TestcontainersConfiguration
 import com.plot.api.dev.DevContext
 import java.util.UUID
+import org.springframework.http.MediaType
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -11,6 +12,7 @@ import org.springframework.context.annotation.Import
 import org.springframework.test.context.TestPropertySource
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.get
+import org.springframework.test.web.servlet.patch
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -45,5 +47,27 @@ class WorkspaceApiIntegrationTest {
 				status { isNotFound() }
 				jsonPath("$.error") { value("NOT_FOUND") }
 			}
+	}
+
+	@Test
+	fun ownerCanUpdateWorkspaceProfile() {
+		mockMvc.patch("/api/workspaces/${devContext.devWorkspaceId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"name":"Product","logoUrl":"data:image/png;base64,abc"}"""
+		}.andExpect {
+			status { isOk() }
+			jsonPath("$.name") { value("Product") }
+			jsonPath("$.logoUrl") { value("data:image/png;base64,abc") }
+			jsonPath("$.role") { value("OWNER") }
+		}
+
+		mockMvc.patch("/api/workspaces/${devContext.devWorkspaceId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"name":"Personal","logoUrl":""}"""
+		}.andExpect {
+			status { isOk() }
+			jsonPath("$.name") { value("Personal") }
+			jsonPath("$.logoUrl") { doesNotExist() }
+		}
 	}
 }

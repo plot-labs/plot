@@ -32,6 +32,7 @@ const productNavItems = [
 ];
 
 const workspaceSettingsNavItems = [
+  { href: "/settings/general", label: "General", icon: SettingsIcon },
   { href: "/settings/integrations", label: "Integrations", icon: IntegrationsIcon },
 ];
 
@@ -51,7 +52,7 @@ const appHomeHref = "/artifacts";
 
 type Account = {
   user: { id: string; email: string; displayName: string };
-  workspaces: Array<{ id: string; name: string; slug: string; role: string }>;
+  workspaces: Array<{ id: string; name: string; slug: string; logoUrl: string | null; role: string }>;
   defaultWorkspaceId: string;
 };
 
@@ -95,6 +96,24 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
     mark: item.name.slice(0, 1).toUpperCase(),
     selected: item.id === currentWorkspaceId,
   })) ?? [];
+
+  useEffect(() => {
+    function updateWorkspace(event: Event) {
+      const workspace = (event as CustomEvent<{ id?: string; name?: string; logoUrl?: string | null }>).detail;
+      if (!workspace?.id) return;
+      setAccount((current) => current
+        ? {
+          ...current,
+          workspaces: current.workspaces.map((item) => item.id === workspace.id
+            ? { ...item, name: workspace.name ?? item.name, logoUrl: workspace.logoUrl === undefined ? item.logoUrl : workspace.logoUrl }
+            : item),
+        }
+        : current);
+    }
+
+    window.addEventListener("plot:workspace-updated", updateWorkspace);
+    return () => window.removeEventListener("plot:workspace-updated", updateWorkspace);
+  }, []);
 
   useEffect(() => {
     if (!workspaceMenuOpen) {
@@ -214,9 +233,7 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
                     : "border-black/[0.12] bg-white/40 text-black/76 hover:bg-white/65 dark:border-white/12 dark:bg-white/5 dark:text-white/78 dark:hover:bg-white/10",
                 )}
               >
-                <span className="flex size-6 shrink-0 items-center justify-center rounded-[7px] bg-[#ef3f2c] font-serif text-[14px] font-semibold leading-none text-white">
-                  {currentWorkspaceMark}
-                </span>
+                <WorkspaceAvatar logoUrl={currentWorkspace?.logoUrl} mark={currentWorkspaceMark} variant="trigger" />
                 <span className="min-w-0 flex-1 truncate">{currentWorkspaceName}</span>
                 <ChevronDown
                   className={cn(
@@ -232,10 +249,10 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
                   aria-label="Workspace menu"
                   className="absolute left-3 top-[76px] z-50 w-[228px] overflow-hidden rounded-[12px] border border-black/[0.08] bg-white text-[13px] text-black/76 shadow-[0_12px_30px_rgb(15_23_42_/_0.1)] dark:border-white/10 dark:bg-[#292a2f] dark:text-white/80"
                 >
-                  <div className="border-b border-black/[0.08] px-3 pb-2 pt-3 text-[13px] font-medium text-black/45 dark:border-white/10 dark:text-white/45">
+                  <div className="border-b border-black/[0.08] px-3 pb-1.5 pt-2.5 text-[12px] font-medium text-black/45 dark:border-white/10 dark:text-white/45">
                     Workspaces
                   </div>
-                  <div className="p-1.5">
+                  <div className="p-1">
                     {workspaceItems.map((workspace) => (
                       <button
                         key={workspace.id}
@@ -250,32 +267,23 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
                           window.location.reload();
                         }}
                         className={cn(
-                          "flex h-12 w-full items-center gap-3 rounded-[8px] px-2 text-left font-medium transition hover:bg-black/[0.04] focus-visible:bg-black/[0.04] focus-visible:outline-none dark:hover:bg-white/10 dark:focus-visible:bg-white/10",
+                          "flex h-9 w-full items-center gap-2.5 rounded-[8px] px-2 text-left font-medium transition hover:bg-black/[0.04] focus-visible:bg-black/[0.04] focus-visible:outline-none dark:hover:bg-white/10 dark:focus-visible:bg-white/10",
                           workspace.selected && "bg-black/[0.035] text-black/82 dark:bg-white/[0.07] dark:text-white/88",
                         )}
                       >
-                        <span
-                          className={cn(
-                            "flex size-9 shrink-0 items-center justify-center rounded-[9px] font-serif text-[16px] font-semibold leading-none",
-                            workspace.selected
-                              ? "bg-[#ef3f2c] text-white"
-                              : "bg-black/[0.06] text-black/48 dark:bg-white/10 dark:text-white/52",
-                          )}
-                        >
-                          {workspace.mark}
-                        </span>
+                        <WorkspaceAvatar logoUrl={workspace.logoUrl} mark={workspace.mark} variant="menu" />
                         <span className="min-w-0 flex-1 truncate text-[15px]">{workspace.name}</span>
                         {workspace.selected && <Check className="size-4 shrink-0 text-black/55 dark:text-white/60" />}
                       </button>
                     ))}
                   </div>
-                  <div className="border-t border-black/[0.08] p-1.5 dark:border-white/10">
+                  <div className="border-t border-black/[0.08] p-1 dark:border-white/10">
                     <button
                       type="button"
                       disabled
                       aria-label="Create workspace"
                       title="Workspace creation coming soon"
-                      className="flex h-11 w-full items-center gap-3 rounded-[8px] px-2 text-left text-[15px] font-medium text-black/40 dark:text-white/40"
+                      className="flex h-9 w-full items-center gap-2.5 rounded-[8px] px-2 text-left text-[13px] font-medium text-black/40 dark:text-white/40"
                     >
                       <Plus className="size-5 shrink-0" />
                       Create workspace
@@ -422,6 +430,38 @@ function SettingsIcon() {
       aria-hidden="true"
       className="shrink-0"
     />
+  );
+}
+
+function WorkspaceAvatar({
+  logoUrl,
+  mark,
+  variant,
+}: {
+  logoUrl?: string | null;
+  mark: string;
+  variant: "menu" | "trigger";
+}) {
+  const isMenu = variant === "menu";
+  return (
+    <span
+      className={cn(
+        "flex shrink-0 items-center justify-center overflow-hidden font-serif font-semibold leading-none",
+        isMenu ? "size-7 rounded-[8px] text-[13px]" : "size-6 rounded-[7px] text-[14px]",
+        logoUrl ? "bg-black/[0.04] dark:bg-white/10" : "bg-[#ef3f2c] text-white",
+      )}
+    >
+      {logoUrl ? (
+        <Image
+          src={logoUrl}
+          alt=""
+          width={isMenu ? 28 : 24}
+          height={isMenu ? 28 : 24}
+          unoptimized
+          className="size-full object-cover"
+        />
+      ) : mark}
+    </span>
   );
 }
 
