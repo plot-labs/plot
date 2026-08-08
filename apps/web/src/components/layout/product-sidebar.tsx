@@ -75,9 +75,9 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
     ?? account?.workspaces[0];
   const currentWorkspaceId = currentWorkspace?.id ?? selectedWorkspaceId;
   const currentWorkspaceName = currentWorkspace?.name ?? "Workspace";
+  const currentWorkspaceMark = currentWorkspaceName.slice(0, 1).toUpperCase();
   const workspaceItems = account?.workspaces.map((item) => ({
     ...item,
-    detail: item.role,
     mark: item.name.slice(0, 1).toUpperCase(),
     selected: item.id === currentWorkspaceId,
   })) ?? [];
@@ -185,7 +185,7 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
             )}
           >
             <span className="flex size-7 shrink-0 items-center justify-center rounded-[8px] bg-[#ef3f2c] font-serif text-[15px] font-semibold leading-none text-white">
-              P
+              {currentWorkspaceMark}
             </span>
             <span className="min-w-0 flex-1 truncate">{currentWorkspaceName}</span>
             <ChevronDown
@@ -197,54 +197,39 @@ export function ProductSidebar({ theme, onThemeChange, onToggleSidebar }: Produc
           </button>
 
           {workspaceMenuOpen && (
-            <div className="absolute left-3 top-[68px] z-50 w-[228px] overflow-hidden rounded-[12px] border border-black/[0.08] bg-white text-[12px] text-black/76 shadow-[0_10px_28px_rgb(15_23_42_/_0.04)] dark:border-white/10 dark:bg-[#292a2f] dark:text-white/80">
-              <div className="p-3">
-                <div className="flex items-center gap-2.5">
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-[9px] bg-[#ef3f2c] font-serif text-[17px] font-semibold leading-none text-white">
-                    P
-                  </span>
-                  <div className="min-w-0">
-                    <div className="truncate text-[14px] font-semibold text-black/84 dark:text-white/88">{currentWorkspaceName}</div>
-                    <div className="mt-0.5 truncate text-[12px] text-black/45 dark:text-white/45">
-                      {currentWorkspace?.role ?? "OWNER"}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="border-t border-black/[0.08] py-1 dark:border-white/10">
-                {workspaceItems.map((workspace) => (
-                  <button
-                    key={workspace.id}
-                    type="button"
-                    onClick={() => {
-                      window.localStorage.setItem("plot.workspaceId", workspace.id);
-                      setSelectedWorkspaceId(workspace.id);
-                      setWorkspaceMenuOpen(false);
-                      window.location.reload();
-                    }}
-                    className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition hover:bg-black/[0.04] dark:hover:bg-white/10"
+            <div role="menu" aria-label="Workspaces" className="absolute left-3 top-[68px] z-50 w-[228px] overflow-hidden rounded-[10px] border border-black/[0.08] bg-white p-1 text-[13px] text-black/76 shadow-[0_10px_28px_rgb(15_23_42_/_0.06)] dark:border-white/10 dark:bg-[#292a2f] dark:text-white/80">
+              {workspaceItems.map((workspace) => (
+                <button
+                  key={workspace.id}
+                  type="button"
+                  role="menuitemradio"
+                  aria-label={`${workspace.name} workspace`}
+                  aria-checked={workspace.selected}
+                  onClick={() => {
+                    window.localStorage.setItem("plot.workspaceId", workspace.id);
+                    setSelectedWorkspaceId(workspace.id);
+                    setWorkspaceMenuOpen(false);
+                    window.location.reload();
+                  }}
+                  className={cn(
+                    "flex h-9 w-full items-center gap-2 rounded-[7px] px-2 text-left font-medium transition hover:bg-black/[0.04] focus-visible:bg-black/[0.04] focus-visible:outline-none dark:hover:bg-white/10 dark:focus-visible:bg-white/10",
+                    workspace.selected && "bg-black/[0.035] text-black/82 dark:bg-white/[0.07] dark:text-white/88",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "flex size-6 shrink-0 items-center justify-center rounded-[6px] font-serif text-[12px] font-semibold leading-none",
+                      workspace.selected
+                        ? "bg-[#ef3f2c] text-white"
+                        : "bg-black/[0.06] text-black/48 dark:bg-white/10 dark:text-white/52",
+                    )}
                   >
-                    <span
-                      className={cn(
-                        "flex size-7 shrink-0 items-center justify-center rounded-[8px] font-serif text-[13px] font-semibold leading-none",
-                        workspace.selected
-                          ? "bg-[#ef3f2c] text-white"
-                          : "bg-black/[0.06] text-black/48 dark:bg-white/10 dark:text-white/52",
-                      )}
-                    >
-                      {workspace.mark}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium text-black/78 dark:text-white/82">
-                        {workspace.name}
-                      </span>
-                      <span className="block truncate text-[11px] text-black/38 dark:text-white/38">{workspace.detail}</span>
-                    </span>
-                    {workspace.selected && <Check className="size-3.5 shrink-0 text-black/72 dark:text-white/76" />}
-                  </button>
-                ))}
-              </div>
+                    {workspace.mark}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">{workspace.name}</span>
+                  {workspace.selected && <Check className="size-3.5 shrink-0 text-black/45 dark:text-white/52" />}
+                </button>
+              ))}
             </div>
           )}
         </div>

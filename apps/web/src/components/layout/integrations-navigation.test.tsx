@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const sidebarMocks = vi.hoisted(() => ({ listSessions: vi.fn() }));
@@ -52,5 +52,36 @@ describe("Integrations navigation", () => {
     await Promise.resolve();
     expect(sidebarMocks.listSessions).not.toHaveBeenCalled();
     expect(screen.queryByRole("link", { name: "Release notes" })).not.toBeInTheDocument();
+  });
+
+  it("renders a compact selector when only one workspace is available", async () => {
+    render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
+
+    const trigger = await screen.findByRole("button", { name: /Personal/ });
+    fireEvent.click(trigger);
+
+    const option = screen.getByRole("menuitemradio", { name: "Personal workspace" });
+    expect(option).toHaveClass("h-9");
+    expect(option).toHaveAttribute("aria-checked", "true");
+    expect(screen.queryByText("OWNER")).not.toBeInTheDocument();
+  });
+
+  it("keeps workspace switching when multiple workspaces are available", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(Response.json({
+      user: { id: "user-1", email: "owner@example.com", displayName: "Owner" },
+      workspaces: [
+        { id: "workspace-1", name: "Personal", slug: "personal", role: "OWNER" },
+        { id: "workspace-2", name: "Product", slug: "product", role: "MEMBER" },
+      ],
+      defaultWorkspaceId: "workspace-1",
+    }));
+    render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
+
+    const trigger = await screen.findByRole("button", { name: /Personal/ });
+    fireEvent.click(trigger);
+
+    expect(screen.getAllByRole("menuitemradio")).toHaveLength(2);
+    expect(screen.getByRole("menuitemradio", { name: "Personal workspace" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("menuitemradio", { name: "Product workspace" })).toHaveAttribute("aria-checked", "false");
   });
 });
