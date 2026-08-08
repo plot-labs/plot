@@ -2,6 +2,7 @@
 
 import {
   ArrowLeft01Icon,
+  MessageMultiple01Icon,
   MoreVerticalIcon,
   PlugSocketIcon,
   Settings02Icon,
@@ -31,6 +32,7 @@ import { plotApiClient } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
 const productNavItems = [
+  { href: "/chat", label: "Chat", icon: ChatIcon },
   { href: "/artifacts", label: "Artifacts", icon: ArtifactsIcon },
 ];
 
@@ -61,7 +63,7 @@ const themeOptions = [
   { value: "dark", label: "Dark", icon: Moon },
 ] satisfies Array<{ value: ProductTheme; label: string; icon: typeof Monitor }>;
 
-const appHomeHref = "/artifacts";
+const appHomeHref = "/chat";
 
 type Account = {
   user: { id: string; email: string; displayName: string };
@@ -649,6 +651,19 @@ function ArtifactsIcon() {
   return (
     <HugeiconsIcon
       icon={Shapes01Icon}
+      size={16}
+      color="currentColor"
+      strokeWidth={1.5}
+      aria-hidden="true"
+      className="shrink-0"
+    />
+  );
+}
+
+function ChatIcon() {
+  return (
+    <HugeiconsIcon
+      icon={MessageMultiple01Icon}
       size={16}
       color="currentColor"
       strokeWidth={1.5}

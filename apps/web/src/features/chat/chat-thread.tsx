@@ -1,26 +1,26 @@
 import type { ReactNode } from "react";
 
-export type SessionMessage = {
+export type ChatMessage = {
   id: string;
   role: "user";
   timestamp: string;
   content: string;
 };
 
-type SessionThreadProps = {
-  messages: SessionMessage[];
+type ChatThreadProps = {
+  messages: ChatMessage[];
   generationPanel?: ReactNode;
 };
 
-export function SessionThread({
+export function ChatThread({
   messages,
   generationPanel,
-}: SessionThreadProps) {
+}: ChatThreadProps) {
   return (
     <section className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 pt-16 sm:px-6 lg:px-8 lg:pb-10 lg:pt-20">
       <div className="mx-auto max-w-3xl space-y-10 pb-40">
         {messages.map((message) => (
-          <SessionThreadMessage
+          <ChatThreadMessage
             key={message.id}
             message={message}
           />
@@ -32,10 +32,10 @@ export function SessionThread({
   );
 }
 
-function SessionThreadMessage({
+function ChatThreadMessage({
   message,
 }: {
-  message: SessionMessage;
+  message: ChatMessage;
 }) {
   return (
     <article className="flex justify-end">

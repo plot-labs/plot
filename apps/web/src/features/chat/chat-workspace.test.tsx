@@ -34,8 +34,8 @@ vi.mock("@/lib/generation-polling", () => ({
   pollGeneration: mocks.getGeneration,
   isTerminalGenerationStatus: (status: string) => ["READY", "NEEDS_REVIEW", "FAILED"].includes(status),
 }));
-vi.mock("@/features/sessions/session-composer", () => ({
-  SessionComposer: ({ onSubmit, variant }: { onSubmit: (message: string, ids: string[]) => void; variant?: string }) => (
+vi.mock("@/features/chat/chat-composer", () => ({
+  ChatComposer: ({ onSubmit, variant }: { onSubmit: (message: string, ids: string[]) => void; variant?: string }) => (
     <button type="button" onClick={() => onSubmit("Write release notes", ["block-1"])}>
       {variant === "center" ? "Start generation" : "Generate again"}
     </button>
@@ -44,20 +44,20 @@ vi.mock("@/features/sessions/session-composer", () => ({
 vi.mock("@/features/citations/cited-draft-editor", () => ({ CitedDraftEditor: () => <div>Reviewed artifact</div> }));
 vi.mock("@/features/citations/export-dialog", () => ({ ExportDialog: () => null }));
 vi.mock("@/features/citations/artifact-history-panel", () => ({ ArtifactHistoryPanel: () => <div>History</div> }));
-vi.mock("@/features/sessions/generation-work-log", () => ({ GenerationWorkLog: () => <div>Generation log</div> }));
+vi.mock("@/features/chat/generation-work-log", () => ({ GenerationWorkLog: () => <div>Generation log</div> }));
 
-import { SessionsWorkspace } from "./sessions-workspace";
+import { ChatWorkspace } from "./chat-workspace";
 
-const session = { id: "session-1", title: "Release", status: "OPEN", latestGenerationId: "run-1", lastActivityAt: "2026-07-01T00:00:00Z", createdAt: "2026-07-01T00:00:00Z", updatedAt: "2026-07-01T00:00:00Z" };
+const chat = { id: "chat-1", title: "Release", status: "OPEN", latestGenerationId: "run-1", lastActivityAt: "2026-07-01T00:00:00Z", createdAt: "2026-07-01T00:00:00Z", updatedAt: "2026-07-01T00:00:00Z" };
 const reference = { id: "block-1", sourceScopeId: "scope-1", provider: "GITHUB", sourceKind: "PULL_REQUEST", sourceLabel: "PR #1", repositoryLabel: "acme/plot", title: "Ship", body: "Evidence", originalUrl: "https://github.test/1", sourceCreatedAt: null };
 const artifactSummary = { id: "artifact-1", generationRunId: "run-1", status: "READY", title: "Release" };
 const terminalRun = {
   id: "run-1", status: "READY", semanticRewriteAttempt: 0, pollAfterMs: null, failureCode: null,
-  evidence: [], sentences: [], artifacts: [], workSessionId: "session-1",
+  evidence: [], sentences: [], artifacts: [], workSessionId: "chat-1",
   artifact: { id: "artifact-1", generationRunId: "run-1", status: "READY", title: "Release", variant: { id: "variant-1", status: "READY", revisionId: "artifact-revision-1", revisionNumber: 1, lexicalContent: { root: { children: [], type: "root", version: 1 } }, sentences: [], sources: [] } },
 };
 
-describe("SessionsWorkspace", () => {
+describe("ChatWorkspace", () => {
   beforeEach(() => {
     mocks.search = "";
     Object.values(mocks).forEach((value) => { if (typeof value === "function" && "mockReset" in value) value.mockReset(); });
@@ -69,17 +69,17 @@ describe("SessionsWorkspace", () => {
     Object.defineProperty(window, "location", { configurable: true, value: { ...window.location, assign: mocks.locationAssign } });
   });
 
-  it("shows only actual sessions and the empty state", async () => {
-    render(<SessionsWorkspace />);
-    expect(await screen.findByText("No sessions yet. Start with a source-backed request.")).toBeVisible();
+  it("shows only actual chats and the empty state", async () => {
+    render(<ChatWorkspace />);
+    expect(await screen.findByText("No chats yet. Start with a source-backed request.")).toBeVisible();
     expect(screen.queryByText("July changelog")).not.toBeInTheDocument();
   });
 
-  it("creates a session-owned generation without browser pointer repair", async () => {
-    mocks.createSession.mockResolvedValue({ ...session, latestGenerationId: null });
+  it("creates a chat-owned generation without browser pointer repair", async () => {
+    mocks.createSession.mockResolvedValue({ ...chat, latestGenerationId: null });
     mocks.createGeneration.mockResolvedValue({ ...terminalRun, id: "run-new", artifact: null });
 
-    render(<SessionsWorkspace />);
+    render(<ChatWorkspace />);
     await screen.findByRole("button", { name: "Start generation" });
     fireEvent.click(screen.getByRole("button", { name: "Start generation" }));
 
@@ -87,31 +87,31 @@ describe("SessionsWorkspace", () => {
       sourceScopeId: "scope-1",
       writingBlockIds: ["block-1"],
       instruction: "Write release notes",
-      workSessionId: "session-1",
+      workSessionId: "chat-1",
     }, expect.any(String)));
-    expect(mocks.locationAssign).toHaveBeenCalledWith("/sessions?session=session-1&generation=run-new");
+    expect(mocks.locationAssign).toHaveBeenCalledWith("/chat?chat=chat-1&generation=run-new");
     expect(window.sessionStorage.length).toBe(0);
   });
 
-  it("keeps a created empty session and shows a retry error when generation cannot start", async () => {
-    mocks.createSession.mockResolvedValue({ ...session, latestGenerationId: null });
+  it("keeps a created empty chat and shows a retry error when generation cannot start", async () => {
+    mocks.createSession.mockResolvedValue({ ...chat, latestGenerationId: null });
     mocks.createGeneration.mockRejectedValue(new Error("Source unavailable"));
-    render(<SessionsWorkspace />);
+    render(<ChatWorkspace />);
     await screen.findByRole("button", { name: "Start generation" });
     fireEvent.click(screen.getByRole("button", { name: "Start generation" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Source unavailable");
   });
 
-  it("shows all session generations while rendering only artifacts for completed activity", async () => {
-    mocks.search = "session=session-1&generation=run-1";
-    mocks.listSessions.mockResolvedValue([session]);
+  it("shows all chat generations while rendering only artifacts for completed activity", async () => {
+    mocks.search = "chat=chat-1&generation=run-1";
+    mocks.listSessions.mockResolvedValue([chat]);
     mocks.listSessionGenerations.mockResolvedValue([
       { id: "run-queued", status: "QUEUED", instruction: "Customer update", createdAt: "2026-07-01T00:00:00Z", completedAt: null, failureCode: null, artifact: null },
       { id: "run-1", status: "READY", instruction: "Release notes", createdAt: "2026-07-01T00:01:00Z", completedAt: "2026-07-01T00:02:00Z", failureCode: null, artifact: artifactSummary },
       { id: "run-failed", status: "FAILED", instruction: "Internal note", createdAt: "2026-07-01T00:03:00Z", completedAt: "2026-07-01T00:04:00Z", failureCode: "SOURCE_UNAVAILABLE", artifact: null },
     ]);
     mocks.getGeneration.mockResolvedValue(terminalRun);
-    render(<SessionsWorkspace />);
+    render(<ChatWorkspace />);
 
     expect(await screen.findByText("Reviewed artifact")).toBeVisible();
     expect(screen.getAllByRole("button", { name: /Customer update/ })[0]).toBeVisible();
@@ -119,40 +119,40 @@ describe("SessionsWorkspace", () => {
     expect(screen.getAllByText("1 artifact")[0]).toBeVisible();
   });
 
-  it("starts a follow-up generation with the active session linkage and no pointer update", async () => {
-    mocks.search = "session=session-1&generation=run-1";
-    mocks.listSessions.mockResolvedValue([session]);
+  it("starts a follow-up generation with the active chat linkage and no pointer update", async () => {
+    mocks.search = "chat=chat-1&generation=run-1";
+    mocks.listSessions.mockResolvedValue([chat]);
     mocks.listSessionGenerations.mockResolvedValue([{ id: "run-1", status: "READY", instruction: "Release notes", createdAt: "2026-07-01T00:01:00Z", completedAt: "2026-07-01T00:02:00Z", failureCode: null, artifact: artifactSummary }]);
     mocks.getGeneration.mockResolvedValue(terminalRun);
     mocks.createGeneration.mockResolvedValue({ ...terminalRun, id: "run-2", artifact: null });
-    render(<SessionsWorkspace />);
+    render(<ChatWorkspace />);
     expect(await screen.findByText("Reviewed artifact")).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "Generate again" }));
-    await waitFor(() => expect(mocks.createGeneration).toHaveBeenCalledWith(expect.objectContaining({ workSessionId: "session-1" }), expect.any(String), expect.any(Object)));
-    expect(mocks.replace).toHaveBeenCalledWith("/sessions?session=session-1&generation=run-2", { scroll: false });
+    await waitFor(() => expect(mocks.createGeneration).toHaveBeenCalledWith(expect.objectContaining({ workSessionId: "chat-1" }), expect.any(String), expect.any(Object)));
+    expect(mocks.replace).toHaveBeenCalledWith("/chat?chat=chat-1&generation=run-2", { scroll: false });
     expect(window.sessionStorage.length).toBe(0);
   });
 
-  it("does not render a generation from a different session", async () => {
-    mocks.search = "session=session-1&generation=run-other";
-    mocks.listSessions.mockResolvedValue([session]);
+  it("does not render a generation from a different chat", async () => {
+    mocks.search = "chat=chat-1&generation=run-other";
+    mocks.listSessions.mockResolvedValue([chat]);
     mocks.listSessionGenerations.mockResolvedValue([]);
-    mocks.getGeneration.mockResolvedValue({ ...terminalRun, id: "run-other", workSessionId: "session-2" });
-    render(<SessionsWorkspace />);
-    expect(await screen.findByRole("alert")).toHaveTextContent("not part of this session");
+    mocks.getGeneration.mockResolvedValue({ ...terminalRun, id: "run-other", workSessionId: "chat-2" });
+    render(<ChatWorkspace />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("not part of this chat");
     expect(screen.queryByText("Reviewed artifact")).not.toBeInTheDocument();
   });
 
   it("opens the mobile History panel and restores focus when it closes", async () => {
-    mocks.search = "session=session-1&generation=run-1";
-    mocks.listSessions.mockResolvedValue([session]);
+    mocks.search = "chat=chat-1&generation=run-1";
+    mocks.listSessions.mockResolvedValue([chat]);
     mocks.listSessionGenerations.mockResolvedValue([{ id: "run-1", status: "READY", instruction: "Release notes", createdAt: "2026-07-01T00:01:00Z", completedAt: "2026-07-01T00:02:00Z", failureCode: null, artifact: artifactSummary }]);
     mocks.getGeneration.mockResolvedValue(terminalRun);
-    render(<SessionsWorkspace />);
+    render(<ChatWorkspace />);
     await screen.findByText("Reviewed artifact");
 
-    const historyTrigger = screen.getAllByRole("tab", { name: "History" }).find((element) => element.getAttribute("aria-controls") === "mobile-session-history-panel");
+    const historyTrigger = screen.getAllByRole("tab", { name: "History" }).find((element) => element.getAttribute("aria-controls") === "mobile-chat-history-panel");
     expect(historyTrigger).toBeDefined();
     fireEvent.click(historyTrigger!);
     expect(await screen.findByRole("tabpanel", { name: "History panel" })).toBeVisible();

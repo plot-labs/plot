@@ -5,7 +5,7 @@ import { useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
-type SessionComposerProps = {
+type ChatComposerProps = {
   onSubmit: (message: string, referenceIds: string[]) => void;
   variant?: "center" | "dock";
   id?: string;
@@ -14,14 +14,14 @@ type SessionComposerProps = {
   busy?: boolean;
 };
 
-export function SessionComposer({
+export function ChatComposer({
   onSubmit,
   variant = "dock",
   id,
   placeholder = "Ask Plot to create another source-backed artifact...",
   references = [],
   busy = false,
-}: SessionComposerProps) {
+}: ChatComposerProps) {
   const [message, setMessage] = useState("");
   const [referencesOpen, setReferencesOpen] = useState(false);
   const submittingRef = useRef(false);
@@ -62,7 +62,7 @@ export function SessionComposer({
           onChange={(event) => setMessage(event.target.value)}
           className="min-h-20 w-full resize-none bg-transparent px-4 py-3 text-sm leading-6 outline-none placeholder:text-black/30 dark:placeholder:text-white/35"
           placeholder={placeholder}
-          aria-label="Session message"
+          aria-label="Chat message"
         />
         <div className="flex items-center gap-2 px-3 pb-3 text-xs text-black/45 dark:text-white/45">
           <div className="relative">

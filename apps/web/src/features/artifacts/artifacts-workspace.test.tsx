@@ -40,7 +40,7 @@ describe("ArtifactsWorkspace", () => {
           id: "artifact-1",
           generationRunId: "run-1",
           status: "READY",
-          title: "Local preview artifact · Session workspace",
+          title: "Local preview artifact · Chat workspace",
           updatedAt: "2026-08-08T10:00:00Z",
         },
         {

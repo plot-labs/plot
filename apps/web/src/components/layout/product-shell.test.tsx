@@ -29,6 +29,7 @@ describe("ProductShell mobile navigation", () => {
 
     const navigation = screen.getByRole("navigation", { name: "Product navigation" });
     expect(navigation).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Chat" })).toHaveAttribute("href", "/chat");
     expect(screen.getByRole("link", { name: "Artifacts" })).toHaveAttribute("aria-current", "page");
 
     expect(screen.getByRole("link", { name: "Workspace settings" })).toHaveAttribute("href", "/settings/integrations");

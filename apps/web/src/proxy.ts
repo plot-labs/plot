@@ -13,7 +13,7 @@ export function proxy(request: NextRequest) {
 
   if (host && appHosts.has(host) && request.nextUrl.pathname === "/") {
     const url = request.nextUrl.clone();
-    url.pathname = "/sessions";
+    url.pathname = "/chat";
 
     return NextResponse.rewrite(url);
   }

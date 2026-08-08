@@ -10,37 +10,37 @@ import type {
   Artifact,
   GenerationReference,
   GenerationRun,
-  SessionGeneration,
-  WorkSessionSummary,
+  SessionGeneration as ChatGeneration,
+  WorkSessionSummary as ChatSummary,
 } from "@plot/api-client";
 import { ArtifactDocumentSurface } from "@/features/artifacts/artifact-document-surface";
 import { ArtifactHistoryPanel } from "@/features/citations/artifact-history-panel";
 import type { SaveArtifactInput } from "@/features/citations/cited-draft-editor";
-import { GenerationWorkLog } from "@/features/sessions/generation-work-log";
-import { SessionComposer } from "@/features/sessions/session-composer";
+import { GenerationWorkLog } from "@/features/chat/generation-work-log";
+import { ChatComposer } from "@/features/chat/chat-composer";
 import { isTerminalGenerationStatus, pollGeneration } from "@/lib/generation-polling";
 import { plotApiClient } from "@/lib/api-client";
 
-export function SessionsWorkspace() {
-  return <Suspense fallback={null}><SessionsWorkspaceContent /></Suspense>;
+export function ChatWorkspace() {
+  return <Suspense fallback={null}><ChatWorkspaceContent /></Suspense>;
 }
 
-function SessionsWorkspaceContent() {
+function ChatWorkspaceContent() {
   const searchParams = useSearchParams();
-  const requestedSessionId = searchParams.get("session");
-  const [sessions, setSessions] = useState<WorkSessionSummary[]>([]);
+  const requestedChatId = searchParams.get("chat");
+  const [chats, setChats] = useState<ChatSummary[]>([]);
   const [references, setReferences] = useState<GenerationReference[]>([]);
-  const [sessionsLoading, setSessionsLoading] = useState(true);
-  const [sessionsError, setSessionsError] = useState("");
+  const [chatsLoading, setChatsLoading] = useState(true);
+  const [chatsError, setChatsError] = useState("");
   const [referencesLoading, setReferencesLoading] = useState(true);
   const [referencesError, setReferencesError] = useState("");
 
   useEffect(() => {
     const controller = new AbortController();
     void plotApiClient.listSessions({ signal: controller.signal })
-      .then((value) => { if (!controller.signal.aborted) setSessions(value); })
-      .catch((error) => { if (!controller.signal.aborted) setSessionsError(messageFor(error, "Sessions could not be loaded.")); })
-      .finally(() => { if (!controller.signal.aborted) setSessionsLoading(false); });
+      .then((value) => { if (!controller.signal.aborted) setChats(value); })
+      .catch((error) => { if (!controller.signal.aborted) setChatsError(messageFor(error, "Chats could not be loaded.")); })
+      .finally(() => { if (!controller.signal.aborted) setChatsLoading(false); });
     void plotApiClient.listGenerationReferences({ signal: controller.signal })
       .then((value) => { if (!controller.signal.aborted) setReferences(value); })
       .catch((error) => { if (!controller.signal.aborted) setReferencesError(messageFor(error, "Sources could not be loaded.")); })
@@ -48,38 +48,38 @@ function SessionsWorkspaceContent() {
     return () => controller.abort();
   }, []);
 
-  const activeSession = requestedSessionId ? sessions.find((session) => session.id === requestedSessionId) : null;
-  if (activeSession) {
-    return <ActiveSessionWorkspace activeSession={activeSession} references={references} sourceError={referencesError} />;
+  const activeChat = requestedChatId ? chats.find((chat) => chat.id === requestedChatId) : null;
+  if (activeChat) {
+    return <ActiveChatWorkspace activeChat={activeChat} references={references} sourceError={referencesError} />;
   }
 
-  return <SessionsHome
-    sessions={sessions}
+  return <ChatHome
+    chats={chats}
     references={references}
-    sessionsLoading={sessionsLoading}
-    sessionsError={sessionsError}
+    chatsLoading={chatsLoading}
+    chatsError={chatsError}
     referencesLoading={referencesLoading}
     referencesError={referencesError}
-    onSessionCreated={(session) => setSessions((current) => [session, ...current])}
+    onChatCreated={(chat) => setChats((current) => [chat, ...current])}
   />;
 }
 
-function SessionsHome({
-  sessions,
+function ChatHome({
+  chats,
   references,
-  sessionsLoading,
-  sessionsError,
+  chatsLoading,
+  chatsError,
   referencesLoading,
   referencesError,
-  onSessionCreated,
+  onChatCreated,
 }: {
-  sessions: WorkSessionSummary[];
+  chats: ChatSummary[];
   references: GenerationReference[];
-  sessionsLoading: boolean;
-  sessionsError: string;
+  chatsLoading: boolean;
+  chatsError: string;
   referencesLoading: boolean;
   referencesError: string;
-  onSessionCreated: (session: WorkSessionSummary) => void;
+  onChatCreated: (chat: ChatSummary) => void;
 }) {
   const [startError, setStartError] = useState("");
   const [starting, setStarting] = useState(false);
@@ -94,13 +94,13 @@ function SessionsHome({
 
     setStarting(true);
     setStartError("");
-    let session: WorkSessionSummary;
+    let chat: ChatSummary;
     try {
-      session = await plotApiClient.createSession({ title: message });
-      onSessionCreated(session);
+      chat = await plotApiClient.createSession({ title: message });
+      onChatCreated(chat);
     } catch (error) {
       setStarting(false);
-      setStartError(messageFor(error, "A session could not be created. Please try again."));
+      setStartError(messageFor(error, "A chat could not be created. Please try again."));
       return;
     }
 
@@ -109,11 +109,11 @@ function SessionsHome({
         sourceScopeId: selected[0]!.sourceScopeId,
         writingBlockIds: selected.map((reference) => reference.id),
         instruction: message,
-        workSessionId: session.id,
+        workSessionId: chat.id,
       }, crypto.randomUUID());
-      window.location.assign(sessionHref(session.id, run.id));
+      window.location.assign(chatHref(chat.id, run.id));
     } catch (error) {
-      setStartError(messageFor(error, "The session was created, but generation could not start. Choose sources and try again."));
+      setStartError(messageFor(error, "The chat was created, but generation could not start. Choose sources and try again."));
       setStarting(false);
     }
   }
@@ -124,7 +124,7 @@ function SessionsHome({
         <div className="w-full max-w-[760px]">
           <h1 className="text-center text-[28px] font-medium tracking-normal text-black/82 dark:text-white/88">What should Plot create?</h1>
           <div className="mt-9">
-            <SessionComposer
+            <ChatComposer
               key={references.map((reference) => reference.id).join(":") || "no-references"}
               variant="center"
               placeholder="Ask for a changelog, customer update, or source-backed draft..."
@@ -137,14 +137,14 @@ function SessionsHome({
           {!referencesLoading && !referencesError && references.length === 0 ? <SourceEmptyState /> : null}
           {referencesError ? <ErrorNotice message={referencesError} /> : null}
           {startError ? <ErrorNotice message={startError} /> : null}
-          {sessionsError ? <ErrorNotice message={sessionsError} /> : null}
+          {chatsError ? <ErrorNotice message={chatsError} /> : null}
           <div className="mx-auto mt-5 max-w-[720px] text-sm">
-            {!sessionsLoading && !sessionsError && sessions.length === 0 ? <p className="px-3 py-3 text-black/42 dark:text-white/42">No sessions yet. Start with a source-backed request.</p> : null}
-            {sessions.map((session) => (
-              <Link key={session.id} href={sessionHref(session.id, session.latestGenerationId)} className="flex items-center gap-3 border-b border-black/[0.06] px-3 py-3 text-black/45 transition hover:text-black/70 dark:border-white/10 dark:text-white/45 dark:hover:text-white/75">
+            {!chatsLoading && !chatsError && chats.length === 0 ? <p className="px-3 py-3 text-black/42 dark:text-white/42">No chats yet. Start with a source-backed request.</p> : null}
+            {chats.map((chat) => (
+              <Link key={chat.id} href={chatHref(chat.id, chat.latestGenerationId)} className="flex items-center gap-3 border-b border-black/[0.06] px-3 py-3 text-black/45 transition hover:text-black/70 dark:border-white/10 dark:text-white/45 dark:hover:text-white/75">
                 <MessageSquareText aria-hidden="true" className="size-4 shrink-0" />
-                <span className="min-w-0 flex-1 truncate">{session.title || "Untitled session"}</span>
-                <span className="text-xs text-black/32 dark:text-white/35">{formatActivity(session.lastActivityAt)}</span>
+                <span className="min-w-0 flex-1 truncate">{chat.title || "Untitled chat"}</span>
+                <span className="text-xs text-black/32 dark:text-white/35">{formatActivity(chat.lastActivityAt)}</span>
               </Link>
             ))}
           </div>
@@ -154,12 +154,12 @@ function SessionsHome({
   );
 }
 
-function ActiveSessionWorkspace({ activeSession, references, sourceError }: { activeSession: WorkSessionSummary; references: GenerationReference[]; sourceError: string }) {
+function ActiveChatWorkspace({ activeChat, references, sourceError }: { activeChat: ChatSummary; references: GenerationReference[]; sourceError: string }) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const requestedGenerationId = searchParams.get("generation");
   const requestedArtifactId = searchParams.get("artifact");
-  const [activities, setActivities] = useState<SessionGeneration[]>([]);
+  const [activities, setActivities] = useState<ChatGeneration[]>([]);
   const [activitiesLoadedFor, setActivitiesLoadedFor] = useState<string | null>(null);
   const [activitiesError, setActivitiesError] = useState("");
   const [generationRun, setGenerationRun] = useState<GenerationRun | null>(null);
@@ -179,7 +179,7 @@ function ActiveSessionWorkspace({ activeSession, references, sourceError }: { ac
   const documentKeyRef = useRef("");
   const generationAbortRef = useRef<AbortController | null>(null);
   const activeGenerationIdRef = useRef<string | null>(null);
-  const activitiesLoading = activitiesLoadedFor !== activeSession.id;
+  const activitiesLoading = activitiesLoadedFor !== activeChat.id;
 
   useEffect(() => {
     const previous = previousMobilePanelRef.current;
@@ -195,28 +195,28 @@ function ActiveSessionWorkspace({ activeSession, references, sourceError }: { ac
       if (artifactActivity) return artifactActivity;
     }
     if (requestedGenerationId) return activities.find((activity) => activity.id === requestedGenerationId) ?? null;
-    return activities.find((activity) => activity.id === activeSession.latestGenerationId) ?? activities[0] ?? null;
-  }, [activities, activeSession.latestGenerationId, requestedArtifactId, requestedGenerationId]);
+    return activities.find((activity) => activity.id === activeChat.latestGenerationId) ?? activities[0] ?? null;
+  }, [activities, activeChat.latestGenerationId, requestedArtifactId, requestedGenerationId]);
 
   useEffect(() => {
     const controller = new AbortController();
-    void plotApiClient.listSessionGenerations(activeSession.id, { signal: controller.signal })
+    void plotApiClient.listSessionGenerations(activeChat.id, { signal: controller.signal })
       .then((value) => {
         if (controller.signal.aborted) return;
         setActivities(value);
         setActivitiesError("");
-        setActivitiesLoadedFor(activeSession.id);
+        setActivitiesLoadedFor(activeChat.id);
       })
       .catch((error) => {
         if (controller.signal.aborted) return;
-        setActivitiesError(messageFor(error, "Session activity could not be loaded."));
-        setActivitiesLoadedFor(activeSession.id);
+        setActivitiesError(messageFor(error, "Chat activity could not be loaded."));
+        setActivitiesLoadedFor(activeChat.id);
       });
     return () => controller.abort();
-  }, [activeSession.id]);
+  }, [activeChat.id]);
 
   useEffect(() => {
-    const generationId = selectedActivity?.id ?? requestedGenerationId ?? (requestedArtifactId ? null : activeSession.latestGenerationId);
+    const generationId = selectedActivity?.id ?? requestedGenerationId ?? (requestedArtifactId ? null : activeChat.latestGenerationId);
     if (!generationId) {
       queueMicrotask(() => {
         setGenerationRun(null);
@@ -246,8 +246,8 @@ function ActiveSessionWorkspace({ activeSession, references, sourceError }: { ac
       try {
         const current = await plotApiClient.getGeneration(generationId!, { signal: controller.signal });
         if (generationAbortRef.current !== controller) return;
-        if (current.workSessionId !== activeSession.id) {
-          throw new Error("That generation is not part of this session.");
+        if (current.workSessionId !== activeChat.id) {
+          throw new Error("That generation is not part of this chat.");
         }
         setGenerationRun(current);
         upsertActivity(setActivities, activityForRun(current));
@@ -280,14 +280,14 @@ function ActiveSessionWorkspace({ activeSession, references, sourceError }: { ac
         activeGenerationIdRef.current = null;
       }
     };
-  }, [activeSession.id, activeSession.latestGenerationId, requestedArtifactId, requestedGenerationId, selectedActivity?.id]);
+  }, [activeChat.id, activeChat.latestGenerationId, requestedArtifactId, requestedGenerationId, selectedActivity?.id]);
 
-  const selectActivity = useCallback((activity: SessionGeneration) => {
+  const selectActivity = useCallback((activity: ChatGeneration) => {
     setHistoricalArtifact(null);
     setHistoricalPosition(null);
     if (!activity.artifact) setMobilePanel("assistant");
-    router.replace(sessionHref(activeSession.id, activity.id, activity.artifact?.id ?? null), { scroll: false });
-  }, [activeSession.id, router]);
+    router.replace(chatHref(activeChat.id, activity.id, activity.artifact?.id ?? null), { scroll: false });
+  }, [activeChat.id, router]);
 
   async function submitMessage(message: string, referenceIds: string[]) {
     const selected = selectReferences(references, referenceIds);
@@ -310,11 +310,11 @@ function ActiveSessionWorkspace({ activeSession, references, sourceError }: { ac
         sourceScopeId: selected[0]!.sourceScopeId,
         writingBlockIds: selected.map((reference) => reference.id),
         instruction: message,
-        workSessionId: activeSession.id,
+        workSessionId: activeChat.id,
       }, crypto.randomUUID(), { signal: controller.signal });
       if (generationAbortRef.current !== controller || controller.signal.aborted) return;
       upsertActivity(setActivities, activityForRun(run, message));
-      router.replace(sessionHref(activeSession.id, run.id, run.artifact?.id ?? null), { scroll: false });
+      router.replace(chatHref(activeChat.id, run.id, run.artifact?.id ?? null), { scroll: false });
     } catch (error) {
       if (generationAbortRef.current === controller && !(error instanceof DOMException && error.name === "AbortError")) {
         setGenerationError(messageFor(error, "Generation could not be started."));
@@ -345,7 +345,7 @@ function ActiveSessionWorkspace({ activeSession, references, sourceError }: { ac
       content: activity.instruction!,
     }));
   if (!messages.length) {
-    messages.push({ id: activeSession.id, role: "user", timestamp: "Request", createdAt: null, content: activeSession.title || "Untitled request" });
+    messages.push({ id: activeChat.id, role: "user", timestamp: "Request", createdAt: null, content: activeChat.title || "Untitled request" });
   }
 
   return (
@@ -354,12 +354,12 @@ function ActiveSessionWorkspace({ activeSession, references, sourceError }: { ac
         <header className="flex min-h-14 shrink-0 items-center justify-between gap-4 bg-white px-4 py-3 dark:bg-[#111113] sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-black/78 dark:text-white/82">
             <FileText aria-hidden="true" className="size-4 shrink-0 text-black/50 dark:text-white/50" />
-            <h1 className="truncate">{activeSession.title || "Untitled session"}</h1>
+            <h1 className="truncate">{activeChat.title || "Untitled chat"}</h1>
             <MoreHorizontal aria-hidden="true" className="size-4 shrink-0 text-black/45 dark:text-white/45" />
           </div>
           <div className="flex shrink-0 items-center gap-3 text-xs text-black/42 dark:text-white/45">
-            <span>Session activity</span>
-            <a href="#session-composer" className="rounded-md px-2 py-1 font-semibold text-black/65 transition hover:bg-black/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 dark:text-white/70 dark:hover:bg-white/[0.06]">New artifact</a>
+            <span>Chat activity</span>
+            <a href="#chat-composer" className="rounded-md px-2 py-1 font-semibold text-black/65 transition hover:bg-black/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 dark:text-white/70 dark:hover:bg-white/[0.06]">New artifact</a>
           </div>
         </header>
 
@@ -367,7 +367,7 @@ function ActiveSessionWorkspace({ activeSession, references, sourceError }: { ac
           <div className="mx-auto max-w-7xl space-y-5">
             <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(250px,0.32fr)]">
               <div className="min-w-0">
-                <section aria-label="Session conversation" className="mb-5 space-y-3">
+                <section aria-label="Chat conversation" className="mb-5 space-y-3">
                   {messages.map((message) => (
                     <article key={message.id} className="flex justify-end">
                       <div className="max-w-[min(720px,92%)] rounded-[20px] bg-black/[0.055] px-4 py-3 text-sm leading-6 text-black/80 dark:bg-white/10 dark:text-white/82">
@@ -430,14 +430,14 @@ function ActiveSessionWorkspace({ activeSession, references, sourceError }: { ac
             </div>
 
             <div className="lg:hidden">
-              <div role="tablist" aria-label="Session workspace panels" className="flex gap-2 rounded-xl border border-black/10 bg-white p-2 dark:border-white/10 dark:bg-white/[0.04]">
+              <div role="tablist" aria-label="Chat workspace panels" className="flex gap-2 rounded-xl border border-black/10 bg-white p-2 dark:border-white/10 dark:bg-white/[0.04]">
                 <button
                   ref={mobileAssistantTriggerRef}
                   type="button"
                   role="tab"
                   aria-selected={mobilePanel === "assistant"}
                   aria-expanded={mobilePanel === "assistant"}
-                  aria-controls="mobile-session-assistant-panel"
+                  aria-controls="mobile-chat-assistant-panel"
                   onClick={() => setMobilePanel((current) => current === "assistant" ? null : "assistant")}
                   className={`min-h-10 flex-1 rounded-lg px-3 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${mobilePanel === "assistant" ? "bg-black text-white dark:bg-white dark:text-black" : "text-black/60 hover:bg-black/[0.04] dark:text-white/62 dark:hover:bg-white/[0.06]"}`}
                 >
@@ -450,7 +450,7 @@ function ActiveSessionWorkspace({ activeSession, references, sourceError }: { ac
                   disabled={!currentArtifact}
                   aria-selected={mobilePanel === "history"}
                   aria-expanded={mobilePanel === "history"}
-                  aria-controls="mobile-session-history-panel"
+                  aria-controls="mobile-chat-history-panel"
                   onClick={() => setMobilePanel((current) => current === "history" ? null : "history")}
                   className={`min-h-10 flex-1 rounded-lg px-3 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-40 ${mobilePanel === "history" ? "bg-black text-white dark:bg-white dark:text-black" : "text-black/60 hover:bg-black/[0.04] dark:text-white/62 dark:hover:bg-white/[0.06]"}`}
                 >
@@ -458,8 +458,8 @@ function ActiveSessionWorkspace({ activeSession, references, sourceError }: { ac
                 </button>
               </div>
               {mobilePanel === "assistant" ? (
-                <div id="mobile-session-assistant-panel" role="tabpanel" aria-label="Assistant panel" className="mt-3">
-                  <SessionActivityPanel
+                <div id="mobile-chat-assistant-panel" role="tabpanel" aria-label="Assistant panel" className="mt-3">
+                  <ChatActivityPanel
                     activities={activities}
                     selectedActivityId={selectedActivity?.id ?? null}
                     loading={activitiesLoading}
@@ -469,7 +469,7 @@ function ActiveSessionWorkspace({ activeSession, references, sourceError }: { ac
                 </div>
               ) : null}
               {mobilePanel === "history" && currentArtifact ? (
-                <div id="mobile-session-history-panel" role="tabpanel" aria-label="History panel" className="mt-3 rounded-xl border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-white/[0.04]">
+                <div id="mobile-chat-history-panel" role="tabpanel" aria-label="History panel" className="mt-3 rounded-xl border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-white/[0.04]">
                   <ArtifactHistoryPanel
                     variantId={currentArtifact.variant.id}
                     client={plotApiClient}
@@ -486,8 +486,8 @@ function ActiveSessionWorkspace({ activeSession, references, sourceError }: { ac
             </div>
           </div>
         </div>
-        <SessionComposer
-          id="session-composer"
+        <ChatComposer
+          id="chat-composer"
           key={references.map((reference) => reference.id).join(":") || "no-references"}
           placeholder="Ask Plot to create another source-backed artifact..."
           onSubmit={(message, ids) => void submitMessage(message, ids)}
@@ -513,23 +513,23 @@ function WorkspaceSidePanel({
 }: {
   activePanel: "assistant" | "history";
   onPanelChange: (panel: "assistant" | "history") => void;
-  activities: SessionGeneration[];
+  activities: ChatGeneration[];
   selectedActivityId: string | null;
   loading: boolean;
   error: string;
-  onSelectActivity: (activity: SessionGeneration) => void;
+  onSelectActivity: (activity: ChatGeneration) => void;
   currentArtifact: Artifact | null;
   selectedHistoryPosition: number | null;
   onSelectHistory: (detail: ArtifactHistoryDetail, position: number) => void;
 }) {
   return (
     <aside className="hidden min-w-0 rounded-xl border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-white/[0.04] lg:sticky lg:top-3 lg:block lg:h-fit">
-      <div role="tablist" aria-label="Session workspace panels" className="flex gap-1 rounded-lg bg-black/[0.04] p-1 dark:bg-white/[0.06]">
+      <div role="tablist" aria-label="Chat workspace panels" className="flex gap-1 rounded-lg bg-black/[0.04] p-1 dark:bg-white/[0.06]">
         <button
           type="button"
           role="tab"
           aria-selected={activePanel === "assistant"}
-          aria-controls="desktop-session-assistant-panel"
+          aria-controls="desktop-chat-assistant-panel"
           onClick={() => onPanelChange("assistant")}
           className={`min-h-10 flex-1 rounded-md px-3 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${activePanel === "assistant" ? "bg-white text-black shadow-sm dark:bg-white/15 dark:text-white" : "text-black/55 hover:text-black/75 dark:text-white/58 dark:hover:text-white/80"}`}
         >
@@ -540,7 +540,7 @@ function WorkspaceSidePanel({
           role="tab"
           disabled={!currentArtifact}
           aria-selected={activePanel === "history"}
-          aria-controls="desktop-session-history-panel"
+          aria-controls="desktop-chat-history-panel"
           onClick={() => onPanelChange("history")}
           className={`min-h-10 flex-1 rounded-md px-3 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-40 ${activePanel === "history" ? "bg-white text-black shadow-sm dark:bg-white/15 dark:text-white" : "text-black/55 hover:text-black/75 dark:text-white/58 dark:hover:text-white/80"}`}
         >
@@ -548,8 +548,8 @@ function WorkspaceSidePanel({
         </button>
       </div>
       {activePanel === "assistant" ? (
-        <div id="desktop-session-assistant-panel" role="tabpanel" aria-label="Assistant panel" className="mt-4">
-          <SessionActivityPanel
+        <div id="desktop-chat-assistant-panel" role="tabpanel" aria-label="Assistant panel" className="mt-4">
+          <ChatActivityPanel
             activities={activities}
             selectedActivityId={selectedActivityId}
             loading={loading}
@@ -558,7 +558,7 @@ function WorkspaceSidePanel({
           />
         </div>
       ) : currentArtifact ? (
-        <div id="desktop-session-history-panel" role="tabpanel" aria-label="History panel" className="mt-4">
+        <div id="desktop-chat-history-panel" role="tabpanel" aria-label="History panel" className="mt-4">
           <ArtifactHistoryPanel
             variantId={currentArtifact.variant.id}
             client={plotApiClient}
@@ -574,18 +574,18 @@ function WorkspaceSidePanel({
   );
 }
 
-function SessionActivityPanel({
+function ChatActivityPanel({
   activities,
   selectedActivityId,
   loading,
   error,
   onSelect,
 }: {
-  activities: SessionGeneration[];
+  activities: ChatGeneration[];
   selectedActivityId: string | null;
   loading: boolean;
   error: string;
-  onSelect: (activity: SessionGeneration) => void;
+  onSelect: (activity: ChatGeneration) => void;
 }) {
   const artifacts = activities.filter((activity) => activity.artifact);
   return (
@@ -593,18 +593,18 @@ function SessionActivityPanel({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="text-xs font-semibold uppercase tracking-[0.08em] text-black/42 dark:text-white/45">Assistant</div>
-          <h2 className="mt-1 text-sm font-semibold text-black/82 dark:text-white/88">Session activity</h2>
+          <h2 className="mt-1 text-sm font-semibold text-black/82 dark:text-white/88">Chat activity</h2>
           <p className="mt-1 text-xs leading-5 text-black/48 dark:text-white/52">Generations stay here while they work, fail, or produce an artifact.</p>
         </div>
         {artifacts.length ? <span className="text-xs text-black/42 dark:text-white/45">{artifacts.length} artifact{artifacts.length === 1 ? "" : "s"}</span> : null}
       </div>
-      {loading ? <p className="mt-4 text-sm text-black/45 dark:text-white/48">Loading session activity…</p> : null}
+      {loading ? <p className="mt-4 text-sm text-black/45 dark:text-white/48">Loading chat activity…</p> : null}
       {error ? <ErrorNotice message={error} /> : null}
       {!loading && !activities.length && !error ? <p className="mt-4 text-sm text-black/48 dark:text-white/48">No generations yet. Start with a source-backed request below.</p> : null}
       {artifacts.length ? (
         <div className="mt-4" aria-label="Artifact selector">
-          <div className="mb-2 text-xs font-semibold text-black/55 dark:text-white/58">Artifacts in this session</div>
-          <div className="flex min-w-0 gap-2 overflow-x-auto pb-1" role="listbox" aria-label="Artifacts in this session">
+          <div className="mb-2 text-xs font-semibold text-black/55 dark:text-white/58">Artifacts in this chat</div>
+          <div className="flex min-w-0 gap-2 overflow-x-auto pb-1" role="listbox" aria-label="Artifacts in this chat">
             {artifacts.map((activity) => (
               <button
                 key={activity.artifact!.id}
@@ -622,7 +622,7 @@ function SessionActivityPanel({
         </div>
       ) : null}
       {activities.length ? (
-        <ol className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3" aria-label="Generations in this session">
+        <ol className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3" aria-label="Generations in this chat">
           {activities.map((activity) => (
             <li key={activity.id}>
               <button
@@ -654,7 +654,7 @@ function GenerationActivityDetail({ run, busy, error }: { run: GenerationRun | n
     <section aria-label="Selected generation details" className="mb-5 space-y-3">
       {run ? <GenerationWorkLog run={run} /> : busy ? <div className="rounded-xl border border-black/10 bg-black/[0.025] px-4 py-3 text-sm text-black/62 dark:border-white/10 dark:bg-white/[0.04] dark:text-white/62">Plot is preparing the grounded artifact…</div> : null}
       {error ? <ErrorNotice message={error} /> : null}
-      {run?.status === "FAILED" && !error ? <ErrorNotice message={`Generation stopped before a reviewable artifact was produced${run.failureCode ? ` (${run.failureCode})` : ""}. It remains available as session activity.`} /> : null}
+      {run?.status === "FAILED" && !error ? <ErrorNotice message={`Generation stopped before a reviewable artifact was produced${run.failureCode ? ` (${run.failureCode})` : ""}. It remains available as chat activity.`} /> : null}
       {run?.status === "NEEDS_REVIEW" && run.failureCode && !error ? <ErrorNotice message={`Source review needs attention (${run.failureCode}). The artifact is preserved, but its review is incomplete.`} /> : null}
     </section>
   );
@@ -665,7 +665,7 @@ function EmptyArtifactState({ hasSelection }: { hasSelection: boolean }) {
 }
 
 function SourceEmptyState() {
-  return <p className="mt-3 text-center text-sm text-black/50 dark:text-white/50">Connect and import a source in <Link href="/settings/integrations" className="text-[#2563eb] hover:underline dark:text-[#93c5fd]">Integrations</Link> or <Link href="/sources" className="text-[#2563eb] hover:underline dark:text-[#93c5fd]">Sources</Link> before starting a session.</p>;
+  return <p className="mt-3 text-center text-sm text-black/50 dark:text-white/50">Connect and import a source in <Link href="/settings/integrations" className="text-[#2563eb] hover:underline dark:text-[#93c5fd]">Integrations</Link> or <Link href="/sources" className="text-[#2563eb] hover:underline dark:text-[#93c5fd]">Sources</Link> before starting a chat.</p>;
 }
 
 function ErrorNotice({ message }: { message: string }) {
@@ -688,11 +688,11 @@ function validateGenerationSelection(all: GenerationReference[], selected: Gener
   return "";
 }
 
-function sessionHref(sessionId: string, generationId: string | null, artifactId: string | null = null) {
-  const params = new URLSearchParams({ session: sessionId });
+function chatHref(chatId: string, generationId: string | null, artifactId: string | null = null) {
+  const params = new URLSearchParams({ chat: chatId });
   if (generationId) params.set("generation", generationId);
   if (artifactId) params.set("artifact", artifactId);
-  return `/sessions?${params.toString()}`;
+  return `/chat?${params.toString()}`;
 }
 
 function formatActivity(value: string | null) {
@@ -710,7 +710,7 @@ function isActiveGenerationStatus(status: GenerationRun["status"]) {
   return !isTerminalGenerationStatus(status);
 }
 
-function activityForRun(run: GenerationRun, instruction: string | null = null): SessionGeneration {
+function activityForRun(run: GenerationRun, instruction: string | null = null): ChatGeneration {
   const createdAt = run.timing?.createdAt ?? new Date().toISOString();
   const completedAt = run.timing?.finishedAt ?? null;
   return {
@@ -732,7 +732,7 @@ function activityForRun(run: GenerationRun, instruction: string | null = null): 
   };
 }
 
-function upsertActivity(setActivities: Dispatch<SetStateAction<SessionGeneration[]>>, next: SessionGeneration) {
+function upsertActivity(setActivities: Dispatch<SetStateAction<ChatGeneration[]>>, next: ChatGeneration) {
   setActivities((current) => {
     const existingIndex = current.findIndex((activity) => activity.id === next.id);
     if (existingIndex < 0) return [...current, next].sort(compareActivity);
@@ -751,7 +751,7 @@ function upsertActivity(setActivities: Dispatch<SetStateAction<SessionGeneration
   });
 }
 
-function compareActivity(left: SessionGeneration, right: SessionGeneration) {
+function compareActivity(left: ChatGeneration, right: ChatGeneration) {
   return left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id);
 }
 
