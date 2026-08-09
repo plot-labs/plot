@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const sidebarMocks = vi.hoisted(() => ({
@@ -49,6 +49,17 @@ describe("Settings navigation", () => {
     expect(within(productNavigation).getByRole("link", { name: "Artifacts" })).toHaveAttribute("aria-current", "page");
     expect(screen.queryByRole("navigation", { name: "Settings navigation" })).not.toBeInTheDocument();
     expect(await screen.findByRole("button", { name: /Personal/ })).toBeVisible();
+  });
+
+  it("announces the workspace selected after account loading", async () => {
+    const workspaceChanged = vi.fn();
+    window.addEventListener("plot:workspace-changed", workspaceChanged, { once: true });
+
+    render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
+
+    await waitFor(() => expect(workspaceChanged).toHaveBeenCalledTimes(1));
+    expect((workspaceChanged.mock.calls[0]?.[0] as CustomEvent<{ id: string }>).detail.id).toBe("workspace-1");
+    expect(window.localStorage.getItem("plot.workspaceId")).toBe("workspace-1");
   });
 
   it("keeps shared workspace context above workspace settings navigation", async () => {

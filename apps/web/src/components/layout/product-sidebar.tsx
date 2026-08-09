@@ -104,6 +104,9 @@ export function ProductSidebar({ collapsed = false, theme, onThemeChange, onTogg
         if (resolvedWorkspaceId) window.localStorage.setItem("plot.workspaceId", resolvedWorkspaceId);
         else window.localStorage.removeItem("plot.workspaceId");
         setSelectedWorkspaceId(resolvedWorkspaceId);
+        if (resolvedWorkspaceId !== savedId) {
+          window.dispatchEvent(new CustomEvent("plot:workspace-changed", { detail: { id: resolvedWorkspaceId } }));
+        }
       })
       .catch(() => undefined);
     return () => { cancelled = true; };
