@@ -353,7 +353,7 @@ class GitHubChangeRoutineIntegrationTest {
 		jdbcTemplate.update(
 			"""
 			update writing_blocks
-			set title = 'Changed evidence', activity_sequence = nextval('writing_block_activity_sequence'), updated_at = now()
+			set title = 'Changed evidence', updated_at = now()
 			where workspace_id = ? and id = ?
 			""".trimIndent(),
 			devContext.devWorkspaceId,
@@ -390,6 +390,13 @@ class GitHubChangeRoutineIntegrationTest {
 		assertEquals(secondEventRunId, projectedExecutionId(routineId))
 
 		eventPersistence.fail(claimed, "TEST_FAILURE", Instant.now())
+		assertEquals(secondEventRunId, projectedExecutionId(routineId))
+
+		assertEquals(1, eventWorker.drain())
+		assertEquals(GitHubRoutineEventStatus.FAILED, eventPersistence.find(firstEventRunId)?.status)
+		val successor = assertNotNull(eventPersistence.find(secondEventRunId))
+		assertEquals(GitHubRoutineEventStatus.SUCCEEDED, successor.status)
+		assertNotNull(successor.generationRunId)
 		assertEquals(secondEventRunId, projectedExecutionId(routineId))
 	}
 

@@ -6,7 +6,7 @@ import java.time.Instant
 import java.util.UUID
 import javax.sql.DataSource
 import kotlin.test.assertEquals
-import kotlin.test.assertNotEquals
+import kotlin.test.assertTrue
 import org.flywaydb.core.Flyway
 import org.flywaydb.core.api.MigrationVersion
 import org.junit.jupiter.api.AfterEach
@@ -37,15 +37,15 @@ class RoutineMigrationIntegrationTest {
 	}
 
 	@Test
-	fun `V20 backfills the legacy ingestion watermark without hiding later evidence`() {
+	fun `V22 preserves unprocessed legacy backlog`() {
 		migrateTo("19")
 		val userId = UUID.randomUUID()
 		val workspaceId = UUID.randomUUID()
 		val namespaceId = UUID.randomUUID()
 		val scopeId = UUID.randomUUID()
 		val routineId = UUID.randomUUID()
-		val beforeBlockId = UUID.randomUUID()
-		val afterBlockId = UUID.randomUUID()
+		val processedBlockId = UUID.randomUUID()
+		val backlogBlockId = UUID.randomUUID()
 		val lastRunAt = Instant.parse("2026-08-09T00:00:00Z")
 		insertLegacyFixture(
 			userId,
@@ -53,22 +53,22 @@ class RoutineMigrationIntegrationTest {
 			namespaceId,
 			scopeId,
 			routineId,
-			beforeBlockId,
-			afterBlockId,
+			processedBlockId,
+			backlogBlockId,
 			lastRunAt,
 		)
 
-		migrateTo("21")
+		migrateTo("22")
 
-		val beforeSequence = activitySequence(beforeBlockId)
-		val afterSequence = activitySequence(afterBlockId)
+		val processedSequence = activitySequence(processedBlockId)
+		val backlogSequence = activitySequence(backlogBlockId)
 		val cursor = jdbcTemplate.queryForObject(
 			"select activity_cursor_sequence from $schema.routines where id = ?",
 			Long::class.java,
 			routineId,
 		)
-		assertEquals(beforeSequence, cursor)
-		assertNotEquals(afterSequence, cursor)
+		assertEquals(processedSequence, cursor)
+		assertTrue(backlogSequence > cursor!!)
 	}
 
 	private fun migrateTo(version: String) {
@@ -88,10 +88,11 @@ class RoutineMigrationIntegrationTest {
 		namespaceId: UUID,
 		scopeId: UUID,
 		routineId: UUID,
-		beforeBlockId: UUID,
-		afterBlockId: UUID,
+		processedBlockId: UUID,
+		backlogBlockId: UUID,
 		lastRunAt: Instant,
 	) {
+		val generationRunId = UUID.randomUUID()
 		jdbcTemplate.update(
 			"insert into $schema.users (id, email, display_name, status, created_at, updated_at) values (?, ?, 'User', 'ACTIVE', now(), now())",
 			userId,
@@ -125,14 +126,46 @@ class RoutineMigrationIntegrationTest {
 			namespaceId,
 			"scope-${UUID.randomUUID()}",
 		)
-		insertLegacyBlock(workspaceId, namespaceId, scopeId, beforeBlockId, lastRunAt.minusSeconds(1))
-		insertLegacyBlock(workspaceId, namespaceId, scopeId, afterBlockId, lastRunAt.plusSeconds(1))
+		insertLegacyBlock(workspaceId, namespaceId, scopeId, processedBlockId, lastRunAt.minusSeconds(2))
+		insertLegacyBlock(workspaceId, namespaceId, scopeId, backlogBlockId, lastRunAt.minusSeconds(1))
+		jdbcTemplate.update(
+			"""
+			insert into $schema.generation_runs (
+			 id, workspace_id, source_scope_id, created_by_user_id, idempotency_key, request_fingerprint,
+			 status, workflow_version, prompt_version, output_schema_version, budget_version, provider,
+			 model_name, budget_snapshot, user_instruction, finished_at, created_at, updated_at
+			) values (?, ?, ?, ?, ?, 'legacy-fingerprint', 'READY', 'legacy-v1', 'legacy-v1',
+			 'legacy-v1', 'legacy-v1', 'LEGACY', 'legacy-model', '{}'::jsonb, 'Draft updates', ?, ?, ?)
+			""".trimIndent(),
+			generationRunId,
+			workspaceId,
+			scopeId,
+			userId,
+			"legacy-${UUID.randomUUID()}",
+			Timestamp.from(lastRunAt),
+			Timestamp.from(lastRunAt),
+			Timestamp.from(lastRunAt),
+		)
+		jdbcTemplate.update(
+			"""
+			insert into $schema.generation_inputs (
+			 id, workspace_id, generation_run_id, writing_block_id, order_index, source_provider,
+			 source_kind, source_label, snapshot_body, original_url, content_hash, captured_at
+			) values (?, ?, ?, ?, 0, 'GITHUB', 'commit', 'Activity', 'Activity',
+			 'https://github.com/acme/plot', 'legacy-hash', ?)
+			""".trimIndent(),
+			UUID.randomUUID(),
+			workspaceId,
+			generationRunId,
+			processedBlockId,
+			Timestamp.from(lastRunAt),
+		)
 		jdbcTemplate.update(
 			"""
 			insert into $schema.routines
 			(id, workspace_id, created_by_user_id, source_scope_id, name, instruction, cadence,
-			 enabled, last_run_at, next_run_at, created_at, updated_at)
-			values (?, ?, ?, ?, 'Routine', 'Draft updates', 'DAILY', true, ?, ?, now(), now())
+			 enabled, last_run_at, next_run_at, last_generation_run_id, created_at, updated_at)
+			values (?, ?, ?, ?, 'Routine', 'Draft updates', 'DAILY', true, ?, ?, ?, now(), now())
 			""".trimIndent(),
 			routineId,
 			workspaceId,
@@ -140,6 +173,7 @@ class RoutineMigrationIntegrationTest {
 			scopeId,
 			Timestamp.from(lastRunAt),
 			Timestamp.from(lastRunAt.plusSeconds(86_400)),
+			generationRunId,
 		)
 	}
 

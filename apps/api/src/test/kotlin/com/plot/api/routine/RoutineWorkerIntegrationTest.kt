@@ -78,8 +78,7 @@ class RoutineWorkerIntegrationTest {
 		jdbcTemplate.update(
 			"""
 			update writing_blocks
-			set title = 'changed activity', updated_at = ?,
-			    activity_sequence = nextval('writing_block_activity_sequence')
+			set title = 'changed activity', updated_at = ?
 			where workspace_id = ? and id = ?
 			""".trimIndent(),
 			Timestamp.from(activityAt.plusSeconds(60)),
@@ -126,7 +125,7 @@ class RoutineWorkerIntegrationTest {
 		jdbcTemplate.update(
 			"""
 			update writing_blocks
-			set title = 'new revision', activity_sequence = nextval('writing_block_activity_sequence'), updated_at = now()
+			set title = 'new revision', updated_at = now()
 			where workspace_id = ? and id = ?
 			""".trimIndent(),
 			devContext.devWorkspaceId,
@@ -135,6 +134,36 @@ class RoutineWorkerIntegrationTest {
 		runNow(routine.id)
 		val changedRunId = assertNotNull(persistence.find(routine.workspaceId, routine.id)?.lastGenerationRunId)
 		assertEquals(listOf(blockId), generationInputIds(changedRunId))
+	}
+
+	@Test
+	fun `reactivated scope membership is visible after the routine cursor`() {
+		val fixture = insertSourceScope()
+		val routine = persistence.insert(
+			workspaceId = devContext.devWorkspaceId,
+			createdByUserId = devContext.devUserId,
+			name = "Membership routine",
+			sourceScopeId = fixture.scopeId,
+			instruction = "Draft visible activity",
+			cadence = RoutineCadence.DAILY,
+		)
+		val blockId = insertBlock(fixture, 1, Instant.parse("2026-08-09T00:00:00Z"))
+		runNow(routine.id)
+
+		jdbcTemplate.update(
+			"update writing_block_scopes set status = 'TOMBSTONED' where writing_block_id = ? and source_scope_id = ?",
+			blockId,
+			fixture.scopeId,
+		)
+		jdbcTemplate.update(
+			"update writing_block_scopes set status = 'ACTIVE' where writing_block_id = ? and source_scope_id = ?",
+			blockId,
+			fixture.scopeId,
+		)
+
+		runNow(routine.id)
+		val reactivatedRunId = assertNotNull(persistence.find(routine.workspaceId, routine.id)?.lastGenerationRunId)
+		assertEquals(listOf(blockId), generationInputIds(reactivatedRunId))
 	}
 
 	@Test

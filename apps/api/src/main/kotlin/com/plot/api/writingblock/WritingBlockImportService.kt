@@ -44,12 +44,6 @@ class WritingBlockImportService(
 		block: ImportedWritingBlock,
 		now: Instant = Instant.now(),
 	): WritingBlockUpsertResult {
-		// The matching routine worker lock makes activity_sequence commit-ordered per workspace.
-		jdbcTemplate.query(
-			"select pg_advisory_xact_lock(hashtextextended(?, 0))",
-			{ _, _ -> Unit },
-			"routine-activity:${principal.workspaceId}",
-		)
 		jdbcTemplate.query(
 			"select pg_advisory_xact_lock(hashtextextended(?, 0))",
 			{ _, _ -> Unit },
@@ -115,8 +109,7 @@ class WritingBlockImportService(
 				update writing_blocks
 				set source_origin = ?, title = ?, body = ?, url = ?, canonical_url = ?, author = ?,
 				    platform = ?, metadata = cast(? as jsonb), content_hash = ?, source_created_at = ?,
-				    source_updated_at = ?, status = 'ACTIVE', updated_at = ?,
-				    activity_sequence = nextval('writing_block_activity_sequence')
+				    source_updated_at = ?, status = 'ACTIVE', updated_at = ?
 				where workspace_id = ? and id = ?
 				""".trimIndent(),
 				block.sourceOrigin,
@@ -162,8 +155,7 @@ class WritingBlockImportService(
 			  source_created_at = excluded.source_created_at,
 			  source_updated_at = excluded.source_updated_at,
 			  status = 'ACTIVE',
-			  updated_at = excluded.updated_at,
-			  activity_sequence = nextval('writing_block_activity_sequence')
+			  updated_at = excluded.updated_at
 			returning id, (xmax = 0) as inserted
 			""".trimIndent(),
 			RowMapper { rs, _ -> rs.getObject("id", UUID::class.java) to rs.getBoolean("inserted") },

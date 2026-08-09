@@ -131,6 +131,18 @@ class RoutineApiIntegrationTest {
 			status { isOk() }
 			jsonPath("$.enabled") { value(false) }
 		}
+		mockMvc.patch("/api/routines/$routineId") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"enabled":true}"""
+		}.andExpect {
+			status { isConflict() }
+			jsonPath("$.error") { value("SOURCE_NOT_READY") }
+		}
+		assertEquals(false, jdbcTemplate.queryForObject(
+			"select enabled from routines where id = ?",
+			Boolean::class.java,
+			routineId,
+		))
 		mockMvc.post("/api/routines/$routineId/run").andExpect {
 			status { isOk() }
 			jsonPath("$.lastRunStatus") { value("FAILED") }
