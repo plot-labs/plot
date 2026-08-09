@@ -15,7 +15,12 @@ class EvidenceSnapshotService(
 	private val idGenerator: () -> UUID = UuidGenerator()::next,
 	private val clock: Clock = Clock.systemUTC(),
 ) {
-	fun snapshot(generationRunId: UUID, orderIndex: Int, writingBlock: WritingBlock): EvidenceSnapshot {
+	fun snapshot(
+		generationRunId: UUID,
+		orderIndex: Int,
+		writingBlock: WritingBlock,
+		sourceScopeId: UUID? = null,
+	): EvidenceSnapshot {
 		if (orderIndex < 0) invalid("Evidence order must be non-negative")
 		val title = writingBlock.title?.trim()?.takeIf { it.isNotBlank() }
 		val body = writingBlock.body?.trim()?.takeIf { it.isNotBlank() }
@@ -46,6 +51,7 @@ class EvidenceSnapshotService(
 			sourceUpdatedAt = writingBlock.sourceUpdatedAt,
 			contentHash = contentHash,
 			capturedAt = clock.instant(),
+			sourceScopeId = sourceScopeId,
 		)
 	}
 

@@ -30,6 +30,7 @@ class RoutineWorkerIntegrationTest {
 	@Autowired private lateinit var agentPersistence: RoutineAgentPersistence
 	@Autowired private lateinit var worker: RoutineWorker
 	@Autowired private lateinit var evidenceBudget: RoutineEvidenceBudget
+	@Autowired private lateinit var agentProperties: RoutineAgentProperties
 	@Autowired private lateinit var jdbcTemplate: JdbcTemplate
 	@Autowired private lateinit var devBootstrapService: DevBootstrapService
 	@Autowired private lateinit var devContext: DevContext
@@ -50,7 +51,6 @@ class RoutineWorkerIntegrationTest {
 		jdbcTemplate.update("delete from agent_run_inputs where workspace_id = ?", workspaceId)
 		jdbcTemplate.update("delete from agent_run_sources where workspace_id = ?", workspaceId)
 		jdbcTemplate.update("delete from agent_runs where workspace_id = ?", workspaceId)
-		jdbcTemplate.update("delete from work_sessions where workspace_id = ? and routine_execution_id is not null", workspaceId)
 		jdbcTemplate.update("delete from routine_execution_evidence where workspace_id = ?", workspaceId)
 		jdbcTemplate.update("delete from routine_executions where workspace_id = ?", workspaceId)
 		jdbcTemplate.update("delete from routines where workspace_id = ?", workspaceId)
@@ -105,7 +105,7 @@ class RoutineWorkerIntegrationTest {
 		val changedExecutionId = runNow(routine.id, "backlog-changed")
 		assertEquals(listOf(blockIds.first()), seedInputIds(changedExecutionId))
 		assertEquals(3, count("routine_executions"))
-		assertEquals(3, count("work_sessions"))
+		assertEquals(0, count("work_sessions"))
 		assertEquals(3, count("agent_runs"))
 		assertEquals(0, jdbcTemplate.queryForObject(
 			"select count(*) from generation_runs where workspace_id = ? and agent_run_id is not null",
@@ -203,14 +203,14 @@ class RoutineWorkerIntegrationTest {
 		val firstExecutionId = runNow(routine.id, "oversized-first")
 		assertEquals(RoutineExecutionStatus.DISPATCHED, executionStatus(firstExecutionId))
 		assertEquals(listOf(oversizedId), seedInputIds(firstExecutionId))
-		assertEquals(1, count("work_sessions"))
+		assertEquals(0, count("work_sessions"))
 		assertEquals(1, count("agent_runs"))
-		val boundedTitle = assertNotNull(jdbcTemplate.queryForObject(
-			"select snapshot_title from agent_run_inputs where agent_run_id = (select id from agent_runs where routine_execution_id = ?)",
-			String::class.java,
+		val boundedCharacters = assertNotNull(jdbcTemplate.queryForObject(
+			"select length(coalesce(snapshot_title, '')) + length(snapshot_body) from agent_run_inputs where agent_run_id = (select id from agent_runs where routine_execution_id = ?)",
+			Int::class.java,
 			firstExecutionId,
 		))
-		assertEquals(evidenceBudget.maxCharacters, boundedTitle.length)
+		assertEquals(agentProperties.maxInputCharacters, boundedCharacters)
 
 		val secondExecutionId = runNow(routine.id, "oversized-second")
 		assertEquals(listOf(laterId), seedInputIds(secondExecutionId))

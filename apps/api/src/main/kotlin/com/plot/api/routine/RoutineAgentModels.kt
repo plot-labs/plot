@@ -107,6 +107,9 @@ data class AgentRunInputRequest(
 	val routineId: UUID?,
 	val sourceScopeId: UUID,
 	val writingBlockId: UUID,
+	val sourceProvider: String,
+	val sourceKind: String,
+	val sourceLabel: String,
 	val inputKind: AgentRunInputKind,
 	val orderIndex: Int,
 	val activitySequence: Long?,
@@ -121,14 +124,23 @@ data class AgentRunInputRequest(
 )
 
 data class AgentRunDispatchRequest(
-	val title: String,
 	val instructionSnapshot: String,
 	val promptVersion: String,
 	val toolPolicyVersion: String,
 	val budgetSnapshotJson: String = "{}",
+	val maxAttempts: Int = 3,
 	val sourceScopes: List<AgentRunSourceRequest>,
 	val inputs: List<AgentRunInputRequest>,
 	val activityCursorAfter: Long,
+)
+
+data class AgentBudgetSnapshot(
+	val maxModelCalls: Int,
+	val maxToolCalls: Int,
+	val maxRunDurationMillis: Long,
+	val maxInputCharacters: Int,
+	val maxEvidenceCharacters: Int,
+	val truncatedSeed: Boolean = false,
 )
 
 data class AgentRunRecord(
@@ -136,7 +148,6 @@ data class AgentRunRecord(
 	val workspaceId: UUID,
 	val routineExecutionId: UUID,
 	val routineId: UUID,
-	val workSessionId: UUID,
 	val createdByUserId: UUID,
 	val instructionSnapshot: String,
 	val promptVersion: String,
@@ -146,6 +157,8 @@ data class AgentRunRecord(
 	val currentStep: Int,
 	val attemptCount: Int,
 	val maxAttempts: Int,
+	val modelCallCount: Int,
+	val toolCallCount: Int,
 	val nextAttemptAt: Instant?,
 	val failureCode: String?,
 	val claimedBy: String?,
@@ -176,6 +189,9 @@ data class AgentRunInputRecord(
 	val routineId: UUID?,
 	val sourceScopeId: UUID,
 	val writingBlockId: UUID,
+	val sourceProvider: String,
+	val sourceKind: String,
+	val sourceLabel: String,
 	val inputKind: AgentRunInputKind,
 	val orderIndex: Int,
 	val activitySequence: Long?,
@@ -224,8 +240,23 @@ data class AgentStepRecord(
 	val createdAt: Instant,
 )
 
+data class ClaimedAgentRun(
+	val workspaceId: UUID,
+	val agentRunId: UUID,
+	val transitionVersion: Long,
+	val workerId: String,
+)
+
+data class AgentGenerationState(
+	val generationRunId: UUID,
+	val status: String,
+	val materialized: Boolean,
+)
+
 class RoutineExecutionIdempotencyConflictException : IllegalStateException(
 	"Routine execution trigger key was reused with a different fingerprint",
 )
 
 class RoutineExecutionStateException(message: String) : IllegalStateException(message)
+class AgentRunClaimLostException : IllegalStateException("Agent run claim was lost")
+class AgentRunBudgetExceededException(val safeCode: String) : IllegalStateException(safeCode)

@@ -189,7 +189,7 @@ class RoutineAgentMigrationIntegrationTest {
 	}
 
 	@Test
-	fun `dispatch links one Chat AgentRun frozen sources and seed inputs in one workspace`() {
+	fun `dispatch links one AgentRun frozen sources and seed inputs without a Chat`() {
 		val fixture = insertFixture()
 		val context = insertSourceScope(fixture.workspaceId, fixture.namespaceId, "context")
 		val execution = withSchema { persistence.createExecution(executionRequest(fixture)) }
@@ -217,7 +217,7 @@ class RoutineAgentMigrationIntegrationTest {
 		}
 
 		assertEquals(execution.id, agentRun.routineExecutionId)
-		assertEquals(1, count("work_sessions"))
+		assertEquals(0, count("work_sessions"))
 		assertEquals(1, count("agent_runs"))
 		assertEquals(2, withSchema { persistence.listAgentRunSources(fixture.workspaceId, agentRun.id).size })
 		assertEquals(1, withSchema { persistence.listAgentRunInputs(fixture.workspaceId, agentRun.id).size })
@@ -232,49 +232,18 @@ class RoutineAgentMigrationIntegrationTest {
 	}
 
 	@Test
-	fun `agent run work session must belong to its routine execution`() {
-		val fixture = insertFixture()
-		val firstExecution = withSchema { persistence.createExecution(executionRequest(fixture, "manual:first")) }
-		withSchema { persistence.dispatch(fixture.workspaceId, firstExecution.id, dispatchRequest(fixture)) }
-		val secondExecution = withSchema { persistence.createExecution(executionRequest(fixture, "manual:second")) }
-		val unlinkedWorkSessionId = UUID.randomUUID()
-		val now = Timestamp.from(fixture.createdAt)
-		schemaJdbcTemplate.update(
+	fun `routine agent schema has no Chat linkage`() {
+		assertEquals(0, schemaJdbcTemplate.queryForObject(
 			"""
-			insert into $schema.work_sessions (
-			  id, workspace_id, title, status, created_by_user_id,
-			  last_activity_at, created_at, updated_at
-			) values (?, ?, 'Unlinked Chat', 'OPEN', ?, ?, ?, ?)
+			select count(*)
+			from information_schema.columns
+			where table_schema = ?
+			  and ((table_name = 'agent_runs' and column_name = 'work_session_id')
+			    or (table_name = 'work_sessions' and column_name = 'routine_execution_id'))
 			""".trimIndent(),
-			unlinkedWorkSessionId,
-			fixture.workspaceId,
-			fixture.userId,
-			now,
-			now,
-			now,
-		)
-
-		assertFailsWith<DataIntegrityViolationException> {
-			schemaJdbcTemplate.update(
-				"""
-				insert into $schema.agent_runs (
-				  id, workspace_id, routine_execution_id, routine_id, work_session_id, created_by_user_id,
-				  instruction_snapshot, prompt_version, tool_policy_version, budget_snapshot,
-				  status, current_step, attempt_count, max_attempts, created_at, updated_at
-				) values (?, ?, ?, ?, ?, ?, 'Instruction', 'prompt-v1', 'tools-v1', '{}'::jsonb,
-				          'QUEUED', 0, 0, 3, ?, ?)
-				""".trimIndent(),
-				UUID.randomUUID(),
-				fixture.workspaceId,
-				secondExecution.id,
-				fixture.routineId,
-				unlinkedWorkSessionId,
-				fixture.userId,
-				now,
-				now,
-			)
-		}
-		assertEquals(1, count("agent_runs"))
+			Int::class.java,
+			schema,
+		))
 	}
 
 	@Test
@@ -296,7 +265,7 @@ class RoutineAgentMigrationIntegrationTest {
 				)
 			}
 		}
-		assertEquals(1, count("work_sessions"))
+		assertEquals(0, count("work_sessions"))
 		assertEquals(1, count("agent_runs"))
 		assertEquals(10L, jdbcTemplate.queryForObject(
 			"select activity_cursor_sequence from $schema.routines where id = ?",
@@ -339,6 +308,9 @@ class RoutineAgentMigrationIntegrationTest {
 			routineId = null,
 			sourceScopeId = fixture.sourceScopeId,
 			writingBlockId = fixture.blockId,
+			sourceProvider = "GITHUB",
+			sourceKind = "COMMIT",
+			sourceLabel = "Adopted",
 			inputKind = AgentRunInputKind.TOOL_RESULT,
 			orderIndex = 1,
 			activitySequence = null,
@@ -491,7 +463,6 @@ class RoutineAgentMigrationIntegrationTest {
 		)
 
 	private fun dispatchRequest(fixture: Fixture) = AgentRunDispatchRequest(
-		title = "${fixture.routineName} · routine check",
 		instructionSnapshot = "Draft a concise update",
 		promptVersion = "prompt-v1",
 		toolPolicyVersion = "tools-v1",
@@ -510,6 +481,9 @@ class RoutineAgentMigrationIntegrationTest {
 		routineId = fixture.routineId,
 		sourceScopeId = sourceScopeId,
 		writingBlockId = fixture.blockId,
+		sourceProvider = "GITHUB",
+		sourceKind = "COMMIT",
+		sourceLabel = "Activity",
 		inputKind = AgentRunInputKind.SEED,
 		orderIndex = 0,
 		activitySequence = 10,
@@ -528,10 +502,11 @@ class RoutineAgentMigrationIntegrationTest {
 			"""
 			insert into $schema.agent_run_inputs (
 			  id, workspace_id, agent_run_id, routine_id, source_scope_id, writing_block_id,
+			  source_provider, source_kind, source_label,
 			  input_kind, order_index, activity_sequence, snapshot_title, snapshot_body,
 			  snapshot_excerpt, original_url, source_created_at, source_updated_at,
 			  content_hash, captured_at
-			) values (?, ?, ?, ?, ?, ?, 'SEED', ?, ?, 'Activity', 'A bounded activity snapshot',
+			) values (?, ?, ?, ?, ?, ?, 'GITHUB', 'COMMIT', 'Activity', 'SEED', ?, ?, 'Activity', 'A bounded activity snapshot',
 			          'A bounded activity snapshot', 'https://github.com/acme/plot/commit/activity', ?, ?,
 			          'activity-hash', ?)
 			""".trimIndent(),

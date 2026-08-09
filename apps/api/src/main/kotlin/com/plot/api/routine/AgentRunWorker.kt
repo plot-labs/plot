@@ -1,0 +1,345 @@
+package com.plot.api.routine
+
+import com.plot.api.ai.provider.AgentDecision
+import com.plot.api.ai.provider.AgentDecisionAction
+import com.plot.api.ai.provider.AgentDecisionException
+import com.plot.api.ai.provider.AgentDecisionGateway
+import com.plot.api.ai.provider.AgentDecisionRequest
+import com.plot.api.ai.provider.AgentInputView
+import com.plot.api.ai.provider.AgentStepView
+import com.plot.api.common.WorkspacePrincipal
+import com.plot.api.generation.GenerationIdempotencyConflictException
+import com.plot.api.generation.GenerationRunService
+import java.time.Clock
+import java.time.Duration
+import java.time.Instant
+import java.util.UUID
+import org.springframework.scheduling.annotation.Scheduled
+import org.springframework.stereotype.Component
+import tools.jackson.databind.ObjectMapper
+
+@Component
+class AgentRunWorker(
+	private val persistence: RoutineAgentPersistence,
+	private val decisionGateway: AgentDecisionGateway,
+	private val tools: ReadOnlyAgentTools,
+	private val generationRunService: GenerationRunService,
+	private val properties: RoutineAgentProperties,
+	private val objectMapper: ObjectMapper,
+	private val clock: Clock = Clock.systemUTC(),
+	private val workerId: String = "routine-agent-${UUID.randomUUID()}",
+) {
+	@Scheduled(fixedDelayString = "\${plot.routine-agent.poll-delay:PT5S}")
+	fun poll() {
+		processOne()
+	}
+
+	fun processOne(): Boolean {
+		if (!properties.workersEnabled) return false
+		val now = clock.instant()
+		val claim = persistence.claimNextAgentRun(
+			workerId = workerId,
+			now = now,
+			staleBefore = now.minus(properties.claimTimeout),
+		) ?: return false
+		try {
+			processClaim(claim)
+		} catch (_: AgentRunClaimLostException) {
+			// Another worker reclaimed this run. Its fenced transition wins.
+		} catch (failure: AgentDecisionException) {
+			if (failure.recoverable) {
+				persistence.scheduleAgentRetry(
+					claim,
+					failure.code.safeCode("AGENT_PROVIDER_UNAVAILABLE"),
+					now.plus(retryDelay(persistence.findAgentRun(claim.workspaceId, claim.agentRunId)?.attemptCount ?: 0)),
+					now,
+				)
+			} else {
+				persistence.failAgentRun(claim, failure.code.safeCode("AGENT_MODEL_FAILED"), now)
+			}
+		} catch (failure: AgentRunBudgetExceededException) {
+			persistence.failAgentRun(claim, failure.safeCode, now)
+		} catch (failure: AgentToolAccessException) {
+			persistence.failAgentRun(claim, failure.safeCode, now)
+		} catch (_: GenerationIdempotencyConflictException) {
+			persistence.failAgentRun(claim, "AGENT_HANDOFF_CONFLICT", now)
+		} catch (_: IllegalArgumentException) {
+			persistence.failAgentRun(claim, "AGENT_INVALID_DECISION", now)
+		} catch (failure: RuntimeException) {
+			// Unknown infrastructure outcomes retain the claim and become eligible
+			// only through bounded stale recovery; they are not misreported as terminal.
+			try {
+				persistence.recordAgentInfrastructureFailure(claim, now)
+			} catch (recordFailure: RuntimeException) {
+				failure.addSuppressed(recordFailure)
+			}
+			throw failure
+		}
+		return true
+	}
+
+	fun drain(maxTurns: Int = 16): Int {
+		require(maxTurns > 0) { "Agent drain limit must be positive" }
+		var processed = 0
+		while (processed < maxTurns && processOne()) processed++
+		return processed
+	}
+
+	private fun processClaim(claim: ClaimedAgentRun) {
+		val run = persistence.findAgentRun(claim.workspaceId, claim.agentRunId)
+			?: throw AgentRunClaimLostException()
+		val budget = frozenBudget(run)
+		if (run.startedAt != null && Duration.between(run.startedAt, clock.instant()) > Duration.ofMillis(budget.maxRunDurationMillis)) {
+			throw AgentRunBudgetExceededException("AGENT_DURATION_LIMIT")
+		}
+		val steps = persistence.listSteps(run.workspaceId, run.id)
+		val linkedHandoff = steps.lastOrNull {
+			it.kind == AgentStepKind.ARTIFACT_HANDOFF &&
+				it.status == AgentStepStatus.SUCCEEDED &&
+				it.generationRunId != null
+		}
+		if (linkedHandoff != null) {
+			observeGeneration(claim, linkedHandoff.generationRunId!!)
+			return
+		}
+
+		val running = persistence.findRunningStep(run.workspaceId, run.id, run.currentStep)
+		if (running != null) {
+			executeStep(claim, run, running, budget)
+			return
+		}
+		if (!persistence.allAgentSourcesActive(run.workspaceId, run.id)) {
+			throw AgentToolAccessException("SOURCE_NOT_READY")
+		}
+
+		val countedRun = persistence.beginModelDecision(claim, budget.maxModelCalls)
+		val inputs = persistence.listAgentRunInputs(run.workspaceId, run.id)
+		val sources = tools.listAllowedSources(run.workspaceId, run.id).sources
+		if (sources.size != persistence.listAgentRunSources(run.workspaceId, run.id).size) {
+			throw AgentToolAccessException("SOURCE_NOT_READY")
+		}
+		val decision = decisionGateway.decide(
+			AgentDecisionRequest(
+				agentRunId = run.id,
+				instruction = run.instructionSnapshot,
+				sources = sources,
+				inputs = inputs.map { input ->
+					AgentInputView(
+						id = input.id,
+						sourceScopeId = input.sourceScopeId,
+						title = input.snapshotTitle,
+						excerpt = (input.snapshotExcerpt ?: input.snapshotBody).take(MAX_MODEL_EXCERPT),
+					)
+				},
+				completedSteps = steps.filter { it.status == AgentStepStatus.SUCCEEDED }.map { step ->
+					AgentStepView(step.sequence, step.toolName, step.resultJson?.take(MAX_MODEL_STEP_RESULT))
+				},
+				remainingModelCalls = (budget.maxModelCalls - countedRun.modelCallCount).coerceAtLeast(0),
+				remainingToolCalls = (budget.maxToolCalls - countedRun.toolCallCount).coerceAtLeast(0),
+			),
+		)
+		val arguments = validateDecision(decision, sources.map { it.id }.toSet(), inputs.map { it.id }.toSet())
+		val step = persistence.reserveStep(
+			claim = claim,
+			request = AgentStepRequest(
+				agentRunId = run.id,
+				sequence = run.currentStep,
+				kind = if (decision.action == AgentDecisionAction.CREATE_ARTIFACT) {
+					AgentStepKind.ARTIFACT_HANDOFF
+				} else {
+					AgentStepKind.READ_TOOL
+				},
+				status = AgentStepStatus.RUNNING,
+				idempotencyKey = "agent:${run.id}:step:${run.currentStep}",
+				toolName = decision.action.takeUnless { it == AgentDecisionAction.CREATE_ARTIFACT }?.name,
+				argumentsJson = objectMapper.writeValueAsString(arguments),
+				startedAt = clock.instant(),
+			),
+			maxToolCalls = budget.maxToolCalls,
+			now = clock.instant(),
+		)
+		executeStep(claim, countedRun, step, budget)
+	}
+
+	private fun executeStep(
+		claim: ClaimedAgentRun,
+		run: AgentRunRecord,
+		step: AgentStepRecord,
+		budget: AgentBudgetSnapshot,
+	) {
+		val arguments = objectMapper.readValue(step.argumentsJson, AgentStepArguments::class.java)
+		when (arguments.action) {
+			AgentDecisionAction.LIST_ALLOWED_SOURCES -> {
+				val result = tools.listAllowedSources(run.workspaceId, run.id)
+				persistence.completeToolStep(
+					claim = claim,
+					stepId = step.id,
+					resultJson = objectMapper.writeValueAsString(
+						mapOf(
+							"summary" to "Listed ${result.sources.size} allowed sources",
+							"sources" to result.sources,
+						),
+					),
+					maxEvidenceCharacters = budget.maxEvidenceCharacters,
+					now = clock.instant(),
+				)
+			}
+
+			AgentDecisionAction.SEARCH_WRITING_BLOCKS -> {
+				val sourceScopeId = requireNotNull(arguments.sourceScopeId)
+				val result = tools.searchWritingBlocks(
+					run.workspaceId,
+					run.id,
+					sourceScopeId,
+					requireNotNull(arguments.query),
+				)
+				persistence.completeToolStep(
+					claim = claim,
+					stepId = step.id,
+					resultJson = objectMapper.writeValueAsString(
+						mapOf(
+							"summary" to "Found ${result.matches.size} matching source items",
+							"sourceScopeId" to sourceScopeId,
+							"matches" to result.matches,
+						),
+					),
+					sourceScopeId = sourceScopeId,
+					sourceStatusChangedAt = result.sourceStatusChangedAt,
+					maxEvidenceCharacters = budget.maxEvidenceCharacters,
+					now = clock.instant(),
+				)
+			}
+
+			AgentDecisionAction.READ_WRITING_BLOCKS -> {
+				val sourceScopeId = requireNotNull(arguments.sourceScopeId)
+				val writingBlockId = requireNotNull(arguments.writingBlockId)
+				val result = tools.readWritingBlock(run.workspaceId, run.id, sourceScopeId, writingBlockId)
+				val adopted = requireNotNull(result.adoptedInput)
+				persistence.completeToolStep(
+					claim = claim,
+					stepId = step.id,
+					resultJson = objectMapper.writeValueAsString(
+						mapOf(
+							"summary" to "Read one source item",
+							"sourceScopeId" to sourceScopeId,
+							"writingBlockId" to writingBlockId,
+							"title" to adopted.snapshotTitle,
+							"excerpt" to adopted.snapshotExcerpt,
+						),
+					),
+					adoptedInput = adopted,
+					sourceScopeId = sourceScopeId,
+					sourceStatusChangedAt = result.sourceStatusChangedAt,
+					maxEvidenceCharacters = budget.maxEvidenceCharacters,
+					now = clock.instant(),
+				)
+			}
+
+			AgentDecisionAction.CREATE_ARTIFACT -> {
+				val allInputs = persistence.listAgentRunInputs(run.workspaceId, run.id).associateBy { it.id }
+				val selected = arguments.selectedInputIds.map { id ->
+					allInputs[id] ?: throw IllegalArgumentException("Selected Agent input is unavailable")
+				}
+				val evidenceCharacters = selected.sumOf { it.snapshotTitle.orEmpty().length + it.snapshotBody.length }
+				if (evidenceCharacters > budget.maxEvidenceCharacters) {
+					throw AgentRunBudgetExceededException("AGENT_EVIDENCE_LIMIT")
+				}
+				val generation = generationRunService.createForAgent(
+					principal = WorkspacePrincipal(run.workspaceId, run.createdByUserId),
+					agentRun = run,
+					inputs = selected,
+					idempotencyKey = step.idempotencyKey,
+				)
+				persistence.linkGenerationStep(
+					claim = claim,
+					stepId = step.id,
+					generationRunId = generation.runId,
+					resultJson = objectMapper.writeValueAsString(
+						mapOf(
+							"summary" to "Created an Artifact draft",
+							"generationRunId" to generation.runId,
+							"selectedInputCount" to selected.size,
+						),
+					),
+					nextAttemptAt = clock.instant().plus(properties.pollDelay),
+					now = clock.instant(),
+				)
+			}
+		}
+	}
+
+	private fun observeGeneration(claim: ClaimedAgentRun, generationRunId: UUID) {
+		val state = persistence.loadGenerationState(claim.workspaceId, generationRunId)
+			?: throw IllegalArgumentException("Linked generation is unavailable")
+		when {
+			state.materialized && state.status in setOf("READY", "NEEDS_REVIEW") ->
+				persistence.succeedAgentRun(claim, clock.instant())
+			state.status == "FAILED" ->
+				persistence.failAgentRun(claim, "AGENT_GENERATION_FAILED", clock.instant())
+			else -> persistence.releaseAgentClaim(claim, clock.instant().plus(properties.pollDelay), clock.instant())
+		}
+	}
+
+	private fun validateDecision(
+		decision: AgentDecision,
+		allowedSourceIds: Set<UUID>,
+		availableInputIds: Set<UUID>,
+	): AgentStepArguments = when (decision.action) {
+		AgentDecisionAction.LIST_ALLOWED_SOURCES -> AgentStepArguments(decision.action)
+		AgentDecisionAction.SEARCH_WRITING_BLOCKS -> {
+			val sourceScopeId = decision.sourceScopeId?.takeIf { it in allowedSourceIds }
+				?: throw IllegalArgumentException("Search source is not allowed")
+			val query = decision.query?.trim()?.take(200)?.takeIf { it.isNotBlank() }
+				?: throw IllegalArgumentException("Search query is required")
+			AgentStepArguments(decision.action, sourceScopeId = sourceScopeId, query = query)
+		}
+		AgentDecisionAction.READ_WRITING_BLOCKS -> {
+			val sourceScopeId = decision.sourceScopeId?.takeIf { it in allowedSourceIds }
+				?: throw IllegalArgumentException("Read source is not allowed")
+			val writingBlockId = decision.writingBlockIds.singleOrNull()
+				?: throw IllegalArgumentException("Read requires exactly one source item")
+			AgentStepArguments(decision.action, sourceScopeId = sourceScopeId, writingBlockId = writingBlockId)
+		}
+		AgentDecisionAction.CREATE_ARTIFACT -> {
+			val selected = decision.selectedInputIds.distinct()
+			if (selected.isEmpty() || selected.any { it !in availableInputIds }) {
+				throw IllegalArgumentException("Artifact selection is invalid")
+			}
+			AgentStepArguments(decision.action, selectedInputIds = selected)
+		}
+	}
+
+	private fun frozenBudget(run: AgentRunRecord): AgentBudgetSnapshot = try {
+		objectMapper.readValue(run.budgetSnapshotJson, AgentBudgetSnapshot::class.java).also {
+			require(it.maxModelCalls > 0 && it.maxToolCalls > 0)
+			require(it.maxRunDurationMillis > 0 && it.maxInputCharacters > 0)
+			require(it.maxEvidenceCharacters >= it.maxInputCharacters)
+		}
+	} catch (_: RuntimeException) {
+		throw AgentRunBudgetExceededException("AGENT_BUDGET_INVALID")
+	}
+
+	private fun retryDelay(attemptCount: Int): Duration = minOf(
+		MAX_RETRY_DELAY,
+		properties.retryInitialDelay.multipliedBy(1L shl attemptCount.coerceIn(0, MAX_RETRY_SHIFT)),
+	)
+
+	private fun String.safeCode(fallback: String): String =
+		trim().takeIf { SAFE_ERROR_CODE.matches(it) } ?: fallback
+
+	private data class AgentStepArguments(
+		val action: AgentDecisionAction,
+		val sourceScopeId: UUID? = null,
+		val query: String? = null,
+		val writingBlockId: UUID? = null,
+		val selectedInputIds: List<UUID> = emptyList(),
+	)
+
+	private companion object {
+		const val MAX_MODEL_EXCERPT = 1_200
+		const val MAX_MODEL_STEP_RESULT = 2_000
+		const val MAX_RETRY_SHIFT = 8
+		val MAX_RETRY_DELAY: Duration = Duration.ofMinutes(15)
+		val SAFE_ERROR_CODE = Regex("[A-Z][A-Z0-9_]{0,99}")
+	}
+}

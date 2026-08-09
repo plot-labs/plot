@@ -10,6 +10,7 @@ import org.springframework.data.domain.PageRequest
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import org.springframework.transaction.support.TransactionTemplate
+import tools.jackson.databind.ObjectMapper
 
 /**
  * Claims canonical RoutineExecutions and performs only the durable admission
@@ -22,6 +23,8 @@ class RoutineWorker(
 	private val writingBlockRepository: WritingBlockRepository,
 	private val evidenceBudget: RoutineEvidenceBudget,
 	private val transactionTemplate: TransactionTemplate,
+	private val agentProperties: RoutineAgentProperties,
+	private val objectMapper: ObjectMapper,
 	private val clock: Clock? = null,
 	private val workerId: String = "routine-${UUID.randomUUID()}",
 	private val claimTimeout: Duration = Duration.ofMinutes(2),
@@ -130,7 +133,7 @@ class RoutineWorker(
 		val batch = evidenceBudget.select(candidates)
 		val oversized = batch.blocks.isEmpty() && batch.oversizedBlockCount == 1
 		val selected = if (oversized) listOf(candidates.first()) else batch.blocks
-		if (selected.isEmpty() || batch.consumedThrough == null) {
+		if (selected.isEmpty()) {
 			throw RoutineExecutionStateException("Routine evidence preflight did not produce a cursor")
 		}
 		if (!oversized) {
@@ -141,18 +144,29 @@ class RoutineWorker(
 		}
 
 		val now = currentInstant()
+		val seedInputs = buildList {
+			var characters = 0
+			for (block in selected) {
+				val input = seedInput(execution, block, size, now)
+				val inputCharacters = input.snapshotTitle.orEmpty().length + input.snapshotBody.length
+				if (isNotEmpty() && characters + inputCharacters > agentProperties.maxEvidenceCharacters) break
+				add(input)
+				characters += inputCharacters
+			}
+		}
+		val consumedThrough = selected[seedInputs.lastIndex].activitySequence
 		agentPersistence.dispatch(
 			workspaceId = execution.workspaceId,
 			executionId = execution.id,
 			request = AgentRunDispatchRequest(
-				title = "${routine.name} · routine check",
 				instructionSnapshot = routine.instruction,
 				promptVersion = PROMPT_VERSION,
 				toolPolicyVersion = TOOL_POLICY_VERSION,
-				budgetSnapshotJson = if (oversized) OVERSIZED_BUDGET_JSON else BUDGET_JSON,
+				budgetSnapshotJson = budgetSnapshot(oversized),
+				maxAttempts = agentProperties.maxAttempts,
 				sourceScopes = sourceScopes(execution, routine, now),
-				inputs = selected.mapIndexed { index, block -> seedInput(execution, block, index, now) },
-				activityCursorAfter = batch.consumedThrough.sequence,
+				inputs = seedInputs,
+				activityCursorAfter = consumedThrough,
 			),
 			now = now,
 			workerId = workerId,
@@ -227,20 +241,24 @@ class RoutineWorker(
 		orderIndex: Int,
 		now: Instant,
 	): AgentRunInputRequest {
-		val title = block.title.orEmpty().take(evidenceBudget.maxCharacters)
-		val bodyLimit = (evidenceBudget.maxCharacters - title.length).coerceAtLeast(1)
+		val title = block.title.orEmpty().take((agentProperties.maxInputCharacters - 1).coerceAtLeast(0))
+		val bodyLimit = agentProperties.maxInputCharacters - title.length
 		val body = (block.body ?: block.title ?: "Activity").take(bodyLimit).ifBlank { "Activity" }
 		return AgentRunInputRequest(
 			routineId = execution.routineId,
 			sourceScopeId = execution.triggerSourceScopeId,
 			writingBlockId = block.id,
+			sourceProvider = block.platform?.uppercase() ?: "GITHUB",
+			sourceKind = block.sourceKind,
+			sourceLabel = block.title?.take(240)?.takeIf { it.isNotBlank() } ?: "GitHub ${block.sourceKind}",
 			inputKind = AgentRunInputKind.SEED,
 			orderIndex = orderIndex,
 			activitySequence = block.activitySequence,
 			snapshotTitle = title.ifBlank { null },
 			snapshotBody = body,
 			snapshotExcerpt = body.take(240),
-			originalUrl = block.canonicalUrl ?: block.url ?: "plot://writing-block/${block.id}",
+			originalUrl = block.canonicalUrl ?: block.url
+				?: throw RoutineExecutionStateException("Routine source evidence URL is unavailable"),
 			sourceCreatedAt = block.sourceCreatedAt,
 			sourceUpdatedAt = block.sourceUpdatedAt,
 			contentHash = block.contentHash ?: "activity:${block.id}:${block.activitySequence}",
@@ -361,10 +379,19 @@ class RoutineWorker(
 
 	private fun currentInstant(): Instant = clock?.instant() ?: Instant.now()
 
+	private fun budgetSnapshot(oversized: Boolean): String = objectMapper.writeValueAsString(
+		AgentBudgetSnapshot(
+			maxModelCalls = agentProperties.maxModelCalls,
+			maxToolCalls = agentProperties.maxToolCalls,
+			maxRunDurationMillis = agentProperties.maxRunDuration.toMillis(),
+			maxInputCharacters = agentProperties.maxInputCharacters,
+			maxEvidenceCharacters = agentProperties.maxEvidenceCharacters,
+			truncatedSeed = oversized,
+		),
+	)
+
 	private companion object {
 		const val PROMPT_VERSION = "routine-agent-v1"
 		const val TOOL_POLICY_VERSION = "read-only-v1"
-		const val BUDGET_JSON = "{\"kind\":\"routine-agent\",\"bounded\":true}"
-		const val OVERSIZED_BUDGET_JSON = "{\"kind\":\"routine-agent\",\"bounded\":true,\"truncated\":true}"
 	}
 }

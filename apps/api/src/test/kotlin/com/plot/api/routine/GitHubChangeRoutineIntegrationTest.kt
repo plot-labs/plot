@@ -53,7 +53,6 @@ class GitHubChangeRoutineIntegrationTest {
 		jdbcTemplate.update("delete from agent_run_inputs where workspace_id = ?", workspaceId)
 		jdbcTemplate.update("delete from agent_run_sources where workspace_id = ?", workspaceId)
 		jdbcTemplate.update("delete from agent_runs where workspace_id = ?", workspaceId)
-		jdbcTemplate.update("delete from work_sessions where workspace_id = ? and routine_execution_id is not null", workspaceId)
 		jdbcTemplate.update("delete from routine_execution_evidence where workspace_id = ?", workspaceId)
 		jdbcTemplate.update("delete from routine_executions where workspace_id = ?", workspaceId)
 		routineIds.forEach { routineId -> jdbcTemplate.update("delete from routines where id = ?", routineId) }
@@ -75,7 +74,7 @@ class GitHubChangeRoutineIntegrationTest {
 	}
 
 	@Test
-	fun `default branch delivery creates one canonical execution and one Chat AgentRun`() {
+	fun `default branch delivery creates one canonical execution and one AgentRun`() {
 		val repository = bindRepository()
 		val routineId = insertRoutine(repository.scopeId, RoutineCadence.ON_GITHUB_CHANGE)
 		val deliveryId = "delivery-${UUID.randomUUID()}"
@@ -90,7 +89,7 @@ class GitHubChangeRoutineIntegrationTest {
 		val executionId = executionId(routineId, deliveryId)
 		assertEquals(RoutineExecutionStatus.DISPATCHED, executionStatus(executionId))
 		assertEquals("github:$routineId:${deliveryUuid(deliveryId)}", triggerKey(executionId))
-		assertEquals(1, count("work_sessions"))
+		assertEquals(0, count("work_sessions"))
 		assertEquals(1, count("agent_runs"))
 		assertEquals(1, seedCount(executionId))
 		assertEquals(0, jdbcTemplate.queryForObject(
@@ -214,7 +213,7 @@ class GitHubChangeRoutineIntegrationTest {
 		assertEquals(2, countExecutions(routineId))
 		assertEquals(1, eventWorker.drain())
 		assertEquals(RoutineExecutionStatus.NO_ACTIVITY, executionStatus(executionId(routineId, secondDeliveryId)))
-		assertEquals(1, count("work_sessions"))
+		assertEquals(0, count("work_sessions"))
 		assertEquals(1, count("agent_runs"))
 	}
 
@@ -245,12 +244,12 @@ class GitHubChangeRoutineIntegrationTest {
 		routineWorker.runNow(routine.workspaceId, routine.id, manual.id)
 
 		assertEquals(listOf(olderBlockId), seedIds(manual.id))
-		assertEquals(2, count("work_sessions"))
+		assertEquals(0, count("work_sessions"))
 		assertEquals(2, count("agent_runs"))
 	}
 
 	@Test
-	fun `stale canonical claim is recovered without duplicating the Chat`() {
+	fun `stale canonical claim is recovered without duplicating the AgentRun`() {
 		val repository = bindRepository()
 		val routineId = insertRoutine(repository.scopeId, RoutineCadence.ON_GITHUB_CHANGE)
 		val deliveryId = "stale-${UUID.randomUUID()}"
@@ -273,7 +272,7 @@ class GitHubChangeRoutineIntegrationTest {
 		val recovered = assertNotNull(agentPersistence.findExecution(devContext.devWorkspaceId, executionId))
 		assertEquals(2, recovered.attemptCount)
 		assertEquals(RoutineExecutionStatus.DISPATCHED, recovered.status)
-		assertEquals(1, count("work_sessions"))
+		assertEquals(0, count("work_sessions"))
 		assertEquals(1, count("agent_runs"))
 	}
 
