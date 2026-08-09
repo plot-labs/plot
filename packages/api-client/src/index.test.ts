@@ -52,35 +52,66 @@ describe("Plot API client", () => {
       lastGenerationRunId: null,
       lastRunStatus: null,
       lastErrorCode: null,
+      contextSourceScopeIds: [],
+      latestExecution: null,
       createdAt: "2026-08-09T00:00:00Z",
       updatedAt: "2026-08-09T00:00:00Z",
+    };
+    const agentRun = {
+      id: "agent-run-1",
+      routineExecutionId: "execution-1",
+      routineId: "routine-1",
+      status: "SUCCEEDED",
+      failureCode: null,
+      generationRunId: "run-1",
+      artifactId: "artifact-1",
+      startedAt: "2026-08-09T00:01:00Z",
+      finishedAt: "2026-08-09T00:02:00Z",
+      steps: [{
+        sequence: 1,
+        kind: "ARTIFACT_HANDOFF",
+        status: "SUCCEEDED",
+        toolName: null,
+        failureCode: null,
+        generationRunId: "run-1",
+        artifactId: "artifact-1",
+        startedAt: "2026-08-09T00:01:00Z",
+        finishedAt: "2026-08-09T00:02:00Z",
+      }],
     };
     const fetcher = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(Response.json([routine]))
       .mockResolvedValueOnce(Response.json(routine))
+      .mockResolvedValueOnce(Response.json(routine))
       .mockResolvedValueOnce(Response.json({ ...routine, enabled: false }))
-      .mockResolvedValueOnce(Response.json({ ...routine, lastRunStatus: "QUEUED", lastGenerationRunId: "run-1" }));
+      .mockResolvedValueOnce(Response.json({ ...routine, latestExecution: { id: "execution-1", status: "DISPATCHED", agentRunId: "agent-run-1", agentRunStatus: "QUEUED", generationRunId: null, artifactId: null, errorCode: null, startedAt: null, finishedAt: null } }))
+      .mockResolvedValueOnce(Response.json(agentRun));
     const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
 
     await client.listRoutines();
-    await client.createRoutine({ name: routine.name, sourceScopeId: routine.sourceScopeId, instruction: routine.instruction, cadence: "WEEKLY" });
+    await client.getRoutine("routine-1");
+    await client.createRoutine({ name: routine.name, sourceScopeId: routine.sourceScopeId, contextSourceScopeIds: ["scope-2"], instruction: routine.instruction, cadence: "WEEKLY" });
     await client.updateRoutine("routine-1", { enabled: false });
     await client.runRoutineNow("routine-1", "manual-request-1");
+    await client.getRoutineAgentRun("routine-1", "agent-run-1");
 
     expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
       "/api/plot/routines",
+      "/api/plot/routines/routine-1",
       "/api/plot/routines",
       "/api/plot/routines/routine-1",
       "/api/plot/routines/routine-1/run",
+      "/api/plot/routines/routine-1/agent-runs/agent-run-1",
     ]);
-    expect(fetcher.mock.calls[1]?.[1]).toMatchObject({
+    expect(fetcher.mock.calls[2]?.[1]).toMatchObject({
       method: "POST",
-      body: JSON.stringify({ name: routine.name, sourceScopeId: routine.sourceScopeId, instruction: routine.instruction, cadence: "WEEKLY" }),
+      body: JSON.stringify({ name: routine.name, sourceScopeId: routine.sourceScopeId, contextSourceScopeIds: ["scope-2"], instruction: routine.instruction, cadence: "WEEKLY" }),
     });
-    expect(fetcher.mock.calls[2]?.[1]).toMatchObject({ method: "PATCH", body: JSON.stringify({ enabled: false }) });
-    expect(fetcher.mock.calls[3]?.[1]).toMatchObject({ method: "POST" });
-    expect(new Headers(fetcher.mock.calls[3]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
-    expect(new Headers(fetcher.mock.calls[3]?.[1]?.headers).get("Idempotency-Key")).toBe("manual-request-1");
+    expect(fetcher.mock.calls[3]?.[1]).toMatchObject({ method: "PATCH", body: JSON.stringify({ enabled: false }) });
+    expect(fetcher.mock.calls[4]?.[1]).toMatchObject({ method: "POST" });
+    expect(new Headers(fetcher.mock.calls[4]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
+    expect(new Headers(fetcher.mock.calls[4]?.[1]?.headers).get("Idempotency-Key")).toBe("manual-request-1");
+    expect(agentRun.steps).toHaveLength(1);
   });
 
   it("uses the session contracts with workspace scoping", async () => {

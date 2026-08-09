@@ -320,6 +320,46 @@ export type RoutineCadence =
   | "ON_GIT_TAG";
 export type RoutineRunStatus = "NO_ACTIVITY" | GenerationStatus | null;
 
+export type RoutineExecutionStatus = "PROBING" | "NO_ACTIVITY" | "DISPATCHED" | "FAILED";
+export type RoutineAgentRunStatus = "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED";
+
+export interface RoutineExecutionSummary {
+  id: string;
+  status: RoutineExecutionStatus;
+  agentRunId: string | null;
+  agentRunStatus: RoutineAgentRunStatus | null;
+  generationRunId: string | null;
+  artifactId: string | null;
+  errorCode: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+}
+
+export interface RoutineAgentStep {
+  sequence: number;
+  kind: "READ_TOOL" | "ARTIFACT_HANDOFF";
+  status: "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED";
+  toolName: string | null;
+  failureCode: string | null;
+  generationRunId: string | null;
+  artifactId: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+}
+
+export interface RoutineAgentRunDetail {
+  id: string;
+  routineExecutionId: string;
+  routineId: string;
+  status: RoutineAgentRunStatus;
+  failureCode: string | null;
+  generationRunId: string | null;
+  artifactId: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  steps: RoutineAgentStep[];
+}
+
 export interface Routine {
   id: string;
   name: string;
@@ -333,6 +373,8 @@ export interface Routine {
   lastGenerationRunId: string | null;
   lastRunStatus: RoutineRunStatus;
   lastErrorCode: string | null;
+  contextSourceScopeIds: string[];
+  latestExecution: RoutineExecutionSummary | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -400,9 +442,11 @@ export interface PlotApiClient {
   getWorkspace(id: string, options?: RequestOptions): Promise<WorkspaceSummary>;
   updateWorkspace(id: string, input: { name?: string; logoUrl?: string }, options?: RequestOptions): Promise<WorkspaceSummary>;
   listRoutines(options?: RequestOptions): Promise<Routine[]>;
-  createRoutine(input: { name: string; sourceScopeId: string; instruction: string; cadence: RoutineCadence }, options?: RequestOptions): Promise<Routine>;
+  getRoutine(id: string, options?: RequestOptions): Promise<Routine>;
+  createRoutine(input: { name: string; sourceScopeId: string; contextSourceScopeIds?: string[]; instruction: string; cadence: RoutineCadence }, options?: RequestOptions): Promise<Routine>;
   updateRoutine(id: string, input: { enabled: boolean }, options?: RequestOptions): Promise<Routine>;
   runRoutineNow(id: string, idempotencyKey: string, options?: RequestOptions): Promise<Routine>;
+  getRoutineAgentRun(routineId: string, agentRunId: string, options?: RequestOptions): Promise<RoutineAgentRunDetail>;
   listSessions(options?: RequestOptions): Promise<WorkSessionSummary[]>;
   createSession(input: { title?: string | null }, options?: RequestOptions): Promise<WorkSessionSummary>;
   updateSession(id: string, input: { title?: string; latestGenerationId?: string }, options?: RequestOptions): Promise<WorkSessionSummary>;
@@ -505,6 +549,9 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
       signal: requestOptions?.signal,
     }),
     listRoutines: (requestOptions) => request("/routines", { signal: requestOptions?.signal }),
+    getRoutine: (id, requestOptions) => request(`/routines/${encodeURIComponent(id)}`, {
+      signal: requestOptions?.signal,
+    }),
     createRoutine: (input, requestOptions) => request("/routines", {
       method: "POST",
       body: JSON.stringify(input),
@@ -520,6 +567,10 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
       signal: requestOptions?.signal,
       headers: { "Idempotency-Key": idempotencyKey },
     }),
+    getRoutineAgentRun: (routineId, agentRunId, requestOptions) => request(
+      `/routines/${encodeURIComponent(routineId)}/agent-runs/${encodeURIComponent(agentRunId)}`,
+      { signal: requestOptions?.signal },
+    ),
     listSessions: (requestOptions) => request("/sessions", { signal: requestOptions?.signal }),
     createSession: (input, requestOptions) => request("/sessions", {
       method: "POST",
