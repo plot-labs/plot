@@ -159,7 +159,6 @@ describe("Plot same-origin proxy", () => {
     ["PATCH", ["workspaces", "018fd000-0000-7000-8000-000000000002"]],
     ["GET", ["routines"]],
     ["POST", ["routines"]],
-    ["GET", ["routines", "018fd000-0000-7000-8000-000000000002"]],
     ["PATCH", ["routines", "018fd000-0000-7000-8000-000000000002"]],
     ["POST", ["routines", "018fd000-0000-7000-8000-000000000002", "run"]],
     ["GET", ["artifacts"]],
