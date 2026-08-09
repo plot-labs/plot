@@ -312,6 +312,31 @@ export interface WorkspaceSummary {
   role: string | null;
 }
 
+export type RoutineCadence =
+  | "DAILY"
+  | "WEEKLY"
+  | "ON_GITHUB_CHANGE"
+  | "ON_GITHUB_RELEASE"
+  | "ON_GIT_TAG";
+export type RoutineRunStatus = "NO_ACTIVITY" | GenerationStatus | null;
+
+export interface Routine {
+  id: string;
+  name: string;
+  sourceScopeId: string;
+  sourceLabel: string;
+  instruction: string;
+  cadence: RoutineCadence;
+  enabled: boolean;
+  lastRunAt: string | null;
+  nextRunAt: string;
+  lastGenerationRunId: string | null;
+  lastRunStatus: RoutineRunStatus;
+  lastErrorCode: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface WorkSessionSummary {
   id: string;
   title: string | null;
@@ -374,6 +399,10 @@ export interface PlotApiClient {
   createWorkspace(input: { name: string }, options?: RequestOptions): Promise<WorkspaceSummary>;
   getWorkspace(id: string, options?: RequestOptions): Promise<WorkspaceSummary>;
   updateWorkspace(id: string, input: { name?: string; logoUrl?: string }, options?: RequestOptions): Promise<WorkspaceSummary>;
+  listRoutines(options?: RequestOptions): Promise<Routine[]>;
+  createRoutine(input: { name: string; sourceScopeId: string; instruction: string; cadence: RoutineCadence }, options?: RequestOptions): Promise<Routine>;
+  updateRoutine(id: string, input: { name?: string; sourceScopeId?: string; instruction?: string; cadence?: RoutineCadence; enabled?: boolean }, options?: RequestOptions): Promise<Routine>;
+  runRoutineNow(id: string, options?: RequestOptions): Promise<Routine>;
   listSessions(options?: RequestOptions): Promise<WorkSessionSummary[]>;
   createSession(input: { title?: string | null }, options?: RequestOptions): Promise<WorkSessionSummary>;
   updateSession(id: string, input: { title?: string; latestGenerationId?: string }, options?: RequestOptions): Promise<WorkSessionSummary>;
@@ -473,6 +502,21 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
     updateWorkspace: (id, input, requestOptions) => request(`/workspaces/${encodeURIComponent(id)}`, {
       method: "PATCH",
       body: JSON.stringify(input),
+      signal: requestOptions?.signal,
+    }),
+    listRoutines: (requestOptions) => request("/routines", { signal: requestOptions?.signal }),
+    createRoutine: (input, requestOptions) => request("/routines", {
+      method: "POST",
+      body: JSON.stringify(input),
+      signal: requestOptions?.signal,
+    }),
+    updateRoutine: (id, input, requestOptions) => request(`/routines/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+      signal: requestOptions?.signal,
+    }),
+    runRoutineNow: (id, requestOptions) => request(`/routines/${encodeURIComponent(id)}/run`, {
+      method: "POST",
       signal: requestOptions?.signal,
     }),
     listSessions: (requestOptions) => request("/sessions", { signal: requestOptions?.signal }),

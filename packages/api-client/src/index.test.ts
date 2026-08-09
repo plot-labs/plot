@@ -38,6 +38,50 @@ describe("Plot API client", () => {
     expect(new Headers(fetcher.mock.calls[1]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
   });
 
+  it("uses the routine automation contracts with workspace scoping", async () => {
+    const routine = {
+      id: "routine-1",
+      name: "Weekly release note",
+      sourceScopeId: "scope-1",
+      sourceLabel: "acme/plot",
+      instruction: "Draft a release note",
+      cadence: "WEEKLY",
+      enabled: true,
+      lastRunAt: null,
+      nextRunAt: "2026-08-16T00:00:00Z",
+      lastGenerationRunId: null,
+      lastRunStatus: null,
+      lastErrorCode: null,
+      createdAt: "2026-08-09T00:00:00Z",
+      updatedAt: "2026-08-09T00:00:00Z",
+    };
+    const fetcher = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json([routine]))
+      .mockResolvedValueOnce(Response.json(routine))
+      .mockResolvedValueOnce(Response.json({ ...routine, enabled: false }))
+      .mockResolvedValueOnce(Response.json({ ...routine, lastRunStatus: "QUEUED", lastGenerationRunId: "run-1" }));
+    const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
+
+    await client.listRoutines();
+    await client.createRoutine({ name: routine.name, sourceScopeId: routine.sourceScopeId, instruction: routine.instruction, cadence: "WEEKLY" });
+    await client.updateRoutine("routine-1", { enabled: false });
+    await client.runRoutineNow("routine-1");
+
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+      "/api/plot/routines",
+      "/api/plot/routines",
+      "/api/plot/routines/routine-1",
+      "/api/plot/routines/routine-1/run",
+    ]);
+    expect(fetcher.mock.calls[1]?.[1]).toMatchObject({
+      method: "POST",
+      body: JSON.stringify({ name: routine.name, sourceScopeId: routine.sourceScopeId, instruction: routine.instruction, cadence: "WEEKLY" }),
+    });
+    expect(fetcher.mock.calls[2]?.[1]).toMatchObject({ method: "PATCH", body: JSON.stringify({ enabled: false }) });
+    expect(fetcher.mock.calls[3]?.[1]).toMatchObject({ method: "POST" });
+    expect(new Headers(fetcher.mock.calls[3]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
+  });
+
   it("uses the session contracts with workspace scoping", async () => {
     const fetcher = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(Response.json([]))
