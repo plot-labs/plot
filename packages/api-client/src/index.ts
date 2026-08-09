@@ -401,7 +401,7 @@ export interface PlotApiClient {
   updateWorkspace(id: string, input: { name?: string; logoUrl?: string }, options?: RequestOptions): Promise<WorkspaceSummary>;
   listRoutines(options?: RequestOptions): Promise<Routine[]>;
   createRoutine(input: { name: string; sourceScopeId: string; instruction: string; cadence: RoutineCadence }, options?: RequestOptions): Promise<Routine>;
-  updateRoutine(id: string, input: { enabled?: boolean }, options?: RequestOptions): Promise<Routine>;
+  updateRoutine(id: string, input: { enabled: boolean }, options?: RequestOptions): Promise<Routine>;
   runRoutineNow(id: string, options?: RequestOptions): Promise<Routine>;
   listSessions(options?: RequestOptions): Promise<WorkSessionSummary[]>;
   createSession(input: { title?: string | null }, options?: RequestOptions): Promise<WorkSessionSummary>;
