@@ -49,24 +49,6 @@ class RoutinePersistence(
 		sourceScopeId,
 	) == true
 
-	fun recordGitHubEventRun(routine: RoutineRecord, generationRunId: UUID, now: Instant) {
-		val updated = jdbcTemplate.update(
-			"""
-			update routines
-			set last_run_at = ?, last_generation_run_id = ?, last_run_status = 'QUEUED',
-			    last_error_code = null, transition_version = transition_version + 1, updated_at = ?
-			where workspace_id = ? and id = ? and enabled = true and cadence = ?
-			""".trimIndent(),
-			Timestamp.from(now),
-			generationRunId,
-			Timestamp.from(now),
-			routine.workspaceId,
-			routine.id,
-			routine.cadence.name,
-		)
-		check(updated == 1) { "GitHub event routine is no longer enabled" }
-	}
-
 	fun insert(
 		workspaceId: UUID,
 		createdByUserId: UUID,

@@ -2,8 +2,6 @@ package com.plot.api.routine
 
 import com.plot.api.common.UuidGenerator
 import com.plot.api.common.WorkspacePrincipal
-import com.plot.api.config.PlotAiProperties
-import com.plot.api.generation.GenerationRunService
 import com.plot.api.github.GitHubProperties
 import com.plot.api.github.GitHubReleaseSourceContext
 import com.plot.api.github.GitHubWebhookCommit
@@ -16,17 +14,19 @@ import java.time.Instant
 import java.util.UUID
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 
 @Service
 class GitHubChangeRoutineService(
 	private val persistence: RoutinePersistence,
+	private val eventPersistence: GitHubRoutineEventPersistence,
 	private val writingBlockImportService: WritingBlockImportService,
-	private val generationRunService: GenerationRunService,
 	private val jdbcTemplate: JdbcTemplate,
 	private val uuidGenerator: UuidGenerator,
 	private val properties: GitHubProperties,
-	private val aiProperties: PlotAiProperties,
+	private val evidenceBudget: RoutineEvidenceBudget,
 ) {
+	@Transactional
 	fun accept(
 		context: GitHubReleaseSourceContext,
 		delivery: GitHubWebhookDelivery,
@@ -39,21 +39,12 @@ class GitHubChangeRoutineService(
 		val now = delivery.receivedAt
 		val observationId = createObservation(context, delivery.externalDeliveryId, webhook.eventType, now)
 		val importer = WorkspacePrincipal(context.workspaceId, context.createdByUserId)
-		var remainingCharacters = minOf(properties.maxReleaseEvidenceCharacters, aiProperties.maxEvidenceCharacters)
-		val blocks = (webhook.commits
-			.distinctBy { it.sha }
-			.take(properties.maxReleaseEvidenceBlocks)
-			.mapNotNull { commit ->
-				val block = commit.toWritingBlock(context, observationId, now)
-				val title = block.title.take(minOf(properties.maxReleaseTitleCharacters, remainingCharacters))
-				if (title.isBlank()) return@mapNotNull null
-				remainingCharacters -= title.length
-				val body = block.body?.take(minOf(properties.maxReleaseBodyCharacters, remainingCharacters))
-				remainingCharacters -= body.orEmpty().length
-				block.copy(title = title, body = body)
-			} + listOfNotNull(webhook.toEventWritingBlock(context, observationId, now)))
-			.take(properties.maxReleaseEvidenceBlocks)
+		val blocks = boundedEvidenceBlocks(context, delivery.externalDeliveryId, webhook, observationId, now)
 		if (blocks.isEmpty()) return 0
+		evidenceBudget.requireWithinBudget(
+			blocks.size,
+			blocks.sumOf { evidenceBudget.characters(it.title, it.body) },
+		)
 		val writingBlockIds = blocks.map { block ->
 			writingBlockImportService.upsert(
 				importer,
@@ -62,21 +53,45 @@ class GitHubChangeRoutineService(
 			).blockId
 		}
 
-		routines.forEach { routine ->
-			val generation = generationRunService.createForPrincipal(
-				principal = WorkspacePrincipal(routine.workspaceId, routine.createdByUserId),
-				sourceScopeId = routine.sourceScopeId,
-				writingBlockIds = writingBlockIds,
-				instruction = routine.instruction,
-				idempotencyKey = "routine-github:${routine.id}:${delivery.externalDeliveryId}",
-			)
-			persistence.recordGitHubEventRun(routine, generation.runId, now)
+		val enqueued = routines.count { routine ->
+			eventPersistence.enqueue(routine, delivery, writingBlockIds) != null
 		}
-		return routines.size
+		return enqueued
 	}
 
 	fun hasReleaseEventRoutines(context: GitHubReleaseSourceContext): Boolean =
 		persistence.hasEnabledReleaseEventRoutines(context.workspaceId, context.sourceScopeId)
+
+	private fun boundedEvidenceBlocks(
+		context: GitHubReleaseSourceContext,
+		externalDeliveryId: String,
+		webhook: ParsedGitHubWebhook,
+		observationId: UUID,
+		now: Instant,
+	): List<ImportedWritingBlock> {
+		val blockLimit = minOf(properties.maxReleaseEvidenceBlocks, evidenceBudget.maxBlocks)
+		val characterLimit = minOf(properties.maxReleaseEvidenceCharacters, evidenceBudget.maxCharacters)
+		var remainingCharacters = characterLimit
+		val blocks = mutableListOf<ImportedWritingBlock>()
+		fun add(block: ImportedWritingBlock) {
+			if (blocks.size == blockLimit || remainingCharacters == 0) return
+			val title = block.title.take(minOf(properties.maxReleaseTitleCharacters, characterLimit))
+			if (title.isBlank()) return
+			val body = block.body?.take(minOf(properties.maxReleaseBodyCharacters, characterLimit - title.length))
+			val canonical = block.copy(title = title, body = body)
+			val characters = evidenceBudget.characters(canonical.title, canonical.body)
+			if (characters > remainingCharacters) return
+			blocks += canonical
+			remainingCharacters -= characters
+		}
+
+		webhook.toEventWritingBlock(context, externalDeliveryId, observationId, now)?.let(::add)
+		webhook.commits.distinctBy { it.sha }.forEach { commit ->
+			if (blocks.size == blockLimit || remainingCharacters == 0) return@forEach
+			add(commit.toWritingBlock(context, observationId, now))
+		}
+		return blocks
+	}
 
 	private fun createObservation(
 		context: GitHubReleaseSourceContext,
@@ -112,6 +127,7 @@ class GitHubChangeRoutineService(
 
 	private fun ParsedGitHubWebhook.toEventWritingBlock(
 		context: GitHubReleaseSourceContext,
+		externalDeliveryId: String,
 		observationId: UUID,
 		now: Instant,
 	): ImportedWritingBlock? {
@@ -127,7 +143,7 @@ class GitHubChangeRoutineService(
 			sourceNamespaceId = context.sourceNamespaceId,
 			sourceScopeId = context.sourceScopeId,
 			observationId = observationId,
-			externalObjectKey = "$kind:$tag",
+			externalObjectKey = "$kind:$tag:$externalDeliveryId",
 			sourceOrigin = "integration",
 			sourceKind = kind,
 			title = if (isRelease) "Release $tag published" else "Tag $tag pushed",
