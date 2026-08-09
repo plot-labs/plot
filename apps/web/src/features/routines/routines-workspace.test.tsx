@@ -91,6 +91,34 @@ describe("RoutinesWorkspace", () => {
     expect(await screen.findByText("No routines yet")).toBeVisible();
   });
 
+  it("ignores an initial load that resolves after the workspace changes", async () => {
+    const pendingRoutines = deferred<Routine[]>();
+    const pendingConnections = deferred<(typeof activeConnection)[]>();
+    mocks.listRoutines
+      .mockReturnValueOnce(pendingRoutines.promise)
+      .mockResolvedValueOnce([routine({ id: "routine-2", name: "Workspace two routine" })]);
+    mocks.listGitHubConnections
+      .mockReturnValueOnce(pendingConnections.promise)
+      .mockResolvedValueOnce([activeConnection]);
+    render(<RoutinesWorkspace />);
+
+    await waitFor(() => expect(mocks.listRoutines).toHaveBeenCalledTimes(1));
+    const routinesSignal = mocks.listRoutines.mock.calls[0]?.[0].signal as AbortSignal;
+    const connectionsSignal = mocks.listGitHubConnections.mock.calls[0]?.[0].signal as AbortSignal;
+
+    switchWorkspace("workspace-2");
+    expect(routinesSignal.aborted).toBe(true);
+    expect(connectionsSignal.aborted).toBe(true);
+    await screen.findByText("Workspace two routine");
+
+    await act(async () => {
+      pendingRoutines.resolve([routine({ id: "routine-old", name: "Old workspace routine" })]);
+      pendingConnections.resolve([activeConnection]);
+      await Promise.all([pendingRoutines.promise, pendingConnections.promise]);
+    });
+    expect(screen.queryByText("Old workspace routine")).not.toBeInTheDocument();
+  });
+
   it("ignores a create response from the previous workspace", async () => {
     const pendingCreate = deferred<Routine>();
     const workspaceTwoRoutine = routine({ id: "routine-2", name: "Workspace two routine" });
