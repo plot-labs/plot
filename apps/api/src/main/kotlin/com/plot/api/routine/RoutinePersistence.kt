@@ -127,7 +127,28 @@ class RoutinePersistence(
 	)
 
 	fun isSourceActive(workspaceId: UUID, sourceScopeId: UUID): Boolean = jdbcTemplate.queryForObject(
-		"select exists(select 1 from source_scopes where workspace_id = ? and id = ? and status = 'ACTIVE')",
+		"""
+		select exists(
+		  select 1
+		  from source_scopes scope
+		  join source_namespaces namespace
+		    on namespace.workspace_id = scope.workspace_id
+		   and namespace.id = scope.source_namespace_id
+		   and namespace.provider = scope.provider
+		   and namespace.status = 'ACTIVE'
+		  join connection_namespace_bindings binding
+		    on binding.workspace_id = namespace.workspace_id
+		   and binding.source_namespace_id = namespace.id
+		   and binding.provider = namespace.provider
+		   and binding.status = 'ACTIVE'
+		  join connections connection
+		    on connection.workspace_id = binding.workspace_id
+		   and connection.id = binding.connection_id
+		   and connection.provider = binding.provider
+		   and connection.status = 'ACTIVE'
+		  where scope.workspace_id = ? and scope.id = ? and scope.status = 'ACTIVE'
+		)
+		""".trimIndent(),
 		Boolean::class.java,
 		workspaceId,
 		sourceScopeId,

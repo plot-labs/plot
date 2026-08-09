@@ -109,6 +109,80 @@ class RoutineAgentPersistence(
 		args = arrayOf(workspaceId, executionId, Timestamp.from(now), Timestamp.from(staleBefore)),
 	)
 
+	fun saveRefreshContinuation(
+		workspaceId: UUID,
+		executionId: UUID,
+		workerId: String,
+		continuationJson: String,
+		now: Instant = currentInstant(),
+	): RoutineExecutionRecord = transactionTemplate.execute {
+		val updated = jdbcTemplate.update(
+			"""
+			update routine_executions
+			set refresh_continuation = ?::jsonb, error_code = null, updated_at = ?
+			where workspace_id = ? and id = ? and status = 'PROBING'
+			  and claimed_by = ? and refresh_completed_at is null
+			""".trimIndent(),
+			continuationJson,
+			Timestamp.from(now),
+			workspaceId,
+			executionId,
+			workerId,
+		)
+		if (updated != 1) throw RoutineClaimLostException()
+		requireNotNull(findExecution(workspaceId, executionId))
+	}
+
+	fun completeRefresh(
+		workspaceId: UUID,
+		executionId: UUID,
+		workerId: String,
+		now: Instant = currentInstant(),
+	): RoutineExecutionRecord = transactionTemplate.execute {
+		val updated = jdbcTemplate.update(
+			"""
+			update routine_executions
+			set refresh_continuation = null, refresh_completed_at = ?, error_code = null, updated_at = ?
+			where workspace_id = ? and id = ? and status = 'PROBING'
+			  and claimed_by = ? and refresh_completed_at is null
+			""".trimIndent(),
+			Timestamp.from(now),
+			Timestamp.from(now),
+			workspaceId,
+			executionId,
+			workerId,
+		)
+		if (updated != 1) throw RoutineClaimLostException()
+		requireNotNull(findExecution(workspaceId, executionId))
+	}
+
+	fun releaseExecutionForRetry(
+		workspaceId: UUID,
+		executionId: UUID,
+		workerId: String,
+		nextAttemptAt: Instant,
+		errorCode: String? = null,
+		now: Instant = currentInstant(),
+	): RoutineExecutionRecord = transactionTemplate.execute {
+		if (errorCode != null) require(errorCode.matches(SAFE_ERROR_CODE)) { "Routine refresh error code is invalid" }
+		val updated = jdbcTemplate.update(
+			"""
+			update routine_executions
+			set claimed_by = null, claimed_at = null, next_attempt_at = ?, error_code = ?,
+			    transition_version = transition_version + 1, updated_at = ?
+			where workspace_id = ? and id = ? and status = 'PROBING' and claimed_by = ?
+			""".trimIndent(),
+			Timestamp.from(nextAttemptAt),
+			errorCode,
+			Timestamp.from(now),
+			workspaceId,
+			executionId,
+			workerId,
+		)
+		if (updated != 1) throw RoutineClaimLostException()
+		requireNotNull(findExecution(workspaceId, executionId))
+	}
+
 	fun addEvidence(
 		workspaceId: UUID,
 		executionId: UUID,
@@ -962,10 +1036,28 @@ class RoutineAgentPersistence(
 		val counts = jdbcTemplate.query(
 			"""
 			select count(*) as total,
-			       count(*) filter (where scope.status = 'ACTIVE') as active
+			       count(*) filter (
+			         where scope.status = 'ACTIVE' and namespace.status = 'ACTIVE'
+			           and exists (
+			             select 1
+			             from connection_namespace_bindings binding
+			             join connections connection
+			               on connection.workspace_id = binding.workspace_id
+			              and connection.id = binding.connection_id
+			              and connection.provider = binding.provider
+			              and connection.status = 'ACTIVE'
+			             where binding.workspace_id = namespace.workspace_id
+			               and binding.source_namespace_id = namespace.id
+			               and binding.provider = namespace.provider
+			               and binding.status = 'ACTIVE'
+			           )
+			       ) as active
 			from agent_run_sources source
 			join source_scopes scope
 			  on scope.workspace_id = source.workspace_id and scope.id = source.source_scope_id
+			join source_namespaces namespace
+			  on namespace.workspace_id = scope.workspace_id and namespace.id = scope.source_namespace_id
+			 and namespace.provider = scope.provider
 			where source.workspace_id = ? and source.agent_run_id = ?
 			""".trimIndent(),
 			{ rs, _ -> rs.getInt("total") to rs.getInt("active") },
@@ -1035,19 +1127,54 @@ class RoutineAgentPersistence(
 		) ?: 0
 		val statuses = jdbcTemplate.query(
 			"""
-			select scope.status
+			select scope.id, scope.status, namespace.status as namespace_status
 			from agent_run_sources source
 			join source_scopes scope
 			  on scope.workspace_id = source.workspace_id and scope.id = source.source_scope_id
+			join source_namespaces namespace
+			  on namespace.workspace_id = scope.workspace_id and namespace.id = scope.source_namespace_id
+			 and namespace.provider = scope.provider
 			where source.workspace_id = ? and source.agent_run_id = ?
 			order by scope.id
-			for update of scope
+			for update of scope, namespace
 			""".trimIndent(),
-			{ rs, _ -> rs.getString("status") },
+			{ rs, _ -> Triple(
+				rs.getObject("id", UUID::class.java),
+				rs.getString("status"),
+				rs.getString("namespace_status"),
+			) },
 			workspaceId,
 			agentRunId,
 		)
-		if (expected == 0 || statuses.size != expected || statuses.any { it != "ACTIVE" }) {
+		val connectedScopeIds = jdbcTemplate.query(
+			"""
+			select scope.id
+			from agent_run_sources source
+			join source_scopes scope
+			  on scope.workspace_id = source.workspace_id and scope.id = source.source_scope_id
+			join connection_namespace_bindings binding
+			  on binding.workspace_id = scope.workspace_id
+			 and binding.source_namespace_id = scope.source_namespace_id
+			 and binding.provider = scope.provider
+			join connections connection
+			  on connection.workspace_id = binding.workspace_id
+			 and connection.id = binding.connection_id
+			 and connection.provider = binding.provider
+			where source.workspace_id = ? and source.agent_run_id = ?
+			  and binding.status = 'ACTIVE' and connection.status = 'ACTIVE'
+			order by scope.id
+			for update of binding, connection
+			""".trimIndent(),
+			{ rs, _ -> rs.getObject("id", UUID::class.java) },
+			workspaceId,
+			agentRunId,
+		).toSet()
+		if (
+			expected == 0 ||
+			statuses.size != expected ||
+			statuses.any { it.second != "ACTIVE" || it.third != "ACTIVE" } ||
+			connectedScopeIds != statuses.map { it.first }.toSet()
+		) {
 			throw AgentToolAccessException("SOURCE_NOT_READY")
 		}
 	}
@@ -1060,14 +1187,28 @@ class RoutineAgentPersistence(
 	) {
 		val current = jdbcTemplate.query(
 			"""
-			select scope.status_changed_at
+			select greatest(
+			  scope.status_changed_at,
+			  namespace.updated_at,
+			  binding.updated_at,
+			  connection.updated_at
+			) as lifecycle_version_at
 			from agent_run_sources source
 			join source_scopes scope
 			  on scope.workspace_id = source.workspace_id and scope.id = source.source_scope_id
+			join source_namespaces namespace
+			  on namespace.workspace_id = scope.workspace_id and namespace.id = scope.source_namespace_id
+			 and namespace.provider = scope.provider and namespace.status = 'ACTIVE'
+			join connection_namespace_bindings binding
+			  on binding.workspace_id = namespace.workspace_id and binding.source_namespace_id = namespace.id
+			 and binding.provider = namespace.provider and binding.status = 'ACTIVE'
+			join connections connection
+			  on connection.workspace_id = binding.workspace_id and connection.id = binding.connection_id
+			 and connection.provider = binding.provider and connection.status = 'ACTIVE'
 			where source.workspace_id = ? and source.agent_run_id = ? and source.source_scope_id = ?
 			  and scope.status = 'ACTIVE'
 			""".trimIndent(),
-			{ rs, _ -> rs.getTimestamp("status_changed_at").toInstant() },
+			{ rs, _ -> rs.getTimestamp("lifecycle_version_at").toInstant() },
 			workspaceId,
 			agentRunId,
 			sourceScopeId,
@@ -1402,17 +1543,32 @@ class RoutineAgentPersistence(
 		val placeholders = distinctIds.joinToString(",") { "?" }
 		val rows = jdbcTemplate.query(
 			"""
-			select id, status, status_changed_at
-			from source_scopes
-			where workspace_id = ? and id in ($placeholders)
-			order by id
-			for update
+			select scope.id, scope.status,
+			       greatest(
+			         scope.status_changed_at,
+			         namespace.updated_at,
+			         binding.updated_at,
+			         connection.updated_at
+			       ) as lifecycle_version_at
+			from source_scopes scope
+			join source_namespaces namespace
+			  on namespace.workspace_id = scope.workspace_id and namespace.id = scope.source_namespace_id
+			 and namespace.provider = scope.provider and namespace.status = 'ACTIVE'
+			join connection_namespace_bindings binding
+			  on binding.workspace_id = namespace.workspace_id and binding.source_namespace_id = namespace.id
+			 and binding.provider = namespace.provider and binding.status = 'ACTIVE'
+			join connections connection
+			  on connection.workspace_id = binding.workspace_id and connection.id = binding.connection_id
+			 and connection.provider = binding.provider and connection.status = 'ACTIVE'
+			where scope.workspace_id = ? and scope.id in ($placeholders)
+			order by scope.id
+			for update of scope, namespace, binding, connection
 			""".trimIndent(),
 			{ rs, _ ->
 				LockedSource(
 					id = rs.getObject("id", UUID::class.java),
 					status = rs.getString("status"),
-					statusChangedAt = rs.getTimestamp("status_changed_at").toInstant(),
+					statusChangedAt = rs.getTimestamp("lifecycle_version_at").toInstant(),
 				)
 			},
 			workspaceId,

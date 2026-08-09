@@ -3,6 +3,8 @@ package com.plot.api.generation
 import com.plot.api.ai.provider.GenerationModelGateway
 import com.plot.api.common.UuidGenerator
 import com.plot.api.config.PlotAiProperties
+import com.plot.api.entitlement.WorkspaceAccessService
+import com.plot.api.routine.RoutineAgentProperties
 import io.micrometer.observation.ObservationRegistry
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.context.annotation.Bean
@@ -48,6 +50,8 @@ class GenerationWorkflowConfiguration {
 		properties: PlotAiProperties,
 		leaseFactory: GenerationRunLeaseFactory,
 		observationRegistry: ObservationRegistry,
+		workspaceAccessService: WorkspaceAccessService,
+		routineAgentProperties: RoutineAgentProperties,
 	): GenerationRunWorker = GenerationRunWorker(
 		persistence,
 		workflowService,
@@ -56,6 +60,8 @@ class GenerationWorkflowConfiguration {
 		retryInitialDelay = properties.retryInitialDelay,
 		leaseFactory = leaseFactory,
 		observationRegistry = observationRegistry,
+		workspaceAccessService = workspaceAccessService,
+		agentRunsEnabled = routineAgentProperties.workersEnabled,
 	)
 
 	@Bean(destroyMethod = "shutdown")

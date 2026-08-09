@@ -569,6 +569,7 @@ class RoutineAgentMigrationIntegrationTest {
 			workspaceId, "agent-${UUID.randomUUID()}", userId, Timestamp.from(now), Timestamp.from(now),
 		)
 		insertSourceNamespace(workspaceId, namespaceId, "root")
+		insertConnectionBinding(workspaceId, namespaceId, userId, now)
 		insertSourceScope(workspaceId, namespaceId, "trigger", scopeId)
 		schemaJdbcTemplate.update(
 			"""
@@ -611,6 +612,29 @@ class RoutineAgentMigrationIntegrationTest {
 			values (?, ?, 'GITHUB', 'REPOSITORY', ?, ?, 'ACTIVE', ?, ?)
 			""".trimIndent(),
 			namespaceId, workspaceId, "namespace:$suffix:$namespaceId", suffix, Timestamp.from(TEST_NOW), Timestamp.from(TEST_NOW),
+		)
+	}
+
+	private fun insertConnectionBinding(workspaceId: UUID, namespaceId: UUID, userId: UUID, now: Instant) {
+		val connectionId = UUID.randomUUID()
+		schemaJdbcTemplate.update(
+			"insert into $schema.connections (id, workspace_id, provider, connection_kind, external_connection_key, status, created_by_user_id, created_at, updated_at) values (?, ?, 'GITHUB', 'GITHUB_APP_INSTALLATION', ?, 'ACTIVE', ?, ?, ?)",
+			connectionId,
+			workspaceId,
+			(UUID.randomUUID().mostSignificantBits and Long.MAX_VALUE).toString(),
+			userId,
+			Timestamp.from(now),
+			Timestamp.from(now),
+		)
+		schemaJdbcTemplate.update(
+			"insert into $schema.connection_namespace_bindings (id, workspace_id, provider, connection_id, source_namespace_id, status, valid_from, created_at, updated_at) values (?, ?, 'GITHUB', ?, ?, 'ACTIVE', ?, ?, ?)",
+			UUID.randomUUID(),
+			workspaceId,
+			connectionId,
+			namespaceId,
+			Timestamp.from(now),
+			Timestamp.from(now),
+			Timestamp.from(now),
 		)
 	}
 

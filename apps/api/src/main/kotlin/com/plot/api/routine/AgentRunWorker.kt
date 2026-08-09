@@ -7,7 +7,9 @@ import com.plot.api.ai.provider.AgentDecisionGateway
 import com.plot.api.ai.provider.AgentDecisionRequest
 import com.plot.api.ai.provider.AgentInputView
 import com.plot.api.ai.provider.AgentStepView
+import com.plot.api.common.ApiException
 import com.plot.api.common.WorkspacePrincipal
+import com.plot.api.entitlement.WorkspaceAccessService
 import com.plot.api.generation.GenerationIdempotencyConflictException
 import com.plot.api.generation.GenerationRunService
 import java.time.Clock
@@ -24,6 +26,7 @@ class AgentRunWorker(
 	private val decisionGateway: AgentDecisionGateway,
 	private val tools: ReadOnlyAgentTools,
 	private val generationRunService: GenerationRunService,
+	private val workspaceAccessService: WorkspaceAccessService,
 	private val properties: RoutineAgentProperties,
 	private val objectMapper: ObjectMapper,
 	private val clock: Clock = Clock.systemUTC(),
@@ -36,17 +39,18 @@ class AgentRunWorker(
 
 	fun processOne(): Boolean {
 		if (!properties.workersEnabled) return false
-		val now = clock.instant()
+		val claimAt = clock.instant()
 		val claim = persistence.claimNextAgentRun(
 			workerId = workerId,
-			now = now,
-			staleBefore = now.minus(properties.claimTimeout),
+			now = claimAt,
+			staleBefore = claimAt.minus(properties.claimTimeout),
 		) ?: return false
 		try {
 			processClaim(claim)
 		} catch (_: AgentRunClaimLostException) {
 			// Another worker reclaimed this run. Its fenced transition wins.
 		} catch (failure: AgentDecisionException) {
+			val now = clock.instant()
 			if (failure.recoverable) {
 				persistence.scheduleAgentRetry(
 					claim,
@@ -58,18 +62,20 @@ class AgentRunWorker(
 				persistence.failAgentRun(claim, failure.code.safeCode("AGENT_MODEL_FAILED"), now)
 			}
 		} catch (failure: AgentRunBudgetExceededException) {
-			persistence.failAgentRun(claim, failure.safeCode, now)
+			persistence.failAgentRun(claim, failure.safeCode, clock.instant())
 		} catch (failure: AgentToolAccessException) {
-			persistence.failAgentRun(claim, failure.safeCode, now)
+			persistence.failAgentRun(claim, failure.safeCode, clock.instant())
+		} catch (failure: ApiException) {
+			persistence.failAgentRun(claim, backgroundAccessCode(failure), clock.instant())
 		} catch (_: GenerationIdempotencyConflictException) {
-			persistence.failAgentRun(claim, "AGENT_HANDOFF_CONFLICT", now)
+			persistence.failAgentRun(claim, "AGENT_HANDOFF_CONFLICT", clock.instant())
 		} catch (_: IllegalArgumentException) {
-			persistence.failAgentRun(claim, "AGENT_INVALID_DECISION", now)
+			persistence.failAgentRun(claim, "AGENT_INVALID_DECISION", clock.instant())
 		} catch (failure: RuntimeException) {
 			// Unknown infrastructure outcomes retain the claim and become eligible
 			// only through bounded stale recovery; they are not misreported as terminal.
 			try {
-				persistence.recordAgentInfrastructureFailure(claim, now)
+				persistence.recordAgentInfrastructureFailure(claim, clock.instant())
 			} catch (recordFailure: RuntimeException) {
 				failure.addSuppressed(recordFailure)
 			}
@@ -112,6 +118,7 @@ class AgentRunWorker(
 			throw AgentToolAccessException("SOURCE_NOT_READY")
 		}
 
+		workspaceAccessService.requireWritable(run.workspaceId)
 		val countedRun = persistence.beginModelDecision(claim, budget.maxModelCalls)
 		val inputs = persistence.listAgentRunInputs(run.workspaceId, run.id)
 		val sources = tools.listAllowedSources(run.workspaceId, run.id).sources
@@ -168,6 +175,7 @@ class AgentRunWorker(
 		budget: AgentBudgetSnapshot,
 	) {
 		val arguments = objectMapper.readValue(step.argumentsJson, AgentStepArguments::class.java)
+		workspaceAccessService.requireWritable(run.workspaceId)
 		when (arguments.action) {
 			AgentDecisionAction.LIST_ALLOWED_SOURCES -> {
 				val result = tools.listAllowedSources(run.workspaceId, run.id)
@@ -326,6 +334,11 @@ class AgentRunWorker(
 
 	private fun String.safeCode(fallback: String): String =
 		trim().takeIf { SAFE_ERROR_CODE.matches(it) } ?: fallback
+
+	private fun backgroundAccessCode(failure: ApiException): String = when (failure.error) {
+		"ACCESS_DENIED", "WORKSPACE_READ_ONLY" -> failure.error
+		else -> "WORKSPACE_ACCESS_FAILED"
+	}
 
 	private data class AgentStepArguments(
 		val action: AgentDecisionAction,

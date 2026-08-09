@@ -25,6 +25,11 @@ data class GitHubPullRequest(
 	val mergedAt: Instant?,
 )
 
+data class GitHubPullRequestPage(
+	val pullRequests: List<GitHubPullRequest>,
+	val nextPage: String?,
+)
+
 data class GitHubCommit(
 	val sha: String,
 	val message: String,

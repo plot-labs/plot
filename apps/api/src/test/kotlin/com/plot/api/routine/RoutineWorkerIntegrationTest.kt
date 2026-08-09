@@ -3,6 +3,9 @@ package com.plot.api.routine
 import com.plot.api.TestcontainersConfiguration
 import com.plot.api.dev.DevBootstrapService
 import com.plot.api.dev.DevContext
+import com.plot.api.github.GitHubClient
+import com.plot.api.github.GitHubPullRequest
+import com.plot.api.github.GitHubRepository
 import java.sql.Timestamp
 import java.time.Duration
 import java.time.Instant
@@ -15,15 +18,19 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.test.context.TestConfiguration
+import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
+import org.springframework.context.annotation.Primary
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.TestPropertySource
 
 @SpringBootTest
-@Import(TestcontainersConfiguration::class)
+@Import(TestcontainersConfiguration::class, RoutineWorkerIntegrationTest.Config::class)
 @TestPropertySource(properties = [
 	"plot.routines.poll-delay=PT1H",
 	"plot.routines.github-event-poll-delay=PT1H",
+	"plot.routine-agent.workers-enabled=true",
 ])
 class RoutineWorkerIntegrationTest {
 	@Autowired private lateinit var persistence: RoutinePersistence
@@ -36,11 +43,17 @@ class RoutineWorkerIntegrationTest {
 	@Autowired private lateinit var devContext: DevContext
 	private val sourceScopeIds = mutableListOf<UUID>()
 	private val sourceNamespaceIds = mutableListOf<UUID>()
+	private val bindingIds = mutableListOf<UUID>()
+	private val connectionIds = mutableListOf<UUID>()
 	private val writingBlockIds = mutableListOf<UUID>()
 
 	@BeforeEach
 	fun bootstrap() {
 		devBootstrapService.bootstrap()
+		jdbcTemplate.update(
+			"update workspaces set plan = 'founding', entitlement_status = 'active', access_mode = 'full', updated_at = now() where id = ?",
+			devContext.devWorkspaceId,
+		)
 	}
 
 	@AfterEach
@@ -58,14 +71,26 @@ class RoutineWorkerIntegrationTest {
 			jdbcTemplate.update("delete from writing_block_scopes where writing_block_id = ?", blockId)
 			jdbcTemplate.update("delete from writing_blocks where id = ?", blockId)
 		}
+		jdbcTemplate.update(
+			"delete from source_observations where workspace_id = ? and authority_owner like 'github:routine-refresh:%'",
+			workspaceId,
+		)
 		sourceScopeIds.forEach { sourceScopeId ->
 			jdbcTemplate.update("delete from source_scopes where id = ?", sourceScopeId)
+		}
+		bindingIds.forEach { bindingId ->
+			jdbcTemplate.update("delete from connection_namespace_bindings where id = ?", bindingId)
 		}
 		sourceNamespaceIds.forEach { namespaceId ->
 			jdbcTemplate.update("delete from source_namespaces where id = ?", namespaceId)
 		}
+		connectionIds.forEach { connectionId ->
+			jdbcTemplate.update("delete from connections where id = ?", connectionId)
+		}
 		sourceScopeIds.clear()
 		sourceNamespaceIds.clear()
+		bindingIds.clear()
+		connectionIds.clear()
 		writingBlockIds.clear()
 	}
 
@@ -343,8 +368,19 @@ class RoutineWorkerIntegrationTest {
 	) ?: 0
 
 	private fun insertSourceScope(): SourceFixture {
+		val connectionId = UUID.randomUUID()
 		val namespaceId = UUID.randomUUID()
+		val bindingId = UUID.randomUUID()
 		val scopeId = UUID.randomUUID()
+		val installationId = UUID.randomUUID().mostSignificantBits and Long.MAX_VALUE
+		val repositoryId = UUID.randomUUID().mostSignificantBits and Long.MAX_VALUE
+		jdbcTemplate.update(
+			"insert into connections (id, workspace_id, provider, connection_kind, external_connection_key, status, created_by_user_id, created_at, updated_at) values (?, ?, 'GITHUB', 'GITHUB_APP_INSTALLATION', ?, 'ACTIVE', ?, now(), now())",
+			connectionId,
+			devContext.devWorkspaceId,
+			installationId.toString(),
+			devContext.devUserId,
+		)
 		jdbcTemplate.update(
 			"""
 			insert into source_namespaces
@@ -356,6 +392,13 @@ class RoutineWorkerIntegrationTest {
 			"installation-${UUID.randomUUID()}",
 		)
 		jdbcTemplate.update(
+			"insert into connection_namespace_bindings (id, workspace_id, provider, connection_id, source_namespace_id, status, valid_from, created_at, updated_at) values (?, ?, 'GITHUB', ?, ?, 'ACTIVE', now(), now(), now())",
+			bindingId,
+			devContext.devWorkspaceId,
+			connectionId,
+			namespaceId,
+		)
+		jdbcTemplate.update(
 			"""
 			insert into source_scopes
 			(id, workspace_id, source_namespace_id, provider, scope_semantics, scope_kind,
@@ -365,11 +408,30 @@ class RoutineWorkerIntegrationTest {
 			scopeId,
 			devContext.devWorkspaceId,
 			namespaceId,
-			"repository-${UUID.randomUUID()}",
+			repositoryId.toString(),
 		)
 		sourceScopeIds += scopeId
 		sourceNamespaceIds += namespaceId
+		bindingIds += bindingId
+		connectionIds += connectionId
 		return SourceFixture(namespaceId, scopeId)
+	}
+
+	@TestConfiguration(proxyBeanMethods = false)
+	class Config {
+		@Bean
+		@Primary
+		fun routineWorkerGitHubClient(): GitHubClient = object : GitHubClient {
+			override fun listInstallationRepositories(installationId: Long): List<GitHubRepository> = error("not used")
+
+			override fun listClosedPullRequests(
+				installationId: Long,
+				repositoryId: Long,
+				owner: String,
+				repository: String,
+				pageCap: Int,
+			): List<GitHubPullRequest> = emptyList()
+		}
 	}
 
 	private fun insertBlock(

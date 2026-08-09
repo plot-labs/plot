@@ -412,6 +412,96 @@ class AgentRunWorkerIntegrationTest {
 	}
 
 	@Test
+	fun `workspace revocation before an Agent decision prevents model and tool work`() {
+		val admitted = admitAgent("Revoked before model", "acme/revoked-model")
+		setWorkspaceAccess("revoked", "read_only")
+
+		assertTrue(agentWorker.processOne())
+
+		assertEquals(0, agentModel.requests.size)
+		assertEquals("FAILED", agentStatus(admitted.agentRunId))
+		assertEquals("WORKSPACE_READ_ONLY", agentFailure(admitted.agentRunId))
+		assertEquals(0, count("select count(*) from agent_steps where agent_run_id = ?", admitted.agentRunId))
+		assertEquals(0, count("select count(*) from generation_runs where agent_run_id = ?", admitted.agentRunId))
+	}
+
+	@Test
+	fun `workspace revocation after an Agent decision prevents the typed read`() {
+		val admitted = admitAgent("Revoked before read", "acme/revoked-read")
+		agentModel.scriptedDecision = {
+			setWorkspaceAccess("revoked", "read_only")
+			AgentDecision(
+				AgentDecisionAction.READ_WRITING_BLOCKS,
+				sourceScopeId = admitted.source.scopeId,
+				writingBlockIds = listOf(admitted.blockId),
+			)
+		}
+
+		assertTrue(agentWorker.processOne())
+
+		assertEquals(1, agentModel.requests.size)
+		assertEquals("FAILED", agentStatus(admitted.agentRunId))
+		assertEquals("WORKSPACE_READ_ONLY", agentFailure(admitted.agentRunId))
+		assertEquals(0, count(
+			"select count(*) from agent_run_inputs where agent_run_id = ? and input_kind = 'TOOL_RESULT'",
+			admitted.agentRunId,
+		))
+		assertEquals(0, count("select count(*) from generation_runs where agent_run_id = ?", admitted.agentRunId))
+	}
+
+	@Test
+	fun `workspace revocation after an Agent decision prevents Generation handoff`() {
+		val admitted = admitAgent("Revoked before handoff", "acme/revoked-handoff")
+		agentModel.scriptedDecision = { request ->
+			setWorkspaceAccess("revoked", "read_only")
+			AgentDecision(
+				AgentDecisionAction.CREATE_ARTIFACT,
+				selectedInputIds = request.inputs.map { it.id },
+			)
+		}
+
+		assertTrue(agentWorker.processOne())
+
+		assertEquals(1, agentModel.requests.size)
+		assertEquals("FAILED", agentStatus(admitted.agentRunId))
+		assertEquals("WORKSPACE_READ_ONLY", agentFailure(admitted.agentRunId))
+		assertEquals(0, count("select count(*) from generation_runs where agent_run_id = ?", admitted.agentRunId))
+	}
+
+	@Test
+	fun `workspace revocation after handoff prevents the Generation model call`() {
+		val admitted = admitAgent("Revoked before generation", "acme/revoked-generation")
+		agentModel.scriptedDecision = { request ->
+			AgentDecision(
+				AgentDecisionAction.CREATE_ARTIFACT,
+				selectedInputIds = request.inputs.map { it.id },
+			)
+		}
+		assertTrue(agentWorker.processOne())
+		val generationRunId = assertNotNull(jdbcTemplate.queryForObject(
+			"select id from generation_runs where agent_run_id = ?",
+			UUID::class.java,
+			admitted.agentRunId,
+		))
+		setWorkspaceAccess("revoked", "read_only")
+
+		assertTrue(generationWorker.processOne())
+
+		assertEquals(0, generationModel.calls)
+		assertEquals("FAILED", jdbcTemplate.queryForObject(
+			"select status from generation_runs where id = ?",
+			String::class.java,
+			generationRunId,
+		))
+		assertEquals("WORKSPACE_READ_ONLY", jdbcTemplate.queryForObject(
+			"select error_code from generation_runs where id = ?",
+			String::class.java,
+			generationRunId,
+		))
+		assertEquals(0, count("select count(*) from content_packs where generation_run_id = ?", generationRunId))
+	}
+
+	@Test
 	fun `search returns bounded source results before Artifact handoff`() {
 		val admitted = admitAgent("Search routine", "acme/search")
 		agentModel.scriptedDecision = { request ->
@@ -475,8 +565,17 @@ class AgentRunWorkerIntegrationTest {
 	}
 
 	private fun insertSource(label: String): AgentSourceFixture {
+		val connectionId = UUID.randomUUID()
 		val namespaceId = UUID.randomUUID()
+		val bindingId = UUID.randomUUID()
 		val scopeId = UUID.randomUUID()
+		jdbcTemplate.update(
+			"insert into connections (id, workspace_id, provider, connection_kind, external_connection_key, status, created_by_user_id, created_at, updated_at) values (?, ?, 'GITHUB', 'GITHUB_APP_INSTALLATION', ?, 'ACTIVE', ?, now(), now())",
+			connectionId,
+			devContext.devWorkspaceId,
+			(UUID.randomUUID().mostSignificantBits and Long.MAX_VALUE).toString(),
+			devContext.devUserId,
+		)
 		jdbcTemplate.update(
 			"""
 			insert into source_namespaces
@@ -487,6 +586,13 @@ class AgentRunWorkerIntegrationTest {
 			devContext.devWorkspaceId,
 			"installation-${UUID.randomUUID()}",
 			label,
+		)
+		jdbcTemplate.update(
+			"insert into connection_namespace_bindings (id, workspace_id, provider, connection_id, source_namespace_id, status, valid_from, created_at, updated_at) values (?, ?, 'GITHUB', ?, ?, 'ACTIVE', now(), now(), now())",
+			bindingId,
+			devContext.devWorkspaceId,
+			connectionId,
+			namespaceId,
 		)
 		jdbcTemplate.update(
 			"""
@@ -552,6 +658,27 @@ class AgentRunWorkerIntegrationTest {
 
 	private fun count(sql: String, vararg args: Any): Int =
 		jdbcTemplate.queryForObject(sql, Int::class.java, *args) ?: 0
+
+	private fun setWorkspaceAccess(status: String, accessMode: String) {
+		jdbcTemplate.update(
+			"update workspaces set plan = 'founding', entitlement_status = ?, access_mode = ?, updated_at = now() where id = ?",
+			status,
+			accessMode,
+			devContext.devWorkspaceId,
+		)
+	}
+
+	private fun agentStatus(agentRunId: UUID): String = assertNotNull(jdbcTemplate.queryForObject(
+		"select status from agent_runs where id = ?",
+		String::class.java,
+		agentRunId,
+	))
+
+	private fun agentFailure(agentRunId: UUID): String = assertNotNull(jdbcTemplate.queryForObject(
+		"select failure_code from agent_runs where id = ?",
+		String::class.java,
+		agentRunId,
+	))
 
 	@TestConfiguration(proxyBeanMethods = false)
 	class Config {

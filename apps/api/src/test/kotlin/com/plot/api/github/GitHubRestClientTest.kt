@@ -262,6 +262,59 @@ class GitHubRestClientTest {
 	}
 
 	@Test
+	fun returnsOneClosedPullRequestPageWithATrustedContinuation() {
+		var pullPageCalls = 0
+		val next = "https://api.github.test/repos/acme/plot/pulls?state=closed&per_page=100&page=2"
+		val transport = GitHubHttpTransport { _, uri, _, _ ->
+			when {
+				uri.path.endsWith("/access_tokens") ->
+					GitHubHttpResponse(201, emptyMap(), "{\"token\":\"installation-token\"}")
+				else -> {
+					pullPageCalls++
+					GitHubHttpResponse(
+						200,
+						mapOf("Link" to listOf("<$next>; rel=\"next\"")),
+						"""[{"id":11,"number":1,"title":"First","body":null,"html_url":"https://github.com/acme/plot/pull/1","user":{"login":"ada"},"base":{"ref":"main"},"head":{"ref":"feature"},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-02T00:00:00Z","merged_at":"2026-01-02T00:00:00Z"}]""",
+					)
+				}
+			}
+		}
+		val client = GitHubRestClient(properties(), objectMapper, transport = transport)
+
+		val page = client.listClosedPullRequestsPage(77, 44, "acme", "plot", continuation = null)
+
+		assertEquals(listOf(11L), page.pullRequests.map { it.id })
+		assertEquals(next, page.nextPage)
+		assertEquals(1, pullPageCalls)
+	}
+
+	@Test
+	fun rejectsAnUntrustedPersistedPullRequestContinuationBeforeHttp() {
+		var calls = 0
+		val client = GitHubRestClient(
+			properties(),
+			objectMapper,
+			transport = GitHubHttpTransport { _, _, _, _ ->
+				calls++
+				GitHubHttpResponse(500, emptyMap(), "provider secret")
+			},
+		)
+
+		val exception = assertFailsWith<ApiException> {
+			client.listClosedPullRequestsPage(
+				77,
+				44,
+				"acme",
+				"plot",
+				"https://user@api.github.test/repos/acme/plot/pulls?page=2",
+			)
+		}
+
+		assertEquals("GITHUB_REDIRECT_REJECTED", exception.error)
+		assertEquals(0, calls)
+	}
+
+	@Test
 	fun rejectsPageCapAndUntrustedPaginationLinksBeforeReturningPartialData() {
 		val transport = GitHubHttpTransport { method, uri, headers, body ->
 			when {

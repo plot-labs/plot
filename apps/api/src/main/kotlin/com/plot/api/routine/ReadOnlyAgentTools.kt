@@ -35,6 +35,15 @@ class ReadOnlyAgentTools(
 			from agent_run_sources source
 			join source_scopes scope
 			  on scope.workspace_id = source.workspace_id and scope.id = source.source_scope_id
+			join source_namespaces namespace
+			  on namespace.workspace_id = scope.workspace_id and namespace.id = scope.source_namespace_id
+			 and namespace.provider = scope.provider and namespace.status = 'ACTIVE'
+			join connection_namespace_bindings binding
+			  on binding.workspace_id = namespace.workspace_id and binding.source_namespace_id = namespace.id
+			 and binding.provider = namespace.provider and binding.status = 'ACTIVE'
+			join connections connection
+			  on connection.workspace_id = binding.workspace_id and connection.id = binding.connection_id
+			 and connection.provider = binding.provider and connection.status = 'ACTIVE'
 			where source.workspace_id = ? and source.agent_run_id = ? and scope.status = 'ACTIVE'
 			order by source.order_index, scope.id
 			""".trimIndent(),
@@ -126,14 +135,24 @@ class ReadOnlyAgentTools(
 		sourceScopeId: UUID,
 	): AllowedSource = jdbcTemplate.query(
 		"""
-		select scope.display_name, scope.status_changed_at
+		select scope.display_name,
+		       greatest(scope.status_changed_at, namespace.updated_at, binding.updated_at, connection.updated_at) as lifecycle_version_at
 		from agent_run_sources source
 		join source_scopes scope
 		  on scope.workspace_id = source.workspace_id and scope.id = source.source_scope_id
+		join source_namespaces namespace
+		  on namespace.workspace_id = scope.workspace_id and namespace.id = scope.source_namespace_id
+		 and namespace.provider = scope.provider and namespace.status = 'ACTIVE'
+		join connection_namespace_bindings binding
+		  on binding.workspace_id = namespace.workspace_id and binding.source_namespace_id = namespace.id
+		 and binding.provider = namespace.provider and binding.status = 'ACTIVE'
+		join connections connection
+		  on connection.workspace_id = binding.workspace_id and connection.id = binding.connection_id
+		 and connection.provider = binding.provider and connection.status = 'ACTIVE'
 		where source.workspace_id = ? and source.agent_run_id = ?
 		  and source.source_scope_id = ? and scope.status = 'ACTIVE'
 		""".trimIndent(),
-		{ rs, _ -> AllowedSource(rs.getString(1), rs.getTimestamp(2).toInstant()) },
+		{ rs, _ -> AllowedSource(rs.getString(1), rs.getTimestamp("lifecycle_version_at").toInstant()) },
 		workspaceId,
 		agentRunId,
 		sourceScopeId,

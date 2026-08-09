@@ -26,6 +26,7 @@ import org.springframework.test.context.TestPropertySource
 @TestPropertySource(properties = [
 	"plot.routines.poll-delay=PT1H",
 	"plot.routines.github-event-poll-delay=PT1H",
+	"plot.routine-agent.workers-enabled=true",
 ])
 class GitHubChangeRoutineIntegrationTest {
 	@Autowired private lateinit var webhookService: GitHubWebhookService
@@ -43,6 +44,10 @@ class GitHubChangeRoutineIntegrationTest {
 	@BeforeEach
 	fun bootstrap() {
 		devBootstrapService.bootstrap()
+		jdbcTemplate.update(
+			"update workspaces set plan = 'founding', entitlement_status = 'active', access_mode = 'full', updated_at = now() where id = ?",
+			devContext.devWorkspaceId,
+		)
 	}
 
 	@AfterEach

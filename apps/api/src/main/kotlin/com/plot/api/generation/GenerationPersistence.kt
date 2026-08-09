@@ -102,21 +102,40 @@ class GenerationPersistence(
 			if (!linkedAgent) {
 				throw ApiException(HttpStatus.BAD_REQUEST, "INVALID_AGENT_RUN", "Agent run is unavailable in this workspace")
 			}
+			val expectedSourceCount = jdbcTemplate.queryForObject(
+				"select count(*) from agent_run_sources where workspace_id = ? and agent_run_id = ?",
+				Int::class.java,
+				reservation.workspaceId,
+				agentRunId,
+			) ?: 0
 			val sourceStatuses = jdbcTemplate.query(
 				"""
-				select scope.status
+				select scope.status, namespace.status, binding.status, connection.status
 				from agent_run_sources source
 				join source_scopes scope
 				  on scope.workspace_id = source.workspace_id and scope.id = source.source_scope_id
+				join source_namespaces namespace
+				  on namespace.workspace_id = scope.workspace_id and namespace.id = scope.source_namespace_id
+				 and namespace.provider = scope.provider
+				join connection_namespace_bindings binding
+				  on binding.workspace_id = namespace.workspace_id and binding.source_namespace_id = namespace.id
+				 and binding.provider = namespace.provider and binding.status = 'ACTIVE'
+				join connections connection
+				  on connection.workspace_id = binding.workspace_id and connection.id = binding.connection_id
+				 and connection.provider = binding.provider and connection.status = 'ACTIVE'
 				where source.workspace_id = ? and source.agent_run_id = ?
 				order by scope.id
-				for update of scope
+				for update of scope, namespace, binding, connection
 				""".trimIndent(),
-				{ rs, _ -> rs.getString("status") },
+				{ rs, _ -> listOf(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4)) },
 				reservation.workspaceId,
 				agentRunId,
 			)
-			if (sourceStatuses.isEmpty() || sourceStatuses.any { it != "ACTIVE" }) {
+			if (
+				expectedSourceCount == 0 ||
+				sourceStatuses.size != expectedSourceCount ||
+				sourceStatuses.flatten().any { it != "ACTIVE" }
+			) {
 				throw AgentToolAccessException("SOURCE_NOT_READY")
 			}
 		}
@@ -218,12 +237,17 @@ class GenerationPersistence(
 		}
 	}
 
-	fun claimNext(workerId: String, staleBefore: Instant): ClaimedGenerationRun? = transactionTemplate.execute {
+	fun claimNext(
+		workerId: String,
+		staleBefore: Instant,
+		includeAgentRuns: Boolean = true,
+	): ClaimedGenerationRun? = transactionTemplate.execute {
 		val row = jdbcTemplate.query(
 			"""
 			select workspace_id, id, transition_version
 			from generation_runs
 			where status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
+			  and (? or agent_run_id is null)
 			  and (next_attempt_at is null or next_attempt_at <= now())
 			  and (claimed_by is null or heartbeat_at < ?)
 			  and (
@@ -241,6 +265,7 @@ class GenerationPersistence(
 			limit 1
 			""".trimIndent(),
 			{ rs, _ -> Triple(rs.getObject(1, UUID::class.java), rs.getObject(2, UUID::class.java), rs.getLong(3)) },
+			includeAgentRuns,
 			Timestamp.from(staleBefore),
 		).firstOrNull() ?: return@execute null
 		val now = clock.instant()

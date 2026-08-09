@@ -26,6 +26,7 @@ import org.springframework.test.web.servlet.post
 @TestPropertySource(properties = [
 	"plot.dev-bootstrap.enabled=true",
 	"plot.routines.poll-delay=PT1H",
+	"plot.routine-agent.workers-enabled=true",
 	"server.address=127.0.0.1",
 ])
 class RoutineApiIntegrationTest {
@@ -40,7 +41,9 @@ class RoutineApiIntegrationTest {
 		jdbcTemplate.update("delete from routine_executions where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from routines where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from source_scopes where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from connection_namespace_bindings where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from source_namespaces where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from connections where workspace_id = ?", devContext.devWorkspaceId)
 	}
 
 	@Test
@@ -214,8 +217,17 @@ class RoutineApiIntegrationTest {
 	}
 
 	private fun insertSourceScope(): UUID {
+		val connectionId = UUID.randomUUID()
 		val namespaceId = UUID.randomUUID()
+		val bindingId = UUID.randomUUID()
 		val scopeId = UUID.randomUUID()
+		jdbcTemplate.update(
+			"insert into connections (id, workspace_id, provider, connection_kind, external_connection_key, status, created_by_user_id, created_at, updated_at) values (?, ?, 'GITHUB', 'GITHUB_APP_INSTALLATION', ?, 'ACTIVE', ?, now(), now())",
+			connectionId,
+			devContext.devWorkspaceId,
+			(UUID.randomUUID().mostSignificantBits and Long.MAX_VALUE).toString(),
+			devContext.devUserId,
+		)
 		jdbcTemplate.update(
 			"""
 			insert into source_namespaces
@@ -225,6 +237,13 @@ class RoutineApiIntegrationTest {
 			namespaceId,
 			devContext.devWorkspaceId,
 			"installation-${UUID.randomUUID()}",
+		)
+		jdbcTemplate.update(
+			"insert into connection_namespace_bindings (id, workspace_id, provider, connection_id, source_namespace_id, status, valid_from, created_at, updated_at) values (?, ?, 'GITHUB', ?, ?, 'ACTIVE', now(), now(), now())",
+			bindingId,
+			devContext.devWorkspaceId,
+			connectionId,
+			namespaceId,
 		)
 		jdbcTemplate.update(
 			"""

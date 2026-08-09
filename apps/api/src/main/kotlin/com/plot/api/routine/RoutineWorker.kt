@@ -1,5 +1,7 @@
 package com.plot.api.routine
 
+import com.plot.api.common.ApiException
+import com.plot.api.entitlement.WorkspaceAccessService
 import com.plot.api.writingblock.WritingBlock
 import com.plot.api.writingblock.WritingBlockRepository
 import java.time.Clock
@@ -24,6 +26,8 @@ class RoutineWorker(
 	private val evidenceBudget: RoutineEvidenceBudget,
 	private val transactionTemplate: TransactionTemplate,
 	private val agentProperties: RoutineAgentProperties,
+	private val workspaceAccessService: WorkspaceAccessService,
+	private val refreshService: GitHubRoutineRefreshService,
 	private val objectMapper: ObjectMapper,
 	private val clock: Clock? = null,
 	private val workerId: String = "routine-${UUID.randomUUID()}",
@@ -35,6 +39,7 @@ class RoutineWorker(
 	}
 
 	fun drain(): Boolean {
+		if (!agentProperties.workersEnabled) return false
 		val now = currentInstant()
 		val canonicalExecution = agentPersistence.claimNext(workerId, now, now.minus(claimTimeout))
 		if (canonicalExecution != null) {
@@ -56,6 +61,7 @@ class RoutineWorker(
 	}
 
 	fun runNow(workspaceId: UUID, id: UUID, executionId: UUID? = null) {
+		if (!agentProperties.workersEnabled) return
 		val now = currentInstant()
 		val routine = persistence.find(workspaceId, id) ?: return
 		val execution = executionId?.let { agentPersistence.findExecution(workspaceId, it) }
@@ -73,31 +79,53 @@ class RoutineWorker(
 
 	private fun process(execution: RoutineExecutionRecord, claimedRoutine: RoutineRecord?) {
 		try {
+			workspaceAccessService.requireWritable(execution.workspaceId)
+			val routine = persistence.find(execution.workspaceId, execution.routineId)
+				?: throw RoutineExecutionStateException("Routine was not found")
+			val readyExecution = refreshIfRequired(execution, routine) ?: return
+			workspaceAccessService.requireWritable(execution.workspaceId)
 			transactionTemplate.executeWithoutResult {
-				persistence.lockWorkspaceActivity(execution.workspaceId)
-				processLocked(execution, claimedRoutine)
+				persistence.lockWorkspaceActivity(readyExecution.workspaceId)
+				processLocked(readyExecution, claimedRoutine)
 			}
 		} catch (_: RoutineClaimLostException) {
 			// A stale replacement owns this execution now.
+		} catch (failure: ApiException) {
+			if (isRecoverableRefreshFailure(failure) && execution.refreshCompletedAt == null) {
+				releaseRefreshRetry(execution, safeApiCode(failure))
+			} else {
+				failClaimedExecution(execution, claimedRoutine, safeApiCode(failure))
+			}
 		} catch (failure: RuntimeException) {
 			if (!isPermanent(failure)) throw failure
-			val now = currentInstant()
-			try {
-				if (agentPersistence.findExecution(execution.workspaceId, execution.id)?.status == RoutineExecutionStatus.PROBING) {
-					agentPersistence.failExecution(execution.workspaceId, execution.id, safeErrorCode(failure), now, workerId)
-				}
-				finishProjection(
-					execution = execution,
-					claimedRoutine = claimedRoutine,
-					now = now,
-					status = "FAILED",
-					nextRunAt = nextRunAtFor(execution, claimedRoutine ?: persistence.find(execution.workspaceId, execution.routineId), now),
-					errorCode = safeErrorCode(failure),
-				)
-			} catch (_: RoutineClaimLostException) {
-				// A stale replacement owns this execution now.
-			}
+			failClaimedExecution(execution, claimedRoutine, safeErrorCode(failure))
 		}
+	}
+
+	private fun refreshIfRequired(
+		execution: RoutineExecutionRecord,
+		routine: RoutineRecord,
+	): RoutineExecutionRecord? {
+		if (
+			execution.triggerKind != RoutineExecutionTriggerKind.SCHEDULED ||
+			routine.cadence !in setOf(RoutineCadence.DAILY, RoutineCadence.WEEKLY) ||
+			execution.refreshCompletedAt != null
+		) {
+			return execution
+		}
+		val result = refreshService.refreshOnePage(execution, workerId)
+		if (!result.completed) {
+			agentPersistence.releaseExecutionForRetry(
+				execution.workspaceId,
+				execution.id,
+				workerId,
+				currentInstant().plus(agentProperties.retryInitialDelay),
+				now = currentInstant(),
+			)
+			return null
+		}
+		return agentPersistence.findExecution(execution.workspaceId, execution.id)
+			?: throw RoutineClaimLostException()
 	}
 
 	private fun processLocked(execution: RoutineExecutionRecord, claimedRoutine: RoutineRecord?) {
@@ -107,6 +135,13 @@ class RoutineWorker(
 		if (!routine.enabled && execution.triggerKind != RoutineExecutionTriggerKind.MANUAL) {
 			completeFailure(execution, claimedRoutine, routine, "ROUTINE_DISABLED")
 			return
+		}
+		if (
+			execution.triggerKind == RoutineExecutionTriggerKind.SCHEDULED &&
+			routine.cadence in setOf(RoutineCadence.DAILY, RoutineCadence.WEEKLY) &&
+			execution.refreshCompletedAt == null
+		) {
+			throw RoutineExecutionStateException("Scheduled Routine refresh is incomplete")
 		}
 		if (!persistence.isSourceActive(execution.workspaceId, routine.sourceScopeId)) {
 			completeFailure(execution, claimedRoutine, routine, "SOURCE_NOT_READY")
@@ -281,6 +316,8 @@ class RoutineWorker(
 				triggerKey = "scheduled:${routine.id}:${routine.nextRunAt.toEpochMilli()}",
 				requestFingerprint = fingerprint(routine, routine.nextRunAt),
 				scheduledFor = routine.nextRunAt,
+				refreshFrom = routine.cadence.previousSlot(routine.nextRunAt),
+				refreshTo = routine.nextRunAt,
 				activityCursorBefore = routine.activityCursorSequence,
 			),
 		)
@@ -364,6 +401,64 @@ class RoutineWorker(
 		generateSequence<Throwable>(failure) { it.cause }
 			.any { it is RoutineExecutionStateException || it is IllegalArgumentException }
 
+	private fun isRecoverableRefreshFailure(failure: ApiException): Boolean =
+		failure.error in setOf("GITHUB_NETWORK_ERROR", "GITHUB_RATE_LIMITED", "GITHUB_PROVIDER_UNAVAILABLE")
+
+	private fun releaseRefreshRetry(execution: RoutineExecutionRecord, errorCode: String) {
+		try {
+			val now = currentInstant()
+			agentPersistence.releaseExecutionForRetry(
+				execution.workspaceId,
+				execution.id,
+				workerId,
+				now.plus(agentProperties.retryInitialDelay),
+				errorCode,
+				now,
+			)
+		} catch (_: RoutineClaimLostException) {
+			// A stale replacement owns this execution now.
+		}
+	}
+
+	private fun failClaimedExecution(
+		execution: RoutineExecutionRecord,
+		claimedRoutine: RoutineRecord?,
+		errorCode: String,
+	) {
+		val now = currentInstant()
+		try {
+			transactionTemplate.executeWithoutResult {
+				val current = agentPersistence.findExecution(execution.workspaceId, execution.id)
+				if (current?.status == RoutineExecutionStatus.PROBING) {
+					if (current.refreshCompletedAt == null) refreshService.fail(current, workerId, now)
+					agentPersistence.failExecution(execution.workspaceId, execution.id, errorCode, now, workerId)
+				}
+			}
+			finishProjection(
+				execution = execution,
+				claimedRoutine = claimedRoutine,
+				now = now,
+				status = "FAILED",
+				nextRunAt = nextRunAtFor(
+					execution,
+					claimedRoutine ?: persistence.find(execution.workspaceId, execution.routineId),
+					now,
+				),
+				errorCode = errorCode,
+			)
+		} catch (_: RoutineClaimLostException) {
+			// A stale replacement owns this execution now.
+		}
+	}
+
+	private fun safeApiCode(failure: ApiException): String = when (failure.error) {
+		"ACCESS_DENIED", "WORKSPACE_READ_ONLY" -> failure.error
+		"REPOSITORY_INACTIVE", "NOT_FOUND", "GITHUB_ACCESS_DENIED", "GITHUB_NOT_FOUND" -> "SOURCE_NOT_READY"
+		"IMPORT_TOO_LARGE" -> "ROUTINE_REFRESH_TOO_LARGE"
+		"GITHUB_NETWORK_ERROR", "GITHUB_RATE_LIMITED", "GITHUB_PROVIDER_UNAVAILABLE" -> "ROUTINE_REFRESH_RETRY"
+		else -> "ROUTINE_REFRESH_FAILED"
+	}
+
 	private fun safeErrorCode(failure: RuntimeException): String {
 		val messages = generateSequence<Throwable>(failure) { it.cause }
 			.mapNotNull { it.message }
@@ -378,6 +473,12 @@ class RoutineWorker(
 	}
 
 	private fun currentInstant(): Instant = clock?.instant() ?: Instant.now()
+
+	private fun RoutineCadence.previousSlot(slot: Instant): Instant = when (this) {
+		RoutineCadence.DAILY -> slot.minus(Duration.ofDays(1))
+		RoutineCadence.WEEKLY -> slot.minus(Duration.ofDays(7))
+		else -> slot
+	}
 
 	private fun budgetSnapshot(oversized: Boolean): String = objectMapper.writeValueAsString(
 		AgentBudgetSnapshot(
