@@ -7,6 +7,7 @@ import {
   PlugSocketIcon,
   Settings02Icon,
   Shapes01Icon,
+  ZapIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import Image from "next/image";
@@ -34,6 +35,7 @@ import { cn } from "@/lib/utils";
 
 const productNavItems = [
   { href: "/chat", label: "Chat", icon: ChatIcon },
+  { href: "/routines", label: "Routines", icon: RoutinesIcon },
   { href: "/artifacts", label: "Artifacts", icon: ArtifactsIcon },
 ];
 
@@ -724,6 +726,19 @@ function ChatIcon() {
   return (
     <HugeiconsIcon
       icon={MessageMultiple01Icon}
+      size={16}
+      color="currentColor"
+      strokeWidth={1.5}
+      aria-hidden="true"
+      className="shrink-0"
+    />
+  );
+}
+
+function RoutinesIcon() {
+  return (
+    <HugeiconsIcon
+      icon={ZapIcon}
       size={16}
       color="currentColor"
       strokeWidth={1.5}

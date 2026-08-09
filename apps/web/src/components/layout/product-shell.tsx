@@ -64,6 +64,7 @@ export function ProductShell({ children }: { children: ReactNode }) {
 
 function MobileProductNavigation({ pathname }: { pathname: string }) {
   const chatActive = pathname === "/chat" || pathname.startsWith("/chat/");
+  const routinesActive = pathname === "/routines" || pathname.startsWith("/routines/");
   const artifactsActive = pathname === "/artifacts" || pathname.startsWith("/artifacts/");
   const settingsActive = pathname === "/settings" || pathname.startsWith("/settings/");
 
@@ -83,6 +84,19 @@ function MobileProductNavigation({ pathname }: { pathname: string }) {
         )}
       >
         Chat
+      </Link>
+
+      <Link
+        href="/routines"
+        aria-current={routinesActive ? "page" : undefined}
+        className={cn(
+          "rounded-[8px] px-3 py-1.5 font-medium transition",
+          routinesActive
+            ? "bg-[#eef0f3] text-black dark:bg-white/12 dark:text-white"
+            : "text-black/55 hover:bg-black/[0.04] dark:text-white/55 dark:hover:bg-white/10",
+        )}
+      >
+        Routines
       </Link>
 
       <Link
