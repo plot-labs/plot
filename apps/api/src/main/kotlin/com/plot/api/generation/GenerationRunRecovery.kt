@@ -19,7 +19,10 @@ class GenerationRunRecovery(
 		return RecoveryResult(releasedClaims, 0)
 	}
 
-	@Scheduled(fixedDelayString = "\${plot.ai.worker-poll-delay:PT5S}")
+	@Scheduled(
+		fixedDelayString = "\${plot.ai.worker-poll-delay:PT5S}",
+		initialDelayString = "\${plot.ai.worker-poll-delay:PT5S}",
+	)
 	fun poll() {
 		recover()
 	}
