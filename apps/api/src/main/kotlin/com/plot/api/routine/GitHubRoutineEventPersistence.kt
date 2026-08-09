@@ -36,15 +36,18 @@ class GitHubRoutineEventPersistence(
 			val inserted = jdbcTemplate.update(
 				"""
 				insert into routine_github_event_runs (
-				 id, workspace_id, routine_id, delivery_id, status, created_at, updated_at
+				 id, workspace_id, routine_id, delivery_id, status, created_at, updated_at,
+				 retired_at, retirement_code
 				)
 				select ?, r.workspace_id, r.id, ?, 'QUEUED', ?, ?
+				       , ?, 'CANONICAL_EXECUTION_CUTOVER'
 				from routines r
 				where r.workspace_id = ? and r.id = ? and r.enabled = true and r.cadence = ?
 				on conflict (routine_id, delivery_id) do nothing
 				""".trimIndent(),
 				eventRunId,
 				delivery.id,
+				Timestamp.from(now),
 				Timestamp.from(now),
 				Timestamp.from(now),
 				routine.workspaceId,
@@ -80,7 +83,8 @@ class GitHubRoutineEventPersistence(
 			val staleBefore = now.minus(claimTimeout)
 			val candidate = jdbcTemplate.query(
 				selectSql + "\n" + """
-					 where (e.status = 'QUEUED'
+					 where e.retired_at is null
+					   and (e.status = 'QUEUED'
 					    or (e.status = 'PROCESSING' and e.claimed_at < ?))
 					   and (r.claimed_by is null or r.claimed_by = 'routine-github:' || e.id::text)
 				   and not exists (

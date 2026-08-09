@@ -3,6 +3,7 @@ package com.plot.api.routine
 import com.plot.api.TestcontainersConfiguration
 import com.plot.api.dev.DevBootstrapService
 import com.plot.api.dev.DevContext
+import java.sql.Timestamp
 import java.util.UUID
 import kotlin.test.assertEquals
 import org.junit.jupiter.api.BeforeEach
@@ -36,6 +37,7 @@ class RoutineApiIntegrationTest {
 	@BeforeEach
 	fun clearRoutinesAndSources() {
 		devBootstrapService.bootstrap()
+		jdbcTemplate.update("delete from routine_executions where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from routines where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from source_scopes where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from source_namespaces where workspace_id = ?", devContext.devWorkspaceId)
@@ -64,6 +66,11 @@ class RoutineApiIntegrationTest {
 			devContext.devWorkspaceId,
 			sourceScopeId,
 		)
+		val scheduledNextRunAt = jdbcTemplate.queryForObject(
+			"select next_run_at from routines where id = ?",
+			Timestamp::class.java,
+			routineId,
+		)
 
 		mockMvc.get("/api/routines")
 			.andExpect {
@@ -78,15 +85,45 @@ class RoutineApiIntegrationTest {
 		}.andExpect {
 			status { isOk() }
 			jsonPath("$.enabled") { value(false) }
-			jsonPath("$.cadence") { value("WEEKLY") }
-		}
+				jsonPath("$.cadence") { value("WEEKLY") }
+			}
 
 		mockMvc.post("/api/routines/$routineId/run")
+			.andExpect { status { isBadRequest() } }
+		mockMvc.post("/api/routines/$routineId/run") {
+			headers { add("Idempotency-Key", "manual-lifecycle") }
+		}
 			.andExpect {
 				status { isOk() }
 				jsonPath("$.id") { value(routineId.toString()) }
 				jsonPath("$.lastRunStatus") { value("NO_ACTIVITY") }
 			}
+
+		assertEquals(1, jdbcTemplate.queryForObject(
+			"select count(*) from routine_executions where routine_id = ? and trigger_key = ?",
+			Int::class.java,
+			routineId,
+			"manual:$routineId:manual-lifecycle",
+		))
+		mockMvc.post("/api/routines/$routineId/run") {
+			headers { add("Idempotency-Key", "manual-lifecycle") }
+		}
+			.andExpect {
+				status { isOk() }
+				jsonPath("$.id") { value(routineId.toString()) }
+				jsonPath("$.lastRunStatus") { value("NO_ACTIVITY") }
+			}
+		assertEquals(1, jdbcTemplate.queryForObject(
+			"select count(*) from routine_executions where routine_id = ? and trigger_key = ?",
+			Int::class.java,
+			routineId,
+			"manual:$routineId:manual-lifecycle",
+		))
+		assertEquals(scheduledNextRunAt, jdbcTemplate.queryForObject(
+			"select next_run_at from routines where id = ?",
+			Timestamp::class.java,
+			routineId,
+		))
 	}
 
 	@Test
@@ -112,7 +149,9 @@ class RoutineApiIntegrationTest {
 			status { isConflict() }
 			jsonPath("$.error") { value("ROUTINE_BUSY") }
 		}
-		mockMvc.post("/api/routines/$routineId/run").andExpect {
+		mockMvc.post("/api/routines/$routineId/run") {
+			headers { add("Idempotency-Key", "manual-busy") }
+		}.andExpect {
 			status { isConflict() }
 			jsonPath("$.error") { value("ROUTINE_BUSY") }
 		}
@@ -143,7 +182,9 @@ class RoutineApiIntegrationTest {
 			Boolean::class.java,
 			routineId,
 		))
-		mockMvc.post("/api/routines/$routineId/run").andExpect {
+		mockMvc.post("/api/routines/$routineId/run") {
+			headers { add("Idempotency-Key", "manual-source-failure") }
+		}.andExpect {
 			status { isOk() }
 			jsonPath("$.lastRunStatus") { value("FAILED") }
 			jsonPath("$.lastErrorCode") { value("SOURCE_NOT_READY") }

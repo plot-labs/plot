@@ -402,7 +402,7 @@ export interface PlotApiClient {
   listRoutines(options?: RequestOptions): Promise<Routine[]>;
   createRoutine(input: { name: string; sourceScopeId: string; instruction: string; cadence: RoutineCadence }, options?: RequestOptions): Promise<Routine>;
   updateRoutine(id: string, input: { enabled: boolean }, options?: RequestOptions): Promise<Routine>;
-  runRoutineNow(id: string, options?: RequestOptions): Promise<Routine>;
+  runRoutineNow(id: string, idempotencyKey: string, options?: RequestOptions): Promise<Routine>;
   listSessions(options?: RequestOptions): Promise<WorkSessionSummary[]>;
   createSession(input: { title?: string | null }, options?: RequestOptions): Promise<WorkSessionSummary>;
   updateSession(id: string, input: { title?: string; latestGenerationId?: string }, options?: RequestOptions): Promise<WorkSessionSummary>;
@@ -515,9 +515,10 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
       body: JSON.stringify(input),
       signal: requestOptions?.signal,
     }),
-    runRoutineNow: (id, requestOptions) => request(`/routines/${encodeURIComponent(id)}/run`, {
+    runRoutineNow: (id, idempotencyKey, requestOptions) => request(`/routines/${encodeURIComponent(id)}/run`, {
       method: "POST",
       signal: requestOptions?.signal,
+      headers: { "Idempotency-Key": idempotencyKey },
     }),
     listSessions: (requestOptions) => request("/sessions", { signal: requestOptions?.signal }),
     createSession: (input, requestOptions) => request("/sessions", {

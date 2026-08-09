@@ -1,46 +1,41 @@
 package com.plot.api.routine
 
 import com.plot.api.TestcontainersConfiguration
-import com.plot.api.common.WorkspacePrincipal
 import com.plot.api.dev.DevBootstrapService
 import com.plot.api.dev.DevContext
-import com.plot.api.generation.GenerationRunDispatcher
-import com.plot.api.generation.GenerationRunService
 import java.sql.Timestamp
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
-import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.boot.test.context.TestConfiguration
-import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
-import org.springframework.context.annotation.Primary
-import org.springframework.core.task.TaskExecutor
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.TestPropertySource
 
 @SpringBootTest
-@Import(TestcontainersConfiguration::class, RoutineWorkerIntegrationTest.DispatchConfig::class)
+@Import(TestcontainersConfiguration::class)
 @TestPropertySource(properties = [
 	"plot.routines.poll-delay=PT1H",
 	"plot.routines.github-event-poll-delay=PT1H",
 ])
 class RoutineWorkerIntegrationTest {
 	@Autowired private lateinit var persistence: RoutinePersistence
+	@Autowired private lateinit var agentPersistence: RoutineAgentPersistence
 	@Autowired private lateinit var worker: RoutineWorker
-	@Autowired private lateinit var generationRunService: GenerationRunService
 	@Autowired private lateinit var evidenceBudget: RoutineEvidenceBudget
 	@Autowired private lateinit var jdbcTemplate: JdbcTemplate
 	@Autowired private lateinit var devBootstrapService: DevBootstrapService
 	@Autowired private lateinit var devContext: DevContext
 	private val sourceScopeIds = mutableListOf<UUID>()
+	private val sourceNamespaceIds = mutableListOf<UUID>()
+	private val writingBlockIds = mutableListOf<UUID>()
 
 	@BeforeEach
 	fun bootstrap() {
@@ -48,13 +43,34 @@ class RoutineWorkerIntegrationTest {
 	}
 
 	@AfterEach
-	fun removeRoutines() {
-		sourceScopeIds.forEach { jdbcTemplate.update("delete from routines where source_scope_id = ?", it) }
+	fun removeFixtures() {
+		val workspaceId = devContext.devWorkspaceId
+		jdbcTemplate.update("delete from agent_steps where workspace_id = ?", workspaceId)
+		jdbcTemplate.update("delete from generation_runs where workspace_id = ? and agent_run_id is not null", workspaceId)
+		jdbcTemplate.update("delete from agent_run_inputs where workspace_id = ?", workspaceId)
+		jdbcTemplate.update("delete from agent_run_sources where workspace_id = ?", workspaceId)
+		jdbcTemplate.update("delete from agent_runs where workspace_id = ?", workspaceId)
+		jdbcTemplate.update("delete from work_sessions where workspace_id = ? and routine_execution_id is not null", workspaceId)
+		jdbcTemplate.update("delete from routine_execution_evidence where workspace_id = ?", workspaceId)
+		jdbcTemplate.update("delete from routine_executions where workspace_id = ?", workspaceId)
+		jdbcTemplate.update("delete from routines where workspace_id = ?", workspaceId)
+		writingBlockIds.forEach { blockId ->
+			jdbcTemplate.update("delete from writing_block_scopes where writing_block_id = ?", blockId)
+			jdbcTemplate.update("delete from writing_blocks where id = ?", blockId)
+		}
+		sourceScopeIds.forEach { sourceScopeId ->
+			jdbcTemplate.update("delete from source_scopes where id = ?", sourceScopeId)
+		}
+		sourceNamespaceIds.forEach { namespaceId ->
+			jdbcTemplate.update("delete from source_namespaces where id = ?", namespaceId)
+		}
 		sourceScopeIds.clear()
+		sourceNamespaceIds.clear()
+		writingBlockIds.clear()
 	}
 
 	@Test
-	fun `compound activity cursor drains more than twenty blocks and sees changed upserts`() {
+	fun `activity cursor drains more than twenty blocks and changed upserts once`() {
 		val fixture = insertSourceScope()
 		val routine = persistence.insert(
 			workspaceId = devContext.devWorkspaceId,
@@ -67,13 +83,13 @@ class RoutineWorkerIntegrationTest {
 		val activityAt = Instant.parse("2026-08-09T00:00:00Z")
 		val blockIds = (1..25).map { index -> insertBlock(fixture, index, activityAt) }
 
-		runNow(routine.id)
-		val firstRunId = assertNotNull(persistence.find(routine.workspaceId, routine.id)?.lastGenerationRunId)
-		assertEquals(blockIds.take(20), generationInputIds(firstRunId))
+		val firstExecutionId = runNow(routine.id, "backlog-first")
+		assertEquals(blockIds.take(20), seedInputIds(firstExecutionId))
+		assertEquals(RoutineExecutionStatus.DISPATCHED, executionStatus(firstExecutionId))
 
-		runNow(routine.id)
-		val secondRunId = assertNotNull(persistence.find(routine.workspaceId, routine.id)?.lastGenerationRunId)
-		assertEquals(blockIds.drop(20), generationInputIds(secondRunId))
+		val secondExecutionId = runNow(routine.id, "backlog-second")
+		assertEquals(blockIds.drop(20), seedInputIds(secondExecutionId))
+		assertEquals(RoutineExecutionStatus.DISPATCHED, executionStatus(secondExecutionId))
 
 		jdbcTemplate.update(
 			"""
@@ -85,13 +101,21 @@ class RoutineWorkerIntegrationTest {
 			devContext.devWorkspaceId,
 			blockIds.first(),
 		)
-		runNow(routine.id)
-		val changedRunId = assertNotNull(persistence.find(routine.workspaceId, routine.id)?.lastGenerationRunId)
-		assertEquals(listOf(blockIds.first()), generationInputIds(changedRunId))
+
+		val changedExecutionId = runNow(routine.id, "backlog-changed")
+		assertEquals(listOf(blockIds.first()), seedInputIds(changedExecutionId))
+		assertEquals(3, count("routine_executions"))
+		assertEquals(3, count("work_sessions"))
+		assertEquals(3, count("agent_runs"))
+		assertEquals(0, jdbcTemplate.queryForObject(
+			"select count(*) from generation_runs where workspace_id = ? and agent_run_id is not null",
+			Int::class.java,
+			devContext.devWorkspaceId,
+		))
 	}
 
 	@Test
-	fun `legacy cursor position avoids replay and a later revision is visible`() {
+	fun `legacy cursor position avoids replay and later revision is visible`() {
 		val fixture = insertSourceScope()
 		val activityAt = Instant.parse("2026-08-09T00:00:00Z")
 		val blockId = insertBlock(fixture, 1, activityAt)
@@ -117,23 +141,19 @@ class RoutineWorkerIntegrationTest {
 			routine.id,
 		)
 
-		runNow(routine.id)
-		val noReplay = assertNotNull(persistence.find(routine.workspaceId, routine.id))
-		assertEquals("NO_ACTIVITY", noReplay.lastRunStatus)
-		assertNull(noReplay.lastGenerationRunId)
+		val noReplayExecutionId = runNow(routine.id, "legacy-no-replay")
+		assertEquals(RoutineExecutionStatus.NO_ACTIVITY, executionStatus(noReplayExecutionId))
+		assertEquals(0, seedInputIds(noReplayExecutionId).size)
+		assertEquals(0, count("work_sessions"))
 
 		jdbcTemplate.update(
-			"""
-			update writing_blocks
-			set title = 'new revision', updated_at = now()
-			where workspace_id = ? and id = ?
-			""".trimIndent(),
+			"update writing_blocks set title = 'new revision', updated_at = now() where workspace_id = ? and id = ?",
 			devContext.devWorkspaceId,
 			blockId,
 		)
-		runNow(routine.id)
-		val changedRunId = assertNotNull(persistence.find(routine.workspaceId, routine.id)?.lastGenerationRunId)
-		assertEquals(listOf(blockId), generationInputIds(changedRunId))
+		val changedExecutionId = runNow(routine.id, "legacy-revision")
+		assertEquals(listOf(blockId), seedInputIds(changedExecutionId))
+		assertEquals(RoutineExecutionStatus.DISPATCHED, executionStatus(changedExecutionId))
 	}
 
 	@Test
@@ -148,7 +168,7 @@ class RoutineWorkerIntegrationTest {
 			cadence = RoutineCadence.DAILY,
 		)
 		val blockId = insertBlock(fixture, 1, Instant.parse("2026-08-09T00:00:00Z"))
-		runNow(routine.id)
+		runNow(routine.id, "membership-first")
 
 		jdbcTemplate.update(
 			"update writing_block_scopes set status = 'TOMBSTONED' where writing_block_id = ? and source_scope_id = ?",
@@ -161,13 +181,12 @@ class RoutineWorkerIntegrationTest {
 			fixture.scopeId,
 		)
 
-		runNow(routine.id)
-		val reactivatedRunId = assertNotNull(persistence.find(routine.workspaceId, routine.id)?.lastGenerationRunId)
-		assertEquals(listOf(blockId), generationInputIds(reactivatedRunId))
+		val reactivatedExecutionId = runNow(routine.id, "membership-reactivated")
+		assertEquals(listOf(blockId), seedInputIds(reactivatedExecutionId))
 	}
 
 	@Test
-	fun `oversized evidence is failed and consumed alone so later evidence is not wedged`() {
+	fun `oversized evidence is bounded and consumed as activity`() {
 		val fixture = insertSourceScope()
 		val routine = persistence.insert(
 			workspaceId = devContext.devWorkspaceId,
@@ -181,20 +200,24 @@ class RoutineWorkerIntegrationTest {
 		val oversizedId = insertBlock(fixture, 1, at, title = "x".repeat(evidenceBudget.maxCharacters + 1))
 		val laterId = insertBlock(fixture, 2, at.plusSeconds(1))
 
-		runNow(routine.id)
-		val skipped = assertNotNull(persistence.find(routine.workspaceId, routine.id))
-		assertEquals("FAILED", skipped.lastRunStatus)
-		assertEquals("ROUTINE_EVIDENCE_TOO_LARGE", skipped.lastErrorCode)
-		assertNull(skipped.lastGenerationRunId)
-		assertEquals(activitySequence(oversizedId), skipped.activityCursorSequence)
+		val firstExecutionId = runNow(routine.id, "oversized-first")
+		assertEquals(RoutineExecutionStatus.DISPATCHED, executionStatus(firstExecutionId))
+		assertEquals(listOf(oversizedId), seedInputIds(firstExecutionId))
+		assertEquals(1, count("work_sessions"))
+		assertEquals(1, count("agent_runs"))
+		val boundedTitle = assertNotNull(jdbcTemplate.queryForObject(
+			"select snapshot_title from agent_run_inputs where agent_run_id = (select id from agent_runs where routine_execution_id = ?)",
+			String::class.java,
+			firstExecutionId,
+		))
+		assertEquals(evidenceBudget.maxCharacters, boundedTitle.length)
 
-		runNow(routine.id)
-		val laterRunId = assertNotNull(persistence.find(routine.workspaceId, routine.id)?.lastGenerationRunId)
-		assertEquals(listOf(laterId), generationInputIds(laterRunId))
+		val secondExecutionId = runNow(routine.id, "oversized-second")
+		assertEquals(listOf(laterId), seedInputIds(secondExecutionId))
 	}
 
 	@Test
-	fun `stale reclaim keeps one execution identity and a failed attempt clears the old generation projection`() {
+	fun `stale reclaim keeps one execution identity and fences the old owner`() {
 		val fixture = insertSourceScope()
 		val routine = persistence.insert(
 			workspaceId = devContext.devWorkspaceId,
@@ -204,73 +227,120 @@ class RoutineWorkerIntegrationTest {
 			instruction = "Draft activity",
 			cadence = RoutineCadence.DAILY,
 		)
-		val blockId = insertBlock(fixture, 1, Instant.parse("2026-08-09T00:00:00Z"))
-		val queued = assertNotNull(persistence.queueNow(routine.workspaceId, routine.id))
-		val firstClaimAt = Instant.now()
-		val firstClaim = assertNotNull(persistence.claimById(
+		val execution = agentPersistence.createExecution(
+			RoutineExecutionRequest(
+				workspaceId = routine.workspaceId,
+				routineId = routine.id,
+				createdByUserId = routine.createdByUserId,
+				triggerSourceScopeId = routine.sourceScopeId,
+				triggerKind = RoutineExecutionTriggerKind.MANUAL,
+				triggerKey = "manual:${routine.id}:stale",
+				requestFingerprint = "stale-fingerprint",
+				activityCursorBefore = routine.activityCursorSequence,
+			),
+		)
+		val firstClaimAt = Instant.parse("2026-08-09T00:00:00Z")
+		assertNotNull(agentPersistence.claimById(
 			"first-worker",
 			routine.workspaceId,
-			routine.id,
+			execution.id,
 			firstClaimAt,
 			firstClaimAt.minus(Duration.ofMinutes(2)),
 		))
-		val executionId = assertNotNull(firstClaim.activeExecutionId)
-		assertEquals(queued.activeExecutionId, executionId)
-		val principal = WorkspacePrincipal(routine.workspaceId, routine.createdByUserId)
-		val firstGeneration = generationRunService.createForPrincipal(
-			principal,
-			routine.sourceScopeId,
-			listOf(blockId),
-			routine.instruction,
-			"routine:${routine.id}:$executionId",
-		)
-
-		jdbcTemplate.update(
-			"update routines set claimed_at = ? where id = ?",
-			Timestamp.from(firstClaimAt.minus(Duration.ofMinutes(10))),
-			routine.id,
-		)
-		val reclaimAt = firstClaimAt.plus(Duration.ofMinutes(1))
-		val reclaimed = assertNotNull(persistence.claimById(
+		val recovered = assertNotNull(agentPersistence.claimById(
 			"replacement-worker",
 			routine.workspaceId,
-			routine.id,
-			reclaimAt,
-			reclaimAt.minus(Duration.ofMinutes(2)),
+			execution.id,
+			firstClaimAt.plus(Duration.ofMinutes(3)),
+			firstClaimAt.plus(Duration.ofMinutes(1)),
 		))
-		assertEquals(executionId, reclaimed.activeExecutionId)
-		val replayedGeneration = generationRunService.createForPrincipal(
-			principal,
-			routine.sourceScopeId,
-			listOf(blockId),
-			routine.instruction,
-			"routine:${routine.id}:$executionId",
+		assertEquals(execution.id, recovered.id)
+		assertEquals("replacement-worker", recovered.claimedBy)
+		val staleFailure = runCatching {
+			agentPersistence.markNoActivity(
+				routine.workspaceId,
+				execution.id,
+				firstClaimAt.plus(Duration.ofMinutes(3)),
+				workerId = "first-worker",
+			)
+		}.exceptionOrNull()
+		assertNotNull(staleFailure)
+		assertTrue(generateSequence(staleFailure) { it.cause }.any { it is RoutineExecutionStateException })
+		agentPersistence.markNoActivity(
+			routine.workspaceId,
+			execution.id,
+			firstClaimAt.plus(Duration.ofMinutes(3)),
+			workerId = "replacement-worker",
 		)
-		assertEquals(firstGeneration.runId, replayedGeneration.runId)
-
-		persistence.finish(
-			claim = reclaimed,
-			now = reclaimAt,
-			nextRunAt = RoutineCadence.DAILY.nextAfter(reclaimAt),
-			status = "FAILED",
-			errorCode = "ROUTINE_RUN_FAILED",
-		)
-		val failed = assertNotNull(persistence.find(routine.workspaceId, routine.id))
-		assertEquals("FAILED", failed.lastRunStatus)
-		assertEquals("ROUTINE_RUN_FAILED", failed.lastErrorCode)
-		assertNull(failed.lastGenerationRunId)
+		assertEquals(RoutineExecutionStatus.NO_ACTIVITY, executionStatus(execution.id))
 	}
 
-	private fun runNow(routineId: UUID) {
-		val queued = assertNotNull(persistence.queueNow(devContext.devWorkspaceId, routineId))
-		worker.runNow(queued.workspaceId, queued.id)
+	@Test
+	fun `scheduled next slot derives from the persisted due slot`() {
+		val fixture = insertSourceScope()
+		val routine = persistence.insert(
+			workspaceId = devContext.devWorkspaceId,
+			createdByUserId = devContext.devUserId,
+			name = "Stable schedule",
+			sourceScopeId = fixture.scopeId,
+			instruction = "Check on the persisted cadence",
+			cadence = RoutineCadence.DAILY,
+		)
+		val dueAt = Instant.parse("2026-08-01T09:00:00Z")
+		jdbcTemplate.update(
+			"update routines set next_run_at = ? where workspace_id = ? and id = ?",
+			Timestamp.from(dueAt),
+			devContext.devWorkspaceId,
+			routine.id,
+		)
+
+		assertTrue(worker.drain())
+
+		assertEquals(Timestamp.from(dueAt), jdbcTemplate.queryForObject(
+			"select scheduled_for from routine_executions where routine_id = ? and trigger_kind = 'SCHEDULED'",
+			Timestamp::class.java,
+			routine.id,
+		))
+		assertEquals(Timestamp.from(dueAt.plus(Duration.ofDays(1))), jdbcTemplate.queryForObject(
+			"select next_run_at from routines where id = ?",
+			Timestamp::class.java,
+			routine.id,
+		))
 	}
 
-	private fun generationInputIds(runId: UUID): List<UUID> = jdbcTemplate.query(
-		"select writing_block_id from generation_inputs where generation_run_id = ? order by order_index",
+	private fun runNow(routineId: UUID, key: String): UUID {
+		val routine = assertNotNull(persistence.find(devContext.devWorkspaceId, routineId))
+		val execution = agentPersistence.createExecution(
+			RoutineExecutionRequest(
+				workspaceId = routine.workspaceId,
+				routineId = routine.id,
+				createdByUserId = routine.createdByUserId,
+				triggerSourceScopeId = routine.sourceScopeId,
+				triggerKind = RoutineExecutionTriggerKind.MANUAL,
+				triggerKey = "manual:${routine.id}:$key",
+				requestFingerprint = "worker-test:${routine.id}|$key",
+				activityCursorBefore = routine.activityCursorSequence,
+			),
+		)
+		worker.runNow(routine.workspaceId, routine.id, execution.id)
+		return execution.id
+	}
+
+	private fun executionStatus(executionId: UUID): RoutineExecutionStatus = assertNotNull(
+		agentPersistence.findExecution(devContext.devWorkspaceId, executionId),
+	).status
+
+	private fun seedInputIds(executionId: UUID): List<UUID> = jdbcTemplate.query(
+		"select input.writing_block_id from agent_run_inputs input join agent_runs run on run.workspace_id = input.workspace_id and run.id = input.agent_run_id where run.routine_execution_id = ? and input.input_kind = 'SEED' order by input.order_index",
 		{ rs, _ -> rs.getObject(1, UUID::class.java) },
-		runId,
+		executionId,
 	)
+
+	private fun count(table: String): Int = jdbcTemplate.queryForObject(
+		"select count(*) from $table where workspace_id = ?",
+		Int::class.java,
+		devContext.devWorkspaceId,
+	) ?: 0
 
 	private fun insertSourceScope(): SourceFixture {
 		val namespaceId = UUID.randomUUID()
@@ -289,8 +359,8 @@ class RoutineWorkerIntegrationTest {
 			"""
 			insert into source_scopes
 			(id, workspace_id, source_namespace_id, provider, scope_semantics, scope_kind,
-			 external_scope_key, external_key, display_name, status, created_at, updated_at)
-			values (?, ?, ?, 'GITHUB', 'CONTAINER', 'REPOSITORY', ?, 'acme/plot', 'acme/plot', 'ACTIVE', now(), now())
+			 external_scope_key, external_key, display_name, status, status_changed_at, created_at, updated_at)
+			values (?, ?, ?, 'GITHUB', 'CONTAINER', 'REPOSITORY', ?, 'acme/plot', 'acme/plot', 'ACTIVE', now(), now(), now())
 			""".trimIndent(),
 			scopeId,
 			devContext.devWorkspaceId,
@@ -298,6 +368,7 @@ class RoutineWorkerIntegrationTest {
 			"repository-${UUID.randomUUID()}",
 		)
 		sourceScopeIds += scopeId
+		sourceNamespaceIds += namespaceId
 		return SourceFixture(namespaceId, scopeId)
 	}
 
@@ -308,6 +379,7 @@ class RoutineWorkerIntegrationTest {
 		title: String = "Activity $index",
 	): UUID {
 		val blockId = UUID.randomUUID()
+		writingBlockIds += blockId
 		val url = "https://github.com/acme/plot/commit/$blockId"
 		jdbcTemplate.update(
 			"""
@@ -347,20 +419,6 @@ class RoutineWorkerIntegrationTest {
 			Timestamp.from(updatedAt),
 		)
 		return blockId
-	}
-
-	private fun activitySequence(blockId: UUID): Long = jdbcTemplate.queryForObject(
-		"select activity_sequence from writing_blocks where id = ?",
-		Long::class.java,
-		blockId,
-	)!!
-
-	@TestConfiguration(proxyBeanMethods = false)
-	class DispatchConfig {
-		@Bean
-		@Primary
-		fun inertGenerationRunDispatcher(): GenerationRunDispatcher =
-			GenerationRunDispatcher(TaskExecutor { }) { false }
 	}
 }
 

@@ -180,7 +180,9 @@ describe("RoutinesWorkspace", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Run" }));
     await waitFor(() => expect(mocks.runRoutineNow).toHaveBeenCalledTimes(1));
-    const signal = mocks.runRoutineNow.mock.calls[0]?.[1].signal as AbortSignal;
+    const idempotencyKey = mocks.runRoutineNow.mock.calls[0]?.[1] as string;
+    const signal = mocks.runRoutineNow.mock.calls[0]?.[2].signal as AbortSignal;
+    expect(idempotencyKey).toMatch(/^[0-9a-f-]{36}$/);
     switchWorkspace("workspace-2");
     expect(signal.aborted).toBe(true);
     await screen.findByText("Workspace two routine");

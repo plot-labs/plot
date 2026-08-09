@@ -45,6 +45,15 @@ data class RoutineExecutionRequest(
 	val refreshTo: Instant? = null,
 	val refreshContinuationJson: String? = null,
 	val activityCursorBefore: Long? = null,
+	val id: UUID? = null,
+)
+
+data class RoutineExecutionEvidenceRecord(
+	val executionId: UUID,
+	val workspaceId: UUID,
+	val writingBlockId: UUID,
+	val activitySequence: Long,
+	val orderIndex: Int,
 )
 
 data class RoutineExecutionRecord(
@@ -75,6 +84,7 @@ data class RoutineExecutionRecord(
 	val finishedAt: Instant?,
 	val createdAt: Instant,
 	val updatedAt: Instant,
+	val legacyGenerationRunId: UUID? = null,
 )
 
 data class RoutineContextSourceRecord(

@@ -62,6 +62,48 @@ interface WritingBlockRepository : JpaRepository<WritingBlock, UUID> {
 		pageable: Pageable,
 	): List<WritingBlock>
 
+	@Query(
+		"""
+		select b.* from writing_blocks b
+		where b.workspace_id = :workspaceId
+		  and b.status = 'ACTIVE'
+		  and (
+		    cast(:cursorSequence as bigint) is null
+		    or b.activity_sequence > cast(:cursorSequence as bigint)
+		  )
+		  and exists (
+		    select 1 from source_scopes scope
+		    where scope.workspace_id = :workspaceId
+		      and scope.id = :sourceScopeId
+		      and scope.status = 'ACTIVE'
+		  )
+		  and exists (
+		    select 1 from writing_block_scopes membership
+		    where membership.workspace_id = :workspaceId
+		      and membership.source_scope_id = :sourceScopeId
+		      and membership.writing_block_id = b.id
+		      and membership.status = 'ACTIVE'
+		  )
+		  and not exists (
+		    select 1 from agent_run_inputs input
+		    where input.workspace_id = :workspaceId
+		      and input.routine_id = :routineId
+		      and input.writing_block_id = b.id
+		      and input.activity_sequence = b.activity_sequence
+		      and input.input_kind = 'SEED'
+		  )
+		order by b.activity_sequence asc
+		""",
+		nativeQuery = true,
+	)
+	fun findUnconsumedActiveAfterActivityCursor(
+		@Param("workspaceId") workspaceId: UUID,
+		@Param("routineId") routineId: UUID,
+		@Param("sourceScopeId") sourceScopeId: UUID,
+		@Param("cursorSequence") cursorSequence: Long?,
+		pageable: Pageable,
+	): List<WritingBlock>
+
 	fun findByWorkspaceIdAndId(workspaceId: UUID, id: UUID): WritingBlock?
 
 	@Query(

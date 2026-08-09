@@ -1,6 +1,7 @@
 package com.plot.api.routine
 
 import com.plot.api.common.ApiException
+import com.plot.api.common.UuidGenerator
 import com.plot.api.dev.DevContext
 import com.plot.api.source.SourceManagedAccessGuard
 import com.plot.api.source.SourceScope
@@ -15,7 +16,9 @@ import org.springframework.transaction.annotation.Transactional
 @Service
 class RoutineService(
 	private val devContext: DevContext,
+	private val uuidGenerator: UuidGenerator,
 	private val persistence: RoutinePersistence,
+	private val agentPersistence: RoutineAgentPersistence,
 	private val sourceScopeRepository: SourceScopeRepository,
 	private val sourceManagedAccessGuard: SourceManagedAccessGuard,
 ) {
@@ -57,9 +60,64 @@ class RoutineService(
 	}
 
 	@Transactional
-	fun queueNow(id: UUID): RoutineRecord {
-		get(id)
-		return persistence.queueNow(devContext.devWorkspaceId, id) ?: throw busy()
+	fun queueNow(id: UUID, idempotencyKey: String): RoutineRecord {
+		val routine = get(id)
+		val key = idempotencyKey.trim()
+		if (key.isBlank() || key.length > 200) {
+			throw ApiException(HttpStatus.BAD_REQUEST, "IDEMPOTENCY_KEY_REQUIRED", "Idempotency-Key is required")
+		}
+		val request = RoutineExecutionRequest(
+			workspaceId = routine.workspaceId,
+			routineId = routine.id,
+			createdByUserId = devContext.devUserId,
+			triggerSourceScopeId = routine.sourceScopeId,
+			triggerKind = RoutineExecutionTriggerKind.MANUAL,
+			triggerKey = "manual:${routine.id}:$key",
+			requestFingerprint = manualFingerprint(routine),
+			activityCursorBefore = routine.activityCursorSequence,
+		)
+		val existing = agentPersistence.findByTriggerKey(routine.workspaceId, routine.id, request.triggerKey)
+		if (existing != null && existing.requestFingerprint != request.requestFingerprint) {
+			throw RoutineExecutionIdempotencyConflictException()
+		}
+		if (existing != null && existing.status != RoutineExecutionStatus.PROBING) {
+			// A replay of a terminal execution is already converged. Never put its
+			// id back into the legacy Routine claim projection.
+			if (routine.activeExecutionId == existing.id) {
+				agentPersistence.projectRoutine(
+					workspaceId = routine.workspaceId,
+					routineId = routine.id,
+					executionId = existing.id,
+					now = existing.finishedAt ?: existing.updatedAt,
+					nextRunAt = routine.nextRunAt,
+					status = existing.publicRoutineStatus(),
+					errorCode = existing.errorCode,
+				)
+			}
+			return persistence.find(routine.workspaceId, routine.id) ?: routine
+		}
+		if (existing != null && routine.activeExecutionId == existing.id) {
+			// A concurrent retry observes the same in-flight execution. The current
+			// claimant owns the work; the caller can safely read the projection.
+			return routine
+		}
+		val executionId = existing?.id ?: uuidGenerator.next()
+		val queued = persistence.queueManual(devContext.devWorkspaceId, id, executionId)
+			?: run {
+				// The routine row is the serialization point for different manual keys.
+				// If an identical request raced us, its canonical execution is now
+				// visible and is safe to converge on; a different key remains busy.
+				val raced = agentPersistence.findByTriggerKey(routine.workspaceId, routine.id, request.triggerKey)
+				if (raced != null && raced.requestFingerprint == request.requestFingerprint && raced.status != RoutineExecutionStatus.PROBING) {
+					return persistence.find(routine.workspaceId, routine.id) ?: routine
+				}
+				if (raced != null && raced.requestFingerprint == request.requestFingerprint && persistence.find(routine.workspaceId, routine.id)?.activeExecutionId == raced.id) {
+					return persistence.find(routine.workspaceId, routine.id) ?: routine
+				}
+				throw busy()
+			}
+		agentPersistence.createExecution(request.copy(id = executionId))
+		return queued
 	}
 
 	private fun requireGitHubScope(id: UUID): SourceScope {
@@ -74,4 +132,22 @@ class RoutineService(
 	private fun notFound() = ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Routine not found")
 
 	private fun busy() = ApiException(HttpStatus.CONFLICT, "ROUTINE_BUSY", "Routine is already running")
+
+	private fun manualFingerprint(routine: RoutineRecord): String = buildString {
+		append(routine.id).append('|')
+		append(routine.sourceScopeId).append('|')
+		append(routine.cadence.name).append('|')
+		append(routine.instruction).append('|')
+		append("routine-agent-v1").append('|')
+		append("read-only-v1")
+		agentPersistence.listContextSources(routine.workspaceId, routine.id)
+			.forEach { append('|').append(it.sourceScopeId) }
+	}
+
+	private fun RoutineExecutionRecord.publicRoutineStatus(): String = when (status) {
+		RoutineExecutionStatus.DISPATCHED -> "QUEUED"
+		RoutineExecutionStatus.NO_ACTIVITY -> "NO_ACTIVITY"
+		RoutineExecutionStatus.FAILED -> "FAILED"
+		RoutineExecutionStatus.PROBING -> "QUEUED"
+	}
 }

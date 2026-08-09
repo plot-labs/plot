@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RestController
 
 @RestController
@@ -36,9 +37,12 @@ class RoutineController(
 	): RoutineResponse = service.update(id, request).toResponse()
 
 	@PostMapping("/{id}/run")
-	fun runNow(@PathVariable id: UUID): RoutineResponse {
-		val queued = service.queueNow(id)
-		worker.runNow(queued.workspaceId, id)
+	fun runNow(
+		@PathVariable id: UUID,
+		@RequestHeader("Idempotency-Key") idempotencyKey: String,
+	): RoutineResponse {
+		val queued = service.queueNow(id, idempotencyKey)
+		queued.activeExecutionId?.let { worker.runNow(queued.workspaceId, id, it) }
 		return service.get(id).toResponse()
 	}
 }

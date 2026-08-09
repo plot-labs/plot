@@ -78,6 +78,53 @@ class RoutineAgentMigrationIntegrationTest {
 	}
 
 	@Test
+	fun `canonical execution claim can be recovered and stale owner cannot finish it`() {
+		val fixture = insertFixture()
+		val execution = withSchema { persistence.createExecution(executionRequest(fixture)) }
+		val firstClaim = withSchema {
+			persistence.claimById(
+				"worker-a",
+				fixture.workspaceId,
+				execution.id,
+				fixture.createdAt,
+				fixture.createdAt.minusSeconds(120),
+			)
+		}
+		assertNotNull(firstClaim)
+		val recovered = withSchema {
+			persistence.claimById(
+				"worker-b",
+				fixture.workspaceId,
+				execution.id,
+				fixture.createdAt.plusSeconds(301),
+				fixture.createdAt.plusSeconds(181),
+			)
+		}
+		assertEquals("worker-b", recovered?.claimedBy)
+		assertFailsWith<RoutineExecutionStateException> {
+			withSchema {
+				persistence.markNoActivity(
+					fixture.workspaceId,
+					execution.id,
+					fixture.createdAt.plusSeconds(302),
+					workerId = "worker-a",
+				)
+			}
+		}
+		withSchema {
+			persistence.markNoActivity(
+				fixture.workspaceId,
+				execution.id,
+				fixture.createdAt.plusSeconds(302),
+				workerId = "worker-b",
+			)
+		}
+		assertEquals(RoutineExecutionStatus.NO_ACTIVITY, withSchema {
+			persistence.findExecution(fixture.workspaceId, execution.id)?.status
+		})
+	}
+
+	@Test
 	fun `execution trigger source must match routine source`() {
 		val fixture = insertFixture()
 		val otherSourceScopeId = insertSourceScope(fixture.workspaceId, fixture.namespaceId, "other-trigger")
@@ -128,7 +175,7 @@ class RoutineAgentMigrationIntegrationTest {
 			),
 		)
 
-		assertFailsWith<DataIntegrityViolationException> {
+		assertFailsWith<RoutineExecutionStateException> {
 			withSchema { persistence.dispatch(fixture.workspaceId, execution.id, request) }
 		}
 		assertEquals(0, count("work_sessions"))
@@ -146,6 +193,7 @@ class RoutineAgentMigrationIntegrationTest {
 		val fixture = insertFixture()
 		val context = insertSourceScope(fixture.workspaceId, fixture.namespaceId, "context")
 		val execution = withSchema { persistence.createExecution(executionRequest(fixture)) }
+		withSchema { persistence.addContextSource(fixture.workspaceId, fixture.routineId, context, 0, fixture.createdAt) }
 		val agentRun = withSchema {
 			persistence.dispatch(
 				fixture.workspaceId,

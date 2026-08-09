@@ -101,20 +101,19 @@ class RoutinePersistence(
 		return if (updated == 1) find(workspaceId, id) else null
 	}
 
-	fun queueNow(workspaceId: UUID, id: UUID, now: Instant = currentInstant()): RoutineRecord? {
-		val executionId = uuidGenerator.next()
+	fun queueManual(workspaceId: UUID, id: UUID, executionId: UUID): RoutineRecord? {
 		val updated = jdbcTemplate.update(
 			"""
 			update routines
-			set next_run_at = ?, active_execution_id = coalesce(active_execution_id, ?),
-			    updated_at = ?, transition_version = transition_version + 1
+			set active_execution_id = ?, updated_at = ?, transition_version = transition_version + 1
 			where workspace_id = ? and id = ? and claimed_by is null
+			  and (active_execution_id is null or active_execution_id = ?)
 			""".trimIndent(),
-			Timestamp.from(now),
 			executionId,
-			Timestamp.from(now),
+			Timestamp.from(currentInstant()),
 			workspaceId,
 			id,
+			executionId,
 		)
 		return if (updated == 1) find(workspaceId, id) else null
 	}
@@ -123,16 +122,8 @@ class RoutinePersistence(
 		workerId = workerId,
 		now = now,
 		staleBefore = staleBefore,
-		where = "((r.enabled = true and r.cadence in ('DAILY', 'WEEKLY') and r.next_run_at <= ?) or r.active_execution_id is not null)",
+		where = "(r.enabled = true and r.cadence in ('DAILY', 'WEEKLY') and r.next_run_at <= ?)",
 		args = arrayOf(Timestamp.from(now)),
-	)
-
-	fun claimById(workerId: String, workspaceId: UUID, id: UUID, now: Instant, staleBefore: Instant): RoutineRecord? = claim(
-		workerId = workerId,
-		now = now,
-		staleBefore = staleBefore,
-		where = "r.workspace_id = ? and r.id = ? and r.next_run_at <= ? and r.active_execution_id is not null",
-		args = arrayOf(workspaceId, id, Timestamp.from(now)),
 	)
 
 	fun isSourceActive(workspaceId: UUID, sourceScopeId: UUID): Boolean = jdbcTemplate.queryForObject(

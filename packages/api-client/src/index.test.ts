@@ -65,7 +65,7 @@ describe("Plot API client", () => {
     await client.listRoutines();
     await client.createRoutine({ name: routine.name, sourceScopeId: routine.sourceScopeId, instruction: routine.instruction, cadence: "WEEKLY" });
     await client.updateRoutine("routine-1", { enabled: false });
-    await client.runRoutineNow("routine-1");
+    await client.runRoutineNow("routine-1", "manual-request-1");
 
     expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
       "/api/plot/routines",
@@ -80,6 +80,7 @@ describe("Plot API client", () => {
     expect(fetcher.mock.calls[2]?.[1]).toMatchObject({ method: "PATCH", body: JSON.stringify({ enabled: false }) });
     expect(fetcher.mock.calls[3]?.[1]).toMatchObject({ method: "POST" });
     expect(new Headers(fetcher.mock.calls[3]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
+    expect(new Headers(fetcher.mock.calls[3]?.[1]?.headers).get("Idempotency-Key")).toBe("manual-request-1");
   });
 
   it("uses the session contracts with workspace scoping", async () => {

@@ -14,19 +14,19 @@ import java.time.Instant
 import java.util.UUID
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Service
-import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionTemplate
 
 @Service
 class GitHubChangeRoutineService(
 	private val persistence: RoutinePersistence,
-	private val eventPersistence: GitHubRoutineEventPersistence,
+	private val agentPersistence: RoutineAgentPersistence,
 	private val writingBlockImportService: WritingBlockImportService,
 	private val jdbcTemplate: JdbcTemplate,
 	private val uuidGenerator: UuidGenerator,
 	private val properties: GitHubProperties,
 	private val evidenceBudget: RoutineEvidenceBudget,
+	private val transactionTemplate: TransactionTemplate,
 ) {
-	@Transactional
 	fun accept(
 		context: GitHubReleaseSourceContext,
 		delivery: GitHubWebhookDelivery,
@@ -45,16 +45,41 @@ class GitHubChangeRoutineService(
 			blocks.size,
 			blocks.sumOf { evidenceBudget.characters(it.title, it.body) },
 		)
-		val writingBlockIds = blocks.map { block ->
+		val upserts = blocks.map { block ->
 			writingBlockImportService.upsert(
 				importer,
 				block,
 				now,
-			).blockId
+			)
 		}
+		val changedIds = upserts
+			.filter { it.created || it.changed }
+			.map { it.blockId }
 
 		val enqueued = routines.count { routine ->
-			eventPersistence.enqueue(routine, delivery, writingBlockIds) != null
+			try {
+				transactionTemplate.execute {
+					val execution = agentPersistence.createExecution(
+						RoutineExecutionRequest(
+							workspaceId = routine.workspaceId,
+							routineId = routine.id,
+							createdByUserId = routine.createdByUserId,
+							triggerSourceScopeId = routine.sourceScopeId,
+							triggerKind = RoutineExecutionTriggerKind.GITHUB,
+							triggerKey = "github:${routine.id}:${delivery.id}",
+							requestFingerprint = githubFingerprint(routine, delivery, blocks),
+							triggerDeliveryId = delivery.id,
+							refreshFrom = delivery.receivedAt,
+							refreshTo = delivery.receivedAt,
+							activityCursorBefore = routine.activityCursorSequence,
+						),
+					)
+					agentPersistence.addEvidence(routine.workspaceId, execution.id, changedIds, now)
+					true
+				}
+			} catch (_: RoutineExecutionIdempotencyConflictException) {
+				false
+			}
 		}
 		return enqueued
 	}
@@ -80,7 +105,14 @@ class GitHubChangeRoutineService(
 			val body = block.body?.take(minOf(properties.maxReleaseBodyCharacters, characterLimit - title.length))
 			val canonical = block.copy(title = title, body = body)
 			val characters = evidenceBudget.characters(canonical.title, canonical.body)
-			if (characters > remainingCharacters) return
+			if (characters > remainingCharacters) {
+				if (blocks.isNotEmpty()) return
+				val boundedBody = canonical.body?.take((characterLimit - canonical.title.length).coerceAtLeast(1))
+				val bounded = canonical.copy(body = boundedBody)
+				blocks += bounded
+				remainingCharacters = 0
+				return
+			}
 			blocks += canonical
 			remainingCharacters -= characters
 		}
@@ -91,6 +123,28 @@ class GitHubChangeRoutineService(
 			add(commit.toWritingBlock(context, observationId, now))
 		}
 		return blocks
+	}
+
+	private fun githubFingerprint(
+		routine: RoutineRecord,
+		delivery: GitHubWebhookDelivery,
+		blocks: List<ImportedWritingBlock>,
+	): String = buildString {
+		append(routine.id)
+		append('|').append(routine.sourceScopeId)
+		append('|').append(routine.cadence.name)
+		append('|').append(routine.instruction)
+		append('|').append(PROMPT_VERSION)
+		append('|').append(TOOL_POLICY_VERSION)
+		agentPersistence.listContextSources(routine.workspaceId, routine.id)
+			.forEach { append('|').append(it.sourceScopeId) }
+		append('|').append(delivery.payloadHash)
+		append('|').append(delivery.eventType)
+		append('|').append(delivery.eventAction.orEmpty())
+		blocks.forEach {
+			append('|').append(it.externalObjectKey)
+			append('@').append(it.sourceUpdatedAt)
+		}
 	}
 
 	private fun createObservation(
@@ -116,6 +170,11 @@ class GitHubChangeRoutineService(
 			Timestamp.from(now),
 			Timestamp.from(now),
 		)
+	}
+
+	private companion object {
+		const val PROMPT_VERSION = "routine-agent-v1"
+		const val TOOL_POLICY_VERSION = "read-only-v1"
 	}
 
 	private fun ParsedGitHubWebhook.routineCadence(): RoutineCadence? = when {

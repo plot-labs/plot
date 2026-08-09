@@ -29,7 +29,7 @@ class RoutineAgentPersistence(
 			return@execute existing
 		}
 
-		val id = uuidGenerator.next()
+		val id = request.id ?: uuidGenerator.next()
 		val now = clock.instant()
 		val inserted = jdbcTemplate.update(
 			"""
@@ -83,6 +83,80 @@ class RoutineAgentPersistence(
 		triggerKey,
 	).firstOrNull()
 
+	fun claimNext(
+		workerId: String,
+		now: Instant = clock.instant(),
+		staleBefore: Instant = now.minusSeconds(120),
+	): RoutineExecutionRecord? = claim(
+		workerId = workerId,
+		now = now,
+		staleBefore = staleBefore,
+		where = "(e.next_attempt_at is null or e.next_attempt_at <= ?) and (e.claimed_by is null or e.claimed_at < ?)",
+		args = arrayOf(Timestamp.from(now), Timestamp.from(staleBefore)),
+	)
+
+	fun claimById(
+		workerId: String,
+		workspaceId: UUID,
+		executionId: UUID,
+		now: Instant = clock.instant(),
+		staleBefore: Instant = now.minusSeconds(120),
+	): RoutineExecutionRecord? = claim(
+		workerId = workerId,
+		now = now,
+		staleBefore = staleBefore,
+		where = "e.workspace_id = ? and e.id = ? and (e.next_attempt_at is null or e.next_attempt_at <= ?) and (e.claimed_by is null or e.claimed_at < ?)",
+		args = arrayOf(workspaceId, executionId, Timestamp.from(now), Timestamp.from(staleBefore)),
+	)
+
+	fun addEvidence(
+		workspaceId: UUID,
+		executionId: UUID,
+		writingBlockIds: List<UUID>,
+		now: Instant = clock.instant(),
+	) {
+		if (writingBlockIds.isEmpty()) return
+		transactionTemplate.executeWithoutResult {
+			writingBlockIds.distinct().forEachIndexed { index, writingBlockId ->
+				jdbcTemplate.update(
+					"""
+					insert into routine_execution_evidence (
+					  execution_id, workspace_id, writing_block_id, activity_sequence, order_index
+					)
+					select ?, block.workspace_id, block.id, block.activity_sequence, ?
+					from writing_blocks block
+					where block.workspace_id = ? and block.id = ?
+					on conflict (execution_id, writing_block_id) do nothing
+					""".trimIndent(),
+					executionId,
+					index,
+					workspaceId,
+					writingBlockId,
+				)
+			}
+		}
+	}
+
+	fun listEvidence(workspaceId: UUID, executionId: UUID): List<RoutineExecutionEvidenceRecord> = jdbcTemplate.query(
+		"""
+		select execution_id, workspace_id, writing_block_id, activity_sequence, order_index
+		from routine_execution_evidence
+		where workspace_id = ? and execution_id = ?
+		order by order_index, writing_block_id
+		""".trimIndent(),
+		{ rs, _ ->
+			RoutineExecutionEvidenceRecord(
+				executionId = rs.getObject("execution_id", UUID::class.java),
+				workspaceId = rs.getObject("workspace_id", UUID::class.java),
+				writingBlockId = rs.getObject("writing_block_id", UUID::class.java),
+				activitySequence = rs.getLong("activity_sequence"),
+				orderIndex = rs.getInt("order_index"),
+			)
+		},
+		workspaceId,
+		executionId,
+	)
+
 	fun addContextSource(
 		workspaceId: UUID,
 		routineId: UUID,
@@ -134,7 +208,17 @@ class RoutineAgentPersistence(
 		workspaceId: UUID,
 		executionId: UUID,
 		now: Instant = clock.instant(),
+		workerId: String? = null,
 	): RoutineExecutionRecord = transactionTemplate.execute {
+		val ownershipClause = if (workerId == null) "" else " and claimed_by = ?"
+		val ownershipArgs: Array<Any> = workerId?.let { arrayOf<Any>(it) } ?: emptyArray()
+		val sqlArgs: Array<Any> = (listOf<Any>(
+			Timestamp.from(now),
+			Timestamp.from(now),
+			Timestamp.from(now),
+			workspaceId,
+			executionId,
+		) + ownershipArgs.asList()).toTypedArray()
 		val updated = jdbcTemplate.update(
 			"""
 			update routine_executions
@@ -142,34 +226,157 @@ class RoutineAgentPersistence(
 			    claimed_by = null, claimed_at = null, finished_at = ?,
 			    transition_version = transition_version + 1, updated_at = ?
 			where workspace_id = ? and id = ? and status = 'PROBING'
+			$ownershipClause
 			""".trimIndent(),
-			Timestamp.from(now),
-			Timestamp.from(now),
-			Timestamp.from(now),
-			workspaceId,
-			executionId,
+			*sqlArgs,
 		)
 		if (updated != 1) throw RoutineExecutionStateException("Routine execution is not probing")
 		requireNotNull(findExecution(workspaceId, executionId))
 	} ?: error("No-activity transaction returned no record")
+
+	fun failExecution(
+		workspaceId: UUID,
+		executionId: UUID,
+		errorCode: String,
+		now: Instant = clock.instant(),
+		workerId: String? = null,
+	): RoutineExecutionRecord = transactionTemplate.execute {
+		require(errorCode.matches(SAFE_ERROR_CODE)) { "Routine execution error code is invalid" }
+		val ownershipClause = if (workerId == null) "" else " and claimed_by = ?"
+		val ownershipArgs: Array<Any> = workerId?.let { arrayOf<Any>(it) } ?: emptyArray()
+		val sqlArgs: Array<Any> = (listOf<Any>(
+			errorCode,
+			Timestamp.from(now),
+			Timestamp.from(now),
+			workspaceId,
+			executionId,
+		) + ownershipArgs.asList()).toTypedArray()
+		val updated = jdbcTemplate.update(
+			"""
+			update routine_executions
+			set status = 'FAILED', error_code = ?, claimed_by = null, claimed_at = null,
+			    finished_at = ?, transition_version = transition_version + 1, updated_at = ?
+			where workspace_id = ? and id = ? and status = 'PROBING'
+			$ownershipClause
+			""".trimIndent(),
+			*sqlArgs,
+		)
+		if (updated != 1) throw RoutineExecutionStateException("Routine execution is not probing")
+		requireNotNull(findExecution(workspaceId, executionId))
+	} ?: error("Failure transaction returned no record")
+
+	fun projectRoutine(
+		workspaceId: UUID,
+		routineId: UUID,
+		executionId: UUID,
+		now: Instant,
+		nextRunAt: Instant,
+		status: String,
+		errorCode: String? = null,
+		projectionAt: Instant = now,
+	) {
+		require(status in setOf("QUEUED", "NO_ACTIVITY", "FAILED")) { "Invalid Routine projection status" }
+		val updated = jdbcTemplate.update(
+			"""
+			update routines
+			set last_run_at = ?, next_run_at = ?, last_execution_id = ?, last_generation_run_id = null,
+			    last_run_status = ?, last_error_code = ?,
+			    active_execution_id = case when active_execution_id = ? then null else active_execution_id end,
+			    claimed_by = case when active_execution_id = ? then null else claimed_by end,
+			    claimed_at = case when active_execution_id = ? then null else claimed_at end,
+			    transition_version = transition_version + 1, updated_at = ?
+			where workspace_id = ? and id = ?
+			  and (active_execution_id is null or active_execution_id = ?)
+			  and (
+			    last_execution_id = ?
+			    or last_run_at is null
+			    or last_run_at < ?
+			    or (last_run_at = ? and (last_execution_id is null or last_execution_id < ?))
+			  )
+			""".trimIndent(),
+			Timestamp.from(projectionAt),
+			Timestamp.from(nextRunAt),
+			executionId,
+			status,
+			errorCode,
+			executionId,
+			executionId,
+			executionId,
+			Timestamp.from(now),
+			workspaceId,
+			routineId,
+			executionId,
+			executionId,
+			Timestamp.from(projectionAt),
+			Timestamp.from(projectionAt),
+			executionId,
+		)
+		// A newer execution may already own the public Routine projection. The
+		// canonical execution remains terminal; preserving the newer projection
+		// is the intended result, not a claim failure.
+	}
+
+	private fun claim(
+		workerId: String,
+		now: Instant,
+		staleBefore: Instant,
+		where: String,
+		args: Array<Any>,
+	): RoutineExecutionRecord? = transactionTemplate.execute {
+			val candidate = jdbcTemplate.query(
+				selectExecutionSql + "\nwhere e.status = 'PROBING' and $where order by e.created_at, e.id for update skip locked limit 1",
+				executionMapper,
+				*args,
+			).firstOrNull() ?: return@execute null
+			val updated = jdbcTemplate.update(
+				"""
+				update routine_executions
+				set claimed_by = ?, claimed_at = ?, attempt_count = attempt_count + 1,
+				    started_at = coalesce(started_at, ?), next_attempt_at = null,
+				    transition_version = transition_version + 1, updated_at = ?
+				where workspace_id = ? and id = ? and transition_version = ?
+				  and status = 'PROBING'
+				  and (claimed_by is null or claimed_at < ?)
+				""".trimIndent(),
+				workerId,
+				Timestamp.from(now),
+				Timestamp.from(now),
+				Timestamp.from(now),
+				candidate.workspaceId,
+				candidate.id,
+				candidate.transitionVersion,
+				Timestamp.from(staleBefore),
+			)
+			if (updated != 1) null else findExecution(candidate.workspaceId, candidate.id)
+		}
 
 	fun dispatch(
 		workspaceId: UUID,
 		executionId: UUID,
 		request: AgentRunDispatchRequest,
 		now: Instant = clock.instant(),
+		workerId: String? = null,
 	): AgentRunRecord = transactionTemplate.execute {
 		val execution = findExecutionForUpdate(workspaceId, executionId)
 			?: throw RoutineExecutionStateException("Routine execution was not found")
 		if (execution.status != RoutineExecutionStatus.PROBING) {
 			throw RoutineExecutionStateException("Only a probing execution may be dispatched")
 		}
+		if (workerId != null && execution.claimedBy != workerId) {
+			throw RoutineExecutionStateException("Routine execution claim was lost")
+		}
+		val ownershipClause = if (workerId == null) "" else " and claimed_by = ?"
+		val ownershipArgs: Array<Any> = workerId?.let { arrayOf<Any>(it) } ?: emptyArray()
 		val currentRoutineCursor = findRoutineCursorForUpdate(workspaceId, execution.routineId)
 			?: throw RoutineExecutionStateException("Routine was not found")
 		if (currentRoutineCursor.value != execution.activityCursorBefore) {
 			throw RoutineExecutionStateException("Routine activity cursor is stale")
 		}
-		validateDispatchRequest(execution, request)
+		val lockedSources = lockSourceScopes(
+			workspaceId,
+			request.sourceScopes.map { it.sourceScopeId },
+		)
+		validateDispatchRequest(execution, request, lockedSources)
 
 		val workSessionId = uuidGenerator.next()
 		jdbcTemplate.update(
@@ -213,6 +420,7 @@ class RoutineAgentPersistence(
 		)
 
 		request.sourceScopes.forEachIndexed { index, source ->
+			val captured = lockedSources[source.sourceScopeId]
 			jdbcTemplate.update(
 				"""
 				insert into agent_run_sources (
@@ -226,8 +434,8 @@ class RoutineAgentPersistence(
 				source.sourceScopeId,
 				source.role.name,
 				index,
-				source.capturedStatus,
-				Timestamp.from(source.capturedStatusChangedAt),
+				captured?.status ?: source.capturedStatus,
+				Timestamp.from(captured?.statusChangedAt ?: source.capturedStatusChangedAt),
 				Timestamp.from(now),
 			)
 		}
@@ -263,6 +471,14 @@ class RoutineAgentPersistence(
 		}
 
 		val finishedAt = now
+		val sqlArgs: Array<Any> = (listOf<Any>(
+			request.activityCursorAfter,
+			Timestamp.from(now),
+			Timestamp.from(finishedAt),
+			Timestamp.from(now),
+			workspaceId,
+			executionId,
+		) + ownershipArgs.asList()).toTypedArray()
 		val executionUpdated = jdbcTemplate.update(
 			"""
 			update routine_executions
@@ -270,27 +486,25 @@ class RoutineAgentPersistence(
 			    claimed_by = null, claimed_at = null, finished_at = ?,
 			    transition_version = transition_version + 1, updated_at = ?
 			where workspace_id = ? and id = ? and status = 'PROBING'
+			$ownershipClause
 			""".trimIndent(),
-			request.activityCursorAfter,
-			Timestamp.from(now),
-			Timestamp.from(finishedAt),
-			Timestamp.from(now),
-			workspaceId,
-			executionId,
+			*sqlArgs,
 		)
 		if (executionUpdated != 1) throw RoutineExecutionStateException("Routine execution transition was lost")
-		val cursorUpdated = jdbcTemplate.update(
-			"""
-			update routines
-			set activity_cursor_sequence = greatest(coalesce(activity_cursor_sequence, 0), ?), updated_at = ?
-			where workspace_id = ? and id = ?
-			""".trimIndent(),
-			request.activityCursorAfter,
-			Timestamp.from(now),
-			workspaceId,
-			execution.routineId,
-		)
-		if (cursorUpdated != 1) throw RoutineExecutionStateException("Routine cursor update was lost")
+		if (execution.triggerKind != RoutineExecutionTriggerKind.GITHUB) {
+			val cursorUpdated = jdbcTemplate.update(
+				"""
+				update routines
+				set activity_cursor_sequence = greatest(coalesce(activity_cursor_sequence, 0), ?), updated_at = ?
+				where workspace_id = ? and id = ?
+				""".trimIndent(),
+				request.activityCursorAfter,
+				Timestamp.from(now),
+				workspaceId,
+				execution.routineId,
+			)
+			if (cursorUpdated != 1) throw RoutineExecutionStateException("Routine cursor update was lost")
+		}
 		requireNotNull(findAgentRun(workspaceId, agentRunId))
 	} ?: error("Dispatch transaction returned no AgentRun")
 
@@ -476,7 +690,11 @@ class RoutineAgentPersistence(
 		}
 	}
 
-	private fun validateDispatchRequest(execution: RoutineExecutionRecord, request: AgentRunDispatchRequest) {
+	private fun validateDispatchRequest(
+		execution: RoutineExecutionRecord,
+		request: AgentRunDispatchRequest,
+		lockedSources: Map<UUID, LockedSource>,
+	) {
 		require(request.title.isNotBlank()) { "Routine Chat title is required" }
 		require(request.instructionSnapshot.isNotBlank()) { "Agent instruction snapshot is required" }
 		require(request.promptVersion.isNotBlank()) { "Prompt version is required" }
@@ -489,8 +707,28 @@ class RoutineAgentPersistence(
 		require(trigger.sourceScopeId == execution.triggerSourceScopeId) {
 			"Agent trigger source does not match the execution source"
 		}
+		require(lockedSources.values.all { it.status == "ACTIVE" }) {
+			"Agent source scopes must be active"
+		}
 		require(request.sourceScopes.map { it.sourceScopeId }.distinct().size == request.sourceScopes.size) {
 			"Agent source scopes must be unique"
+		}
+		val configuredContextSources = jdbcTemplate.query(
+			"""
+			select source_scope_id
+			from routine_context_sources
+			where workspace_id = ? and routine_id = ?
+			order by order_index, source_scope_id
+			""".trimIndent(),
+			{ rs, _ -> rs.getObject(1, UUID::class.java) },
+			execution.workspaceId,
+			execution.routineId,
+		)
+		val requestContextSources = request.sourceScopes
+			.filter { it.role == AgentRunSourceRole.CONTEXT }
+			.map { it.sourceScopeId }
+		if (requestContextSources != configuredContextSources) {
+			throw RoutineExecutionStateException("Agent context sources must match the Routine context source snapshot")
 		}
 		require(request.inputs.isNotEmpty()) { "An active execution requires seed input" }
 		require(request.inputs.all { it.inputKind == AgentRunInputKind.SEED }) {
@@ -517,6 +755,34 @@ class RoutineAgentPersistence(
 		}
 	}
 
+	private fun lockSourceScopes(workspaceId: UUID, sourceScopeIds: List<UUID>): Map<UUID, LockedSource> {
+		require(sourceScopeIds.isNotEmpty()) { "Agent source scopes are required" }
+		val distinctIds = sourceScopeIds.distinct()
+		val placeholders = distinctIds.joinToString(",") { "?" }
+		val rows = jdbcTemplate.query(
+			"""
+			select id, status, status_changed_at
+			from source_scopes
+			where workspace_id = ? and id in ($placeholders)
+			order by id
+			for update
+			""".trimIndent(),
+			{ rs, _ ->
+				LockedSource(
+					id = rs.getObject("id", UUID::class.java),
+					status = rs.getString("status"),
+					statusChangedAt = rs.getTimestamp("status_changed_at").toInstant(),
+				)
+			},
+			workspaceId,
+			*distinctIds.toTypedArray(),
+		)
+		if (rows.size != distinctIds.size) {
+			throw RoutineExecutionStateException("Every Agent source scope must exist in the execution workspace")
+		}
+		return rows.associateBy { it.id }
+	}
+
 	private val executionMapper = { rs: ResultSet, _: Int -> rs.toRoutineExecution() }
 	private val contextSourceMapper = { rs: ResultSet, _: Int -> rs.toContextSource() }
 	private val agentRunMapper = { rs: ResultSet, _: Int -> rs.toAgentRun() }
@@ -524,6 +790,11 @@ class RoutineAgentPersistence(
 	private val agentRunInputMapper = { rs: ResultSet, _: Int -> rs.toAgentRunInput() }
 	private val agentStepMapper = { rs: ResultSet, _: Int -> rs.toAgentStep() }
 	private data class RoutineCursor(val value: Long?)
+	private data class LockedSource(val id: UUID, val status: String, val statusChangedAt: Instant)
+
+	private companion object {
+		val SAFE_ERROR_CODE = Regex("[A-Z][A-Z0-9_]{0,99}")
+	}
 
 	private val selectExecutionSql = """
 		select e.id, e.workspace_id, e.routine_id, e.created_by_user_id, e.trigger_source_scope_id,
@@ -531,7 +802,8 @@ class RoutineAgentPersistence(
 		       e.scheduled_for, e.refresh_from, e.refresh_to, e.refresh_continuation::text,
 		       e.refresh_completed_at, e.activity_cursor_before, e.activity_cursor_after,
 		       e.status, e.attempt_count, e.transition_version, e.claimed_by, e.claimed_at,
-		       e.next_attempt_at, e.error_code, e.started_at, e.finished_at, e.created_at, e.updated_at
+		       e.next_attempt_at, e.error_code, e.started_at, e.finished_at, e.created_at, e.updated_at,
+		       e.legacy_generation_run_id
 		from routine_executions e
 	""".trimIndent()
 
@@ -572,6 +844,7 @@ class RoutineAgentPersistence(
 		finishedAt = getTimestamp("finished_at")?.toInstant(),
 		createdAt = getTimestamp("created_at").toInstant(),
 		updatedAt = getTimestamp("updated_at").toInstant(),
+		legacyGenerationRunId = getObject("legacy_generation_run_id", UUID::class.java),
 	)
 
 	private fun ResultSet.toContextSource() = RoutineContextSourceRecord(

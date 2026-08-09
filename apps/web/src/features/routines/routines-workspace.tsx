@@ -225,7 +225,7 @@ export function RoutinesWorkspace() {
     setBusyRoutineId(routine.id);
     setError(null);
     try {
-      const updated = await plotApiClient.runRoutineNow(routine.id, { signal: controller.signal });
+      const updated = await plotApiClient.runRoutineNow(routine.id, crypto.randomUUID(), { signal: controller.signal });
       if (!requestIsCurrent(controller, workspaceRevision, workspaceId)) return;
       setRoutines((current) => current.map((item) => item.id === updated.id ? updated : item));
     } catch {
