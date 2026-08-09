@@ -27,7 +27,7 @@ class ApiApplicationTests {
 	@Test
 	fun contextStartsAndAppliesFlywayMigrations() {
 		assertEquals(
-			"15",
+			"16",
 			jdbcTemplate.queryForObject(
 				"select version from flyway_schema_history where success order by installed_rank desc limit 1",
 				String::class.java,
