@@ -25,8 +25,11 @@ data class RoutineRecord(
 	val instruction: String,
 	val cadence: RoutineCadence,
 	val enabled: Boolean,
+	val activityCursorSequence: Long?,
 	val lastRunAt: Instant?,
 	val nextRunAt: Instant,
+	val activeExecutionId: UUID?,
+	val lastExecutionId: UUID?,
 	val lastGenerationRunId: UUID?,
 	val lastRunStatus: String?,
 	val lastErrorCode: String?,
@@ -36,3 +39,9 @@ data class RoutineRecord(
 	val createdAt: Instant,
 	val updatedAt: Instant,
 )
+
+data class RoutineActivityCursor(
+	val sequence: Long,
+)
+
+class RoutineClaimLostException : IllegalStateException("Routine claim was lost")

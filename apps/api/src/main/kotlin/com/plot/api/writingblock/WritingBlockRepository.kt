@@ -1,6 +1,5 @@
 package com.plot.api.writingblock
 
-import java.time.Instant
 import java.util.UUID
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
@@ -32,30 +31,34 @@ interface WritingBlockRepository : JpaRepository<WritingBlock, UUID> {
 
 	@Query(
 		"""
-		select b from WritingBlock b
-		where b.workspaceId = :workspaceId
+		select b.* from writing_blocks b
+		where b.workspace_id = :workspaceId
 		  and b.status = 'ACTIVE'
-		  and b.ingestedAt > :after
+		  and (
+		    cast(:cursorSequence as bigint) is null
+		    or b.activity_sequence > cast(:cursorSequence as bigint)
+		  )
 		  and exists (
-		    select 1 from SourceScope scope
-		    where scope.workspaceId = :workspaceId
+		    select 1 from source_scopes scope
+		    where scope.workspace_id = :workspaceId
 		      and scope.id = :sourceScopeId
 		      and scope.status = 'ACTIVE'
 		  )
 		  and exists (
-		    select 1 from WritingBlockScope membership
-		    where membership.workspaceId = :workspaceId
-		      and membership.sourceScopeId = :sourceScopeId
-		      and membership.writingBlockId = b.id
+		    select 1 from writing_block_scopes membership
+		    where membership.workspace_id = :workspaceId
+		      and membership.source_scope_id = :sourceScopeId
+		      and membership.writing_block_id = b.id
 		      and membership.status = 'ACTIVE'
 		  )
-		order by b.ingestedAt asc, b.id asc
+		order by b.activity_sequence asc
 		""",
+		nativeQuery = true,
 	)
-	fun findActiveSince(
+	fun findActiveAfterActivityCursor(
 		@Param("workspaceId") workspaceId: UUID,
 		@Param("sourceScopeId") sourceScopeId: UUID,
-		@Param("after") after: Instant,
+		@Param("cursorSequence") cursorSequence: Long?,
 		pageable: Pageable,
 	): List<WritingBlock>
 

@@ -74,11 +74,11 @@ class RoutineApiIntegrationTest {
 
 		mockMvc.patch("/api/routines/$routineId") {
 			contentType = MediaType.APPLICATION_JSON
-			content = """{"enabled":false,"cadence":"DAILY"}"""
+			content = """{"enabled":false}"""
 		}.andExpect {
 			status { isOk() }
 			jsonPath("$.enabled") { value(false) }
-			jsonPath("$.cadence") { value("DAILY") }
+			jsonPath("$.cadence") { value("WEEKLY") }
 		}
 
 		mockMvc.post("/api/routines/$routineId/run")
@@ -87,6 +87,55 @@ class RoutineApiIntegrationTest {
 				jsonPath("$.id") { value(routineId.toString()) }
 				jsonPath("$.lastRunStatus") { value("NO_ACTIVITY") }
 			}
+	}
+
+	@Test
+	fun `active claims fence updates and manual runs`() {
+		val sourceScopeId = insertSourceScope()
+		val routineId = createRoutine(sourceScopeId)
+		jdbcTemplate.update(
+			"""
+			update routines
+			set claimed_by = ?, claimed_at = now(), active_execution_id = ?,
+			    transition_version = transition_version + 1
+			where id = ?
+			""".trimIndent(),
+			"routine-github:${UUID.randomUUID()}",
+			UUID.randomUUID(),
+			routineId,
+		)
+
+		mockMvc.patch("/api/routines/$routineId") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"enabled":false}"""
+		}.andExpect {
+			status { isConflict() }
+			jsonPath("$.error") { value("ROUTINE_BUSY") }
+		}
+		mockMvc.post("/api/routines/$routineId/run").andExpect {
+			status { isConflict() }
+			jsonPath("$.error") { value("ROUTINE_BUSY") }
+		}
+	}
+
+	@Test
+	fun `disconnected routine can be disabled and a manual run reports source failure`() {
+		val sourceScopeId = insertSourceScope()
+		val routineId = createRoutine(sourceScopeId)
+		jdbcTemplate.update("update source_scopes set status = 'ERROR', updated_at = now() where id = ?", sourceScopeId)
+
+		mockMvc.patch("/api/routines/$routineId") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"enabled":false}"""
+		}.andExpect {
+			status { isOk() }
+			jsonPath("$.enabled") { value(false) }
+		}
+		mockMvc.post("/api/routines/$routineId/run").andExpect {
+			status { isOk() }
+			jsonPath("$.lastRunStatus") { value("FAILED") }
+			jsonPath("$.lastErrorCode") { value("SOURCE_NOT_READY") }
+		}
 	}
 
 	@Test
@@ -137,5 +186,18 @@ class RoutineApiIntegrationTest {
 			"repository-${UUID.randomUUID()}",
 		)
 		return scopeId
+	}
+
+	private fun createRoutine(sourceScopeId: UUID): UUID {
+		mockMvc.post("/api/routines") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"name":"Weekly update","sourceScopeId":"$sourceScopeId","instruction":"Draft an update","cadence":"WEEKLY"}"""
+		}.andExpect { status { isCreated() } }
+		return jdbcTemplate.queryForObject(
+			"select id from routines where workspace_id = ? and source_scope_id = ?",
+			UUID::class.java,
+			devContext.devWorkspaceId,
+			sourceScopeId,
+		)!!
 	}
 }

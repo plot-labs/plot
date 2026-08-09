@@ -43,26 +43,24 @@ class RoutineService(
 
 	@Transactional
 	fun update(id: UUID, request: UpdateRoutineRequest): RoutineRecord {
-		sourceManagedAccessGuard.requireReadable()
 		val current = get(id)
-		val sourceScopeId = request.sourceScopeId ?: current.sourceScopeId
-		requireGitHubScope(sourceScopeId)
-		val name = request.name?.trim()?.takeUnless { it.isNullOrBlank() } ?: current.name
-		val instruction = request.instruction?.trim()?.takeUnless { it.isNullOrBlank() } ?: current.instruction
-		return persistence.update(
+		val enabled = requireNotNull(request.enabled)
+		if (enabled) {
+			sourceManagedAccessGuard.requireReadable()
+			requireGitHubScope(current.sourceScopeId)
+		}
+		return persistence.updateEnabled(
 			workspaceId = current.workspaceId,
 			id = current.id,
-			name = name,
-			sourceScopeId = sourceScopeId,
-			instruction = instruction,
-			cadence = request.cadence ?: current.cadence,
-			enabled = request.enabled ?: current.enabled,
-		)
+			enabled = enabled,
+		) ?: throw busy()
 	}
 
 	@Transactional
-	fun queueNow(id: UUID): RoutineRecord = persistence.queueNow(devContext.devWorkspaceId, id)
-		?: throw notFound()
+	fun queueNow(id: UUID): RoutineRecord {
+		get(id)
+		return persistence.queueNow(devContext.devWorkspaceId, id) ?: throw busy()
+	}
 
 	private fun requireGitHubScope(id: UUID): SourceScope {
 		val scope = sourceScopeRepository.findByWorkspaceIdAndId(devContext.devWorkspaceId, id)
@@ -74,4 +72,6 @@ class RoutineService(
 	}
 
 	private fun notFound() = ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Routine not found")
+
+	private fun busy() = ApiException(HttpStatus.CONFLICT, "ROUTINE_BUSY", "Routine is already running")
 }

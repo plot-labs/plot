@@ -16,11 +16,7 @@ data class CreateRoutineRequest(
 )
 
 data class UpdateRoutineRequest(
-	@field:Size(max = 80) val name: String? = null,
-	val sourceScopeId: UUID? = null,
-	@field:Size(max = 2_000) val instruction: String? = null,
-	val cadence: RoutineCadence? = null,
-	val enabled: Boolean? = null,
+	@field:NotNull val enabled: Boolean?,
 )
 
 data class RoutineResponse(

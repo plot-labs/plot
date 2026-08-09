@@ -1,5 +1,6 @@
 package com.plot.api.writingblock
 
+import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.Id
 import jakarta.persistence.Table
@@ -34,4 +35,6 @@ class WritingBlock(
 	var createdByUserId: UUID?,
 	var createdAt: Instant,
 	var updatedAt: Instant,
+	@Column(insertable = false, updatable = false)
+	var activitySequence: Long = 0,
 )

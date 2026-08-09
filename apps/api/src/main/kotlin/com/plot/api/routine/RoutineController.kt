@@ -24,9 +24,6 @@ class RoutineController(
 	@GetMapping
 	fun list(): List<RoutineResponse> = service.list().map { it.toResponse() }
 
-	@GetMapping("/{id}")
-	fun get(@PathVariable id: UUID): RoutineResponse = service.get(id).toResponse()
-
 	@PostMapping
 	fun create(@Valid @RequestBody request: CreateRoutineRequest): ResponseEntity<RoutineResponse> = ResponseEntity
 		.status(201)
