@@ -98,7 +98,12 @@ class GenerationWorkflowConfiguration {
 		persistence: GenerationPersistence,
 		dispatcher: GenerationRunDispatcher,
 		properties: PlotAiProperties,
-	): GenerationRunRecovery = GenerationRunRecovery(persistence, dispatcher, claimTimeout = properties.claimTimeout)
+	): GenerationRunRecovery = GenerationRunRecovery(
+		persistence,
+		dispatcher,
+		claimTimeout = properties.claimTimeout,
+		workerEnabled = properties.workerEnabled,
+	)
 
 	private fun heartbeatInterval(claimTimeout: Duration): Duration =
 		Duration.ofMillis(maxOf(MINIMUM_HEARTBEAT_MILLIS, claimTimeout.toMillis() / 3))

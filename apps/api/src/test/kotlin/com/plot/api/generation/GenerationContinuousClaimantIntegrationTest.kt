@@ -22,6 +22,7 @@ import org.springframework.test.context.TestPropertySource
 	properties = [
 		"plot.dev-bootstrap.enabled=true",
 		"plot.ai.enabled=false",
+		"plot.ai.worker-enabled=true",
 		"plot.ai.worker-poll-delay=50ms",
 	],
 )
