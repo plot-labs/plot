@@ -11,6 +11,7 @@ import {
   plotApiClient,
   type GitHubRepository,
   type Routine,
+  type RoutineAgentRunDetail,
   type RoutineCadence,
 } from "@/lib/api-client";
 
@@ -25,6 +26,7 @@ export function RoutinesWorkspace() {
   const [sources, setSources] = useState<SourceOption[]>([]);
   const [name, setName] = useState("");
   const [sourceScopeId, setSourceScopeId] = useState("");
+  const [contextSourceScopeIds, setContextSourceScopeIds] = useState<string[]>([]);
   const [instruction, setInstruction] = useState(defaultInstruction);
   const [cadence, setCadence] = useState<RoutineCadence>("WEEKLY");
   const [isLoading, setIsLoading] = useState(true);
@@ -35,9 +37,14 @@ export function RoutinesWorkspace() {
   const [reloadNonce, setReloadNonce] = useState(0);
   const [routineQuery, setRoutineQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [expandedRoutineId, setExpandedRoutineId] = useState<string | null>(null);
+  const [agentDetail, setAgentDetail] = useState<{ routineId: string; value: RoutineAgentRunDetail } | null>(null);
+  const [agentDetailLoadingId, setAgentDetailLoadingId] = useState<string | null>(null);
+  const [agentDetailError, setAgentDetailError] = useState<string | null>(null);
   const workspaceRevisionRef = useRef(0);
   const createAbortRef = useRef<AbortController | null>(null);
   const routineActionAbortRef = useRef<AbortController | null>(null);
+  const agentDetailAbortRef = useRef<AbortController | null>(null);
   const createTriggerRef = useRef<HTMLButtonElement>(null);
   const createPanelRef = useRef<HTMLElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
@@ -48,18 +55,25 @@ export function RoutinesWorkspace() {
       workspaceRevisionRef.current += 1;
       createAbortRef.current?.abort();
       routineActionAbortRef.current?.abort();
+      agentDetailAbortRef.current?.abort();
       createAbortRef.current = null;
       routineActionAbortRef.current = null;
+      agentDetailAbortRef.current = null;
       restoreCreateFocusRef.current = false;
       setRoutines([]);
       setSources([]);
       setSourceScopeId("");
+      setContextSourceScopeIds([]);
       setError(null);
       setLoadError(null);
       setIsLoading(true);
       setIsSaving(false);
       setBusyRoutineId(null);
       setCreateOpen(false);
+      setExpandedRoutineId(null);
+      setAgentDetail(null);
+      setAgentDetailLoadingId(null);
+      setAgentDetailError(null);
       setReloadNonce((value) => value + 1);
     }
 
@@ -68,6 +82,7 @@ export function RoutinesWorkspace() {
       window.removeEventListener("plot:workspace-changed", handleWorkspaceChanged);
       createAbortRef.current?.abort();
       routineActionAbortRef.current?.abort();
+      agentDetailAbortRef.current?.abort();
     };
   }, []);
 
@@ -104,6 +119,9 @@ export function RoutinesWorkspace() {
         setRoutines(nextRoutines);
         setSources(nextSources);
         setSourceScopeId((current) => nextSources.some((source) => source.id === current) ? current : nextSources[0]?.id ?? "");
+        setContextSourceScopeIds((current) => current
+          .filter((id) => nextSources.some((source) => source.id === id))
+          .slice(0, 4));
         setLoadError(null);
         setError(connectionResult.status === "rejected" ? "GitHub sources could not be loaded." : null);
       })
@@ -165,6 +183,7 @@ export function RoutinesWorkspace() {
       const routine = await plotApiClient.createRoutine({
         name: name.trim(),
         sourceScopeId,
+        contextSourceScopeIds,
         instruction: instruction.trim(),
         cadence,
       }, { signal: controller.signal });
@@ -172,6 +191,7 @@ export function RoutinesWorkspace() {
       setRoutines((current) => [routine, ...current]);
       setName("");
       setInstruction(defaultInstruction);
+      setContextSourceScopeIds([]);
       restoreCreateFocusRef.current = true;
       setCreateOpen(false);
     } catch {
@@ -228,6 +248,12 @@ export function RoutinesWorkspace() {
       const updated = await plotApiClient.runRoutineNow(routine.id, crypto.randomUUID(), { signal: controller.signal });
       if (!requestIsCurrent(controller, workspaceRevision, workspaceId)) return;
       setRoutines((current) => current.map((item) => item.id === updated.id ? updated : item));
+      agentDetailAbortRef.current?.abort();
+      agentDetailAbortRef.current = null;
+      setExpandedRoutineId(null);
+      setAgentDetail(null);
+      setAgentDetailLoadingId(null);
+      setAgentDetailError(null);
     } catch {
       if (requestIsCurrent(controller, workspaceRevision, workspaceId)) {
         setError("Routine could not run. Try again after checking the connected source.");
@@ -241,6 +267,7 @@ export function RoutinesWorkspace() {
   }
 
   function openCreate() {
+    if (!sources.length || isLoading) return;
     restoreCreateFocusRef.current = false;
     setError(null);
     setCreateOpen(true);
@@ -252,10 +279,66 @@ export function RoutinesWorkspace() {
   }
 
   function retryLoad() {
+    agentDetailAbortRef.current?.abort();
+    agentDetailAbortRef.current = null;
+    setExpandedRoutineId(null);
+    setAgentDetail(null);
+    setAgentDetailLoadingId(null);
+    setAgentDetailError(null);
     setError(null);
     setLoadError(null);
     setIsLoading(true);
     setReloadNonce((value) => value + 1);
+  }
+
+  function changeTriggerSource(nextSourceScopeId: string) {
+    setSourceScopeId(nextSourceScopeId);
+    setContextSourceScopeIds((current) => current.filter((id) => id !== nextSourceScopeId));
+  }
+
+  function toggleContextSource(id: string) {
+    setContextSourceScopeIds((current) => current.includes(id)
+      ? current.filter((sourceId) => sourceId !== id)
+      : current.length < 4 ? [...current, id] : current);
+  }
+
+  async function toggleAgentDetail(routine: Routine) {
+    const agentRunId = routine.latestExecution?.agentRunId;
+    if (!agentRunId) return;
+    if (expandedRoutineId === routine.id) {
+      agentDetailAbortRef.current?.abort();
+      agentDetailAbortRef.current = null;
+      setExpandedRoutineId(null);
+      setAgentDetail(null);
+      setAgentDetailLoadingId(null);
+      setAgentDetailError(null);
+      return;
+    }
+
+    const workspaceId = getSelectedWorkspaceId();
+    if (!workspaceId) return;
+    agentDetailAbortRef.current?.abort();
+    const controller = new AbortController();
+    const workspaceRevision = workspaceRevisionRef.current;
+    agentDetailAbortRef.current = controller;
+    setExpandedRoutineId(routine.id);
+    setAgentDetail(null);
+    setAgentDetailLoadingId(routine.id);
+    setAgentDetailError(null);
+    try {
+      const detail = await plotApiClient.getRoutineAgentRun(routine.id, agentRunId, { signal: controller.signal });
+      if (!requestIsCurrent(controller, workspaceRevision, workspaceId)) return;
+      setAgentDetail({ routineId: routine.id, value: detail });
+    } catch {
+      if (requestIsCurrent(controller, workspaceRevision, workspaceId)) {
+        setAgentDetailError("Agent activity could not be loaded.");
+      }
+    } finally {
+      if (agentDetailAbortRef.current === controller) {
+        agentDetailAbortRef.current = null;
+        setAgentDetailLoadingId(null);
+      }
+    }
   }
 
   return (
@@ -270,7 +353,7 @@ export function RoutinesWorkspace() {
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
                 <button type="button" onClick={retryLoad} disabled={refreshDisabled} aria-label="Refresh routines" title="Refresh routines" className="inline-flex size-9 items-center justify-center rounded-[9px] text-black/45 transition hover:bg-black/[0.04] hover:text-black/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 disabled:cursor-wait disabled:opacity-45 dark:text-white/48 dark:hover:bg-white/10 dark:hover:text-white/75"><RefreshCw className={`size-3.5 ${isLoading ? "animate-spin" : ""}`} /></button>
-                {!createOpen && <button ref={createTriggerRef} type="button" onClick={openCreate} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-[9px] bg-[#252a30] px-3 text-[12px] font-medium text-white transition hover:bg-[#171a1e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 focus-visible:ring-offset-2 dark:bg-white dark:text-[#18191b] dark:hover:bg-white/90"><HugeiconsIcon icon={Add01Icon} size={15} color="currentColor" strokeWidth={1.5} aria-hidden="true" />Create</button>}
+                {!createOpen && <button ref={createTriggerRef} type="button" onClick={openCreate} disabled={isLoading || !sources.length} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-[9px] bg-[#252a30] px-3 text-[12px] font-medium text-white transition hover:bg-[#171a1e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-[#18191b] dark:hover:bg-white/90"><HugeiconsIcon icon={Add01Icon} size={15} color="currentColor" strokeWidth={1.5} aria-hidden="true" />Create</button>}
               </div>
             </div>
             <label className="mt-5 flex h-10 items-center gap-2.5 rounded-[9px] border border-black/10 bg-white px-3 text-[12px] text-black/40 transition focus-within:border-black/20 focus-within:ring-2 focus-within:ring-black/[0.04] dark:border-white/12 dark:bg-white/[0.04] dark:text-white/42">
@@ -282,10 +365,15 @@ export function RoutinesWorkspace() {
 
           {(loadError ?? error) && <div role="alert" className="mx-6 mt-4 flex items-center justify-between gap-3 rounded-[9px] border border-black/10 bg-white px-3 py-2.5 text-[12px] text-black/58 dark:border-white/12 dark:bg-white/[0.04] dark:text-white/60"><span>{loadError ?? error}</span><button type="button" onClick={retryLoad} disabled={refreshDisabled} aria-label="Retry loading routines" className="inline-flex size-7 items-center justify-center rounded-[7px] text-black/45 transition hover:bg-black/[0.04] disabled:cursor-wait disabled:opacity-45 dark:text-white/48 dark:hover:bg-white/10"><RefreshCw className="size-3.5" /></button></div>}
 
+          {!isLoading && !loadError && !sources.length && <div className="mx-6 mt-4 flex items-center justify-between gap-3 rounded-[9px] border border-black/10 bg-white px-3 py-2.5 text-[12px] text-black/58 dark:border-white/12 dark:bg-white/[0.04] dark:text-white/60"><span>Connect a source before creating a routine.</span><Link href="/settings/integrations" className="shrink-0 font-medium text-black/72 underline underline-offset-4 dark:text-white/75">Integrations</Link></div>}
+
           {isLoading ? <div className="flex items-center gap-2 px-6 py-8 text-[13px] text-black/45 dark:text-white/45"><LoaderCircle className="size-4 animate-spin" /> Loading routines…</div> : loadError ? null : visibleRoutines.length ? (
             <div className="divide-y divide-black/[0.07] dark:divide-white/[0.08]">
               {visibleRoutines.map((routine) => {
                 const busy = busyRoutineId === routine.id;
+                const agentRunId = routine.latestExecution?.agentRunId;
+                const artifactId = routine.latestExecution?.artifactId;
+                const expanded = expandedRoutineId === routine.id;
                 return (
                   <article key={routine.id} className="px-6 py-4 transition hover:bg-white/70 dark:hover:bg-white/[0.04]">
                     <div className="flex items-start gap-3">
@@ -300,12 +388,21 @@ export function RoutinesWorkspace() {
                         </div>
                         <p className="mt-2 truncate text-[11px] text-black/38 dark:text-white/40">{routine.sourceLabel}</p>
                         <div className="mt-3 flex items-center justify-between gap-3">
-                          <span className="truncate text-[11px] text-black/38 dark:text-white/40">{routine.lastRunStatus ? `Last run: ${routine.lastRunStatus.replaceAll("_", " ").toLowerCase()}` : !isEventCadence(routine.cadence) ? `Next: ${formatDate(routine.nextRunAt)}` : "Waiting for activity"}</span>
+                          <span className="truncate text-[11px] text-black/38 dark:text-white/40">{formatRoutineStatus(routine)}</span>
                           <div className="flex shrink-0 items-center gap-1">
-                            <button type="button" onClick={() => { void runRoutine(routine); }} disabled={busyRoutineId !== null || isRoutineRunInProgress(routine.lastRunStatus)} className="inline-flex h-7 items-center gap-1.5 rounded-[7px] px-2 text-[11px] font-medium text-black/55 transition hover:bg-black/[0.04] hover:text-black/78 disabled:cursor-wait disabled:opacity-50 dark:text-white/58 dark:hover:bg-white/10 dark:hover:text-white/82"><Play className="size-3" /> Run</button>
+                            {artifactId && <Link href={`/artifacts?artifact=${encodeURIComponent(artifactId)}`} aria-label={`Open artifact for ${routine.name}`} className="inline-flex h-7 items-center rounded-[7px] px-2 text-[11px] font-medium text-black/55 transition hover:bg-black/[0.04] hover:text-black/78 dark:text-white/58 dark:hover:bg-white/10 dark:hover:text-white/82">Artifact</Link>}
+                            {agentRunId && <button type="button" onClick={() => { void toggleAgentDetail(routine); }} aria-expanded={expanded} aria-label={`View agent activity for ${routine.name}`} className="inline-flex h-7 items-center rounded-[7px] px-2 text-[11px] font-medium text-black/55 transition hover:bg-black/[0.04] hover:text-black/78 dark:text-white/58 dark:hover:bg-white/10 dark:hover:text-white/82">Activity</button>}
+                            <button type="button" onClick={() => { void runRoutine(routine); }} disabled={busyRoutineId !== null || isRoutineRunInProgress(routine)} className="inline-flex h-7 items-center gap-1.5 rounded-[7px] px-2 text-[11px] font-medium text-black/55 transition hover:bg-black/[0.04] hover:text-black/78 disabled:cursor-wait disabled:opacity-50 dark:text-white/58 dark:hover:bg-white/10 dark:hover:text-white/82"><Play className="size-3" /> Run</button>
                             <button type="button" onClick={() => { void toggleRoutine(routine); }} disabled={busyRoutineId !== null} aria-label={routine.enabled ? `Pause ${routine.name}` : `Enable ${routine.name}`} title={routine.enabled ? "Pause routine" : "Enable routine"} className="inline-flex size-7 items-center justify-center rounded-[7px] text-black/42 transition hover:bg-black/[0.04] hover:text-black/72 disabled:cursor-wait disabled:opacity-50 dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white/75">{busy ? <LoaderCircle className="size-3.5 animate-spin" /> : <Power className="size-3.5" />}</button>
                           </div>
                         </div>
+                        {expanded && <div className="mt-3 border-t border-black/[0.07] pt-3 dark:border-white/[0.08]">
+                          {agentDetailLoadingId === routine.id ? <p className="text-[11px] text-black/42 dark:text-white/45">Loading agent activity…</p> : agentDetailError ? <p role="alert" className="text-[11px] text-black/55 dark:text-white/60">{agentDetailError}</p> : agentDetail?.routineId === routine.id ? (
+                            <ol aria-label={`Agent activity for ${routine.name}`} className="space-y-1.5">
+                              {[...agentDetail.value.steps].sort((left, right) => left.sequence - right.sequence).map((step) => <li key={step.sequence} className="flex items-center justify-between gap-3 text-[11px]"><span className="min-w-0 truncate text-black/55 dark:text-white/58">{formatAgentStep(step)}</span><span className="shrink-0 text-black/38 dark:text-white/40">{step.status.toLowerCase()}</span></li>)}
+                            </ol>
+                          ) : null}
+                        </div>}
                       </div>
                     </div>
                   </article>
@@ -316,7 +413,7 @@ export function RoutinesWorkspace() {
             <div className="px-6 py-14 text-center">
               <HugeiconsIcon icon={ZapIcon} size={20} color="currentColor" strokeWidth={1.5} className="mx-auto text-black/25 dark:text-white/30" aria-hidden="true" />
               <p className="mt-3 text-[13px] font-medium text-black/58 dark:text-white/62">{routines.length ? "No matching routines" : "No routines yet"}</p>
-              <p className="mt-1 text-[12px] leading-5 text-black/40 dark:text-white/42">{routines.length ? "Try another search." : "Create one to keep your next draft moving."}</p>
+              <p className="mt-1 text-[12px] leading-5 text-black/40 dark:text-white/42">{routines.length ? "Try another search." : sources.length ? "Create one to keep your next draft moving." : "Connect a source to get started."}</p>
             </div>
           )}
         </section>
@@ -337,10 +434,20 @@ export function RoutinesWorkspace() {
               <div className="space-y-5 px-6 py-6 sm:px-8">
                 <label className="block space-y-1.5 text-[12px] font-medium text-black/62 dark:text-white/65">
                   Source repository
-                  <select value={sourceScopeId} onChange={(event) => setSourceScopeId(event.target.value)} disabled={!sources.length} className="h-10 w-full rounded-[9px] border border-black/10 bg-white px-3 text-sm font-normal text-black/80 outline-none focus:border-black/25 focus:ring-2 focus:ring-black/[0.05] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/12 dark:bg-white/[0.06] dark:text-white/85">
+                  <select value={sourceScopeId} onChange={(event) => changeTriggerSource(event.target.value)} disabled={!sources.length} className="h-10 w-full rounded-[9px] border border-black/10 bg-white px-3 text-sm font-normal text-black/80 outline-none focus:border-black/25 focus:ring-2 focus:ring-black/[0.05] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/12 dark:bg-white/[0.06] dark:text-white/85">
                     {!sources.length ? <option value="">Connect GitHub first</option> : sources.map((source) => <option key={source.id} value={source.id}>{source.displayName}</option>)}
                   </select>
                 </label>
+                {sources.some((source) => source.id !== sourceScopeId) && <fieldset className="space-y-2">
+                  <legend className="text-[12px] font-medium text-black/62 dark:text-white/65">Additional context</legend>
+                  <p className="text-[11px] leading-4 text-black/40 dark:text-white/42">Optionally read up to four more repositories.</p>
+                  <div className="space-y-1">
+                    {sources.filter((source) => source.id !== sourceScopeId).map((source) => {
+                      const selected = contextSourceScopeIds.includes(source.id);
+                      return <label key={source.id} className="flex min-h-9 items-center gap-2 rounded-[8px] px-2 text-[12px] font-normal text-black/65 transition hover:bg-black/[0.03] dark:text-white/68 dark:hover:bg-white/[0.05]"><input type="checkbox" checked={selected} disabled={!selected && contextSourceScopeIds.length >= 4} onChange={() => toggleContextSource(source.id)} className="size-3.5 accent-[#252a30]" /><span className="truncate">{source.displayName}</span></label>;
+                    })}
+                  </div>
+                </fieldset>}
                 <label className="block space-y-1.5 text-[12px] font-medium text-black/62 dark:text-white/65">
                   Routine name
                   <input ref={nameInputRef} value={name} onChange={(event) => setName(event.target.value)} placeholder="Weekly product update" maxLength={80} className="h-10 w-full rounded-[9px] border border-black/10 bg-white px-3 text-sm font-normal text-black/80 outline-none placeholder:text-black/35 focus:border-black/25 focus:ring-2 focus:ring-black/[0.05] dark:border-white/12 dark:bg-white/[0.06] dark:text-white/85 dark:placeholder:text-white/35" />
@@ -354,8 +461,7 @@ export function RoutinesWorkspace() {
                   <RoutineTriggerPicker value={cadence} onChange={setCadence} />
                 </div>
               </div>
-              <div className="mt-auto flex items-center justify-between gap-3 border-t border-black/[0.08] px-6 py-4 dark:border-white/10 sm:px-8">
-                {!sources.length && !isLoading ? <Link href="/settings/integrations" className="text-[12px] font-medium text-black/55 underline underline-offset-4 dark:text-white/58">Set up GitHub</Link> : <span />}
+              <div className="mt-auto flex items-center justify-end gap-3 border-t border-black/[0.08] px-6 py-4 dark:border-white/10 sm:px-8">
                 <button type="submit" disabled={!canCreate} className="inline-flex h-9 items-center gap-2 rounded-[9px] bg-[#252a30] px-3.5 text-[13px] font-medium text-white transition hover:bg-[#171a1e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-[#18191b] dark:hover:bg-white/90">
                   {isSaving ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" /> : null}
                   {isSaving ? "Creating…" : "Create routine"}
@@ -385,7 +491,32 @@ function isEventCadence(cadence: RoutineCadence) {
   return cadence !== "DAILY" && cadence !== "WEEKLY";
 }
 
-function isRoutineRunInProgress(status: Routine["lastRunStatus"]) {
+function formatRoutineStatus(routine: Routine) {
+  const execution = routine.latestExecution;
+  if (execution?.status === "NO_ACTIVITY") return "Checked · No new activity";
+  if (execution?.status === "FAILED") return "Run failed";
+  if (execution?.agentRunStatus === "QUEUED") return "Agent queued";
+  if (execution?.agentRunStatus === "RUNNING") return "Agent running";
+  if (execution?.agentRunStatus === "SUCCEEDED") return "Agent completed";
+  if (execution?.agentRunStatus === "FAILED") return "Agent failed";
+  if (execution?.status === "PROBING") return "Checking for activity";
+  if (execution?.status === "DISPATCHED") return "Preparing agent";
+  if (routine.lastRunStatus) return `Last run: ${routine.lastRunStatus.replaceAll("_", " ").toLowerCase()}`;
+  return !isEventCadence(routine.cadence) ? `Next: ${formatDate(routine.nextRunAt)}` : "Waiting for activity";
+}
+
+function formatAgentStep(step: RoutineAgentRunDetail["steps"][number]) {
+  const label = step.kind === "ARTIFACT_HANDOFF"
+    ? "Create artifact"
+    : step.toolName ? `Read ${step.toolName}` : "Read source context";
+  return step.failureCode ? `${label} · ${step.failureCode.replaceAll("_", " ").toLowerCase()}` : label;
+}
+
+function isRoutineRunInProgress(routine: Routine) {
+  const execution = routine.latestExecution;
+  if (execution?.status === "PROBING") return true;
+  if (execution?.status === "DISPATCHED" && (!execution.agentRunStatus || execution.agentRunStatus === "QUEUED" || execution.agentRunStatus === "RUNNING")) return true;
+  const status = routine.lastRunStatus;
   // ponytail: refresh on demand; add background polling only if status latency proves it is needed.
   return status === "QUEUED"
     || status === "WRITING"

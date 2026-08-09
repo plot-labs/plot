@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   createRoutine: vi.fn(),
   updateRoutine: vi.fn(),
   runRoutineNow: vi.fn(),
+  getRoutineAgentRun: vi.fn(),
 }));
 
 vi.mock("@/lib/api-client", async () => {
@@ -23,6 +24,7 @@ vi.mock("@/lib/api-client", async () => {
       createRoutine: mocks.createRoutine,
       updateRoutine: mocks.updateRoutine,
       runRoutineNow: mocks.runRoutineNow,
+      getRoutineAgentRun: mocks.getRoutineAgentRun,
     },
   };
 });
@@ -54,6 +56,7 @@ describe("RoutinesWorkspace", () => {
     mocks.createRoutine.mockReset();
     mocks.updateRoutine.mockReset();
     mocks.runRoutineNow.mockReset();
+    mocks.getRoutineAgentRun.mockReset();
     Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
       configurable: true,
       value: vi.fn(),
@@ -198,20 +201,143 @@ describe("RoutinesWorkspace", () => {
     const idleRoutine = routine({ id: "routine-1", name: "Release routine" });
     mocks.listRoutines
       .mockResolvedValueOnce([idleRoutine])
-      .mockResolvedValueOnce([{ ...idleRoutine, lastRunStatus: "READY" }]);
-    mocks.runRoutineNow.mockResolvedValue({ ...idleRoutine, lastRunStatus: "QUEUED" });
+      .mockResolvedValueOnce([{ ...idleRoutine, latestExecution: execution({ agentRunStatus: "SUCCEEDED", artifactId: "artifact-1" }) }]);
+    mocks.runRoutineNow.mockResolvedValue({ ...idleRoutine, latestExecution: execution({ agentRunStatus: "QUEUED" }) });
     render(<RoutinesWorkspace />);
 
     const run = await screen.findByRole("button", { name: "Run" });
     fireEvent.click(run);
 
-    expect(await screen.findByText("Last run: queued")).toBeVisible();
+    expect(await screen.findByText("Agent queued")).toBeVisible();
     expect(run).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Refresh routines" }));
 
-    expect(await screen.findByText("Last run: ready", {}, { timeout: 2_000 })).toBeVisible();
+    expect(await screen.findByText("Agent completed", {}, { timeout: 2_000 })).toBeVisible();
     await waitFor(() => expect(screen.getByRole("button", { name: "Run" })).toBeEnabled());
     expect(mocks.listRoutines).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps creation unavailable and offers one Integrations action without a source", async () => {
+    mocks.listGitHubConnections.mockResolvedValue([]);
+    render(<RoutinesWorkspace />);
+
+    await screen.findByText("No routines yet");
+    const create = screen.getByRole("button", { name: "Create" });
+    expect(create).toBeDisabled();
+    fireEvent.click(create);
+
+    const integrations = screen.getAllByRole("link", { name: "Integrations" });
+    expect(integrations).toHaveLength(1);
+    expect(integrations[0]).toHaveAttribute("href", "/settings/integrations");
+    expect(screen.queryByRole("heading", { name: "Create routine" })).not.toBeInTheDocument();
+    expect(mocks.createRoutine).not.toHaveBeenCalled();
+  });
+
+  it("creates a routine with distinct optional context sources", async () => {
+    const docsSource = {
+      ...activeConnection.repositories[0],
+      id: "source-2",
+      externalRepositoryId: 202,
+      name: "docs",
+      displayName: "acme/docs",
+      url: "https://github.com/acme/docs",
+    };
+    mocks.listGitHubConnections.mockResolvedValue([{ ...activeConnection, repositories: [...activeConnection.repositories, docsSource] }]);
+    mocks.createRoutine.mockImplementation(async (input) => routine({
+      id: "routine-created",
+      name: input.name,
+      contextSourceScopeIds: input.contextSourceScopeIds,
+    }));
+    render(<RoutinesWorkspace />);
+
+    await screen.findByText("No routines yet");
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "acme/docs" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Routine name" }), { target: { value: "Cross-repo update" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create routine" }));
+
+    await waitFor(() => expect(mocks.createRoutine).toHaveBeenCalledWith(expect.objectContaining({
+      sourceScopeId: "source-1",
+      contextSourceScopeIds: ["source-2"],
+    }), expect.anything()));
+  });
+
+  it("shows no artifact for no activity and exactly one artifact link after success", async () => {
+    mocks.listRoutines.mockResolvedValue([
+      routine({ id: "routine-empty", name: "No activity routine", latestExecution: execution({ status: "NO_ACTIVITY", agentRunId: null, agentRunStatus: null }) }),
+      routine({ id: "routine-ready", name: "Successful routine", latestExecution: execution({ agentRunStatus: "SUCCEEDED", artifactId: "artifact-1" }) }),
+    ]);
+    render(<RoutinesWorkspace />);
+
+    expect(await screen.findByText("Checked · No new activity")).toBeVisible();
+    expect(screen.getByText("Agent completed")).toBeVisible();
+    expect(screen.queryByRole("link", { name: "Open artifact for No activity routine" })).not.toBeInTheDocument();
+    const artifactLinks = screen.getAllByRole("link", { name: "Open artifact for Successful routine" });
+    expect(artifactLinks).toHaveLength(1);
+    expect(artifactLinks[0]).toHaveAttribute("href", "/artifacts?artifact=artifact-1");
+  });
+
+  it("loads safe agent activity in sequence order", async () => {
+    const current = routine({ name: "Agent routine", latestExecution: execution({ agentRunStatus: "SUCCEEDED", artifactId: "artifact-1" }) });
+    mocks.listRoutines.mockResolvedValue([current]);
+    mocks.getRoutineAgentRun.mockResolvedValue({
+      id: "agent-1",
+      routineExecutionId: "execution-1",
+      routineId: current.id,
+      status: "SUCCEEDED",
+      failureCode: null,
+      generationRunId: "generation-1",
+      artifactId: "artifact-1",
+      startedAt: "2026-08-10T00:00:00Z",
+      finishedAt: "2026-08-10T00:01:00Z",
+      steps: [
+        { sequence: 2, kind: "ARTIFACT_HANDOFF", status: "SUCCEEDED", toolName: null, failureCode: null, generationRunId: "generation-1", artifactId: "artifact-1", startedAt: null, finishedAt: null },
+        { sequence: 1, kind: "READ_TOOL", status: "SUCCEEDED", toolName: "github.search", failureCode: null, generationRunId: null, artifactId: null, startedAt: null, finishedAt: null },
+      ],
+    });
+    render(<RoutinesWorkspace />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "View agent activity for Agent routine" }));
+    const activity = await screen.findByRole("list", { name: "Agent activity for Agent routine" });
+    const steps = within(activity).getAllByRole("listitem");
+    expect(steps).toHaveLength(2);
+    expect(steps[0]).toHaveTextContent("Read github.search");
+    expect(steps[1]).toHaveTextContent("Create artifact");
+    expect(screen.getAllByRole("link", { name: "Open artifact for Agent routine" })).toHaveLength(1);
+  });
+
+  it("ignores an agent detail response from the previous workspace", async () => {
+    const pendingDetail = deferred<Awaited<ReturnType<typeof mocks.getRoutineAgentRun>>>();
+    const oldRoutine = routine({ id: "routine-old", name: "Old agent routine", latestExecution: execution() });
+    mocks.listRoutines
+      .mockResolvedValueOnce([oldRoutine])
+      .mockResolvedValueOnce([routine({ id: "routine-2", name: "Workspace two routine" })]);
+    mocks.getRoutineAgentRun.mockReturnValue(pendingDetail.promise);
+    render(<RoutinesWorkspace />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "View agent activity for Old agent routine" }));
+    await waitFor(() => expect(mocks.getRoutineAgentRun).toHaveBeenCalledTimes(1));
+    const signal = mocks.getRoutineAgentRun.mock.calls[0]?.[2].signal as AbortSignal;
+    switchWorkspace("workspace-2");
+    expect(signal.aborted).toBe(true);
+    await screen.findByText("Workspace two routine");
+
+    await act(async () => {
+      pendingDetail.resolve({
+        id: "agent-1",
+        routineExecutionId: "execution-1",
+        routineId: oldRoutine.id,
+        status: "SUCCEEDED",
+        failureCode: null,
+        generationRunId: "generation-1",
+        artifactId: "artifact-1",
+        startedAt: null,
+        finishedAt: null,
+        steps: [{ sequence: 1, kind: "READ_TOOL", status: "SUCCEEDED", toolName: "old.secret.source", failureCode: null, generationRunId: null, artifactId: null, startedAt: null, finishedAt: null }],
+      });
+      await pendingDetail.promise;
+    });
+    expect(screen.queryByText("Read old.secret.source")).not.toBeInTheDocument();
   });
 
   it("focuses and scrolls to the create form, then restores focus when it closes", async () => {
@@ -254,6 +380,21 @@ function routine(overrides: Partial<Routine> = {}): Routine {
     latestExecution: null,
     createdAt: "2026-08-01T00:00:00Z",
     updatedAt: "2026-08-01T00:00:00Z",
+    ...overrides,
+  };
+}
+
+function execution(overrides: Partial<NonNullable<Routine["latestExecution"]>> = {}): NonNullable<Routine["latestExecution"]> {
+  return {
+    id: "execution-1",
+    status: "DISPATCHED",
+    agentRunId: "agent-1",
+    agentRunStatus: "RUNNING",
+    generationRunId: null,
+    artifactId: null,
+    errorCode: null,
+    startedAt: "2026-08-10T00:00:00Z",
+    finishedAt: null,
     ...overrides,
   };
 }

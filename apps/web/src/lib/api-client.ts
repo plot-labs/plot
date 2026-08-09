@@ -17,6 +17,7 @@ export type {
   GitHubRepositoryMonitoring,
   PlotApiClient,
   Routine,
+  RoutineAgentRunDetail,
   RoutineCadence,
   WorkSessionSummary,
   WorkspaceSummary,
