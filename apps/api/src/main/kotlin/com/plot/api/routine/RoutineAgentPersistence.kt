@@ -1,0 +1,662 @@
+package com.plot.api.routine
+
+import com.plot.api.common.UuidGenerator
+import java.sql.ResultSet
+import java.sql.Timestamp
+import java.time.Clock
+import java.time.Instant
+import java.util.UUID
+import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.stereotype.Repository
+import org.springframework.transaction.support.TransactionTemplate
+
+@Repository
+class RoutineAgentPersistence(
+	private val jdbcTemplate: JdbcTemplate,
+	private val transactionTemplate: TransactionTemplate,
+	private val uuidGenerator: UuidGenerator,
+	private val clock: Clock = Clock.systemUTC(),
+) {
+	fun createExecution(request: RoutineExecutionRequest): RoutineExecutionRecord = transactionTemplate.execute {
+		val triggerKey = request.triggerKey.trim()
+		val requestFingerprint = request.requestFingerprint.trim()
+		validateExecutionRequest(request, triggerKey, requestFingerprint)
+		val existing = findByTriggerKey(request.workspaceId, request.routineId, triggerKey)
+		if (existing != null) {
+			if (existing.requestFingerprint != requestFingerprint) {
+				throw RoutineExecutionIdempotencyConflictException()
+			}
+			return@execute existing
+		}
+
+		val id = uuidGenerator.next()
+		val now = clock.instant()
+		val inserted = jdbcTemplate.update(
+			"""
+			insert into routine_executions (
+			  id, workspace_id, routine_id, created_by_user_id, trigger_source_scope_id,
+			  trigger_kind, trigger_key, request_fingerprint, trigger_delivery_id,
+			  scheduled_for, refresh_from, refresh_to, refresh_continuation,
+			  activity_cursor_before, status, created_at, updated_at
+			) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, 'PROBING', ?, ?)
+			on conflict (workspace_id, routine_id, trigger_key) do nothing
+			""".trimIndent(),
+			id,
+			request.workspaceId,
+			request.routineId,
+			request.createdByUserId,
+			request.triggerSourceScopeId,
+			request.triggerKind.name,
+			triggerKey,
+			requestFingerprint,
+			request.triggerDeliveryId,
+			request.scheduledFor?.let(Timestamp::from),
+			request.refreshFrom?.let(Timestamp::from),
+			request.refreshTo?.let(Timestamp::from),
+			request.refreshContinuationJson,
+			request.activityCursorBefore,
+			Timestamp.from(now),
+			Timestamp.from(now),
+		)
+		if (inserted == 0) {
+			val raced = requireNotNull(findByTriggerKey(request.workspaceId, request.routineId, triggerKey))
+			if (raced.requestFingerprint != requestFingerprint) {
+				throw RoutineExecutionIdempotencyConflictException()
+			}
+			return@execute raced
+		}
+		requireNotNull(findExecution(request.workspaceId, id))
+	} ?: error("Routine execution transaction returned no record")
+
+	fun findExecution(workspaceId: UUID, id: UUID): RoutineExecutionRecord? = jdbcTemplate.query(
+		selectExecutionSql + " where e.workspace_id = ? and e.id = ?",
+		executionMapper,
+		workspaceId,
+		id,
+	).firstOrNull()
+
+	fun findByTriggerKey(workspaceId: UUID, routineId: UUID, triggerKey: String): RoutineExecutionRecord? = jdbcTemplate.query(
+		selectExecutionSql + " where e.workspace_id = ? and e.routine_id = ? and e.trigger_key = ?",
+		executionMapper,
+		workspaceId,
+		routineId,
+		triggerKey,
+	).firstOrNull()
+
+	fun addContextSource(
+		workspaceId: UUID,
+		routineId: UUID,
+		sourceScopeId: UUID,
+		orderIndex: Int,
+		now: Instant = clock.instant(),
+	): RoutineContextSourceRecord = transactionTemplate.execute {
+		require(orderIndex >= 0) { "Context source order must be non-negative" }
+		val id = uuidGenerator.next()
+		jdbcTemplate.update(
+			"""
+			insert into routine_context_sources (id, workspace_id, routine_id, source_scope_id, order_index, created_at)
+			values (?, ?, ?, ?, ?, ?)
+			on conflict (workspace_id, routine_id, source_scope_id) do update set order_index = excluded.order_index
+			""".trimIndent(),
+			id,
+			workspaceId,
+			routineId,
+			sourceScopeId,
+			orderIndex,
+			Timestamp.from(now),
+		)
+		jdbcTemplate.query(
+			"""
+			select id, workspace_id, routine_id, source_scope_id, order_index, created_at
+			from routine_context_sources
+			where workspace_id = ? and routine_id = ? and source_scope_id = ?
+			""".trimIndent(),
+			contextSourceMapper,
+			workspaceId,
+			routineId,
+			sourceScopeId,
+		).single()
+	} ?: error("Context source transaction returned no record")
+
+	fun listContextSources(workspaceId: UUID, routineId: UUID): List<RoutineContextSourceRecord> = jdbcTemplate.query(
+		"""
+		select id, workspace_id, routine_id, source_scope_id, order_index, created_at
+		from routine_context_sources
+		where workspace_id = ? and routine_id = ?
+		order by order_index, id
+		""".trimIndent(),
+		contextSourceMapper,
+		workspaceId,
+		routineId,
+	)
+
+	fun markNoActivity(
+		workspaceId: UUID,
+		executionId: UUID,
+		now: Instant = clock.instant(),
+	): RoutineExecutionRecord = transactionTemplate.execute {
+		val updated = jdbcTemplate.update(
+			"""
+			update routine_executions
+			set status = 'NO_ACTIVITY', refresh_completed_at = coalesce(refresh_completed_at, ?),
+			    claimed_by = null, claimed_at = null, finished_at = ?,
+			    transition_version = transition_version + 1, updated_at = ?
+			where workspace_id = ? and id = ? and status = 'PROBING'
+			""".trimIndent(),
+			Timestamp.from(now),
+			Timestamp.from(now),
+			Timestamp.from(now),
+			workspaceId,
+			executionId,
+		)
+		if (updated != 1) throw RoutineExecutionStateException("Routine execution is not probing")
+		requireNotNull(findExecution(workspaceId, executionId))
+	} ?: error("No-activity transaction returned no record")
+
+	fun dispatch(
+		workspaceId: UUID,
+		executionId: UUID,
+		request: AgentRunDispatchRequest,
+		now: Instant = clock.instant(),
+	): AgentRunRecord = transactionTemplate.execute {
+		val execution = findExecutionForUpdate(workspaceId, executionId)
+			?: throw RoutineExecutionStateException("Routine execution was not found")
+		if (execution.status != RoutineExecutionStatus.PROBING) {
+			throw RoutineExecutionStateException("Only a probing execution may be dispatched")
+		}
+		val currentRoutineCursor = findRoutineCursorForUpdate(workspaceId, execution.routineId)
+			?: throw RoutineExecutionStateException("Routine was not found")
+		if (currentRoutineCursor.value != execution.activityCursorBefore) {
+			throw RoutineExecutionStateException("Routine activity cursor is stale")
+		}
+		validateDispatchRequest(execution, request)
+
+		val workSessionId = uuidGenerator.next()
+		jdbcTemplate.update(
+			"""
+			insert into work_sessions (
+			  id, workspace_id, routine_execution_id, title, status, created_by_user_id,
+			  last_activity_at, created_at, updated_at
+			) values (?, ?, ?, ?, 'OPEN', ?, ?, ?, ?)
+			""".trimIndent(),
+			workSessionId,
+			workspaceId,
+			executionId,
+			request.title.trim(),
+			execution.createdByUserId,
+			Timestamp.from(now),
+			Timestamp.from(now),
+			Timestamp.from(now),
+		)
+
+		val agentRunId = uuidGenerator.next()
+		jdbcTemplate.update(
+			"""
+			insert into agent_runs (
+			  id, workspace_id, routine_execution_id, routine_id, work_session_id, created_by_user_id,
+			  instruction_snapshot, prompt_version, tool_policy_version, budget_snapshot,
+			  status, current_step, attempt_count, max_attempts, created_at, updated_at
+			) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, 'QUEUED', 0, 0, 3, ?, ?)
+			""".trimIndent(),
+			agentRunId,
+			workspaceId,
+			executionId,
+			execution.routineId,
+			workSessionId,
+			execution.createdByUserId,
+			request.instructionSnapshot.trim(),
+			request.promptVersion.trim(),
+			request.toolPolicyVersion.trim(),
+			request.budgetSnapshotJson,
+			Timestamp.from(now),
+			Timestamp.from(now),
+		)
+
+		request.sourceScopes.forEachIndexed { index, source ->
+			jdbcTemplate.update(
+				"""
+				insert into agent_run_sources (
+				  id, workspace_id, agent_run_id, source_scope_id, source_role, order_index,
+				  captured_status, captured_status_changed_at, captured_at
+				) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+				""".trimIndent(),
+				uuidGenerator.next(),
+				workspaceId,
+				agentRunId,
+				source.sourceScopeId,
+				source.role.name,
+				index,
+				source.capturedStatus,
+				Timestamp.from(source.capturedStatusChangedAt),
+				Timestamp.from(now),
+			)
+		}
+
+		request.inputs.forEach { input ->
+			jdbcTemplate.update(
+				"""
+				insert into agent_run_inputs (
+				  id, workspace_id, agent_run_id, routine_id, source_scope_id, writing_block_id,
+				  input_kind, order_index, activity_sequence, snapshot_title, snapshot_body,
+				  snapshot_excerpt, original_url, source_created_at, source_updated_at,
+				  content_hash, captured_at
+				) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				""".trimIndent(),
+				uuidGenerator.next(),
+				workspaceId,
+				agentRunId,
+				input.routineId,
+				input.sourceScopeId,
+				input.writingBlockId,
+				input.inputKind.name,
+				input.orderIndex,
+				input.activitySequence,
+				input.snapshotTitle,
+				input.snapshotBody,
+				input.snapshotExcerpt,
+				input.originalUrl,
+				input.sourceCreatedAt?.let(Timestamp::from),
+				input.sourceUpdatedAt?.let(Timestamp::from),
+				input.contentHash,
+				Timestamp.from(input.capturedAt),
+			)
+		}
+
+		val finishedAt = now
+		val executionUpdated = jdbcTemplate.update(
+			"""
+			update routine_executions
+			set status = 'DISPATCHED', activity_cursor_after = ?, refresh_completed_at = coalesce(refresh_completed_at, ?),
+			    claimed_by = null, claimed_at = null, finished_at = ?,
+			    transition_version = transition_version + 1, updated_at = ?
+			where workspace_id = ? and id = ? and status = 'PROBING'
+			""".trimIndent(),
+			request.activityCursorAfter,
+			Timestamp.from(now),
+			Timestamp.from(finishedAt),
+			Timestamp.from(now),
+			workspaceId,
+			executionId,
+		)
+		if (executionUpdated != 1) throw RoutineExecutionStateException("Routine execution transition was lost")
+		val cursorUpdated = jdbcTemplate.update(
+			"""
+			update routines
+			set activity_cursor_sequence = greatest(coalesce(activity_cursor_sequence, 0), ?), updated_at = ?
+			where workspace_id = ? and id = ?
+			""".trimIndent(),
+			request.activityCursorAfter,
+			Timestamp.from(now),
+			workspaceId,
+			execution.routineId,
+		)
+		if (cursorUpdated != 1) throw RoutineExecutionStateException("Routine cursor update was lost")
+		requireNotNull(findAgentRun(workspaceId, agentRunId))
+	} ?: error("Dispatch transaction returned no AgentRun")
+
+	fun findAgentRun(workspaceId: UUID, id: UUID): AgentRunRecord? = jdbcTemplate.query(
+		selectAgentRunSql + " where a.workspace_id = ? and a.id = ?",
+		agentRunMapper,
+		workspaceId,
+		id,
+	).firstOrNull()
+
+	fun listAgentRunSources(workspaceId: UUID, agentRunId: UUID): List<AgentRunSourceRecord> = jdbcTemplate.query(
+		"""
+		select id, workspace_id, agent_run_id, source_scope_id, source_role, order_index,
+		       captured_status, captured_status_changed_at, captured_at
+		from agent_run_sources
+		where workspace_id = ? and agent_run_id = ?
+		order by order_index, id
+		""".trimIndent(),
+		agentRunSourceMapper,
+		workspaceId,
+		agentRunId,
+	)
+
+	fun listAgentRunInputs(workspaceId: UUID, agentRunId: UUID): List<AgentRunInputRecord> = jdbcTemplate.query(
+		"""
+		select id, workspace_id, agent_run_id, routine_id, source_scope_id, writing_block_id,
+		       input_kind, order_index, activity_sequence, snapshot_title, snapshot_body,
+		       snapshot_excerpt, original_url, source_created_at, source_updated_at,
+		       content_hash, captured_at
+		from agent_run_inputs
+		where workspace_id = ? and agent_run_id = ?
+		order by order_index, id
+		""".trimIndent(),
+		agentRunInputMapper,
+		workspaceId,
+		agentRunId,
+	)
+
+	fun appendInput(
+		workspaceId: UUID,
+		agentRunId: UUID,
+		input: AgentRunInputRequest,
+		now: Instant = clock.instant(),
+	): AgentRunInputRecord = transactionTemplate.execute {
+		require(input.orderIndex >= 0) { "Agent input order must be non-negative" }
+		require(input.inputKind == AgentRunInputKind.TOOL_RESULT) {
+			"Only tool-result inputs may be appended after dispatch"
+		}
+		require(input.routineId == null) { "Tool-result inputs must not claim seed ownership" }
+		val id = uuidGenerator.next()
+		jdbcTemplate.update(
+			"""
+			insert into agent_run_inputs (
+			  id, workspace_id, agent_run_id, routine_id, source_scope_id, writing_block_id,
+			  input_kind, order_index, activity_sequence, snapshot_title, snapshot_body,
+			  snapshot_excerpt, original_url, source_created_at, source_updated_at,
+			  content_hash, captured_at
+			) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			""".trimIndent(),
+			id,
+			workspaceId,
+			agentRunId,
+			input.routineId,
+			input.sourceScopeId,
+			input.writingBlockId,
+			input.inputKind.name,
+			input.orderIndex,
+			input.activitySequence,
+			input.snapshotTitle,
+			input.snapshotBody,
+			input.snapshotExcerpt,
+			input.originalUrl,
+			input.sourceCreatedAt?.let(Timestamp::from),
+			input.sourceUpdatedAt?.let(Timestamp::from),
+			input.contentHash,
+			Timestamp.from(input.capturedAt),
+		)
+		requireNotNull(findInput(workspaceId, agentRunId, id))
+	} ?: error("Agent input transaction returned no record")
+
+	fun appendStep(
+		workspaceId: UUID,
+		request: AgentStepRequest,
+		now: Instant = clock.instant(),
+	): AgentStepRecord = transactionTemplate.execute {
+		val id = uuidGenerator.next()
+		jdbcTemplate.update(
+			"""
+			insert into agent_steps (
+			  id, workspace_id, agent_run_id, sequence, step_kind, status, idempotency_key,
+			  tool_name, arguments, result, adopted_input_id, generation_run_id,
+			  failure_code, started_at, finished_at, created_at
+			) values (?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?, ?, ?, ?, ?, ?)
+			""".trimIndent(),
+			id,
+			workspaceId,
+			request.agentRunId,
+			request.sequence,
+			request.kind.name,
+			request.status.name,
+			request.idempotencyKey.trim(),
+			request.toolName,
+			request.argumentsJson,
+			request.resultJson,
+			request.adoptedInputId,
+			request.generationRunId,
+			request.failureCode,
+			request.startedAt?.let(Timestamp::from),
+			request.finishedAt?.let(Timestamp::from),
+			Timestamp.from(now),
+		)
+		findStep(workspaceId, request.agentRunId, id)
+	} ?: error("Agent step transaction returned no record")
+
+	fun listSteps(workspaceId: UUID, agentRunId: UUID): List<AgentStepRecord> = jdbcTemplate.query(
+		"""
+		select id, workspace_id, agent_run_id, sequence, step_kind, status, idempotency_key,
+		       tool_name, arguments::text, result::text, adopted_input_id, generation_run_id,
+		       failure_code, started_at, finished_at, created_at
+		from agent_steps
+		where workspace_id = ? and agent_run_id = ?
+		order by sequence, id
+		""".trimIndent(),
+		agentStepMapper,
+		workspaceId,
+		agentRunId,
+	)
+
+	private fun findStep(workspaceId: UUID, agentRunId: UUID, id: UUID): AgentStepRecord? = jdbcTemplate.query(
+		"""
+		select id, workspace_id, agent_run_id, sequence, step_kind, status, idempotency_key,
+		       tool_name, arguments::text, result::text, adopted_input_id, generation_run_id,
+		       failure_code, started_at, finished_at, created_at
+		from agent_steps
+		where workspace_id = ? and agent_run_id = ? and id = ?
+		""".trimIndent(),
+		agentStepMapper,
+		workspaceId,
+		agentRunId,
+		id,
+	).firstOrNull()
+
+	private fun findInput(workspaceId: UUID, agentRunId: UUID, id: UUID): AgentRunInputRecord? = jdbcTemplate.query(
+		"""
+		select id, workspace_id, agent_run_id, routine_id, source_scope_id, writing_block_id,
+		       input_kind, order_index, activity_sequence, snapshot_title, snapshot_body,
+		       snapshot_excerpt, original_url, source_created_at, source_updated_at,
+		       content_hash, captured_at
+		from agent_run_inputs
+		where workspace_id = ? and agent_run_id = ? and id = ?
+		""".trimIndent(),
+		agentRunInputMapper,
+		workspaceId,
+		agentRunId,
+		id,
+	).firstOrNull()
+
+	private fun findExecutionForUpdate(workspaceId: UUID, id: UUID): RoutineExecutionRecord? = jdbcTemplate.query(
+		selectExecutionSql + " where e.workspace_id = ? and e.id = ? for update",
+		executionMapper,
+		workspaceId,
+		id,
+	).firstOrNull()
+
+	private fun findRoutineCursorForUpdate(workspaceId: UUID, routineId: UUID): RoutineCursor? = jdbcTemplate.query(
+		"select activity_cursor_sequence from routines where workspace_id = ? and id = ? for update",
+		{ rs, _ -> RoutineCursor(rs.getObject(1, java.lang.Long::class.java)?.toLong()) },
+		workspaceId,
+		routineId,
+	).firstOrNull()
+
+	private fun validateExecutionRequest(
+		request: RoutineExecutionRequest,
+		triggerKey: String,
+		requestFingerprint: String,
+	) {
+		require(triggerKey.isNotBlank()) { "Routine execution trigger key is required" }
+		require(requestFingerprint.isNotBlank()) { "Routine execution fingerprint is required" }
+		if (request.triggerKind == RoutineExecutionTriggerKind.GITHUB) {
+			requireNotNull(request.triggerDeliveryId) { "GitHub execution requires a delivery identity" }
+		} else {
+			require(request.triggerDeliveryId == null) { "Only GitHub execution may carry a delivery identity" }
+		}
+	}
+
+	private fun validateDispatchRequest(execution: RoutineExecutionRecord, request: AgentRunDispatchRequest) {
+		require(request.title.isNotBlank()) { "Routine Chat title is required" }
+		require(request.instructionSnapshot.isNotBlank()) { "Agent instruction snapshot is required" }
+		require(request.promptVersion.isNotBlank()) { "Prompt version is required" }
+		require(request.toolPolicyVersion.isNotBlank()) { "Tool policy version is required" }
+		require(request.budgetSnapshotJson.isNotBlank()) { "Agent budget snapshot is required" }
+		require(request.sourceScopes.count { it.role == AgentRunSourceRole.TRIGGER } == 1) {
+			"Exactly one trigger source is required"
+		}
+		val trigger = request.sourceScopes.single { it.role == AgentRunSourceRole.TRIGGER }
+		require(trigger.sourceScopeId == execution.triggerSourceScopeId) {
+			"Agent trigger source does not match the execution source"
+		}
+		require(request.sourceScopes.map { it.sourceScopeId }.distinct().size == request.sourceScopes.size) {
+			"Agent source scopes must be unique"
+		}
+		require(request.inputs.isNotEmpty()) { "An active execution requires seed input" }
+		require(request.inputs.all { it.inputKind == AgentRunInputKind.SEED }) {
+			"Dispatch accepts seed inputs only"
+		}
+		require(request.inputs.all { it.routineId == execution.routineId }) {
+			"Seed inputs must belong to the execution Routine"
+		}
+		require(request.inputs.map { it.orderIndex }.sorted() == request.inputs.indices.toList()) {
+			"Seed input order must be contiguous"
+		}
+		require(request.inputs.all { it.activitySequence != null }) {
+			"Seed inputs require activity sequences"
+		}
+		val activityCursorBefore = execution.activityCursorBefore ?: 0L
+		require(request.activityCursorAfter > activityCursorBefore) {
+			"Activity cursor must advance beyond the previous cursor"
+		}
+		require(request.inputs.all {
+			val activitySequence = it.activitySequence!!
+			activitySequence > activityCursorBefore && activitySequence <= request.activityCursorAfter
+		}) {
+			"Activity cursor must cover every seed input"
+		}
+	}
+
+	private val executionMapper = { rs: ResultSet, _: Int -> rs.toRoutineExecution() }
+	private val contextSourceMapper = { rs: ResultSet, _: Int -> rs.toContextSource() }
+	private val agentRunMapper = { rs: ResultSet, _: Int -> rs.toAgentRun() }
+	private val agentRunSourceMapper = { rs: ResultSet, _: Int -> rs.toAgentRunSource() }
+	private val agentRunInputMapper = { rs: ResultSet, _: Int -> rs.toAgentRunInput() }
+	private val agentStepMapper = { rs: ResultSet, _: Int -> rs.toAgentStep() }
+	private data class RoutineCursor(val value: Long?)
+
+	private val selectExecutionSql = """
+		select e.id, e.workspace_id, e.routine_id, e.created_by_user_id, e.trigger_source_scope_id,
+		       e.trigger_kind, e.trigger_key, e.request_fingerprint, e.trigger_delivery_id,
+		       e.scheduled_for, e.refresh_from, e.refresh_to, e.refresh_continuation::text,
+		       e.refresh_completed_at, e.activity_cursor_before, e.activity_cursor_after,
+		       e.status, e.attempt_count, e.transition_version, e.claimed_by, e.claimed_at,
+		       e.next_attempt_at, e.error_code, e.started_at, e.finished_at, e.created_at, e.updated_at
+		from routine_executions e
+	""".trimIndent()
+
+	private val selectAgentRunSql = """
+		select a.id, a.workspace_id, a.routine_execution_id, a.routine_id, a.work_session_id, a.created_by_user_id,
+		       a.instruction_snapshot, a.prompt_version, a.tool_policy_version, a.budget_snapshot::text,
+		       a.status, a.current_step, a.attempt_count, a.max_attempts, a.next_attempt_at,
+		       a.failure_code, a.claimed_by, a.claimed_at, a.transition_version, a.started_at,
+		       a.finished_at, a.created_at, a.updated_at
+		from agent_runs a
+	""".trimIndent()
+
+	private fun ResultSet.toRoutineExecution() = RoutineExecutionRecord(
+		id = getObject("id", UUID::class.java),
+		workspaceId = getObject("workspace_id", UUID::class.java),
+		routineId = getObject("routine_id", UUID::class.java),
+		createdByUserId = getObject("created_by_user_id", UUID::class.java),
+		triggerSourceScopeId = getObject("trigger_source_scope_id", UUID::class.java),
+		triggerKind = RoutineExecutionTriggerKind.valueOf(getString("trigger_kind")),
+		triggerKey = getString("trigger_key"),
+		requestFingerprint = getString("request_fingerprint"),
+		triggerDeliveryId = getObject("trigger_delivery_id", UUID::class.java),
+		scheduledFor = getTimestamp("scheduled_for")?.toInstant(),
+		refreshFrom = getTimestamp("refresh_from")?.toInstant(),
+		refreshTo = getTimestamp("refresh_to")?.toInstant(),
+		refreshContinuationJson = getString("refresh_continuation"),
+		refreshCompletedAt = getTimestamp("refresh_completed_at")?.toInstant(),
+		activityCursorBefore = getObject("activity_cursor_before", java.lang.Long::class.java)?.toLong(),
+		activityCursorAfter = getObject("activity_cursor_after", java.lang.Long::class.java)?.toLong(),
+		status = RoutineExecutionStatus.valueOf(getString("status")),
+		attemptCount = getInt("attempt_count"),
+		transitionVersion = getLong("transition_version"),
+		claimedBy = getString("claimed_by"),
+		claimedAt = getTimestamp("claimed_at")?.toInstant(),
+		nextAttemptAt = getTimestamp("next_attempt_at")?.toInstant(),
+		errorCode = getString("error_code"),
+		startedAt = getTimestamp("started_at")?.toInstant(),
+		finishedAt = getTimestamp("finished_at")?.toInstant(),
+		createdAt = getTimestamp("created_at").toInstant(),
+		updatedAt = getTimestamp("updated_at").toInstant(),
+	)
+
+	private fun ResultSet.toContextSource() = RoutineContextSourceRecord(
+		id = getObject("id", UUID::class.java),
+		workspaceId = getObject("workspace_id", UUID::class.java),
+		routineId = getObject("routine_id", UUID::class.java),
+		sourceScopeId = getObject("source_scope_id", UUID::class.java),
+		orderIndex = getInt("order_index"),
+		createdAt = getTimestamp("created_at").toInstant(),
+	)
+
+	private fun ResultSet.toAgentRun() = AgentRunRecord(
+		id = getObject("id", UUID::class.java),
+		workspaceId = getObject("workspace_id", UUID::class.java),
+		routineExecutionId = getObject("routine_execution_id", UUID::class.java),
+		routineId = getObject("routine_id", UUID::class.java),
+		workSessionId = getObject("work_session_id", UUID::class.java),
+		createdByUserId = getObject("created_by_user_id", UUID::class.java),
+		instructionSnapshot = getString("instruction_snapshot"),
+		promptVersion = getString("prompt_version"),
+		toolPolicyVersion = getString("tool_policy_version"),
+		budgetSnapshotJson = getString("budget_snapshot"),
+		status = AgentRunStatus.valueOf(getString("status")),
+		currentStep = getInt("current_step"),
+		attemptCount = getInt("attempt_count"),
+		maxAttempts = getInt("max_attempts"),
+		nextAttemptAt = getTimestamp("next_attempt_at")?.toInstant(),
+		failureCode = getString("failure_code"),
+		claimedBy = getString("claimed_by"),
+		claimedAt = getTimestamp("claimed_at")?.toInstant(),
+		transitionVersion = getLong("transition_version"),
+		startedAt = getTimestamp("started_at")?.toInstant(),
+		finishedAt = getTimestamp("finished_at")?.toInstant(),
+		createdAt = getTimestamp("created_at").toInstant(),
+		updatedAt = getTimestamp("updated_at").toInstant(),
+	)
+
+	private fun ResultSet.toAgentRunSource() = AgentRunSourceRecord(
+		id = getObject("id", UUID::class.java),
+		workspaceId = getObject("workspace_id", UUID::class.java),
+		agentRunId = getObject("agent_run_id", UUID::class.java),
+		sourceScopeId = getObject("source_scope_id", UUID::class.java),
+		role = AgentRunSourceRole.valueOf(getString("source_role")),
+		orderIndex = getInt("order_index"),
+		capturedStatus = getString("captured_status"),
+		capturedStatusChangedAt = getTimestamp("captured_status_changed_at").toInstant(),
+		capturedAt = getTimestamp("captured_at").toInstant(),
+	)
+
+	private fun ResultSet.toAgentRunInput() = AgentRunInputRecord(
+		id = getObject("id", UUID::class.java),
+		workspaceId = getObject("workspace_id", UUID::class.java),
+		agentRunId = getObject("agent_run_id", UUID::class.java),
+		routineId = getObject("routine_id", UUID::class.java),
+		sourceScopeId = getObject("source_scope_id", UUID::class.java),
+		writingBlockId = getObject("writing_block_id", UUID::class.java),
+		inputKind = AgentRunInputKind.valueOf(getString("input_kind")),
+		orderIndex = getInt("order_index"),
+		activitySequence = getObject("activity_sequence", java.lang.Long::class.java)?.toLong(),
+		snapshotTitle = getString("snapshot_title"),
+		snapshotBody = getString("snapshot_body"),
+		snapshotExcerpt = getString("snapshot_excerpt"),
+		originalUrl = getString("original_url"),
+		sourceCreatedAt = getTimestamp("source_created_at")?.toInstant(),
+		sourceUpdatedAt = getTimestamp("source_updated_at")?.toInstant(),
+		contentHash = getString("content_hash"),
+		capturedAt = getTimestamp("captured_at").toInstant(),
+	)
+
+	private fun ResultSet.toAgentStep() = AgentStepRecord(
+		id = getObject("id", UUID::class.java),
+		workspaceId = getObject("workspace_id", UUID::class.java),
+		agentRunId = getObject("agent_run_id", UUID::class.java),
+		sequence = getInt("sequence"),
+		kind = AgentStepKind.valueOf(getString("step_kind")),
+		status = AgentStepStatus.valueOf(getString("status")),
+		idempotencyKey = getString("idempotency_key"),
+		toolName = getString("tool_name"),
+		argumentsJson = getString("arguments"),
+		resultJson = getString("result"),
+		adoptedInputId = getObject("adopted_input_id", UUID::class.java),
+		generationRunId = getObject("generation_run_id", UUID::class.java),
+		failureCode = getString("failure_code"),
+		startedAt = getTimestamp("started_at")?.toInstant(),
+		finishedAt = getTimestamp("finished_at")?.toInstant(),
+		createdAt = getTimestamp("created_at").toInstant(),
+	)
+}
