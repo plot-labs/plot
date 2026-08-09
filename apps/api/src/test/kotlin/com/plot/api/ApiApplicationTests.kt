@@ -7,6 +7,7 @@ import io.micrometer.observation.ObservationRegistry
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import org.flywaydb.core.Flyway
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -23,9 +24,11 @@ class ApiApplicationTests {
 	@Autowired private lateinit var webhookParser: GitHubWebhookParser
 	@Autowired private lateinit var environment: Environment
 	@Autowired private lateinit var observationRegistry: ObservationRegistry
+	@Autowired private lateinit var flyway: Flyway
 
 	@Test
 	fun contextStartsAndAppliesFlywayMigrations() {
+		assertTrue(flyway.configuration.isGroup)
 		assertEquals(
 			"22",
 			jdbcTemplate.queryForObject(

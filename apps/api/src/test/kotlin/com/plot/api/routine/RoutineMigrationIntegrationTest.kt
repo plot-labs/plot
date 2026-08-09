@@ -78,6 +78,7 @@ class RoutineMigrationIntegrationTest {
 			.defaultSchema(schema)
 			.locations("classpath:db/migration")
 			.target(MigrationVersion.fromVersion(version))
+			.group(true)
 			.load()
 			.migrate()
 	}
