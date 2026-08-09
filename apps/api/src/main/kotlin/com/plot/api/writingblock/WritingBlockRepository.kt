@@ -1,5 +1,6 @@
 package com.plot.api.writingblock
 
+import java.time.Instant
 import java.util.UUID
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
@@ -28,6 +29,36 @@ interface WritingBlockRepository : JpaRepository<WritingBlock, UUID> {
 		sourceScopeId: UUID,
 		pageable: Pageable,
 	): Page<WritingBlock>
+
+	@Query(
+		"""
+		select b from WritingBlock b
+		where b.workspaceId = :workspaceId
+		  and b.status = 'ACTIVE'
+		  and b.ingestedAt > :after
+		  and exists (
+		    select 1 from SourceScope scope
+		    where scope.workspaceId = :workspaceId
+		      and scope.id = :sourceScopeId
+		      and scope.status = 'ACTIVE'
+		  )
+		  and exists (
+		    select 1 from WritingBlockScope membership
+		    where membership.workspaceId = :workspaceId
+		      and membership.sourceScopeId = :sourceScopeId
+		      and membership.writingBlockId = b.id
+		      and membership.status = 'ACTIVE'
+		  )
+		order by b.ingestedAt asc, b.id asc
+		""",
+	)
+	fun findActiveSince(
+		@Param("workspaceId") workspaceId: UUID,
+		@Param("sourceScopeId") sourceScopeId: UUID,
+		@Param("after") after: Instant,
+		pageable: Pageable,
+	): List<WritingBlock>
+
 	fun findByWorkspaceIdAndId(workspaceId: UUID, id: UUID): WritingBlock?
 
 	@Query(

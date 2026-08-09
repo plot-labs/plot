@@ -27,7 +27,7 @@ class ApiApplicationTests {
 	@Test
 	fun contextStartsAndAppliesFlywayMigrations() {
 		assertEquals(
-			"16",
+			"19",
 			jdbcTemplate.queryForObject(
 				"select version from flyway_schema_history where success order by installed_rank desc limit 1",
 				String::class.java,
@@ -58,6 +58,13 @@ class ApiApplicationTests {
 		).orEmpty()
 		assertTrue(statusConstraint.contains("NEEDS_REVIEW"))
 		assertFalse(statusConstraint.contains("NEEDS_YOUR_CALL"))
+		val routineCadenceConstraint = jdbcTemplate.queryForObject(
+			"select pg_get_constraintdef(oid) from pg_constraint where conname = 'routines_cadence_check'",
+			String::class.java,
+		).orEmpty()
+		assertTrue(routineCadenceConstraint.contains("ON_GITHUB_CHANGE"))
+		assertTrue(routineCadenceConstraint.contains("ON_GITHUB_RELEASE"))
+		assertTrue(routineCadenceConstraint.contains("ON_GIT_TAG"))
 	}
 
 	@Test
@@ -73,6 +80,28 @@ class ApiApplicationTests {
 
 		assertEquals("v1.2.3", parsed.tagName)
 		assertEquals("a".repeat(40), parsed.afterSha)
+	}
+
+	@Test
+	fun contextParsesGitHubPushCommitsForChangeRoutines() {
+		val parsed = webhookParser.parse(
+			"push-delivery",
+			"push",
+			objectMapper.writeValueAsBytes(mapOf(
+				"ref" to "refs/heads/main",
+				"commits" to listOf(mapOf(
+					"id" to "b".repeat(40),
+					"message" to "Ship routines\n\nGenerate a draft on push.",
+					"url" to "https://github.com/acme/plot/commit/${"b".repeat(40)}",
+					"timestamp" to "2026-08-09T00:00:00Z",
+					"author" to mapOf("username" to "octocat"),
+				)),
+			)),
+		)
+
+		assertEquals(1, parsed.commits.size)
+		assertEquals("Ship routines\n\nGenerate a draft on push.", parsed.commits.single().message)
+		assertEquals("octocat", parsed.commits.single().author)
 	}
 
 	@Test

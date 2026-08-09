@@ -1,6 +1,7 @@
 package com.plot.api.github
 
 import com.plot.api.observability.stopSafely
+import com.plot.api.routine.GitHubChangeRoutineService
 import io.micrometer.observation.Observation
 import io.micrometer.observation.ObservationRegistry
 import java.time.Instant
@@ -16,6 +17,7 @@ class GitHubWebhookService(
 	private val scopeResolver: GitHubReleaseScopeResolver,
 	private val persistence: GitHubReleasePersistence,
 	private val dispatcher: GitHubReleaseDraftDispatcher,
+	private val gitHubChangeRoutineService: GitHubChangeRoutineService,
 	private val lifecycleService: GitHubSourceAccessLifecycleService,
 	private val observationRegistry: ObservationRegistry,
 ) {
@@ -75,15 +77,29 @@ class GitHubWebhookService(
 		return when {
 			webhook.eventType == "push" && (webhook.refDeleted == true || webhook.forced == true) ->
 				mark(delivery, GitHubWebhookDisposition.IGNORED)
-			webhook.eventType == "push" && webhook.tagName != null ->
-				enqueue(context, delivery, webhook.tagName, webhook.afterSha)
-			webhook.eventType == "push" && webhook.ref == "refs/heads/${context.defaultBranch}" ->
-				mark(delivery, GitHubWebhookDisposition.OBSERVED)
+			webhook.eventType == "push" && webhook.tagName != null -> {
+				val queued = gitHubChangeRoutineService.accept(context, delivery, webhook)
+				if (gitHubChangeRoutineService.hasReleaseEventRoutines(context)) {
+					mark(delivery, if (queued > 0) GitHubWebhookDisposition.QUEUED else GitHubWebhookDisposition.OBSERVED)
+				} else {
+					enqueue(context, delivery, webhook.tagName, webhook.afterSha)
+				}
+			}
+			webhook.eventType == "push" && webhook.ref == "refs/heads/${context.defaultBranch}" -> {
+				val queued = gitHubChangeRoutineService.accept(context, delivery, webhook)
+				mark(delivery, if (queued > 0) GitHubWebhookDisposition.QUEUED else GitHubWebhookDisposition.OBSERVED)
+			}
 			webhook.eventType == "push" -> mark(delivery, GitHubWebhookDisposition.IGNORED)
 			// release.target_commitish may be a mutable branch. Only a canonical tag push
 			// contributes an immutable observed head SHA to the release request.
-			webhook.eventType == "release" && webhook.eventAction == "published" && webhook.tagName != null ->
-				enqueue(context, delivery, webhook.tagName, observedHeadSha = null)
+			webhook.eventType == "release" && webhook.eventAction == "published" && webhook.tagName != null -> {
+				val queued = gitHubChangeRoutineService.accept(context, delivery, webhook)
+				if (gitHubChangeRoutineService.hasReleaseEventRoutines(context)) {
+					mark(delivery, if (queued > 0) GitHubWebhookDisposition.QUEUED else GitHubWebhookDisposition.OBSERVED)
+				} else {
+					enqueue(context, delivery, webhook.tagName, observedHeadSha = null)
+				}
+			}
 			else -> mark(delivery, GitHubWebhookDisposition.IGNORED)
 		}
 	}

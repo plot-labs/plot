@@ -1,0 +1,141 @@
+package com.plot.api.routine
+
+import com.plot.api.TestcontainersConfiguration
+import com.plot.api.dev.DevBootstrapService
+import com.plot.api.dev.DevContext
+import java.util.UUID
+import kotlin.test.assertEquals
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
+import org.springframework.context.annotation.Import
+import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.http.MediaType
+import org.springframework.test.context.TestPropertySource
+import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.get
+import org.springframework.test.web.servlet.patch
+import org.springframework.test.web.servlet.post
+
+@SpringBootTest
+@AutoConfigureMockMvc
+@Import(TestcontainersConfiguration::class)
+@TestPropertySource(properties = [
+	"plot.dev-bootstrap.enabled=true",
+	"plot.routines.poll-delay=PT1H",
+	"server.address=127.0.0.1",
+])
+class RoutineApiIntegrationTest {
+	@Autowired private lateinit var mockMvc: MockMvc
+	@Autowired private lateinit var jdbcTemplate: JdbcTemplate
+	@Autowired private lateinit var devBootstrapService: DevBootstrapService
+	@Autowired private lateinit var devContext: DevContext
+
+	@BeforeEach
+	fun clearRoutinesAndSources() {
+		devBootstrapService.bootstrap()
+		jdbcTemplate.update("delete from routines where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from source_scopes where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from source_namespaces where workspace_id = ?", devContext.devWorkspaceId)
+	}
+
+	@Test
+	fun `routine lifecycle stays scoped to the dev workspace`() {
+		val sourceScopeId = insertSourceScope()
+
+		mockMvc.post("/api/routines") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """
+				{"name":"Weekly release note","sourceScopeId":"$sourceScopeId","instruction":"Draft a release note","cadence":"WEEKLY"}
+			""".trimIndent()
+		}.andExpect {
+			status { isCreated() }
+			jsonPath("$.name") { value("Weekly release note") }
+			jsonPath("$.sourceScopeId") { value(sourceScopeId.toString()) }
+			jsonPath("$.sourceLabel") { value("acme/plot") }
+			jsonPath("$.enabled") { value(true) }
+		}
+
+		val routineId = jdbcTemplate.queryForObject(
+			"select id from routines where workspace_id = ? and source_scope_id = ?",
+			UUID::class.java,
+			devContext.devWorkspaceId,
+			sourceScopeId,
+		)
+
+		mockMvc.get("/api/routines")
+			.andExpect {
+				status { isOk() }
+				jsonPath("$[0].id") { value(routineId.toString()) }
+				jsonPath("$[0].cadence") { value("WEEKLY") }
+			}
+
+		mockMvc.patch("/api/routines/$routineId") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"enabled":false,"cadence":"DAILY"}"""
+		}.andExpect {
+			status { isOk() }
+			jsonPath("$.enabled") { value(false) }
+			jsonPath("$.cadence") { value("DAILY") }
+		}
+
+		mockMvc.post("/api/routines/$routineId/run")
+			.andExpect {
+				status { isOk() }
+				jsonPath("$.id") { value(routineId.toString()) }
+				jsonPath("$.lastRunStatus") { value("NO_ACTIVITY") }
+			}
+	}
+
+	@Test
+	fun `github event cadence can be configured without becoming scheduler work`() {
+		val sourceScopeId = insertSourceScope()
+
+		mockMvc.post("/api/routines") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"name":"Release update","sourceScopeId":"$sourceScopeId","instruction":"Draft the release","cadence":"ON_GITHUB_RELEASE"}"""
+		}.andExpect {
+			status { isCreated() }
+			jsonPath("$.cadence") { value("ON_GITHUB_RELEASE") }
+		}
+
+		assertEquals(
+			0,
+			jdbcTemplate.queryForObject(
+				"select count(*) from routines where workspace_id = ? and cadence in ('DAILY', 'WEEKLY') and next_run_at <= now()",
+				Int::class.java,
+				devContext.devWorkspaceId,
+			),
+		)
+	}
+
+	private fun insertSourceScope(): UUID {
+		val namespaceId = UUID.randomUUID()
+		val scopeId = UUID.randomUUID()
+		jdbcTemplate.update(
+			"""
+			insert into source_namespaces
+			(id, workspace_id, provider, namespace_kind, external_namespace_key, display_name, status, created_at, updated_at)
+			values (?, ?, 'GITHUB', 'INSTALLATION', ?, 'Acme', 'ACTIVE', now(), now())
+			""".trimIndent(),
+			namespaceId,
+			devContext.devWorkspaceId,
+			"installation-${UUID.randomUUID()}",
+		)
+		jdbcTemplate.update(
+			"""
+			insert into source_scopes
+			(id, workspace_id, source_namespace_id, provider, scope_semantics, scope_kind,
+			 external_scope_key, external_key, display_name, status, created_at, updated_at)
+			values (?, ?, ?, 'GITHUB', 'CONTAINER', 'REPOSITORY', ?, 'acme/plot', 'acme/plot', 'ACTIVE', now(), now())
+			""".trimIndent(),
+			scopeId,
+			devContext.devWorkspaceId,
+			namespaceId,
+			"repository-${UUID.randomUUID()}",
+		)
+		return scopeId
+	}
+}
