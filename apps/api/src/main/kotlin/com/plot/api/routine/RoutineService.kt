@@ -23,18 +23,30 @@ class RoutineService(
 	private val sourceManagedAccessGuard: SourceManagedAccessGuard,
 ) {
 	@Transactional(readOnly = true)
-	fun list(): List<RoutineRecord> = persistence.list(devContext.devWorkspaceId)
+	fun list(): List<RoutineView> = persistence.list(devContext.devWorkspaceId).map(::view)
 
 	@Transactional(readOnly = true)
-	fun get(id: UUID): RoutineRecord = persistence.find(devContext.devWorkspaceId, id) ?: throw notFound()
+	fun get(id: UUID, executionId: UUID? = null): RoutineView = view(requireRoutine(id), executionId)
 
 	@Transactional
-	fun create(request: CreateRoutineRequest): RoutineRecord {
+	fun create(request: CreateRoutineRequest): RoutineView {
 		sourceManagedAccessGuard.requireReadable()
 		val sourceScopeId = requireNotNull(request.sourceScopeId)
 		val cadence = requireNotNull(request.cadence)
 		val scope = requireGitHubScope(sourceScopeId)
-		return persistence.insert(
+		val contextSourceScopeIds = request.contextSourceScopeIds
+		if (
+			contextSourceScopeIds.distinct().size != contextSourceScopeIds.size ||
+			sourceScopeId in contextSourceScopeIds
+		) {
+			throw ApiException(
+				HttpStatus.BAD_REQUEST,
+				"INVALID_CONTEXT_SOURCES",
+				"Context sources must be distinct from the trigger source",
+			)
+		}
+		contextSourceScopeIds.forEach(::requireGitHubScope)
+		val routine = persistence.insert(
 			workspaceId = devContext.devWorkspaceId,
 			createdByUserId = devContext.devUserId,
 			name = request.name.trim(),
@@ -42,26 +54,31 @@ class RoutineService(
 			instruction = request.instruction.trim(),
 			cadence = cadence,
 		)
+		contextSourceScopeIds.forEachIndexed { index, id ->
+			agentPersistence.addContextSource(routine.workspaceId, routine.id, id, index)
+		}
+		return view(routine)
 	}
 
 	@Transactional
-	fun update(id: UUID, request: UpdateRoutineRequest): RoutineRecord {
-		val current = get(id)
+	fun update(id: UUID, request: UpdateRoutineRequest): RoutineView {
+		val current = requireRoutine(id)
 		val enabled = requireNotNull(request.enabled)
 		if (enabled) {
 			sourceManagedAccessGuard.requireReadable()
 			requireGitHubScope(current.sourceScopeId)
 		}
-		return persistence.updateEnabled(
+		val updated = persistence.updateEnabled(
 			workspaceId = current.workspaceId,
 			id = current.id,
 			enabled = enabled,
 		) ?: throw busy()
+		return view(updated)
 	}
 
 	@Transactional
-	fun queueNow(id: UUID, idempotencyKey: String): RoutineRecord {
-		val routine = get(id)
+	fun queueNow(id: UUID, idempotencyKey: String): RoutineQueueResult {
+		val routine = persistence.findForUpdate(devContext.devWorkspaceId, id) ?: throw notFound()
 		val key = idempotencyKey.trim()
 		if (key.isBlank() || key.length > 200) {
 			throw ApiException(HttpStatus.BAD_REQUEST, "IDEMPOTENCY_KEY_REQUIRED", "Idempotency-Key is required")
@@ -94,12 +111,15 @@ class RoutineService(
 					errorCode = existing.errorCode,
 				)
 			}
-			return persistence.find(routine.workspaceId, routine.id) ?: routine
+			return RoutineQueueResult(
+				persistence.find(routine.workspaceId, routine.id) ?: routine,
+				existing.id,
+			)
 		}
 		if (existing != null && routine.activeExecutionId == existing.id) {
 			// A concurrent retry observes the same in-flight execution. The current
 			// claimant owns the work; the caller can safely read the projection.
-			return routine
+			return RoutineQueueResult(routine, existing.id)
 		}
 		val executionId = existing?.id ?: uuidGenerator.next()
 		val queued = persistence.queueManual(devContext.devWorkspaceId, id, executionId)
@@ -109,24 +129,66 @@ class RoutineService(
 				// visible and is safe to converge on; a different key remains busy.
 				val raced = agentPersistence.findByTriggerKey(routine.workspaceId, routine.id, request.triggerKey)
 				if (raced != null && raced.requestFingerprint == request.requestFingerprint && raced.status != RoutineExecutionStatus.PROBING) {
-					return persistence.find(routine.workspaceId, routine.id) ?: routine
+					return RoutineQueueResult(
+						persistence.find(routine.workspaceId, routine.id) ?: routine,
+						raced.id,
+					)
 				}
 				if (raced != null && raced.requestFingerprint == request.requestFingerprint && persistence.find(routine.workspaceId, routine.id)?.activeExecutionId == raced.id) {
-					return persistence.find(routine.workspaceId, routine.id) ?: routine
+					return RoutineQueueResult(
+						persistence.find(routine.workspaceId, routine.id) ?: routine,
+						raced.id,
+					)
 				}
 				throw busy()
 			}
-		agentPersistence.createExecution(request.copy(id = executionId))
-		return queued
+		val execution = agentPersistence.createExecution(request.copy(id = executionId))
+		return RoutineQueueResult(queued, execution.id)
+	}
+
+	@Transactional(readOnly = true)
+	fun getAgentRun(routineId: UUID, agentRunId: UUID): AgentRunDetailView {
+		val routine = requireRoutine(routineId)
+		val agentRun = agentPersistence.findAgentRun(routine.workspaceId, agentRunId)
+			?.takeIf { it.routineId == routine.id }
+			?: throw notFound()
+		val steps = agentPersistence.listSteps(routine.workspaceId, agentRun.id)
+		val artifacts = steps.mapNotNull { it.generationRunId }
+			.distinct()
+			.mapNotNull { generationRunId ->
+				agentPersistence.findArtifactId(routine.workspaceId, generationRunId)
+					?.let { generationRunId to it }
+			}
+			.toMap()
+		return AgentRunDetailView(agentRun, steps, artifacts)
 	}
 
 	private fun requireGitHubScope(id: UUID): SourceScope {
 		val scope = sourceScopeRepository.findByWorkspaceIdAndId(devContext.devWorkspaceId, id)
 			?: throw notFound()
-		if (scope.status != "ACTIVE" || scope.provider != "GITHUB") {
+		if (
+			scope.status != "ACTIVE" ||
+			scope.provider != "GITHUB" ||
+			!persistence.isSourceActive(devContext.devWorkspaceId, id)
+		) {
 			throw ApiException(HttpStatus.CONFLICT, "SOURCE_NOT_READY", "Connect an active GitHub source before creating a routine")
 		}
 		return scope
+	}
+
+	private fun requireRoutine(id: UUID): RoutineRecord =
+		persistence.find(devContext.devWorkspaceId, id) ?: throw notFound()
+
+	private fun view(routine: RoutineRecord, executionId: UUID? = null): RoutineView {
+		val latestExecutionId = executionId ?: routine.activeExecutionId ?: routine.lastExecutionId
+		return RoutineView(
+			routine = routine,
+			contextSourceScopeIds = agentPersistence.listContextSources(routine.workspaceId, routine.id)
+				.map { it.sourceScopeId },
+			latestExecution = latestExecutionId?.let {
+				agentPersistence.findExecutionSummary(routine.workspaceId, it)
+			},
+		)
 	}
 
 	private fun notFound() = ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Routine not found")
@@ -151,3 +213,20 @@ class RoutineService(
 		RoutineExecutionStatus.PROBING -> "QUEUED"
 	}
 }
+
+data class RoutineView(
+	val routine: RoutineRecord,
+	val contextSourceScopeIds: List<UUID>,
+	val latestExecution: RoutineExecutionSummaryRecord?,
+)
+
+data class RoutineQueueResult(
+	val routine: RoutineRecord,
+	val executionId: UUID,
+)
+
+data class AgentRunDetailView(
+	val agentRun: AgentRunRecord,
+	val steps: List<AgentStepRecord>,
+	val artifactIds: Map<UUID, UUID>,
+)

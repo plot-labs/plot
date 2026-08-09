@@ -1,8 +1,10 @@
 package com.plot.api.routine
 
+import com.plot.api.routine.dto.AgentRunDetailResponse
 import com.plot.api.routine.dto.CreateRoutineRequest
 import com.plot.api.routine.dto.RoutineResponse
 import com.plot.api.routine.dto.UpdateRoutineRequest
+import com.plot.api.routine.dto.toDetailResponse
 import com.plot.api.routine.dto.toResponse
 import jakarta.validation.Valid
 import java.util.UUID
@@ -23,18 +25,29 @@ class RoutineController(
 	private val worker: RoutineWorker,
 ) {
 	@GetMapping
-	fun list(): List<RoutineResponse> = service.list().map { it.toResponse() }
+	fun list(): List<RoutineResponse> = service.list().map {
+		it.routine.toResponse(it.contextSourceScopeIds, it.latestExecution)
+	}
+
+	@GetMapping("/{id}")
+	fun get(@PathVariable id: UUID): RoutineResponse = service.get(id).let {
+		it.routine.toResponse(it.contextSourceScopeIds, it.latestExecution)
+	}
 
 	@PostMapping
 	fun create(@Valid @RequestBody request: CreateRoutineRequest): ResponseEntity<RoutineResponse> = ResponseEntity
 		.status(201)
-		.body(service.create(request).toResponse())
+		.body(service.create(request).let {
+			it.routine.toResponse(it.contextSourceScopeIds, it.latestExecution)
+		})
 
 	@PatchMapping("/{id}")
 	fun update(
 		@PathVariable id: UUID,
 		@Valid @RequestBody request: UpdateRoutineRequest,
-	): RoutineResponse = service.update(id, request).toResponse()
+	): RoutineResponse = service.update(id, request).let {
+		it.routine.toResponse(it.contextSourceScopeIds, it.latestExecution)
+	}
 
 	@PostMapping("/{id}/run")
 	fun runNow(
@@ -42,7 +55,17 @@ class RoutineController(
 		@RequestHeader("Idempotency-Key") idempotencyKey: String,
 	): RoutineResponse {
 		val queued = service.queueNow(id, idempotencyKey)
-		queued.activeExecutionId?.let { worker.runNow(queued.workspaceId, id, it) }
-		return service.get(id).toResponse()
+		worker.runNow(queued.routine.workspaceId, id, queued.executionId)
+		return service.get(id, queued.executionId).let {
+			it.routine.toResponse(it.contextSourceScopeIds, it.latestExecution)
+		}
+	}
+
+	@GetMapping("/{id}/agent-runs/{agentRunId}")
+	fun getAgentRun(
+		@PathVariable id: UUID,
+		@PathVariable agentRunId: UUID,
+	): AgentRunDetailResponse = service.getAgentRun(id, agentRunId).let {
+		it.agentRun.toDetailResponse(it.steps, it.artifactIds)
 	}
 }

@@ -83,6 +83,51 @@ class RoutineAgentPersistence(
 		triggerKey,
 	).firstOrNull()
 
+	fun findExecutionSummary(workspaceId: UUID, executionId: UUID): RoutineExecutionSummaryRecord? = jdbcTemplate.query(
+		"""
+		select execution.id as execution_id, execution.status as execution_status,
+		       execution.error_code as execution_error_code,
+		       agent.id as agent_run_id, agent.status as agent_run_status,
+		       agent.failure_code as agent_failure_code,
+		       coalesce(handoff.generation_run_id, execution.legacy_generation_run_id) as generation_run_id,
+		       pack.id as artifact_id, execution.started_at,
+		       case when agent.id is null then execution.finished_at else agent.finished_at end as finished_at
+		from routine_executions execution
+		left join agent_runs agent
+		  on agent.workspace_id = execution.workspace_id
+		 and agent.routine_execution_id = execution.id
+		left join lateral (
+		  select step.generation_run_id
+		  from agent_steps step
+		  where step.workspace_id = agent.workspace_id
+		    and step.agent_run_id = agent.id
+		    and step.generation_run_id is not null
+		  order by step.sequence desc, step.id desc
+		  limit 1
+		) handoff on true
+		left join content_packs pack
+		  on pack.workspace_id = execution.workspace_id
+		 and pack.generation_run_id = coalesce(handoff.generation_run_id, execution.legacy_generation_run_id)
+		where execution.workspace_id = ? and execution.id = ?
+		""".trimIndent(),
+		{ rs, _ ->
+			RoutineExecutionSummaryRecord(
+				executionId = rs.getObject("execution_id", UUID::class.java),
+				executionStatus = RoutineExecutionStatus.valueOf(rs.getString("execution_status")),
+				executionErrorCode = rs.getString("execution_error_code"),
+				agentRunId = rs.getObject("agent_run_id", UUID::class.java),
+				agentRunStatus = rs.getString("agent_run_status")?.let(AgentRunStatus::valueOf),
+				agentFailureCode = rs.getString("agent_failure_code"),
+				generationRunId = rs.getObject("generation_run_id", UUID::class.java),
+				artifactId = rs.getObject("artifact_id", UUID::class.java),
+				startedAt = rs.getTimestamp("started_at")?.toInstant(),
+				finishedAt = rs.getTimestamp("finished_at")?.toInstant(),
+			)
+		},
+		workspaceId,
+		executionId,
+	).singleOrNull()
+
 	fun claimNext(
 		workerId: String,
 		now: Instant = currentInstant(),
@@ -697,6 +742,17 @@ class RoutineAgentPersistence(
 		workspaceId,
 		agentRunId,
 	)
+
+	fun findArtifactId(workspaceId: UUID, generationRunId: UUID): UUID? = jdbcTemplate.query(
+		"""
+		select id
+		from content_packs
+		where workspace_id = ? and generation_run_id = ?
+		""".trimIndent(),
+		{ rs, _ -> rs.getObject("id", UUID::class.java) },
+		workspaceId,
+		generationRunId,
+	).singleOrNull()
 
 	fun claimNextAgentRun(
 		workerId: String,

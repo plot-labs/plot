@@ -253,6 +253,19 @@ data class AgentGenerationState(
 	val materialized: Boolean,
 )
 
+data class RoutineExecutionSummaryRecord(
+	val executionId: UUID,
+	val executionStatus: RoutineExecutionStatus,
+	val executionErrorCode: String?,
+	val agentRunId: UUID?,
+	val agentRunStatus: AgentRunStatus?,
+	val agentFailureCode: String?,
+	val generationRunId: UUID?,
+	val artifactId: UUID?,
+	val startedAt: Instant?,
+	val finishedAt: Instant?,
+)
+
 class RoutineExecutionIdempotencyConflictException : IllegalStateException(
 	"Routine execution trigger key was reused with a different fingerprint",
 )

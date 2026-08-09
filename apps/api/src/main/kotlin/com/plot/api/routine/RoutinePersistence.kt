@@ -30,6 +30,13 @@ class RoutinePersistence(
 		id,
 	).firstOrNull()
 
+	fun findForUpdate(workspaceId: UUID, id: UUID): RoutineRecord? = jdbcTemplate.query(
+		selectSql + " where r.workspace_id = ? and r.id = ? for update of r",
+		mapper,
+		workspaceId,
+		id,
+	).firstOrNull()
+
 	fun listEnabledGitHubEventRoutines(
 		workspaceId: UUID,
 		sourceScopeId: UUID,
