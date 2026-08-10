@@ -1,15 +1,7 @@
 "use client";
 
-import {
-  ArrowDown01Icon,
-  Calendar03Icon,
-  Clock01Icon,
-  GitBranchIcon,
-  Package01Icon,
-  Tag01Icon,
-  Tick02Icon,
-} from "@hugeicons/core-free-icons";
-import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
+import { ArrowDown01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { useEffect, useId, useRef, useState } from "react";
 
 import type { RoutineCadence } from "@/lib/api-client";
@@ -18,23 +10,22 @@ type TriggerOption = {
   value: RoutineCadence;
   label: string;
   description: string;
-  icon: IconSvgElement;
 };
 
 const triggerGroups: ReadonlyArray<{ label: string; options: TriggerOption[] }> = [
   {
     label: "Time",
     options: [
-      { value: "DAILY", label: "Every day", description: "Run once each day", icon: Clock01Icon },
-      { value: "WEEKLY", label: "Every week", description: "Run every 7 days", icon: Calendar03Icon },
+      { value: "DAILY", label: "Every day", description: "Run once each day" },
+      { value: "WEEKLY", label: "Every week", description: "Run every 7 days" },
     ],
   },
   {
     label: "Event",
     options: [
-      { value: "ON_GITHUB_CHANGE", label: "Push to default branch", description: "Run after GitHub pushes", icon: GitBranchIcon },
-      { value: "ON_GITHUB_RELEASE", label: "Release published", description: "Run for each published release", icon: Package01Icon },
-      { value: "ON_GIT_TAG", label: "Git tag pushed", description: "Run for each new tag", icon: Tag01Icon },
+      { value: "ON_GITHUB_CHANGE", label: "Push to default branch", description: "Run after GitHub pushes" },
+      { value: "ON_GITHUB_RELEASE", label: "Release published", description: "Run for each published release" },
+      { value: "ON_GIT_TAG", label: "Git tag pushed", description: "Run for each new tag" },
     ],
   },
 ];
@@ -134,11 +125,8 @@ export function RoutineTriggerPicker({ value, onChange }: RoutineTriggerPickerPr
           event.preventDefault();
           openListbox();
         }}
-        className="flex min-h-12 w-full items-center gap-3 rounded-[9px] border border-black/10 bg-white px-3 text-left transition hover:border-black/20 focus-visible:border-black/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/[0.05] dark:border-white/12 dark:bg-white/[0.06] dark:hover:border-white/20 dark:focus-visible:border-white/25"
+        className="flex min-h-12 w-full items-center gap-3 rounded-[9px] border border-black/10 bg-white px-3.5 text-left transition hover:border-black/20 focus-visible:border-black/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/[0.05] dark:border-white/12 dark:bg-white/[0.06] dark:hover:border-white/20 dark:focus-visible:border-white/25"
       >
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-[9px] bg-[#eef1f4] text-black/60 dark:bg-white/[0.08] dark:text-white/65">
-          <HugeiconsIcon icon={selected.icon} size={16} color="currentColor" strokeWidth={1.5} aria-hidden="true" />
-        </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13px] font-medium text-black/78 dark:text-white/82">{selected.label}</span>
           <span className="block truncate text-[11px] font-normal text-black/42 dark:text-white/42">{selected.description}</span>
@@ -188,11 +176,8 @@ export function RoutineTriggerPicker({ value, onChange }: RoutineTriggerPickerPr
                     aria-selected={selected}
                     onClick={() => select(option)}
                     onPointerMove={() => setActiveIndex(optionIndex)}
-                    className={`flex w-full items-center gap-3 rounded-[9px] px-2 py-2 text-left outline-none transition ${selected ? "bg-[#eef1f4] text-black/88 dark:bg-white/[0.08] dark:text-white/92" : "text-black/72 hover:bg-black/[0.04] dark:text-white/75 dark:hover:bg-white/[0.07]"} ${active ? "ring-2 ring-inset ring-black/15 dark:ring-white/15" : ""}`}
+                    className={`flex w-full items-center gap-2.5 rounded-[9px] px-2.5 py-2 text-left outline-none transition ${selected ? "bg-[#eef1f4] text-black/88 dark:bg-white/[0.08] dark:text-white/92" : "text-black/72 hover:bg-black/[0.04] dark:text-white/75 dark:hover:bg-white/[0.07]"} ${active ? "ring-2 ring-inset ring-black/15 dark:ring-white/15" : ""}`}
                   >
-                    <span className={`flex size-8 shrink-0 items-center justify-center rounded-[9px] ${selected ? "bg-white text-black/65 shadow-sm dark:bg-white/[0.12] dark:text-white/75" : "bg-black/[0.04] text-black/45 dark:bg-white/[0.07] dark:text-white/48"}`}>
-                      <HugeiconsIcon icon={option.icon} size={16} color="currentColor" strokeWidth={1.5} aria-hidden="true" />
-                    </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[13px] font-medium">{option.label}</span>
                       <span className="block truncate text-[11px] font-normal text-black/42 dark:text-white/42">{option.description}</span>
