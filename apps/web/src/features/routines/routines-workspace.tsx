@@ -356,7 +356,26 @@ export function RoutinesWorkspace() {
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
                 <button type="button" onClick={retryLoad} disabled={refreshDisabled} aria-label="Refresh routines" title="Refresh routines" className="inline-flex size-9 items-center justify-center rounded-[9px] text-black/45 transition hover:bg-black/[0.04] hover:text-black/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 disabled:cursor-wait disabled:opacity-45 dark:text-white/48 dark:hover:bg-white/10 dark:hover:text-white/75"><RefreshCw className={`size-3.5 ${isLoading ? "animate-spin" : ""}`} /></button>
-                {!createOpen && <button ref={createTriggerRef} type="button" onClick={openCreate} disabled={isLoading || !sources.length} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-[9px] bg-[#252a30] px-3 text-[12px] font-medium text-white transition hover:bg-[#171a1e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-[#18191b] dark:hover:bg-white/90"><HugeiconsIcon icon={Add01Icon} size={15} color="currentColor" strokeWidth={1.5} aria-hidden="true" />Create</button>}
+                {!createOpen && (
+                  <button
+                    ref={createTriggerRef}
+                    type="button"
+                    onClick={openCreate}
+                    disabled={isLoading || !sources.length}
+                    style={{
+                      background: "linear-gradient(to bottom, rgba(0, 0, 0, 0.78), rgba(0, 0, 0, 0.88))",
+                      backdropFilter: "saturate(200%) blur(40px)",
+                      WebkitBackdropFilter: "saturate(200%) blur(40px)",
+                      border: "1px solid rgba(255, 255, 255, 0.18)",
+                      boxShadow: "inset 0 1px 1px rgba(255, 255, 255, 0.25), inset 0 -1px 1px rgba(0, 0, 0, 0.1), 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.08)",
+                      color: "#FFFFFF",
+                    }}
+                    className="inline-flex h-8.5 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[12px] font-semibold text-white transition-all duration-200 hover:opacity-90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <HugeiconsIcon icon={Add01Icon} size={15} color="currentColor" strokeWidth={1.5} aria-hidden="true" />
+                    Create
+                  </button>
+                )}
               </div>
             </div>
             <label className="mt-5 flex h-10 items-center gap-2.5 rounded-[9px] border border-black/10 bg-white px-3 text-[12px] text-black/40 transition focus-within:border-black/20 focus-within:ring-2 focus-within:ring-black/[0.04] dark:border-white/12 dark:bg-white/[0.04] dark:text-white/42">
@@ -466,7 +485,19 @@ export function RoutinesWorkspace() {
                 </div>
               </div>
               <div className="mt-auto flex items-center justify-end gap-3 border-t border-black/[0.08] px-6 py-4 dark:border-white/10 sm:px-8">
-                <button type="submit" disabled={!canCreate} className="inline-flex h-9 items-center gap-2 rounded-[9px] bg-[#252a30] px-3.5 text-[13px] font-medium text-white transition hover:bg-[#171a1e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-[#18191b] dark:hover:bg-white/90">
+                <button
+                  type="submit"
+                  disabled={!canCreate}
+                  style={{
+                    background: "linear-gradient(to bottom, rgba(0, 0, 0, 0.78), rgba(0, 0, 0, 0.88))",
+                    backdropFilter: "saturate(200%) blur(40px)",
+                    WebkitBackdropFilter: "saturate(200%) blur(40px)",
+                    border: "1px solid rgba(255, 255, 255, 0.18)",
+                    boxShadow: "inset 0 1px 1px rgba(255, 255, 255, 0.25), inset 0 -1px 1px rgba(0, 0, 0, 0.1), 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.08)",
+                    color: "#FFFFFF",
+                  }}
+                  className="inline-flex h-9 items-center gap-2 rounded-full px-4 text-[13px] font-semibold text-white transition-all duration-200 hover:opacity-90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 disabled:cursor-not-allowed disabled:opacity-40"
+                >
                   {isSaving ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" /> : null}
                   {isSaving ? "Creating…" : "Create routine"}
                 </button>
