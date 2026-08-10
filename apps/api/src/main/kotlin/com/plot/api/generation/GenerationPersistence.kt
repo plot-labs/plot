@@ -86,18 +86,20 @@ class GenerationPersistence(
 			}
 		}
 		reservation.agentRunId?.let { agentRunId ->
-			require(reservation.workSessionId == null) { "Routine Agent generation must not create or attach a Chat" }
+			val workSessionId = reservation.workSessionId
+				?: throw ApiException(HttpStatus.BAD_REQUEST, "INVALID_SESSION", "Routine Agent generation requires its Chat")
 			val linkedAgent = jdbcTemplate.query(
 				"""
 				select id
 				from agent_runs
-				where workspace_id = ? and id = ? and created_by_user_id = ?
+				where workspace_id = ? and id = ? and created_by_user_id = ? and work_session_id = ?
 				for update
 				""".trimIndent(),
 				{ rs, _ -> rs.getObject(1, UUID::class.java) },
 				reservation.workspaceId,
 				agentRunId,
 				reservation.createdByUserId,
+				workSessionId,
 			).isNotEmpty()
 			if (!linkedAgent) {
 				throw ApiException(HttpStatus.BAD_REQUEST, "INVALID_AGENT_RUN", "Agent run is unavailable in this workspace")

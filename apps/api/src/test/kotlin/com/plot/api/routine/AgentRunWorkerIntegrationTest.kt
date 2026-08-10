@@ -169,8 +169,20 @@ class AgentRunWorkerIntegrationTest {
 			""".trimIndent(),
 			generationRunId,
 		))
-		assertEquals(0, count(
+		assertEquals(1, count(
 			"select count(*) from generation_runs where id = ? and work_session_id is not null",
+			generationRunId,
+		))
+		assertEquals(1, count(
+			"""
+			select count(*)
+			from generation_runs generation
+			join agent_runs agent
+			  on agent.workspace_id = generation.workspace_id
+			 and agent.id = generation.agent_run_id
+			 and agent.work_session_id = generation.work_session_id
+			where generation.id = ?
+			""".trimIndent(),
 			generationRunId,
 		))
 		assertEquals(

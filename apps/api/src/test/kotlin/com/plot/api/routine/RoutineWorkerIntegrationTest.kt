@@ -130,7 +130,7 @@ class RoutineWorkerIntegrationTest {
 		val changedExecutionId = runNow(routine.id, "backlog-changed")
 		assertEquals(listOf(blockIds.first()), seedInputIds(changedExecutionId))
 		assertEquals(3, count("routine_executions"))
-		assertEquals(0, count("work_sessions"))
+		assertEquals(3, count("work_sessions"))
 		assertEquals(3, count("agent_runs"))
 		assertEquals(0, jdbcTemplate.queryForObject(
 			"select count(*) from generation_runs where workspace_id = ? and agent_run_id is not null",
@@ -228,7 +228,7 @@ class RoutineWorkerIntegrationTest {
 		val firstExecutionId = runNow(routine.id, "oversized-first")
 		assertEquals(RoutineExecutionStatus.DISPATCHED, executionStatus(firstExecutionId))
 		assertEquals(listOf(oversizedId), seedInputIds(firstExecutionId))
-		assertEquals(0, count("work_sessions"))
+		assertEquals(1, count("work_sessions"))
 		assertEquals(1, count("agent_runs"))
 		val boundedCharacters = assertNotNull(jdbcTemplate.queryForObject(
 			"select length(coalesce(snapshot_title, '')) + length(snapshot_body) from agent_run_inputs where agent_run_id = (select id from agent_runs where routine_execution_id = ?)",

@@ -189,7 +189,7 @@ class RoutineAgentMigrationIntegrationTest {
 	}
 
 	@Test
-	fun `dispatch links one AgentRun frozen sources and seed inputs without a Chat`() {
+	fun `dispatch links one AgentRun frozen sources and seed inputs to one Chat`() {
 		val fixture = insertFixture()
 		val context = insertSourceScope(fixture.workspaceId, fixture.namespaceId, "context")
 		val execution = withSchema { persistence.createExecution(executionRequest(fixture)) }
@@ -217,8 +217,15 @@ class RoutineAgentMigrationIntegrationTest {
 		}
 
 		assertEquals(execution.id, agentRun.routineExecutionId)
-		assertEquals(0, count("work_sessions"))
+		val chatId = requireNotNull(agentRun.workSessionId)
+		assertEquals(1, count("work_sessions"))
 		assertEquals(1, count("agent_runs"))
+		assertEquals(1, jdbcTemplate.queryForObject(
+			"select count(*) from work_sessions where routine_execution_id = ? and id = ?",
+			Int::class.java,
+			execution.id,
+			chatId,
+		))
 		assertEquals(2, withSchema { persistence.listAgentRunSources(fixture.workspaceId, agentRun.id).size })
 		assertEquals(1, withSchema { persistence.listAgentRunInputs(fixture.workspaceId, agentRun.id).size })
 		assertEquals(RoutineExecutionStatus.DISPATCHED, withSchema {
@@ -232,8 +239,8 @@ class RoutineAgentMigrationIntegrationTest {
 	}
 
 	@Test
-	fun `routine agent schema has no Chat linkage`() {
-		assertEquals(0, schemaJdbcTemplate.queryForObject(
+	fun `routine agent schema has Chat linkage`() {
+		assertEquals(2, schemaJdbcTemplate.queryForObject(
 			"""
 			select count(*)
 			from information_schema.columns
@@ -265,7 +272,7 @@ class RoutineAgentMigrationIntegrationTest {
 				)
 			}
 		}
-		assertEquals(0, count("work_sessions"))
+		assertEquals(1, count("work_sessions"))
 		assertEquals(1, count("agent_runs"))
 		assertEquals(10L, jdbcTemplate.queryForObject(
 			"select activity_cursor_sequence from $schema.routines where id = ?",

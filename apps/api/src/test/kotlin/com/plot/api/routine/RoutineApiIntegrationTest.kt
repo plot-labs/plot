@@ -242,24 +242,36 @@ class RoutineApiIntegrationTest {
 				requestFingerprint = "safe-detail:$routineId",
 			),
 		)
+		val chatId = UUID.randomUUID()
 		val agentRunId = UUID.randomUUID()
 		val generationRunId = UUID.randomUUID()
 		val artifactId = UUID.randomUUID()
 		val now = Timestamp.from(Instant.parse("2026-08-10T00:00:00Z"))
 		jdbcTemplate.update(
+			"insert into work_sessions (id, workspace_id, title, status, created_by_user_id, last_activity_at, created_at, updated_at, routine_execution_id) values (?, ?, 'Routine: Safe detail', 'OPEN', ?, ?, ?, ?, ?)",
+			chatId,
+			devContext.devWorkspaceId,
+			devContext.devUserId,
+			now,
+			now,
+			now,
+			execution.id,
+		)
+		jdbcTemplate.update(
 			"""
 			insert into agent_runs (
-			 id, workspace_id, routine_execution_id, routine_id, created_by_user_id,
+			 id, workspace_id, routine_execution_id, routine_id, work_session_id, created_by_user_id,
 			 instruction_snapshot, prompt_version, tool_policy_version, budget_snapshot,
 			 status, current_step, attempt_count, max_attempts, model_call_count, tool_call_count,
 			 started_at, finished_at, created_at, updated_at
-			) values (?, ?, ?, ?, ?, 'Draft safely', 'v1', 'read-only-v1', '{}'::jsonb,
+			) values (?, ?, ?, ?, ?, ?, 'Draft safely', 'v1', 'read-only-v1', '{}'::jsonb,
 			 'SUCCEEDED', 2, 0, 3, 1, 1, ?, ?, ?, ?)
 			""".trimIndent(),
 			agentRunId,
 			devContext.devWorkspaceId,
 			execution.id,
 			routineId,
+			chatId,
 			devContext.devUserId,
 			now,
 			now,
@@ -271,16 +283,17 @@ class RoutineApiIntegrationTest {
 			insert into generation_runs (
 			 id, workspace_id, created_by_user_id, idempotency_key, request_fingerprint,
 			 status, workflow_version, prompt_version, output_schema_version, budget_version,
-			 provider, model_name, budget_snapshot, user_instruction, agent_run_id,
+			 provider, model_name, budget_snapshot, user_instruction, work_session_id, agent_run_id,
 			 finished_at, created_at, updated_at
 			) values (?, ?, ?, ?, ?, 'READY', 'v1', 'v1', 'v1', 'v1',
-			 'test', 'test', '{}'::jsonb, 'Draft safely', ?, ?, ?, ?)
+			 'test', 'test', '{}'::jsonb, 'Draft safely', ?, ?, ?, ?, ?)
 			""".trimIndent(),
 			generationRunId,
 			devContext.devWorkspaceId,
 			devContext.devUserId,
 			"agent:$agentRunId",
 			"agent:$agentRunId",
+			chatId,
 			agentRunId,
 			now,
 			now,
@@ -346,11 +359,12 @@ class RoutineApiIntegrationTest {
 			jsonPath("$.latestExecution.id") { value(execution.id.toString()) }
 			jsonPath("$.latestExecution.agentRunStatus") { value("SUCCEEDED") }
 			jsonPath("$.latestExecution.artifactId") { value(artifactId.toString()) }
-			jsonPath("$.latestExecution.chatId") { doesNotExist() }
+			jsonPath("$.latestExecution.chatId") { value(chatId.toString()) }
 		}
 		val detail = mockMvc.get("/api/routines/$routineId/agent-runs/$agentRunId").andExpect {
 			status { isOk() }
 			jsonPath("$.artifactId") { value(artifactId.toString()) }
+			jsonPath("$.chatId") { value(chatId.toString()) }
 			jsonPath("$.steps[0].sequence") { value(0) }
 			jsonPath("$.steps[1].generationRunId") { value(generationRunId.toString()) }
 			jsonPath("$.steps[1].artifactId") { value(artifactId.toString()) }

@@ -94,7 +94,7 @@ class GitHubChangeRoutineIntegrationTest {
 		val executionId = executionId(routineId, deliveryId)
 		assertEquals(RoutineExecutionStatus.DISPATCHED, executionStatus(executionId))
 		assertEquals("github:$routineId:${deliveryUuid(deliveryId)}", triggerKey(executionId))
-		assertEquals(0, count("work_sessions"))
+		assertEquals(1, count("work_sessions"))
 		assertEquals(1, count("agent_runs"))
 		assertEquals(1, seedCount(executionId))
 		assertEquals(0, jdbcTemplate.queryForObject(
@@ -218,7 +218,7 @@ class GitHubChangeRoutineIntegrationTest {
 		assertEquals(2, countExecutions(routineId))
 		assertEquals(1, eventWorker.drain())
 		assertEquals(RoutineExecutionStatus.NO_ACTIVITY, executionStatus(executionId(routineId, secondDeliveryId)))
-		assertEquals(0, count("work_sessions"))
+		assertEquals(1, count("work_sessions"))
 		assertEquals(1, count("agent_runs"))
 	}
 
@@ -249,7 +249,7 @@ class GitHubChangeRoutineIntegrationTest {
 		routineWorker.runNow(routine.workspaceId, routine.id, manual.id)
 
 		assertEquals(listOf(olderBlockId), seedIds(manual.id))
-		assertEquals(0, count("work_sessions"))
+		assertEquals(2, count("work_sessions"))
 		assertEquals(2, count("agent_runs"))
 	}
 
@@ -277,7 +277,7 @@ class GitHubChangeRoutineIntegrationTest {
 		val recovered = assertNotNull(agentPersistence.findExecution(devContext.devWorkspaceId, executionId))
 		assertEquals(2, recovered.attemptCount)
 		assertEquals(RoutineExecutionStatus.DISPATCHED, recovered.status)
-		assertEquals(0, count("work_sessions"))
+		assertEquals(1, count("work_sessions"))
 		assertEquals(1, count("agent_runs"))
 	}
 

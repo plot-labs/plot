@@ -61,6 +61,7 @@ describe("Plot API client", () => {
       id: "agent-run-1",
       routineExecutionId: "execution-1",
       routineId: "routine-1",
+      chatId: "chat-1",
       status: "SUCCEEDED",
       failureCode: null,
       generationRunId: "run-1",
@@ -84,7 +85,7 @@ describe("Plot API client", () => {
       .mockResolvedValueOnce(Response.json(routine))
       .mockResolvedValueOnce(Response.json(routine))
       .mockResolvedValueOnce(Response.json({ ...routine, enabled: false }))
-      .mockResolvedValueOnce(Response.json({ ...routine, latestExecution: { id: "execution-1", status: "DISPATCHED", agentRunId: "agent-run-1", agentRunStatus: "QUEUED", generationRunId: null, artifactId: null, errorCode: null, startedAt: null, finishedAt: null } }))
+      .mockResolvedValueOnce(Response.json({ ...routine, latestExecution: { id: "execution-1", status: "DISPATCHED", chatId: "chat-1", agentRunId: "agent-run-1", agentRunStatus: "QUEUED", generationRunId: null, artifactId: null, errorCode: null, startedAt: null, finishedAt: null } }))
       .mockResolvedValueOnce(Response.json(agentRun));
     const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
 

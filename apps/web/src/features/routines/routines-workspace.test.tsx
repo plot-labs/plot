@@ -262,16 +262,22 @@ describe("RoutinesWorkspace", () => {
     }), expect.anything()));
   });
 
-  it("shows no artifact for no activity and exactly one artifact link after success", async () => {
+  it("shows no artifact or Chat for no activity and links successful work to one Chat and Artifact", async () => {
     mocks.listRoutines.mockResolvedValue([
-      routine({ id: "routine-empty", name: "No activity routine", latestExecution: execution({ status: "NO_ACTIVITY", agentRunId: null, agentRunStatus: null }) }),
-      routine({ id: "routine-ready", name: "Successful routine", latestExecution: execution({ agentRunStatus: "SUCCEEDED", artifactId: "artifact-1" }) }),
+      routine({ id: "routine-empty", name: "No activity routine", latestExecution: execution({ status: "NO_ACTIVITY", chatId: null, agentRunId: null, agentRunStatus: null }) }),
+      routine({ id: "routine-ready", name: "Successful routine", latestExecution: execution({ agentRunStatus: "SUCCEEDED", generationRunId: "generation-1", artifactId: "artifact-1" }) }),
     ]);
     render(<RoutinesWorkspace />);
 
     expect(await screen.findByText("Checked · No new activity")).toBeVisible();
     expect(screen.getByText("Agent completed")).toBeVisible();
+    expect(screen.queryByRole("link", { name: "Open Chat for No activity routine" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Open artifact for No activity routine" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Open Chat for Successful routine" })).toHaveLength(1);
+    expect(screen.getByRole("link", { name: "Open Chat for Successful routine" })).toHaveAttribute(
+      "href",
+      "/chat?chat=chat-1&generation=generation-1&artifact=artifact-1",
+    );
     const artifactLinks = screen.getAllByRole("link", { name: "Open artifact for Successful routine" });
     expect(artifactLinks).toHaveLength(1);
     expect(artifactLinks[0]).toHaveAttribute("href", "/artifacts?artifact=artifact-1");
@@ -284,6 +290,7 @@ describe("RoutinesWorkspace", () => {
       id: "agent-1",
       routineExecutionId: "execution-1",
       routineId: current.id,
+      chatId: "chat-1",
       status: "SUCCEEDED",
       failureCode: null,
       generationRunId: "generation-1",
@@ -327,6 +334,7 @@ describe("RoutinesWorkspace", () => {
         id: "agent-1",
         routineExecutionId: "execution-1",
         routineId: oldRoutine.id,
+        chatId: "chat-old",
         status: "SUCCEEDED",
         failureCode: null,
         generationRunId: "generation-1",
@@ -388,6 +396,7 @@ function execution(overrides: Partial<NonNullable<Routine["latestExecution"]>> =
   return {
     id: "execution-1",
     status: "DISPATCHED",
+    chatId: "chat-1",
     agentRunId: "agent-1",
     agentRunStatus: "RUNNING",
     generationRunId: null,

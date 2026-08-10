@@ -116,12 +116,19 @@ export function ProductSidebar({ collapsed = false, theme, onThemeChange, onTogg
     if (settingsMode || !selectedWorkspaceId) return;
 
     const controller = new AbortController();
-    void plotApiClient.listSessions({ signal: controller.signal })
-      .then((value) => {
-        if (!controller.signal.aborted) setRecentChats(value.slice(0, 8));
-      })
-      .catch(() => undefined);
-    return () => controller.abort();
+    const loadSessions = () => {
+      void plotApiClient.listSessions({ signal: controller.signal })
+        .then((value) => {
+          if (!controller.signal.aborted) setRecentChats(value.slice(0, 8));
+        })
+        .catch(() => undefined);
+    };
+    loadSessions();
+    window.addEventListener("plot:sessions-changed", loadSessions);
+    return () => {
+      controller.abort();
+      window.removeEventListener("plot:sessions-changed", loadSessions);
+    };
   }, [settingsMode, selectedWorkspaceId]);
 
   const currentWorkspace = account?.workspaces.find((item) => item.id === selectedWorkspaceId)

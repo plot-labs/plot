@@ -326,6 +326,7 @@ export type RoutineAgentRunStatus = "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED
 export interface RoutineExecutionSummary {
   id: string;
   status: RoutineExecutionStatus;
+  chatId: string | null;
   agentRunId: string | null;
   agentRunStatus: RoutineAgentRunStatus | null;
   generationRunId: string | null;
@@ -351,6 +352,7 @@ export interface RoutineAgentRunDetail {
   id: string;
   routineExecutionId: string;
   routineId: string;
+  chatId: string | null;
   status: RoutineAgentRunStatus;
   failureCode: string | null;
   generationRunId: string | null;

@@ -87,7 +87,7 @@ class RoutineAgentPersistence(
 		"""
 		select execution.id as execution_id, execution.status as execution_status,
 		       execution.error_code as execution_error_code,
-		       agent.id as agent_run_id, agent.status as agent_run_status,
+		       agent.work_session_id, agent.id as agent_run_id, agent.status as agent_run_status,
 		       agent.failure_code as agent_failure_code,
 		       coalesce(handoff.generation_run_id, execution.legacy_generation_run_id) as generation_run_id,
 		       pack.id as artifact_id, execution.started_at,
@@ -115,6 +115,7 @@ class RoutineAgentPersistence(
 				executionId = rs.getObject("execution_id", UUID::class.java),
 				executionStatus = RoutineExecutionStatus.valueOf(rs.getString("execution_status")),
 				executionErrorCode = rs.getString("execution_error_code"),
+				workSessionId = rs.getObject("work_session_id", UUID::class.java),
 				agentRunId = rs.getObject("agent_run_id", UUID::class.java),
 				agentRunStatus = rs.getString("agent_run_status")?.let(AgentRunStatus::valueOf),
 				agentFailureCode = rs.getString("agent_failure_code"),
@@ -497,19 +498,44 @@ class RoutineAgentPersistence(
 		)
 		validateDispatchRequest(execution, request, lockedSources)
 
+		val workSessionId = uuidGenerator.next()
+		val routineName = jdbcTemplate.queryForObject(
+			"select name from routines where workspace_id = ? and id = ?",
+			String::class.java,
+			workspaceId,
+			execution.routineId,
+		) ?: "Routine"
+		jdbcTemplate.update(
+			"""
+			insert into work_sessions (
+			  id, workspace_id, title, status, created_by_user_id, latest_generation_run_id,
+			  last_activity_at, created_at, updated_at, routine_execution_id
+			) values (?, ?, ?, 'OPEN', ?, null, ?, ?, ?, ?)
+			""".trimIndent(),
+			workSessionId,
+			workspaceId,
+			"Routine: $routineName",
+			execution.createdByUserId,
+			Timestamp.from(now),
+			Timestamp.from(now),
+			Timestamp.from(now),
+			executionId,
+		)
+
 		val agentRunId = uuidGenerator.next()
 		jdbcTemplate.update(
 			"""
 			insert into agent_runs (
-			  id, workspace_id, routine_execution_id, routine_id, created_by_user_id,
+			  id, workspace_id, routine_execution_id, routine_id, work_session_id, created_by_user_id,
 			  instruction_snapshot, prompt_version, tool_policy_version, budget_snapshot,
 			  status, current_step, attempt_count, max_attempts, created_at, updated_at
-			) values (?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, 'QUEUED', 0, 0, ?, ?, ?)
+			) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, 'QUEUED', 0, 0, ?, ?, ?)
 			""".trimIndent(),
 			agentRunId,
 			workspaceId,
 			executionId,
 			execution.routineId,
+			workSessionId,
 			execution.createdByUserId,
 			request.instructionSnapshot.trim(),
 			request.promptVersion.trim(),
@@ -982,11 +1008,12 @@ class RoutineAgentPersistence(
 			"Agent handoff step is stale"
 		}
 		val generationBelongsToAgent = jdbcTemplate.queryForObject(
-			"select count(*) from generation_runs where workspace_id = ? and id = ? and agent_run_id = ? and work_session_id is null",
+			"select count(*) from generation_runs where workspace_id = ? and id = ? and agent_run_id = ? and work_session_id = ?",
 			Int::class.java,
 			claim.workspaceId,
 			generationRunId,
 			claim.agentRunId,
+			requireNotNull(run.workSessionId),
 		) == 1
 		if (!generationBelongsToAgent) throw RoutineExecutionStateException("Generation handoff belongs to another Agent run")
 		val stepUpdated = jdbcTemplate.update(
@@ -1663,7 +1690,7 @@ class RoutineAgentPersistence(
 	""".trimIndent()
 
 	private val selectAgentRunSql = """
-		select a.id, a.workspace_id, a.routine_execution_id, a.routine_id, a.created_by_user_id,
+		select a.id, a.workspace_id, a.routine_execution_id, a.work_session_id, a.routine_id, a.created_by_user_id,
 		       a.instruction_snapshot, a.prompt_version, a.tool_policy_version, a.budget_snapshot::text,
 		       a.status, a.current_step, a.attempt_count, a.max_attempts,
 		       a.model_call_count, a.tool_call_count, a.next_attempt_at,
@@ -1716,6 +1743,7 @@ class RoutineAgentPersistence(
 		id = getObject("id", UUID::class.java),
 		workspaceId = getObject("workspace_id", UUID::class.java),
 		routineExecutionId = getObject("routine_execution_id", UUID::class.java),
+		workSessionId = getObject("work_session_id", UUID::class.java),
 		routineId = getObject("routine_id", UUID::class.java),
 		createdByUserId = getObject("created_by_user_id", UUID::class.java),
 		instructionSnapshot = getString("instruction_snapshot"),

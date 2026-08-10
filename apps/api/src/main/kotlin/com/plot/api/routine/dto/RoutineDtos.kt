@@ -45,6 +45,7 @@ data class RoutineResponse(
 data class RoutineExecutionSummaryResponse(
 	val id: UUID,
 	val status: String,
+	val chatId: UUID?,
 	val agentRunId: UUID?,
 	val agentRunStatus: String?,
 	val generationRunId: UUID?,
@@ -58,6 +59,7 @@ data class AgentRunDetailResponse(
 	val id: UUID,
 	val routineExecutionId: UUID,
 	val routineId: UUID,
+	val chatId: UUID?,
 	val status: String,
 	val failureCode: String?,
 	val generationRunId: UUID?,
@@ -104,6 +106,7 @@ fun RoutineRecord.toResponse(
 fun RoutineExecutionSummaryRecord.toResponse() = RoutineExecutionSummaryResponse(
 	id = executionId,
 	status = executionStatus.name,
+	chatId = workSessionId,
 	agentRunId = agentRunId,
 	agentRunStatus = agentRunStatus?.name,
 	generationRunId = generationRunId,
@@ -122,6 +125,7 @@ fun AgentRunRecord.toDetailResponse(
 		id = id,
 		routineExecutionId = routineExecutionId,
 		routineId = routineId,
+		chatId = workSessionId,
 		status = status.name,
 		failureCode = failureCode,
 		generationRunId = generationRunId,
