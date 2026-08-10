@@ -16,8 +16,7 @@ import {
 } from "@/lib/api-client";
 
 import { RoutineTriggerPicker } from "./routine-trigger-picker";
-
-type SourceOption = { id: string; displayName: string };
+import { SourceRepositoryPicker, type SourceOption } from "./source-repository-picker";
 
 const defaultInstruction = "Create a concise update from the latest changes.";
 
@@ -441,9 +440,7 @@ export function RoutinesWorkspace() {
               <div className="space-y-5 px-6 py-6 sm:px-8">
                 <label className="flex flex-col gap-2.5 text-[12px] font-medium text-black/62 dark:text-white/65">
                   <span>Source repository</span>
-                  <select value={sourceScopeId} onChange={(event) => changeTriggerSource(event.target.value)} disabled={!sources.length} className="h-10 w-full rounded-[9px] border border-black/10 bg-white px-3 text-sm font-normal text-black/80 outline-none focus:border-black/25 focus:ring-2 focus:ring-black/[0.05] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/12 dark:bg-white/[0.06] dark:text-white/85">
-                    {!sources.length ? <option value="">Connect GitHub first</option> : sources.map((source) => <option key={source.id} value={source.id}>{source.displayName}</option>)}
-                  </select>
+                  <SourceRepositoryPicker sources={sources} value={sourceScopeId} onChange={changeTriggerSource} />
                 </label>
                 {sources.some((source) => source.id !== sourceScopeId) && <fieldset className="space-y-2">
                   <legend className="text-[12px] font-medium text-black/62 dark:text-white/65">Additional context</legend>
