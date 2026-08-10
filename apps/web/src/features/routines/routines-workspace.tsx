@@ -439,8 +439,8 @@ export function RoutinesWorkspace() {
 
             <form onSubmit={(event) => void createRoutine(event)} className="flex flex-1 flex-col">
               <div className="space-y-5 px-6 py-6 sm:px-8">
-                <label className="block space-y-1.5 text-[12px] font-medium text-black/62 dark:text-white/65">
-                  Source repository
+                <label className="flex flex-col gap-2.5 text-[12px] font-medium text-black/62 dark:text-white/65">
+                  <span>Source repository</span>
                   <select value={sourceScopeId} onChange={(event) => changeTriggerSource(event.target.value)} disabled={!sources.length} className="h-10 w-full rounded-[9px] border border-black/10 bg-white px-3 text-sm font-normal text-black/80 outline-none focus:border-black/25 focus:ring-2 focus:ring-black/[0.05] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/12 dark:bg-white/[0.06] dark:text-white/85">
                     {!sources.length ? <option value="">Connect GitHub first</option> : sources.map((source) => <option key={source.id} value={source.id}>{source.displayName}</option>)}
                   </select>
@@ -455,15 +455,15 @@ export function RoutinesWorkspace() {
                     })}
                   </div>
                 </fieldset>}
-                <label className="block space-y-1.5 text-[12px] font-medium text-black/62 dark:text-white/65">
-                  Routine name
+                <label className="flex flex-col gap-2.5 text-[12px] font-medium text-black/62 dark:text-white/65">
+                  <span>Routine name</span>
                   <input ref={nameInputRef} value={name} onChange={(event) => setName(event.target.value)} placeholder="Weekly product update" maxLength={80} className="h-10 w-full rounded-[9px] border border-black/10 bg-white px-3 text-sm font-normal text-black/80 outline-none placeholder:text-black/35 focus:border-black/25 focus:ring-2 focus:ring-black/[0.05] dark:border-white/12 dark:bg-white/[0.06] dark:text-white/85 dark:placeholder:text-white/35" />
                 </label>
-                <label className="block space-y-1.5 text-[12px] font-medium text-black/62 dark:text-white/65">
-                  Draft instruction
+                <label className="flex flex-col gap-2.5 text-[12px] font-medium text-black/62 dark:text-white/65">
+                  <span>Draft instruction</span>
                   <textarea value={instruction} onChange={(event) => setInstruction(event.target.value)} maxLength={2_000} rows={4} className="w-full resize-y rounded-[9px] border border-black/10 bg-white px-3 py-2.5 text-sm font-normal leading-5 text-black/80 outline-none placeholder:text-black/35 focus:border-black/25 focus:ring-2 focus:ring-black/[0.05] dark:border-white/12 dark:bg-white/[0.06] dark:text-white/85 dark:placeholder:text-white/35" />
                 </label>
-                <div className="space-y-1.5 text-[12px] font-medium text-black/62 dark:text-white/65">
+                <div className="flex flex-col gap-2.5 text-[12px] font-medium text-black/62 dark:text-white/65">
                   <span>Trigger</span>
                   <RoutineTriggerPicker value={cadence} onChange={setCadence} />
                 </div>
@@ -487,8 +487,8 @@ function formatDate(value: string) {
 }
 
 function formatCadence(cadence: RoutineCadence) {
-  if (cadence === "DAILY") return "Every day";
-  if (cadence === "WEEKLY") return "Every week";
+  if (cadence === "DAILY") return "Daily";
+  if (cadence === "WEEKLY") return "Weekly";
   if (cadence === "ON_GITHUB_CHANGE") return "When the default branch changes";
   if (cadence === "ON_GITHUB_RELEASE") return "When a release is published";
   return "When a git tag is pushed";
