@@ -97,7 +97,11 @@ class GenerationWorkflowConfiguration {
 	fun generationRunDispatcher(
 		@Qualifier("generationTaskExecutor") generationTaskExecutor: TaskExecutor,
 		worker: GenerationRunWorker,
-	): GenerationRunDispatcher = GenerationRunDispatcher(generationTaskExecutor) { worker.drain() > 0 }
+		properties: PlotAiProperties,
+	): GenerationRunDispatcher = GenerationRunDispatcher(
+		generationTaskExecutor,
+		properties.workerEnabled,
+	) { worker.drain() > 0 }
 
 	@Bean
 	fun generationRunRecovery(

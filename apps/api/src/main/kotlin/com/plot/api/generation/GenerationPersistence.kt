@@ -753,13 +753,12 @@ class GenerationPersistence(
 			val updated = jdbcTemplate.update(
 				"""
 				update generation_runs
-				set claimed_by = null, claimed_at = null, heartbeat_at = null, next_attempt_at = ?,
+				set claimed_by = null, claimed_at = null, heartbeat_at = null, next_attempt_at = null,
 				    transition_version = transition_version + 1, updated_at = ?
 				where workspace_id = ? and id = ? and claimed_by = ? and transition_version = ?
 				  and (heartbeat_at is null or heartbeat_at < ?)
 				  and status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
 				""".trimIndent(),
-				Timestamp.from(now),
 				Timestamp.from(now),
 				candidate.workspaceId,
 				candidate.runId,

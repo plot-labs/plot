@@ -402,38 +402,48 @@ class RoutineWorkersDisabledIntegrationTest {
 				activityCursorBefore = null,
 			),
 		)
+		val chatId = UUID.randomUUID()
 		val agentRunId = UUID.randomUUID()
 		jdbcTemplate.update(
-			"update routine_executions set status = 'DISPATCHED', finished_at = now(), updated_at = now() where id = ?",
+			"insert into work_sessions (id, workspace_id, title, status, created_by_user_id, last_activity_at, created_at, updated_at, routine_execution_id) values (?, ?, 'Routine: Disabled worker', 'OPEN', ?, now(), now(), now(), ?)",
+			chatId,
+			devContext.devWorkspaceId,
+			devContext.devUserId,
+			execution.id,
+		)
+		jdbcTemplate.update(
+			"update routine_executions set status = 'DISPATCHED', finished_at = greatest(now(), created_at), updated_at = now() where id = ?",
 			execution.id,
 		)
 		jdbcTemplate.update(
 			"""
 			insert into agent_runs (
-			 id, workspace_id, routine_execution_id, routine_id, created_by_user_id,
+			 id, workspace_id, routine_execution_id, routine_id, work_session_id, created_by_user_id,
 			 instruction_snapshot, prompt_version, tool_policy_version, budget_snapshot,
 			 status, max_attempts, created_at, updated_at
-			) values (?, ?, ?, ?, ?, 'Do not run', 'test', 'read-only-v1', '{}'::jsonb, 'QUEUED', 3, now(), now())
+			) values (?, ?, ?, ?, ?, ?, 'Do not run', 'test', 'read-only-v1', '{}'::jsonb, 'QUEUED', 3, now(), now())
 			""".trimIndent(),
 			agentRunId,
 			devContext.devWorkspaceId,
 			execution.id,
 			routine.id,
+			chatId,
 			devContext.devUserId,
 		)
 		val generationRunId = UUID.randomUUID()
 		jdbcTemplate.update(
 			"""
 			insert into generation_runs (
-			 id, workspace_id, agent_run_id, source_scope_id, created_by_user_id,
+			 id, workspace_id, agent_run_id, work_session_id, source_scope_id, created_by_user_id,
 			 idempotency_key, request_fingerprint, status, workflow_version, prompt_version,
 			 output_schema_version, budget_version, provider, model_name, budget_snapshot,
 			 created_at, updated_at
-			) values (?, ?, ?, null, ?, ?, ?, 'QUEUED', 'fixed-v1', 'test', 'test', 'test', 'test', 'test', '{}'::jsonb, now(), now())
+			) values (?, ?, ?, ?, null, ?, ?, ?, 'QUEUED', 'fixed-v1', 'test', 'test', 'test', 'test', 'test', '{}'::jsonb, now(), now())
 			""".trimIndent(),
 			generationRunId,
 			devContext.devWorkspaceId,
 			agentRunId,
+			chatId,
 			devContext.devUserId,
 			"disabled:$generationRunId",
 			"disabled:$generationRunId",
