@@ -408,20 +408,29 @@ class RoutineApiIntegrationTest {
 			),
 		)
 		val foreignAgentRunId = UUID.randomUUID()
+		val foreignChatId = UUID.randomUUID()
+		jdbcTemplate.update(
+			"insert into work_sessions (id, workspace_id, title, status, created_by_user_id, last_activity_at, created_at, updated_at, routine_execution_id) values (?, ?, 'Routine: Foreign', 'OPEN', ?, now(), now(), now(), ?)",
+			foreignChatId,
+			foreignWorkspaceId,
+			devContext.devUserId,
+			foreignExecution.id,
+		)
 		jdbcTemplate.update(
 			"""
 			insert into agent_runs (
-			 id, workspace_id, routine_execution_id, routine_id, created_by_user_id,
+			 id, workspace_id, routine_execution_id, routine_id, work_session_id, created_by_user_id,
 			 instruction_snapshot, prompt_version, tool_policy_version, budget_snapshot,
 			 status, current_step, attempt_count, max_attempts, model_call_count, tool_call_count,
 			 created_at, updated_at
-			) values (?, ?, ?, ?, ?, 'Foreign secret', 'v1', 'read-only-v1', '{}'::jsonb,
+			) values (?, ?, ?, ?, ?, ?, 'Foreign secret', 'v1', 'read-only-v1', '{}'::jsonb,
 			 'QUEUED', 0, 0, 3, 0, 0, now(), now())
 			""".trimIndent(),
 			foreignAgentRunId,
 			foreignWorkspaceId,
 			foreignExecution.id,
 			foreignRoutine.id,
+			foreignChatId,
 			devContext.devUserId,
 		)
 

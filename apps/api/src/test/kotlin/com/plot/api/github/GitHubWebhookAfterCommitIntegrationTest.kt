@@ -60,7 +60,7 @@ class GitHubWebhookAfterCommitIntegrationTest {
 	}
 
 	@Test
-	fun rollbackSuppressesTheAfterCommitDispatcher() {
+	fun failedProcessingLeavesTheDeliveryRetryableWithoutDispatching() {
 		bindRepository()
 		failingPersistence.failQueuedMark.set(true)
 
@@ -68,7 +68,10 @@ class GitHubWebhookAfterCommitIntegrationTest {
 
 		assertEquals(0, dispatcher.dispatches.get())
 		assertEquals(0, releaseRequestCount())
-		assertEquals(0, jdbcTemplate.queryForObject("select count(*) from github_webhook_deliveries", Int::class.java))
+		assertEquals(1, jdbcTemplate.queryForObject("select count(*) from github_webhook_deliveries", Int::class.java))
+		assertEquals("RECEIVED", jdbcTemplate.queryForObject(
+			"select disposition from github_webhook_deliveries limit 1", String::class.java,
+		))
 	}
 
 	private fun bindRepository() {
