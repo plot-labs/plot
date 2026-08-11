@@ -43,6 +43,7 @@ export function RoutinesWorkspace() {
   const workspaceRevisionRef = useRef(0);
   const createAbortRef = useRef<AbortController | null>(null);
   const routineActionAbortRef = useRef<AbortController | null>(null);
+  const runRequestKeyRef = useRef<{ routineId: string; key: string } | null>(null);
   const agentDetailAbortRef = useRef<AbortController | null>(null);
   const createTriggerRef = useRef<HTMLButtonElement>(null);
   const createPanelRef = useRef<HTMLElement>(null);
@@ -57,6 +58,7 @@ export function RoutinesWorkspace() {
       agentDetailAbortRef.current?.abort();
       createAbortRef.current = null;
       routineActionAbortRef.current = null;
+      runRequestKeyRef.current = null;
       agentDetailAbortRef.current = null;
       restoreCreateFocusRef.current = false;
       setRoutines([]);
@@ -244,11 +246,18 @@ export function RoutinesWorkspace() {
     const controller = new AbortController();
     const workspaceRevision = workspaceRevisionRef.current;
     routineActionAbortRef.current = controller;
+    const requestKey = runRequestKeyRef.current?.routineId === routine.id
+      ? runRequestKeyRef.current.key
+      : crypto.randomUUID();
+    runRequestKeyRef.current = { routineId: routine.id, key: requestKey };
     setBusyRoutineId(routine.id);
     setError(null);
     try {
-      const updated = await plotApiClient.runRoutineNow(routine.id, crypto.randomUUID(), { signal: controller.signal });
+      const updated = await plotApiClient.runRoutineNow(routine.id, requestKey, { signal: controller.signal });
       if (!requestIsCurrent(controller, workspaceRevision, workspaceId)) return;
+      if (runRequestKeyRef.current?.routineId === routine.id && runRequestKeyRef.current.key === requestKey) {
+        runRequestKeyRef.current = null;
+      }
       setRoutines((current) => current.map((item) => item.id === updated.id ? updated : item));
       if (updated.latestExecution?.chatId) window.dispatchEvent(new Event("plot:sessions-changed"));
       agentDetailAbortRef.current?.abort();

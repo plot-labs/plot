@@ -217,6 +217,23 @@ describe("RoutinesWorkspace", () => {
     expect(mocks.listRoutines).toHaveBeenCalledTimes(2);
   });
 
+  it("reuses the manual run key when the first response is lost", async () => {
+    const idleRoutine = routine({ id: "routine-1", name: "Release routine" });
+    mocks.listRoutines.mockResolvedValue([idleRoutine]);
+    mocks.runRoutineNow
+      .mockRejectedValueOnce(new Error("response lost"))
+      .mockResolvedValueOnce({ ...idleRoutine, latestExecution: execution({ agentRunStatus: "QUEUED" }) });
+    render(<RoutinesWorkspace />);
+
+    const run = await screen.findByRole("button", { name: "Run" });
+    fireEvent.click(run);
+    await screen.findByText("Routine could not run. Try again after checking the connected source.");
+    fireEvent.click(run);
+
+    await waitFor(() => expect(mocks.runRoutineNow).toHaveBeenCalledTimes(2));
+    expect(mocks.runRoutineNow.mock.calls[1]?.[1]).toBe(mocks.runRoutineNow.mock.calls[0]?.[1]);
+  });
+
   it("keeps creation unavailable and offers one Integrations action without a source", async () => {
     mocks.listGitHubConnections.mockResolvedValue([]);
     render(<RoutinesWorkspace />);
