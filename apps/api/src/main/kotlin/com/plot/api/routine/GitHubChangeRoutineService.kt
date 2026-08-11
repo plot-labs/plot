@@ -14,6 +14,8 @@ import java.time.Instant
 import java.util.UUID
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Service
+import org.springframework.transaction.PlatformTransactionManager
+import org.springframework.transaction.TransactionDefinition
 import org.springframework.transaction.support.TransactionTemplate
 
 @Service
@@ -25,8 +27,12 @@ class GitHubChangeRoutineService(
 	private val uuidGenerator: UuidGenerator,
 	private val properties: GitHubProperties,
 	private val evidenceBudget: RoutineEvidenceBudget,
-	private val transactionTemplate: TransactionTemplate,
+	private val transactionManager: PlatformTransactionManager,
 ) {
+	private val routineTransactionTemplate = TransactionTemplate(transactionManager).apply {
+		propagationBehavior = TransactionDefinition.PROPAGATION_REQUIRES_NEW
+	}
+
 	fun accept(
 		context: GitHubReleaseSourceContext,
 		delivery: GitHubWebhookDelivery,
@@ -36,29 +42,33 @@ class GitHubChangeRoutineService(
 		val routines = persistence.listEnabledGitHubEventRoutines(context.workspaceId, context.sourceScopeId, cadence)
 		if (routines.isEmpty()) return 0
 
-		val now = delivery.receivedAt
-		val observationId = createObservation(context, delivery.externalDeliveryId, webhook.eventType, now)
-		val importer = WorkspacePrincipal(context.workspaceId, context.createdByUserId)
-		val blocks = boundedEvidenceBlocks(context, delivery.externalDeliveryId, webhook, observationId, now)
-		if (blocks.isEmpty()) return 0
-		evidenceBudget.requireWithinBudget(
-			blocks.size,
-			blocks.sumOf { evidenceBudget.characters(it.title, it.body) },
-		)
-		val upserts = blocks.map { block ->
-			writingBlockImportService.upsert(
-				importer,
-				block,
-				now,
+		val prepared = routineTransactionTemplate.execute {
+			val now = delivery.receivedAt
+			val observationId = createObservation(context, delivery.externalDeliveryId, webhook.eventType, now)
+			val importer = WorkspacePrincipal(context.workspaceId, context.createdByUserId)
+			val blocks = boundedEvidenceBlocks(context, delivery.externalDeliveryId, webhook, observationId, now)
+			if (blocks.isEmpty()) return@execute PreparedEvidence(emptyList(), emptyList())
+			evidenceBudget.requireWithinBudget(
+				blocks.size,
+				blocks.sumOf { evidenceBudget.characters(it.title, it.body) },
+			)
+			val upserts = blocks.map { block ->
+				writingBlockImportService.upsert(
+					importer,
+					block,
+					now,
+				)
+			}
+			PreparedEvidence(
+				blocks = blocks,
+				changedIds = upserts.filter { it.created || it.changed }.map { it.blockId },
 			)
 		}
-		val changedIds = upserts
-			.filter { it.created || it.changed }
-			.map { it.blockId }
+		if (prepared.blocks.isEmpty()) return 0
 
 		val enqueued = routines.count { routine ->
 			try {
-				transactionTemplate.execute {
+				routineTransactionTemplate.execute {
 					val execution = agentPersistence.createExecution(
 						RoutineExecutionRequest(
 							workspaceId = routine.workspaceId,
@@ -67,14 +77,14 @@ class GitHubChangeRoutineService(
 							triggerSourceScopeId = routine.sourceScopeId,
 							triggerKind = RoutineExecutionTriggerKind.GITHUB,
 							triggerKey = "github:${routine.id}:${delivery.id}",
-							requestFingerprint = githubFingerprint(routine, delivery, blocks),
+							requestFingerprint = githubFingerprint(routine, delivery, prepared.blocks),
 							triggerDeliveryId = delivery.id,
 							refreshFrom = delivery.receivedAt,
 							refreshTo = delivery.receivedAt,
 							activityCursorBefore = routine.activityCursorSequence,
 						),
 					)
-					agentPersistence.addEvidence(routine.workspaceId, execution.id, changedIds, now)
+					agentPersistence.addEvidence(routine.workspaceId, execution.id, prepared.changedIds, delivery.receivedAt)
 					true
 				}
 			} catch (_: RoutineExecutionIdempotencyConflictException) {
@@ -83,6 +93,11 @@ class GitHubChangeRoutineService(
 		}
 		return enqueued
 	}
+
+	private data class PreparedEvidence(
+		val blocks: List<ImportedWritingBlock>,
+		val changedIds: List<UUID>,
+	)
 
 	fun hasReleaseEventRoutines(context: GitHubReleaseSourceContext): Boolean =
 		persistence.hasEnabledReleaseEventRoutines(context.workspaceId, context.sourceScopeId)

@@ -7,7 +7,8 @@ import io.micrometer.observation.ObservationRegistry
 import java.time.Instant
 import java.util.UUID
 import org.springframework.stereotype.Service
-import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.PlatformTransactionManager
+import org.springframework.transaction.support.TransactionTemplate
 import org.springframework.transaction.support.TransactionSynchronization
 import org.springframework.transaction.support.TransactionSynchronizationManager
 
@@ -20,14 +21,26 @@ class GitHubWebhookService(
 	private val gitHubChangeRoutineService: GitHubChangeRoutineService,
 	private val lifecycleService: GitHubSourceAccessLifecycleService,
 	private val observationRegistry: ObservationRegistry,
+	private val transactionManager: PlatformTransactionManager,
 ) {
-	@Transactional
+	private val transactionTemplate = TransactionTemplate(transactionManager)
+
 	fun accept(webhook: ParsedGitHubWebhook): GitHubWebhookDelivery {
 		val observation = Observation.start("plot.github.webhook", observationRegistry)
 			.highCardinalityKeyValue("plot.webhook_delivery_id", webhook.externalDeliveryId)
 		try {
 			observation.openScope().use {
-				val delivery = acceptInternal(webhook)
+				val candidate = newDelivery(webhook)
+				val inserted = requireNotNull(transactionTemplate.execute {
+					persistence.insertDelivery(candidate)
+				})
+				if (inserted.id != candidate.id && inserted.disposition != GitHubWebhookDisposition.RECEIVED) {
+					observation.lowCardinalityKeyValue("plot.disposition", inserted.disposition.name)
+					return inserted
+				}
+				val delivery = requireNotNull(transactionTemplate.execute {
+					process(inserted, webhook)
+				})
 				observation.lowCardinalityKeyValue("plot.disposition", delivery.disposition.name)
 				return delivery
 			}
@@ -39,9 +52,7 @@ class GitHubWebhookService(
 		}
 	}
 
-	private fun acceptInternal(webhook: ParsedGitHubWebhook): GitHubWebhookDelivery {
-		persistence.findDelivery(webhook.externalDeliveryId)?.let { return it }
-		val delivery = GitHubWebhookDelivery(
+	private fun newDelivery(webhook: ParsedGitHubWebhook): GitHubWebhookDelivery = GitHubWebhookDelivery(
 			id = UUID.randomUUID(),
 			externalDeliveryId = webhook.externalDeliveryId,
 			eventType = webhook.eventType,
@@ -61,8 +72,11 @@ class GitHubWebhookService(
 			receivedAt = Instant.now(),
 			processedAt = null,
 		)
-		val inserted = persistence.insertDelivery(delivery)
-		if (inserted.id != delivery.id) return inserted
+
+	private fun process(
+		delivery: GitHubWebhookDelivery,
+		webhook: ParsedGitHubWebhook,
+	): GitHubWebhookDelivery {
 
 		if (lifecycleService.isLifecycle(webhook)) {
 			val projection = lifecycleService.project(webhook)
