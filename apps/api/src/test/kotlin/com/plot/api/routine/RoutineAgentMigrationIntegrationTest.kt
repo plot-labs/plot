@@ -46,6 +46,11 @@ class RoutineAgentMigrationIntegrationTest {
 			schemaJdbcTemplate,
 			TransactionTemplate(DataSourceTransactionManager(schemaDataSource)),
 			uuidGenerator,
+			AgentRunPersistence(
+				schemaJdbcTemplate,
+				TransactionTemplate(DataSourceTransactionManager(schemaDataSource)),
+				uuidGenerator,
+			),
 		)
 	}
 
