@@ -89,7 +89,7 @@ class RoutineAgentPersistence(
 		       execution.error_code as execution_error_code,
 		       agent.work_session_id, agent.id as agent_run_id, agent.status as agent_run_status,
 		       agent.failure_code as agent_failure_code,
-		       coalesce(handoff.generation_run_id, execution.legacy_generation_run_id) as generation_run_id,
+		       handoff.generation_run_id as generation_run_id,
 		       pack.id as artifact_id, execution.started_at,
 		       case when agent.id is null then execution.finished_at else agent.finished_at end as finished_at
 		from routine_executions execution
@@ -107,7 +107,7 @@ class RoutineAgentPersistence(
 		) handoff on true
 		left join content_packs pack
 		  on pack.workspace_id = execution.workspace_id
-		 and pack.generation_run_id = coalesce(handoff.generation_run_id, execution.legacy_generation_run_id)
+		 and pack.generation_run_id = handoff.generation_run_id
 		where execution.workspace_id = ? and execution.id = ?
 		""".trimIndent(),
 		{ rs, _ ->
@@ -1684,8 +1684,7 @@ class RoutineAgentPersistence(
 		       e.scheduled_for, e.refresh_from, e.refresh_to, e.refresh_continuation::text,
 		       e.refresh_completed_at, e.activity_cursor_before, e.activity_cursor_after,
 		       e.status, e.attempt_count, e.transition_version, e.claimed_by, e.claimed_at,
-		       e.next_attempt_at, e.error_code, e.started_at, e.finished_at, e.created_at, e.updated_at,
-		       e.legacy_generation_run_id
+		       e.next_attempt_at, e.error_code, e.started_at, e.finished_at, e.created_at, e.updated_at
 		from routine_executions e
 	""".trimIndent()
 
@@ -1727,7 +1726,6 @@ class RoutineAgentPersistence(
 		finishedAt = getTimestamp("finished_at")?.toInstant(),
 		createdAt = getTimestamp("created_at").toInstant(),
 		updatedAt = getTimestamp("updated_at").toInstant(),
-		legacyGenerationRunId = getObject("legacy_generation_run_id", UUID::class.java),
 	)
 
 	private fun ResultSet.toContextSource() = RoutineContextSourceRecord(

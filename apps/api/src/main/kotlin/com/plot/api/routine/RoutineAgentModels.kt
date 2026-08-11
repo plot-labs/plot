@@ -84,7 +84,6 @@ data class RoutineExecutionRecord(
 	val finishedAt: Instant?,
 	val createdAt: Instant,
 	val updatedAt: Instant,
-	val legacyGenerationRunId: UUID? = null,
 )
 
 data class RoutineContextSourceRecord(
