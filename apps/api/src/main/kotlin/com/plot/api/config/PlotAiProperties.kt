@@ -22,6 +22,7 @@ data class PlotAiProperties(
 	val maxTotalTokens: Int = 80_000,
 	val maxRunDuration: Duration = Duration.ofMinutes(5),
 	val claimTimeout: Duration = Duration.ofMinutes(10),
+	val workerEnabled: Boolean = true,
 	val workerPollDelay: Duration = Duration.ofSeconds(5),
 	val retryInitialDelay: Duration = Duration.ofMillis(250),
 	val maxEvidenceCharacters: Int = 120_000,

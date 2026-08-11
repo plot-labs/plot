@@ -21,6 +21,9 @@ data class EvidenceSnapshot(
 	val sourceUpdatedAt: Instant?,
 	val contentHash: String,
 	val capturedAt: Instant,
+	val sourceScopeId: UUID? = null,
+	val agentRunId: UUID? = null,
+	val agentRunInputId: UUID? = null,
 )
 
 data class WriterOutput(val sentences: List<WriterSentence>)

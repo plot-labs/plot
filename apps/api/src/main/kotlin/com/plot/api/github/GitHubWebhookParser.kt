@@ -2,6 +2,7 @@ package com.plot.api.github
 
 import com.plot.api.common.ApiException
 import java.security.MessageDigest
+import java.time.Instant
 import java.util.HexFormat
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Component
@@ -23,7 +24,16 @@ data class ParsedGitHubWebhook(
 	val refCreated: Boolean?,
 	val refDeleted: Boolean?,
 	val forced: Boolean?,
+	val commits: List<GitHubWebhookCommit> = emptyList(),
 	val payloadHash: String,
+)
+
+data class GitHubWebhookCommit(
+	val sha: String,
+	val message: String,
+	val author: String?,
+	val timestamp: Instant?,
+	val url: String?,
 )
 
 @Component
@@ -56,6 +66,7 @@ class GitHubWebhookParser(private val objectMapper: ObjectMapper) {
 			refCreated = root.boolean("created"),
 			refDeleted = root.boolean("deleted"),
 			forced = root.boolean("forced"),
+			commits = root.path("commits").commits(),
 			payloadHash = MessageDigest.getInstance("SHA-256").digest(rawBody).toHex(),
 		)
 	}
@@ -76,6 +87,22 @@ class GitHubWebhookParser(private val objectMapper: ObjectMapper) {
 			if (id.canConvertToLong()) ids += id.longValue()
 		}
 		ids
+	} else {
+		emptyList()
+	}
+
+	private fun JsonNode.commits(): List<GitHubWebhookCommit> = if (isArray) {
+		mapNotNull { node ->
+			val sha = node.text("id") ?: return@mapNotNull null
+			val message = node.text("message") ?: return@mapNotNull null
+			GitHubWebhookCommit(
+				sha = sha,
+				message = message,
+				author = node.path("author").text("username") ?: node.path("author").text("name"),
+				timestamp = node.text("timestamp")?.let { runCatching { Instant.parse(it) }.getOrNull() },
+				url = node.text("url"),
+			)
+		}
 	} else {
 		emptyList()
 	}

@@ -7,6 +7,7 @@ import {
   PlugSocketIcon,
   Settings02Icon,
   Shapes01Icon,
+  ZapIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import Image from "next/image";
@@ -34,6 +35,7 @@ import { cn } from "@/lib/utils";
 
 const productNavItems = [
   { href: "/chat", label: "Chat", icon: ChatIcon },
+  { href: "/routines", label: "Routines", icon: RoutinesIcon },
   { href: "/artifacts", label: "Artifacts", icon: ArtifactsIcon },
 ];
 
@@ -102,6 +104,9 @@ export function ProductSidebar({ collapsed = false, theme, onThemeChange, onTogg
         if (resolvedWorkspaceId) window.localStorage.setItem("plot.workspaceId", resolvedWorkspaceId);
         else window.localStorage.removeItem("plot.workspaceId");
         setSelectedWorkspaceId(resolvedWorkspaceId);
+        if (resolvedWorkspaceId !== savedId) {
+          window.dispatchEvent(new CustomEvent("plot:workspace-changed", { detail: { id: resolvedWorkspaceId } }));
+        }
       })
       .catch(() => undefined);
     return () => { cancelled = true; };
@@ -111,12 +116,19 @@ export function ProductSidebar({ collapsed = false, theme, onThemeChange, onTogg
     if (settingsMode || !selectedWorkspaceId) return;
 
     const controller = new AbortController();
-    void plotApiClient.listSessions({ signal: controller.signal })
-      .then((value) => {
-        if (!controller.signal.aborted) setRecentChats(value.slice(0, 8));
-      })
-      .catch(() => undefined);
-    return () => controller.abort();
+    const loadSessions = () => {
+      void plotApiClient.listSessions({ signal: controller.signal })
+        .then((value) => {
+          if (!controller.signal.aborted) setRecentChats(value.slice(0, 8));
+        })
+        .catch(() => undefined);
+    };
+    loadSessions();
+    window.addEventListener("plot:sessions-changed", loadSessions);
+    return () => {
+      controller.abort();
+      window.removeEventListener("plot:sessions-changed", loadSessions);
+    };
   }, [settingsMode, selectedWorkspaceId]);
 
   const currentWorkspace = account?.workspaces.find((item) => item.id === selectedWorkspaceId)
@@ -724,6 +736,19 @@ function ChatIcon() {
   return (
     <HugeiconsIcon
       icon={MessageMultiple01Icon}
+      size={16}
+      color="currentColor"
+      strokeWidth={1.5}
+      aria-hidden="true"
+      className="shrink-0"
+    />
+  );
+}
+
+function RoutinesIcon() {
+  return (
+    <HugeiconsIcon
+      icon={ZapIcon}
       size={16}
       color="currentColor"
       strokeWidth={1.5}

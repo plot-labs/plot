@@ -107,20 +107,47 @@ class GitHubRestClient(
 	): List<GitHubPullRequest> {
 		val token = installationToken(installationId, repositoryId)
 		val pullRequests = mutableListOf<GitHubPullRequest>()
-		var next: URI? = uri("/repos/${path(owner)}/${path(repository)}/pulls?state=closed&per_page=100&page=1")
+		var continuation: String? = null
 		var pages = 0
-		while (next != null) {
+		do {
 			pages++
 			if (pages > pageCap.coerceAtLeast(1)) {
 				throw ApiException(HttpStatus.CONTENT_TOO_LARGE, "IMPORT_TOO_LARGE", "GitHub pull-request page cap exceeded")
 			}
-			val response = request("GET", next, token)
-			val root = parse(response)
-			if (!root.isArray) throw ApiException(HttpStatus.BAD_GATEWAY, "GITHUB_INVALID_RESPONSE", "GitHub returned an invalid pull-request response")
-			root.forEach { pullRequests += parsePullRequest(it) }
-			next = nextUri(response)
-		}
+			val pageUri = continuation?.let(::trustedPaginationUri)
+				?: uri("/repos/${path(owner)}/${path(repository)}/pulls?state=closed&per_page=100&page=1")
+			val page = listClosedPullRequestsPage(pageUri, token)
+			pullRequests += page.pullRequests
+			continuation = page.nextPage
+		} while (continuation != null)
 		return pullRequests.distinctBy { it.id }
+	}
+
+	override fun listClosedPullRequestsPage(
+		installationId: Long,
+		repositoryId: Long,
+		owner: String,
+		repository: String,
+		continuation: String?,
+	): GitHubPullRequestPage {
+		val pageUri = continuation?.let(::trustedPaginationUri)
+			?: uri("/repos/${path(owner)}/${path(repository)}/pulls?state=closed&per_page=100&page=1")
+		val token = installationToken(installationId, repositoryId)
+		return listClosedPullRequestsPage(pageUri, token)
+	}
+
+	private fun listClosedPullRequestsPage(pageUri: URI, token: String): GitHubPullRequestPage {
+		val response = request("GET", pageUri, token)
+		val root = parse(response)
+		if (!root.isArray) {
+			throw ApiException(HttpStatus.BAD_GATEWAY, "GITHUB_INVALID_RESPONSE", "GitHub returned an invalid pull-request response")
+		}
+		return GitHubPullRequestPage(
+			pullRequests = buildList {
+				root.forEach { add(parsePullRequest(it)) }
+			}.distinctBy { it.id },
+			nextPage = nextUri(response)?.toASCIIString(),
+		)
 	}
 
 	override fun listPublishedReleaseTags(
@@ -581,9 +608,19 @@ class GitHubRestClient(
 			?.value?.joinToString(",")
 			?: return null
 		val next = Regex("<([^>]+)>\\s*;\\s*rel=\"next\"").find(value)?.groupValues?.get(1) ?: return null
-		val uri = runCatching { URI.create(next) }.getOrNull() ?: throw ApiException(HttpStatus.BAD_GATEWAY, "GITHUB_INVALID_RESPONSE", "GitHub returned an invalid pagination link")
+		return trustedPaginationUri(next)
+	}
+
+	private fun trustedPaginationUri(value: String): URI {
+		val uri = runCatching { URI.create(value) }.getOrNull()
+			?: throw ApiException(HttpStatus.BAD_GATEWAY, "GITHUB_INVALID_RESPONSE", "GitHub returned an invalid pagination link")
 		val base = URI.create(properties.apiBaseUrl)
-		if (uri.scheme != base.scheme || uri.host != base.host || uri.port != base.port) {
+		if (
+			uri.scheme != base.scheme ||
+			!uri.host.equals(base.host, ignoreCase = true) ||
+			uri.port != base.port ||
+			uri.userInfo != null
+		) {
 			throw ApiException(HttpStatus.BAD_GATEWAY, "GITHUB_REDIRECT_REJECTED", "GitHub returned an untrusted pagination link")
 		}
 		return uri

@@ -1,12 +1,14 @@
 package com.plot.api.github
 
 import com.plot.api.observability.stopSafely
+import com.plot.api.routine.GitHubChangeRoutineService
 import io.micrometer.observation.Observation
 import io.micrometer.observation.ObservationRegistry
 import java.time.Instant
 import java.util.UUID
 import org.springframework.stereotype.Service
-import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.PlatformTransactionManager
+import org.springframework.transaction.support.TransactionTemplate
 import org.springframework.transaction.support.TransactionSynchronization
 import org.springframework.transaction.support.TransactionSynchronizationManager
 
@@ -16,16 +18,29 @@ class GitHubWebhookService(
 	private val scopeResolver: GitHubReleaseScopeResolver,
 	private val persistence: GitHubReleasePersistence,
 	private val dispatcher: GitHubReleaseDraftDispatcher,
+	private val gitHubChangeRoutineService: GitHubChangeRoutineService,
 	private val lifecycleService: GitHubSourceAccessLifecycleService,
 	private val observationRegistry: ObservationRegistry,
+	private val transactionManager: PlatformTransactionManager,
 ) {
-	@Transactional
+	private val transactionTemplate = TransactionTemplate(transactionManager)
+
 	fun accept(webhook: ParsedGitHubWebhook): GitHubWebhookDelivery {
 		val observation = Observation.start("plot.github.webhook", observationRegistry)
 			.highCardinalityKeyValue("plot.webhook_delivery_id", webhook.externalDeliveryId)
 		try {
 			observation.openScope().use {
-				val delivery = acceptInternal(webhook)
+				val candidate = newDelivery(webhook)
+				val inserted = requireNotNull(transactionTemplate.execute {
+					persistence.insertDelivery(candidate)
+				})
+				if (inserted.id != candidate.id && inserted.disposition != GitHubWebhookDisposition.RECEIVED) {
+					observation.lowCardinalityKeyValue("plot.disposition", inserted.disposition.name)
+					return inserted
+				}
+				val delivery = requireNotNull(transactionTemplate.execute {
+					process(inserted, webhook)
+				})
 				observation.lowCardinalityKeyValue("plot.disposition", delivery.disposition.name)
 				return delivery
 			}
@@ -37,9 +52,7 @@ class GitHubWebhookService(
 		}
 	}
 
-	private fun acceptInternal(webhook: ParsedGitHubWebhook): GitHubWebhookDelivery {
-		persistence.findDelivery(webhook.externalDeliveryId)?.let { return it }
-		val delivery = GitHubWebhookDelivery(
+	private fun newDelivery(webhook: ParsedGitHubWebhook): GitHubWebhookDelivery = GitHubWebhookDelivery(
 			id = UUID.randomUUID(),
 			externalDeliveryId = webhook.externalDeliveryId,
 			eventType = webhook.eventType,
@@ -59,8 +72,11 @@ class GitHubWebhookService(
 			receivedAt = Instant.now(),
 			processedAt = null,
 		)
-		val inserted = persistence.insertDelivery(delivery)
-		if (inserted.id != delivery.id) return inserted
+
+	private fun process(
+		delivery: GitHubWebhookDelivery,
+		webhook: ParsedGitHubWebhook,
+	): GitHubWebhookDelivery {
 
 		if (lifecycleService.isLifecycle(webhook)) {
 			val projection = lifecycleService.project(webhook)
@@ -75,15 +91,29 @@ class GitHubWebhookService(
 		return when {
 			webhook.eventType == "push" && (webhook.refDeleted == true || webhook.forced == true) ->
 				mark(delivery, GitHubWebhookDisposition.IGNORED)
-			webhook.eventType == "push" && webhook.tagName != null ->
-				enqueue(context, delivery, webhook.tagName, webhook.afterSha)
-			webhook.eventType == "push" && webhook.ref == "refs/heads/${context.defaultBranch}" ->
-				mark(delivery, GitHubWebhookDisposition.OBSERVED)
+			webhook.eventType == "push" && webhook.tagName != null -> {
+				val queued = gitHubChangeRoutineService.accept(context, delivery, webhook)
+				if (gitHubChangeRoutineService.hasReleaseEventRoutines(context)) {
+					mark(delivery, if (queued > 0) GitHubWebhookDisposition.QUEUED else GitHubWebhookDisposition.OBSERVED)
+				} else {
+					enqueue(context, delivery, webhook.tagName, webhook.afterSha)
+				}
+			}
+			webhook.eventType == "push" && webhook.ref == "refs/heads/${context.defaultBranch}" -> {
+				val queued = gitHubChangeRoutineService.accept(context, delivery, webhook)
+				mark(delivery, if (queued > 0) GitHubWebhookDisposition.QUEUED else GitHubWebhookDisposition.OBSERVED)
+			}
 			webhook.eventType == "push" -> mark(delivery, GitHubWebhookDisposition.IGNORED)
 			// release.target_commitish may be a mutable branch. Only a canonical tag push
 			// contributes an immutable observed head SHA to the release request.
-			webhook.eventType == "release" && webhook.eventAction == "published" && webhook.tagName != null ->
-				enqueue(context, delivery, webhook.tagName, observedHeadSha = null)
+			webhook.eventType == "release" && webhook.eventAction == "published" && webhook.tagName != null -> {
+				val queued = gitHubChangeRoutineService.accept(context, delivery, webhook)
+				if (gitHubChangeRoutineService.hasReleaseEventRoutines(context)) {
+					mark(delivery, if (queued > 0) GitHubWebhookDisposition.QUEUED else GitHubWebhookDisposition.OBSERVED)
+				} else {
+					enqueue(context, delivery, webhook.tagName, observedHeadSha = null)
+				}
+			}
 			else -> mark(delivery, GitHubWebhookDisposition.IGNORED)
 		}
 	}

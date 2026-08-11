@@ -44,6 +44,12 @@ class WritingBlockImportService(
 		block: ImportedWritingBlock,
 		now: Instant = Instant.now(),
 	): WritingBlockUpsertResult {
+		// Acquire before row locks; V22 triggers provide the same ordering for older binaries.
+		jdbcTemplate.query(
+			"select pg_advisory_xact_lock(hashtextextended(?, 0))",
+			{ _, _ -> Unit },
+			"routine-activity:${principal.workspaceId}",
+		)
 		jdbcTemplate.query(
 			"select pg_advisory_xact_lock(hashtextextended(?, 0))",
 			{ _, _ -> Unit },

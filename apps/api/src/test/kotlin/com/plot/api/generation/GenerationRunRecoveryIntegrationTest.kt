@@ -26,12 +26,13 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.jupiter.api.BeforeEach
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import org.springframework.jdbc.core.JdbcTemplate
-import org.springframework.test.context.TestPropertySource
 import org.springframework.test.annotation.DirtiesContext
+import org.springframework.test.context.TestPropertySource
 
 @SpringBootTest
 @Import(TestcontainersConfiguration::class)
@@ -42,6 +43,19 @@ class GenerationRunRecoveryIntegrationTest {
 	@Autowired private lateinit var workflow: GenerationWorkflowService
 	@Autowired private lateinit var jdbcTemplate: JdbcTemplate
 	@Autowired private lateinit var devContext: DevContext
+
+	@BeforeEach
+	fun isolateGenerationQueue() {
+		jdbcTemplate.update(
+			"""
+			update generation_runs
+			set status = 'FAILED', error_code = 'TEST_ISOLATION',
+			    claimed_by = null, claimed_at = null, heartbeat_at = null,
+			    finished_at = coalesce(finished_at, greatest(now(), created_at)), updated_at = now()
+			where status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
+			""".trimIndent(),
+		)
+	}
 
 	@Test
 	fun `conditional claim prevents duplicates and stale recovery releases ownership`() {

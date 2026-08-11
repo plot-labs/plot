@@ -24,6 +24,21 @@ interface GitHubClient {
 		pageCap: Int,
 	): List<GitHubPullRequest>
 
+	fun listClosedPullRequestsPage(
+		installationId: Long,
+		repositoryId: Long,
+		owner: String,
+		repository: String,
+		continuation: String?,
+	): GitHubPullRequestPage = if (continuation == null) {
+		GitHubPullRequestPage(
+			listClosedPullRequests(installationId, repositoryId, owner, repository, pageCap = 1),
+			nextPage = null,
+		)
+	} else {
+		throw UnsupportedOperationException("GitHub pull-request pagination is not implemented")
+	}
+
 	fun listPublishedReleaseTags(
 		installationId: Long,
 		repositoryId: Long,

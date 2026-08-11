@@ -5,9 +5,11 @@ import org.springframework.core.task.TaskRejectedException
 
 class GenerationRunDispatcher(
 	private val taskExecutor: TaskExecutor,
+	private val enabled: Boolean = true,
 	private val drainBatch: () -> Boolean,
 ) {
 	fun dispatch() {
+		if (!enabled) return
 		try {
 			taskExecutor.execute {
 				while (drainBatch()) {

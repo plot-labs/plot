@@ -39,10 +39,9 @@ class GenerationPersistenceReliabilityIntegrationTest {
 			update generation_runs
 			set status = 'FAILED', error_code = 'TEST_ISOLATION',
 			    claimed_by = null, claimed_at = null, heartbeat_at = null,
-			    finished_at = coalesce(finished_at, now()), updated_at = now()
-			where workspace_id = ? and status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
+			    finished_at = coalesce(finished_at, greatest(now(), created_at)), updated_at = now()
+			where status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
 			""".trimIndent(),
-			devContext.devWorkspaceId,
 		)
 	}
 

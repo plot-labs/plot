@@ -3,6 +3,7 @@ package com.plot.api.entitlement
 import com.plot.api.common.ApiException
 import com.plot.api.dev.DevContext
 import com.plot.api.workspace.WorkspaceRepository
+import java.util.UUID
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -14,8 +15,11 @@ class WorkspaceAccessService(
 	private val entitlementReader: WorkspaceEntitlementReader,
 ) {
 	@Transactional(noRollbackFor = [ApiException::class])
-	fun requireWritable() {
-		val workspace = workspaceRepository.findByIdAndStatus(devContext.devWorkspaceId, "ACTIVE")
+	fun requireWritable() = requireWritable(devContext.devWorkspaceId)
+
+	@Transactional(noRollbackFor = [ApiException::class])
+	fun requireWritable(workspaceId: UUID) {
+		val workspace = workspaceRepository.findByIdAndStatus(workspaceId, "ACTIVE")
 			?: throw ApiException(HttpStatus.FORBIDDEN, "ACCESS_DENIED", "Access denied")
 		val entitlement = entitlementReader.resolve(workspace)
 		if (

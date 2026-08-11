@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const navigation = vi.hoisted(() => ({ pathname: "/artifacts" }));
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/artifacts",
+  usePathname: () => navigation.pathname,
 }));
 
 vi.mock("@/components/layout/product-sidebar", () => ({
@@ -14,13 +16,16 @@ vi.mock("@/components/layout/product-sidebar", () => ({
 import { ProductShell } from "./product-shell";
 
 describe("ProductShell mobile navigation", () => {
-  it("links directly to workspace Settings and marks Artifacts as current", () => {
+  beforeEach(() => {
+    navigation.pathname = "/artifacts";
     vi.stubGlobal("matchMedia", () => ({
       matches: false,
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
     }));
+  });
 
+  it("links directly to workspace Settings and marks Artifacts as current", () => {
     render(
       <ProductShell>
         <div>Content</div>
@@ -33,5 +38,19 @@ describe("ProductShell mobile navigation", () => {
     expect(screen.getByRole("link", { name: "Artifacts" })).toHaveAttribute("aria-current", "page");
 
     expect(screen.getByRole("link", { name: "Workspace settings" })).toHaveAttribute("href", "/settings/integrations");
+  });
+
+  it("marks only Routines as current on the routines page", () => {
+    navigation.pathname = "/routines";
+
+    render(
+      <ProductShell>
+        <div>Content</div>
+      </ProductShell>,
+    );
+
+    expect(screen.getByRole("link", { name: "Routines" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Chat" })).not.toHaveAttribute("aria-current");
+    expect(screen.getByRole("link", { name: "Artifacts" })).not.toHaveAttribute("aria-current");
   });
 });

@@ -492,8 +492,13 @@ class GitHubWebhookApiIntegrationTest {
 
 		assertFailsWith<Exception> { postWebhook(deliveryId, "push", body) }
 
-		assertEquals(0, jdbcTemplate.queryForObject(
+		assertEquals(1, jdbcTemplate.queryForObject(
 			"select count(*) from github_webhook_deliveries where external_delivery_id = ?", Int::class.java, deliveryId,
+		))
+		assertEquals("RECEIVED", jdbcTemplate.queryForObject(
+			"select disposition from github_webhook_deliveries where external_delivery_id = ?",
+			String::class.java,
+			deliveryId,
 		))
 		assertEquals(0, releaseRequestCount())
 
