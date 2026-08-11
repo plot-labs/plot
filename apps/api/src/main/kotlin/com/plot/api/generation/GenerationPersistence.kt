@@ -2,16 +2,17 @@ package com.plot.api.generation
 
 import com.plot.api.ai.provider.ModelCallMetadata
 import com.plot.api.ai.provider.ModelRole
-import java.sql.Timestamp
 import com.plot.api.common.ApiException
-import com.plot.api.entitlement.TrialPolicy
 import com.plot.api.common.UuidGenerator
-import com.plot.api.generation.model.EvidenceSnapshot
-import com.plot.api.generation.model.ReviewVerdict
-import com.plot.api.generation.model.SentenceArtifact
+import com.plot.api.entitlement.TrialPolicy
 import com.plot.api.generation.dto.GenerationModelTimingResponse
 import com.plot.api.generation.dto.GenerationRunTimingResponse
 import com.plot.api.generation.dto.GenerationStepTimingResponse
+import com.plot.api.generation.model.EvidenceSnapshot
+import com.plot.api.generation.model.ReviewVerdict
+import com.plot.api.generation.model.SentenceArtifact
+import com.plot.api.routine.AgentToolAccessException
+import java.sql.Timestamp
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
@@ -32,6 +33,7 @@ data class GenerationRunReservation(
 	val modelName: String,
 	val budgetJson: String,
 	val workSessionId: UUID? = null,
+	val agentRunId: UUID? = null,
 )
 
 data class ClaimedGenerationRun(
@@ -83,6 +85,62 @@ class GenerationPersistence(
 				throw ApiException(HttpStatus.BAD_REQUEST, "INVALID_SESSION", "Work session is unavailable in this workspace")
 			}
 		}
+		reservation.agentRunId?.let { agentRunId ->
+			val workSessionId = reservation.workSessionId
+				?: throw ApiException(HttpStatus.BAD_REQUEST, "INVALID_SESSION", "Routine Agent generation requires its Chat")
+			val linkedAgent = jdbcTemplate.query(
+				"""
+				select id
+				from agent_runs
+				where workspace_id = ? and id = ? and created_by_user_id = ? and work_session_id = ?
+				for update
+				""".trimIndent(),
+				{ rs, _ -> rs.getObject(1, UUID::class.java) },
+				reservation.workspaceId,
+				agentRunId,
+				reservation.createdByUserId,
+				workSessionId,
+			).isNotEmpty()
+			if (!linkedAgent) {
+				throw ApiException(HttpStatus.BAD_REQUEST, "INVALID_AGENT_RUN", "Agent run is unavailable in this workspace")
+			}
+			val expectedSourceCount = jdbcTemplate.queryForObject(
+				"select count(*) from agent_run_sources where workspace_id = ? and agent_run_id = ?",
+				Int::class.java,
+				reservation.workspaceId,
+				agentRunId,
+			) ?: 0
+			val sourceStatuses = jdbcTemplate.query(
+				"""
+				select scope.status, namespace.status, binding.status, connection.status
+				from agent_run_sources source
+				join source_scopes scope
+				  on scope.workspace_id = source.workspace_id and scope.id = source.source_scope_id
+				join source_namespaces namespace
+				  on namespace.workspace_id = scope.workspace_id and namespace.id = scope.source_namespace_id
+				 and namespace.provider = scope.provider
+				join connection_namespace_bindings binding
+				  on binding.workspace_id = namespace.workspace_id and binding.source_namespace_id = namespace.id
+				 and binding.provider = namespace.provider and binding.status = 'ACTIVE'
+				join connections connection
+				  on connection.workspace_id = binding.workspace_id and connection.id = binding.connection_id
+				 and connection.provider = binding.provider and connection.status = 'ACTIVE'
+				where source.workspace_id = ? and source.agent_run_id = ?
+				order by scope.id
+				for update of scope, namespace, binding, connection
+				""".trimIndent(),
+				{ rs, _ -> listOf(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4)) },
+				reservation.workspaceId,
+				agentRunId,
+			)
+			if (
+				expectedSourceCount == 0 ||
+				sourceStatuses.size != expectedSourceCount ||
+				sourceStatuses.flatten().any { it != "ACTIVE" }
+			) {
+				throw AgentToolAccessException("SOURCE_NOT_READY")
+			}
+		}
 		val existing = jdbcTemplate.query(
 			"select id, request_fingerprint from generation_runs where workspace_id = ? and created_by_user_id = ? and idempotency_key = ?",
 			{ rs, _ -> rs.getObject(1, UUID::class.java) to rs.getString(2) },
@@ -97,14 +155,15 @@ class GenerationPersistence(
 		val inserted = jdbcTemplate.update(
 			"""
 			insert into generation_runs (
-			 id, workspace_id, work_session_id, source_scope_id, created_by_user_id, idempotency_key, request_fingerprint,
+			 id, workspace_id, work_session_id, agent_run_id, source_scope_id, created_by_user_id, idempotency_key, request_fingerprint,
 			 status, workflow_version, prompt_version, output_schema_version, budget_version, provider,
 			 model_name, budget_snapshot, user_instruction, created_at, updated_at
-			) values (?, ?, ?, ?, ?, ?, ?, 'QUEUED', 'fixed-v1', 'changelog-v8', 'generation-v5',
+			) values (?, ?, ?, ?, ?, ?, ?, ?, 'QUEUED', 'fixed-v1', 'changelog-v8', 'generation-v5',
 			 'budget-v1', ?, ?, ?::jsonb, ?, ?, ?)
 			on conflict (workspace_id, created_by_user_id, idempotency_key) do nothing
 			""".trimIndent(),
-			reservation.state.runId, reservation.workspaceId, reservation.workSessionId, reservation.sourceScopeId,
+			reservation.state.runId, reservation.workspaceId, reservation.workSessionId, reservation.agentRunId,
+			reservation.sourceScopeId,
 			reservation.createdByUserId, reservation.idempotencyKey, reservation.requestFingerprint,
 			reservation.provider, reservation.modelName, reservation.budgetJson, reservation.state.instruction,
 			Timestamp.from(now), Timestamp.from(now),
@@ -180,12 +239,17 @@ class GenerationPersistence(
 		}
 	}
 
-	fun claimNext(workerId: String, staleBefore: Instant): ClaimedGenerationRun? = transactionTemplate.execute {
+	fun claimNext(
+		workerId: String,
+		staleBefore: Instant,
+		includeAgentRuns: Boolean = true,
+	): ClaimedGenerationRun? = transactionTemplate.execute {
 		val row = jdbcTemplate.query(
 			"""
 			select workspace_id, id, transition_version
 			from generation_runs
 			where status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
+			  and (? or agent_run_id is null)
 			  and (next_attempt_at is null or next_attempt_at <= now())
 			  and (claimed_by is null or heartbeat_at < ?)
 			  and (
@@ -203,6 +267,7 @@ class GenerationPersistence(
 			limit 1
 			""".trimIndent(),
 			{ rs, _ -> Triple(rs.getObject(1, UUID::class.java), rs.getObject(2, UUID::class.java), rs.getLong(3)) },
+			includeAgentRuns,
 			Timestamp.from(staleBefore),
 		).firstOrNull() ?: return@execute null
 		val now = clock.instant()
@@ -688,13 +753,12 @@ class GenerationPersistence(
 			val updated = jdbcTemplate.update(
 				"""
 				update generation_runs
-				set claimed_by = null, claimed_at = null, heartbeat_at = null, next_attempt_at = ?,
+				set claimed_by = null, claimed_at = null, heartbeat_at = null, next_attempt_at = null,
 				    transition_version = transition_version + 1, updated_at = ?
 				where workspace_id = ? and id = ? and claimed_by = ? and transition_version = ?
 				  and (heartbeat_at is null or heartbeat_at < ?)
 				  and status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
 				""".trimIndent(),
-				Timestamp.from(now),
 				Timestamp.from(now),
 				candidate.workspaceId,
 				candidate.runId,
@@ -719,7 +783,7 @@ class GenerationPersistence(
 		require(attemptNo > 0) { "Generation retry attempt must be positive" }
 		val source = jdbcTemplate.query(
 			"""
-			select work_session_id, source_scope_id, created_by_user_id, idempotency_key, request_fingerprint,
+			select work_session_id, agent_run_id, source_scope_id, created_by_user_id, idempotency_key, request_fingerprint,
 				status, provider, model_name, budget_snapshot::text, user_instruction
 			from generation_runs
 			where workspace_id = ? and id = ?
@@ -728,6 +792,7 @@ class GenerationPersistence(
 			{ rs, _ ->
 				RetryGenerationSource(
 					workSessionId = rs.getObject("work_session_id", UUID::class.java),
+					agentRunId = rs.getObject("agent_run_id", UUID::class.java),
 					sourceScopeId = rs.getObject("source_scope_id", UUID::class.java),
 					createdByUserId = rs.getObject("created_by_user_id", UUID::class.java),
 					idempotencyKey = rs.getString("idempotency_key"),
@@ -763,6 +828,7 @@ class GenerationPersistence(
 			instruction = source.instruction,
 			status = GenerationRunStatus.QUEUED,
 			workSessionId = source.workSessionId,
+			agentRunId = source.agentRunId,
 		)
 		createRun(
 			GenerationRunReservation(
@@ -776,6 +842,7 @@ class GenerationPersistence(
 				modelName = source.modelName,
 				budgetJson = source.budgetJson,
 				workSessionId = source.workSessionId,
+				agentRunId = source.agentRunId,
 			),
 		)
 	})
@@ -784,11 +851,13 @@ class GenerationPersistence(
 		jdbcTemplate.update(
 			"""
 			insert into generation_inputs (id, workspace_id, generation_run_id, writing_block_id, order_index,
+			 source_scope_id, agent_run_id, agent_run_input_id,
 			 source_provider, source_kind, source_label, snapshot_title, snapshot_body, snapshot_excerpt,
 			 original_url, source_created_at, source_updated_at, content_hash, captured_at)
-			values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			""".trimIndent(),
 			evidence.id, workspaceId, evidence.generationRunId, evidence.writingBlockId, evidence.orderIndex,
+			evidence.sourceScopeId, evidence.agentRunId, evidence.agentRunInputId,
 			evidence.sourceProvider.name, evidence.sourceKind, evidence.sourceLabel, evidence.snapshotTitle,
 			evidence.snapshotBody, evidence.snapshotExcerpt, evidence.originalUrl,
 			evidence.sourceCreatedAt?.let(Timestamp::from), evidence.sourceUpdatedAt?.let(Timestamp::from),
@@ -978,6 +1047,7 @@ private data class RunTimingRow(
 
 private data class RetryGenerationSource(
 	val workSessionId: UUID?,
+	val agentRunId: UUID?,
 	val sourceScopeId: UUID?,
 	val createdByUserId: UUID,
 	val idempotencyKey: String,

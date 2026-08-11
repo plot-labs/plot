@@ -16,9 +16,10 @@ import {
   plotApiClient,
   PlotApiError,
   type GitHubConnection,
+  type GitHubRepository,
 } from "@/lib/api-client";
 
-type IntegrationAction = "install" | "disconnect" | null;
+type IntegrationAction = "install" | "disconnect" | "enable" | null;
 
 type IntegrationBrand = "figma" | "github" | "linear" | "notion" | "slack";
 
@@ -49,6 +50,10 @@ const plannedIntegrations: Array<{
   },
 ];
 
+function requestIsCurrent(controller: AbortController, workspaceId: string) {
+  return !controller.signal.aborted && getSelectedWorkspaceId() === workspaceId;
+}
+
 export function IntegrationsWorkspace() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -56,11 +61,14 @@ export function IntegrationsWorkspace() {
   const callbackError = searchParams.get("githubError");
   const [preferredConnectionId] = useState(callbackConnectionId);
   const [connections, setConnections] = useState<GitHubConnection[]>([]);
+  const [availableRepositories, setAvailableRepositories] = useState<GitHubRepository[]>([]);
+  const [selectedExternalRepositoryId, setSelectedExternalRepositoryId] = useState("");
   const [isOwner, setIsOwner] = useState<boolean | null>(null);
   const [connectionNeedsReconnect, setConnectionNeedsReconnect] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [action, setAction] = useState<IntegrationAction>(null);
   const actionRef = useRef<IntegrationAction>(null);
+  const actionAbortRef = useRef<AbortController | null>(null);
   const [message, setMessage] = useState<string | null>(callbackError ? callbackMessage(callbackError) : null);
   const [messageRequestId, setMessageRequestId] = useState<string | null>(null);
   const [reloadNonce, setReloadNonce] = useState(0);
@@ -74,6 +82,7 @@ export function IntegrationsWorkspace() {
   const selectedRepositoryDisconnected = selectedRepository?.statusReason === "REPOSITORY_DELETED"
     || selectedRepository?.statusReason === "USER_DISCONNECTED";
   const connectedRepository = selectedRepository?.status === "ACTIVE" ? selectedRepository : null;
+  const needsRepositorySetup = selectedConnection?.status === "ACTIVE" && !connectedRepository;
   const connectionBadgeStatus: "connected" | "attention" | "disconnected" = !selectedConnection
     || selectedConnection.status === "DISABLED"
     || selectedConnection.statusReason === "INSTALLATION_UNINSTALLED"
@@ -101,10 +110,16 @@ export function IntegrationsWorkspace() {
   useEffect(() => {
     function handleWorkspaceChanged() {
       setConnections([]);
+      setAvailableRepositories([]);
+      setSelectedExternalRepositoryId("");
       setIsOwner(null);
       setConnectionNeedsReconnect(false);
       setMessage(null);
       setMessageRequestId(null);
+      actionAbortRef.current?.abort();
+      actionAbortRef.current = null;
+      actionRef.current = null;
+      setAction(null);
       setIsLoading(true);
       setReloadNonce((value) => value + 1);
     }
@@ -114,7 +129,7 @@ export function IntegrationsWorkspace() {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
 
     async function load() {
       try {
@@ -122,28 +137,43 @@ export function IntegrationsWorkspace() {
         if (!workspaceId) throw new Error("No workspace is selected");
 
         const [workspace, nextConnections] = await Promise.all([
-          plotApiClient.getWorkspace(workspaceId),
-          plotApiClient.listGitHubConnections(),
+          plotApiClient.getWorkspace(workspaceId, { signal: controller.signal }),
+          plotApiClient.listGitHubConnections({ signal: controller.signal }),
         ]);
-        if (cancelled) return;
+        if (!requestIsCurrent(controller, workspaceId)) return;
 
         const owner = workspace.role === "OWNER";
+        const nextConnection = nextConnections.find((connection) => connection.id === preferredConnectionId)
+          ?? nextConnections.find((connection) => connection.status === "ACTIVE")
+          ?? nextConnections[0]
+          ?? null;
+        const hasActiveRepository = nextConnection?.repositories.some((repository) => repository.status === "ACTIVE") ?? false;
+        let repositories: GitHubRepository[] = [];
+        if (owner && nextConnection?.status === "ACTIVE" && !hasActiveRepository) {
+          repositories = await plotApiClient.listGitHubRepositories(nextConnection.id, { signal: controller.signal });
+        }
+        if (!requestIsCurrent(controller, workspaceId)) return;
+
         setIsOwner(owner);
         setConnections(nextConnections);
+        setAvailableRepositories(repositories);
+        setSelectedExternalRepositoryId((current) => repositories.some((repository) => String(repository.externalRepositoryId) === current)
+          ? current
+          : String(repositories[0]?.externalRepositoryId ?? ""));
         setConnectionNeedsReconnect(false);
       } catch (error) {
-        if (!cancelled) {
+        if (!controller.signal.aborted) {
           setConnectionNeedsReconnect(requiresReconnect(error));
           setMessage(errorMessage(error));
           setMessageRequestId(providerRequestId(error));
         }
       } finally {
-        if (!cancelled) setIsLoading(false);
+        if (!controller.signal.aborted) setIsLoading(false);
       }
     }
 
     queueMicrotask(() => { void load(); });
-    return () => { cancelled = true; };
+    return () => controller.abort();
   }, [preferredConnectionId, reloadNonce]);
 
   useEffect(() => {
@@ -167,14 +197,70 @@ export function IntegrationsWorkspace() {
     }
   };
 
+  const enableRepository = async () => {
+    if (!selectedConnection || !selectedExternalRepositoryId || actionRef.current) return;
+    const workspaceId = getSelectedWorkspaceId();
+    if (!workspaceId) return;
+    const controller = new AbortController();
+    actionAbortRef.current = controller;
+    actionRef.current = "enable";
+    setAction("enable");
+    setMessage(null);
+    setMessageRequestId(null);
+    try {
+      const repository = await plotApiClient.connectGitHubRepository(
+        selectedConnection.id,
+        Number(selectedExternalRepositoryId),
+        { signal: controller.signal },
+      );
+      if (!requestIsCurrent(controller, workspaceId) || !repository.id) return;
+
+      const to = new Date();
+      const from = new Date(to.getTime() - 30 * 24 * 60 * 60 * 1_000);
+      try {
+        await plotApiClient.importGitHubRepository(repository.id, {
+          from: from.toISOString(),
+          to: to.toISOString(),
+        }, { signal: controller.signal });
+      } catch (error) {
+        if (requestIsCurrent(controller, workspaceId)) {
+          setMessage("GitHub is connected, but the initial source import could not finish.");
+          setMessageRequestId(providerRequestId(error));
+        }
+      }
+      if (!requestIsCurrent(controller, workspaceId)) return;
+      setConnections((current) => current.map((connection) => connection.id === selectedConnection.id
+        ? { ...connection, repositories: [...connection.repositories.filter((item) => item.externalRepositoryId !== repository.externalRepositoryId), repository] }
+        : connection));
+      setAvailableRepositories([]);
+      setSelectedExternalRepositoryId("");
+    } catch (error) {
+      if (requestIsCurrent(controller, workspaceId)) {
+        setMessage(errorMessage(error));
+        setMessageRequestId(providerRequestId(error));
+      }
+    } finally {
+      if (actionAbortRef.current === controller) {
+        actionAbortRef.current = null;
+        actionRef.current = null;
+        setAction(null);
+      }
+    }
+  };
+
   const disconnectRepository = async () => {
     if (!connectedRepository?.id || actionRef.current) return;
+    const workspaceId = getSelectedWorkspaceId();
+    if (!workspaceId) return;
+    const controller = new AbortController();
+    actionAbortRef.current = controller;
     actionRef.current = "disconnect";
     setAction("disconnect");
     setMessage(null);
     setMessageRequestId(null);
     try {
-      await plotApiClient.disconnectGitHubRepository(connectedRepository.id);
+      await plotApiClient.disconnectGitHubRepository(connectedRepository.id, { signal: controller.signal });
+      if (!requestIsCurrent(controller, workspaceId)) return;
       setConnections((current) => current.map((connection) => connection.id === selectedConnection?.id
         ? {
           ...connection,
@@ -184,11 +270,16 @@ export function IntegrationsWorkspace() {
         }
         : connection));
     } catch (error) {
-      setMessage(errorMessage(error));
-      setMessageRequestId(providerRequestId(error));
+      if (requestIsCurrent(controller, workspaceId)) {
+        setMessage(errorMessage(error));
+        setMessageRequestId(providerRequestId(error));
+      }
     } finally {
-      actionRef.current = null;
-      setAction(null);
+      if (actionAbortRef.current === controller) {
+        actionAbortRef.current = null;
+        actionRef.current = null;
+        setAction(null);
+      }
     }
   };
 
@@ -231,7 +322,7 @@ export function IntegrationsWorkspace() {
             <SectionHeading
               id="essentials-heading"
               title="Available integrations"
-              description={connectionBadgeStatus === "connected" ? "Configured for this workspace" : "Ready to connect"}
+              description={needsRepositorySetup ? "Choose a repository" : connectionBadgeStatus === "connected" ? "Configured for this workspace" : "Ready to connect"}
             />
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -274,6 +365,33 @@ export function IntegrationsWorkspace() {
                 {selectedConnection && (
                   <div className="mt-3 flex min-w-0 items-center gap-2">
                     <ConnectionBadge status={connectionBadgeStatus} />
+                  </div>
+                )}
+                {!isLoading && isOwner && needsRepositorySetup && availableRepositories.length > 0 && (
+                  <div className="mt-4 flex items-center gap-2 border-t border-black/[0.07] pt-4 dark:border-white/[0.08]">
+                    <label className="min-w-0 flex-1">
+                      <span className="sr-only">GitHub repository</span>
+                      <select
+                        aria-label="GitHub repository"
+                        value={selectedExternalRepositoryId}
+                        onChange={(event) => setSelectedExternalRepositoryId(event.target.value)}
+                        disabled={action !== null}
+                        className="h-9 w-full rounded-[8px] border border-black/10 bg-white px-2.5 text-[12px] text-black/72 outline-none focus:border-black/25 focus:ring-2 focus:ring-black/[0.04] disabled:opacity-50 dark:border-white/12 dark:bg-white/[0.06] dark:text-white/75"
+                      >
+                        {availableRepositories.map((repository) => (
+                          <option key={repository.externalRepositoryId} value={repository.externalRepositoryId}>{repository.displayName}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => { void enableRepository(); }}
+                      disabled={action !== null || !selectedExternalRepositoryId}
+                      className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-[8px] bg-[#252a30] px-3 text-[12px] font-medium text-white transition hover:bg-[#171a1e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 disabled:cursor-wait disabled:opacity-45 dark:bg-white dark:text-[#18191b] dark:hover:bg-white/90"
+                    >
+                      {action === "enable" ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" /> : null}
+                      Enable
+                    </button>
                   </div>
                 )}
                 {isLoading && <Loading />}

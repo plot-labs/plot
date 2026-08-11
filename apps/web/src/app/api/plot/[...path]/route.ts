@@ -185,8 +185,15 @@ function isAllowed(method: string, path: string[]): boolean {
   if (method === "POST" && /^github\/repositories\/[^/]+\/release-activity\/[^/]+\/retry$/.test(route)) return true;
   if (method === "GET" && /^github\/imports\/[^/]+$/.test(route)) return true;
   if (method === "GET" && route === "blocks") return true;
+  if (method === "GET" && route === "routines") return true;
+  if (method === "GET" && /^routines\/[0-9a-fA-F-]+$/.test(route)) return true;
+  if (method === "GET" && /^routines\/[0-9a-fA-F-]+\/agent-runs\/[0-9a-fA-F-]+$/.test(route)) return true;
+  if (method === "POST" && route === "routines") return true;
+  if (method === "PATCH" && /^routines\/[0-9a-fA-F-]+$/.test(route)) return true;
+  if (method === "POST" && /^routines\/[0-9a-fA-F-]+\/run$/.test(route)) return true;
   if (method === "GET" && route === "sessions") return true;
   if (method === "POST" && route === "sessions") return true;
+  if (method === "GET" && /^sessions\/[^/]+\/generations$/.test(route)) return true;
   if (method === "PATCH" && /^sessions\/[^/]+$/.test(route)) return true;
   if (method === "POST" && route === "generations") return true;
   if (method === "GET" && /^generations\/[^/]+$/.test(route)) return true;

@@ -40,6 +40,7 @@ data class GenerationWorkflowState(
 	val rewriteTargetSentenceIds: List<UUID> = emptyList(),
 	val failureCode: String? = null,
 	val workSessionId: UUID? = null,
+	val agentRunId: UUID? = null,
 )
 
 class GenerationWorkflowService(

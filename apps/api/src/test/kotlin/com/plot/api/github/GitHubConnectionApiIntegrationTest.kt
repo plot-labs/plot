@@ -58,6 +58,8 @@ class GitHubConnectionApiIntegrationTest {
 
 	@BeforeEach
 	fun cleanData() {
+		jdbcTemplate.update("delete from routine_context_sources where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from routines where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from writing_block_scopes where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from source_imports where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from source_observations where workspace_id = ?", devContext.devWorkspaceId)
@@ -70,6 +72,38 @@ class GitHubConnectionApiIntegrationTest {
 		jdbcTemplate.update("delete from connections where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from github_installation_states where workspace_id = ?", devContext.devWorkspaceId)
 		fakeClient.reset()
+	}
+
+	@Test
+	fun cleanInstallationCanActivateImportAndCreateRoutineWithoutDatabaseSetup() {
+		val connectionId = completeInstallation()
+		val scopeId = connect(connectionId, 1001)
+
+		mockMvc.post("/api/github/repositories/$scopeId/imports") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"from":"2026-01-01T00:00:00Z","to":"2026-02-01T00:00:00Z"}"""
+		}.andExpect {
+			status { isOk() }
+			jsonPath("$.blockCreatedCount") { value(1) }
+		}
+
+		mockMvc.post("/api/routines") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """
+				{"name":"Repository update","sourceScopeId":"$scopeId","contextSourceScopeIds":[],"instruction":"Draft the latest update","cadence":"WEEKLY"}
+			""".trimIndent()
+		}.andExpect {
+			status { isCreated() }
+			jsonPath("$.sourceScopeId") { value(scopeId.toString()) }
+			jsonPath("$.sourceLabel") { value("acme/one") }
+		}
+
+		assertEquals(1, jdbcTemplate.queryForObject(
+			"select count(*) from routines where workspace_id = ? and source_scope_id = ?",
+			Int::class.java,
+			devContext.devWorkspaceId,
+			scopeId,
+		))
 	}
 
 	@Test

@@ -8,6 +8,9 @@ const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
   getWorkspace: vi.fn(),
   listConnections: vi.fn(),
+  listRepositories: vi.fn(),
+  connectRepository: vi.fn(),
+  importRepository: vi.fn(),
   createInstallationRequest: vi.fn(),
   disconnectRepository: vi.fn(),
 }));
@@ -25,6 +28,9 @@ vi.mock("@/lib/api-client", async () => {
     plotApiClient: {
       getWorkspace: mocks.getWorkspace,
       listGitHubConnections: mocks.listConnections,
+      listGitHubRepositories: mocks.listRepositories,
+      connectGitHubRepository: mocks.connectRepository,
+      importGitHubRepository: mocks.importRepository,
       createGitHubInstallationRequest: mocks.createInstallationRequest,
       disconnectGitHubRepository: mocks.disconnectRepository,
     },
@@ -62,6 +68,9 @@ describe("IntegrationsWorkspace", () => {
     mocks.replace.mockReset();
     mocks.getWorkspace.mockReset().mockResolvedValue({ id: "workspace-1", role: "OWNER" });
     mocks.listConnections.mockReset().mockResolvedValue([]);
+    mocks.listRepositories.mockReset().mockResolvedValue([]);
+    mocks.connectRepository.mockReset().mockResolvedValue(repository);
+    mocks.importRepository.mockReset().mockResolvedValue({ id: "import-1", sourceScopeId: "scope-1", status: "COMPLETED" });
     mocks.createInstallationRequest.mockReset();
     mocks.disconnectRepository.mockReset().mockResolvedValue(undefined);
   });
@@ -148,13 +157,39 @@ describe("IntegrationsWorkspace", () => {
     expect(screen.queryByRole("radio")).not.toBeInTheDocument();
   });
 
+  it("activates and imports a granted repository from a clean connection", async () => {
+    mocks.listConnections.mockResolvedValue([connection]);
+    mocks.listRepositories.mockResolvedValue([{ ...repository, id: null, status: null }]);
+
+    render(<IntegrationsWorkspace />);
+
+    expect(await screen.findByRole("combobox", { name: "GitHub repository" })).toHaveValue("42");
+    fireEvent.click(screen.getByRole("button", { name: "Enable" }));
+
+    await waitFor(() => expect(mocks.connectRepository).toHaveBeenCalledWith(
+      "connection-1",
+      42,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    ));
+    await waitFor(() => expect(mocks.importRepository).toHaveBeenCalledTimes(1));
+    const [, window, options] = mocks.importRepository.mock.calls[0] as [string, { from: string; to: string }, { signal: AbortSignal }];
+    expect(new Date(window.to).getTime() - new Date(window.from).getTime()).toBe(30 * 24 * 60 * 60 * 1_000);
+    expect(options.signal).toBeInstanceOf(AbortSignal);
+    expect(await screen.findByRole("button", { name: "Disconnect GitHub" })).toBeVisible();
+    expect(screen.queryByRole("combobox", { name: "GitHub repository" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Repository access")).not.toBeInTheDocument();
+  });
+
   it("disconnects the connected GitHub repository", async () => {
     mocks.listConnections.mockResolvedValue([{ ...connection, repositories: [repository] }]);
 
     render(<IntegrationsWorkspace />);
     fireEvent.click(await screen.findByRole("button", { name: "Disconnect GitHub" }));
 
-    await waitFor(() => expect(mocks.disconnectRepository).toHaveBeenCalledWith("scope-1"));
+    await waitFor(() => expect(mocks.disconnectRepository).toHaveBeenCalledWith(
+      "scope-1",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    ));
     expect(screen.getAllByText("Disconnected").length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: "Disconnect GitHub" })).not.toBeInTheDocument();
     expect(screen.queryByText("Repository access")).not.toBeInTheDocument();

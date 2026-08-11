@@ -9,6 +9,8 @@ import com.plot.api.ai.provider.ModelCallResult
 import com.plot.api.ai.provider.ReviewerModelRequest
 import com.plot.api.ai.provider.RewriteModelRequest
 import com.plot.api.ai.provider.WriterModelRequest
+import com.plot.api.common.ApiException
+import com.plot.api.entitlement.WorkspaceAccessService
 import com.plot.api.generation.model.ReviewerOutput
 import com.plot.api.generation.model.TargetedRewriteOutput
 import com.plot.api.generation.model.WriterOutput
@@ -33,13 +35,19 @@ class GenerationRunWorker(
 		) {}
 	},
 	private val observationRegistry: ObservationRegistry = ObservationRegistry.NOOP,
+	private val workspaceAccessService: WorkspaceAccessService? = null,
+	private val agentRunsEnabled: Boolean = true,
 ) {
 	internal var lastFailure: RuntimeException? = null
 		private set
 
 	/** Processes one logical model call so every successful call becomes a durable checkpoint. */
 	fun processOne(): Boolean {
-		val claim = persistence.claimNext(workerId, clock.instant().minus(claimTimeout)) ?: return false
+		val claim = persistence.claimNext(
+			workerId,
+			clock.instant().minus(claimTimeout),
+			includeAgentRuns = agentRunsEnabled,
+		) ?: return false
 		val observation = Observation.start("plot.generation.attempt", observationRegistry)
 			.lowCardinalityKeyValue("plot.operation", "generation")
 			.highCardinalityKeyValue("plot.generation_run_id", claim.runId.toString())
@@ -73,6 +81,18 @@ class GenerationRunWorker(
 		attemptObservation: Observation,
 	): Pair<String, Boolean> {
 		val state = persistence.loadState(claim.workspaceId, claim.runId)
+		try {
+			workspaceAccessService?.requireWritable(claim.workspaceId)
+		} catch (failure: ApiException) {
+			val code = if (failure.error in setOf("ACCESS_DENIED", "WORKSPACE_READ_ONLY")) {
+				failure.error
+			} else {
+				"WORKSPACE_ACCESS_FAILED"
+			}
+			runLease.commit { persistence.failClaim(claim, state, code) }
+			attemptObservation.lowCardinalityKeyValue("plot.error_code", code)
+			return "FAILED" to true
+		}
 		val budgetFailure = persistence.budgetFailureCode(claim)
 		if (budgetFailure != null) {
 			runLease.commit { persistence.failClaim(claim, state, budgetFailure) }

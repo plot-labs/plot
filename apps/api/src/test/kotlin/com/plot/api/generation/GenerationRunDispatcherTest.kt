@@ -21,6 +21,16 @@ class GenerationRunDispatcherTest {
 	}
 
 	@Test
+	fun `disabled dispatcher does not wake the generation worker`() {
+		val drains = AtomicInteger()
+		val dispatcher = GenerationRunDispatcher(SyncTaskExecutor(), enabled = false) { drains.incrementAndGet() < 3 }
+
+		dispatcher.dispatch()
+
+		assertEquals(0, drains.get())
+	}
+
+	@Test
 	fun `unexpected drain failure stops the current dispatch turn`() {
 		val attempts = AtomicInteger()
 		val retried = CountDownLatch(1)

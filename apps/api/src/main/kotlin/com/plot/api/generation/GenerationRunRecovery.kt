@@ -11,15 +11,19 @@ class GenerationRunRecovery(
 	private val dispatcher: GenerationRunDispatcher,
 	private val clock: Clock = Clock.systemUTC(),
 	private val claimTimeout: Duration = Duration.ofMinutes(2),
+	private val workerEnabled: Boolean = true,
 ) {
 	@EventListener(ApplicationReadyEvent::class)
 	fun recover(): RecoveryResult {
 		val releasedClaims = persistence.recoverStaleClaims(clock.instant().minus(claimTimeout))
-		dispatcher.dispatch()
+		if (workerEnabled) dispatcher.dispatch()
 		return RecoveryResult(releasedClaims, 0)
 	}
 
-	@Scheduled(fixedDelayString = "\${plot.ai.worker-poll-delay:PT5S}")
+	@Scheduled(
+		fixedDelayString = "\${plot.ai.worker-poll-delay:PT5S}",
+		initialDelayString = "\${plot.ai.worker-poll-delay:PT5S}",
+	)
 	fun poll() {
 		recover()
 	}
