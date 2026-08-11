@@ -29,7 +29,6 @@ import org.springframework.test.context.TestPropertySource
 @Import(TestcontainersConfiguration::class, RoutineWorkerIntegrationTest.Config::class)
 @TestPropertySource(properties = [
 	"plot.routines.poll-delay=PT1H",
-	"plot.routines.github-event-poll-delay=PT1H",
 	"plot.routine-agent.workers-enabled=true",
 ])
 class RoutineWorkerIntegrationTest {

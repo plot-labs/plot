@@ -25,7 +25,6 @@ import org.springframework.test.context.TestPropertySource
 @Import(TestcontainersConfiguration::class)
 @TestPropertySource(properties = [
 	"plot.routines.poll-delay=PT1H",
-	"plot.routines.github-event-poll-delay=PT1H",
 	"plot.routine-agent.workers-enabled=true",
 ])
 class GitHubChangeRoutineIntegrationTest {
@@ -33,7 +32,6 @@ class GitHubChangeRoutineIntegrationTest {
 	@Autowired private lateinit var jdbcTemplate: JdbcTemplate
 	@Autowired private lateinit var devBootstrapService: DevBootstrapService
 	@Autowired private lateinit var devContext: DevContext
-	@Autowired private lateinit var eventWorker: GitHubRoutineEventWorker
 	@Autowired private lateinit var routineWorker: RoutineWorker
 	@Autowired private lateinit var routinePersistence: RoutinePersistence
 	@Autowired private lateinit var agentPersistence: RoutineAgentPersistence
@@ -91,7 +89,7 @@ class GitHubChangeRoutineIntegrationTest {
 		webhookService.accept(webhook)
 
 		assertEquals(1, countExecutions(routineId))
-		assertEquals(1, eventWorker.drain())
+		drainOne()
 		val executionId = executionId(routineId, deliveryId)
 		assertEquals(RoutineExecutionStatus.DISPATCHED, executionStatus(executionId))
 		assertEquals("github:$routineId:${deliveryUuid(deliveryId)}", triggerKey(executionId))
@@ -138,7 +136,7 @@ class GitHubChangeRoutineIntegrationTest {
 			payloadHash = "d".repeat(64),
 		))
 		assertEquals(1, countExecutions(releaseRoutineId))
-		assertEquals(1, eventWorker.drain())
+		drainOne()
 		assertEquals(RoutineExecutionStatus.DISPATCHED, executionStatus(executionId(releaseRoutineId, releaseDeliveryId)))
 
 		val tagRoutineId = insertRoutine(repository.scopeId, RoutineCadence.ON_GIT_TAG)
@@ -160,7 +158,7 @@ class GitHubChangeRoutineIntegrationTest {
 			payloadHash = "f".repeat(64),
 		))
 		assertEquals(1, countExecutions(tagRoutineId))
-		assertEquals(1, eventWorker.drain())
+		drainOne()
 		assertEquals(RoutineExecutionStatus.DISPATCHED, executionStatus(executionId(tagRoutineId, tagDeliveryId)))
 	}
 
@@ -197,7 +195,7 @@ class GitHubChangeRoutineIntegrationTest {
 		))
 
 		assertEquals(20, evidenceCount(routineId, deliveryId))
-		assertEquals(1, eventWorker.drain())
+		drainOne()
 		assertEquals(20, seedCount(executionId(routineId, deliveryId)))
 		assertEquals(1, jdbcTemplate.queryForObject(
 			"select count(*) from routine_execution_evidence evidence join writing_blocks block on block.id = evidence.writing_block_id where evidence.execution_id = ? and block.source_kind = 'tag'",
@@ -214,10 +212,10 @@ class GitHubChangeRoutineIntegrationTest {
 		val firstDeliveryId = "first-${UUID.randomUUID()}"
 		val secondDeliveryId = "second-${UUID.randomUUID()}"
 		webhookService.accept(pushWebhook(firstDeliveryId, sha, "Original evidence", "a".repeat(64)))
-		assertEquals(1, eventWorker.drain())
+		drainOne()
 		webhookService.accept(pushWebhook(secondDeliveryId, sha, "Original evidence", "a".repeat(64)))
 		assertEquals(2, countExecutions(routineId))
-		assertEquals(1, eventWorker.drain())
+		drainOne()
 		assertEquals(RoutineExecutionStatus.NO_ACTIVITY, executionStatus(executionId(routineId, secondDeliveryId)))
 		assertEquals(1, count("work_sessions"))
 		assertEquals(1, count("agent_runs"))
@@ -231,7 +229,7 @@ class GitHubChangeRoutineIntegrationTest {
 		val deliveryId = "cursor-${UUID.randomUUID()}"
 
 		webhookService.accept(pushWebhook(deliveryId, "8".repeat(40), "New event activity", "8".repeat(64)))
-		assertEquals(1, eventWorker.drain())
+		drainOne()
 		assertEquals(null, routinePersistence.find(devContext.devWorkspaceId, routineId)?.activityCursorSequence)
 
 		val routine = assertNotNull(routinePersistence.find(devContext.devWorkspaceId, routineId))
@@ -274,7 +272,7 @@ class GitHubChangeRoutineIntegrationTest {
 			executionId,
 		)
 		assertEquals(firstClaim.id, executionId)
-		assertEquals(1, eventWorker.drain())
+		drainOne()
 		val recovered = assertNotNull(agentPersistence.findExecution(devContext.devWorkspaceId, executionId))
 		assertEquals(2, recovered.attemptCount)
 		assertEquals(RoutineExecutionStatus.DISPATCHED, recovered.status)
@@ -311,8 +309,8 @@ class GitHubChangeRoutineIntegrationTest {
 			contextScopeId,
 		)
 		jdbcTemplate.update("update source_scopes set status = 'ERROR' where id = ?", contextScopeId)
-		assertEquals(1, eventWorker.drain())
-		assertEquals(1, eventWorker.drain())
+		drainOne()
+		drainOne()
 		assertEquals(RoutineExecutionStatus.FAILED, executionStatus(executionId(firstRoutineId, deliveryId)))
 		assertEquals(RoutineExecutionStatus.DISPATCHED, executionStatus(executionId(secondRoutineId, deliveryId)))
 		assertEquals(1, jdbcTemplate.queryForObject(
@@ -550,6 +548,10 @@ class GitHubChangeRoutineIntegrationTest {
 		Int::class.java,
 		devContext.devWorkspaceId,
 	) ?: 0
+
+	private fun drainOne() {
+		assertEquals(true, routineWorker.drain())
+	}
 
 	private fun randomPositiveLong(): Long = UUID.randomUUID().mostSignificantBits and Long.MAX_VALUE
 }

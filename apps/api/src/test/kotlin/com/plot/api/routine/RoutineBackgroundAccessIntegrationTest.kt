@@ -50,7 +50,6 @@ import tools.jackson.databind.ObjectMapper
 @TestPropertySource(properties = [
 	"plot.dev-bootstrap.enabled=true",
 	"plot.routines.poll-delay=PT1H",
-	"plot.routines.github-event-poll-delay=PT1H",
 	"plot.routine-agent.workers-enabled=true",
 	"plot.routine-agent.poll-delay=PT1H",
 	"plot.routine-agent.retry-initial-delay=PT0S",
@@ -342,7 +341,6 @@ class RoutineBackgroundAccessIntegrationTest {
 @TestPropertySource(properties = [
 	"plot.dev-bootstrap.enabled=true",
 	"plot.routines.poll-delay=PT1H",
-	"plot.routines.github-event-poll-delay=PT1H",
 	"plot.routine-agent.workers-enabled=false",
 	"plot.routine-agent.poll-delay=PT1H",
 	"server.address=127.0.0.1",
