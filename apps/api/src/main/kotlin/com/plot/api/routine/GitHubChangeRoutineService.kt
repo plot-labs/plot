@@ -66,6 +66,7 @@ class GitHubChangeRoutineService(
 		}
 		if (prepared.blocks.isEmpty()) return 0
 
+		var firstAdmissionFailure: RuntimeException? = null
 		val enqueued = routines.count { routine ->
 			try {
 				routineTransactionTemplate.execute {
@@ -89,7 +90,13 @@ class GitHubChangeRoutineService(
 				}
 			} catch (_: RoutineExecutionIdempotencyConflictException) {
 				false
+			} catch (failure: RuntimeException) {
+				firstAdmissionFailure = firstAdmissionFailure ?: failure
+				false
 			}
+		}
+		firstAdmissionFailure?.let { failure ->
+			throw RoutineExecutionStateException("GitHub routine admission failed").also { it.initCause(failure) }
 		}
 		return enqueued
 	}
