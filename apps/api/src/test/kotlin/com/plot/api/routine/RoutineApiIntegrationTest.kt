@@ -52,6 +52,7 @@ class RoutineApiIntegrationTest {
 		jdbcTemplate.update("delete from agent_steps where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from generation_runs where workspace_id = ? and agent_run_id is not null", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from agent_runs where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from work_sessions where workspace_id = ? and routine_execution_id is not null", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from routine_executions where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from routines where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from source_scopes where workspace_id = ?", devContext.devWorkspaceId)

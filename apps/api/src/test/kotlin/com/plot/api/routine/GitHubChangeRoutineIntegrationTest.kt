@@ -58,6 +58,7 @@ class GitHubChangeRoutineIntegrationTest {
 		jdbcTemplate.update("delete from agent_run_inputs where workspace_id = ?", workspaceId)
 		jdbcTemplate.update("delete from agent_run_sources where workspace_id = ?", workspaceId)
 		jdbcTemplate.update("delete from agent_runs where workspace_id = ?", workspaceId)
+		jdbcTemplate.update("delete from work_sessions where workspace_id = ? and routine_execution_id is not null", workspaceId)
 		jdbcTemplate.update("delete from routine_execution_evidence where workspace_id = ?", workspaceId)
 		jdbcTemplate.update("delete from routine_executions where workspace_id = ?", workspaceId)
 		routineIds.forEach { routineId -> jdbcTemplate.update("delete from routines where id = ?", routineId) }

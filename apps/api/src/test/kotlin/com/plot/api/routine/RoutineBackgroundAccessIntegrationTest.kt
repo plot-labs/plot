@@ -322,6 +322,7 @@ class RoutineBackgroundAccessIntegrationTest {
 		jdbcTemplate.update("delete from agent_run_inputs where workspace_id = ? and agent_run_id in (select id from agent_runs where routine_id = ?)", workspaceId, fixture.routineId)
 		jdbcTemplate.update("delete from agent_run_sources where workspace_id = ? and agent_run_id in (select id from agent_runs where routine_id = ?)", workspaceId, fixture.routineId)
 		jdbcTemplate.update("delete from agent_runs where workspace_id = ? and routine_id = ?", workspaceId, fixture.routineId)
+		jdbcTemplate.update("delete from work_sessions where workspace_id = ? and routine_execution_id in (select id from routine_executions where workspace_id = ? and routine_id = ?)", workspaceId, workspaceId, fixture.routineId)
 		jdbcTemplate.update("delete from routine_execution_evidence where workspace_id = ? and execution_id in (select id from routine_executions where routine_id = ?)", workspaceId, fixture.routineId)
 		jdbcTemplate.update("delete from routine_executions where workspace_id = ? and routine_id = ?", workspaceId, fixture.routineId)
 		jdbcTemplate.update("delete from routines where workspace_id = ? and id = ?", workspaceId, fixture.routineId)
@@ -480,6 +481,7 @@ class RoutineWorkersDisabledIntegrationTest {
 		} finally {
 			jdbcTemplate.update("delete from generation_runs where id = ?", generationRunId)
 			jdbcTemplate.update("delete from agent_runs where id = ?", agentRunId)
+			jdbcTemplate.update("delete from work_sessions where workspace_id = ? and routine_execution_id = ?", devContext.devWorkspaceId, execution.id)
 			jdbcTemplate.update("delete from routine_executions where id = ?", execution.id)
 			jdbcTemplate.update("delete from routines where workspace_id = ? and id = ?", devContext.devWorkspaceId, routine.id)
 			jdbcTemplate.update("delete from source_scopes where workspace_id = ? and id = ?", devContext.devWorkspaceId, scopeId)
