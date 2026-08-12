@@ -24,13 +24,8 @@ export function ChatComposer({
 }: ChatComposerProps) {
   const [message, setMessage] = useState("");
   const submittingRef = useRef(false);
-  const [selectedReferenceIds] = useState<string[]>(() => {
-    const first = references.find((reference) => reference.available);
-    return first
-      ? references.filter((reference) => reference.available && reference.groupId === first.groupId).map((reference) => reference.id)
-      : [];
-  });
-  const canSubmit = !busy && Boolean(message.trim()) && selectedReferenceIds.length > 0;
+  const [selectedReferenceIds] = useState<string[]>([]);
+  const canSubmit = !busy && Boolean(message.trim()) && references.some((reference) => reference.available);
 
   return (
     <form

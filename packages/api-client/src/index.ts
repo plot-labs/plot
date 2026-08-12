@@ -174,7 +174,6 @@ export interface CreateGenerationInput {
   sourceScopeId: string;
   writingBlockIds: string[];
   instruction?: string;
-  workSessionId?: string;
 }
 
 export interface RequestOptions { signal?: AbortSignal }
@@ -362,6 +361,23 @@ export interface RoutineAgentRunDetail {
   steps: RoutineAgentStep[];
 }
 
+export interface ChatAgentRun {
+  id: string;
+  chatId: string;
+  status: RoutineAgentRunStatus;
+  failureCode: string | null;
+  generationRunId: string | null;
+  artifactId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateChatAgentRunInput {
+  instruction: string;
+  workSessionId?: string;
+  writingBlockIds?: string[];
+}
+
 export interface Routine {
   id: string;
   name: string;
@@ -449,6 +465,8 @@ export interface PlotApiClient {
   updateRoutine(id: string, input: { enabled: boolean }, options?: RequestOptions): Promise<Routine>;
   runRoutineNow(id: string, idempotencyKey: string, options?: RequestOptions): Promise<Routine>;
   getRoutineAgentRun(routineId: string, agentRunId: string, options?: RequestOptions): Promise<RoutineAgentRunDetail>;
+  createChatAgentRun(input: CreateChatAgentRunInput, idempotencyKey: string, options?: RequestOptions): Promise<ChatAgentRun>;
+  getChatAgentRun(id: string, options?: RequestOptions): Promise<ChatAgentRun>;
   listSessions(options?: RequestOptions): Promise<WorkSessionSummary[]>;
   createSession(input: { title?: string | null }, options?: RequestOptions): Promise<WorkSessionSummary>;
   updateSession(id: string, input: { title?: string; latestGenerationId?: string }, options?: RequestOptions): Promise<WorkSessionSummary>;
@@ -573,6 +591,15 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
       `/routines/${encodeURIComponent(routineId)}/agent-runs/${encodeURIComponent(agentRunId)}`,
       { signal: requestOptions?.signal },
     ),
+    createChatAgentRun: (input, idempotencyKey, requestOptions) => request("/agent-runs", {
+      method: "POST",
+      body: JSON.stringify(input),
+      signal: requestOptions?.signal,
+      headers: { "Idempotency-Key": idempotencyKey },
+    }),
+    getChatAgentRun: (id, requestOptions) => request(`/agent-runs/${encodeURIComponent(id)}`, {
+      signal: requestOptions?.signal,
+    }),
     listSessions: (requestOptions) => request("/sessions", { signal: requestOptions?.signal }),
     createSession: (input, requestOptions) => request("/sessions", {
       method: "POST",

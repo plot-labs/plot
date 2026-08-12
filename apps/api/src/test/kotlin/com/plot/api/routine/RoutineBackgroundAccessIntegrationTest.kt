@@ -417,9 +417,10 @@ class RoutineWorkersDisabledIntegrationTest {
 			"""
 			insert into agent_runs (
 			 id, workspace_id, routine_execution_id, routine_id, work_session_id, created_by_user_id,
+			 origin, idempotency_key, request_fingerprint,
 			 instruction_snapshot, prompt_version, tool_policy_version, budget_snapshot,
 			 status, max_attempts, created_at, updated_at
-			) values (?, ?, ?, ?, ?, ?, 'Do not run', 'test', 'read-only-v1', '{}'::jsonb, 'QUEUED', 3, now(), now())
+			) values (?, ?, ?, ?, ?, ?, 'ROUTINE', ?, ?, 'Do not run', 'test', 'read-only-v1', '{}'::jsonb, 'QUEUED', 3, now(), now())
 			""".trimIndent(),
 			agentRunId,
 			devContext.devWorkspaceId,
@@ -427,6 +428,8 @@ class RoutineWorkersDisabledIntegrationTest {
 			routine.id,
 			chatId,
 			devContext.devUserId,
+			"routine:$execution.id",
+			"routine:$execution.id",
 		)
 		val generationRunId = UUID.randomUUID()
 		jdbcTemplate.update(
