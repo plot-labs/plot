@@ -197,6 +197,18 @@ class AgentRunPersistence(
 		id,
 	).firstOrNull()
 
+	fun findChatAgentRunByIdempotencyKey(
+		workspaceId: UUID,
+		idempotencyKey: String,
+		forUpdate: Boolean = false,
+	): AgentRunRecord? = jdbcTemplate.query(
+		selectAgentRunSql + " where a.workspace_id = ? and a.origin = 'CHAT' and a.idempotency_key = ?" +
+			if (forUpdate) " for update" else "",
+		agentRunMapper,
+		workspaceId,
+		idempotencyKey,
+	).singleOrNull()
+
 	fun listAgentRunSources(workspaceId: UUID, agentRunId: UUID): List<AgentRunSourceRecord> = jdbcTemplate.query(
 		"""
 		select id, workspace_id, agent_run_id, source_scope_id, source_role, order_index,

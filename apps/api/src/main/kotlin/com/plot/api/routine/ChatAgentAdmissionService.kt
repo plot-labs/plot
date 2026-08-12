@@ -1,0 +1,297 @@
+package com.plot.api.routine
+
+import com.plot.api.common.ApiException
+import com.plot.api.common.UuidGenerator
+import com.plot.api.dev.DevContext
+import com.plot.api.routine.dto.ChatAgentRunResponse
+import com.plot.api.routine.dto.CreateChatAgentRunRequest
+import com.plot.api.routine.dto.toChatResponse
+import com.plot.api.source.SourceManagedAccessGuard
+import java.security.MessageDigest
+import java.sql.Timestamp
+import java.time.Instant
+import java.util.UUID
+import org.springframework.http.HttpStatus
+import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.stereotype.Service
+import org.springframework.transaction.support.TransactionTemplate
+import tools.jackson.databind.ObjectMapper
+
+@Service
+class ChatAgentAdmissionService(
+	private val devContext: DevContext,
+	private val jdbcTemplate: JdbcTemplate,
+	private val transactionTemplate: TransactionTemplate,
+	private val uuidGenerator: UuidGenerator,
+	private val agentRunPersistence: AgentRunPersistence,
+	private val tools: ReadOnlyAgentTools,
+	private val properties: RoutineAgentProperties,
+	private val objectMapper: ObjectMapper,
+	private val sourceManagedAccessGuard: SourceManagedAccessGuard,
+) {
+	fun admit(request: CreateChatAgentRunRequest, idempotencyKey: String): ChatAgentRunResponse {
+		sourceManagedAccessGuard.requireReadable()
+		val workspaceId = devContext.devWorkspaceId
+		val userId = devContext.devUserId
+		val key = idempotencyKey.trim()
+		if (key.isBlank() || key.length > 200) {
+			throw ApiException(HttpStatus.BAD_REQUEST, "IDEMPOTENCY_KEY_REQUIRED", "Idempotency-Key is required")
+		}
+		val instruction = request.instruction.trim()
+		if (request.writingBlockIds.distinct().size != request.writingBlockIds.size) {
+			throw ApiException(HttpStatus.BAD_REQUEST, "DUPLICATE_SOURCE_ITEMS", "Writing Block IDs must be unique")
+		}
+		val fingerprint = fingerprint(request.copy(instruction = instruction))
+		return transactionTemplate.execute {
+			// A transaction-scoped advisory lock prevents two identical requests from
+		// creating duplicate Chats before the partial idempotency index is reached.
+			jdbcTemplate.queryForObject(
+				"select pg_advisory_xact_lock(hashtextextended(?, 0))",
+				{ _, _ -> Unit },
+				"$workspaceId:$key",
+			)
+			findExisting(workspaceId, key)?.let { existing ->
+				if (existing.requestFingerprint != fingerprint) throw AgentRunIdempotencyConflictException()
+				return@execute existing.toChatResponseFor(agentRunPersistence)
+			}
+
+			val sources = lockActiveSources(workspaceId)
+			if (sources.isEmpty()) {
+				throw ApiException(
+					HttpStatus.CONFLICT,
+					"SOURCE_NOT_READY",
+					"Connect an active source before starting a Chat",
+				)
+			}
+			val chatId = resolveChat(request.workSessionId, workspaceId, userId, instruction)
+			val runId = uuidGenerator.next()
+			val now = Instant.now()
+			val inserted = jdbcTemplate.update(
+				"""
+				insert into agent_runs (
+				  id, workspace_id, routine_execution_id, routine_id, work_session_id, created_by_user_id,
+				  origin, idempotency_key, request_fingerprint,
+				  instruction_snapshot, prompt_version, tool_policy_version, budget_snapshot,
+				  status, max_attempts, created_at, updated_at
+				) values (?, ?, null, null, ?, ?, 'CHAT', ?, ?, ?, 'chat-agent-v1', 'read-only-v1', ?::jsonb,
+				  'QUEUED', ?, ?, ?)
+				on conflict (workspace_id, idempotency_key) where origin = 'CHAT' do nothing
+				""".trimIndent(),
+				runId,
+				workspaceId,
+				chatId,
+				userId,
+				key,
+				fingerprint,
+				instruction,
+				budgetSnapshot(),
+				properties.maxAttempts,
+				Timestamp.from(now),
+				Timestamp.from(now),
+			)
+			if (inserted == 0) {
+				val raced = requireNotNull(findExisting(workspaceId, key))
+				if (raced.requestFingerprint != fingerprint) throw AgentRunIdempotencyConflictException()
+				return@execute raced.toChatResponseFor(agentRunPersistence)
+			}
+
+			sources.forEachIndexed { index, source ->
+				jdbcTemplate.update(
+					"""
+					insert into agent_run_sources (
+					  id, workspace_id, agent_run_id, source_scope_id, source_role, order_index,
+					  captured_status, captured_status_changed_at, captured_at
+					) values (?, ?, ?, ?, 'CONTEXT', ?, 'ACTIVE', ?, ?)
+					""".trimIndent(),
+					uuidGenerator.next(),
+					workspaceId,
+					runId,
+					source.id,
+					index,
+					Timestamp.from(source.lifecycleVersionAt),
+					Timestamp.from(now),
+				)
+			}
+
+			request.writingBlockIds.forEachIndexed { index, blockId ->
+				val sourceScopeId = findReadableBlockSource(workspaceId, blockId, sources.map { it.id })
+					?: throw ApiException(HttpStatus.BAD_REQUEST, "SOURCE_ITEM_NOT_READY", "A selected source item is unavailable")
+				val input = try {
+					tools.readWritingBlock(workspaceId, runId, sourceScopeId, blockId).adoptedInput
+				} catch (failure: AgentToolAccessException) {
+					throw ApiException(HttpStatus.BAD_REQUEST, failure.safeCode, "A selected source item is unavailable")
+				}
+				val seed = requireNotNull(input).copy(
+					inputKind = AgentRunInputKind.SEED,
+					routineId = null,
+					activitySequence = null,
+					orderIndex = index,
+				)
+				insertSeed(workspaceId, runId, seed, now)
+			}
+
+			val run = requireNotNull(agentRunPersistence.findAgentRun(workspaceId, runId))
+			run.toChatResponse()
+		}
+	}
+
+	fun get(id: UUID): ChatAgentRunResponse {
+		val run = agentRunPersistence.findAgentRun(devContext.devWorkspaceId, id)
+			?.takeIf { it.origin == AgentRunOrigin.CHAT }
+			?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Agent run not found")
+		return run.toChatResponseFor(agentRunPersistence)
+	}
+
+	private fun AgentRunRecord.toChatResponseFor(persistence: AgentRunPersistence): ChatAgentRunResponse {
+		val generationRunId = persistence.listSteps(workspaceId, id)
+			.lastOrNull { it.generationRunId != null }
+			?.generationRunId
+		return toChatResponse(
+			generationRunId = generationRunId,
+			artifactId = generationRunId?.let { persistence.findArtifactId(workspaceId, it) },
+		)
+	}
+
+	private fun resolveChat(workSessionId: UUID?, workspaceId: UUID, userId: UUID, instruction: String): UUID {
+		if (workSessionId == null) {
+			val id = uuidGenerator.next()
+			val now = Instant.now()
+			jdbcTemplate.update(
+				"""
+				insert into work_sessions (
+				  id, workspace_id, title, status, created_by_user_id, latest_generation_run_id,
+				  last_activity_at, created_at, updated_at
+				) values (?, ?, ?, 'OPEN', ?, null, ?, ?, ?)
+				""".trimIndent(),
+				id,
+				workspaceId,
+				instruction,
+				userId,
+				Timestamp.from(now),
+				Timestamp.from(now),
+				Timestamp.from(now),
+			)
+			return id
+		}
+
+		val session = jdbcTemplate.query(
+			"select routine_execution_id from work_sessions where workspace_id = ? and id = ? for update",
+			{ rs, _ -> ChatSessionRow(rs.getObject("routine_execution_id", UUID::class.java)) },
+			workspaceId,
+			workSessionId,
+		).singleOrNull() ?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Chat not found")
+		if (session.routineExecutionId != null) {
+			throw ApiException(HttpStatus.CONFLICT, "CHAT_NOT_INTERACTIVE", "Routine Chats cannot receive interactive requests")
+		}
+		jdbcTemplate.update(
+			"update work_sessions set last_activity_at = ?, updated_at = ? where workspace_id = ? and id = ?",
+			Timestamp.from(Instant.now()),
+			Timestamp.from(Instant.now()),
+			workspaceId,
+			workSessionId,
+		)
+		return workSessionId
+	}
+
+	private fun lockActiveSources(workspaceId: UUID): List<FrozenSource> = jdbcTemplate.query(
+		"""
+		select scope.id,
+		       greatest(scope.status_changed_at, namespace.updated_at, binding.updated_at, connection.updated_at)
+		         as lifecycle_version_at
+		from source_scopes scope
+		join source_namespaces namespace
+		  on namespace.workspace_id = scope.workspace_id and namespace.id = scope.source_namespace_id
+		 and namespace.provider = scope.provider and namespace.status = 'ACTIVE'
+		join connection_namespace_bindings binding
+		  on binding.workspace_id = namespace.workspace_id and binding.source_namespace_id = namespace.id
+		 and binding.provider = namespace.provider and binding.status = 'ACTIVE'
+		join connections connection
+		  on connection.workspace_id = binding.workspace_id and connection.id = binding.connection_id
+		 and connection.provider = binding.provider and connection.status = 'ACTIVE'
+		where scope.workspace_id = ? and scope.provider = 'GITHUB' and scope.status = 'ACTIVE'
+		order by scope.id
+		for update of scope, namespace, binding, connection
+		""".trimIndent(),
+		{ rs, _ -> FrozenSource(rs.getObject("id", UUID::class.java), rs.getTimestamp("lifecycle_version_at").toInstant()) },
+		workspaceId,
+	)
+
+	private fun findReadableBlockSource(workspaceId: UUID, blockId: UUID, sourceScopeIds: List<UUID>): UUID? {
+		if (sourceScopeIds.isEmpty()) return null
+		val placeholders = sourceScopeIds.joinToString(",") { "?" }
+		return jdbcTemplate.query(
+			"""
+			select membership.source_scope_id
+			from writing_block_scopes membership
+			join writing_blocks block
+			  on block.workspace_id = membership.workspace_id and block.id = membership.writing_block_id
+			where membership.workspace_id = ? and membership.writing_block_id = ?
+			  and membership.source_scope_id in ($placeholders)
+			  and membership.status = 'ACTIVE' and block.status = 'ACTIVE'
+			order by membership.source_scope_id
+			""".trimIndent(),
+			{ rs, _ -> rs.getObject("source_scope_id", UUID::class.java) },
+			workspaceId,
+			blockId,
+			*sourceScopeIds.toTypedArray(),
+		).firstOrNull()
+	}
+
+	private fun insertSeed(workspaceId: UUID, agentRunId: UUID, input: AgentRunInputRequest, now: Instant) {
+		jdbcTemplate.update(
+			"""
+			insert into agent_run_inputs (
+			  id, workspace_id, agent_run_id, routine_id, source_scope_id, writing_block_id,
+			  source_provider, source_kind, source_label,
+			  input_kind, order_index, activity_sequence, snapshot_title, snapshot_body,
+			  snapshot_excerpt, original_url, source_created_at, source_updated_at,
+			  content_hash, captured_at
+			) values (?, ?, ?, null, ?, ?, ?, ?, ?, 'SEED', ?, null, ?, ?, ?, ?, ?, ?, ?, ?)
+			""".trimIndent(),
+			uuidGenerator.next(),
+			workspaceId,
+			agentRunId,
+			input.sourceScopeId,
+			input.writingBlockId,
+			input.sourceProvider,
+			input.sourceKind,
+			input.sourceLabel,
+			input.orderIndex,
+			input.snapshotTitle,
+			input.snapshotBody,
+			input.snapshotExcerpt,
+			input.originalUrl,
+			input.sourceCreatedAt?.let(Timestamp::from),
+			input.sourceUpdatedAt?.let(Timestamp::from),
+			input.contentHash,
+			Timestamp.from(now),
+		)
+	}
+
+	private fun findExisting(workspaceId: UUID, key: String): AgentRunRecord? =
+		agentRunPersistence.findChatAgentRunByIdempotencyKey(workspaceId, key, forUpdate = true)
+
+	private fun budgetSnapshot(): String = objectMapper.writeValueAsString(
+		mapOf(
+			"maxModelCalls" to properties.maxModelCalls,
+			"maxToolCalls" to properties.maxToolCalls,
+			"maxRunDurationMillis" to properties.maxRunDuration.toMillis(),
+			"maxInputCharacters" to properties.maxInputCharacters,
+			"maxEvidenceCharacters" to properties.maxEvidenceCharacters,
+			"truncatedSeed" to false,
+		),
+	)
+
+	private fun fingerprint(request: CreateChatAgentRunRequest): String {
+		val canonical = buildString {
+			append(request.workSessionId ?: "new").append('|')
+			append(request.instruction).append('|')
+			request.writingBlockIds.forEach { append(it).append(',') }
+		}
+		return MessageDigest.getInstance("SHA-256").digest(canonical.toByteArray())
+			.joinToString("") { byte -> "%02x".format(byte) }
+	}
+
+	private data class FrozenSource(val id: UUID, val lifecycleVersionAt: Instant)
+	private data class ChatSessionRow(val routineExecutionId: UUID?)
+}

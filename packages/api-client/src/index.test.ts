@@ -136,6 +136,37 @@ describe("Plot API client", () => {
     expect(new Headers(fetcher.mock.calls[2]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
   });
 
+  it("adopts a Chat Agent run with a stable idempotency key", async () => {
+    const response = {
+      id: "agent-run-1",
+      chatId: "session-1",
+      status: "QUEUED",
+      failureCode: null,
+      generationRunId: null,
+      artifactId: null,
+      createdAt: "2026-08-12T00:00:00Z",
+      updatedAt: "2026-08-12T00:00:00Z",
+    };
+    const fetcher = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(response, { status: 202 }))
+      .mockResolvedValueOnce(Response.json(response));
+    const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
+
+    await client.createChatAgentRun({ instruction: "Explore the source", writingBlockIds: ["block-1"] }, "chat-request-1");
+    await client.getChatAgentRun("agent-run-1");
+
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+      "/api/plot/agent-runs",
+      "/api/plot/agent-runs/agent-run-1",
+    ]);
+    expect(fetcher.mock.calls[0]?.[1]).toMatchObject({
+      method: "POST",
+      body: JSON.stringify({ instruction: "Explore the source", writingBlockIds: ["block-1"] }),
+    });
+		expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).get("Idempotency-Key")).toBe("chat-request-1");
+		expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
+  });
+
   it("uses the GitHub onboarding contracts with workspace scoping", async () => {
     const fetcher = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(Response.json({ installUrl: "https://github.test/install", expiresAt: "2026-07-01T00:00:00Z" }))

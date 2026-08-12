@@ -281,6 +281,10 @@ class RoutineExecutionIdempotencyConflictException : IllegalStateException(
 	"Routine execution trigger key was reused with a different fingerprint",
 )
 
+class AgentRunIdempotencyConflictException : IllegalStateException(
+	"Agent run idempotency key was reused with a different fingerprint",
+)
+
 class RoutineExecutionStateException(message: String) : IllegalStateException(message)
 class AgentRunClaimLostException : IllegalStateException("Agent run claim was lost")
 class AgentRunBudgetExceededException(val safeCode: String) : IllegalStateException(safeCode)
