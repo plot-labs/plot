@@ -143,7 +143,7 @@ class GenerationRunService(
 				modelName = properties.model?.trim().takeUnless { it.isNullOrBlank() } ?: "not-configured",
 				budgetJson = generationBudgetJson(),
 				workSessionId = requireNotNull(agentRun.workSessionId) {
-					"Routine Agent must have a Chat before creating a generation"
+					"Agent run must have a Chat before creating a generation"
 				},
 				agentRunId = agentRun.id,
 			),

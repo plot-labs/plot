@@ -8,7 +8,7 @@ import { ChatComposer } from "./chat-composer";
 const references = [{ id: "source-1", label: "PR #1", available: true }];
 
 describe("ChatComposer", () => {
-  it("enables send only for a trimmed prompt with a selected source", () => {
+  it("enables send only for a trimmed prompt with a connected source", () => {
     const onSubmit = vi.fn();
     render(<ChatComposer references={references} onSubmit={onSubmit} />);
     const prompt = screen.getByRole("textbox", { name: "Chat message" });
@@ -24,7 +24,7 @@ describe("ChatComposer", () => {
     fireEvent.click(send);
 
     expect(onSubmit).toHaveBeenCalledTimes(1);
-    expect(onSubmit).toHaveBeenCalledWith("Write release notes", ["source-1"]);
+    expect(onSubmit).toHaveBeenCalledWith("Write release notes", []);
     expect(send).toBeDisabled();
   });
 

@@ -120,10 +120,12 @@ fun AgentRunRecord.toDetailResponse(
 	steps: List<AgentStepRecord>,
 	artifactIds: Map<UUID, UUID>,
 ): AgentRunDetailResponse {
+	val executionId = requireNotNull(routineExecutionId) { "Routine Agent run is missing its execution" }
+	val routineId = requireNotNull(this.routineId) { "Routine Agent run is missing its routine" }
 	val generationRunId = steps.lastOrNull { it.generationRunId != null }?.generationRunId
 	return AgentRunDetailResponse(
 		id = id,
-		routineExecutionId = routineExecutionId,
+		routineExecutionId = executionId,
 		routineId = routineId,
 		chatId = workSessionId,
 		status = status.name,

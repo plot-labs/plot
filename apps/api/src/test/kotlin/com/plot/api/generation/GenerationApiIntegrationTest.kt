@@ -52,33 +52,21 @@ class GenerationApiIntegrationTest {
 	@Autowired private lateinit var generationRunService: GenerationRunService
 
 	@Test
-	fun `interactive generation links to its session atomically without a browser repair`() {
+	fun `direct generation cannot attach itself to a Chat`() {
 		val sessionId = UUID.randomUUID()
-		jdbcTemplate.update(
-			"""
-			insert into work_sessions (id, workspace_id, title, status, created_by_user_id, last_activity_at, created_at, updated_at)
-			values (?, ?, 'Session artifact workspace', 'OPEN', ?, now(), now(), now())
-			""".trimIndent(),
-			sessionId, devContext.devWorkspaceId, devContext.devUserId,
-		)
 		val fixture = sourceFixture()
-		val run = mockMvc.post("/api/generations") {
-			header("Idempotency-Key", "session-link-${UUID.randomUUID()}")
+		val key = "session-link-${UUID.randomUUID()}"
+		mockMvc.post("/api/generations") {
+			header("Idempotency-Key", key)
 			contentType = MediaType.APPLICATION_JSON
 			content = """{"sourceScopeId":"${fixture.scopeId}","writingBlockIds":["${fixture.blockId}"],"instruction":"Customer update","workSessionId":"$sessionId"}"""
 		}.andExpect {
-			status { isAccepted() }
-			jsonPath("$.workSessionId") { value(sessionId.toString()) }
+			status { isConflict() }
+			jsonPath("$.error") { value("CHAT_AGENT_REQUIRED") }
 		}.andReturn()
-		val runId = UUID.fromString(objectMapper.readTree(run.response.contentAsString).get("id").asText())
-
-		assertEquals(sessionId, jdbcTemplate.queryForObject(
-			"select work_session_id from generation_runs where workspace_id = ? and id = ?",
-			UUID::class.java, devContext.devWorkspaceId, runId,
-		))
-		assertEquals(runId, jdbcTemplate.queryForObject(
-			"select latest_generation_run_id from work_sessions where workspace_id = ? and id = ?",
-			UUID::class.java, devContext.devWorkspaceId, sessionId,
+		assertEquals(0, jdbcTemplate.queryForObject(
+			"select count(*) from generation_runs where idempotency_key = ?",
+			Int::class.java, key,
 		))
 	}
 

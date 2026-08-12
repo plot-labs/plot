@@ -23,6 +23,7 @@ import com.plot.api.generation.model.SentenceReview
 import com.plot.api.generation.model.TargetedRewriteOutput
 import com.plot.api.generation.model.WriterOutput
 import com.plot.api.generation.model.WriterSentence
+import com.plot.api.routine.dto.CreateChatAgentRunRequest
 import java.sql.Timestamp
 import java.time.Duration
 import java.time.Instant
@@ -71,6 +72,7 @@ class AgentRunWorkerIntegrationTest {
 	@Autowired private lateinit var routineWorker: RoutineWorker
 	@Autowired private lateinit var agentWorker: AgentRunWorker
 	@Autowired private lateinit var generationWorker: GenerationRunWorker
+	@Autowired private lateinit var chatAdmission: ChatAgentAdmissionService
 	@Autowired private lateinit var agentModel: ScriptedAgentDecisionGateway
 	@Autowired private lateinit var generationModel: AgentGenerationModelGateway
 
@@ -208,6 +210,50 @@ class AgentRunWorkerIntegrationTest {
 		assertTrue(agentModel.requests.none { request ->
 			request.toString().contains("MUTATED SECRET") || request.toString().contains("Authorization")
 		})
+	}
+
+	@Test
+	fun `Chat Agent discovers two sources without a seed and hands one Artifact to the same Chat`() {
+		val first = insertSource("acme/chat-plot")
+		val second = insertSource("acme/chat-docs")
+		val firstBlock = insertBlock(first, "Chat release", "Release context")
+		val secondBlock = insertBlock(second, "Chat docs", "Documentation context")
+		val routineCountBefore = count("select count(*) from routine_executions")
+		val chat = chatAdmission.admit(
+			CreateChatAgentRunRequest("Explore both connected sources"),
+			"chat-worker-${UUID.randomUUID()}",
+		)
+		agentModel.reads = listOf(first.scopeId to firstBlock, second.scopeId to secondBlock)
+
+		repeat(3) { assertTrue(agentWorker.processOne()) }
+		val generationRunId = assertNotNull(jdbcTemplate.queryForObject(
+			"select id from generation_runs where workspace_id = ? and agent_run_id = ?",
+			UUID::class.java,
+			devContext.devWorkspaceId,
+			chat.id,
+		))
+		assertEquals(chat.chatId, jdbcTemplate.queryForObject(
+			"select work_session_id from generation_runs where id = ?",
+			UUID::class.java,
+			generationRunId,
+		))
+		assertEquals(2, count("select count(*) from agent_steps where agent_run_id = ? and step_kind = 'READ_TOOL'", chat.id))
+		assertEquals(1, count("select count(*) from agent_steps where agent_run_id = ? and step_kind = 'ARTIFACT_HANDOFF'", chat.id))
+		assertEquals(2, count("select count(*) from agent_run_inputs where agent_run_id = ? and input_kind = 'TOOL_RESULT'", chat.id))
+		assertEquals(routineCountBefore, count("select count(*) from routine_executions"))
+
+		assertEquals(2, generationWorker.drain())
+		jdbcTemplate.update("update agent_runs set next_attempt_at = now() where id = ?", chat.id)
+		assertTrue(agentWorker.processOne())
+		assertEquals("SUCCEEDED", jdbcTemplate.queryForObject("select status from agent_runs where id = ?", String::class.java, chat.id))
+		assertEquals(generationRunId, chatAdmission.get(chat.id).generationRunId)
+		assertEquals(generationRunId, jdbcTemplate.queryForObject(
+			"select latest_generation_run_id from work_sessions where id = ?",
+			UUID::class.java,
+			chat.chatId,
+		))
+		assertEquals(1, count("select count(*) from content_packs where generation_run_id = ?", generationRunId))
+		assertEquals(2, count("select count(distinct source_scope_id) from generation_inputs where generation_run_id = ?", generationRunId))
 	}
 
 	@Test

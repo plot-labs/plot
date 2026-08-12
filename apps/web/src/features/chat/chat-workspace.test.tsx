@@ -8,8 +8,10 @@ const mocks = vi.hoisted(() => ({
   listSessions: vi.fn(),
   listReferences: vi.fn(),
   listSessionGenerations: vi.fn(),
-  createSession: vi.fn(),
+  createChatAgentRun: vi.fn(),
   createGeneration: vi.fn(),
+  getChatAgentRun: vi.fn(),
+  pollChatAgentRun: vi.fn(),
   getGeneration: vi.fn(),
   replace: vi.fn(),
   locationAssign: vi.fn(),
@@ -24,8 +26,9 @@ vi.mock("@/lib/api-client", () => ({
     listSessions: mocks.listSessions,
     listGenerationReferences: mocks.listReferences,
     listSessionGenerations: mocks.listSessionGenerations,
-    createSession: mocks.createSession,
+    createChatAgentRun: mocks.createChatAgentRun,
     createGeneration: mocks.createGeneration,
+    getChatAgentRun: mocks.getChatAgentRun,
     getGeneration: mocks.getGeneration,
     saveArtifactVariant: vi.fn(),
   },
@@ -33,6 +36,10 @@ vi.mock("@/lib/api-client", () => ({
 vi.mock("@/lib/generation-polling", () => ({
   pollGeneration: mocks.getGeneration,
   isTerminalGenerationStatus: (status: string) => ["READY", "NEEDS_REVIEW", "FAILED"].includes(status),
+}));
+vi.mock("@/lib/chat-agent-polling", () => ({
+  pollChatAgentRun: mocks.pollChatAgentRun,
+  isTerminalChatAgentStatus: (status: string) => ["SUCCEEDED", "FAILED"].includes(status),
 }));
 vi.mock("@/features/chat/chat-composer", () => ({
   ChatComposer: ({ onSubmit, variant }: { onSubmit: (message: string, ids: string[]) => void; variant?: string }) => (
@@ -64,6 +71,11 @@ describe("ChatWorkspace", () => {
     mocks.listSessions.mockResolvedValue([]);
     mocks.listReferences.mockResolvedValue([reference]);
     mocks.listSessionGenerations.mockResolvedValue([]);
+    mocks.pollChatAgentRun.mockImplementation(async (_client: unknown, id: string, options: { onUpdate?: (run: unknown) => void }) => {
+      const next = await mocks.getChatAgentRun(id);
+      options.onUpdate?.(next);
+      return next;
+    });
     mocks.replace.mockImplementation(() => undefined);
     window.sessionStorage.clear();
     Object.defineProperty(window, "location", { configurable: true, value: { ...window.location, assign: mocks.locationAssign } });
@@ -76,31 +88,44 @@ describe("ChatWorkspace", () => {
     expect(screen.queryByText("No chats yet. Start with a source-backed request.")).not.toBeInTheDocument();
   });
 
-  it("creates a chat-owned generation without browser pointer repair", async () => {
-    mocks.createSession.mockResolvedValue({ ...chat, latestGenerationId: null });
-    mocks.createGeneration.mockResolvedValue({ ...terminalRun, id: "run-new", artifact: null });
+  it("admits one Chat Agent request and navigates to the returned Chat without a Generation call", async () => {
+    mocks.createChatAgentRun.mockResolvedValue({ id: "agent-new", chatId: "chat-new", status: "QUEUED", failureCode: null, generationRunId: null, artifactId: null, createdAt: "2026-07-01T00:00:00Z", updatedAt: "2026-07-01T00:00:00Z" });
 
     render(<ChatWorkspace />);
     await screen.findByRole("button", { name: "Start generation" });
     fireEvent.click(screen.getByRole("button", { name: "Start generation" }));
 
-    await waitFor(() => expect(mocks.createGeneration).toHaveBeenCalledWith({
-      sourceScopeId: "scope-1",
+    await waitFor(() => expect(mocks.createChatAgentRun).toHaveBeenCalledWith({
       writingBlockIds: ["block-1"],
       instruction: "Write release notes",
-      workSessionId: "chat-1",
     }, expect.any(String)));
-    expect(mocks.locationAssign).toHaveBeenCalledWith("/chat?chat=chat-1&generation=run-new");
+    expect(mocks.createGeneration).not.toHaveBeenCalled();
+    expect(mocks.createChatAgentRun).toHaveBeenCalledTimes(1);
+    expect(mocks.locationAssign).toHaveBeenCalledWith("/chat?chat=chat-new&agent=agent-new");
     expect(window.sessionStorage.length).toBe(0);
   });
 
-  it("keeps a created empty chat and shows a retry error when generation cannot start", async () => {
-    mocks.createSession.mockResolvedValue({ ...chat, latestGenerationId: null });
-    mocks.createGeneration.mockRejectedValue(new Error("Source unavailable"));
+  it("shows a retry error when Chat Agent admission cannot start", async () => {
+    mocks.createChatAgentRun.mockRejectedValue(new Error("Source unavailable"));
     render(<ChatWorkspace />);
     await screen.findByRole("button", { name: "Start generation" });
     fireEvent.click(screen.getByRole("button", { name: "Start generation" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Source unavailable");
+  });
+
+  it("reuses the pending idempotency key after an admission response is lost", async () => {
+    const admitted = { id: "agent-retry", chatId: "chat-retry", status: "QUEUED", failureCode: null, generationRunId: null, artifactId: null, createdAt: "2026-07-01T00:00:00Z", updatedAt: "2026-07-01T00:00:00Z" };
+    mocks.createChatAgentRun.mockRejectedValueOnce(new TypeError("Network request failed")).mockResolvedValueOnce(admitted);
+    render(<ChatWorkspace />);
+    await waitFor(() => expect(screen.queryByText("Loading sources…")).not.toBeInTheDocument());
+    const start = screen.getByRole("button", { name: "Start generation" });
+
+    fireEvent.click(start);
+    await screen.findByRole("alert");
+    fireEvent.click(start);
+
+    await waitFor(() => expect(mocks.createChatAgentRun).toHaveBeenCalledTimes(2));
+    expect(mocks.createChatAgentRun.mock.calls[0]![1]).toBe(mocks.createChatAgentRun.mock.calls[1]![1]);
   });
 
   it("shows all chat generations while rendering only artifacts for completed activity", async () => {
@@ -120,19 +145,33 @@ describe("ChatWorkspace", () => {
     expect(screen.getAllByText("1 artifact")[0]).toBeVisible();
   });
 
-  it("starts a follow-up generation with the active chat linkage and no pointer update", async () => {
+  it("starts a follow-up Agent request with the active Chat linkage and no pointer update", async () => {
     mocks.search = "chat=chat-1&generation=run-1";
     mocks.listSessions.mockResolvedValue([chat]);
     mocks.listSessionGenerations.mockResolvedValue([{ id: "run-1", status: "READY", instruction: "Release notes", createdAt: "2026-07-01T00:01:00Z", completedAt: "2026-07-01T00:02:00Z", failureCode: null, artifact: artifactSummary }]);
     mocks.getGeneration.mockResolvedValue(terminalRun);
-    mocks.createGeneration.mockResolvedValue({ ...terminalRun, id: "run-2", artifact: null });
+    mocks.createChatAgentRun.mockResolvedValue({ id: "agent-2", chatId: "chat-1", status: "QUEUED", failureCode: null, generationRunId: null, artifactId: null, createdAt: "2026-07-01T00:03:00Z", updatedAt: "2026-07-01T00:03:00Z" });
     render(<ChatWorkspace />);
     expect(await screen.findByText("Reviewed artifact")).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "Generate again" }));
-    await waitFor(() => expect(mocks.createGeneration).toHaveBeenCalledWith(expect.objectContaining({ workSessionId: "chat-1" }), expect.any(String), expect.any(Object)));
-    expect(mocks.replace).toHaveBeenCalledWith("/chat?chat=chat-1&generation=run-2", { scroll: false });
+    await waitFor(() => expect(mocks.createChatAgentRun).toHaveBeenCalledWith(expect.objectContaining({ workSessionId: "chat-1", writingBlockIds: ["block-1"] }), expect.any(String), expect.any(Object)));
+    expect(mocks.createChatAgentRun).toHaveBeenCalledTimes(1);
+    expect(mocks.replace).toHaveBeenCalledWith("/chat?chat=chat-1&agent=agent-2", { scroll: false });
     expect(window.sessionStorage.length).toBe(0);
+  });
+
+  it("shows queued Agent activity and routes to the linked Generation after handoff", async () => {
+    mocks.search = "chat=chat-1&agent=agent-1";
+    mocks.listSessions.mockResolvedValue([chat]);
+    mocks.listSessionGenerations.mockResolvedValue([]);
+    mocks.getChatAgentRun
+      .mockResolvedValueOnce({ id: "agent-1", chatId: "chat-1", status: "QUEUED", failureCode: null, generationRunId: null, artifactId: null, createdAt: "2026-07-01T00:00:00Z", updatedAt: "2026-07-01T00:00:00Z" })
+      .mockResolvedValueOnce({ id: "agent-1", chatId: "chat-1", status: "SUCCEEDED", failureCode: null, generationRunId: "run-2", artifactId: null, createdAt: "2026-07-01T00:00:00Z", updatedAt: "2026-07-01T00:01:00Z" });
+    render(<ChatWorkspace />);
+
+    expect(await screen.findByRole("region", { name: "Agent request details" })).toBeVisible();
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/chat?chat=chat-1&generation=run-2", { scroll: false }));
   });
 
   it("does not render a generation from a different chat", async () => {

@@ -52,9 +52,12 @@ class RoutineApiIntegrationTest {
 		jdbcTemplate.update("delete from agent_steps where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from generation_runs where workspace_id = ? and agent_run_id is not null", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from agent_runs where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from work_sessions where workspace_id = ? and routine_execution_id is null", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from work_sessions where workspace_id = ? and routine_execution_id is not null", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from routine_executions where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from routines where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from writing_block_scopes where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from writing_blocks where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from source_scopes where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from connection_namespace_bindings where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from source_namespaces where workspace_id = ?", devContext.devWorkspaceId)
@@ -262,10 +265,11 @@ class RoutineApiIntegrationTest {
 			"""
 			insert into agent_runs (
 			 id, workspace_id, routine_execution_id, routine_id, work_session_id, created_by_user_id,
+			 origin, idempotency_key, request_fingerprint,
 			 instruction_snapshot, prompt_version, tool_policy_version, budget_snapshot,
 			 status, current_step, attempt_count, max_attempts, model_call_count, tool_call_count,
 			 started_at, finished_at, created_at, updated_at
-			) values (?, ?, ?, ?, ?, ?, 'Draft safely', 'v1', 'read-only-v1', '{}'::jsonb,
+			) values (?, ?, ?, ?, ?, ?, 'ROUTINE', ?, ?, 'Draft safely', 'v1', 'read-only-v1', '{}'::jsonb,
 			 'SUCCEEDED', 2, 0, 3, 1, 1, ?, ?, ?, ?)
 			""".trimIndent(),
 			agentRunId,
@@ -274,6 +278,8 @@ class RoutineApiIntegrationTest {
 			routineId,
 			chatId,
 			devContext.devUserId,
+			"routine:${execution.id}",
+			"routine:${execution.id}",
 			now,
 			now,
 			now,
@@ -420,10 +426,11 @@ class RoutineApiIntegrationTest {
 			"""
 			insert into agent_runs (
 			 id, workspace_id, routine_execution_id, routine_id, work_session_id, created_by_user_id,
+			 origin, idempotency_key, request_fingerprint,
 			 instruction_snapshot, prompt_version, tool_policy_version, budget_snapshot,
 			 status, current_step, attempt_count, max_attempts, model_call_count, tool_call_count,
 			 created_at, updated_at
-			) values (?, ?, ?, ?, ?, ?, 'Foreign secret', 'v1', 'read-only-v1', '{}'::jsonb,
+			) values (?, ?, ?, ?, ?, ?, 'ROUTINE', ?, ?, 'Foreign secret', 'v1', 'read-only-v1', '{}'::jsonb,
 			 'QUEUED', 0, 0, 3, 0, 0, now(), now())
 			""".trimIndent(),
 			foreignAgentRunId,
@@ -432,6 +439,8 @@ class RoutineApiIntegrationTest {
 			foreignRoutine.id,
 			foreignChatId,
 			devContext.devUserId,
+			"routine:$foreignExecution.id",
+			"routine:$foreignExecution.id",
 		)
 
 		val routineBody = mockMvc.get("/api/routines/${foreignRoutine.id}").andExpect {
@@ -534,6 +543,89 @@ class RoutineApiIntegrationTest {
 		)
 	}
 
+	@Test
+	fun `chat agent admission is idempotent and allows multiple runs in one Chat`() {
+		val sourceScopeId = insertSourceScope()
+		val blockId = insertWritingBlock(sourceScopeId)
+		val request = """{"instruction":"Draft an update","writingBlockIds":["$blockId"]}"""
+
+		val first = mockMvc.post("/api/agent-runs") {
+			header("Idempotency-Key", "chat-request-1")
+			contentType = MediaType.APPLICATION_JSON
+			content = request
+		}.andExpect {
+			status { isAccepted() }
+			jsonPath("$.status") { value("QUEUED") }
+			jsonPath("$.chatId") { exists() }
+		}.andReturn().response.contentAsString
+		val firstJson = objectMapper.readTree(first)
+		val firstRunId = firstJson.get("id").asText()
+		mockMvc.get("/api/agent-runs/$firstRunId").andExpect {
+			status { isOk() }
+			jsonPath("$.id") { value(firstRunId) }
+			jsonPath("$.chatId") { value(firstJson.get("chatId").asText()) }
+			jsonPath("$.generationRunId") { doesNotExist() }
+		}
+
+		val replay = mockMvc.post("/api/agent-runs") {
+			header("Idempotency-Key", "chat-request-1")
+			contentType = MediaType.APPLICATION_JSON
+			content = request
+		}.andExpect { status { isAccepted() } }.andReturn().response.contentAsString
+		val replayJson = objectMapper.readTree(replay)
+		assertEquals(firstJson.get("id").asText(), replayJson.get("id").asText())
+		assertEquals(firstJson.get("chatId").asText(), replayJson.get("chatId").asText())
+
+		mockMvc.post("/api/agent-runs") {
+			header("Idempotency-Key", "chat-request-1")
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"instruction":"A different request","writingBlockIds":["$blockId"]}"""
+		}.andExpect {
+			status { isConflict() }
+			jsonPath("$.error") { value("IDEMPOTENCY_KEY_REUSED") }
+		}
+
+		val chatId = UUID.fromString(firstJson.get("chatId").asText())
+		mockMvc.post("/api/agent-runs") {
+			header("Idempotency-Key", "chat-request-2")
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"instruction":"Follow up","workSessionId":"$chatId","writingBlockIds":["$blockId"]}"""
+		}.andExpect {
+			status { isAccepted() }
+			jsonPath("$.chatId") { value(chatId.toString()) }
+		}
+
+		assertEquals(2, jdbcTemplate.queryForObject(
+			"select count(*) from agent_runs where workspace_id = ? and origin = 'CHAT' and work_session_id = ?",
+			Int::class.java,
+			devContext.devWorkspaceId,
+			chatId,
+		))
+		assertEquals(2, jdbcTemplate.queryForObject(
+			"select count(*) from agent_run_inputs where workspace_id = ? and input_kind = 'SEED' and writing_block_id = ?",
+			Int::class.java,
+			devContext.devWorkspaceId,
+			blockId,
+		))
+	}
+
+	@Test
+	fun `chat agent admission requires at least one active source`() {
+		mockMvc.post("/api/agent-runs") {
+			header("Idempotency-Key", "chat-without-source")
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"instruction":"Explore the workspace"}"""
+		}.andExpect {
+			status { isConflict() }
+			jsonPath("$.error") { value("SOURCE_NOT_READY") }
+		}
+		assertEquals(0, jdbcTemplate.queryForObject(
+			"select count(*) from agent_runs where workspace_id = ? and origin = 'CHAT'",
+			Int::class.java,
+			devContext.devWorkspaceId,
+		))
+	}
+
 	private fun insertSourceScope(
 		label: String = "acme/plot",
 		workspaceId: UUID = devContext.devWorkspaceId,
@@ -595,5 +687,48 @@ class RoutineApiIntegrationTest {
 			devContext.devWorkspaceId,
 			sourceScopeId,
 		)!!
+	}
+
+	private fun insertWritingBlock(sourceScopeId: UUID): UUID {
+		val blockId = UUID.randomUUID()
+		val namespaceId = jdbcTemplate.queryForObject(
+			"select source_namespace_id from source_scopes where workspace_id = ? and id = ?",
+			UUID::class.java,
+			devContext.devWorkspaceId,
+			sourceScopeId,
+		)!!
+		val now = Timestamp.from(Instant.now())
+		jdbcTemplate.update(
+			"""
+			insert into writing_blocks (
+			 id, workspace_id, source_origin, source_kind, title, body, url, canonical_url,
+			 platform, content_hash, source_created_at, source_updated_at, ingested_at,
+			 status, created_by_user_id, created_at, updated_at, source_namespace_id, external_object_key
+			) values (?, ?, 'GITHUB', 'PULL_REQUEST', 'A source item', 'A source body',
+			 'https://github.com/acme/plot/pull/1', 'https://github.com/acme/plot/pull/1',
+			 'GITHUB', 'chat-block-hash', ?, ?, ?, 'ACTIVE', ?, ?, ?, ?, ?)
+			""".trimIndent(),
+			blockId,
+			devContext.devWorkspaceId,
+			now,
+			now,
+			now,
+			devContext.devUserId,
+			now,
+			now,
+			namespaceId,
+			"chat-block-${UUID.randomUUID()}",
+		)
+		jdbcTemplate.update(
+			"insert into writing_block_scopes (id, workspace_id, source_namespace_id, writing_block_id, source_scope_id, membership_kind, status, first_seen_at, last_seen_at) values (?, ?, ?, ?, ?, 'OBSERVED_VIA', 'ACTIVE', ?, ?)",
+			UUID.randomUUID(),
+			devContext.devWorkspaceId,
+			namespaceId,
+			blockId,
+			sourceScopeId,
+			now,
+			now,
+		)
+		return blockId
 	}
 }

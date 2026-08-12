@@ -1,15 +1,17 @@
 package com.plot.api.generation
 
+import com.plot.api.common.ApiException
+import com.plot.api.dev.DevContext
 import com.plot.api.generation.dto.CreateGenerationRequest
 import com.plot.api.generation.dto.GenerationRunResponse
 import com.plot.api.generation.dto.toResponse
-import com.plot.api.dev.DevContext
 import com.plot.api.source.SourceManagedAccessGuard
 import com.plot.api.artifact.ArtifactService
 import jakarta.validation.Valid
 import java.net.URI
 import java.util.UUID
 import org.springframework.http.CacheControl
+import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.transaction.annotation.Isolation
 import org.springframework.transaction.annotation.Transactional
@@ -34,12 +36,18 @@ class GenerationController(
 		@Valid @RequestBody request: CreateGenerationRequest,
 	): ResponseEntity<GenerationRunResponse> {
 		accessGuard.requireReadable()
+		if (request.workSessionId != null) {
+			throw ApiException(
+				HttpStatus.CONFLICT,
+				"CHAT_AGENT_REQUIRED",
+				"Chat generations must be admitted through the AgentRun endpoint",
+			)
+		}
 		val state = runService.create(
 			sourceScopeId = requireNotNull(request.sourceScopeId),
 			writingBlockIds = request.writingBlockIds,
 			instruction = request.instruction,
 			idempotencyKey = idempotencyKey,
-			workSessionId = request.workSessionId,
 		)
 		return ResponseEntity.accepted()
 			.location(URI.create("/api/generations/${state.runId}"))

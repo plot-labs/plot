@@ -3,6 +3,7 @@ package com.plot.api.common
 import com.plot.api.generation.GenerationIdempotencyConflictException
 import com.plot.api.generation.GenerationSourceAccessException
 import com.plot.api.routine.RoutineExecutionIdempotencyConflictException
+import com.plot.api.routine.AgentRunIdempotencyConflictException
 import com.plot.api.artifact.ExportConfirmationRequiredException
 import org.springframework.http.CacheControl
 import org.springframework.http.HttpStatus
@@ -38,6 +39,11 @@ class ApiExceptionHandler {
 
 	@ExceptionHandler(RoutineExecutionIdempotencyConflictException::class)
 	fun handleRoutineIdempotencyConflict(exception: RoutineExecutionIdempotencyConflictException): ResponseEntity<ApiErrorResponse> = ResponseEntity
+		.status(HttpStatus.CONFLICT).cacheControl(CacheControl.noStore())
+		.body(ApiErrorResponse("IDEMPOTENCY_KEY_REUSED", exception.message ?: "Idempotency key was reused"))
+
+	@ExceptionHandler(AgentRunIdempotencyConflictException::class)
+	fun handleAgentRunIdempotencyConflict(exception: AgentRunIdempotencyConflictException): ResponseEntity<ApiErrorResponse> = ResponseEntity
 		.status(HttpStatus.CONFLICT).cacheControl(CacheControl.noStore())
 		.body(ApiErrorResponse("IDEMPOTENCY_KEY_REUSED", exception.message ?: "Idempotency key was reused"))
 

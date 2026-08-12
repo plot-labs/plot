@@ -12,6 +12,9 @@ import com.plot.api.common.WorkspacePrincipal
 import com.plot.api.entitlement.WorkspaceAccessService
 import com.plot.api.generation.GenerationIdempotencyConflictException
 import com.plot.api.generation.GenerationRunService
+import com.plot.api.observability.stopSafely
+import io.micrometer.observation.Observation
+import io.micrometer.observation.ObservationRegistry
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
@@ -31,6 +34,7 @@ class AgentRunWorker(
 	private val objectMapper: ObjectMapper,
 	private val clock: Clock = Clock.systemUTC(),
 	private val workerId: String = "routine-agent-${UUID.randomUUID()}",
+	private val observationRegistry: ObservationRegistry = ObservationRegistry.NOOP,
 ) {
 	@Scheduled(fixedDelayString = "\${plot.routine-agent.poll-delay:PT5S}")
 	fun poll() {
@@ -45,11 +49,19 @@ class AgentRunWorker(
 			now = claimAt,
 			staleBefore = claimAt.minus(properties.claimTimeout),
 		) ?: return false
+		val origin = persistence.findAgentRun(claim.workspaceId, claim.agentRunId)?.origin?.name ?: "UNKNOWN"
+		val observation = Observation.start("plot.agent.attempt", observationRegistry)
+			.lowCardinalityKeyValue("plot.operation", "agent")
+			.lowCardinalityKeyValue("plot.agent_origin", origin)
+			.highCardinalityKeyValue("plot.agent_run_id", claim.agentRunId.toString())
+		var outcome = "SUCCEEDED"
 		try {
-			processClaim(claim)
+			observation.openScope().use { processClaim(claim) }
 		} catch (_: AgentRunClaimLostException) {
+			outcome = "LEASE_LOST"
 			// Another worker reclaimed this run. Its fenced transition wins.
 		} catch (failure: AgentDecisionException) {
+			outcome = "FAILED"
 			val now = clock.instant()
 			if (failure.recoverable) {
 				persistence.scheduleAgentRetry(
@@ -62,16 +74,22 @@ class AgentRunWorker(
 				persistence.failAgentRun(claim, failure.code.safeCode("AGENT_MODEL_FAILED"), now)
 			}
 		} catch (failure: AgentRunBudgetExceededException) {
+			outcome = "FAILED"
 			persistence.failAgentRun(claim, failure.safeCode, clock.instant())
 		} catch (failure: AgentToolAccessException) {
+			outcome = "FAILED"
 			persistence.failAgentRun(claim, failure.safeCode, clock.instant())
 		} catch (failure: ApiException) {
+			outcome = "FAILED"
 			persistence.failAgentRun(claim, backgroundAccessCode(failure), clock.instant())
 		} catch (_: GenerationIdempotencyConflictException) {
+			outcome = "FAILED"
 			persistence.failAgentRun(claim, "AGENT_HANDOFF_CONFLICT", clock.instant())
 		} catch (_: IllegalArgumentException) {
+			outcome = "FAILED"
 			persistence.failAgentRun(claim, "AGENT_INVALID_DECISION", clock.instant())
 		} catch (failure: RuntimeException) {
+			outcome = "FAILED"
 			// Unknown infrastructure outcomes retain the claim and become eligible
 			// only through bounded stale recovery; they are not misreported as terminal.
 			try {
@@ -80,6 +98,9 @@ class AgentRunWorker(
 				failure.addSuppressed(recordFailure)
 			}
 			throw failure
+		} finally {
+			observation.lowCardinalityKeyValue("plot.outcome", outcome)
+			observation.stopSafely()
 		}
 		return true
 	}

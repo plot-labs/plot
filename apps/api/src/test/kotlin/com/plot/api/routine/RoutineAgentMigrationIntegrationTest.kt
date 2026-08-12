@@ -259,6 +259,53 @@ class RoutineAgentMigrationIntegrationTest {
 	}
 
 	@Test
+	fun `Chat AgentRuns can share one Chat and keep request identity`() {
+		val fixture = insertFixture()
+		val chatId = UUID.randomUUID()
+		val now = Timestamp.from(fixture.createdAt)
+		schemaJdbcTemplate.update(
+			"insert into $schema.work_sessions (id, workspace_id, title, status, created_by_user_id, last_activity_at, created_at, updated_at) values (?, ?, 'Interactive chat', 'OPEN', ?, ?, ?, ?)",
+			chatId,
+			fixture.workspaceId,
+			fixture.userId,
+			now,
+			now,
+			now,
+		)
+
+		val agentIds = listOf(UUID.randomUUID(), UUID.randomUUID())
+		agentIds.forEachIndexed { index, agentId ->
+			schemaJdbcTemplate.update(
+				"""
+				insert into $schema.agent_runs (
+				  id, workspace_id, work_session_id, created_by_user_id, origin,
+				  idempotency_key, request_fingerprint, instruction_snapshot,
+				  prompt_version, tool_policy_version, budget_snapshot, status,
+				  current_step, attempt_count, max_attempts, created_at, updated_at
+				) values (?, ?, ?, ?, 'CHAT', ?, ?, 'Find a concise update', 'prompt-v1', 'read-only-v1', '{}'::jsonb, 'QUEUED', 0, 0, 3, ?, ?)
+				""".trimIndent(),
+				agentId,
+				fixture.workspaceId,
+				chatId,
+				fixture.userId,
+				"chat-request-$index",
+				"chat-fingerprint-$index",
+				now,
+				now,
+			)
+		}
+
+		assertEquals(2, schemaJdbcTemplate.queryForObject(
+			"select count(*) from $schema.agent_runs where workspace_id = ? and work_session_id = ? and origin = 'CHAT'",
+			Int::class.java,
+			fixture.workspaceId,
+			chatId,
+		))
+		assertEquals(AgentRunOrigin.CHAT, withSchema { persistence.findAgentRun(fixture.workspaceId, agentIds.first())?.origin })
+		assertEquals("chat-request-1", withSchema { persistence.findAgentRun(fixture.workspaceId, agentIds.last())?.idempotencyKey })
+	}
+
+	@Test
 	fun `stale execution cannot dispatch after another execution advances cursor`() {
 		val fixture = insertFixture()
 		val firstExecution = withSchema { persistence.createExecution(executionRequest(fixture, "manual:first")) }
