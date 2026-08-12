@@ -309,7 +309,7 @@ describe("Plot API client", () => {
     const controller = new AbortController();
 
     const result = await client.createGeneration(
-      { sourceScopeId: "scope-1", writingBlockIds: ["block-1"], instruction: "Notes", workSessionId: "session-1" },
+      { sourceScopeId: "scope-1", writingBlockIds: ["block-1"], instruction: "Notes" },
       "key-1",
       { signal: controller.signal },
     );
@@ -320,7 +320,7 @@ describe("Plot API client", () => {
       "/api/plot/generations",
       expect.objectContaining({
         method: "POST",
-        body: JSON.stringify({ sourceScopeId: "scope-1", writingBlockIds: ["block-1"], instruction: "Notes", workSessionId: "session-1" }),
+        body: JSON.stringify({ sourceScopeId: "scope-1", writingBlockIds: ["block-1"], instruction: "Notes" }),
         signal: controller.signal,
         headers: expect.objectContaining({ "Idempotency-Key": "key-1" }),
       }),

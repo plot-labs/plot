@@ -174,7 +174,6 @@ export interface CreateGenerationInput {
   sourceScopeId: string;
   writingBlockIds: string[];
   instruction?: string;
-  workSessionId?: string;
 }
 
 export interface RequestOptions { signal?: AbortSignal }
