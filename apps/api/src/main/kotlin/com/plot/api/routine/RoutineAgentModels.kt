@@ -15,6 +15,10 @@ enum class AgentRunStatus {
 	QUEUED, RUNNING, SUCCEEDED, FAILED,
 }
 
+enum class AgentRunOrigin {
+	ROUTINE, CHAT,
+}
+
 enum class AgentRunSourceRole {
 	TRIGGER, CONTEXT,
 }
@@ -131,6 +135,9 @@ data class AgentRunDispatchRequest(
 	val sourceScopes: List<AgentRunSourceRequest>,
 	val inputs: List<AgentRunInputRequest>,
 	val activityCursorAfter: Long,
+	val origin: AgentRunOrigin = AgentRunOrigin.ROUTINE,
+	val idempotencyKey: String? = null,
+	val requestFingerprint: String? = null,
 )
 
 data class AgentBudgetSnapshot(
@@ -145,9 +152,12 @@ data class AgentBudgetSnapshot(
 data class AgentRunRecord(
 	val id: UUID,
 	val workspaceId: UUID,
-	val routineExecutionId: UUID,
+	val routineExecutionId: UUID?,
 	val workSessionId: UUID?,
-	val routineId: UUID,
+	val routineId: UUID?,
+	val origin: AgentRunOrigin,
+	val idempotencyKey: String,
+	val requestFingerprint: String,
 	val createdByUserId: UUID,
 	val instructionSnapshot: String,
 	val promptVersion: String,

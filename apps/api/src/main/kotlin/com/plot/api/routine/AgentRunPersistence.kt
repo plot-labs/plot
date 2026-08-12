@@ -74,9 +74,10 @@ class AgentRunPersistence(
 			"""
 			insert into agent_runs (
 			  id, workspace_id, routine_execution_id, routine_id, work_session_id, created_by_user_id,
+			  origin, idempotency_key, request_fingerprint,
 			  instruction_snapshot, prompt_version, tool_policy_version, budget_snapshot,
 			  status, current_step, attempt_count, max_attempts, created_at, updated_at
-			) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, 'QUEUED', 0, 0, ?, ?, ?)
+			) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, 'QUEUED', 0, 0, ?, ?, ?)
 			""".trimIndent(),
 			agentRunId,
 			workspaceId,
@@ -84,6 +85,9 @@ class AgentRunPersistence(
 			execution.routineId,
 			workSessionId,
 			execution.createdByUserId,
+			request.origin.name,
+			request.idempotencyKey ?: "routine:$executionId",
+			request.requestFingerprint ?: "routine:$executionId",
 			request.instructionSnapshot.trim(),
 			request.promptVersion.trim(),
 			request.toolPolicyVersion.trim(),
@@ -1223,7 +1227,8 @@ class AgentRunPersistence(
 	""".trimIndent()
 
 	private val selectAgentRunSql = """
-		select a.id, a.workspace_id, a.routine_execution_id, a.work_session_id, a.routine_id, a.created_by_user_id,
+		select a.id, a.workspace_id, a.routine_execution_id, a.work_session_id, a.routine_id, a.origin,
+		       a.idempotency_key, a.request_fingerprint, a.created_by_user_id,
 		       a.instruction_snapshot, a.prompt_version, a.tool_policy_version, a.budget_snapshot::text,
 		       a.status, a.current_step, a.attempt_count, a.max_attempts,
 		       a.model_call_count, a.tool_call_count, a.next_attempt_at,
@@ -1268,6 +1273,9 @@ class AgentRunPersistence(
 		routineExecutionId = getObject("routine_execution_id", UUID::class.java),
 		workSessionId = getObject("work_session_id", UUID::class.java),
 		routineId = getObject("routine_id", UUID::class.java),
+		origin = AgentRunOrigin.valueOf(getString("origin")),
+		idempotencyKey = getString("idempotency_key"),
+		requestFingerprint = getString("request_fingerprint"),
 		createdByUserId = getObject("created_by_user_id", UUID::class.java),
 		instructionSnapshot = getString("instruction_snapshot"),
 		promptVersion = getString("prompt_version"),
