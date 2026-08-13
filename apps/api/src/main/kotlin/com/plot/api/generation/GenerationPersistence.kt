@@ -2,6 +2,8 @@ package com.plot.api.generation
 
 import com.plot.api.ai.provider.ModelCallMetadata
 import com.plot.api.ai.provider.ModelRole
+import com.plot.api.artifact.run.ArtifactRunPersistence
+import com.plot.api.artifact.run.ArtifactRunStatus
 import com.plot.api.common.ApiException
 import com.plot.api.common.UuidGenerator
 import com.plot.api.entitlement.TrialPolicy
@@ -34,6 +36,7 @@ data class GenerationRunReservation(
 	val budgetJson: String,
 	val workSessionId: UUID? = null,
 	val agentRunId: UUID? = null,
+	val artifactRunId: UUID? = null,
 )
 
 data class ClaimedGenerationRun(
@@ -56,6 +59,7 @@ class GenerationPersistence(
 	private val objectMapper: ObjectMapper,
 	private val transactionTemplate: TransactionTemplate,
 	private val uuidGenerator: UuidGenerator,
+	private val artifactRunPersistence: ArtifactRunPersistence,
 	private val clock: Clock = Clock.systemUTC(),
 ) {
 	fun findIdempotentRun(
@@ -152,17 +156,29 @@ class GenerationPersistence(
 		}
 		requireTrialGenerationCapacity(reservation.workspaceId)
 		val now = clock.instant()
+		reservation.artifactRunId?.let { artifactRunId ->
+			val agentRunId = requireNotNull(reservation.agentRunId) { "Artifact run requires an AgentRun" }
+			artifactRunPersistence.admit(
+				workspaceId = reservation.workspaceId,
+				agentRunId = agentRunId,
+				createdByUserId = reservation.createdByUserId,
+				idempotencyKey = reservation.idempotencyKey,
+				requestFingerprint = reservation.requestFingerprint,
+				id = artifactRunId,
+				now = now,
+			)
+		}
 		val inserted = jdbcTemplate.update(
 			"""
 			insert into generation_runs (
-			 id, workspace_id, work_session_id, agent_run_id, source_scope_id, created_by_user_id, idempotency_key, request_fingerprint,
+			 id, workspace_id, work_session_id, agent_run_id, artifact_run_id, source_scope_id, created_by_user_id, idempotency_key, request_fingerprint,
 			 status, workflow_version, prompt_version, output_schema_version, budget_version, provider,
 			 model_name, budget_snapshot, user_instruction, created_at, updated_at
-			) values (?, ?, ?, ?, ?, ?, ?, ?, 'QUEUED', 'fixed-v1', 'changelog-v8', 'generation-v5',
+			) values (?, ?, ?, ?, ?, ?, ?, ?, ?, 'QUEUED', 'fixed-v1', 'changelog-v8', 'generation-v5',
 			 'budget-v1', ?, ?, ?::jsonb, ?, ?, ?)
 			on conflict (workspace_id, created_by_user_id, idempotency_key) do nothing
 			""".trimIndent(),
-			reservation.state.runId, reservation.workspaceId, reservation.workSessionId, reservation.agentRunId,
+			reservation.state.runId, reservation.workspaceId, reservation.workSessionId, reservation.agentRunId, reservation.artifactRunId,
 			reservation.sourceScopeId,
 			reservation.createdByUserId, reservation.idempotencyKey, reservation.requestFingerprint,
 			reservation.provider, reservation.modelName, reservation.budgetJson, reservation.state.instruction,
@@ -586,6 +602,13 @@ class GenerationPersistence(
 				claim.workspaceId, claim.runId, claim.workerId, claim.transitionVersion,
 			)
 			check(updated == 1) { "Generation run claim was lost" }
+			artifactRunPersistence.syncWorkflowState(
+				workspaceId = claim.workspaceId,
+				workflowRunId = claim.runId,
+				status = state.status.toArtifactRunStatus(),
+				errorCode = state.failureCode,
+				now = now,
+			)
 		}
 	}
 
@@ -652,6 +675,13 @@ class GenerationPersistence(
 			claim.workspaceId, claim.runId, claim.workerId, claim.transitionVersion,
 		)
 		check(updated == 1) { "Generation run claim was lost" }
+		artifactRunPersistence.syncWorkflowState(
+			workspaceId = claim.workspaceId,
+			workflowRunId = claim.runId,
+			status = failed.status.toArtifactRunStatus(),
+			errorCode = code,
+			now = now,
+		)
 	}
 
 	fun loadState(workspaceId: UUID, runId: UUID): GenerationWorkflowState {
@@ -783,7 +813,7 @@ class GenerationPersistence(
 		require(attemptNo > 0) { "Generation retry attempt must be positive" }
 		val source = jdbcTemplate.query(
 			"""
-			select work_session_id, agent_run_id, source_scope_id, created_by_user_id, idempotency_key, request_fingerprint,
+			select work_session_id, agent_run_id, artifact_run_id, source_scope_id, created_by_user_id, idempotency_key, request_fingerprint,
 				status, provider, model_name, budget_snapshot::text, user_instruction
 			from generation_runs
 			where workspace_id = ? and id = ?
@@ -793,6 +823,7 @@ class GenerationPersistence(
 				RetryGenerationSource(
 					workSessionId = rs.getObject("work_session_id", UUID::class.java),
 					agentRunId = rs.getObject("agent_run_id", UUID::class.java),
+					artifactRunId = rs.getObject("artifact_run_id", UUID::class.java),
 					sourceScopeId = rs.getObject("source_scope_id", UUID::class.java),
 					createdByUserId = rs.getObject("created_by_user_id", UUID::class.java),
 					idempotencyKey = rs.getString("idempotency_key"),
@@ -843,6 +874,7 @@ class GenerationPersistence(
 				budgetJson = source.budgetJson,
 				workSessionId = source.workSessionId,
 				agentRunId = source.agentRunId,
+				artifactRunId = source.artifactRunId,
 			),
 		)
 	})
@@ -1048,6 +1080,7 @@ private data class RunTimingRow(
 private data class RetryGenerationSource(
 	val workSessionId: UUID?,
 	val agentRunId: UUID?,
+	val artifactRunId: UUID?,
 	val sourceScopeId: UUID?,
 	val createdByUserId: UUID,
 	val idempotencyKey: String,
@@ -1066,6 +1099,16 @@ private fun GenerationWorkflowState.asFailure(code: String): GenerationWorkflowS
 	status = if (reviews.isEmpty()) GenerationRunStatus.FAILED else GenerationRunStatus.NEEDS_REVIEW,
 	failureCode = code,
 )
+
+private fun GenerationRunStatus.toArtifactRunStatus(): ArtifactRunStatus = when (this) {
+	GenerationRunStatus.QUEUED -> ArtifactRunStatus.QUEUED
+	GenerationRunStatus.WRITING -> ArtifactRunStatus.WRITING
+	GenerationRunStatus.REVIEWING -> ArtifactRunStatus.REVIEWING
+	GenerationRunStatus.REWRITING -> ArtifactRunStatus.REWRITING
+	GenerationRunStatus.READY -> ArtifactRunStatus.READY
+	GenerationRunStatus.NEEDS_REVIEW -> ArtifactRunStatus.NEEDS_REVIEW
+	GenerationRunStatus.FAILED -> ArtifactRunStatus.FAILED
+}
 
 class GenerationIdempotencyConflictException : IllegalStateException("Idempotency key was reused with different inputs")
 class GenerationRunNotFoundException(val runId: UUID) : IllegalStateException("Generation run not found")

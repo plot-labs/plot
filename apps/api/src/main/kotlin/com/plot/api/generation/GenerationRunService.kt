@@ -106,6 +106,7 @@ class GenerationRunService(
 		}
 
 		val runId = uuidGenerator.next()
+		val artifactRunId = uuidGenerator.next()
 		val evidence = ordered.mapIndexed { index, input ->
 			EvidenceSnapshot(
 				id = uuidGenerator.next(),
@@ -146,6 +147,7 @@ class GenerationRunService(
 					"Agent run must have a Chat before creating a generation"
 				},
 				agentRunId = agentRun.id,
+				artifactRunId = artifactRunId,
 			),
 		)
 		dispatchAfterCommit()

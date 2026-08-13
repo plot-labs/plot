@@ -1,6 +1,7 @@
 package com.plot.api.generation
 
 import com.plot.api.ai.provider.GenerationModelGateway
+import com.plot.api.artifact.run.ArtifactRunPersistence
 import com.plot.api.common.UuidGenerator
 import com.plot.api.config.PlotAiProperties
 import com.plot.api.entitlement.WorkspaceAccessService
@@ -40,7 +41,14 @@ class GenerationWorkflowConfiguration {
 		objectMapper: ObjectMapper,
 		transactionTemplate: TransactionTemplate,
 		uuidGenerator: UuidGenerator,
-	): GenerationPersistence = GenerationPersistence(jdbcTemplate, objectMapper, transactionTemplate, uuidGenerator)
+		artifactRunPersistence: ArtifactRunPersistence,
+	): GenerationPersistence = GenerationPersistence(
+		jdbcTemplate,
+		objectMapper,
+		transactionTemplate,
+		uuidGenerator,
+		artifactRunPersistence,
+	)
 
 	@Bean
 	fun generationRunWorker(

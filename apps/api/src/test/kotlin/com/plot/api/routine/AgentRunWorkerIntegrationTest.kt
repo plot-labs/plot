@@ -154,6 +154,11 @@ class AgentRunWorkerIntegrationTest {
 			routine.workspaceId,
 			agentRunId,
 		)!!
+		assertEquals(1, count("select count(*) from artifact_runs where workspace_id = ? and agent_run_id = ?", routine.workspaceId, agentRunId))
+		assertEquals(1, count(
+			"select count(*) from generation_runs where workspace_id = ? and artifact_run_id = (select id from artifact_runs where workspace_id = ? and agent_run_id = ?)",
+			routine.workspaceId, routine.workspaceId, agentRunId,
+		))
 		assertEquals(2, count("select count(*) from agent_steps where agent_run_id = ? and step_kind = 'READ_TOOL'", agentRunId))
 		assertEquals(1, count("select count(*) from agent_steps where agent_run_id = ? and step_kind = 'ARTIFACT_HANDOFF'", agentRunId))
 		assertEquals(2, count("select count(*) from generation_inputs where generation_run_id = ?", generationRunId))
@@ -205,6 +210,7 @@ class AgentRunWorkerIntegrationTest {
 		jdbcTemplate.update("update agent_runs set next_attempt_at = now() where id = ?", agentRunId)
 		assertTrue(agentWorker.processOne())
 		assertEquals("SUCCEEDED", jdbcTemplate.queryForObject("select status from agent_runs where id = ?", String::class.java, agentRunId))
+		assertEquals("READY", jdbcTemplate.queryForObject("select status from artifact_runs where workspace_id = ? and agent_run_id = ?", String::class.java, routine.workspaceId, agentRunId))
 		assertEquals(1, count("select count(*) from content_packs where generation_run_id = ?", generationRunId))
 		assertEquals(3, agentModel.requests.size)
 		assertTrue(agentModel.requests.none { request ->
@@ -232,6 +238,7 @@ class AgentRunWorkerIntegrationTest {
 			devContext.devWorkspaceId,
 			chat.id,
 		))
+		assertEquals(1, count("select count(*) from artifact_runs where workspace_id = ? and agent_run_id = ?", devContext.devWorkspaceId, chat.id))
 		assertEquals(chat.chatId, jdbcTemplate.queryForObject(
 			"select work_session_id from generation_runs where id = ?",
 			UUID::class.java,
@@ -246,6 +253,7 @@ class AgentRunWorkerIntegrationTest {
 		jdbcTemplate.update("update agent_runs set next_attempt_at = now() where id = ?", chat.id)
 		assertTrue(agentWorker.processOne())
 		assertEquals("SUCCEEDED", jdbcTemplate.queryForObject("select status from agent_runs where id = ?", String::class.java, chat.id))
+		assertEquals("READY", jdbcTemplate.queryForObject("select status from artifact_runs where workspace_id = ? and agent_run_id = ?", String::class.java, devContext.devWorkspaceId, chat.id))
 		assertEquals(generationRunId, chatAdmission.get(chat.id).generationRunId)
 		assertEquals(generationRunId, jdbcTemplate.queryForObject(
 			"select latest_generation_run_id from work_sessions where id = ?",
