@@ -804,81 +804,6 @@ class ArtifactWorkflowPersistence(
 		}
 	}
 
-	fun createRetryAttempt(
-		workspaceId: UUID,
-		failedRunId: UUID,
-		newRunId: UUID,
-		attemptNo: Int,
-	): ArtifactWorkflowState = checkNotNull(transactionTemplate.execute {
-		require(attemptNo > 0) { "ArtifactWorkflow retry attempt must be positive" }
-		val source = jdbcTemplate.query(
-			"""
-			select work_session_id, agent_run_id, artifact_run_id, source_scope_id, created_by_user_id, idempotency_key, request_fingerprint,
-				status, provider, model_name, budget_snapshot::text, user_instruction
-			from generation_runs
-			where workspace_id = ? and id = ?
-			for update
-			""".trimIndent(),
-			{ rs, _ ->
-				RetryArtifactWorkflowSource(
-					workSessionId = rs.getObject("work_session_id", UUID::class.java),
-					agentRunId = rs.getObject("agent_run_id", UUID::class.java),
-					artifactRunId = rs.getObject("artifact_run_id", UUID::class.java),
-					sourceScopeId = rs.getObject("source_scope_id", UUID::class.java),
-					createdByUserId = rs.getObject("created_by_user_id", UUID::class.java),
-					idempotencyKey = rs.getString("idempotency_key"),
-					requestFingerprint = rs.getString("request_fingerprint"),
-					status = ArtifactWorkflowRunStatus.valueOf(rs.getString("status")),
-					provider = rs.getString("provider"),
-					modelName = rs.getString("model_name"),
-					budgetJson = rs.getString("budget_snapshot"),
-					instruction = rs.getString("user_instruction"),
-				)
-			},
-			workspaceId,
-			failedRunId,
-		).firstOrNull() ?: throw ArtifactWorkflowRunNotFoundException(failedRunId)
-		check(source.status == ArtifactWorkflowRunStatus.FAILED) { "Linked generation is not retryable" }
-		val packCount = jdbcTemplate.queryForObject(
-			"select count(*) from content_packs where workspace_id = ? and generation_run_id = ?",
-			Int::class.java,
-			workspaceId,
-			failedRunId,
-		) ?: 0
-		check(packCount == 0) { "A materialized generation cannot be retried" }
-		val previous = loadState(workspaceId, failedRunId)
-		val frozenEvidence = previous.evidence.map { evidence ->
-			evidence.copy(
-				id = uuidGenerator.next(),
-				artifactWorkflowRunId = newRunId,
-			)
-		}
-		val initial = ArtifactWorkflowState(
-			runId = newRunId,
-			evidence = frozenEvidence,
-			instruction = source.instruction,
-			status = ArtifactWorkflowRunStatus.QUEUED,
-			workSessionId = source.workSessionId,
-			agentRunId = source.agentRunId,
-		)
-		createRun(
-			ArtifactWorkflowRunReservation(
-				workspaceId = workspaceId,
-				createdByUserId = source.createdByUserId,
-				sourceScopeId = source.sourceScopeId,
-				idempotencyKey = source.idempotencyKey.withAttempt(attemptNo),
-				requestFingerprint = source.requestFingerprint,
-				state = initial,
-				provider = source.provider,
-				modelName = source.modelName,
-				budgetJson = source.budgetJson,
-				workSessionId = source.workSessionId,
-				agentRunId = source.agentRunId,
-				artifactRunId = source.artifactRunId,
-			),
-		)
-	})
-
 	private fun insertEvidence(workspaceId: UUID, evidence: EvidenceSnapshot) {
 		jdbcTemplate.update(
 			"""
@@ -1076,24 +1001,6 @@ private data class RunTimingRow(
 	val totalTokens: Long,
 	val totalLatencyMs: Long,
 )
-
-private data class RetryArtifactWorkflowSource(
-	val workSessionId: UUID?,
-	val agentRunId: UUID?,
-	val artifactRunId: UUID?,
-	val sourceScopeId: UUID?,
-	val createdByUserId: UUID,
-	val idempotencyKey: String,
-	val requestFingerprint: String,
-	val status: ArtifactWorkflowRunStatus,
-	val provider: String,
-	val modelName: String,
-	val budgetJson: String,
-	val instruction: String?,
-)
-
-private fun String.withAttempt(attemptNo: Int): String =
-	replace(Regex(":attempt:\\d+$"), "") + ":attempt:$attemptNo"
 
 private fun ArtifactWorkflowState.asFailure(code: String): ArtifactWorkflowState = copy(
 	status = if (reviews.isEmpty()) ArtifactWorkflowRunStatus.FAILED else ArtifactWorkflowRunStatus.NEEDS_REVIEW,
