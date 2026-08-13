@@ -2,6 +2,7 @@ package com.plot.api.routine
 
 import com.plot.api.common.ApiException
 import com.plot.api.common.UuidGenerator
+import com.plot.api.common.WorkspacePrincipal
 import com.plot.api.dev.DevContext
 import com.plot.api.routine.dto.ChatAgentRunResponse
 import com.plot.api.routine.dto.CreateChatAgentRunRequest
@@ -31,17 +32,57 @@ class ChatAgentAdmissionService(
 ) {
 	fun admit(request: CreateChatAgentRunRequest, idempotencyKey: String): ChatAgentRunResponse {
 		sourceManagedAccessGuard.requireReadable()
-		val workspaceId = devContext.devWorkspaceId
-		val userId = devContext.devUserId
+		val run = admitInternal(
+			principal = WorkspacePrincipal(devContext.devWorkspaceId, devContext.devUserId),
+			instruction = request.instruction,
+			workSessionId = request.workSessionId,
+			writingBlockIds = request.writingBlockIds,
+			idempotencyKey = idempotencyKey,
+			chatTitle = null,
+		)
+		return run.toChatResponseFor(agentRunPersistence)
+	}
+
+	fun admitAutomated(
+		principal: WorkspacePrincipal,
+		instruction: String,
+		writingBlockIds: List<UUID>,
+		idempotencyKey: String,
+		chatTitle: String,
+	): AgentRunRecord = admitInternal(
+		principal = principal,
+		instruction = instruction,
+		workSessionId = null,
+		writingBlockIds = writingBlockIds,
+		idempotencyKey = idempotencyKey,
+		chatTitle = chatTitle,
+	)
+
+	private fun admitInternal(
+		principal: WorkspacePrincipal,
+		instruction: String,
+		workSessionId: UUID?,
+		writingBlockIds: List<UUID>,
+		idempotencyKey: String,
+		chatTitle: String?,
+	): AgentRunRecord {
+		val workspaceId = principal.workspaceId
+		val userId = principal.userId
 		val key = idempotencyKey.trim()
 		if (key.isBlank() || key.length > 200) {
 			throw ApiException(HttpStatus.BAD_REQUEST, "IDEMPOTENCY_KEY_REQUIRED", "Idempotency-Key is required")
 		}
-		val instruction = request.instruction.trim()
-		if (request.writingBlockIds.distinct().size != request.writingBlockIds.size) {
+		val normalizedInstruction = instruction.trim()
+		if (writingBlockIds.distinct().size != writingBlockIds.size) {
 			throw ApiException(HttpStatus.BAD_REQUEST, "DUPLICATE_SOURCE_ITEMS", "Writing Block IDs must be unique")
 		}
-		val fingerprint = fingerprint(request.copy(instruction = instruction))
+		val fingerprint = fingerprint(
+			CreateChatAgentRunRequest(
+				instruction = normalizedInstruction,
+				workSessionId = workSessionId,
+				writingBlockIds = writingBlockIds,
+			),
+		)
 		return transactionTemplate.execute {
 			// A transaction-scoped advisory lock prevents two identical requests from
 		// creating duplicate Chats before the partial idempotency index is reached.
@@ -52,7 +93,7 @@ class ChatAgentAdmissionService(
 			)
 			findExisting(workspaceId, key)?.let { existing ->
 				if (existing.requestFingerprint != fingerprint) throw AgentRunIdempotencyConflictException()
-				return@execute existing.toChatResponseFor(agentRunPersistence)
+				return@execute existing
 			}
 
 			val sources = lockActiveSources(workspaceId)
@@ -63,7 +104,7 @@ class ChatAgentAdmissionService(
 					"Connect an active source before starting a Chat",
 				)
 			}
-			val chatId = resolveChat(request.workSessionId, workspaceId, userId, instruction)
+			val chatId = resolveChat(workSessionId, workspaceId, userId, chatTitle ?: normalizedInstruction)
 			val runId = uuidGenerator.next()
 			val now = Instant.now()
 			val inserted = jdbcTemplate.update(
@@ -83,7 +124,7 @@ class ChatAgentAdmissionService(
 				userId,
 				key,
 				fingerprint,
-				instruction,
+				normalizedInstruction,
 				budgetSnapshot(),
 				properties.maxAttempts,
 				Timestamp.from(now),
@@ -92,7 +133,7 @@ class ChatAgentAdmissionService(
 			if (inserted == 0) {
 				val raced = requireNotNull(findExisting(workspaceId, key))
 				if (raced.requestFingerprint != fingerprint) throw AgentRunIdempotencyConflictException()
-				return@execute raced.toChatResponseFor(agentRunPersistence)
+				return@execute raced
 			}
 
 			sources.forEachIndexed { index, source ->
@@ -113,7 +154,7 @@ class ChatAgentAdmissionService(
 				)
 			}
 
-			request.writingBlockIds.forEachIndexed { index, blockId ->
+			writingBlockIds.forEachIndexed { index, blockId ->
 				val sourceScopeId = findReadableBlockSource(workspaceId, blockId, sources.map { it.id })
 					?: throw ApiException(HttpStatus.BAD_REQUEST, "SOURCE_ITEM_NOT_READY", "A selected source item is unavailable")
 				val input = try {
@@ -131,7 +172,7 @@ class ChatAgentAdmissionService(
 			}
 
 			val run = requireNotNull(agentRunPersistence.findAgentRun(workspaceId, runId))
-			run.toChatResponse()
+			run
 		}
 	}
 
@@ -152,7 +193,7 @@ class ChatAgentAdmissionService(
 		)
 	}
 
-	private fun resolveChat(workSessionId: UUID?, workspaceId: UUID, userId: UUID, instruction: String): UUID {
+	private fun resolveChat(workSessionId: UUID?, workspaceId: UUID, userId: UUID, title: String): UUID {
 		if (workSessionId == null) {
 			val id = uuidGenerator.next()
 			val now = Instant.now()
@@ -165,7 +206,7 @@ class ChatAgentAdmissionService(
 				""".trimIndent(),
 				id,
 				workspaceId,
-				instruction,
+				title,
 				userId,
 				Timestamp.from(now),
 				Timestamp.from(now),

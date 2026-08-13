@@ -30,7 +30,7 @@ class ApiApplicationTests {
 	fun contextStartsAndAppliesFlywayMigrations() {
 		assertTrue(flyway.configuration.isGroup)
 		assertEquals(
-				"25",
+				"26",
 			jdbcTemplate.queryForObject(
 				"select version from flyway_schema_history where success order by installed_rank desc limit 1",
 				String::class.java,

@@ -51,6 +51,18 @@ interface GitHubReleasePersistence {
 		observationId: UUID,
 		generationRunId: UUID,
 	)
+	fun linkAgentRun(
+		requestId: UUID,
+		transitionVersion: Long,
+		observationId: UUID,
+		agentRunId: UUID,
+	): Unit = error("Agent-run release linkage is not supported by this persistence implementation")
+	fun linkAgentArtifact(
+		requestId: UUID,
+		transitionVersion: Long,
+		agentRunId: UUID,
+		generationRunId: UUID,
+	): Unit = error("Agent artifact release linkage is not supported by this persistence implementation")
 	fun bindEvidence(
 		requestId: UUID,
 		transitionVersion: Long,
@@ -416,6 +428,57 @@ class JdbcGitHubReleasePersistence(
 		}
 	}
 
+	override fun linkAgentRun(
+		requestId: UUID,
+		transitionVersion: Long,
+		observationId: UUID,
+		agentRunId: UUID,
+	) {
+		val updated = jdbcTemplate.update(
+			"""
+			update github_release_draft_requests
+			set agent_run_id = ?, status = 'GENERATING', transition_version = transition_version + 1,
+				claimed_by = null, claimed_at = null, heartbeat_at = null, updated_at = ?
+			where id = ? and transition_version = ? and observation_id = ?
+			  and agent_run_id is null and generation_run_id is null
+			""".trimIndent(),
+			agentRunId, Timestamp.from(clock.instant()), requestId, transitionVersion, observationId,
+		)
+		requireExactlyOne(updated, "Release Agent run transition was lost")
+	}
+
+	override fun linkAgentArtifact(
+		requestId: UUID,
+		transitionVersion: Long,
+		agentRunId: UUID,
+		generationRunId: UUID,
+	) {
+		transactionTemplate.executeWithoutResult {
+			val now = Timestamp.from(clock.instant())
+			val updated = jdbcTemplate.update(
+				"""
+				update github_release_draft_requests
+				set generation_run_id = ?, transition_version = transition_version + 1, updated_at = ?
+				where id = ? and transition_version = ? and agent_run_id = ?
+				  and generation_run_id is null
+				""".trimIndent(),
+				generationRunId, now, requestId, transitionVersion, agentRunId,
+			)
+			requireExactlyOne(updated, "Release Artifact workflow transition was lost")
+			val linkedPack = jdbcTemplate.update(
+				"""
+				update content_packs
+				set release_request_id = ?
+				where workspace_id = (select workspace_id from github_release_draft_requests where id = ?)
+				  and generation_run_id = ?
+				  and (release_request_id is null or release_request_id = ?)
+				""".trimIndent(),
+				requestId, requestId, generationRunId, requestId,
+			)
+			requireExactlyOne(linkedPack, "Release Artifact materialization was not found")
+		}
+	}
+
 	override fun bindEvidence(
 		requestId: UUID,
 		transitionVersion: Long,
@@ -768,7 +831,7 @@ class JdbcGitHubReleasePersistence(
 private val requestColumns = """
 id, workspace_id, source_scope_id, initial_delivery_id, tag_name, observed_head_sha,
 base_sha, head_sha, boundary_reason,
-status, attempt_count, generation_attempt, transition_version, generation_run_id, observation_id, error_code
+status, attempt_count, generation_attempt, transition_version, agent_run_id, generation_run_id, observation_id, error_code
 """.trimIndent()
 
 private val activityColumns = """
@@ -828,6 +891,7 @@ private fun java.sql.ResultSet.toReleaseDraftRequest(): GitHubReleaseDraftReques
 	status = GitHubReleaseDraftStatus.valueOf(getString("status")),
 	attemptCount = getInt("attempt_count"),
 	transitionVersion = getLong("transition_version"),
+	agentRunId = getObject("agent_run_id", UUID::class.java),
 	generationRunId = getObject("generation_run_id", UUID::class.java),
 	observationId = getObject("observation_id", UUID::class.java),
 	errorCode = getString("error_code"),

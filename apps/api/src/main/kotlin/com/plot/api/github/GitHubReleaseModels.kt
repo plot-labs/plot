@@ -47,12 +47,14 @@ data class GitHubReleaseDraftRequest(
 	val errorCode: String?,
 	val generationAttempt: Int = 0,
 	val observedHeadSha: String? = null,
+	val agentRunId: UUID? = null,
 )
 
 data class GitHubReleaseRetryResult(
 	val requestId: UUID,
 	val generationRunId: UUID?,
 	val generationAttempt: Int,
+	val agentRunId: UUID? = null,
 )
 
 data class GitHubReleaseActivityRecord(

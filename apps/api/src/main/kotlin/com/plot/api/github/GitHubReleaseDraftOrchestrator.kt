@@ -1,11 +1,14 @@
 package com.plot.api.github
 
 import com.plot.api.common.WorkspacePrincipal
+import com.plot.api.artifact.run.ArtifactRunPersistence
+import com.plot.api.artifact.run.ArtifactRunStatus
 import com.plot.api.generation.GenerationPersistence
 import com.plot.api.generation.GenerationRunService
 import com.plot.api.generation.GenerationRunNotFoundException
 import com.plot.api.generation.GenerationRunStatus
 import com.plot.api.generation.GenerationWorkflowState
+import com.plot.api.routine.AgentRunPersistence
 import java.util.UUID
 import org.springframework.stereotype.Component
 import org.springframework.stereotype.Service
@@ -53,6 +56,9 @@ class GitHubReleaseDraftOrchestrator(
 	private val evidenceService: GitHubReleaseEvidenceService,
 	private val generationGateway: GitHubReleaseGenerationGateway,
 	private val evidenceGenerationBinder: GitHubReleaseEvidenceGenerationBinder,
+	private val agentAdmission: GitHubReleaseAgentAdmission? = null,
+	private val artifactRunPersistence: ArtifactRunPersistence? = null,
+	private val agentRunPersistence: AgentRunPersistence? = null,
 ) {
 	fun process(request: GitHubReleaseDraftRequest, lease: GitHubReleaseLease): GitHubReleaseDraftStatus {
 		require(lease.workerId.isNotBlank()) { "Release worker ID is required" }
@@ -119,18 +125,34 @@ class GitHubReleaseDraftOrchestrator(
 					}
 					lease.checkpoint()
 					var generation: GenerationWorkflowState? = null
+					var agentRunId: UUID? = null
 					lease.transition { transitionVersion ->
-						generation = evidenceGenerationBinder.bindAndCreate(
-							request = request,
-							transitionVersion = transitionVersion,
-							principal = principal,
-							evidence = evidence,
-							instruction = instruction(request),
-							idempotencyKey = idempotencyKey(context, request),
-						)
+						if (agentAdmission != null) {
+							agentRunId = agentAdmission.bindAndAdmit(
+								request = request,
+								transitionVersion = transitionVersion,
+								principal = principal,
+								evidence = evidence,
+								instruction = instruction(request),
+								idempotencyKey = idempotencyKey(context, request),
+							).id
+						} else {
+							generation = evidenceGenerationBinder.bindAndCreate(
+								request = request,
+								transitionVersion = transitionVersion,
+								principal = principal,
+								evidence = evidence,
+								instruction = instruction(request),
+								idempotencyKey = idempotencyKey(context, request),
+							)
+						}
 					}
 					lease.checkpoint()
-					linkGeneration(request, evidence, checkNotNull(generation), lease)
+					if (agentRunId != null) {
+						persistence.linkAgentRun(request.id, lease.transitionVersion, evidence.observationId, agentRunId)
+					} else {
+						linkGeneration(request, evidence, checkNotNull(generation), lease)
+					}
 					return GitHubReleaseDraftStatus.GENERATING
 				}
 			}
@@ -147,6 +169,22 @@ class GitHubReleaseDraftOrchestrator(
 	fun reconcileGenerating(limit: Int) {
 		persistence.findGenerating(limit).forEach { request ->
 			try {
+				if (request.agentRunId != null && artifactRunPersistence != null && agentRunPersistence != null) {
+					val artifact = artifactRunPersistence.findWorkflowStateByAgentRun(request.workspaceId, request.agentRunId)
+					when {
+						artifact?.status == ArtifactRunStatus.FAILED -> persistence.finish(
+							request.id, request.transitionVersion, GitHubReleaseDraftStatus.FAILED, "ARTIFACT_WORKFLOW_FAILED",
+						)
+						artifact?.materialized == true && artifact.workflowRunId != null && artifact.status in setOf(ArtifactRunStatus.READY, ArtifactRunStatus.NEEDS_REVIEW) -> {
+							persistence.linkAgentArtifact(request.id, request.transitionVersion, request.agentRunId, artifact.workflowRunId)
+							persistence.finish(request.id, request.transitionVersion + 1, GitHubReleaseDraftStatus.READY)
+						}
+						agentRunPersistence.findAgentRun(request.workspaceId, request.agentRunId)?.status == com.plot.api.routine.AgentRunStatus.FAILED -> persistence.finish(
+							request.id, request.transitionVersion, GitHubReleaseDraftStatus.FAILED, "AGENT_RUN_FAILED",
+						)
+					}
+					return@forEach
+				}
 				val runId = request.generationRunId ?: return@forEach
 				val generation = generationGateway.load(request.workspaceId, runId)
 				when (generation.status) {
@@ -192,6 +230,20 @@ class GitHubReleaseDraftOrchestrator(
 		lease: GitHubReleaseLease,
 	) {
 		lease.checkpoint()
+		if (agentAdmission != null) {
+			val agentRun = agentAdmission.bindAndAdmit(
+				request = request,
+				transitionVersion = lease.transitionVersion,
+				principal = principal,
+				evidence = evidence,
+				instruction = instruction(request),
+				idempotencyKey = idempotencyKey(context, request),
+			)
+			lease.advanceTransition()
+			lease.checkpoint()
+			persistence.linkAgentRun(request.id, lease.transitionVersion, evidence.observationId, agentRun.id)
+			return
+		}
 		val generation = generationGateway.create(
 			principal = principal,
 			sourceScopeId = context.sourceScopeId,

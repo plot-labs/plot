@@ -1,6 +1,8 @@
 package com.plot.api.github
 
 import com.plot.api.TestcontainersConfiguration
+import com.plot.api.ai.provider.AgentDecision
+import com.plot.api.ai.provider.AgentDecisionAction
 import com.plot.api.ai.provider.GenerationModelGateway
 import com.plot.api.ai.provider.ModelCallMetadata
 import com.plot.api.ai.provider.ModelCallResult
@@ -19,6 +21,8 @@ import com.plot.api.generation.model.SentenceReview
 import com.plot.api.generation.model.TargetedRewriteOutput
 import com.plot.api.generation.model.WriterOutput
 import com.plot.api.generation.model.WriterSentence
+import com.plot.api.routine.AgentRunWorker
+import com.plot.api.routine.ScriptedAgentDecisionGateway
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
@@ -57,6 +61,7 @@ import org.springframework.test.context.TestPropertySource
 	"plot.github.private-key=test-key",
 	"plot.github.state-secret=test-state-secret",
 	"plot.github.release-automation-enabled=true",
+	"plot.routine-agent.workers-enabled=true",
 	"plot.github.release-worker-poll-delay=PT24H",
 	"server.address=127.0.0.1",
 ])
@@ -70,6 +75,8 @@ class GitHubReleaseAutomationIntegrationTest {
 	@Autowired private lateinit var generationWorkflowService: GenerationWorkflowService
 	@Autowired private lateinit var github: ScriptedGitHubClient
 	@Autowired private lateinit var model: ScriptedGenerationModelGateway
+	@Autowired private lateinit var agentWorker: AgentRunWorker
+	@Autowired private lateinit var agentModel: ScriptedAgentDecisionGateway
 	@Autowired private lateinit var jdbcTemplate: JdbcTemplate
 	@Autowired private lateinit var devContext: DevContext
 
@@ -106,8 +113,18 @@ class GitHubReleaseAutomationIntegrationTest {
 			where status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
 			""".trimIndent(),
 		)
+		jdbcTemplate.update(
+			"""
+			update agent_runs
+			set status = 'FAILED', failure_code = 'TEST_ISOLATION',
+			    claimed_by = null, claimed_at = null,
+			    finished_at = coalesce(finished_at, now()), updated_at = now()
+			where status in ('QUEUED', 'RUNNING')
+			""".trimIndent(),
+		)
 		github.reset()
 		model.reset()
+		agentModel.reset()
 		jdbcTemplate.update(
 			"""
 			update workspaces
@@ -206,7 +223,8 @@ class GitHubReleaseAutomationIntegrationTest {
 		assertEquals(firstHead, generating.baseSha)
 		assertEquals(secondHead, generating.headSha)
 		assertEquals("PREVIOUS_RELEASE_HEAD", generating.boundaryReason)
-		val generationRunId = assertNotNull(generating.generationRunId)
+		val agentRunId = assertNotNull(generating.agentRunId)
+		assertNull(generating.generationRunId)
 		assertEquals(listOf("$firstHead...$secondHead"), github.comparisons)
 		val expectedPullRequestKey =
 			"release:v1.1.0:$firstHead...$secondHead:pull_request:${pullRequest.id}"
@@ -228,6 +246,31 @@ class GitHubReleaseAutomationIntegrationTest {
 		assertTrue(evidence[1].metadata.contains("\"sha\": \"$secondHead\""))
 		assertTrue(evidence.all { it.metadata.contains("\"releaseTag\": \"v1.1.0\"") })
 
+		assertTrue(evidence.all { it.releaseObservationId == it.membershipObservationId })
+		assertEquals(2, boundEvidence(generating.id))
+		assertCounts(fixture, requests = 2, runs = 0, packs = 0)
+
+		agentModel.scriptedDecision = { request ->
+			AgentDecision(
+				action = AgentDecisionAction.CREATE_ARTIFACT,
+				selectedInputIds = request.inputs.map { it.id },
+			)
+		}
+		assertEquals(1, agentWorker.drain())
+		val linked = release("v1.1.0", fixture)
+		assertEquals(agentRunId, linked.agentRunId)
+		assertNull(linked.generationRunId)
+		assertEquals(1, agentRunIdCount(agentRunId))
+		assertCounts(fixture, requests = 2, runs = 1, packs = 0)
+
+		assertEquals(2, generationWorker.drain())
+		jdbcTemplate.update("update agent_runs set next_attempt_at = now() where id = ?", agentRunId)
+		assertEquals(1, agentWorker.drain())
+		releaseWorker.reconcile()
+		val ready = release("v1.1.0", fixture)
+		assertEquals(GitHubReleaseDraftStatus.READY, ready.status)
+		val artifactId = assertNotNull(artifactId(ready.id))
+		val generationRunId = assertNotNull(ready.generationRunId)
 		val inputs = generationInputs(generationRunId)
 		assertEquals(evidence.map { it.writingBlockId }, inputs.map { it.writingBlockId })
 		assertEquals(evidence.map { it.sourceKind }, inputs.map { it.sourceKind })
@@ -237,16 +280,6 @@ class GitHubReleaseAutomationIntegrationTest {
 		assertEquals(listOf(0, 1), inputs.map { it.orderIndex })
 		assertTrue(inputs.all { it.generationRunId == generationRunId })
 		assertEquals(inputs.size, inputs.map { it.generationInputId }.distinct().size)
-		assertTrue(evidence.all { it.releaseObservationId == it.membershipObservationId })
-		assertEquals(2, boundEvidence(generating.id))
-		assertEquals(generationRunId, generationRunForAttempt(generating.id))
-		assertCounts(fixture, requests = 2, runs = 1, packs = 0)
-
-		assertEquals(2, generationWorker.drain())
-		releaseWorker.reconcile()
-		val ready = release("v1.1.0", fixture)
-		assertEquals(GitHubReleaseDraftStatus.READY, ready.status)
-		val artifactId = assertNotNull(artifactId(ready.id))
 		assertEquals(1, model.writerCalls.get())
 		assertEquals(1, model.reviewerCalls.get())
 		assertCounts(fixture, requests = 2, runs = 1, packs = 1)
@@ -263,7 +296,7 @@ class GitHubReleaseAutomationIntegrationTest {
 		webhookService.accept(releasePublished(fixture, "release-${UUID.randomUUID()}", "v1.1.0"))
 		assertEquals(0, releaseWorker.drain())
 		assertEquals(1, requestCount(fixture, "v1.1.0"))
-		assertEquals(1, generationAttemptCount(ready.id))
+		assertEquals(0, generationAttemptCount(ready.id))
 		assertEquals(1, model.writerCalls.get())
 		assertEquals(1, model.reviewerCalls.get())
 		assertCounts(fixture, requests = 2, runs = 1, packs = 1)
@@ -555,15 +588,10 @@ class GitHubReleaseAutomationIntegrationTest {
 		requestId,
 	)
 
-	private fun generationRunForAttempt(requestId: UUID): UUID = jdbcTemplate.queryForObject(
-		"""
-		select generation_run_id
-		from github_release_generation_attempts
-		where request_id = ? and attempt_no = 0
-		""".trimIndent(),
-		UUID::class.java,
-		requestId,
-	)!!
+	private fun agentRunIdCount(agentRunId: UUID): Int = count(
+		"select count(*) from agent_runs where id = ?",
+		agentRunId,
+	)
 
 	private fun requestCount(fixture: RepositoryFixture, tagName: String): Int = count(
 		"""
@@ -582,7 +610,21 @@ class GitHubReleaseAutomationIntegrationTest {
 			fixture.scopeId,
 		))
 		assertEquals(runs, count(
-			"select count(*) from generation_runs where workspace_id = ? and source_scope_id = ?",
+			"""
+			select count(*)
+			from generation_runs g
+			where g.workspace_id = ?
+			  and (
+			    g.source_scope_id = ?
+			    or g.agent_run_id in (
+			      select agent_run_id
+			      from github_release_draft_requests
+			      where workspace_id = ? and source_scope_id = ? and agent_run_id is not null
+			    )
+			  )
+			""".trimIndent(),
+			devContext.devWorkspaceId,
+			fixture.scopeId,
 			devContext.devWorkspaceId,
 			fixture.scopeId,
 		))
@@ -611,6 +653,10 @@ class GitHubReleaseAutomationIntegrationTest {
 		@Bean
 		@Primary
 		fun scriptedGenerationModelGateway() = ScriptedGenerationModelGateway()
+
+		@Bean
+		@Primary
+		fun scriptedAgentDecisionGateway() = ScriptedAgentDecisionGateway()
 
 		@Bean
 		@Primary
