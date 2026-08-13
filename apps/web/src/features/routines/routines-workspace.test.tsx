@@ -282,7 +282,7 @@ describe("RoutinesWorkspace", () => {
   it("shows no artifact or Chat for no activity and links successful work to one Chat and Artifact", async () => {
     mocks.listRoutines.mockResolvedValue([
       routine({ id: "routine-empty", name: "No activity routine", latestExecution: execution({ status: "NO_ACTIVITY", chatId: null, agentRunId: null, agentRunStatus: null }) }),
-      routine({ id: "routine-ready", name: "Successful routine", latestExecution: execution({ agentRunStatus: "SUCCEEDED", generationRunId: "generation-1", artifactId: "artifact-1" }) }),
+      routine({ id: "routine-ready", name: "Successful routine", latestExecution: execution({ agentRunStatus: "SUCCEEDED", artifactId: "artifact-1" }) }),
     ]);
     render(<RoutinesWorkspace />);
 
@@ -293,7 +293,7 @@ describe("RoutinesWorkspace", () => {
     expect(screen.getAllByRole("link", { name: "Open Chat for Successful routine" })).toHaveLength(1);
     expect(screen.getByRole("link", { name: "Open Chat for Successful routine" })).toHaveAttribute(
       "href",
-      "/chat?chat=chat-1&generation=generation-1&artifact=artifact-1",
+      "/chat?chat=chat-1&artifact=artifact-1",
     );
     const artifactLinks = screen.getAllByRole("link", { name: "Open artifact for Successful routine" });
     expect(artifactLinks).toHaveLength(1);
@@ -310,13 +310,12 @@ describe("RoutinesWorkspace", () => {
       chatId: "chat-1",
       status: "SUCCEEDED",
       failureCode: null,
-      generationRunId: "generation-1",
       artifactId: "artifact-1",
       startedAt: "2026-08-10T00:00:00Z",
       finishedAt: "2026-08-10T00:01:00Z",
       steps: [
-        { sequence: 2, kind: "ARTIFACT_HANDOFF", status: "SUCCEEDED", toolName: null, failureCode: null, generationRunId: "generation-1", artifactId: "artifact-1", startedAt: null, finishedAt: null },
-        { sequence: 1, kind: "READ_TOOL", status: "SUCCEEDED", toolName: "github.search", failureCode: null, generationRunId: null, artifactId: null, startedAt: null, finishedAt: null },
+        { sequence: 2, kind: "ARTIFACT_HANDOFF", status: "SUCCEEDED", toolName: null, failureCode: null, artifactId: "artifact-1", startedAt: null, finishedAt: null },
+        { sequence: 1, kind: "READ_TOOL", status: "SUCCEEDED", toolName: "github.search", failureCode: null, artifactId: null, startedAt: null, finishedAt: null },
       ],
     });
     render(<RoutinesWorkspace />);
@@ -354,11 +353,10 @@ describe("RoutinesWorkspace", () => {
         chatId: "chat-old",
         status: "SUCCEEDED",
         failureCode: null,
-        generationRunId: "generation-1",
-        artifactId: "artifact-1",
+      artifactId: "artifact-1",
         startedAt: null,
         finishedAt: null,
-        steps: [{ sequence: 1, kind: "READ_TOOL", status: "SUCCEEDED", toolName: "old.secret.source", failureCode: null, generationRunId: null, artifactId: null, startedAt: null, finishedAt: null }],
+        steps: [{ sequence: 1, kind: "READ_TOOL", status: "SUCCEEDED", toolName: "old.secret.source", failureCode: null, artifactId: null, startedAt: null, finishedAt: null }],
       });
       await pendingDetail.promise;
     });
@@ -398,7 +396,6 @@ function routine(overrides: Partial<Routine> = {}): Routine {
     enabled: true,
     lastRunAt: null,
     nextRunAt: "2026-08-10T00:00:00Z",
-    lastGenerationRunId: null,
     lastRunStatus: null,
     lastErrorCode: null,
     contextSourceScopeIds: [],
@@ -416,7 +413,6 @@ function execution(overrides: Partial<NonNullable<Routine["latestExecution"]>> =
     chatId: "chat-1",
     agentRunId: "agent-1",
     agentRunStatus: "RUNNING",
-    generationRunId: null,
     artifactId: null,
     errorCode: null,
     startedAt: "2026-08-10T00:00:00Z",

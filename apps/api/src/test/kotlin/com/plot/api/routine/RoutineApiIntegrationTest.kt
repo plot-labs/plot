@@ -363,17 +363,19 @@ class RoutineApiIntegrationTest {
 
 		mockMvc.get("/api/routines/$routineId").andExpect {
 			status { isOk() }
+			jsonPath("$.lastGenerationRunId") { doesNotExist() }
 			jsonPath("$.latestExecution.id") { value(execution.id.toString()) }
 			jsonPath("$.latestExecution.agentRunStatus") { value("SUCCEEDED") }
 			jsonPath("$.latestExecution.artifactId") { value(artifactId.toString()) }
 			jsonPath("$.latestExecution.chatId") { value(chatId.toString()) }
+			jsonPath("$.latestExecution.generationRunId") { doesNotExist() }
 		}
 		val detail = mockMvc.get("/api/routines/$routineId/agent-runs/$agentRunId").andExpect {
 			status { isOk() }
 			jsonPath("$.artifactId") { value(artifactId.toString()) }
 			jsonPath("$.chatId") { value(chatId.toString()) }
 			jsonPath("$.steps[0].sequence") { value(0) }
-			jsonPath("$.steps[1].generationRunId") { value(generationRunId.toString()) }
+			jsonPath("$.steps[1].generationRunId") { doesNotExist() }
 			jsonPath("$.steps[1].artifactId") { value(artifactId.toString()) }
 			jsonPath("$.claimedBy") { doesNotExist() }
 			jsonPath("$.steps[0].arguments") { doesNotExist() }

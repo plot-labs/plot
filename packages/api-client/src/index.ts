@@ -315,7 +315,7 @@ export type RoutineCadence =
   | "ON_GITHUB_CHANGE"
   | "ON_GITHUB_RELEASE"
   | "ON_GIT_TAG";
-export type RoutineRunStatus = "NO_ACTIVITY" | GenerationStatus | null;
+export type RoutineRunStatus = string | null;
 
 export type RoutineExecutionStatus = "PROBING" | "NO_ACTIVITY" | "DISPATCHED" | "FAILED";
 export type RoutineAgentRunStatus = "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED";
@@ -326,7 +326,6 @@ export interface RoutineExecutionSummary {
   chatId: string | null;
   agentRunId: string | null;
   agentRunStatus: RoutineAgentRunStatus | null;
-  generationRunId: string | null;
   artifactId: string | null;
   errorCode: string | null;
   startedAt: string | null;
@@ -339,7 +338,6 @@ export interface RoutineAgentStep {
   status: "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED";
   toolName: string | null;
   failureCode: string | null;
-  generationRunId: string | null;
   artifactId: string | null;
   startedAt: string | null;
   finishedAt: string | null;
@@ -352,7 +350,6 @@ export interface RoutineAgentRunDetail {
   chatId: string | null;
   status: RoutineAgentRunStatus;
   failureCode: string | null;
-  generationRunId: string | null;
   artifactId: string | null;
   startedAt: string | null;
   finishedAt: string | null;
@@ -392,7 +389,6 @@ export interface Routine {
   enabled: boolean;
   lastRunAt: string | null;
   nextRunAt: string;
-  lastGenerationRunId: string | null;
   lastRunStatus: RoutineRunStatus;
   lastErrorCode: string | null;
   contextSourceScopeIds: string[];

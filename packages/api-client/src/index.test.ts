@@ -49,7 +49,6 @@ describe("Plot API client", () => {
       enabled: true,
       lastRunAt: null,
       nextRunAt: "2026-08-16T00:00:00Z",
-      lastGenerationRunId: null,
       lastRunStatus: null,
       lastErrorCode: null,
       contextSourceScopeIds: [],
@@ -64,7 +63,6 @@ describe("Plot API client", () => {
       chatId: "chat-1",
       status: "SUCCEEDED",
       failureCode: null,
-      generationRunId: "run-1",
       artifactId: "artifact-1",
       startedAt: "2026-08-09T00:01:00Z",
       finishedAt: "2026-08-09T00:02:00Z",
@@ -74,7 +72,6 @@ describe("Plot API client", () => {
         status: "SUCCEEDED",
         toolName: null,
         failureCode: null,
-        generationRunId: "run-1",
         artifactId: "artifact-1",
         startedAt: "2026-08-09T00:01:00Z",
         finishedAt: "2026-08-09T00:02:00Z",
@@ -85,7 +82,7 @@ describe("Plot API client", () => {
       .mockResolvedValueOnce(Response.json(routine))
       .mockResolvedValueOnce(Response.json(routine))
       .mockResolvedValueOnce(Response.json({ ...routine, enabled: false }))
-      .mockResolvedValueOnce(Response.json({ ...routine, latestExecution: { id: "execution-1", status: "DISPATCHED", chatId: "chat-1", agentRunId: "agent-run-1", agentRunStatus: "QUEUED", generationRunId: null, artifactId: null, errorCode: null, startedAt: null, finishedAt: null } }))
+      .mockResolvedValueOnce(Response.json({ ...routine, latestExecution: { id: "execution-1", status: "DISPATCHED", chatId: "chat-1", agentRunId: "agent-run-1", agentRunStatus: "QUEUED", artifactId: null, errorCode: null, startedAt: null, finishedAt: null } }))
       .mockResolvedValueOnce(Response.json(agentRun));
     const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
 
