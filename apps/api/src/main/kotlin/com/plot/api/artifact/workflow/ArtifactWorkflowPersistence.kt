@@ -174,7 +174,7 @@ class ArtifactWorkflowPersistence(
 			 id, workspace_id, work_session_id, agent_run_id, artifact_run_id, source_scope_id, created_by_user_id, idempotency_key, request_fingerprint,
 			 status, workflow_version, prompt_version, output_schema_version, budget_version, provider,
 			 model_name, budget_snapshot, user_instruction, created_at, updated_at
-			) values (?, ?, ?, ?, ?, ?, ?, ?, ?, 'QUEUED', 'fixed-v1', 'changelog-v8', 'generation-v5',
+			) values (?, ?, ?, ?, ?, ?, ?, ?, ?, 'QUEUED', 'fixed-v1', 'changelog-v8', 'artifact-workflow-v5',
 			 'budget-v1', ?, ?, ?::jsonb, ?, ?, ?)
 			on conflict (workspace_id, created_by_user_id, idempotency_key) do nothing
 			""".trimIndent(),

@@ -142,7 +142,7 @@ class ArtifactWorkflowRunRecoveryIntegrationTest {
 			"provider" to "OPENAI",
 			"model_name" to "scripted",
 			"prompt_version" to "changelog-v8",
-			"output_schema_version" to "generation-v5",
+			"output_schema_version" to "artifact-workflow-v5",
 		), jdbcTemplate.queryForMap(
 			"select provider, model_name, prompt_version, output_schema_version from generation_runs where id = ?",
 			state.runId,
