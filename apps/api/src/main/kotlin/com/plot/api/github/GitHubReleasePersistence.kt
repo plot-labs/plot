@@ -553,7 +553,7 @@ class JdbcGitHubReleasePersistence(
 				{ rs, _ ->
 					ReleaseRetryRow(
 						status = GitHubReleaseDraftStatus.valueOf(rs.getString("status")),
-						generationAttempt = rs.getInt("generation_attempt"),
+						runAttempt = rs.getInt("generation_attempt"),
 					)
 				},
 				requestId,
@@ -561,7 +561,7 @@ class JdbcGitHubReleasePersistence(
 				transitionVersion,
 			).firstOrNull() ?: throw GitHubReleaseRetryRejectedException()
 			val now = clock.instant()
-			val nextAttempt = retry.generationAttempt + 1
+		val nextAttempt = retry.runAttempt + 1
 			val updated = jdbcTemplate.update(
 				"""
 				update github_release_draft_requests
@@ -582,7 +582,7 @@ class JdbcGitHubReleasePersistence(
 			GitHubReleaseRetryResult(
 				requestId = requestId,
 				artifactWorkflowRunId = null,
-				generationAttempt = nextAttempt,
+			runAttempt = nextAttempt,
 			)
 		})
 
@@ -774,7 +774,7 @@ private data class StaleReleaseClaim(
 
 private data class ReleaseRetryRow(
 	val status: GitHubReleaseDraftStatus,
-	val generationAttempt: Int,
+	val runAttempt: Int,
 )
 
 private fun java.sql.ResultSet.toDelivery(): GitHubWebhookDelivery = GitHubWebhookDelivery(
@@ -814,7 +814,7 @@ private fun java.sql.ResultSet.toReleaseDraftRequest(): GitHubReleaseDraftReques
 	artifactWorkflowRunId = getObject("generation_run_id", UUID::class.java),
 	observationId = getObject("observation_id", UUID::class.java),
 	errorCode = getString("error_code"),
-	generationAttempt = getInt("generation_attempt"),
+	runAttempt = getInt("generation_attempt"),
 	observedHeadSha = getString("observed_head_sha"),
 )
 

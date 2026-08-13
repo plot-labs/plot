@@ -295,7 +295,7 @@ class GitHubReleaseAutomationIntegrationTest {
 		webhookService.accept(releasePublished(fixture, "release-${UUID.randomUUID()}", "v1.1.0"))
 		assertEquals(0, releaseWorker.drain())
 		assertEquals(1, requestCount(fixture, "v1.1.0"))
-		assertEquals(0, generationAttemptCount(ready.id))
+		assertEquals(0, runAttemptCount(ready.id))
 		assertEquals(1, model.writerCalls.get())
 		assertEquals(1, model.reviewerCalls.get())
 		assertCounts(fixture, requests = 2, runs = 1, packs = 1)
@@ -582,7 +582,7 @@ class GitHubReleaseAutomationIntegrationTest {
 		requestId,
 	).singleOrNull()
 
-	private fun generationAttemptCount(requestId: UUID): Int = count(
+	private fun runAttemptCount(requestId: UUID): Int = count(
 		"select count(*) from github_release_generation_attempts where request_id = ?",
 		requestId,
 	)

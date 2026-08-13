@@ -210,7 +210,7 @@ class GitHubReleaseDraftOrchestrator(
 		context.repositoryId,
 		request.tagName,
 		"attempt",
-		request.generationAttempt,
+		request.runAttempt,
 	).joinToString(":")
 }
 

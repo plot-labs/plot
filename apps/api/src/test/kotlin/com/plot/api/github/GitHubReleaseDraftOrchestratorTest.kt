@@ -191,7 +191,7 @@ class GitHubReleaseDraftOrchestratorTest {
 			artifactWorkflowRunId = failedRun,
 			agentRunId = failedRun,
 			observationId = EVIDENCE_ID,
-			generationAttempt = 1,
+			runAttempt = 1,
 		)
 		fixture.lease.reset(6)
 		fixture.orchestrator.process(retry, fixture.lease)
