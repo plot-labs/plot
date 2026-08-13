@@ -741,20 +741,6 @@ class GitHubReleaseDraftOrchestratorTest {
 			savedRange = Triple(baseSha, headSha, boundaryReason)
 		}
 
-		override fun linkArtifactWorkflow(
-			requestId: UUID,
-			transitionVersion: Long,
-			observationId: UUID,
-			artifactWorkflowRunId: UUID,
-		) {
-			if (failNextArtifactWorkflowLink) {
-				failNextArtifactWorkflowLink = false
-				throw TaskRejectedException("simulated crash after generation")
-			}
-			linkedArtifactWorkflow = LinkedArtifactWorkflow(requestId, transitionVersion, observationId, artifactWorkflowRunId)
-			claimWasHeldWhenArtifactWorkflowLinked = rangeSaved
-		}
-
 		override fun linkAgentRun(
 			requestId: UUID,
 			transitionVersion: Long,

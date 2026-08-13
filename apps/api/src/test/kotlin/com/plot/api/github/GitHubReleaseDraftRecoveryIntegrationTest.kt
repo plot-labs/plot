@@ -148,7 +148,17 @@ class GitHubReleaseDraftRecoveryIntegrationTest {
 			requestId,
 		)
 
-		persistence.linkArtifactWorkflow(requestId, 1, observationId, artifactWorkflowRunId)
+		jdbcTemplate.update(
+			"""
+			update github_release_draft_requests
+			set observation_id = ?, generation_run_id = ?, status = 'GENERATING', transition_version = 2,
+				claimed_by = null, claimed_at = null, heartbeat_at = null
+			where id = ?
+			""".trimIndent(),
+			observationId,
+			artifactWorkflowRunId,
+			requestId,
+		)
 
 		assertEquals(
 			"GENERATING",
@@ -225,7 +235,17 @@ class GitHubReleaseDraftRecoveryIntegrationTest {
 			observationId,
 			requestId,
 		)
-		persistence.linkArtifactWorkflow(requestId, 1, observationId, failedRunId)
+		jdbcTemplate.update(
+			"""
+			update github_release_draft_requests
+			set observation_id = ?, generation_run_id = ?, status = 'GENERATING', transition_version = 2,
+				claimed_by = null, claimed_at = null, heartbeat_at = null
+			where id = ?
+			""".trimIndent(),
+			observationId,
+			failedRunId,
+			requestId,
+		)
 		persistence.finish(requestId, 2, GitHubReleaseDraftStatus.FAILED, "GENERATION_FAILED")
 
 		assertFailsWith<PlannedRetryRollback> {
@@ -244,7 +264,7 @@ class GitHubReleaseDraftRecoveryIntegrationTest {
 		assertEquals(0, row["generation_attempt"])
 		assertEquals(failedRunId, row["generation_run_id"])
 		assertEquals(
-			1,
+			0,
 			jdbcTemplate.queryForObject(
 				"select count(*) from github_release_generation_attempts where request_id = ?",
 				Int::class.java,

@@ -297,12 +297,6 @@ class GitHubReleaseRangeResolverTest {
 			now: Instant,
 			errorCode: String,
 		): Int = 0
-		override fun linkArtifactWorkflow(
-			requestId: UUID,
-			transitionVersion: Long,
-			observationId: UUID,
-			artifactWorkflowRunId: UUID,
-		) = error("not used")
 		override fun bindEvidence(
 			requestId: UUID,
 			transitionVersion: Long,

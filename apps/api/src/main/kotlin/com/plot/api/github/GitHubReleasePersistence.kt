@@ -43,12 +43,6 @@ interface GitHubReleasePersistence {
 		transitionVersion: Long,
 		headSha: String,
 	)
-	fun linkArtifactWorkflow(
-		requestId: UUID,
-		transitionVersion: Long,
-		observationId: UUID,
-		artifactWorkflowRunId: UUID,
-	)
 	fun linkAgentRun(
 		requestId: UUID,
 		transitionVersion: Long,
@@ -384,44 +378,6 @@ class JdbcGitHubReleasePersistence(
 			headSha, Timestamp.from(now), Timestamp.from(now), requestId, transitionVersion,
 		)
 		requireExactlyOne(updated, "Release request transition was lost")
-	}
-
-	override fun linkArtifactWorkflow(
-		requestId: UUID,
-		transitionVersion: Long,
-		observationId: UUID,
-		artifactWorkflowRunId: UUID,
-	) {
-		transactionTemplate.executeWithoutResult {
-			val now = clock.instant()
-			val insertedAttempt = jdbcTemplate.update(
-				"""
-				insert into github_release_generation_attempts (
-				 request_id, workspace_id, attempt_no, generation_run_id, created_at
-				)
-				select id, workspace_id, generation_attempt, ?, ?
-				from github_release_draft_requests
-				where id = ? and transition_version = ? and observation_id = ?
-				""".trimIndent(),
-				artifactWorkflowRunId,
-				Timestamp.from(now),
-				requestId,
-				transitionVersion,
-				observationId,
-			)
-			requireExactlyOne(insertedAttempt, "Release generation attempt transition was lost")
-			val updated = jdbcTemplate.update(
-				"""
-				update github_release_draft_requests
-				set observation_id = ?, generation_run_id = ?, status = 'GENERATING',
-					transition_version = transition_version + 1,
-					claimed_by = null, claimed_at = null, heartbeat_at = null, updated_at = ?
-				where id = ? and transition_version = ? and observation_id = ?
-				""".trimIndent(),
-				observationId, artifactWorkflowRunId, Timestamp.from(now), requestId, transitionVersion, observationId,
-			)
-			requireExactlyOne(updated, "Release request transition was lost")
-		}
 	}
 
 	override fun linkAgentRun(
