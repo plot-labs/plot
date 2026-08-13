@@ -206,7 +206,7 @@ class ArtifactWorkflowModelGatewayConfiguration {
 		promptFactory: ChangelogPromptFactory,
 		environment: Environment,
 	): ArtifactWorkflowModelGateway {
-		// Do not resolve ChatClient.Builder when generation is disabled: with
+		// Do not resolve ChatClient.Builder when artifact workflows are disabled: with
 		// spring.ai.model.chat=none its factory exists but intentionally has no ChatModel.
 		if (properties.configured) validateRuntimeOpenRouterConfiguration(properties, environment)
 		val builder = if (properties.configured) builderProvider.ifAvailable else null

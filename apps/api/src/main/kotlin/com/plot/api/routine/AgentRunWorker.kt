@@ -276,22 +276,22 @@ class AgentRunWorker(
 				if (evidenceCharacters > budget.maxEvidenceCharacters) {
 					throw AgentRunBudgetExceededException("AGENT_EVIDENCE_LIMIT")
 				}
-				val generation = artifactWorkflowRunService.createForAgent(
+				val workflow = artifactWorkflowRunService.createForAgent(
 					principal = WorkspacePrincipal(run.workspaceId, run.createdByUserId),
 					agentRun = run,
 					inputs = selected,
 					idempotencyKey = step.idempotencyKey,
 				)
-				val artifactRun = artifactRunPersistence.findWorkflowStateByWorkflowRun(run.workspaceId, generation.runId)
+				val artifactRun = artifactRunPersistence.findWorkflowStateByWorkflowRun(run.workspaceId, workflow.runId)
 					?: throw IllegalArgumentException("Artifact run admission was not persisted")
 				persistence.linkArtifactWorkflowStep(
 					claim = claim,
 					stepId = step.id,
-					artifactWorkflowRunId = generation.runId,
+					artifactWorkflowRunId = workflow.runId,
 					resultJson = objectMapper.writeValueAsString(
 						mapOf(
 							"summary" to "Created an Artifact draft",
-							"artifactWorkflowRunId" to generation.runId,
+							"artifactWorkflowRunId" to workflow.runId,
 							"artifactRunId" to artifactRun.artifactRunId,
 							"selectedInputCount" to selected.size,
 						),

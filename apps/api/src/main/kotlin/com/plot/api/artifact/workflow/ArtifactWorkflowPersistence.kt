@@ -250,7 +250,7 @@ class ArtifactWorkflowPersistence(
 			throw ApiException(
 				HttpStatus.FORBIDDEN,
 				"TRIAL_PACK_LIMIT_REACHED",
-				"The trial already has three completed or in-progress pack generations. Wait for a failure to release capacity or subscribe.",
+				"The trial already has three completed or in-progress artifact drafts. Wait for a failure to release capacity or subscribe.",
 			)
 		}
 	}
