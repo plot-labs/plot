@@ -401,7 +401,6 @@ export interface WorkSessionSummary {
   id: string;
   title: string | null;
   status: string;
-  latestGenerationId: string | null;
   lastActivityAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -460,7 +459,7 @@ export interface PlotApiClient {
   listSessionAgentRuns(id: string, options?: RequestOptions): Promise<ChatAgentRun[]>;
   listSessions(options?: RequestOptions): Promise<WorkSessionSummary[]>;
   createSession(input: { title?: string | null }, options?: RequestOptions): Promise<WorkSessionSummary>;
-  updateSession(id: string, input: { title?: string; latestGenerationId?: string }, options?: RequestOptions): Promise<WorkSessionSummary>;
+  updateSession(id: string, input: { title?: string }, options?: RequestOptions): Promise<WorkSessionSummary>;
   listGenerationReferences(options?: RequestOptions): Promise<GenerationReference[]>;
   getArtifact(id: string, options?: RequestOptions): Promise<Artifact>;
   getArtifactVariant(id: string, options?: RequestOptions): Promise<Artifact>;

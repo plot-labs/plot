@@ -49,7 +49,7 @@ vi.mock("@/features/citations/artifact-history-panel", () => ({ ArtifactHistoryP
 
 import { ChatWorkspace } from "./chat-workspace";
 
-const chat = { id: "chat-1", title: "Release", status: "OPEN", latestGenerationId: null, lastActivityAt: "2026-07-01T00:00:00Z", createdAt: "2026-07-01T00:00:00Z", updatedAt: "2026-07-01T00:00:00Z" };
+const chat = { id: "chat-1", title: "Release", status: "OPEN", lastActivityAt: "2026-07-01T00:00:00Z", createdAt: "2026-07-01T00:00:00Z", updatedAt: "2026-07-01T00:00:00Z" };
 const reference = { id: "block-1", sourceScopeId: "scope-1", provider: "GITHUB", sourceKind: "PULL_REQUEST", sourceLabel: "PR #1", repositoryLabel: "acme/plot", title: "Ship", body: "Evidence", originalUrl: "https://github.test/1", sourceCreatedAt: null };
 const artifactSummary = { id: "artifact-1", status: "READY", title: "Release", updatedAt: "2026-07-01T00:02:00Z" };
 const artifact = {

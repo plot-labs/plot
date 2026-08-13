@@ -9,7 +9,6 @@ import com.plot.api.worksession.dto.WorkSessionResponse
 import java.time.Instant
 import java.util.UUID
 import org.springframework.http.HttpStatus
-import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -18,7 +17,6 @@ class WorkSessionService(
 	private val devContext: DevContext,
 	private val uuidGenerator: UuidGenerator,
 	private val workSessionRepository: WorkSessionRepository,
-	private val jdbcTemplate: JdbcTemplate,
 ) {
 
 	@Transactional(readOnly = true)
@@ -52,10 +50,6 @@ class WorkSessionService(
 		val now = Instant.now()
 
 		if (request.title != null) workSession.title = request.title.trim()
-		if (request.latestGenerationId != null) {
-			requireGenerationInWorkspace(request.latestGenerationId)
-			workSession.latestGenerationRunId = request.latestGenerationId
-		}
 		workSession.lastActivityAt = now
 		workSession.updatedAt = now
 
@@ -67,13 +61,4 @@ class WorkSessionService(
 			?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Work session not found")
 	}
 
-	private fun requireGenerationInWorkspace(id: UUID) {
-		val exists = jdbcTemplate.queryForObject(
-			"select exists(select 1 from generation_runs where workspace_id = ? and id = ?)",
-			Boolean::class.java,
-			devContext.devWorkspaceId,
-			id,
-		) ?: false
-		if (!exists) throw ApiException(HttpStatus.BAD_REQUEST, "INVALID_GENERATION", "Generation run is unavailable in this workspace")
-	}
 }

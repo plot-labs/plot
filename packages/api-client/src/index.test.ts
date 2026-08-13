@@ -115,13 +115,13 @@ describe("Plot API client", () => {
   it("uses the session contracts with workspace scoping", async () => {
     const fetcher = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(Response.json([]))
-      .mockResolvedValueOnce(Response.json({ id: "session-1", title: "Release", status: "OPEN", latestGenerationId: null, lastActivityAt: null, createdAt: "2026-07-01T00:00:00Z", updatedAt: "2026-07-01T00:00:00Z" }))
-      .mockResolvedValueOnce(Response.json({ id: "session-1", title: "Release", status: "OPEN", latestGenerationId: "run-1", lastActivityAt: "2026-07-01T00:01:00Z", createdAt: "2026-07-01T00:00:00Z", updatedAt: "2026-07-01T00:01:00Z" }));
+      .mockResolvedValueOnce(Response.json({ id: "session-1", title: "Release", status: "OPEN", lastActivityAt: null, createdAt: "2026-07-01T00:00:00Z", updatedAt: "2026-07-01T00:00:00Z" }))
+      .mockResolvedValueOnce(Response.json({ id: "session-1", title: "Updated release", status: "OPEN", lastActivityAt: "2026-07-01T00:01:00Z", createdAt: "2026-07-01T00:00:00Z", updatedAt: "2026-07-01T00:01:00Z" }));
     const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
 
     await client.listSessions();
     await client.createSession({ title: "Release" });
-    await client.updateSession("session-1", { latestGenerationId: "run-1" });
+    await client.updateSession("session-1", { title: "Updated release" });
 
     expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
       "/api/plot/sessions",
@@ -129,7 +129,7 @@ describe("Plot API client", () => {
       "/api/plot/sessions/session-1",
     ]);
     expect(fetcher.mock.calls[1]?.[1]).toMatchObject({ method: "POST", body: JSON.stringify({ title: "Release" }) });
-    expect(fetcher.mock.calls[2]?.[1]).toMatchObject({ method: "PATCH", body: JSON.stringify({ latestGenerationId: "run-1" }) });
+    expect(fetcher.mock.calls[2]?.[1]).toMatchObject({ method: "PATCH", body: JSON.stringify({ title: "Updated release" }) });
     expect(new Headers(fetcher.mock.calls[2]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
   });
 

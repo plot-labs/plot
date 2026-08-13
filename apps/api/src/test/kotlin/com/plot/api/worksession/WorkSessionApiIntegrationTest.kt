@@ -115,55 +115,6 @@ class WorkSessionApiIntegrationTest {
 	}
 
 	@Test
-	fun updateLinksTheLatestGenerationAndRefreshesActivity() {
-		val sessionId = UUID.randomUUID()
-		insertSession(sessionId, title = "Linked Session", createdAt = Instant.parse("2026-01-01T00:00:00Z"))
-		val generationId = UUID.randomUUID()
-		insertGeneration(generationId)
-		jdbcTemplate.update("update work_sessions set last_activity_at = now() - interval '1 minute' where id = ?", sessionId)
-		val before = jdbcTemplate.queryForObject("select last_activity_at from work_sessions where id = ?", Instant::class.java, sessionId)!!
-
-		mockMvc.patch("/api/sessions/$sessionId") {
-			contentType = MediaType.APPLICATION_JSON
-			content = """{"latestGenerationId":"$generationId"}"""
-		}.andExpect {
-			status { isOk() }
-			jsonPath("$.title") { value("Linked Session") }
-			jsonPath("$.latestGenerationId") { value(generationId.toString()) }
-			jsonPath("$.lastActivityAt") { exists() }
-		}
-
-		val after = jdbcTemplate.queryForObject("select last_activity_at from work_sessions where id = ?", Instant::class.java, sessionId)!!
-		check(after.isAfter(before))
-	}
-
-	@Test
-	fun updateRejectsMissingOrOtherWorkspaceGeneration() {
-		val sessionId = UUID.randomUUID()
-		insertSession(sessionId, title = "Scoped Session", createdAt = Instant.parse("2026-01-01T00:00:00Z"))
-		val missingGenerationId = UUID.randomUUID()
-
-		mockMvc.patch("/api/sessions/$sessionId") {
-			contentType = MediaType.APPLICATION_JSON
-			content = """{"latestGenerationId":"$missingGenerationId"}"""
-		}.andExpect {
-			status { isBadRequest() }
-			jsonPath("$.error") { value("INVALID_GENERATION") }
-		}
-
-		val otherWorkspaceId = insertOtherWorkspace()
-		val otherGenerationId = UUID.randomUUID()
-		insertGeneration(otherGenerationId, otherWorkspaceId)
-		mockMvc.patch("/api/sessions/$sessionId") {
-			contentType = MediaType.APPLICATION_JSON
-			content = """{"latestGenerationId":"$otherGenerationId"}"""
-		}.andExpect {
-			status { isBadRequest() }
-			jsonPath("$.error") { value("INVALID_GENERATION") }
-		}
-	}
-
-	@Test
 	fun listOrdersSessionsByLatestActivity() {
 		val olderId = UUID.randomUUID()
 		val newerId = UUID.randomUUID()
@@ -243,20 +194,6 @@ class WorkSessionApiIntegrationTest {
 		)!!
 	}
 
-	private fun insertOtherWorkspace(): UUID {
-		val workspaceId = UUID.randomUUID()
-		jdbcTemplate.update(
-			"""
-			insert into workspaces (id, name, slug, created_by_user_id, status, created_at, updated_at)
-			values (?, 'Other Session Workspace', ?, ?, 'ACTIVE', now(), now())
-			""".trimIndent(),
-			workspaceId,
-			"other-session-${workspaceId}",
-			devContext.devUserId,
-		)
-		return workspaceId
-	}
-
 	private fun insertSession(
 		id: UUID,
 		workspaceId: UUID = devContext.devWorkspaceId,
@@ -287,35 +224,6 @@ class WorkSessionApiIntegrationTest {
 			activityTimestamp,
 			createdTimestamp,
 			createdTimestamp,
-		)
-	}
-
-	private fun insertGeneration(
-		id: UUID,
-		workspaceId: UUID = devContext.devWorkspaceId,
-		createdAt: Instant = Instant.now(),
-		workSessionId: UUID? = null,
-		instruction: String? = null,
-	) {
-		jdbcTemplate.update(
-			"""
-			insert into generation_runs (
-				id, workspace_id, work_session_id, created_by_user_id, idempotency_key, request_fingerprint,
-				status, workflow_version, prompt_version, output_schema_version, budget_version,
-				provider, model_name, budget_snapshot, user_instruction, created_at, updated_at
-			)
-			values (?, ?, ?, ?, ?, ?, 'QUEUED', 'fixed-v1', 'test-v1', 'generation-v5', 'budget-v1',
-				'TEST', 'test-model', '{}'::jsonb, ?, ?, ?)
-			""".trimIndent(),
-			id,
-			workspaceId,
-			workSessionId,
-			devContext.devUserId,
-			"session-test-$id",
-			"fingerprint-$id",
-			instruction,
-			Timestamp.from(createdAt),
-			Timestamp.from(createdAt),
 		)
 	}
 
