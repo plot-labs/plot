@@ -5,8 +5,6 @@ import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
-import com.plot.api.common.UuidGenerator
-import com.plot.api.artifact.workflow.ArtifactWorkflowPersistence
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Repository
 import org.springframework.transaction.support.TransactionTemplate
@@ -107,8 +105,6 @@ interface GitHubReleasePersistence {
 class JdbcGitHubReleasePersistence(
 	private val jdbcTemplate: JdbcTemplate,
 	private val transactionTemplate: TransactionTemplate,
-	private val artifactWorkflowPersistence: ArtifactWorkflowPersistence,
-	private val uuidGenerator: UuidGenerator,
 	private val clock: Clock = Clock.systemUTC(),
 ) : GitHubReleasePersistence {
 	override fun insertDelivery(delivery: GitHubWebhookDelivery): GitHubWebhookDelivery {
@@ -593,7 +589,7 @@ class JdbcGitHubReleasePersistence(
 	): GitHubReleaseRetryResult = checkNotNull(transactionTemplate.execute {
 			val retry = jdbcTemplate.query(
 				"""
-				select status, generation_attempt, generation_run_id
+				select status, generation_attempt
 				from github_release_draft_requests
 				where id = ? and workspace_id = ? and transition_version = ? and status = 'FAILED'
 				for update
@@ -602,56 +598,24 @@ class JdbcGitHubReleasePersistence(
 					ReleaseRetryRow(
 						status = GitHubReleaseDraftStatus.valueOf(rs.getString("status")),
 						generationAttempt = rs.getInt("generation_attempt"),
-						artifactWorkflowRunId = rs.getObject("generation_run_id", UUID::class.java),
 					)
 				},
 				requestId,
 				workspaceId,
 				transitionVersion,
 			).firstOrNull() ?: throw GitHubReleaseRetryRejectedException()
-			val nextArtifactWorkflow = retry.artifactWorkflowRunId?.let { failedRunId ->
-				val successfulPackCount = jdbcTemplate.queryForObject(
-					"select count(*) from content_packs where workspace_id = ? and release_request_id = ?",
-					Int::class.java,
-					workspaceId,
-					requestId,
-				) ?: 0
-				if (successfulPackCount != 0) throw GitHubReleaseRetryRejectedException()
-				val nextAttempt = retry.generationAttempt + 1
-				val generation = artifactWorkflowPersistence.createRetryAttempt(
-					workspaceId = workspaceId,
-					failedRunId = failedRunId,
-					newRunId = uuidGenerator.next(),
-					attemptNo = nextAttempt,
-				)
-				val inserted = jdbcTemplate.update(
-					"""
-					insert into github_release_generation_attempts (
-					 request_id, workspace_id, attempt_no, generation_run_id, created_at
-					) values (?, ?, ?, ?, ?)
-					""".trimIndent(),
-					requestId,
-					workspaceId,
-					nextAttempt,
-					generation.runId,
-					Timestamp.from(clock.instant()),
-				)
-				requireExactlyOne(inserted, "Release generation retry attempt was not recorded")
-				nextAttempt to generation.runId
-			}
 			val now = clock.instant()
+			val nextAttempt = retry.generationAttempt + 1
 			val updated = jdbcTemplate.update(
 				"""
 				update github_release_draft_requests
-				set status = ?, generation_attempt = ?, generation_run_id = ?,
+				set status = 'QUEUED', generation_attempt = ?, generation_run_id = null, agent_run_id = null,
 					attempt_count = 0, error_code = null, next_attempt_at = ?, finished_at = null,
 					transition_version = transition_version + 1, claimed_by = null, claimed_at = null,
 					heartbeat_at = null, updated_at = ?
 				where id = ? and workspace_id = ? and transition_version = ? and status = 'FAILED'
 				""".trimIndent(),
-				if (nextArtifactWorkflow == null) GitHubReleaseDraftStatus.QUEUED.name else GitHubReleaseDraftStatus.GENERATING.name,
-				nextArtifactWorkflow?.first ?: retry.generationAttempt,
-				nextArtifactWorkflow?.second ?: retry.artifactWorkflowRunId,
+				nextAttempt,
 				Timestamp.from(now),
 				Timestamp.from(now),
 				requestId,
@@ -661,8 +625,8 @@ class JdbcGitHubReleasePersistence(
 			if (updated != 1) throw GitHubReleaseRetryRejectedException()
 			GitHubReleaseRetryResult(
 				requestId = requestId,
-				artifactWorkflowRunId = nextArtifactWorkflow?.second,
-				generationAttempt = nextArtifactWorkflow?.first ?: retry.generationAttempt,
+				artifactWorkflowRunId = null,
+				generationAttempt = nextAttempt,
 			)
 		})
 
@@ -855,7 +819,6 @@ private data class StaleReleaseClaim(
 private data class ReleaseRetryRow(
 	val status: GitHubReleaseDraftStatus,
 	val generationAttempt: Int,
-	val artifactWorkflowRunId: UUID?,
 )
 
 private fun java.sql.ResultSet.toDelivery(): GitHubWebhookDelivery = GitHubWebhookDelivery(

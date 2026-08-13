@@ -32,7 +32,7 @@ class GitHubReleaseDraftWorker(
 			.highCardinalityKeyValue("plot.webhook_delivery_id", request.initialDeliveryId.toString())
 			.apply {
 				request.artifactWorkflowRunId?.let {
-					highCardinalityKeyValue("plot.generation_run_id", it.toString())
+						highCardinalityKeyValue("plot.agent_run_id", it.toString())
 				}
 			}
 		var outcome = "SUCCEEDED"
@@ -109,7 +109,7 @@ class GitHubReleaseDraftWorker(
 		is ApiException -> exception.error.takeIf(::isSafeErrorCode) ?: "RELEASE_PROCESSING_FAILED"
 		is GitHubReleasePermanentException -> exception.safeErrorCode
 		is TransientDataAccessException -> "RELEASE_STORAGE_TRANSIENT"
-		is TaskRejectedException -> "GENERATION_START_TRANSIENT"
+		is TaskRejectedException -> "AGENT_ADMISSION_START_TRANSIENT"
 		else -> "RELEASE_PROCESSING_FAILED"
 	}
 

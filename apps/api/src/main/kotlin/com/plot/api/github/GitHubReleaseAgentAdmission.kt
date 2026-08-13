@@ -31,15 +31,18 @@ class DefaultGitHubReleaseAgentAdmission(
 		instruction: String,
 		idempotencyKey: String,
 	): AgentRunRecord = checkNotNull(transactionTemplate.execute {
-		if (request.observationId == null) {
+		val evidenceTransitionVersion = if (request.observationId == null) {
 			persistence.bindEvidence(request.id, transitionVersion, evidence)
-		}
-		chatAgentAdmissionService.admitAutomated(
+			transitionVersion + 1
+		} else transitionVersion
+		val agentRun = chatAgentAdmissionService.admitAutomated(
 			principal = principal,
 			instruction = instruction,
 			writingBlockIds = evidence.writingBlockIds,
 			idempotencyKey = idempotencyKey,
 			chatTitle = "GitHub release ${request.tagName}",
 		)
+		persistence.linkAgentRun(request.id, evidenceTransitionVersion, evidence.observationId, agentRun.id)
+		agentRun
 	})
 }
