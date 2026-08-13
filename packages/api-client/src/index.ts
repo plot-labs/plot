@@ -1,20 +1,7 @@
 export type SourceProvider = "GITHUB";
-export type GenerationStatus = "QUEUED" | "WRITING" | "REVIEWING" | "REWRITING" | "READY" | "NEEDS_REVIEW" | "FAILED";
 export type SentenceOrigin = "GENERATED" | "REWRITTEN" | "USER_MODIFIED";
-export type SentenceVerdict = "SUPPORTED" | "NOT_REQUIRED" | "NEEDS_SUPPORT" | "CONFLICT" | "USER_MODIFIED" | "REVIEW_FAILED";
-export type CitationStatus = "ACTIVE" | "STALE" | "REMOVED";
 
-export interface GenerationEvidence {
-  id: string;
-  provider: SourceProvider;
-  sourceKind: string;
-  sourceLabel: string;
-  originalUrl: string;
-  snapshotExcerpt: string | null;
-  contentHash: string;
-}
-
-export interface GenerationReference {
+export interface SourceReference {
   id: string;
   sourceScopeId: string;
   provider: SourceProvider;
@@ -25,16 +12,6 @@ export interface GenerationReference {
   body: string | null;
   originalUrl: string | null;
   sourceCreatedAt: string | null;
-}
-
-export interface GenerationCitation {
-  evidenceId: string;
-  provider: SourceProvider;
-  sourceLabel: string;
-  originalUrl: string;
-  snapshotExcerpt: string | null;
-  status?: CitationStatus;
-  sourceAccess?: "AVAILABLE" | "LOST";
 }
 
 export interface ContentCitation {
@@ -56,18 +33,6 @@ export interface ContentStatementInput {
   id: string | null;
   orderIndex: number;
   body: string;
-}
-
-export interface GenerationSentence {
-  id: string;
-  revisionId: string;
-  revisionNumber: number;
-  orderIndex: number;
-  body: string;
-  origin: SentenceOrigin;
-  verdict: SentenceVerdict | null;
-  reason: string | null;
-  citations: GenerationCitation[];
 }
 
 export interface ContentSentence {
@@ -95,52 +60,6 @@ export interface Artifact {
   };
 }
 
-export interface GenerationRun {
-  id: string;
-  status: GenerationStatus;
-  semanticRewriteAttempt: number;
-  pollAfterMs: number | null;
-  failureCode: string | null;
-  evidence: GenerationEvidence[];
-  sentences: GenerationSentence[];
-  artifacts: GenerationArtifact[];
-  artifact: Artifact | null;
-  workSessionId?: string | null;
-  timing?: GenerationRunTiming | null;
-}
-
-export interface GenerationRunTiming {
-  createdAt: string;
-  startedAt: string | null;
-  finishedAt: string | null;
-  steps: GenerationStepTiming[];
-  model: GenerationModelTiming | null;
-}
-
-export interface GenerationStepTiming {
-  kind: "WRITER" | "REVIEWER" | "REWRITER";
-  sequence: number;
-  status: "RUNNING" | "SUCCEEDED" | "FAILED";
-  startedAt: string;
-  finishedAt: string | null;
-  durationMs: number | null;
-  failureCode: string | null;
-}
-
-export interface GenerationModelTiming {
-  modelName: string;
-  totalTokens: number;
-  totalLatencyMs: number;
-}
-
-export interface GenerationArtifact {
-  kind: "WRITER_OUTPUT" | "REVIEWER_OUTPUT" | "REWRITER_OUTPUT" | "CONFLICT";
-  sequence: number;
-  sentenceIds: string[];
-  reviews: Array<{ sentenceId: string; verdict: Exclude<SentenceVerdict, "USER_MODIFIED" | "REVIEW_FAILED">; evidenceIds: string[]; reason: string | null }>;
-  detail: string | null;
-}
-
 export interface ArtifactSummary {
   id: string;
   status: string;
@@ -166,12 +85,6 @@ export interface ContentExport {
   unresolvedCount: number;
   warningAcknowledged: boolean;
   includeSources: boolean;
-}
-
-export interface CreateGenerationInput {
-  sourceScopeId: string;
-  writingBlockIds: string[];
-  instruction?: string;
 }
 
 export interface RequestOptions { signal?: AbortSignal }
@@ -460,7 +373,7 @@ export interface PlotApiClient {
   listSessions(options?: RequestOptions): Promise<WorkSessionSummary[]>;
   createSession(input: { title?: string | null }, options?: RequestOptions): Promise<WorkSessionSummary>;
   updateSession(id: string, input: { title?: string }, options?: RequestOptions): Promise<WorkSessionSummary>;
-  listGenerationReferences(options?: RequestOptions): Promise<GenerationReference[]>;
+  listSourceReferences(options?: RequestOptions): Promise<SourceReference[]>;
   getArtifact(id: string, options?: RequestOptions): Promise<Artifact>;
   getArtifactVariant(id: string, options?: RequestOptions): Promise<Artifact>;
   listArtifacts(page?: number, size?: number, options?: RequestOptions): Promise<ArtifactPage>;
@@ -601,7 +514,7 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
       body: JSON.stringify(input),
       signal: requestOptions?.signal,
     }),
-    listGenerationReferences: async (requestOptions) => {
+    listSourceReferences: async (requestOptions) => {
       const connections = await request<GitHubConnection[]>("/github/connections", { signal: requestOptions?.signal });
       const scopes = connections
         .filter((connection) => connection.status === "ACTIVE")
@@ -615,7 +528,7 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
       }));
       return pages.flatMap(({ scope, items }) => items
         .filter((block) => block.status === "ACTIVE")
-        .map((block): GenerationReference => ({
+        .map((block): SourceReference => ({
           id: block.id,
           sourceScopeId: scope.id,
           provider: "GITHUB",

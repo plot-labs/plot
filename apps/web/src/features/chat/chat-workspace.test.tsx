@@ -24,7 +24,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/api-client", () => ({
   plotApiClient: {
     listSessions: mocks.listSessions,
-    listGenerationReferences: mocks.listReferences,
+    listSourceReferences: mocks.listReferences,
     listSessionAgentRuns: mocks.listSessionAgentRuns,
     createChatAgentRun: mocks.createChatAgentRun,
     getChatAgentRun: mocks.getChatAgentRun,

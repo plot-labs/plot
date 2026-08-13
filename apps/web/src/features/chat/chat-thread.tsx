@@ -9,12 +9,12 @@ export type ChatMessage = {
 
 type ChatThreadProps = {
   messages: ChatMessage[];
-  generationPanel?: ReactNode;
+  artifactPanel?: ReactNode;
 };
 
 export function ChatThread({
   messages,
-  generationPanel,
+  artifactPanel,
 }: ChatThreadProps) {
   return (
     <section className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 pt-16 sm:px-6 lg:px-8 lg:pb-10 lg:pt-20">
@@ -25,7 +25,7 @@ export function ChatThread({
             message={message}
           />
         ))}
-        {generationPanel}
+        {artifactPanel}
       </div>
 
     </section>

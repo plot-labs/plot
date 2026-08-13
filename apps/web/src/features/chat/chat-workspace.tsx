@@ -9,7 +9,7 @@ import type {
   ArtifactHistoryDetail,
   Artifact,
   ChatAgentRun,
-  GenerationReference,
+  SourceReference,
   WorkSessionSummary as ChatSummary,
 } from "@plot/api-client";
 import { ArtifactDocumentSurface } from "@/features/artifacts/artifact-document-surface";
@@ -28,7 +28,7 @@ function ChatWorkspaceContent() {
   const router = useRouter();
   const requestedChatId = searchParams.get("chat");
   const [chats, setChats] = useState<ChatSummary[]>([]);
-  const [references, setReferences] = useState<GenerationReference[]>([]);
+  const [references, setReferences] = useState<SourceReference[]>([]);
   const [workspaceRevision, setWorkspaceRevision] = useState(0);
   const [referencesLoading, setReferencesLoading] = useState(true);
   const [referencesError, setReferencesError] = useState("");
@@ -52,7 +52,7 @@ function ChatWorkspaceContent() {
     void plotApiClient.listSessions({ signal: controller.signal })
       .then((value) => { if (!controller.signal.aborted) setChats(value); })
       .catch(() => undefined);
-    void plotApiClient.listGenerationReferences({ signal: controller.signal })
+    void plotApiClient.listSourceReferences({ signal: controller.signal })
       .then((value) => { if (!controller.signal.aborted) setReferences(value); })
       .catch((error) => { if (!controller.signal.aborted) setReferencesError(messageFor(error, "Sources could not be loaded.")); })
       .finally(() => { if (!controller.signal.aborted) setReferencesLoading(false); });
@@ -72,7 +72,7 @@ function ChatHome({
   referencesLoading,
   referencesError,
 }: {
-  references: GenerationReference[];
+  references: SourceReference[];
   referencesLoading: boolean;
   referencesError: string;
 }) {
@@ -82,7 +82,7 @@ function ChatHome({
 
   async function submitHomeRequest(message: string, referenceIds: string[]) {
     const selected = selectReferences(references, referenceIds);
-    const validationError = validateGenerationSelection(references, selected, referencesError);
+    const validationError = validateSourceSelection(references, selected, referencesError);
     if (validationError) {
       setStartError(validationError);
       return;
@@ -130,7 +130,7 @@ function ChatHome({
   );
 }
 
-function ActiveChatWorkspace({ activeChat, references, sourceError }: { activeChat: ChatSummary; references: GenerationReference[]; sourceError: string }) {
+function ActiveChatWorkspace({ activeChat, references, sourceError }: { activeChat: ChatSummary; references: SourceReference[]; sourceError: string }) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const requestedArtifactId = searchParams.get("artifact");
@@ -298,7 +298,7 @@ function ActiveChatWorkspace({ activeChat, references, sourceError }: { activeCh
 
   async function submitMessage(message: string, referenceIds: string[]) {
     const selected = selectReferences(references, referenceIds);
-    const validationError = validateGenerationSelection(references, selected, sourceError);
+    const validationError = validateSourceSelection(references, selected, sourceError);
     if (validationError) {
       setAgentError(validationError);
       return;
@@ -508,7 +508,7 @@ function ChatActivityPanel({
         <div>
           <div className="text-xs font-semibold uppercase tracking-[0.08em] text-black/42 dark:text-white/45">Assistant</div>
           <h2 className="mt-1 text-sm font-semibold text-black/82 dark:text-white/88">Chat activity</h2>
-          <p className="mt-1 text-xs leading-5 text-black/48 dark:text-white/52">Agent requests and generations stay here while they work, fail, or produce an artifact.</p>
+          <p className="mt-1 text-xs leading-5 text-black/48 dark:text-white/52">Agent requests stay here while they work, fail, or produce an artifact.</p>
         </div>
         {artifacts.length ? <span className="text-xs text-black/42 dark:text-white/45">{artifacts.length} artifact{artifacts.length === 1 ? "" : "s"}</span> : null}
       </div>
@@ -605,15 +605,15 @@ function ErrorNotice({ message }: { message: string }) {
   return <div role="alert" className="mt-3 rounded-xl border border-rose-300/60 bg-rose-50 px-4 py-3 text-sm text-rose-900 dark:border-rose-400/25 dark:bg-rose-400/[0.08] dark:text-rose-200">{message}</div>;
 }
 
-function toComposerReferences(references: GenerationReference[]) {
+function toComposerReferences(references: SourceReference[]) {
   return references.map((reference) => ({ id: reference.id, label: `${reference.repositoryLabel} · ${reference.sourceLabel}`, available: true, groupId: reference.sourceScopeId }));
 }
 
-function selectReferences(references: GenerationReference[], ids: string[]) {
+function selectReferences(references: SourceReference[], ids: string[]) {
   return references.filter((reference) => ids.includes(reference.id));
 }
 
-function validateGenerationSelection(all: GenerationReference[], selected: GenerationReference[], sourceError: string) {
+function validateSourceSelection(all: SourceReference[], selected: SourceReference[], sourceError: string) {
   if (sourceError) return sourceError;
   if (!all.length) return "Connect and import a source before starting a Chat.";
   return "";

@@ -245,7 +245,7 @@ describe("Plot API client", () => {
     expect(new Headers(fetcher.mock.calls[1]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
   });
 
-  it("hydrates provider-neutral generation references from connected source scopes", async () => {
+  it("hydrates source references from connected source scopes", async () => {
     const fetcher = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(Response.json([{ id: "connection-1", installationId: 1, status: "ACTIVE", repositories: [
         { id: "scope-1", externalRepositoryId: 42, owner: "acme", name: "plot", displayName: "acme/plot", url: "https://github.com/acme/plot", status: "ACTIVE" },
@@ -255,7 +255,7 @@ describe("Plot API client", () => {
       ], page: 0, size: 100, totalItems: 1, totalPages: 1 }));
     const client = createPlotApiClient({ fetch: fetcher });
 
-    await expect(client.listGenerationReferences()).resolves.toEqual([
+    await expect(client.listSourceReferences()).resolves.toEqual([
       expect.objectContaining({ id: "block-1", sourceScopeId: "scope-1", provider: "GITHUB", sourceLabel: "Clarify recovery", repositoryLabel: "acme/plot" }),
     ]);
     expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
@@ -271,7 +271,7 @@ describe("Plot API client", () => {
       .mockResolvedValueOnce(Response.json({ items: [{ id: "block-2", sourceKind: "PULL_REQUEST", title: "Second", body: "B", url: null, canonicalUrl: null, sourceCreatedAt: null, status: "ACTIVE" }], page: 1, size: 100, totalItems: 2, totalPages: 2 }));
     const client = createPlotApiClient({ fetch: fetcher });
 
-    await expect(client.listGenerationReferences()).resolves.toEqual([
+    await expect(client.listSourceReferences()).resolves.toEqual([
       expect.objectContaining({ id: "block-1" }),
       expect.objectContaining({ id: "block-2" }),
     ]);

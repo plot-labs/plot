@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/api-client", () => ({
   plotApiClient: {
-    listGenerationReferences: mocks.listReferences,
+    listSourceReferences: mocks.listReferences,
   },
 }));
 
