@@ -7,6 +7,8 @@ import com.plot.api.ai.provider.AgentDecisionGateway
 import com.plot.api.ai.provider.AgentDecisionRequest
 import com.plot.api.ai.provider.AgentInputView
 import com.plot.api.ai.provider.AgentStepView
+import com.plot.api.artifact.run.ArtifactRunPersistence
+import com.plot.api.artifact.run.ArtifactRunStatus
 import com.plot.api.common.ApiException
 import com.plot.api.common.WorkspacePrincipal
 import com.plot.api.entitlement.WorkspaceAccessService
@@ -29,6 +31,7 @@ class AgentRunWorker(
 	private val decisionGateway: AgentDecisionGateway,
 	private val tools: ReadOnlyAgentTools,
 	private val generationRunService: GenerationRunService,
+	private val artifactRunPersistence: ArtifactRunPersistence,
 	private val workspaceAccessService: WorkspaceAccessService,
 	private val properties: RoutineAgentProperties,
 	private val objectMapper: ObjectMapper,
@@ -279,6 +282,8 @@ class AgentRunWorker(
 					inputs = selected,
 					idempotencyKey = step.idempotencyKey,
 				)
+				val artifactRun = artifactRunPersistence.findWorkflowStateByWorkflowRun(run.workspaceId, generation.runId)
+					?: throw IllegalArgumentException("Artifact run admission was not persisted")
 				persistence.linkGenerationStep(
 					claim = claim,
 					stepId = step.id,
@@ -287,6 +292,7 @@ class AgentRunWorker(
 						mapOf(
 							"summary" to "Created an Artifact draft",
 							"generationRunId" to generation.runId,
+							"artifactRunId" to artifactRun.artifactRunId,
 							"selectedInputCount" to selected.size,
 						),
 					),
@@ -298,12 +304,12 @@ class AgentRunWorker(
 	}
 
 	private fun observeGeneration(claim: ClaimedAgentRun, generationRunId: UUID) {
-		val state = persistence.loadGenerationState(claim.workspaceId, generationRunId)
-			?: throw IllegalArgumentException("Linked generation is unavailable")
+		val state = artifactRunPersistence.findWorkflowStateByWorkflowRun(claim.workspaceId, generationRunId)
+			?: throw IllegalArgumentException("Linked artifact run is unavailable")
 		when {
-			state.materialized && state.status in setOf("READY", "NEEDS_REVIEW") ->
+			state.materialized && state.status in setOf(ArtifactRunStatus.READY, ArtifactRunStatus.NEEDS_REVIEW) ->
 				persistence.succeedAgentRun(claim, clock.instant())
-			state.status == "FAILED" ->
+			state.status == ArtifactRunStatus.FAILED ->
 				persistence.failAgentRun(claim, "AGENT_GENERATION_FAILED", clock.instant())
 			else -> persistence.releaseAgentClaim(claim, clock.instant().plus(properties.pollDelay), clock.instant())
 		}

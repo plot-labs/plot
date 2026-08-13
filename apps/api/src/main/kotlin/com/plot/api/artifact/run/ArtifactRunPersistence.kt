@@ -74,6 +74,18 @@ class ArtifactRunPersistence(
 		workspaceId, id,
 	).firstOrNull()
 
+	fun findWorkflowStateByWorkflowRun(workspaceId: UUID, workflowRunId: UUID): ArtifactRunWorkflowState? = jdbcTemplate.query(
+		workflowStateSql + " where workflow.workspace_id = ? and workflow.id = ? order by workflow.created_at desc limit 1",
+		workflowStateMapper,
+		workspaceId, workflowRunId,
+	).firstOrNull()
+
+	fun findWorkflowStateByAgentRun(workspaceId: UUID, agentRunId: UUID): ArtifactRunWorkflowState? = jdbcTemplate.query(
+		workflowStateSql + " where artifact.workspace_id = ? and artifact.agent_run_id = ? order by workflow.created_at desc nulls last limit 1",
+		workflowStateMapper,
+		workspaceId, agentRunId,
+	).firstOrNull()
+
 	fun syncWorkflowState(
 		workspaceId: UUID,
 		workflowRunId: UUID,
@@ -119,10 +131,38 @@ class ArtifactRunPersistence(
 		)
 	}
 
+	private val workflowStateMapper = { rs: java.sql.ResultSet, _: Int ->
+		ArtifactRunWorkflowState(
+			artifactRunId = rs.getObject("artifact_run_id", UUID::class.java),
+			agentRunId = rs.getObject("agent_run_id", UUID::class.java),
+			workflowRunId = rs.getObject("workflow_run_id", UUID::class.java),
+			status = ArtifactRunStatus.valueOf(rs.getString("artifact_status")),
+			errorCode = rs.getString("artifact_error_code"),
+			materialized = rs.getBoolean("materialized"),
+		)
+	}
+
 	private val selectSql = """
 		select id, workspace_id, agent_run_id, created_by_user_id, idempotency_key,
 		       request_fingerprint, status, error_code, transition_version,
 		       started_at, finished_at, created_at, updated_at
 		from artifact_runs
+	""".trimIndent()
+
+	private val workflowStateSql = """
+		select artifact.id as artifact_run_id,
+		       artifact.agent_run_id,
+		       workflow.id as workflow_run_id,
+		       artifact.status as artifact_status,
+		       artifact.error_code as artifact_error_code,
+		       exists (
+		         select 1 from content_packs pack
+		         where pack.workspace_id = workflow.workspace_id
+		           and pack.generation_run_id = workflow.id
+		       ) as materialized
+		from artifact_runs artifact
+		left join generation_runs workflow
+		  on workflow.workspace_id = artifact.workspace_id
+		 and workflow.artifact_run_id = artifact.id
 	""".trimIndent()
 }

@@ -23,6 +23,16 @@ data class ArtifactRunRecord(
 	val updatedAt: Instant,
 )
 
+/** Internal projection used by AgentRun orchestration; never exposed as an API DTO. */
+data class ArtifactRunWorkflowState(
+	val artifactRunId: UUID,
+	val agentRunId: UUID,
+	val workflowRunId: UUID?,
+	val status: ArtifactRunStatus,
+	val errorCode: String?,
+	val materialized: Boolean,
+)
+
 class ArtifactRunIdempotencyConflictException : IllegalStateException(
 	"Artifact run idempotency key was reused with different inputs",
 )

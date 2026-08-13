@@ -645,11 +645,13 @@ class AgentRunPersistence(
 		val materialized = jdbcTemplate.queryForObject(
 			"""
 			select count(*)
-			from generation_runs generation
+			from artifact_runs artifact
+			join generation_runs generation
+			  on generation.workspace_id = artifact.workspace_id and generation.artifact_run_id = artifact.id
 			join content_packs pack
 			  on pack.workspace_id = generation.workspace_id and pack.generation_run_id = generation.id
-			where generation.workspace_id = ? and generation.agent_run_id = ?
-			  and generation.status in ('READY', 'NEEDS_REVIEW')
+			where artifact.workspace_id = ? and artifact.agent_run_id = ?
+			  and artifact.status in ('READY', 'NEEDS_REVIEW')
 			""".trimIndent(),
 			Int::class.java,
 			claim.workspaceId,
