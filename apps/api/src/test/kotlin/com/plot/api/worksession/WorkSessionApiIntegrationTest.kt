@@ -39,6 +39,30 @@ class WorkSessionApiIntegrationTest {
 	@BeforeEach
 	fun cleanDevSessions() {
 		jdbcTemplate.update(
+			"delete from generation_runs where workspace_id = ? and agent_run_id is not null",
+			devContext.devWorkspaceId,
+		)
+		jdbcTemplate.update(
+			"delete from artifact_runs where workspace_id = ?",
+			devContext.devWorkspaceId,
+		)
+		jdbcTemplate.update(
+			"delete from agent_steps where workspace_id = ?",
+			devContext.devWorkspaceId,
+		)
+		jdbcTemplate.update(
+			"delete from agent_run_inputs where workspace_id = ?",
+			devContext.devWorkspaceId,
+		)
+		jdbcTemplate.update(
+			"delete from agent_run_sources where workspace_id = ?",
+			devContext.devWorkspaceId,
+		)
+		jdbcTemplate.update(
+			"delete from agent_runs where workspace_id = ?",
+			devContext.devWorkspaceId,
+		)
+		jdbcTemplate.update(
 			"update generation_runs set work_session_id = null where workspace_id = ? and work_session_id is not null",
 			devContext.devWorkspaceId,
 		)
@@ -164,33 +188,21 @@ class WorkSessionApiIntegrationTest {
 	}
 
 	@Test
-	fun listSessionGenerationsReturnsEveryLinkedRunInChronologicalOrder() {
+	fun listSessionAgentRunsReturnsEveryChatRunInChronologicalOrder() {
 		val sessionId = UUID.randomUUID()
-		insertSession(sessionId, title = "Artifact session", createdAt = Instant.parse("2026-01-01T00:00:00Z"))
-		val firstRun = UUID.randomUUID()
-		val secondRun = UUID.randomUUID()
-		insertGeneration(firstRun, createdAt = Instant.parse("2026-01-01T01:00:00Z"), workSessionId = sessionId, instruction = "Changelog")
-		insertGeneration(secondRun, createdAt = Instant.parse("2026-01-01T02:00:00Z"), workSessionId = sessionId, instruction = "Customer update")
-		val artifactId = UUID.randomUUID()
-		jdbcTemplate.update(
-			"""
-			insert into content_packs (id, workspace_id, generation_run_id, title, status, created_at, updated_at)
-			values (?, ?, ?, 'Customer update', 'READY', now(), now())
-			""".trimIndent(),
-			artifactId, devContext.devWorkspaceId, secondRun,
-		)
+		insertSession(sessionId, title = "Agent session", createdAt = Instant.parse("2026-01-01T00:00:00Z"))
+		val firstRun = insertChatAgentRun(sessionId, Instant.parse("2026-01-01T01:00:00Z"), "Changelog")
+		val secondRun = insertChatAgentRun(sessionId, Instant.parse("2026-01-01T02:00:00Z"), "Customer update")
 
-		mockMvc.get("/api/sessions/$sessionId/generations")
+		mockMvc.get("/api/sessions/$sessionId/agent-runs")
 			.andExpect {
 				status { isOk() }
 				jsonPath("$[0].id") { value(firstRun.toString()) }
 				jsonPath("$[0].instruction") { value("Changelog") }
-				jsonPath("$[0].artifact") { doesNotExist() }
+				jsonPath("$[0].generationRunId") { doesNotExist() }
 				jsonPath("$[1].id") { value(secondRun.toString()) }
 				jsonPath("$[1].instruction") { value("Customer update") }
-				jsonPath("$[1].artifact.id") { value(artifactId.toString()) }
-				jsonPath("$[1].artifact.title") { value("Customer update") }
-				jsonPath("$[1].artifact.updatedAt") { exists() }
+				jsonPath("$[1].generationRunId") { doesNotExist() }
 			}
 	}
 
@@ -305,5 +317,30 @@ class WorkSessionApiIntegrationTest {
 			Timestamp.from(createdAt),
 			Timestamp.from(createdAt),
 		)
+	}
+
+	private fun insertChatAgentRun(sessionId: UUID, createdAt: Instant, instruction: String): UUID {
+		val id = UUID.randomUUID()
+		jdbcTemplate.update(
+			"""
+			insert into agent_runs (
+				id, workspace_id, routine_execution_id, routine_id, work_session_id, created_by_user_id,
+				origin, idempotency_key, request_fingerprint, instruction_snapshot,
+				prompt_version, tool_policy_version, budget_snapshot, status,
+				current_step, attempt_count, max_attempts, created_at, updated_at
+			) values (?, ?, null, null, ?, ?, 'CHAT', ?, ?, ?, 'chat-agent-v1', 'read-only-v1', '{}'::jsonb,
+				'SUCCEEDED', 0, 0, 3, ?, ?)
+			""".trimIndent(),
+			id,
+			devContext.devWorkspaceId,
+			sessionId,
+			devContext.devUserId,
+			"session-agent-$id",
+			"fingerprint-$id",
+			instruction,
+			Timestamp.from(createdAt),
+			Timestamp.from(createdAt),
+		)
+		return id
 	}
 }

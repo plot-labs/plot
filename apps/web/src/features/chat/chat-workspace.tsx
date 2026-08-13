@@ -10,17 +10,13 @@ import type {
   Artifact,
   ChatAgentRun,
   GenerationReference,
-  GenerationRun,
-  SessionGeneration as ChatGeneration,
   WorkSessionSummary as ChatSummary,
 } from "@plot/api-client";
 import { ArtifactDocumentSurface } from "@/features/artifacts/artifact-document-surface";
 import { ArtifactHistoryPanel } from "@/features/citations/artifact-history-panel";
 import type { SaveArtifactInput } from "@/features/citations/cited-draft-editor";
-import { GenerationWorkLog } from "@/features/chat/generation-work-log";
 import { ChatComposer } from "@/features/chat/chat-composer";
 import { isTerminalChatAgentStatus, pollChatAgentRun } from "@/lib/chat-agent-polling";
-import { isTerminalGenerationStatus, pollGeneration } from "@/lib/generation-polling";
 import { plotApiClient } from "@/lib/api-client";
 
 export function ChatWorkspace() {
@@ -101,7 +97,7 @@ function ChatHome({
         writingBlockIds: selected.map((reference) => reference.id),
       }, idempotencyKey);
       pendingRequestRef.current = null;
-      window.location.assign(chatHref(run.chatId, null, null, run.id));
+      window.location.assign(chatHref(run.chatId, run.id));
     } catch (error) {
       if (isNonRetryableRequestError(error)) pendingRequestRef.current = null;
       setStartError(messageFor(error, "The request could not be started. Try again."));
@@ -137,18 +133,16 @@ function ChatHome({
 function ActiveChatWorkspace({ activeChat, references, sourceError }: { activeChat: ChatSummary; references: GenerationReference[]; sourceError: string }) {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const requestedGenerationId = searchParams.get("generation");
   const requestedArtifactId = searchParams.get("artifact");
   const requestedAgentId = searchParams.get("agent");
-  const [activities, setActivities] = useState<ChatGeneration[]>([]);
+  const [activities, setActivities] = useState<ChatAgentRun[]>([]);
   const [activitiesLoadedFor, setActivitiesLoadedFor] = useState<string | null>(null);
   const [activitiesError, setActivitiesError] = useState("");
-  const [generationRun, setGenerationRun] = useState<GenerationRun | null>(null);
   const [generatedArtifact, setGeneratedArtifact] = useState<Artifact | null>(null);
   const [historicalArtifact, setHistoricalArtifact] = useState<ArtifactHistoryDetail | null>(null);
   const [historicalPosition, setHistoricalPosition] = useState<number | null>(null);
-  const [generationError, setGenerationError] = useState("");
-  const [generating, setGenerating] = useState(false);
+  const [artifactError, setArtifactError] = useState("");
+  const [artifactLoading, setArtifactLoading] = useState(false);
   const [agentRun, setAgentRun] = useState<ChatAgentRun | null>(null);
   const [agentError, setAgentError] = useState("");
   const [agentBusy, setAgentBusy] = useState(false);
@@ -161,10 +155,8 @@ function ActiveChatWorkspace({ activeChat, references, sourceError }: { activeCh
   const previousMobilePanelRef = useRef<"assistant" | "history" | null>(null);
   const previousArtifactIdRef = useRef<string | null>(null);
   const documentKeyRef = useRef("");
-  const generationAbortRef = useRef<AbortController | null>(null);
   const agentAbortRef = useRef<AbortController | null>(null);
   const pendingRequestRef = useRef<PendingAgentRequest | null>(null);
-  const activeGenerationIdRef = useRef<string | null>(null);
   const activitiesLoading = activitiesLoadedFor !== activeChat.id;
 
   useEffect(() => {
@@ -176,18 +168,17 @@ function ActiveChatWorkspace({ activeChat, references, sourceError }: { activeCh
   }, [mobilePanel]);
 
   const selectedActivity = useMemo(() => {
-    if (requestedAgentId && !requestedGenerationId && !requestedArtifactId) return null;
+    if (requestedAgentId) return activities.find((activity) => activity.id === requestedAgentId) ?? null;
     if (requestedArtifactId) {
-      const artifactActivity = activities.find((activity) => activity.artifact?.id === requestedArtifactId);
+      const artifactActivity = activities.find((activity) => activity.artifactId === requestedArtifactId);
       if (artifactActivity) return artifactActivity;
     }
-    if (requestedGenerationId) return activities.find((activity) => activity.id === requestedGenerationId) ?? null;
-    return activities.find((activity) => activity.id === activeChat.latestGenerationId) ?? activities[0] ?? null;
-  }, [activities, activeChat.latestGenerationId, requestedAgentId, requestedArtifactId, requestedGenerationId]);
+    return activities[activities.length - 1] ?? null;
+  }, [activities, requestedAgentId, requestedArtifactId]);
 
   useEffect(() => {
     const controller = new AbortController();
-    void plotApiClient.listSessionGenerations(activeChat.id, { signal: controller.signal })
+    void plotApiClient.listSessionAgentRuns(activeChat.id, { signal: controller.signal })
       .then((value) => {
         if (controller.signal.aborted) return;
         setActivities(value);
@@ -220,19 +211,22 @@ function ActiveChatWorkspace({ activeChat, references, sourceError }: { activeCh
         if (agentAbortRef.current !== controller) return;
         if (current.chatId !== activeChat.id) throw new Error("That Agent request is not part of this chat.");
         setAgentRun(current);
-        const restored = current.generationRunId || isTerminalChatAgentStatus(current.status)
+        const restored = current.artifactId || isTerminalChatAgentStatus(current.status)
           ? current
           : await pollChatAgentRun(plotApiClient, current.id, {
               signal: controller.signal,
               initialRun: current,
               onUpdate: (next) => {
-                if (agentAbortRef.current === controller) setAgentRun(next);
+                if (agentAbortRef.current === controller) {
+                  setAgentRun(next);
+                  upsertActivity(setActivities, next);
+                }
               },
             });
         if (agentAbortRef.current !== controller) return;
         setAgentRun(restored);
-        if (restored.generationRunId) {
-          router.replace(chatHref(activeChat.id, restored.generationRunId, restored.artifactId), { scroll: false });
+        if (restored.artifactId) {
+          router.replace(chatHref(activeChat.id, restored.id, restored.artifactId), { scroll: false });
         }
       } catch (error) {
         if (agentAbortRef.current === controller && !(error instanceof DOMException && error.name === "AbortError")) {
@@ -254,87 +248,61 @@ function ActiveChatWorkspace({ activeChat, references, sourceError }: { activeCh
   }, [activeChat.id, requestedAgentId, router]);
 
   useEffect(() => {
-    const generationId = selectedActivity?.id ?? requestedGenerationId ?? (requestedArtifactId || requestedAgentId ? null : activeChat.latestGenerationId);
-    if (!generationId) {
+    const requestedArtifactIdForEffect = selectedActivity?.artifactId ?? requestedArtifactId;
+    if (!requestedArtifactIdForEffect) {
       queueMicrotask(() => {
-        setGenerationRun(null);
         setGeneratedArtifact(null);
-        setGenerating(false);
+        setArtifactLoading(false);
+        setArtifactError("");
       });
       return;
     }
-    if (activeGenerationIdRef.current === generationId) return;
+    const artifactId = requestedArtifactIdForEffect;
 
     const controller = new AbortController();
-    activeGenerationIdRef.current = generationId;
-    generationAbortRef.current?.abort();
-    generationAbortRef.current = controller;
     queueMicrotask(() => {
-      if (generationAbortRef.current !== controller) return;
-      setGenerationRun(null);
+      if (controller.signal.aborted) return;
+      setArtifactLoading(true);
+      setArtifactError("");
       setGeneratedArtifact(null);
       setHistoricalArtifact(null);
       setHistoricalPosition(null);
-      setGenerating(true);
-      setGenerationError("");
       setSaveState("saved");
     });
 
-    async function restoreGeneration() {
+    async function restoreArtifact() {
       try {
-        const current = await plotApiClient.getGeneration(generationId!, { signal: controller.signal });
-        if (generationAbortRef.current !== controller) return;
-        if (current.workSessionId !== activeChat.id) {
-          throw new Error("That generation is not part of this chat.");
-        }
-        setGenerationRun(current);
-        upsertActivity(setActivities, activityForRun(current));
-        const restored = isTerminalGenerationStatus(current.status) ? current : await pollGeneration(plotApiClient, current.id, {
-          signal: controller.signal,
-          initialRun: current,
-          onUpdate: (next) => {
-            if (generationAbortRef.current !== controller) return;
-            setGenerationRun(next);
-            upsertActivity(setActivities, activityForRun(next));
-          },
-        });
-        if (generationAbortRef.current !== controller) return;
-        setGenerationRun(restored);
-        setGeneratedArtifact(restored.artifact);
-        upsertActivity(setActivities, activityForRun(restored));
+        const artifact = await plotApiClient.getArtifact(artifactId, { signal: controller.signal });
+        if (controller.signal.aborted) return;
+        setGeneratedArtifact(artifact);
       } catch (error) {
-        if (generationAbortRef.current === controller && !(error instanceof DOMException && error.name === "AbortError")) {
-          setGenerationError(messageFor(error, "The saved generation could not be restored."));
+        if (!controller.signal.aborted && !(error instanceof DOMException && error.name === "AbortError")) {
+          setArtifactError(messageFor(error, "The saved artifact could not be restored."));
         }
       } finally {
-        if (generationAbortRef.current === controller) setGenerating(false);
+        if (!controller.signal.aborted) setArtifactLoading(false);
       }
     }
-    void restoreGeneration();
+    void restoreArtifact();
     return () => {
       controller.abort();
-      if (generationAbortRef.current === controller) {
-        generationAbortRef.current = null;
-        activeGenerationIdRef.current = null;
-      }
     };
-  }, [activeChat.id, activeChat.latestGenerationId, requestedAgentId, requestedArtifactId, requestedGenerationId, selectedActivity?.id]);
+  }, [requestedArtifactId, selectedActivity?.artifactId]);
 
-  const selectActivity = useCallback((activity: ChatGeneration) => {
+  const selectActivity = useCallback((activity: ChatAgentRun) => {
     setHistoricalArtifact(null);
     setHistoricalPosition(null);
-    if (!activity.artifact) setMobilePanel("assistant");
-    router.replace(chatHref(activeChat.id, activity.id, activity.artifact?.id ?? null), { scroll: false });
+    if (!activity.artifactId) setMobilePanel("assistant");
+    router.replace(chatHref(activeChat.id, activity.id, activity.artifactId), { scroll: false });
   }, [activeChat.id, router]);
 
   async function submitMessage(message: string, referenceIds: string[]) {
     const selected = selectReferences(references, referenceIds);
     const validationError = validateGenerationSelection(references, selected, sourceError);
     if (validationError) {
-      setGenerationError(validationError);
+      setAgentError(validationError);
       return;
     }
-    generationAbortRef.current?.abort();
     agentAbortRef.current?.abort();
     const controller = new AbortController();
     agentAbortRef.current = controller;
@@ -343,9 +311,6 @@ function ActiveChatWorkspace({ activeChat, references, sourceError }: { activeCh
     setAgentRun(null);
     setAgentBusy(true);
     setAgentError("");
-    setGenerating(false);
-    setGenerationError("");
-    setGenerationRun(null);
     setGeneratedArtifact(null);
     setHistoricalArtifact(null);
     setHistoricalPosition(null);
@@ -360,7 +325,7 @@ function ActiveChatWorkspace({ activeChat, references, sourceError }: { activeCh
       admitted = true;
       pendingRequestRef.current = null;
       setAgentRun(run);
-      router.replace(chatHref(activeChat.id, null, null, run.id), { scroll: false });
+      router.replace(chatHref(activeChat.id, run.id), { scroll: false });
     } catch (error) {
       if (agentAbortRef.current === controller && !(error instanceof DOMException && error.name === "AbortError")) {
         if (isNonRetryableRequestError(error)) pendingRequestRef.current = null;
@@ -420,7 +385,7 @@ function ActiveChatWorkspace({ activeChat, references, sourceError }: { activeCh
                 ))}
               </section>
               <AgentActivityDetail run={agentRun} busy={agentBusy} error={agentError} instruction={agentInstruction} />
-              <GenerationActivityDetail run={generationRun} busy={generating} error={generationError} />
+              {artifactError ? <ErrorNotice message={artifactError} /> : null}
               {currentArtifact ? (
                 <ArtifactDocumentSurface
                   pack={currentArtifact}
@@ -444,7 +409,6 @@ function ActiveChatWorkspace({ activeChat, references, sourceError }: { activeCh
                     });
                     if (documentKeyRef.current !== documentKey) return;
                     setGeneratedArtifact(next);
-                    setGenerationRun((current) => current ? { ...current, artifact: next } : current);
                     setHistoricalArtifact(null);
                     setHistoricalPosition(null);
                   }}
@@ -517,7 +481,7 @@ function ActiveChatWorkspace({ activeChat, references, sourceError }: { activeCh
           placeholder="Ask Plot to create another source-backed artifact..."
           onSubmit={(message, ids) => void submitMessage(message, ids)}
           references={toComposerReferences(references)}
-          busy={generating || agentBusy || activitiesLoading}
+          busy={artifactLoading || agentBusy || activitiesLoading}
         />
       </div>
     </div>
@@ -531,13 +495,13 @@ function ChatActivityPanel({
   error,
   onSelect,
 }: {
-  activities: ChatGeneration[];
+  activities: ChatAgentRun[];
   selectedActivityId: string | null;
   loading: boolean;
   error: string;
-  onSelect: (activity: ChatGeneration) => void;
+  onSelect: (activity: ChatAgentRun) => void;
 }) {
-  const artifacts = activities.filter((activity) => activity.artifact);
+  const artifacts = activities.filter((activity) => activity.artifactId && activity.artifact);
   return (
     <section aria-label="Assistant" className="rounded-xl border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-white/[0.04] sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -550,14 +514,14 @@ function ChatActivityPanel({
       </div>
       {loading ? <p className="mt-4 text-sm text-black/45 dark:text-white/48">Loading chat activity…</p> : null}
       {error ? <ErrorNotice message={error} /> : null}
-      {!loading && !activities.length && !error ? <p className="mt-4 text-sm text-black/48 dark:text-white/48">No generations yet. Start with a source-backed request below.</p> : null}
+      {!loading && !activities.length && !error ? <p className="mt-4 text-sm text-black/48 dark:text-white/48">No Agent requests yet. Start with a source-backed request below.</p> : null}
       {artifacts.length ? (
         <div className="mt-4" aria-label="Artifact selector">
           <div className="mb-2 text-xs font-semibold text-black/55 dark:text-white/58">Artifacts in this chat</div>
           <div className="flex min-w-0 gap-2 overflow-x-auto pb-1" role="listbox" aria-label="Artifacts in this chat">
             {artifacts.map((activity) => (
               <button
-                key={activity.artifact!.id}
+                key={activity.artifactId}
                 type="button"
                 role="option"
                 aria-selected={selectedActivityId === activity.id}
@@ -565,14 +529,14 @@ function ChatActivityPanel({
                 className={`min-w-40 max-w-56 shrink-0 rounded-lg border px-3 py-2 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${selectedActivityId === activity.id ? "border-black/25 bg-black/[0.04] dark:border-white/25 dark:bg-white/10" : "border-black/[0.08] hover:bg-black/[0.025] dark:border-white/10 dark:hover:bg-white/[0.06]"}`}
               >
                 <span className="block truncate font-medium text-black/78 dark:text-white/82">{activity.artifact!.title || "Generated artifact"}</span>
-                <span className="mt-1 block text-xs text-black/42 dark:text-white/45">{generationStatusLabel(activity.status)}</span>
+                <span className="mt-1 block text-xs text-black/42 dark:text-white/45">{agentStatusLabel(activity.status)}</span>
               </button>
             ))}
           </div>
         </div>
       ) : null}
       {activities.length ? (
-        <ol className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3" aria-label="Generations in this chat">
+        <ol className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3" aria-label="Agent requests in this chat">
           {activities.map((activity) => (
             <li key={activity.id}>
               <button
@@ -582,10 +546,10 @@ function ChatActivityPanel({
                 className={`w-full rounded-lg border px-3 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${selectedActivityId === activity.id ? "border-black/25 bg-black/[0.04] dark:border-white/25 dark:bg-white/10" : "border-black/[0.08] hover:bg-black/[0.025] dark:border-white/10 dark:hover:bg-white/[0.06]"}`}
               >
                 <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.07em] text-black/48 dark:text-white/52">
-                  {isActiveGenerationStatus(activity.status) ? <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" /> : null}
-                  {generationStatusLabel(activity.status)}
+                  {!isTerminalChatAgentStatus(activity.status) ? <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" /> : null}
+                  {agentStatusLabel(activity.status)}
                 </span>
-                <span className="mt-1 block truncate text-sm font-medium text-black/78 dark:text-white/82">{activity.artifact?.title || activity.instruction || "Generation"}</span>
+                <span className="mt-1 block truncate text-sm font-medium text-black/78 dark:text-white/82">{activity.artifact?.title || activity.instruction || "Agent request"}</span>
                 <span className="mt-1 block text-xs text-black/42 dark:text-white/45">
                   {activity.artifact ? "Artifact available" : activity.status === "FAILED" ? "No artifact produced" : "Working; no artifact yet"} · {formatActivity(activity.createdAt)}
                 </span>
@@ -611,16 +575,16 @@ function AgentActivityDetail({
 }) {
   if (!run && !busy && !error) return null;
   const status = run?.status ?? "QUEUED";
-  const linkedGeneration = Boolean(run?.generationRunId);
+  const linkedArtifact = Boolean(run?.artifactId);
   return (
     <section aria-label="Agent request details" className="mb-5 space-y-3">
       <div className="rounded-xl border border-black/10 bg-black/[0.025] px-4 py-3 text-sm text-black/62 dark:border-white/10 dark:bg-white/[0.04] dark:text-white/62">
         <div className="flex items-center gap-2 font-medium text-black/75 dark:text-white/78">
-          {!isTerminalChatAgentStatus(status) && !linkedGeneration ? <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" /> : null}
+          {!isTerminalChatAgentStatus(status) && !linkedArtifact ? <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" /> : null}
           <span>Agent · {agentStatusLabel(status)}</span>
         </div>
         <p className="mt-1 text-xs leading-5 text-black/48 dark:text-white/50">
-          {linkedGeneration ? "Sources are collected. Plot is preparing the grounded artifact…" : instruction ? agentProgressLabel(status) : "Plot is preparing the request…"}
+          {linkedArtifact ? "Sources are collected. Plot is preparing the grounded artifact…" : instruction ? agentProgressLabel(status) : "Plot is preparing the request…"}
         </p>
       </div>
       {error ? <ErrorNotice message={error} /> : null}
@@ -629,20 +593,8 @@ function AgentActivityDetail({
   );
 }
 
-function GenerationActivityDetail({ run, busy, error }: { run: GenerationRun | null; busy: boolean; error: string }) {
-  if (!run && !busy && !error) return null;
-  return (
-    <section aria-label="Selected generation details" className="mb-5 space-y-3">
-      {run ? <GenerationWorkLog run={run} /> : busy ? <div className="rounded-xl border border-black/10 bg-black/[0.025] px-4 py-3 text-sm text-black/62 dark:border-white/10 dark:bg-white/[0.04] dark:text-white/62">Plot is preparing the grounded artifact…</div> : null}
-      {error ? <ErrorNotice message={error} /> : null}
-      {run?.status === "FAILED" && !error ? <ErrorNotice message={`Generation stopped before a reviewable artifact was produced${run.failureCode ? ` (${run.failureCode})` : ""}. It remains available as chat activity.`} /> : null}
-      {run?.status === "NEEDS_REVIEW" && run.failureCode && !error ? <ErrorNotice message={`Source review needs attention (${run.failureCode}). The artifact is preserved, but its review is incomplete.`} /> : null}
-    </section>
-  );
-}
-
 function EmptyArtifactState({ hasSelection }: { hasSelection: boolean }) {
-  return <div className="rounded-xl border border-dashed border-black/10 bg-black/[0.02] px-4 py-6 text-sm leading-6 text-black/48 dark:border-white/10 dark:bg-white/[0.03] dark:text-white/52">{hasSelection ? "This generation is still working or did not produce an artifact. Review its activity above." : "Select a generation to inspect its artifact."}</div>;
+  return <div className="rounded-xl border border-dashed border-black/10 bg-black/[0.02] px-4 py-6 text-sm leading-6 text-black/48 dark:border-white/10 dark:bg-white/[0.03] dark:text-white/52">{hasSelection ? "This Agent request is still working or did not produce an artifact. Review its activity above." : "Select an Agent request to inspect its artifact."}</div>;
 }
 
 function SourceEmptyState() {
@@ -667,11 +619,10 @@ function validateGenerationSelection(all: GenerationReference[], selected: Gener
   return "";
 }
 
-function chatHref(chatId: string, generationId: string | null, artifactId: string | null = null, agentRunId: string | null = null) {
+function chatHref(chatId: string, agentRunId: string | null = null, artifactId: string | null = null) {
   const params = new URLSearchParams({ chat: chatId });
-  if (generationId) params.set("generation", generationId);
-  if (artifactId) params.set("artifact", artifactId);
   if (agentRunId) params.set("agent", agentRunId);
+  if (artifactId) params.set("artifact", artifactId);
   return `/chat?${params.toString()}`;
 }
 
@@ -696,11 +647,6 @@ function formatActivity(value: string | null) {
   return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-function generationStatusLabel(status: GenerationRun["status"]) {
-  const label = status.toLowerCase().replaceAll("_", " ");
-  return label.charAt(0).toUpperCase() + label.slice(1);
-}
-
 function agentStatusLabel(status: ChatAgentRun["status"]) {
   const label = status.toLowerCase().replaceAll("_", " ");
   return label.charAt(0).toUpperCase() + label.slice(1);
@@ -713,33 +659,7 @@ function agentProgressLabel(status: ChatAgentRun["status"]) {
   return "Source exploration stopped before an artifact was produced.";
 }
 
-function isActiveGenerationStatus(status: GenerationRun["status"]) {
-  return !isTerminalGenerationStatus(status);
-}
-
-function activityForRun(run: GenerationRun, instruction: string | null = null): ChatGeneration {
-  const createdAt = run.timing?.createdAt ?? new Date().toISOString();
-  const completedAt = run.timing?.finishedAt ?? null;
-  return {
-    id: run.id,
-    status: run.status,
-    instruction,
-    createdAt,
-    completedAt,
-    failureCode: run.failureCode,
-    artifact: run.artifact
-      ? {
-          id: run.artifact.id,
-          generationRunId: run.artifact.generationRunId,
-          status: run.artifact.status,
-          title: run.artifact.title,
-          updatedAt: completedAt ?? createdAt,
-        }
-      : null,
-  };
-}
-
-function upsertActivity(setActivities: Dispatch<SetStateAction<ChatGeneration[]>>, next: ChatGeneration) {
+function upsertActivity(setActivities: Dispatch<SetStateAction<ChatAgentRun[]>>, next: ChatAgentRun) {
   setActivities((current) => {
     const existingIndex = current.findIndex((activity) => activity.id === next.id);
     if (existingIndex < 0) return [...current, next].sort(compareActivity);
@@ -749,16 +669,16 @@ function upsertActivity(setActivities: Dispatch<SetStateAction<ChatGeneration[]>
       ...existing,
       ...next,
       createdAt: existing.createdAt || next.createdAt,
-      completedAt: next.completedAt ?? existing.completedAt,
+      updatedAt: next.updatedAt || existing.updatedAt,
       failureCode: next.failureCode ?? existing.failureCode,
       artifact: next.artifact ?? existing.artifact,
-      instruction: next.instruction ?? existing.instruction ?? null,
+      instruction: next.instruction || existing.instruction,
     };
     return updated.sort(compareActivity);
   });
 }
 
-function compareActivity(left: ChatGeneration, right: ChatGeneration) {
+function compareActivity(left: ChatAgentRun, right: ChatAgentRun) {
   return left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id);
 }
 

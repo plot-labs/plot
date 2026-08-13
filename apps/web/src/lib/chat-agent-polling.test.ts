@@ -11,15 +11,21 @@ const queued: ChatAgentRun = {
   chatId: "chat-1",
   status: "QUEUED",
   failureCode: null,
-  generationRunId: null,
   artifactId: null,
+  instruction: "Read the connected sources",
+  artifact: null,
   createdAt: "2026-07-01T00:00:00Z",
   updatedAt: "2026-07-01T00:00:00Z",
 };
 
 describe("chat-agent-polling", () => {
-  it("stops at the Generation handoff and reports each Agent update", async () => {
-    const handoff = { ...queued, status: "RUNNING" as const, generationRunId: "generation-1" };
+  it("stops at the Artifact handoff and reports each Agent update", async () => {
+    const handoff = {
+      ...queued,
+      status: "RUNNING" as const,
+      artifactId: "artifact-1",
+      artifact: { id: "artifact-1", status: "READY", title: "Release", updatedAt: "2026-07-01T00:01:00Z" },
+    };
     const getChatAgentRun = vi.fn().mockResolvedValueOnce(handoff);
     const updates: string[] = [];
     const client = { getChatAgentRun } as unknown as PlotApiClient;

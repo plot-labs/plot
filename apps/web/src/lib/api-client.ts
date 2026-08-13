@@ -6,7 +6,6 @@ export type {
   ArtifactHistoryDetail,
   Artifact,
   ArtifactSummary,
-  GenerationRun,
   GenerationReference,
   GitHubAccessCheckTrigger,
   GitHubConnection,

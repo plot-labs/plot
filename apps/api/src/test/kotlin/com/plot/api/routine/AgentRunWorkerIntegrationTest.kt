@@ -254,7 +254,12 @@ class AgentRunWorkerIntegrationTest {
 		assertTrue(agentWorker.processOne())
 		assertEquals("SUCCEEDED", jdbcTemplate.queryForObject("select status from agent_runs where id = ?", String::class.java, chat.id))
 		assertEquals("READY", jdbcTemplate.queryForObject("select status from artifact_runs where workspace_id = ? and agent_run_id = ?", String::class.java, devContext.devWorkspaceId, chat.id))
-		assertEquals(generationRunId, chatAdmission.get(chat.id).generationRunId)
+		val artifactId = assertNotNull(chatAdmission.get(chat.id).artifactId)
+		assertEquals(artifactId, jdbcTemplate.queryForObject(
+			"select id from content_packs where generation_run_id = ?",
+			UUID::class.java,
+			generationRunId,
+		))
 		assertEquals(generationRunId, jdbcTemplate.queryForObject(
 			"select latest_generation_run_id from work_sessions where id = ?",
 			UUID::class.java,

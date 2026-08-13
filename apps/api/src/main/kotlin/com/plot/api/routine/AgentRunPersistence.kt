@@ -197,6 +197,20 @@ class AgentRunPersistence(
 		id,
 	).firstOrNull()
 
+	fun chatExists(workspaceId: UUID, chatId: UUID): Boolean = jdbcTemplate.queryForObject(
+		"select exists(select 1 from work_sessions where workspace_id = ? and id = ?)",
+		Boolean::class.java,
+		workspaceId,
+		chatId,
+	) ?: false
+
+	fun listChatAgentRuns(workspaceId: UUID, chatId: UUID): List<AgentRunRecord> = jdbcTemplate.query(
+		selectAgentRunSql + " where a.workspace_id = ? and a.work_session_id = ? and a.origin = 'CHAT' order by a.created_at, a.id",
+		agentRunMapper,
+		workspaceId,
+		chatId,
+	)
+
 	fun findChatAgentRunByIdempotencyKey(
 		workspaceId: UUID,
 		idempotencyKey: String,
@@ -342,6 +356,28 @@ class AgentRunPersistence(
 		workspaceId,
 		generationRunId,
 	).singleOrNull()
+
+	fun findArtifactForAgentRun(workspaceId: UUID, agentRunId: UUID): AgentArtifactRecord? = jdbcTemplate.query(
+		"""
+		select pack.id, pack.status, pack.title, pack.updated_at
+		from artifact_runs artifact
+		join generation_runs generation
+		  on generation.workspace_id = artifact.workspace_id and generation.artifact_run_id = artifact.id
+		join content_packs pack
+		  on pack.workspace_id = generation.workspace_id and pack.generation_run_id = generation.id
+		where artifact.workspace_id = ? and artifact.agent_run_id = ?
+		order by pack.updated_at desc, pack.id desc
+		limit 1
+		""".trimIndent(),
+		{ rs, _ -> AgentArtifactRecord(
+			rs.getObject("id", UUID::class.java),
+			rs.getString("status"),
+			rs.getString("title"),
+			rs.getTimestamp("updated_at").toInstant(),
+		) },
+		workspaceId,
+		agentRunId,
+	).firstOrNull()
 
 	fun claimNextAgentRun(
 		workerId: String,
@@ -1223,6 +1259,7 @@ class AgentRunPersistence(
 	private val agentStepMapper = { rs: ResultSet, _: Int -> rs.toAgentStep() }
 	private data class RoutineCursor(val value: Long?)
 	private data class LockedSource(val id: UUID, val status: String, val statusChangedAt: Instant)
+	data class AgentArtifactRecord(val id: UUID, val status: String, val title: String?, val updatedAt: Instant)
 
 	private companion object {
 		val SAFE_ERROR_CODE = Regex("[A-Z][A-Z0-9_]{0,99}")

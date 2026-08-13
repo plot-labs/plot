@@ -5,6 +5,7 @@ import com.plot.api.common.UuidGenerator
 import com.plot.api.common.WorkspacePrincipal
 import com.plot.api.dev.DevContext
 import com.plot.api.routine.dto.ChatAgentRunResponse
+import com.plot.api.routine.dto.ChatAgentArtifactSummaryResponse
 import com.plot.api.routine.dto.CreateChatAgentRunRequest
 import com.plot.api.routine.dto.toChatResponse
 import com.plot.api.source.SourceManagedAccessGuard
@@ -183,14 +184,18 @@ class ChatAgentAdmissionService(
 		return run.toChatResponseFor(agentRunPersistence)
 	}
 
+	fun listForChat(chatId: UUID): List<ChatAgentRunResponse> {
+		if (!agentRunPersistence.chatExists(devContext.devWorkspaceId, chatId)) {
+			throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Chat not found")
+		}
+		return agentRunPersistence.listChatAgentRuns(devContext.devWorkspaceId, chatId)
+			.map { it.toChatResponseFor(agentRunPersistence) }
+	}
+
 	private fun AgentRunRecord.toChatResponseFor(persistence: AgentRunPersistence): ChatAgentRunResponse {
-		val generationRunId = persistence.listSteps(workspaceId, id)
-			.lastOrNull { it.generationRunId != null }
-			?.generationRunId
-		return toChatResponse(
-			generationRunId = generationRunId,
-			artifactId = generationRunId?.let { persistence.findArtifactId(workspaceId, it) },
-		)
+		return toChatResponse(artifact = persistence.findArtifactForAgentRun(workspaceId, id)?.let {
+			ChatAgentArtifactSummaryResponse(it.id, it.status, it.title, it.updatedAt)
+		})
 	}
 
 	private fun resolveChat(workSessionId: UUID?, workspaceId: UUID, userId: UUID, title: String): UUID {

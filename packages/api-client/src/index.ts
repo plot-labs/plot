@@ -364,10 +364,16 @@ export interface RoutineAgentRunDetail {
 export interface ChatAgentRun {
   id: string;
   chatId: string;
+  instruction: string;
   status: RoutineAgentRunStatus;
   failureCode: string | null;
-  generationRunId: string | null;
   artifactId: string | null;
+  artifact: {
+    id: string;
+    status: string;
+    title: string | null;
+    updatedAt: string;
+  } | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -405,16 +411,6 @@ export interface WorkSessionSummary {
   lastActivityAt: string | null;
   createdAt: string;
   updatedAt: string;
-}
-
-export interface SessionGeneration {
-  id: string;
-  status: GenerationStatus;
-  instruction: string | null;
-  createdAt: string;
-  completedAt: string | null;
-  failureCode: string | null;
-  artifact: ArtifactSummary | null;
 }
 
 export interface ArtifactHistoryItem {
@@ -467,13 +463,11 @@ export interface PlotApiClient {
   getRoutineAgentRun(routineId: string, agentRunId: string, options?: RequestOptions): Promise<RoutineAgentRunDetail>;
   createChatAgentRun(input: CreateChatAgentRunInput, idempotencyKey: string, options?: RequestOptions): Promise<ChatAgentRun>;
   getChatAgentRun(id: string, options?: RequestOptions): Promise<ChatAgentRun>;
+  listSessionAgentRuns(id: string, options?: RequestOptions): Promise<ChatAgentRun[]>;
   listSessions(options?: RequestOptions): Promise<WorkSessionSummary[]>;
   createSession(input: { title?: string | null }, options?: RequestOptions): Promise<WorkSessionSummary>;
   updateSession(id: string, input: { title?: string; latestGenerationId?: string }, options?: RequestOptions): Promise<WorkSessionSummary>;
-  listSessionGenerations(id: string, options?: RequestOptions): Promise<SessionGeneration[]>;
   listGenerationReferences(options?: RequestOptions): Promise<GenerationReference[]>;
-  createGeneration(input: CreateGenerationInput, idempotencyKey: string, options?: RequestOptions): Promise<GenerationRun>;
-  getGeneration(id: string, options?: RequestOptions): Promise<GenerationRun>;
   getArtifact(id: string, options?: RequestOptions): Promise<Artifact>;
   getArtifactVariant(id: string, options?: RequestOptions): Promise<Artifact>;
   listArtifacts(page?: number, size?: number, options?: RequestOptions): Promise<ArtifactPage>;
@@ -600,6 +594,9 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
     getChatAgentRun: (id, requestOptions) => request(`/agent-runs/${encodeURIComponent(id)}`, {
       signal: requestOptions?.signal,
     }),
+    listSessionAgentRuns: (id, requestOptions) => request(`/sessions/${encodeURIComponent(id)}/agent-runs`, {
+      signal: requestOptions?.signal,
+    }),
     listSessions: (requestOptions) => request("/sessions", { signal: requestOptions?.signal }),
     createSession: (input, requestOptions) => request("/sessions", {
       method: "POST",
@@ -609,9 +606,6 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
     updateSession: (id, input, requestOptions) => request(`/sessions/${encodeURIComponent(id)}`, {
       method: "PATCH",
       body: JSON.stringify(input),
-      signal: requestOptions?.signal,
-    }),
-    listSessionGenerations: (id, requestOptions) => request(`/sessions/${encodeURIComponent(id)}/generations`, {
       signal: requestOptions?.signal,
     }),
     listGenerationReferences: async (requestOptions) => {
@@ -641,13 +635,6 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
           sourceCreatedAt: block.sourceCreatedAt,
         })));
     },
-    createGeneration: (input, idempotencyKey, requestOptions) => request("/generations", {
-      method: "POST",
-      body: JSON.stringify(input),
-      signal: requestOptions?.signal,
-      headers: { "Idempotency-Key": idempotencyKey },
-    }),
-    getGeneration: (id, requestOptions) => request(`/generations/${encodeURIComponent(id)}`, { signal: requestOptions?.signal }),
     getArtifact: (id, requestOptions) => request(`/artifacts/${encodeURIComponent(id)}`, { signal: requestOptions?.signal }),
     getArtifactVariant: (id, requestOptions) => request(`/artifact-variants/${encodeURIComponent(id)}`, { signal: requestOptions?.signal }),
     listArtifacts: (page = 0, size = 25, requestOptions) => request(`/artifacts?page=${page}&size=${size}`, { signal: requestOptions?.signal }),

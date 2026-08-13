@@ -282,51 +282,6 @@ describe("Plot API client", () => {
     expect(fetcher).toHaveBeenCalledTimes(3);
   });
 
-  it("serializes provider-neutral generation requests once and preserves abort", async () => {
-    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
-      Response.json({
-        id: "run-1",
-        status: "QUEUED",
-        semanticRewriteAttempt: 0,
-        pollAfterMs: 500,
-        failureCode: null,
-        evidence: [
-          {
-            id: "e-1",
-            provider: "GITHUB",
-            sourceKind: "message",
-            sourceLabel: "launch-room",
-            originalUrl: "https://github.com/acme/plot/pull/1",
-            snapshotExcerpt: "Shipped",
-            contentHash: "hash",
-          },
-        ],
-        sentences: [],
-        artifact: null,
-      }),
-    );
-    const client = createPlotApiClient({ fetch: fetcher });
-    const controller = new AbortController();
-
-    const result = await client.createGeneration(
-      { sourceScopeId: "scope-1", writingBlockIds: ["block-1"], instruction: "Notes" },
-      "key-1",
-      { signal: controller.signal },
-    );
-
-    expect(result.evidence[0]?.provider).toBe("GITHUB");
-    expect(fetcher).toHaveBeenCalledTimes(1);
-    expect(fetcher).toHaveBeenCalledWith(
-      "/api/plot/generations",
-      expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify({ sourceScopeId: "scope-1", writingBlockIds: ["block-1"], instruction: "Notes" }),
-        signal: controller.signal,
-        headers: expect.objectContaining({ "Idempotency-Key": "key-1" }),
-      }),
-    );
-  });
-
   it("preserves stable structured errors and details", async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
       Response.json(
@@ -351,25 +306,25 @@ describe("Plot API client", () => {
 				Response.json({ error: "MODEL_NOT_CONFIGURED", message: "Configure a model" }, { status: 503 }),
 			),
 		});
-		await expect(modelClient.getGeneration("run-1")).rejects.toMatchObject<PlotApiError>({
+		await expect(modelClient.getChatAgentRun("agent-run-1")).rejects.toMatchObject<PlotApiError>({
 			code: "MODEL_NOT_CONFIGURED",
 			status: 503,
 		});
 	});
 
-	it("loads ordered session generations and content-only artifact history", async () => {
+	it("loads ordered Chat Agent runs and content-only artifact history", async () => {
 		const fetcher = vi.fn<typeof fetch>()
-			.mockResolvedValueOnce(Response.json([{ id: "run-1", status: "READY", instruction: "Changelog", createdAt: "2026-08-01T00:00:00Z", completedAt: "2026-08-01T00:01:00Z", failureCode: null, artifact: null }]))
+			.mockResolvedValueOnce(Response.json([{ id: "agent-1", chatId: "session-1", instruction: "Changelog", status: "SUCCEEDED", failureCode: null, artifactId: "artifact-1", artifact: { id: "artifact-1", status: "READY", title: "Changelog", updatedAt: "2026-08-01T00:01:00Z" }, createdAt: "2026-08-01T00:00:00Z", updatedAt: "2026-08-01T00:01:00Z" }]))
 			.mockResolvedValueOnce(Response.json([{ position: 0, createdAt: "2026-08-01T00:01:00Z", cause: "Edited by you" }]))
 			.mockResolvedValueOnce(Response.json({ createdAt: "2026-08-01T00:01:00Z", cause: "Edited by you", readOnly: true, artifact: { id: "artifact-1" } }));
 		const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
 
-		await client.listSessionGenerations("session-1");
+		await client.listSessionAgentRuns("session-1");
 		await client.listArtifactHistory("variant-1");
 		await client.getArtifactHistoryAt("variant-1", 0);
 
 		expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
-			"/api/plot/sessions/session-1/generations",
+			"/api/plot/sessions/session-1/agent-runs",
 			"/api/plot/artifact-variants/variant-1/history",
 			"/api/plot/artifact-variants/variant-1/history/at/0",
 		]);
@@ -447,9 +402,9 @@ describe("Plot API client", () => {
     let workspaceId = "stale-workspace";
     const client = createPlotApiClient({ fetch: fetcher, workspaceId: () => workspaceId });
 
-    await client.getGeneration("run-1");
-    workspaceId = "resolved-workspace";
-    await client.getGeneration("run-2");
+		await client.getChatAgentRun("agent-1");
+		workspaceId = "resolved-workspace";
+		await client.getChatAgentRun("agent-2");
 
     expect(fetcher.mock.calls.map(([, init]) => new Headers(init?.headers).get("X-Plot-Workspace-Id"))).toEqual([
       "stale-workspace",

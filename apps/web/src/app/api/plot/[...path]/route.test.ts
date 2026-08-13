@@ -103,32 +103,32 @@ describe("Plot same-origin proxy", () => {
       headers: {
         "Cache-Control": "no-store",
         Connection: "keep-alive",
-        Location: "http://127.0.0.1:8080/api/generations/run-1",
+        Location: "http://127.0.0.1:8080/api/agent-runs/run-1",
         "Content-Type": "application/json",
       },
     }));
-    const request = new Request("http://web.test/api/plot/generations", {
+    const request = new Request("http://web.test/api/plot/agent-runs", {
       method: "POST",
       headers: { Connection: "close", "Idempotency-Key": "key", "X-Upstream-Url": "https://attacker.test" },
       body: "{}",
     });
 
-    const response = await proxyPlotRequest(request, ["generations"], { fetch: fetcher, baseUrl: "http://127.0.0.1:8080" });
+    const response = await proxyPlotRequest(request, ["agent-runs"], { fetch: fetcher, baseUrl: "http://127.0.0.1:8080" });
 
     expect(response.status).toBe(202);
-    expect(response.headers.get("location")).toBe("/api/plot/generations/run-1");
+    expect(response.headers.get("location")).toBe("/api/plot/agent-runs/run-1");
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(response.headers.get("connection")).toBeNull();
     const [url, init] = fetcher.mock.calls[0]!;
-    expect(String(url)).toBe("http://127.0.0.1:8080/api/generations");
+    expect(String(url)).toBe("http://127.0.0.1:8080/api/agent-runs");
     expect(new Headers(init?.headers).get("connection")).toBeNull();
     expect(new Headers(init?.headers).get("x-upstream-url")).toBeNull();
   });
 
   it("returns a private no-store error when the upstream is unavailable", async () => {
     const response = await proxyPlotRequest(
-      new Request("http://web.test/api/plot/generations/run-1"),
-      ["generations", "run-1"],
+      new Request("http://web.test/api/plot/agent-runs/00000000-0000-0000-0000-000000000001"),
+      ["agent-runs", "00000000-0000-0000-0000-000000000001"],
       { fetch: vi.fn<typeof fetch>().mockRejectedValue(new Error("private upstream detail")) },
     );
 
@@ -160,7 +160,7 @@ describe("Plot same-origin proxy", () => {
     ["GET", ["routines"]],
     ["GET", ["routines", "018fd000-0000-7000-8000-000000000002"]],
     ["GET", ["routines", "018fd000-0000-7000-8000-000000000002", "agent-runs", "018fd000-0000-7000-8000-000000000003"]],
-    ["GET", ["sessions", "018fd000-0000-7000-8000-000000000002", "generations"]],
+    ["GET", ["sessions", "018fd000-0000-7000-8000-000000000002", "agent-runs"]],
     ["POST", ["routines"]],
     ["PATCH", ["routines", "018fd000-0000-7000-8000-000000000002"]],
     ["POST", ["routines", "018fd000-0000-7000-8000-000000000002", "run"]],
