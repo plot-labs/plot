@@ -164,7 +164,7 @@ class WorkspaceEntitlementApiIntegrationTest {
 		}
 		assertEquals("TRIAL_PACK_LIMIT_REACHED", blocked.error)
 		assertEquals(
-			"The trial already has three completed or in-progress pack generations. Wait for a failure to release capacity or subscribe.",
+			"The trial already has three completed or in-progress artifact drafts. Wait for a failure to release capacity or subscribe.",
 			blocked.message,
 		)
 	}
