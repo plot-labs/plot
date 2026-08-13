@@ -142,7 +142,6 @@ describe("Plot API client", () => {
       chatId: "session-1",
       status: "QUEUED",
       failureCode: null,
-      generationRunId: null,
       artifactId: null,
       createdAt: "2026-08-12T00:00:00Z",
       updatedAt: "2026-08-12T00:00:00Z",

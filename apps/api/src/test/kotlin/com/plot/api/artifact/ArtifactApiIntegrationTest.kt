@@ -61,6 +61,7 @@ class ArtifactApiIntegrationTest {
 		mockMvc.get("/api/artifacts?page=0&size=25").andExpect {
 			status { isOk() }
 			jsonPath("$.items[0].id") { value(fixture.packId.toString()) }
+			jsonPath("$.items[0].generationRunId") { doesNotExist() }
 			jsonPath("$.items[0].updatedAt") { exists() }
 				jsonPath("$.totalItems") { value(org.hamcrest.Matchers.greaterThanOrEqualTo(1)) }
 		}
@@ -69,6 +70,7 @@ class ArtifactApiIntegrationTest {
 			status { isOk() }
 			header { string("Cache-Control", "no-store") }
 			jsonPath("$.variant.revisionNumber") { value(1) }
+			jsonPath("$.generationRunId") { doesNotExist() }
 			jsonPath("$.variant.revisionId") { exists() }
 			jsonPath("$.variant.sources.length()") { value(1) }
 			jsonPath("$.variant.sentences[0].body") { value("Supported sentence.") }

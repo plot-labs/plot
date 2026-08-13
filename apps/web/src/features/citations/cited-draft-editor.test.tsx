@@ -13,7 +13,6 @@ import type { Artifact } from "@plot/api-client";
 
 const pack: Artifact = {
   id: "pack-1",
-  generationRunId: "run-1",
   status: "NEEDS_REVIEW",
   title: "July changelog",
   variant: {

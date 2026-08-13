@@ -38,14 +38,12 @@ describe("ArtifactsWorkspace", () => {
       items: [
         {
           id: "artifact-1",
-          generationRunId: "run-1",
           status: "READY",
           title: "Local preview artifact · Chat workspace",
           updatedAt: "2026-08-08T10:00:00Z",
         },
         {
           id: "artifact-2",
-          generationRunId: "run-2",
           status: "NEEDS_REVIEW",
           title: "v1.1.0 changelog",
           updatedAt: "2026-08-06T12:00:00Z",

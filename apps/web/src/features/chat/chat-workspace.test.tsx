@@ -53,7 +53,7 @@ const chat = { id: "chat-1", title: "Release", status: "OPEN", latestGenerationI
 const reference = { id: "block-1", sourceScopeId: "scope-1", provider: "GITHUB", sourceKind: "PULL_REQUEST", sourceLabel: "PR #1", repositoryLabel: "acme/plot", title: "Ship", body: "Evidence", originalUrl: "https://github.test/1", sourceCreatedAt: null };
 const artifactSummary = { id: "artifact-1", status: "READY", title: "Release", updatedAt: "2026-07-01T00:02:00Z" };
 const artifact = {
-  id: "artifact-1", generationRunId: "internal-run-1", status: "READY", title: "Release",
+  id: "artifact-1", status: "READY", title: "Release",
   variant: { id: "variant-1", status: "READY", revisionId: "artifact-revision-1", revisionNumber: 1, lexicalContent: { root: { children: [], type: "root", version: 1 } }, sentences: [], sources: [] },
 };
 

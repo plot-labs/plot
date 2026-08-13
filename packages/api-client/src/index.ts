@@ -82,7 +82,6 @@ export interface ContentSentence {
 
 export interface Artifact {
   id: string;
-  generationRunId: string;
   status: string;
   title: string | null;
   variant: {
@@ -144,7 +143,6 @@ export interface GenerationArtifact {
 
 export interface ArtifactSummary {
   id: string;
-  generationRunId: string;
   status: string;
   title: string | null;
   updatedAt: string;

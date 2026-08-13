@@ -54,16 +54,15 @@ class ArtifactService(
 		) ?: 0L
 		val items = jdbcTemplate.query(
 			"""
-			select id, generation_run_id, status, title, updated_at from content_packs
+			select id, status, title, updated_at from content_packs
 			where workspace_id = ? order by updated_at desc, id desc limit ? offset ?
 			""".trimIndent(),
 			{ rs, _ ->
 				ArtifactSummaryResponse(
 					id = rs.getObject(1, UUID::class.java),
-					generationRunId = rs.getObject(2, UUID::class.java),
-					status = rs.getString(3),
-					title = rs.getString(4),
-					updatedAt = rs.getTimestamp(5).toInstant(),
+					status = rs.getString(2),
+					title = rs.getString(3),
+					updatedAt = rs.getTimestamp(4).toInstant(),
 				)
 			},
 			devContext.devWorkspaceId, size, page * size,
@@ -196,7 +195,8 @@ class ArtifactService(
 				throw staleArtifactRevision(variantId)
 			}
 			val projection = loadPack("cv.id = ?", variantId)
-			val evidence = loadEvidence(projection.generationRunId)
+			val generationRunId = generationRunIdForVariant(variantId)
+			val evidence = loadEvidence(generationRunId)
 			val publicCitations = loadPublicCitations(variantId, revision.id)
 			val exportSentences = loadExportSentences(variantId, revision.id, publicCitations)
 			val unresolved = exportSentences.filter { it.status.isUnresolved }
@@ -213,14 +213,14 @@ class ArtifactService(
 			val keyMatches = acknowledgedWarningKeys.toSet() == expectedWarningKeys
 			if (unresolved.isNotEmpty() && !acknowledge) {
 				recordExport(
-					revision, projection.generationRunId, variantId, disposition, includeSources,
+					revision, generationRunId, variantId, disposition, includeSources,
 					unresolved, warnings.map { it.key },  false, "REJECTED", null, null,
 				)
 				return@execute ExportAttempt.ConfirmationRequired(warnings, unresolved.map { it.id }, unresolved.map { it.revisionId })
 			}
 			if (unresolved.isNotEmpty() && acknowledge && !keyMatches && !legacyMatches) {
 				recordExport(
-					revision, projection.generationRunId, variantId, disposition, includeSources,
+					revision, generationRunId, variantId, disposition, includeSources,
 					unresolved, acknowledgedWarningKeys, false, "REJECTED", null, null,
 				)
 				return@execute ExportAttempt.ConfirmationRequired(warnings, unresolved.map { it.id }, unresolved.map { it.revisionId })
@@ -252,10 +252,10 @@ class ArtifactService(
 				).joinToString("|"),
 			)
 			val exportId = findSuccessfulExport(
-				revision, projection.generationRunId, variantId, disposition, includeSources,
+				revision, generationRunId, variantId, disposition, includeSources,
 				rendered.unresolvedCount, rendered.warningAcknowledged, inputHash, outputHash,
 			) ?: recordExport(
-				revision, projection.generationRunId, variantId, disposition, includeSources,
+				revision, generationRunId, variantId, disposition, includeSources,
 				exportSentences, warnings.map { it.key }, rendered.warningAcknowledged,
 				"SUCCEEDED", inputHash, outputHash,
 			)
@@ -673,17 +673,24 @@ class ArtifactService(
 
 	private fun loadPack(predicate: String, id: UUID): ArtifactResponse = loadPackForRevision(predicate, id, null)
 
+	private fun generationRunIdForVariant(variantId: UUID): UUID = jdbcTemplate.queryForObject(
+		"select generation_run_id from content_variants where workspace_id = ? and id = ?",
+		UUID::class.java,
+		devContext.devWorkspaceId,
+		variantId,
+	) ?: notFound()
+
 	private fun loadPackForRevision(predicate: String, id: UUID, revisionId: UUID?): ArtifactResponse {
 		val header = jdbcTemplate.query(
 			"""
-			select cp.id, cp.generation_run_id, cp.status, cp.title, cv.id, cv.status
+			select cp.id, cp.status, cp.title, cv.id, cv.status
 			from content_packs cp join content_variants cv on cv.workspace_id = cp.workspace_id and cv.content_pack_id = cp.id
 			where cp.workspace_id = ? and $predicate and cv.variant_index = 0
 			""".trimIndent(),
-			{ rs, _ -> listOf(rs.getObject(1, UUID::class.java), rs.getObject(2, UUID::class.java), rs.getString(3), rs.getString(4), rs.getObject(5, UUID::class.java), rs.getString(6)) },
+			{ rs, _ -> listOf(rs.getObject(1, UUID::class.java), rs.getString(2), rs.getString(3), rs.getObject(4, UUID::class.java), rs.getString(5)) },
 			devContext.devWorkspaceId, id,
 		).firstOrNull() ?: notFound()
-		val variantId = header[4] as UUID
+		val variantId = header[3] as UUID
 		val revision = revisionId?.let { requestedRevision ->
 			jdbcTemplate.query(
 				"select id, generation_run_id, revision_no, lexical_content::text from content_variant_revisions where workspace_id = ? and id = ? and content_variant_id = ?",
@@ -697,12 +704,11 @@ class ArtifactService(
 		val sentences = loadSentences(variantId, revision.id, citations)
 		return ArtifactResponse(
 			header[0] as UUID,
-			header[1] as UUID,
-			header[2] as String,
-			header[3] as String?,
+			header[1] as String,
+			header[2] as String?,
 			ContentVariantResponse(
 				variantId,
-				header[5] as String,
+				header[4] as String,
 				revision.id,
 				revision.revisionNumber,
 				revision.lexicalContent,
