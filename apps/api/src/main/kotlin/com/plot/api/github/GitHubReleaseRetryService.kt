@@ -1,6 +1,6 @@
 package com.plot.api.github
 
-import com.plot.api.generation.GenerationRunDispatcher
+import com.plot.api.artifact.workflow.ArtifactWorkflowRunDispatcher
 import java.util.UUID
 import org.springframework.stereotype.Component
 import org.springframework.stereotype.Service
@@ -14,10 +14,10 @@ interface GitHubReleaseRetryDispatcher {
 
 @Component
 class DefaultGitHubReleaseRetryDispatcher(
-	private val generationRunDispatcher: GenerationRunDispatcher,
+	private val artifactWorkflowRunDispatcher: ArtifactWorkflowRunDispatcher,
 ) : GitHubReleaseRetryDispatcher {
 	override fun dispatch(runId: UUID) {
-		generationRunDispatcher.dispatch()
+		artifactWorkflowRunDispatcher.dispatch()
 	}
 }
 
@@ -33,7 +33,7 @@ class GitHubReleaseRetryService(
 		transitionVersion: Long,
 	): GitHubReleaseRetryResult {
 		val result = persistence.retry(requestId, workspaceId, transitionVersion)
-		result.generationRunId?.let { runId ->
+		result.artifactWorkflowRunId?.let { runId ->
 			TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
 				override fun afterCommit() {
 					dispatcher.dispatch(runId)

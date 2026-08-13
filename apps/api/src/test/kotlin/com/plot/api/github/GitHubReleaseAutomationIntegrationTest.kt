@@ -3,7 +3,7 @@ package com.plot.api.github
 import com.plot.api.TestcontainersConfiguration
 import com.plot.api.ai.provider.AgentDecision
 import com.plot.api.ai.provider.AgentDecisionAction
-import com.plot.api.ai.provider.GenerationModelGateway
+import com.plot.api.ai.provider.ArtifactWorkflowModelGateway
 import com.plot.api.ai.provider.ModelCallMetadata
 import com.plot.api.ai.provider.ModelCallResult
 import com.plot.api.ai.provider.ReviewerModelRequest
@@ -11,16 +11,16 @@ import com.plot.api.ai.provider.RewriteModelRequest
 import com.plot.api.ai.provider.WriterModelRequest
 import com.plot.api.common.ApiException
 import com.plot.api.dev.DevContext
-import com.plot.api.generation.GenerationPersistence
-import com.plot.api.generation.GenerationRunDispatcher
-import com.plot.api.generation.GenerationRunWorker
-import com.plot.api.generation.GenerationWorkflowService
-import com.plot.api.generation.model.ReviewVerdict
-import com.plot.api.generation.model.ReviewerOutput
-import com.plot.api.generation.model.SentenceReview
-import com.plot.api.generation.model.TargetedRewriteOutput
-import com.plot.api.generation.model.WriterOutput
-import com.plot.api.generation.model.WriterSentence
+import com.plot.api.artifact.workflow.ArtifactWorkflowPersistence
+import com.plot.api.artifact.workflow.ArtifactWorkflowRunDispatcher
+import com.plot.api.artifact.workflow.ArtifactWorkflowRunWorker
+import com.plot.api.artifact.workflow.ArtifactWorkflowService
+import com.plot.api.artifact.workflow.model.ReviewVerdict
+import com.plot.api.artifact.workflow.model.ReviewerOutput
+import com.plot.api.artifact.workflow.model.SentenceReview
+import com.plot.api.artifact.workflow.model.TargetedRewriteOutput
+import com.plot.api.artifact.workflow.model.WriterOutput
+import com.plot.api.artifact.workflow.model.WriterSentence
 import com.plot.api.routine.AgentRunWorker
 import com.plot.api.routine.ScriptedAgentDecisionGateway
 import java.time.Duration
@@ -70,20 +70,20 @@ class GitHubReleaseAutomationIntegrationTest {
 	@Autowired private lateinit var webhookService: GitHubWebhookService
 	@Autowired private lateinit var releaseWorker: GitHubReleaseDraftWorker
 	@Autowired private lateinit var activityService: GitHubReleaseActivityService
-	@Autowired private lateinit var generationPersistence: GenerationPersistence
+	@Autowired private lateinit var artifactWorkflowPersistence: ArtifactWorkflowPersistence
 	@Autowired private lateinit var releasePersistence: GitHubReleasePersistence
-	@Autowired private lateinit var generationWorkflowService: GenerationWorkflowService
+	@Autowired private lateinit var artifactWorkflowService: ArtifactWorkflowService
 	@Autowired private lateinit var github: ScriptedGitHubClient
-	@Autowired private lateinit var model: ScriptedGenerationModelGateway
+	@Autowired private lateinit var model: ScriptedArtifactWorkflowModelGateway
 	@Autowired private lateinit var agentWorker: AgentRunWorker
 	@Autowired private lateinit var agentModel: ScriptedAgentDecisionGateway
 	@Autowired private lateinit var jdbcTemplate: JdbcTemplate
 	@Autowired private lateinit var devContext: DevContext
 
-	private val generationWorker: GenerationRunWorker
-		get() = GenerationRunWorker(
-			generationPersistence,
-			generationWorkflowService,
+	private val artifactWorkflowWorker: ArtifactWorkflowRunWorker
+		get() = ArtifactWorkflowRunWorker(
+			artifactWorkflowPersistence,
+			artifactWorkflowService,
 			model,
 			workerId = "release-e2e-generation",
 		)
@@ -207,7 +207,7 @@ class GitHubReleaseAutomationIntegrationTest {
 		assertEquals(GitHubReleaseDraftStatus.NEEDS_RANGE, first.status)
 		assertEquals(firstHead, first.headSha)
 		assertNull(first.baseSha)
-		assertNull(first.generationRunId)
+		assertNull(first.artifactWorkflowRunId)
 		assertCounts(fixture, requests = 1, runs = 0, packs = 0)
 		assertEquals(0, model.totalCalls)
 		jdbcTemplate.update(
@@ -224,7 +224,7 @@ class GitHubReleaseAutomationIntegrationTest {
 		assertEquals(secondHead, generating.headSha)
 		assertEquals("PREVIOUS_RELEASE_HEAD", generating.boundaryReason)
 		val agentRunId = assertNotNull(generating.agentRunId)
-		assertNull(generating.generationRunId)
+		assertNull(generating.artifactWorkflowRunId)
 		assertEquals(listOf("$firstHead...$secondHead"), github.comparisons)
 		val expectedPullRequestKey =
 			"release:v1.1.0:$firstHead...$secondHead:pull_request:${pullRequest.id}"
@@ -259,26 +259,26 @@ class GitHubReleaseAutomationIntegrationTest {
 		assertEquals(1, agentWorker.drain())
 		val linked = release("v1.1.0", fixture)
 		assertEquals(agentRunId, linked.agentRunId)
-		assertNull(linked.generationRunId)
+		assertNull(linked.artifactWorkflowRunId)
 		assertEquals(1, agentRunIdCount(agentRunId))
 		assertCounts(fixture, requests = 2, runs = 1, packs = 0)
 
-		assertEquals(2, generationWorker.drain())
+		assertEquals(2, artifactWorkflowWorker.drain())
 		jdbcTemplate.update("update agent_runs set next_attempt_at = now() where id = ?", agentRunId)
 		assertEquals(1, agentWorker.drain())
 		releaseWorker.reconcile()
 		val ready = release("v1.1.0", fixture)
 		assertEquals(GitHubReleaseDraftStatus.READY, ready.status)
 		val artifactId = assertNotNull(artifactId(ready.id))
-		val generationRunId = assertNotNull(ready.generationRunId)
-		val inputs = generationInputs(generationRunId)
+		val artifactWorkflowRunId = assertNotNull(ready.artifactWorkflowRunId)
+		val inputs = generationInputs(artifactWorkflowRunId)
 		assertEquals(evidence.map { it.writingBlockId }, inputs.map { it.writingBlockId })
 		assertEquals(evidence.map { it.sourceKind }, inputs.map { it.sourceKind })
 		assertEquals(evidence.map { it.canonicalUrl }, inputs.map { it.originalUrl })
 		assertEquals(evidence.map { it.body }, inputs.map { it.snapshotBody })
 		assertEquals(evidence.map { it.contentHash }, inputs.map { it.contentHash })
 		assertEquals(listOf(0, 1), inputs.map { it.orderIndex })
-		assertTrue(inputs.all { it.generationRunId == generationRunId })
+		assertTrue(inputs.all { it.artifactWorkflowRunId == artifactWorkflowRunId })
 		assertEquals(inputs.size, inputs.map { it.generationInputId }.distinct().size)
 		assertEquals(1, model.writerCalls.get())
 		assertEquals(1, model.reviewerCalls.get())
@@ -287,7 +287,7 @@ class GitHubReleaseAutomationIntegrationTest {
 		val activity = assertNotNull(activityService.latest(fixture.scopeId))
 		assertEquals(ready.id, activity.id)
 		assertEquals(GitHubReleaseDraftStatus.READY, activity.status)
-		assertEquals(generationRunId, activity.generationRunId)
+		assertEquals(artifactWorkflowRunId, activity.artifactWorkflowRunId)
 		assertEquals(artifactId, activity.artifactId)
 
 		// Both a GitHub redelivery and the equivalent release.published event converge
@@ -341,7 +341,7 @@ class GitHubReleaseAutomationIntegrationTest {
 
 		val empty = release("v2.0.1", fixture)
 		assertEquals(GitHubReleaseDraftStatus.NO_ACTIVITY, empty.status)
-		assertNull(empty.generationRunId)
+		assertNull(empty.artifactWorkflowRunId)
 		assertCounts(fixture, requests = 2, runs = 0, packs = 0)
 		assertEquals(0, model.totalCalls)
 	}
@@ -548,7 +548,7 @@ class GitHubReleaseAutomationIntegrationTest {
 		requestId,
 	)
 
-	private fun generationInputs(runId: UUID): List<GenerationInputIdentity> = jdbcTemplate.query(
+	private fun generationInputs(runId: UUID): List<ArtifactWorkflowInputIdentity> = jdbcTemplate.query(
 		"""
 		select id, generation_run_id, writing_block_id, source_kind, original_url,
 		       snapshot_body, content_hash, order_index
@@ -557,9 +557,9 @@ class GitHubReleaseAutomationIntegrationTest {
 		order by order_index
 		""".trimIndent(),
 		{ rs, _ ->
-			GenerationInputIdentity(
+			ArtifactWorkflowInputIdentity(
 				generationInputId = rs.getObject(1, UUID::class.java),
-				generationRunId = rs.getObject(2, UUID::class.java),
+				artifactWorkflowRunId = rs.getObject(2, UUID::class.java),
 				writingBlockId = rs.getObject(3, UUID::class.java),
 				sourceKind = rs.getString(4),
 				originalUrl = rs.getString(5),
@@ -652,7 +652,7 @@ class GitHubReleaseAutomationIntegrationTest {
 
 		@Bean
 		@Primary
-		fun scriptedGenerationModelGateway() = ScriptedGenerationModelGateway()
+		fun scriptedArtifactWorkflowModelGateway() = ScriptedArtifactWorkflowModelGateway()
 
 		@Bean
 		@Primary
@@ -664,8 +664,8 @@ class GitHubReleaseAutomationIntegrationTest {
 
 		@Bean
 		@Primary
-		fun noOpGenerationDispatcher(): GenerationRunDispatcher =
-			GenerationRunDispatcher(TaskExecutor { _ -> }) { false }
+		fun noOpArtifactWorkflowDispatcher(): ArtifactWorkflowRunDispatcher =
+			ArtifactWorkflowRunDispatcher(TaskExecutor { _ -> }) { false }
 	}
 }
 
@@ -691,9 +691,9 @@ private data class ReleaseEvidenceIdentity(
 	val metadata: String,
 )
 
-private data class GenerationInputIdentity(
+private data class ArtifactWorkflowInputIdentity(
 	val generationInputId: UUID,
-	val generationRunId: UUID,
+	val artifactWorkflowRunId: UUID,
 	val writingBlockId: UUID,
 	val sourceKind: String,
 	val originalUrl: String,
@@ -829,7 +829,7 @@ private data class TagKey(val repository: RepositoryKey, val tagName: String)
 private data class CompareKey(val repository: RepositoryKey, val baseSha: String, val headSha: String)
 private data class CommitKey(val repository: RepositoryKey, val commitSha: String)
 
-class ScriptedGenerationModelGateway : GenerationModelGateway {
+class ScriptedArtifactWorkflowModelGateway : ArtifactWorkflowModelGateway {
 	val writerCalls = AtomicInteger()
 	val reviewerCalls = AtomicInteger()
 	val totalCalls: Int

@@ -81,7 +81,7 @@ class WorkSessionApiIntegrationTest {
 			status { isOk() }
 			jsonPath("$.title") { value("Draft Session") }
 			jsonPath("$.status") { value("OPEN") }
-			jsonPath("$.latestGenerationId") { doesNotExist() }
+			jsonPath("$.latestArtifactWorkflowId") { doesNotExist() }
 			jsonPath("$.lastActivityAt") { exists() }
 			jsonPath("$.createdAt") { exists() }
 			jsonPath("$.updatedAt") { exists() }
@@ -96,7 +96,7 @@ class WorkSessionApiIntegrationTest {
 				jsonPath("$[0].id") { value(sessionId.toString()) }
 				jsonPath("$[0].title") { value("Draft Session") }
 				jsonPath("$[0].status") { value("OPEN") }
-				jsonPath("$[0].latestGenerationId") { doesNotExist() }
+				jsonPath("$[0].latestArtifactWorkflowId") { doesNotExist() }
 				jsonPath("$[0].workspaceId") { doesNotExist() }
 			}
 
@@ -150,10 +150,10 @@ class WorkSessionApiIntegrationTest {
 				status { isOk() }
 				jsonPath("$[0].id") { value(firstRun.toString()) }
 				jsonPath("$[0].instruction") { value("Changelog") }
-				jsonPath("$[0].generationRunId") { doesNotExist() }
+				jsonPath("$[0].artifactWorkflowRunId") { doesNotExist() }
 				jsonPath("$[1].id") { value(secondRun.toString()) }
 				jsonPath("$[1].instruction") { value("Customer update") }
-				jsonPath("$[1].generationRunId") { doesNotExist() }
+				jsonPath("$[1].artifactWorkflowRunId") { doesNotExist() }
 			}
 	}
 

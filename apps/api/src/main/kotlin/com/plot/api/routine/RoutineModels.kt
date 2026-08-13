@@ -30,7 +30,7 @@ data class RoutineRecord(
 	val nextRunAt: Instant,
 	val activeExecutionId: UUID?,
 	val lastExecutionId: UUID?,
-	val lastGenerationRunId: UUID?,
+	val lastArtifactWorkflowRunId: UUID?,
 	val lastRunStatus: String?,
 	val lastErrorCode: String?,
 	val claimedBy: String?,

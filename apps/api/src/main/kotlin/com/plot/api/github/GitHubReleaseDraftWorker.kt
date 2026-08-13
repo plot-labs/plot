@@ -31,7 +31,7 @@ class GitHubReleaseDraftWorker(
 			.highCardinalityKeyValue("plot.release_request_id", request.id.toString())
 			.highCardinalityKeyValue("plot.webhook_delivery_id", request.initialDeliveryId.toString())
 			.apply {
-				request.generationRunId?.let {
+				request.artifactWorkflowRunId?.let {
 					highCardinalityKeyValue("plot.generation_run_id", it.toString())
 				}
 			}

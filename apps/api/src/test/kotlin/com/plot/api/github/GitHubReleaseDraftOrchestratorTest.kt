@@ -2,8 +2,8 @@ package com.plot.api.github
 
 import com.plot.api.common.ApiException
 import com.plot.api.common.WorkspacePrincipal
-import com.plot.api.generation.GenerationRunStatus
-import com.plot.api.generation.GenerationWorkflowState
+import com.plot.api.artifact.workflow.ArtifactWorkflowRunStatus
+import com.plot.api.artifact.workflow.ArtifactWorkflowState
 import io.micrometer.observation.tck.TestObservationRegistry
 import java.time.Clock
 import java.time.Duration
@@ -20,14 +20,14 @@ import org.springframework.http.HttpStatus
 
 class GitHubReleaseDraftOrchestratorTest {
 	@Test
-	fun firstTagEndsNeedsRangeWithoutStartingGeneration() {
+	fun firstTagEndsNeedsRangeWithoutStartingArtifactWorkflow() {
 		val fixture = fixture(GitHubReleaseRangeResult.NeedsRange("first-head"))
 
 		fixture.orchestrator.process(fixture.request, fixture.lease)
 
 		assertEquals(0, fixture.generation.created.size)
 		assertEquals(0, fixture.persistence.finished.size)
-		assertNull(fixture.persistence.linkedGeneration)
+		assertNull(fixture.persistence.linkedArtifactWorkflow)
 	}
 
 	@Test
@@ -53,7 +53,7 @@ class GitHubReleaseDraftOrchestratorTest {
 	}
 
 	@Test
-	fun secondAncestorTagStartsExactlyOneGenerationAndLinksItBeforeClaimRelease() {
+	fun secondAncestorTagStartsExactlyOneArtifactWorkflowAndLinksItBeforeClaimRelease() {
 		val fixture = fixture(resolvedRange())
 
 		fixture.orchestrator.process(fixture.request, fixture.lease)
@@ -68,18 +68,18 @@ class GitHubReleaseDraftOrchestratorTest {
 			creation.idempotencyKey,
 		)
 		assertEquals(
-			LinkedGeneration(fixture.request.id, 3, EVIDENCE_ID, GENERATION_ID),
-			fixture.persistence.linkedGeneration,
+			LinkedArtifactWorkflow(fixture.request.id, 3, EVIDENCE_ID, GENERATION_ID),
+			fixture.persistence.linkedArtifactWorkflow,
 		)
 		assertEquals(
 			BoundEvidence(fixture.request.id, 2, GitHubReleaseEvidence(EVIDENCE_ID, listOf(WRITING_BLOCK_ID))),
 			fixture.persistence.boundEvidence.single(),
 		)
-		assertTrue(fixture.persistence.claimWasHeldWhenGenerationLinked)
+		assertTrue(fixture.persistence.claimWasHeldWhenArtifactWorkflowLinked)
 	}
 
 	@Test
-	fun emptyEvidenceEndsNoActivityWithoutStartingGeneration() {
+	fun emptyEvidenceEndsNoActivityWithoutStartingArtifactWorkflow() {
 		val fixture = fixture(resolvedRange(), evidence = GitHubReleaseEvidence(EVIDENCE_ID, emptyList()))
 
 		fixture.orchestrator.process(fixture.request, fixture.lease)
@@ -113,7 +113,7 @@ class GitHubReleaseDraftOrchestratorTest {
 	}
 
 	@Test
-	fun movedObservedTagFailsSafelyBeforeEvidenceOrGeneration() {
+	fun movedObservedTagFailsSafelyBeforeEvidenceOrArtifactWorkflow() {
 		val fixture = fixture(GitHubReleaseRangeResult.NeedsRange("unused"))
 		fixture.range.failure = GitHubReleasePermanentException("GITHUB_TAG_MOVED")
 		fixture.persistence.claims += fixture.request
@@ -129,9 +129,9 @@ class GitHubReleaseDraftOrchestratorTest {
 	}
 
 	@Test
-	fun retryAfterGenerationCreationReusesBoundObservationAndItsFrozenGeneration() {
+	fun retryAfterArtifactWorkflowCreationReusesBoundObservationAndItsFrozenArtifactWorkflow() {
 		val fixture = fixture(resolvedRange())
-		fixture.persistence.failNextGenerationLink = true
+		fixture.persistence.failNextArtifactWorkflowLink = true
 		fixture.persistence.claims += fixture.request
 
 		fixture.worker.drain()
@@ -155,7 +155,7 @@ class GitHubReleaseDraftOrchestratorTest {
 
 		assertEquals(1, fixture.evidence.collectCount)
 		assertEquals(1, fixture.generation.uniqueRunCount())
-		assertEquals(EVIDENCE_ID, fixture.persistence.linkedGeneration?.observationId)
+		assertEquals(EVIDENCE_ID, fixture.persistence.linkedArtifactWorkflow?.observationId)
 		assertEquals(
 			fixture.generation.created.first().writingBlockIds,
 			fixture.persistence.findBoundEvidence(fixture.request.id)?.writingBlockIds,
@@ -163,15 +163,15 @@ class GitHubReleaseDraftOrchestratorTest {
 	}
 
 	@Test
-	fun nextGenerationAttemptUsesANewAttemptScopedGenerationIdentity() {
+	fun nextArtifactWorkflowAttemptUsesANewAttemptScopedArtifactWorkflowIdentity() {
 		val fixture = fixture(resolvedRange())
 		fixture.orchestrator.process(fixture.request, fixture.lease)
-		val failedRun = checkNotNull(fixture.persistence.linkedGeneration).generationRunId
-		fixture.generation.loaded[failedRun] = generationState(GenerationRunStatus.FAILED, failedRun)
+		val failedRun = checkNotNull(fixture.persistence.linkedArtifactWorkflow).artifactWorkflowRunId
+		fixture.generation.loaded[failedRun] = generationState(ArtifactWorkflowRunStatus.FAILED, failedRun)
 		fixture.persistence.generating += fixture.request.copy(
 			status = GitHubReleaseDraftStatus.GENERATING,
 			transitionVersion = 4,
-			generationRunId = failedRun,
+			artifactWorkflowRunId = failedRun,
 			observationId = EVIDENCE_ID,
 		)
 		fixture.orchestrator.reconcileGenerating(10)
@@ -182,19 +182,19 @@ class GitHubReleaseDraftOrchestratorTest {
 			status = GitHubReleaseDraftStatus.RESOLVING,
 			attemptCount = 2,
 			transitionVersion = 6,
-			generationRunId = failedRun,
+			artifactWorkflowRunId = failedRun,
 			observationId = EVIDENCE_ID,
 			generationAttempt = 1,
 		)
 		fixture.lease.reset(6)
 		fixture.orchestrator.process(retry, fixture.lease)
-		val successfulRun = checkNotNull(fixture.persistence.linkedGeneration).generationRunId
-		fixture.generation.loaded[successfulRun] = generationState(GenerationRunStatus.READY, successfulRun)
+		val successfulRun = checkNotNull(fixture.persistence.linkedArtifactWorkflow).artifactWorkflowRunId
+		fixture.generation.loaded[successfulRun] = generationState(ArtifactWorkflowRunStatus.READY, successfulRun)
 		fixture.persistence.generating.clear()
 		fixture.persistence.generating += retry.copy(
 			status = GitHubReleaseDraftStatus.GENERATING,
 			transitionVersion = 7,
-			generationRunId = successfulRun,
+			artifactWorkflowRunId = successfulRun,
 		)
 
 		fixture.orchestrator.reconcileGenerating(10)
@@ -205,7 +205,7 @@ class GitHubReleaseDraftOrchestratorTest {
 	}
 
 	@Test
-	fun duplicateSignalsForTheSameTagReuseOneGenerationRun() {
+	fun duplicateSignalsForTheSameTagReuseOneArtifactWorkflowRun() {
 		val fixture = fixture(resolvedRange())
 
 		fixture.orchestrator.process(fixture.request, fixture.lease)
@@ -218,13 +218,13 @@ class GitHubReleaseDraftOrchestratorTest {
 	}
 
 	@Test
-	fun reconcilesReviewableGenerationStatesToReady() {
-		listOf(GenerationRunStatus.READY, GenerationRunStatus.NEEDS_REVIEW).forEach { status ->
+	fun reconcilesReviewableArtifactWorkflowStatesToReady() {
+		listOf(ArtifactWorkflowRunStatus.READY, ArtifactWorkflowRunStatus.NEEDS_REVIEW).forEach { status ->
 			val fixture = fixture(resolvedRange())
 			fixture.persistence.generating += fixture.request.copy(
 				status = GitHubReleaseDraftStatus.GENERATING,
 				transitionVersion = 5,
-				generationRunId = GENERATION_ID,
+				artifactWorkflowRunId = GENERATION_ID,
 			)
 			fixture.generation.loaded[GENERATION_ID] = generationState(status)
 
@@ -238,14 +238,14 @@ class GitHubReleaseDraftOrchestratorTest {
 	}
 
 	@Test
-	fun reconcilesFailedGenerationToSafeReleaseFailure() {
+	fun reconcilesFailedArtifactWorkflowToSafeReleaseFailure() {
 		val fixture = fixture(resolvedRange())
 		fixture.persistence.generating += fixture.request.copy(
 			status = GitHubReleaseDraftStatus.GENERATING,
 			transitionVersion = 5,
-			generationRunId = GENERATION_ID,
+			artifactWorkflowRunId = GENERATION_ID,
 		)
-		fixture.generation.loaded[GENERATION_ID] = generationState(GenerationRunStatus.FAILED)
+		fixture.generation.loaded[GENERATION_ID] = generationState(ArtifactWorkflowRunStatus.FAILED)
 
 		fixture.orchestrator.reconcileGenerating(10)
 
@@ -256,20 +256,20 @@ class GitHubReleaseDraftOrchestratorTest {
 	}
 
 	@Test
-	fun poisonGenerationRowRecordsSafeDiagnosticAndDoesNotBlockLaterRows() {
+	fun poisonArtifactWorkflowRowRecordsSafeDiagnosticAndDoesNotBlockLaterRows() {
 		val fixture = fixture(resolvedRange())
 		val poisonRunId = UUID.randomUUID()
 		val readyRunId = UUID.randomUUID()
 		fixture.persistence.generating += listOf(
-			fixture.request.copy(generationRunId = poisonRunId, transitionVersion = 4),
-			fixture.request.copy(id = UUID.randomUUID(), generationRunId = readyRunId, transitionVersion = 7),
+			fixture.request.copy(artifactWorkflowRunId = poisonRunId, transitionVersion = 4),
+			fixture.request.copy(id = UUID.randomUUID(), artifactWorkflowRunId = readyRunId, transitionVersion = 7),
 		)
 		fixture.generation.loadFailures[poisonRunId] = IllegalStateException("unsafe diagnostic")
-		fixture.generation.loaded[readyRunId] = GenerationWorkflowState(
+		fixture.generation.loaded[readyRunId] = ArtifactWorkflowState(
 			runId = readyRunId,
 			evidence = emptyList(),
 			instruction = "release",
-			status = GenerationRunStatus.READY,
+			status = ArtifactWorkflowRunStatus.READY,
 		)
 
 		fixture.orchestrator.reconcileGenerating(10)
@@ -306,7 +306,7 @@ class GitHubReleaseDraftOrchestratorTest {
 	}
 
 	@Test
-	fun transientGenerationStartFailureRetriesTheSameRequestAtThePostRangeVersion() {
+	fun transientArtifactWorkflowStartFailureRetriesTheSameRequestAtThePostRangeVersion() {
 		val fixture = fixture(resolvedRange())
 		fixture.generation.createFailure = TaskRejectedException("executor unavailable")
 		fixture.persistence.claims += fixture.request
@@ -322,11 +322,11 @@ class GitHubReleaseDraftOrchestratorTest {
 			),
 			fixture.persistence.scheduledRetries.single(),
 		)
-		assertNull(fixture.persistence.linkedGeneration)
+		assertNull(fixture.persistence.linkedArtifactWorkflow)
 	}
 
 	@Test
-	fun lostLeaseAbortsBeforeGenerationAndDoesNotMutateTheRequestAsItsFormerOwner() {
+	fun lostLeaseAbortsBeforeArtifactWorkflowAndDoesNotMutateTheRequestAsItsFormerOwner() {
 		val fixture = fixture(resolvedRange())
 		fixture.lease.loseAfterCheckpoint = 2
 		fixture.persistence.claims += fixture.request
@@ -344,9 +344,9 @@ class GitHubReleaseDraftOrchestratorTest {
 		repeat(2) { fixture.persistence.claims += fixture.request.copy(id = UUID.randomUUID()) }
 		fixture.persistence.generating += fixture.request.copy(
 			status = GitHubReleaseDraftStatus.GENERATING,
-			generationRunId = GENERATION_ID,
+			artifactWorkflowRunId = GENERATION_ID,
 		)
-		fixture.generation.loaded[GENERATION_ID] = generationState(GenerationRunStatus.READY)
+		fixture.generation.loaded[GENERATION_ID] = generationState(ArtifactWorkflowRunStatus.READY)
 
 		val processed = fixture.worker.drain()
 		fixture.worker.reconcile()
@@ -411,8 +411,8 @@ class GitHubReleaseDraftOrchestratorTest {
 		val scope = FakeScopeResolver(context)
 		val range = FakeRangeResolver(rangeResult)
 		val evidenceService = FakeEvidenceService(evidence)
-		val generation = FakeReleaseGenerationGateway()
-		val binder = FakeReleaseEvidenceGenerationBinder(persistence, generation)
+		val generation = FakeReleaseArtifactWorkflowGateway()
+		val binder = FakeReleaseEvidenceArtifactWorkflowBinder(persistence, generation)
 		val lease = FakeReleaseLease()
 		val orchestrator = GitHubReleaseDraftOrchestrator(
 			persistence,
@@ -493,7 +493,7 @@ class GitHubReleaseDraftOrchestratorTest {
 		status = GitHubReleaseDraftStatus.RESOLVING,
 		attemptCount = 1,
 		transitionVersion = 1,
-		generationRunId = null,
+		artifactWorkflowRunId = null,
 		observationId = null,
 		errorCode = null,
 	)
@@ -520,9 +520,9 @@ class GitHubReleaseDraftOrchestratorTest {
 	)
 
 	private fun generationState(
-		status: GenerationRunStatus,
+		status: ArtifactWorkflowRunStatus,
 		runId: UUID = GENERATION_ID,
-	) = GenerationWorkflowState(
+	) = ArtifactWorkflowState(
 		runId = runId,
 		evidence = emptyList(),
 		instruction = "release",
@@ -535,7 +535,7 @@ class GitHubReleaseDraftOrchestratorTest {
 		val request: GitHubReleaseDraftRequest,
 		val range: FakeRangeResolver,
 		val evidence: FakeEvidenceService,
-		val generation: FakeReleaseGenerationGateway,
+		val generation: FakeReleaseArtifactWorkflowGateway,
 		val lease: FakeReleaseLease,
 		val orchestrator: GitHubReleaseDraftOrchestrator,
 		val worker: GitHubReleaseDraftWorker,
@@ -578,9 +578,9 @@ class GitHubReleaseDraftOrchestratorTest {
 		}
 	}
 
-	private class FakeReleaseGenerationGateway : GitHubReleaseGenerationGateway {
-		val created = mutableListOf<GenerationCreation>()
-		val loaded = mutableMapOf<UUID, GenerationWorkflowState>()
+	private class FakeReleaseArtifactWorkflowGateway : GitHubReleaseArtifactWorkflowGateway {
+		val created = mutableListOf<ArtifactWorkflowCreation>()
+		val loaded = mutableMapOf<UUID, ArtifactWorkflowState>()
 		val loadFailures = mutableMapOf<UUID, RuntimeException>()
 		var createFailure: RuntimeException? = null
 
@@ -590,20 +590,20 @@ class GitHubReleaseDraftOrchestratorTest {
 			writingBlockIds: List<UUID>,
 			instruction: String,
 			idempotencyKey: String,
-		): GenerationWorkflowState {
+		): ArtifactWorkflowState {
 			createFailure?.let { throw it }
 			val existing = created.firstOrNull { it.idempotencyKey == idempotencyKey }
 			if (existing != null) {
 				created += existing
 				return existing.state
 			}
-			val state = GenerationWorkflowState(
+			val state = ArtifactWorkflowState(
 				runId = if (created.isEmpty()) GENERATION_ID else SECOND_GENERATION_ID,
 				evidence = emptyList(),
 				instruction = "release",
-				status = GenerationRunStatus.QUEUED,
+				status = ArtifactWorkflowRunStatus.QUEUED,
 			)
-			created += GenerationCreation(
+			created += ArtifactWorkflowCreation(
 				principal,
 				sourceScopeId,
 				writingBlockIds,
@@ -614,16 +614,16 @@ class GitHubReleaseDraftOrchestratorTest {
 			return state
 		}
 
-		override fun load(workspaceId: UUID, runId: UUID): GenerationWorkflowState =
+		override fun load(workspaceId: UUID, runId: UUID): ArtifactWorkflowState =
 			loadFailures[runId]?.let { throw it } ?: loaded.getValue(runId)
 
 		fun uniqueRunCount(): Int = created.map { it.state.runId }.distinct().size
 	}
 
-	private class FakeReleaseEvidenceGenerationBinder(
+	private class FakeReleaseEvidenceArtifactWorkflowBinder(
 		private val persistence: GitHubReleasePersistence,
-		private val generation: GitHubReleaseGenerationGateway,
-	) : GitHubReleaseEvidenceGenerationBinder {
+		private val generation: GitHubReleaseArtifactWorkflowGateway,
+	) : GitHubReleaseEvidenceArtifactWorkflowBinder {
 		override fun bindAndCreate(
 			request: GitHubReleaseDraftRequest,
 			transitionVersion: Long,
@@ -631,7 +631,7 @@ class GitHubReleaseDraftOrchestratorTest {
 			evidence: GitHubReleaseEvidence,
 			instruction: String,
 			idempotencyKey: String,
-		): GenerationWorkflowState {
+		): ArtifactWorkflowState {
 			persistence.bindEvidence(request.id, transitionVersion, evidence)
 			return generation.create(
 				principal,
@@ -651,9 +651,9 @@ class GitHubReleaseDraftOrchestratorTest {
 		val boundEvidence = mutableListOf<BoundEvidence>()
 		val diagnostics = mutableListOf<ReleaseDiagnostic>()
 		val generating = mutableListOf<GitHubReleaseDraftRequest>()
-		var linkedGeneration: LinkedGeneration? = null
-		var claimWasHeldWhenGenerationLinked = false
-		var failNextGenerationLink = false
+		var linkedArtifactWorkflow: LinkedArtifactWorkflow? = null
+		var claimWasHeldWhenArtifactWorkflowLinked = false
+		var failNextArtifactWorkflowLink = false
 		private var rangeSaved = false
 		var savedRange: Triple<String, String, String>? = null
 
@@ -677,18 +677,18 @@ class GitHubReleaseDraftOrchestratorTest {
 			savedRange = Triple(baseSha, headSha, boundaryReason)
 		}
 
-		override fun linkGeneration(
+		override fun linkArtifactWorkflow(
 			requestId: UUID,
 			transitionVersion: Long,
 			observationId: UUID,
-			generationRunId: UUID,
+			artifactWorkflowRunId: UUID,
 		) {
-			if (failNextGenerationLink) {
-				failNextGenerationLink = false
+			if (failNextArtifactWorkflowLink) {
+				failNextArtifactWorkflowLink = false
 				throw TaskRejectedException("simulated crash after generation")
 			}
-			linkedGeneration = LinkedGeneration(requestId, transitionVersion, observationId, generationRunId)
-			claimWasHeldWhenGenerationLinked = rangeSaved
+			linkedArtifactWorkflow = LinkedArtifactWorkflow(requestId, transitionVersion, observationId, artifactWorkflowRunId)
+			claimWasHeldWhenArtifactWorkflowLinked = rangeSaved
 		}
 
 		override fun bindEvidence(
@@ -805,20 +805,20 @@ class GitHubReleaseDraftOrchestratorTest {
 		}
 	}
 
-	private data class GenerationCreation(
+	private data class ArtifactWorkflowCreation(
 		val principal: WorkspacePrincipal,
 		val sourceScopeId: UUID,
 		val writingBlockIds: List<UUID>,
 		val instruction: String,
 		val idempotencyKey: String,
-		val state: GenerationWorkflowState,
+		val state: ArtifactWorkflowState,
 	)
 
-	private data class LinkedGeneration(
+	private data class LinkedArtifactWorkflow(
 		val requestId: UUID,
 		val transitionVersion: Long,
 		val observationId: UUID,
-		val generationRunId: UUID,
+		val artifactWorkflowRunId: UUID,
 	)
 
 	private data class FinishedRequest(

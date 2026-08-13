@@ -8,7 +8,7 @@ import com.plot.api.common.ApiException
 import com.plot.api.dev.DevBootstrapService
 import com.plot.api.dev.DevContext
 import com.plot.api.entitlement.WorkspaceAccessService
-import com.plot.api.generation.GenerationRunWorker
+import com.plot.api.artifact.workflow.ArtifactWorkflowRunWorker
 import com.plot.api.github.GitHubClient
 import com.plot.api.github.GitHubPullRequest
 import com.plot.api.github.GitHubPullRequestPage
@@ -354,7 +354,7 @@ class RoutineWorkersDisabledIntegrationTest {
 	@Autowired private lateinit var agentPersistence: RoutineAgentPersistence
 	@Autowired private lateinit var worker: RoutineWorker
 	@Autowired private lateinit var agentWorker: AgentRunWorker
-	@Autowired private lateinit var generationWorker: GenerationRunWorker
+	@Autowired private lateinit var artifactWorkflowWorker: ArtifactWorkflowRunWorker
 	@Autowired private lateinit var githubClient: RoutineRefreshGitHubClient
 
 	@Test
@@ -431,7 +431,7 @@ class RoutineWorkersDisabledIntegrationTest {
 			"routine:$execution.id",
 			"routine:$execution.id",
 		)
-		val generationRunId = UUID.randomUUID()
+		val artifactWorkflowRunId = UUID.randomUUID()
 		jdbcTemplate.update(
 			"""
 			insert into generation_runs (
@@ -441,13 +441,13 @@ class RoutineWorkersDisabledIntegrationTest {
 			 created_at, updated_at
 			) values (?, ?, ?, ?, null, ?, ?, ?, 'QUEUED', 'fixed-v1', 'test', 'test', 'test', 'test', 'test', '{}'::jsonb, now(), now())
 			""".trimIndent(),
-			generationRunId,
+			artifactWorkflowRunId,
 			devContext.devWorkspaceId,
 			agentRunId,
 			chatId,
 			devContext.devUserId,
-			"disabled:$generationRunId",
-			"disabled:$generationRunId",
+			"disabled:$artifactWorkflowRunId",
+			"disabled:$artifactWorkflowRunId",
 		)
 		val executionCountBefore = jdbcTemplate.queryForObject(
 			"select count(*) from routine_executions where workspace_id = ? and routine_id = ?",
@@ -467,15 +467,15 @@ class RoutineWorkersDisabledIntegrationTest {
 			assertFalse(worker.drain())
 			assertFalse(agentWorker.processOne())
 			assertFalse(agentWorker.processOne())
-			assertFalse(generationWorker.processOne())
-			assertFalse(generationWorker.processOne())
+			assertFalse(artifactWorkflowWorker.processOne())
+			assertFalse(artifactWorkflowWorker.processOne())
 			val queued = assertNotNull(routinePersistence.find(devContext.devWorkspaceId, routine.id))
 			assertNull(queued.claimedBy)
 			assertNull(queued.activeExecutionId)
 			assertNull(jdbcTemplate.queryForObject("select claimed_by from agent_runs where id = ?", String::class.java, agentRunId))
 			assertEquals("QUEUED", jdbcTemplate.queryForObject("select status from agent_runs where id = ?", String::class.java, agentRunId))
-			assertNull(jdbcTemplate.queryForObject("select claimed_by from generation_runs where id = ?", String::class.java, generationRunId))
-			assertEquals("QUEUED", jdbcTemplate.queryForObject("select status from generation_runs where id = ?", String::class.java, generationRunId))
+			assertNull(jdbcTemplate.queryForObject("select claimed_by from generation_runs where id = ?", String::class.java, artifactWorkflowRunId))
+			assertEquals("QUEUED", jdbcTemplate.queryForObject("select status from generation_runs where id = ?", String::class.java, artifactWorkflowRunId))
 			assertEquals(executionCountBefore, jdbcTemplate.queryForObject(
 				"select count(*) from routine_executions where workspace_id = ? and routine_id = ?",
 				Int::class.java,
@@ -490,7 +490,7 @@ class RoutineWorkersDisabledIntegrationTest {
 			))
 			assertEquals(0, githubClient.calls)
 		} finally {
-			jdbcTemplate.update("delete from generation_runs where id = ?", generationRunId)
+			jdbcTemplate.update("delete from generation_runs where id = ?", artifactWorkflowRunId)
 			jdbcTemplate.update("delete from agent_runs where id = ?", agentRunId)
 			jdbcTemplate.update("delete from work_sessions where workspace_id = ? and routine_execution_id = ?", devContext.devWorkspaceId, execution.id)
 			jdbcTemplate.update("delete from routine_executions where id = ?", execution.id)

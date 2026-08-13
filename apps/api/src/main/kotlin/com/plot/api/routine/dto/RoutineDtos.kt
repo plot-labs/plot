@@ -116,7 +116,7 @@ fun AgentRunRecord.toDetailResponse(
 ): AgentRunDetailResponse {
 	val executionId = requireNotNull(routineExecutionId) { "Routine Agent run is missing its execution" }
 	val routineId = requireNotNull(this.routineId) { "Routine Agent run is missing its routine" }
-	val generationRunId = steps.lastOrNull { it.generationRunId != null }?.generationRunId
+	val artifactWorkflowRunId = steps.lastOrNull { it.artifactWorkflowRunId != null }?.artifactWorkflowRunId
 	return AgentRunDetailResponse(
 		id = id,
 		routineExecutionId = executionId,
@@ -124,7 +124,7 @@ fun AgentRunRecord.toDetailResponse(
 		chatId = workSessionId,
 		status = status.name,
 		failureCode = failureCode,
-		artifactId = generationRunId?.let(artifactIds::get),
+		artifactId = artifactWorkflowRunId?.let(artifactIds::get),
 		startedAt = startedAt,
 		finishedAt = finishedAt,
 		steps = steps.map { step ->
@@ -134,7 +134,7 @@ fun AgentRunRecord.toDetailResponse(
 				status = step.status.name,
 				toolName = step.toolName,
 				failureCode = step.failureCode,
-				artifactId = step.generationRunId?.let(artifactIds::get),
+				artifactId = step.artifactWorkflowRunId?.let(artifactIds::get),
 				startedAt = step.startedAt,
 				finishedAt = step.finishedAt,
 			)

@@ -15,7 +15,7 @@ class WorkSession(
 	var title: String?,
 	var status: String,
 	var createdByUserId: UUID?,
-	var latestGenerationRunId: UUID?,
+	var latestArtifactWorkflowRunId: UUID?,
 	var lastActivityAt: Instant?,
 	var createdAt: Instant,
 	var updatedAt: Instant,

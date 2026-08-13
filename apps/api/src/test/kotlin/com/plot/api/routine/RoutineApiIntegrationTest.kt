@@ -248,7 +248,7 @@ class RoutineApiIntegrationTest {
 		)
 		val chatId = UUID.randomUUID()
 		val agentRunId = UUID.randomUUID()
-		val generationRunId = UUID.randomUUID()
+		val artifactWorkflowRunId = UUID.randomUUID()
 		val artifactId = UUID.randomUUID()
 		val now = Timestamp.from(Instant.parse("2026-08-10T00:00:00Z"))
 		jdbcTemplate.update(
@@ -295,7 +295,7 @@ class RoutineApiIntegrationTest {
 			) values (?, ?, ?, ?, ?, 'READY', 'v1', 'v1', 'v1', 'v1',
 			 'test', 'test', '{}'::jsonb, 'Draft safely', ?, ?, ?, ?, ?)
 			""".trimIndent(),
-			generationRunId,
+			artifactWorkflowRunId,
 			devContext.devWorkspaceId,
 			devContext.devUserId,
 			"agent:$agentRunId",
@@ -310,7 +310,7 @@ class RoutineApiIntegrationTest {
 			"insert into content_packs (id, workspace_id, generation_run_id, title, status, created_at, updated_at) values (?, ?, ?, 'Routine Artifact', 'READY', ?, ?)",
 			artifactId,
 			devContext.devWorkspaceId,
-			generationRunId,
+			artifactWorkflowRunId,
 			now,
 			now,
 		)
@@ -342,7 +342,7 @@ class RoutineApiIntegrationTest {
 			devContext.devWorkspaceId,
 			agentRunId,
 			"agent:$agentRunId:step:1",
-			generationRunId,
+			artifactWorkflowRunId,
 			now,
 			now,
 			now,
@@ -363,19 +363,19 @@ class RoutineApiIntegrationTest {
 
 		mockMvc.get("/api/routines/$routineId").andExpect {
 			status { isOk() }
-			jsonPath("$.lastGenerationRunId") { doesNotExist() }
+			jsonPath("$.lastArtifactWorkflowRunId") { doesNotExist() }
 			jsonPath("$.latestExecution.id") { value(execution.id.toString()) }
 			jsonPath("$.latestExecution.agentRunStatus") { value("SUCCEEDED") }
 			jsonPath("$.latestExecution.artifactId") { value(artifactId.toString()) }
 			jsonPath("$.latestExecution.chatId") { value(chatId.toString()) }
-			jsonPath("$.latestExecution.generationRunId") { doesNotExist() }
+			jsonPath("$.latestExecution.artifactWorkflowRunId") { doesNotExist() }
 		}
 		val detail = mockMvc.get("/api/routines/$routineId/agent-runs/$agentRunId").andExpect {
 			status { isOk() }
 			jsonPath("$.artifactId") { value(artifactId.toString()) }
 			jsonPath("$.chatId") { value(chatId.toString()) }
 			jsonPath("$.steps[0].sequence") { value(0) }
-			jsonPath("$.steps[1].generationRunId") { doesNotExist() }
+			jsonPath("$.steps[1].artifactWorkflowRunId") { doesNotExist() }
 			jsonPath("$.steps[1].artifactId") { value(artifactId.toString()) }
 			jsonPath("$.claimedBy") { doesNotExist() }
 			jsonPath("$.steps[0].arguments") { doesNotExist() }
@@ -566,7 +566,7 @@ class RoutineApiIntegrationTest {
 			status { isOk() }
 			jsonPath("$.id") { value(firstRunId) }
 			jsonPath("$.chatId") { value(firstJson.get("chatId").asText()) }
-			jsonPath("$.generationRunId") { doesNotExist() }
+			jsonPath("$.artifactWorkflowRunId") { doesNotExist() }
 		}
 
 		val replay = mockMvc.post("/api/agent-runs") {

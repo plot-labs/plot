@@ -42,7 +42,7 @@ data class GitHubReleaseDraftRequest(
 	val status: GitHubReleaseDraftStatus,
 	val attemptCount: Int,
 	val transitionVersion: Long,
-	val generationRunId: UUID?,
+	val artifactWorkflowRunId: UUID?,
 	val observationId: UUID?,
 	val errorCode: String?,
 	val generationAttempt: Int = 0,
@@ -52,7 +52,7 @@ data class GitHubReleaseDraftRequest(
 
 data class GitHubReleaseRetryResult(
 	val requestId: UUID,
-	val generationRunId: UUID?,
+	val artifactWorkflowRunId: UUID?,
 	val generationAttempt: Int,
 	val agentRunId: UUID? = null,
 )
@@ -65,7 +65,7 @@ data class GitHubReleaseActivityRecord(
 	val baseSha: String?,
 	val headSha: String?,
 	val boundaryReason: String?,
-	val generationRunId: UUID?,
+	val artifactWorkflowRunId: UUID?,
 	val artifactId: UUID?,
 	val errorCode: String?,
 	val transitionVersion: Long,

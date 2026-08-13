@@ -1,7 +1,7 @@
 package com.plot.api.common
 
-import com.plot.api.generation.GenerationIdempotencyConflictException
-import com.plot.api.generation.GenerationSourceAccessException
+import com.plot.api.artifact.workflow.ArtifactWorkflowIdempotencyConflictException
+import com.plot.api.artifact.workflow.ArtifactWorkflowSourceAccessException
 import com.plot.api.routine.RoutineExecutionIdempotencyConflictException
 import com.plot.api.routine.AgentRunIdempotencyConflictException
 import com.plot.api.artifact.ExportConfirmationRequiredException
@@ -32,8 +32,8 @@ class ApiExceptionHandler {
 		.status(HttpStatus.BAD_REQUEST).cacheControl(CacheControl.noStore())
 		.body(ApiErrorResponse("BAD_REQUEST", "${exception.headerName} header is required"))
 
-	@ExceptionHandler(GenerationIdempotencyConflictException::class)
-	fun handleIdempotencyConflict(exception: GenerationIdempotencyConflictException): ResponseEntity<ApiErrorResponse> = ResponseEntity
+	@ExceptionHandler(ArtifactWorkflowIdempotencyConflictException::class)
+	fun handleIdempotencyConflict(exception: ArtifactWorkflowIdempotencyConflictException): ResponseEntity<ApiErrorResponse> = ResponseEntity
 		.status(HttpStatus.CONFLICT).cacheControl(CacheControl.noStore())
 		.body(ApiErrorResponse("IDEMPOTENCY_KEY_REUSED", exception.message ?: "Idempotency key was reused"))
 
@@ -47,8 +47,8 @@ class ApiExceptionHandler {
 		.status(HttpStatus.CONFLICT).cacheControl(CacheControl.noStore())
 		.body(ApiErrorResponse("IDEMPOTENCY_KEY_REUSED", exception.message ?: "Idempotency key was reused"))
 
-	@ExceptionHandler(GenerationSourceAccessException::class)
-	fun handleGenerationSourceAccess(exception: GenerationSourceAccessException): ResponseEntity<ApiErrorResponse> = ResponseEntity
+	@ExceptionHandler(ArtifactWorkflowSourceAccessException::class)
+	fun handleArtifactWorkflowSourceAccess(exception: ArtifactWorkflowSourceAccessException): ResponseEntity<ApiErrorResponse> = ResponseEntity
 		.status(HttpStatus.NOT_FOUND).cacheControl(CacheControl.noStore())
 		.body(ApiErrorResponse("SOURCE_NOT_FOUND", exception.message ?: "Source is unavailable"))
 

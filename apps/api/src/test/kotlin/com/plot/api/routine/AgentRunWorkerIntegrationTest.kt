@@ -6,7 +6,7 @@ import com.plot.api.ai.provider.AgentDecisionAction
 import com.plot.api.ai.provider.AgentDecisionException
 import com.plot.api.ai.provider.AgentDecisionGateway
 import com.plot.api.ai.provider.AgentDecisionRequest
-import com.plot.api.ai.provider.GenerationModelGateway
+import com.plot.api.ai.provider.ArtifactWorkflowModelGateway
 import com.plot.api.ai.provider.ModelCallMetadata
 import com.plot.api.ai.provider.ModelCallResult
 import com.plot.api.ai.provider.ReviewerModelRequest
@@ -14,15 +14,15 @@ import com.plot.api.ai.provider.RewriteModelRequest
 import com.plot.api.ai.provider.WriterModelRequest
 import com.plot.api.dev.DevBootstrapService
 import com.plot.api.dev.DevContext
-import com.plot.api.generation.GenerationPersistence
-import com.plot.api.generation.GenerationRunDispatcher
-import com.plot.api.generation.GenerationRunWorker
-import com.plot.api.generation.model.ReviewVerdict
-import com.plot.api.generation.model.ReviewerOutput
-import com.plot.api.generation.model.SentenceReview
-import com.plot.api.generation.model.TargetedRewriteOutput
-import com.plot.api.generation.model.WriterOutput
-import com.plot.api.generation.model.WriterSentence
+import com.plot.api.artifact.workflow.ArtifactWorkflowPersistence
+import com.plot.api.artifact.workflow.ArtifactWorkflowRunDispatcher
+import com.plot.api.artifact.workflow.ArtifactWorkflowRunWorker
+import com.plot.api.artifact.workflow.model.ReviewVerdict
+import com.plot.api.artifact.workflow.model.ReviewerOutput
+import com.plot.api.artifact.workflow.model.SentenceReview
+import com.plot.api.artifact.workflow.model.TargetedRewriteOutput
+import com.plot.api.artifact.workflow.model.WriterOutput
+import com.plot.api.artifact.workflow.model.WriterSentence
 import com.plot.api.routine.dto.CreateChatAgentRunRequest
 import java.sql.Timestamp
 import java.time.Duration
@@ -71,10 +71,10 @@ class AgentRunWorkerIntegrationTest {
 	@Autowired private lateinit var agentPersistence: RoutineAgentPersistence
 	@Autowired private lateinit var routineWorker: RoutineWorker
 	@Autowired private lateinit var agentWorker: AgentRunWorker
-	@Autowired private lateinit var generationWorker: GenerationRunWorker
+	@Autowired private lateinit var artifactWorkflowWorker: ArtifactWorkflowRunWorker
 	@Autowired private lateinit var chatAdmission: ChatAgentAdmissionService
 	@Autowired private lateinit var agentModel: ScriptedAgentDecisionGateway
-	@Autowired private lateinit var generationModel: AgentGenerationModelGateway
+	@Autowired private lateinit var artifactWorkflowModel: AgentArtifactWorkflowModelGateway
 
 	@BeforeEach
 	fun isolateScenario() {
@@ -100,7 +100,7 @@ class AgentRunWorkerIntegrationTest {
 			devContext.devWorkspaceId,
 		)
 		agentModel.reset()
-		generationModel.reset()
+		artifactWorkflowModel.reset()
 	}
 
 	@Test
@@ -148,7 +148,7 @@ class AgentRunWorkerIntegrationTest {
 		)
 		assertTrue(agentWorker.processOne())
 
-		val generationRunId = jdbcTemplate.queryForObject(
+		val artifactWorkflowRunId = jdbcTemplate.queryForObject(
 			"select id from generation_runs where workspace_id = ? and agent_run_id = ?",
 			UUID::class.java,
 			routine.workspaceId,
@@ -161,9 +161,9 @@ class AgentRunWorkerIntegrationTest {
 		))
 		assertEquals(2, count("select count(*) from agent_steps where agent_run_id = ? and step_kind = 'READ_TOOL'", agentRunId))
 		assertEquals(1, count("select count(*) from agent_steps where agent_run_id = ? and step_kind = 'ARTIFACT_HANDOFF'", agentRunId))
-		assertEquals(2, count("select count(*) from generation_inputs where generation_run_id = ?", generationRunId))
-		assertEquals(2, count("select count(distinct source_scope_id) from generation_inputs where generation_run_id = ?", generationRunId))
-		assertEquals(2, count("select count(*) from generation_inputs where generation_run_id = ? and agent_run_input_id is not null", generationRunId))
+		assertEquals(2, count("select count(*) from generation_inputs where generation_run_id = ?", artifactWorkflowRunId))
+		assertEquals(2, count("select count(distinct source_scope_id) from generation_inputs where generation_run_id = ?", artifactWorkflowRunId))
+		assertEquals(2, count("select count(*) from generation_inputs where generation_run_id = ? and agent_run_input_id is not null", artifactWorkflowRunId))
 		assertEquals(0, count(
 			"""
 			select count(*)
@@ -174,11 +174,11 @@ class AgentRunWorkerIntegrationTest {
 			where generation_input.generation_run_id = ?
 			  and generation_input.source_scope_id is distinct from agent_input.source_scope_id
 			""".trimIndent(),
-			generationRunId,
+			artifactWorkflowRunId,
 		))
 		assertEquals(1, count(
 			"select count(*) from generation_runs where id = ? and work_session_id is not null",
-			generationRunId,
+			artifactWorkflowRunId,
 		))
 		assertEquals(1, count(
 			"""
@@ -190,28 +190,28 @@ class AgentRunWorkerIntegrationTest {
 			 and agent.work_session_id = generation.work_session_id
 			where generation.id = ?
 			""".trimIndent(),
-			generationRunId,
+			artifactWorkflowRunId,
 		))
 		assertEquals(
 			listOf("Original trigger body", "Original docs body"),
 			jdbcTemplate.query(
 				"select snapshot_body from generation_inputs where generation_run_id = ? order by order_index",
 				{ rs, _ -> rs.getString(1) },
-				generationRunId,
+				artifactWorkflowRunId,
 			),
 		)
 		assertEquals(null, jdbcTemplate.queryForObject(
 			"select source_scope_id from generation_runs where id = ?",
 			UUID::class.java,
-			generationRunId,
+			artifactWorkflowRunId,
 		))
 
-		assertEquals(2, generationWorker.drain())
+		assertEquals(2, artifactWorkflowWorker.drain())
 		jdbcTemplate.update("update agent_runs set next_attempt_at = now() where id = ?", agentRunId)
 		assertTrue(agentWorker.processOne())
 		assertEquals("SUCCEEDED", jdbcTemplate.queryForObject("select status from agent_runs where id = ?", String::class.java, agentRunId))
 		assertEquals("READY", jdbcTemplate.queryForObject("select status from artifact_runs where workspace_id = ? and agent_run_id = ?", String::class.java, routine.workspaceId, agentRunId))
-		assertEquals(1, count("select count(*) from content_packs where generation_run_id = ?", generationRunId))
+		assertEquals(1, count("select count(*) from content_packs where generation_run_id = ?", artifactWorkflowRunId))
 		assertEquals(3, agentModel.requests.size)
 		assertTrue(agentModel.requests.none { request ->
 			request.toString().contains("MUTATED SECRET") || request.toString().contains("Authorization")
@@ -232,7 +232,7 @@ class AgentRunWorkerIntegrationTest {
 		agentModel.reads = listOf(first.scopeId to firstBlock, second.scopeId to secondBlock)
 
 		repeat(3) { assertTrue(agentWorker.processOne()) }
-		val generationRunId = assertNotNull(jdbcTemplate.queryForObject(
+		val artifactWorkflowRunId = assertNotNull(jdbcTemplate.queryForObject(
 			"select id from generation_runs where workspace_id = ? and agent_run_id = ?",
 			UUID::class.java,
 			devContext.devWorkspaceId,
@@ -242,14 +242,14 @@ class AgentRunWorkerIntegrationTest {
 		assertEquals(chat.chatId, jdbcTemplate.queryForObject(
 			"select work_session_id from generation_runs where id = ?",
 			UUID::class.java,
-			generationRunId,
+			artifactWorkflowRunId,
 		))
 		assertEquals(2, count("select count(*) from agent_steps where agent_run_id = ? and step_kind = 'READ_TOOL'", chat.id))
 		assertEquals(1, count("select count(*) from agent_steps where agent_run_id = ? and step_kind = 'ARTIFACT_HANDOFF'", chat.id))
 		assertEquals(2, count("select count(*) from agent_run_inputs where agent_run_id = ? and input_kind = 'TOOL_RESULT'", chat.id))
 		assertEquals(routineCountBefore, count("select count(*) from routine_executions"))
 
-		assertEquals(2, generationWorker.drain())
+		assertEquals(2, artifactWorkflowWorker.drain())
 		jdbcTemplate.update("update agent_runs set next_attempt_at = now() where id = ?", chat.id)
 		assertTrue(agentWorker.processOne())
 		assertEquals("SUCCEEDED", jdbcTemplate.queryForObject("select status from agent_runs where id = ?", String::class.java, chat.id))
@@ -258,15 +258,15 @@ class AgentRunWorkerIntegrationTest {
 		assertEquals(artifactId, jdbcTemplate.queryForObject(
 			"select id from content_packs where generation_run_id = ?",
 			UUID::class.java,
-			generationRunId,
+			artifactWorkflowRunId,
 		))
-		assertEquals(generationRunId, jdbcTemplate.queryForObject(
+		assertEquals(artifactWorkflowRunId, jdbcTemplate.queryForObject(
 			"select latest_generation_run_id from work_sessions where id = ?",
 			UUID::class.java,
 			chat.chatId,
 		))
-		assertEquals(1, count("select count(*) from content_packs where generation_run_id = ?", generationRunId))
-		assertEquals(2, count("select count(distinct source_scope_id) from generation_inputs where generation_run_id = ?", generationRunId))
+		assertEquals(1, count("select count(*) from content_packs where generation_run_id = ?", artifactWorkflowRunId))
+		assertEquals(2, count("select count(distinct source_scope_id) from generation_inputs where generation_run_id = ?", artifactWorkflowRunId))
 	}
 
 	@Test
@@ -467,7 +467,7 @@ class AgentRunWorkerIntegrationTest {
 			"update source_scopes set status = 'DISABLED', status_changed_at = now(), updated_at = now() where id = ?",
 			admitted.source.scopeId,
 		)
-		assertEquals(2, generationWorker.drain())
+		assertEquals(2, artifactWorkflowWorker.drain())
 		jdbcTemplate.update("update agent_runs set next_attempt_at = now() where id = ?", admitted.agentRunId)
 		assertTrue(agentWorker.processOne())
 
@@ -521,7 +521,7 @@ class AgentRunWorkerIntegrationTest {
 	}
 
 	@Test
-	fun `workspace revocation after an Agent decision prevents Generation handoff`() {
+	fun `workspace revocation after an Agent decision prevents ArtifactWorkflow handoff`() {
 		val admitted = admitAgent("Revoked before handoff", "acme/revoked-handoff")
 		agentModel.scriptedDecision = { request ->
 			setWorkspaceAccess("revoked", "read_only")
@@ -540,7 +540,7 @@ class AgentRunWorkerIntegrationTest {
 	}
 
 	@Test
-	fun `workspace revocation after handoff prevents the Generation model call`() {
+	fun `workspace revocation after handoff prevents the ArtifactWorkflow model call`() {
 		val admitted = admitAgent("Revoked before generation", "acme/revoked-generation")
 		agentModel.scriptedDecision = { request ->
 			AgentDecision(
@@ -549,27 +549,27 @@ class AgentRunWorkerIntegrationTest {
 			)
 		}
 		assertTrue(agentWorker.processOne())
-		val generationRunId = assertNotNull(jdbcTemplate.queryForObject(
+		val artifactWorkflowRunId = assertNotNull(jdbcTemplate.queryForObject(
 			"select id from generation_runs where agent_run_id = ?",
 			UUID::class.java,
 			admitted.agentRunId,
 		))
 		setWorkspaceAccess("revoked", "read_only")
 
-		assertTrue(generationWorker.processOne())
+		assertTrue(artifactWorkflowWorker.processOne())
 
-		assertEquals(0, generationModel.calls)
+		assertEquals(0, artifactWorkflowModel.calls)
 		assertEquals("FAILED", jdbcTemplate.queryForObject(
 			"select status from generation_runs where id = ?",
 			String::class.java,
-			generationRunId,
+			artifactWorkflowRunId,
 		))
 		assertEquals("WORKSPACE_READ_ONLY", jdbcTemplate.queryForObject(
 			"select error_code from generation_runs where id = ?",
 			String::class.java,
-			generationRunId,
+			artifactWorkflowRunId,
 		))
-		assertEquals(0, count("select count(*) from content_packs where generation_run_id = ?", generationRunId))
+		assertEquals(0, count("select count(*) from content_packs where generation_run_id = ?", artifactWorkflowRunId))
 	}
 
 	@Test
@@ -759,12 +759,12 @@ class AgentRunWorkerIntegrationTest {
 
 		@Bean
 		@Primary
-		fun scriptedAgentGenerationGateway() = AgentGenerationModelGateway()
+		fun scriptedAgentArtifactWorkflowGateway() = AgentArtifactWorkflowModelGateway()
 
 		@Bean
 		@Primary
-		fun noOpGenerationDispatcher(): GenerationRunDispatcher =
-			GenerationRunDispatcher(TaskExecutor { _ -> }) { false }
+		fun noOpArtifactWorkflowDispatcher(): ArtifactWorkflowRunDispatcher =
+			ArtifactWorkflowRunDispatcher(TaskExecutor { _ -> }) { false }
 	}
 }
 
@@ -824,7 +824,7 @@ class ScriptedAgentDecisionGateway : AgentDecisionGateway {
 	}
 }
 
-class AgentGenerationModelGateway : GenerationModelGateway {
+class AgentArtifactWorkflowModelGateway : ArtifactWorkflowModelGateway {
 	var calls = 0
 
 	override fun write(request: WriterModelRequest): ModelCallResult<WriterOutput> {

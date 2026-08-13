@@ -119,7 +119,7 @@ class GitHubWebhookApiIntegrationTest {
 	}
 
 	@Test
-	fun defaultBranchPushIsObservedWithoutQueuingReleaseOrGeneration() {
+	fun defaultBranchPushIsObservedWithoutQueuingReleaseOrArtifactWorkflow() {
 		bindRepository(repositoryId = 99)
 
 		postWebhook(
@@ -312,7 +312,7 @@ class GitHubWebhookApiIntegrationTest {
 	}
 
 	@Test
-	fun installationSuspendFencesNonTerminalReleaseAndGenerationWork() {
+	fun installationSuspendFencesNonTerminalReleaseAndArtifactWorkflowWork() {
 		val boundRepository = bindRepository(repositoryId = 99)
 		insertMonitoring(boundRepository.scopeId)
 		jdbcTemplate.update(
@@ -324,7 +324,7 @@ class GitHubWebhookApiIntegrationTest {
 			boundRepository.scopeId,
 		)
 		val releaseRequestId = insertReleaseRequest(boundRepository.scopeId)
-		val generationRunId = insertGenerationRun(boundRepository.scopeId)
+		val artifactWorkflowRunId = insertArtifactWorkflowRun(boundRepository.scopeId)
 
 		postWebhook(
 			"delivery-${UUID.randomUUID()}",
@@ -353,7 +353,7 @@ class GitHubWebhookApiIntegrationTest {
 			jdbcTemplate.queryForObject(
 				"select status || ':' || error_code from generation_runs where id = ?",
 				String::class.java,
-				generationRunId,
+				artifactWorkflowRunId,
 			),
 		)
 		assertEquals(
@@ -369,7 +369,7 @@ class GitHubWebhookApiIntegrationTest {
 			jdbcTemplate.queryForObject(
 				"select count(*) from generation_runs where id = ? and claimed_by is not null",
 				Int::class.java,
-				generationRunId,
+				artifactWorkflowRunId,
 			),
 		)
 	}
@@ -691,7 +691,7 @@ class GitHubWebhookApiIntegrationTest {
 		return requestId
 	}
 
-	private fun insertGenerationRun(scopeId: UUID): UUID {
+	private fun insertArtifactWorkflowRun(scopeId: UUID): UUID {
 		val runId = UUID.randomUUID()
 		jdbcTemplate.update(
 			"""

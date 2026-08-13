@@ -323,7 +323,7 @@ class AgentRunPersistence(
 			request.argumentsJson,
 			request.resultJson,
 			request.adoptedInputId,
-			request.generationRunId,
+			request.artifactWorkflowRunId,
 			request.failureCode,
 			request.startedAt?.let(Timestamp::from),
 			request.finishedAt?.let(Timestamp::from),
@@ -346,7 +346,7 @@ class AgentRunPersistence(
 		agentRunId,
 	)
 
-	fun findArtifactId(workspaceId: UUID, generationRunId: UUID): UUID? = jdbcTemplate.query(
+	fun findArtifactId(workspaceId: UUID, artifactWorkflowRunId: UUID): UUID? = jdbcTemplate.query(
 		"""
 		select id
 		from content_packs
@@ -354,7 +354,7 @@ class AgentRunPersistence(
 		""".trimIndent(),
 		{ rs, _ -> rs.getObject("id", UUID::class.java) },
 		workspaceId,
-		generationRunId,
+		artifactWorkflowRunId,
 	).singleOrNull()
 
 	fun findArtifactForAgentRun(workspaceId: UUID, agentRunId: UUID): AgentArtifactRecord? = jdbcTemplate.query(
@@ -592,10 +592,10 @@ class AgentRunPersistence(
 		requireNotNull(findStep(claim.workspaceId, claim.agentRunId, stepId))
 	}
 
-	fun linkGenerationStep(
+	fun linkArtifactWorkflowStep(
 		claim: ClaimedAgentRun,
 		stepId: UUID,
-		generationRunId: UUID,
+		artifactWorkflowRunId: UUID,
 		resultJson: String,
 		nextAttemptAt: Instant,
 		now: Instant = currentInstant(),
@@ -610,18 +610,18 @@ class AgentRunPersistence(
 			"select count(*) from generation_runs where workspace_id = ? and id = ? and agent_run_id = ? and work_session_id = ?",
 			Int::class.java,
 			claim.workspaceId,
-			generationRunId,
+			artifactWorkflowRunId,
 			claim.agentRunId,
 			requireNotNull(run.workSessionId),
 		) == 1
-		if (!generationBelongsToAgent) throw RoutineExecutionStateException("Generation handoff belongs to another Agent run")
+		if (!generationBelongsToAgent) throw RoutineExecutionStateException("ArtifactWorkflow handoff belongs to another Agent run")
 		val stepUpdated = jdbcTemplate.update(
 			"""
 			update agent_steps
 			set status = 'SUCCEEDED', generation_run_id = ?, result = ?::jsonb, finished_at = ?
 			where workspace_id = ? and id = ? and agent_run_id = ? and status = 'RUNNING'
 			""".trimIndent(),
-			generationRunId,
+			artifactWorkflowRunId,
 			resultJson,
 			Timestamp.from(now),
 			claim.workspaceId,
@@ -697,7 +697,7 @@ class AgentRunPersistence(
 		terminalizeAgentRun(claim, AgentRunStatus.SUCCEEDED, null, now)
 	}
 
-	fun loadGenerationState(workspaceId: UUID, generationRunId: UUID): AgentGenerationState? = jdbcTemplate.query(
+	fun loadArtifactWorkflowState(workspaceId: UUID, artifactWorkflowRunId: UUID): AgentArtifactWorkflowState? = jdbcTemplate.query(
 		"""
 		select generation.id, generation.status,
 		       exists (
@@ -707,13 +707,13 @@ class AgentRunPersistence(
 		from generation_runs generation
 		where generation.workspace_id = ? and generation.id = ?
 		""".trimIndent(),
-		{ rs, _ -> AgentGenerationState(
+		{ rs, _ -> AgentArtifactWorkflowState(
 			rs.getObject("id", UUID::class.java),
 			rs.getString("status"),
 			rs.getBoolean("materialized"),
 		) },
 		workspaceId,
-		generationRunId,
+		artifactWorkflowRunId,
 	).singleOrNull()
 
 	fun allAgentSourcesActive(workspaceId: UUID, agentRunId: UUID): Boolean {
@@ -1396,7 +1396,7 @@ class AgentRunPersistence(
 		argumentsJson = getString("arguments"),
 		resultJson = getString("result"),
 		adoptedInputId = getObject("adopted_input_id", UUID::class.java),
-		generationRunId = getObject("generation_run_id", UUID::class.java),
+		artifactWorkflowRunId = getObject("generation_run_id", UUID::class.java),
 		failureCode = getString("failure_code"),
 		startedAt = getTimestamp("started_at")?.toInstant(),
 		finishedAt = getTimestamp("finished_at")?.toInstant(),

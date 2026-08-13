@@ -93,7 +93,7 @@ class RoutineMigrationIntegrationTest {
 		backlogBlockId: UUID,
 		lastRunAt: Instant,
 	) {
-		val generationRunId = UUID.randomUUID()
+		val artifactWorkflowRunId = UUID.randomUUID()
 		jdbcTemplate.update(
 			"insert into $schema.users (id, email, display_name, status, created_at, updated_at) values (?, ?, 'User', 'ACTIVE', now(), now())",
 			userId,
@@ -138,7 +138,7 @@ class RoutineMigrationIntegrationTest {
 			) values (?, ?, ?, ?, ?, 'legacy-fingerprint', 'READY', 'legacy-v1', 'legacy-v1',
 			 'legacy-v1', 'legacy-v1', 'LEGACY', 'legacy-model', '{}'::jsonb, 'Draft updates', ?, ?, ?)
 			""".trimIndent(),
-			generationRunId,
+			artifactWorkflowRunId,
 			workspaceId,
 			scopeId,
 			userId,
@@ -157,7 +157,7 @@ class RoutineMigrationIntegrationTest {
 			""".trimIndent(),
 			UUID.randomUUID(),
 			workspaceId,
-			generationRunId,
+			artifactWorkflowRunId,
 			processedBlockId,
 			Timestamp.from(lastRunAt),
 		)
@@ -174,7 +174,7 @@ class RoutineMigrationIntegrationTest {
 			scopeId,
 			Timestamp.from(lastRunAt),
 			Timestamp.from(lastRunAt.plusSeconds(86_400)),
-			generationRunId,
+			artifactWorkflowRunId,
 		)
 	}
 

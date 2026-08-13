@@ -248,7 +248,7 @@ class GitHubConnectionApiIntegrationTest {
 	}
 
 	@Test
-	fun connectedRepositoryMarksWebhookMonitoringActiveWithoutStartingGeneration() {
+	fun connectedRepositoryMarksWebhookMonitoringActiveWithoutStartingArtifactWorkflow() {
 		val connectionId = completeInstallation()
 		val response = mockMvc.put("/api/github/repositories/1001") {
 			contentType = MediaType.APPLICATION_JSON

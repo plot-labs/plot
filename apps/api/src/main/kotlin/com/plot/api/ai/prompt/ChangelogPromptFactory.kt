@@ -2,8 +2,8 @@ package com.plot.api.ai.prompt
 
 import com.plot.api.ai.provider.ReviewerModelRequest
 import com.plot.api.ai.provider.RewriteModelRequest
-import com.plot.api.generation.model.EvidenceSnapshot
-import com.plot.api.generation.model.SentenceArtifact
+import com.plot.api.artifact.workflow.model.EvidenceSnapshot
+import com.plot.api.artifact.workflow.model.SentenceArtifact
 import org.springframework.stereotype.Component
 import tools.jackson.databind.ObjectMapper
 

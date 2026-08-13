@@ -35,7 +35,7 @@ class WorkSessionService(
 			title = request.title?.trim(),
 			status = "OPEN",
 			createdByUserId = devContext.devUserId,
-			latestGenerationRunId = null,
+			latestArtifactWorkflowRunId = null,
 			lastActivityAt = now,
 			createdAt = now,
 			updatedAt = now,

@@ -1,0 +1,1122 @@
+package com.plot.api.artifact.workflow
+
+import com.plot.api.ai.provider.ModelCallMetadata
+import com.plot.api.ai.provider.ModelRole
+import com.plot.api.artifact.run.ArtifactRunPersistence
+import com.plot.api.artifact.run.ArtifactRunStatus
+import com.plot.api.common.ApiException
+import com.plot.api.common.UuidGenerator
+import com.plot.api.entitlement.TrialPolicy
+import com.plot.api.artifact.workflow.dto.ArtifactWorkflowModelTimingResponse
+import com.plot.api.artifact.workflow.dto.ArtifactWorkflowRunTimingResponse
+import com.plot.api.artifact.workflow.dto.ArtifactWorkflowStepTimingResponse
+import com.plot.api.artifact.workflow.model.EvidenceSnapshot
+import com.plot.api.artifact.workflow.model.ReviewVerdict
+import com.plot.api.artifact.workflow.model.SentenceArtifact
+import com.plot.api.routine.AgentToolAccessException
+import java.sql.Timestamp
+import java.time.Clock
+import java.time.Duration
+import java.time.Instant
+import java.util.UUID
+import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.http.HttpStatus
+import org.springframework.transaction.support.TransactionTemplate
+import tools.jackson.databind.ObjectMapper
+
+data class ArtifactWorkflowRunReservation(
+	val workspaceId: UUID,
+	val createdByUserId: UUID,
+	val sourceScopeId: UUID?,
+	val idempotencyKey: String,
+	val requestFingerprint: String,
+	val state: ArtifactWorkflowState,
+	val provider: String,
+	val modelName: String,
+	val budgetJson: String,
+	val workSessionId: UUID? = null,
+	val agentRunId: UUID? = null,
+	val artifactRunId: UUID? = null,
+)
+
+data class ClaimedArtifactWorkflowRun(
+	val workspaceId: UUID,
+	val runId: UUID,
+	val transitionVersion: Long,
+	val workerId: String,
+)
+
+data class ModelInvocationLease(
+	val id: UUID,
+	val stepId: UUID,
+	val role: ModelRole,
+	val logicalCallIndex: Int,
+	val attemptNo: Int,
+)
+
+class ArtifactWorkflowPersistence(
+	private val jdbcTemplate: JdbcTemplate,
+	private val objectMapper: ObjectMapper,
+	private val transactionTemplate: TransactionTemplate,
+	private val uuidGenerator: UuidGenerator,
+	private val artifactRunPersistence: ArtifactRunPersistence,
+	private val clock: Clock = Clock.systemUTC(),
+) {
+	fun findIdempotentRun(
+		workspaceId: UUID,
+		createdByUserId: UUID,
+		idempotencyKey: String,
+		requestFingerprint: String,
+	): ArtifactWorkflowState? {
+		val existing = jdbcTemplate.query(
+			"select id, request_fingerprint from generation_runs where workspace_id = ? and created_by_user_id = ? and idempotency_key = ?",
+			{ rs, _ -> rs.getObject(1, UUID::class.java) to rs.getString(2) },
+			workspaceId, createdByUserId, idempotencyKey,
+		).firstOrNull() ?: return null
+		if (existing.second != requestFingerprint) throw ArtifactWorkflowIdempotencyConflictException()
+		return loadState(workspaceId, existing.first)
+	}
+
+	fun createRun(reservation: ArtifactWorkflowRunReservation): ArtifactWorkflowState = transactionTemplate.execute {
+		reservation.workSessionId?.let { sessionId ->
+			val sessionExists = jdbcTemplate.query(
+				"select id from work_sessions where workspace_id = ? and id = ? for update",
+				{ rs, _ -> rs.getObject(1, UUID::class.java) },
+				reservation.workspaceId,
+				sessionId,
+			).isNotEmpty()
+			if (!sessionExists) {
+				throw ApiException(HttpStatus.BAD_REQUEST, "INVALID_SESSION", "Work session is unavailable in this workspace")
+			}
+		}
+		reservation.agentRunId?.let { agentRunId ->
+			val workSessionId = reservation.workSessionId
+				?: throw ApiException(HttpStatus.BAD_REQUEST, "INVALID_SESSION", "Routine Agent generation requires its Chat")
+			val linkedAgent = jdbcTemplate.query(
+				"""
+				select id
+				from agent_runs
+				where workspace_id = ? and id = ? and created_by_user_id = ? and work_session_id = ?
+				for update
+				""".trimIndent(),
+				{ rs, _ -> rs.getObject(1, UUID::class.java) },
+				reservation.workspaceId,
+				agentRunId,
+				reservation.createdByUserId,
+				workSessionId,
+			).isNotEmpty()
+			if (!linkedAgent) {
+				throw ApiException(HttpStatus.BAD_REQUEST, "INVALID_AGENT_RUN", "Agent run is unavailable in this workspace")
+			}
+			val expectedSourceCount = jdbcTemplate.queryForObject(
+				"select count(*) from agent_run_sources where workspace_id = ? and agent_run_id = ?",
+				Int::class.java,
+				reservation.workspaceId,
+				agentRunId,
+			) ?: 0
+			val sourceStatuses = jdbcTemplate.query(
+				"""
+				select scope.status, namespace.status, binding.status, connection.status
+				from agent_run_sources source
+				join source_scopes scope
+				  on scope.workspace_id = source.workspace_id and scope.id = source.source_scope_id
+				join source_namespaces namespace
+				  on namespace.workspace_id = scope.workspace_id and namespace.id = scope.source_namespace_id
+				 and namespace.provider = scope.provider
+				join connection_namespace_bindings binding
+				  on binding.workspace_id = namespace.workspace_id and binding.source_namespace_id = namespace.id
+				 and binding.provider = namespace.provider and binding.status = 'ACTIVE'
+				join connections connection
+				  on connection.workspace_id = binding.workspace_id and connection.id = binding.connection_id
+				 and connection.provider = binding.provider and connection.status = 'ACTIVE'
+				where source.workspace_id = ? and source.agent_run_id = ?
+				order by scope.id
+				for update of scope, namespace, binding, connection
+				""".trimIndent(),
+				{ rs, _ -> listOf(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4)) },
+				reservation.workspaceId,
+				agentRunId,
+			)
+			if (
+				expectedSourceCount == 0 ||
+				sourceStatuses.size != expectedSourceCount ||
+				sourceStatuses.flatten().any { it != "ACTIVE" }
+			) {
+				throw AgentToolAccessException("SOURCE_NOT_READY")
+			}
+		}
+		val existing = jdbcTemplate.query(
+			"select id, request_fingerprint from generation_runs where workspace_id = ? and created_by_user_id = ? and idempotency_key = ?",
+			{ rs, _ -> rs.getObject(1, UUID::class.java) to rs.getString(2) },
+			reservation.workspaceId, reservation.createdByUserId, reservation.idempotencyKey,
+		).firstOrNull()
+		if (existing != null) {
+			if (existing.second != reservation.requestFingerprint) throw ArtifactWorkflowIdempotencyConflictException()
+			return@execute loadState(reservation.workspaceId, existing.first)
+		}
+		requireTrialArtifactWorkflowCapacity(reservation.workspaceId)
+		val now = clock.instant()
+		reservation.artifactRunId?.let { artifactRunId ->
+			val agentRunId = requireNotNull(reservation.agentRunId) { "Artifact run requires an AgentRun" }
+			artifactRunPersistence.admit(
+				workspaceId = reservation.workspaceId,
+				agentRunId = agentRunId,
+				createdByUserId = reservation.createdByUserId,
+				idempotencyKey = reservation.idempotencyKey,
+				requestFingerprint = reservation.requestFingerprint,
+				id = artifactRunId,
+				now = now,
+			)
+		}
+		val inserted = jdbcTemplate.update(
+			"""
+			insert into generation_runs (
+			 id, workspace_id, work_session_id, agent_run_id, artifact_run_id, source_scope_id, created_by_user_id, idempotency_key, request_fingerprint,
+			 status, workflow_version, prompt_version, output_schema_version, budget_version, provider,
+			 model_name, budget_snapshot, user_instruction, created_at, updated_at
+			) values (?, ?, ?, ?, ?, ?, ?, ?, ?, 'QUEUED', 'fixed-v1', 'changelog-v8', 'generation-v5',
+			 'budget-v1', ?, ?, ?::jsonb, ?, ?, ?)
+			on conflict (workspace_id, created_by_user_id, idempotency_key) do nothing
+			""".trimIndent(),
+			reservation.state.runId, reservation.workspaceId, reservation.workSessionId, reservation.agentRunId, reservation.artifactRunId,
+			reservation.sourceScopeId,
+			reservation.createdByUserId, reservation.idempotencyKey, reservation.requestFingerprint,
+			reservation.provider, reservation.modelName, reservation.budgetJson, reservation.state.instruction,
+			Timestamp.from(now), Timestamp.from(now),
+		)
+		if (inserted == 0) {
+			val raced = jdbcTemplate.query(
+				"select id, request_fingerprint from generation_runs where workspace_id = ? and created_by_user_id = ? and idempotency_key = ?",
+				{ rs, _ -> rs.getObject(1, UUID::class.java) to rs.getString(2) },
+				reservation.workspaceId, reservation.createdByUserId, reservation.idempotencyKey,
+			).single()
+			if (raced.second != reservation.requestFingerprint) throw ArtifactWorkflowIdempotencyConflictException()
+			return@execute loadState(reservation.workspaceId, raced.first)
+		}
+		reservation.state.evidence.forEach { insertEvidence(reservation.workspaceId, it) }
+		insertCheckpoint(reservation.workspaceId, reservation.state, "EVIDENCE_SET", now)
+		reservation.workSessionId?.let { sessionId ->
+			val updated = jdbcTemplate.update(
+				"update work_sessions set latest_generation_run_id = ?, last_activity_at = ?, updated_at = ? where workspace_id = ? and id = ?",
+				reservation.state.runId,
+				Timestamp.from(now),
+				Timestamp.from(now),
+				reservation.workspaceId,
+				sessionId,
+			)
+			check(updated == 1) { "Work session link was lost" }
+		}
+		reservation.state
+	}
+
+	private fun requireTrialArtifactWorkflowCapacity(workspaceId: UUID) {
+		val entitlement = jdbcTemplate.query(
+			"select plan, entitlement_status, access_mode from workspaces where id = ? for update",
+			{ rs, _ -> Triple(rs.getString(1), rs.getString(2), rs.getString(3)) },
+			workspaceId,
+		).singleOrNull()
+			?: throw ApiException(HttpStatus.FORBIDDEN, "ACCESS_DENIED", "Access denied")
+		if (entitlement.third != "full") {
+			throw ApiException(
+				HttpStatus.FORBIDDEN,
+				"WORKSPACE_READ_ONLY",
+				"This workspace is read-only. Reactivate a subscription to make changes.",
+			)
+		}
+		if (entitlement.first != "trial" || entitlement.second != "trialing") return
+		val occupiedPackSlotCount = jdbcTemplate.queryForObject(
+			"""
+			select
+			  (select count(*) from content_packs where workspace_id = ?)
+			  +
+			  (
+			    select count(*)
+			    from generation_runs run
+			    where run.workspace_id = ?
+			      and run.status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
+			      and not exists (
+			        select 1
+			        from content_packs pack
+			        where pack.workspace_id = run.workspace_id
+			          and pack.generation_run_id = run.id
+			      )
+			  )
+			""".trimIndent(),
+			Long::class.java,
+			workspaceId,
+			workspaceId,
+		) ?: 0
+		if (occupiedPackSlotCount >= TrialPolicy.PACK_LIMIT) {
+			throw ApiException(
+				HttpStatus.FORBIDDEN,
+				"TRIAL_PACK_LIMIT_REACHED",
+				"The trial already has three completed or in-progress pack generations. Wait for a failure to release capacity or subscribe.",
+			)
+		}
+	}
+
+	fun claimNext(
+		workerId: String,
+		staleBefore: Instant,
+		includeAgentRuns: Boolean = true,
+	): ClaimedArtifactWorkflowRun? = transactionTemplate.execute {
+		val row = jdbcTemplate.query(
+			"""
+			select workspace_id, id, transition_version
+			from generation_runs
+			where status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
+			  and (? or agent_run_id is null)
+			  and (next_attempt_at is null or next_attempt_at <= now())
+			  and (claimed_by is null or heartbeat_at < ?)
+			  and (
+			    source_scope_id is null
+			    or exists (
+			      select 1
+			      from source_scopes scope
+			      where scope.workspace_id = generation_runs.workspace_id
+			        and scope.id = generation_runs.source_scope_id
+			        and scope.status = 'ACTIVE'
+			    )
+			  )
+			order by created_at, id
+			for update skip locked
+			limit 1
+			""".trimIndent(),
+			{ rs, _ -> Triple(rs.getObject(1, UUID::class.java), rs.getObject(2, UUID::class.java), rs.getLong(3)) },
+			includeAgentRuns,
+			Timestamp.from(staleBefore),
+		).firstOrNull() ?: return@execute null
+		val now = clock.instant()
+		val updated = jdbcTemplate.update(
+			"""
+			update generation_runs
+			set claimed_by = ?, claimed_at = ?, heartbeat_at = ?,
+			    next_attempt_at = null, transition_version = transition_version + 1, updated_at = ?
+			where workspace_id = ? and id = ? and transition_version = ?
+			  and status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
+			  and (claimed_by is null or heartbeat_at is null or heartbeat_at < ?)
+			""".trimIndent(),
+			workerId, Timestamp.from(now), Timestamp.from(now), Timestamp.from(now), row.first, row.second, row.third, Timestamp.from(staleBefore),
+		)
+		if (updated == 1) ClaimedArtifactWorkflowRun(row.first, row.second, row.third + 1, workerId) else null
+	}
+
+	fun fenceSourceScope(
+		workspaceId: UUID,
+		sourceScopeId: UUID,
+		now: Instant,
+		errorCode: String = "SOURCE_ACCESS_LOST",
+	): Int = transactionTemplate.execute {
+		require(errorCode.isNotBlank()) { "ArtifactWorkflow fence error code is required" }
+		jdbcTemplate.update(
+			"""
+			update model_invocations
+			set status = 'FAILED', failure_code = ?, finished_at = ?
+			where workspace_id = ? and status = 'RUNNING'
+			  and generation_run_id in (
+			    select id from generation_runs
+			    where workspace_id = ? and source_scope_id = ?
+			      and status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
+			  )
+			""".trimIndent(),
+			errorCode,
+			Timestamp.from(now),
+			workspaceId,
+			workspaceId,
+			sourceScopeId,
+		)
+		jdbcTemplate.update(
+			"""
+			update generation_workflow_steps
+			set status = 'FAILED', failure_code = ?, finished_at = ?
+			where workspace_id = ? and status = 'RUNNING'
+			  and generation_run_id in (
+			    select id from generation_runs
+			    where workspace_id = ? and source_scope_id = ?
+			      and status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
+			  )
+			""".trimIndent(),
+			errorCode,
+			Timestamp.from(now),
+			workspaceId,
+			workspaceId,
+			sourceScopeId,
+		)
+		jdbcTemplate.update(
+			"""
+			update generation_runs
+			set status = 'FAILED', error_code = ?,
+			    claimed_by = null, claimed_at = null, heartbeat_at = null,
+			    next_attempt_at = null, finished_at = ?,
+			    transition_version = transition_version + 1, updated_at = ?
+			where workspace_id = ? and source_scope_id = ?
+			  and status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
+			""".trimIndent(),
+			errorCode,
+			Timestamp.from(now),
+			Timestamp.from(now),
+			workspaceId,
+			sourceScopeId,
+		)
+	}
+
+	fun renewClaim(claim: ClaimedArtifactWorkflowRun, now: Instant): Boolean = jdbcTemplate.update(
+		"""
+		update generation_runs
+		set heartbeat_at = ?, updated_at = ?
+		where workspace_id = ? and id = ? and claimed_by = ? and transition_version = ?
+		  and status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
+		""".trimIndent(),
+		Timestamp.from(now),
+		Timestamp.from(now),
+		claim.workspaceId,
+		claim.runId,
+		claim.workerId,
+		claim.transitionVersion,
+	) == 1
+
+	fun beginInvocation(claim: ClaimedArtifactWorkflowRun, role: ModelRole): ModelInvocationLease = transactionTemplate.execute {
+		requireClaim(claim)
+		val currentStep = jdbcTemplate.query(
+			"""
+			select id, sequence_no
+			from generation_workflow_steps
+			where workspace_id = ? and generation_run_id = ? and step_kind = ? and status = 'RUNNING'
+			order by sequence_no desc
+			limit 1
+			""".trimIndent(),
+			{ rs, _ -> rs.getObject("id", UUID::class.java) to rs.getInt("sequence_no") },
+			claim.workspaceId, claim.runId, role.name,
+		).firstOrNull()
+		val stepId: UUID
+		val callIndex: Int
+		val attemptNo: Int
+		val invocationId = uuidGenerator.next()
+		val now = clock.instant()
+		if (currentStep == null) {
+			val sequence = jdbcTemplate.queryForObject(
+				"select coalesce(max(sequence_no), -1) + 1 from generation_workflow_steps where workspace_id = ? and generation_run_id = ?",
+				Int::class.java, claim.workspaceId, claim.runId,
+			) ?: 0
+			callIndex = jdbcTemplate.queryForObject(
+				"select coalesce(max(logical_call_index), -1) + 1 from model_invocations where workspace_id = ? and generation_run_id = ?",
+				Int::class.java, claim.workspaceId, claim.runId,
+			) ?: 0
+			stepId = uuidGenerator.next()
+			attemptNo = 1
+			val semanticAttempt = jdbcTemplate.queryForObject(
+				"select semantic_rewrite_attempt from generation_runs where workspace_id = ? and id = ?",
+				Int::class.java, claim.workspaceId, claim.runId,
+			) ?: 0
+			requireExactlyOne(jdbcTemplate.update(
+				"""
+				insert into generation_workflow_steps (id, workspace_id, generation_run_id, step_kind, sequence_no,
+				 semantic_attempt, status, started_at, created_at)
+				values (?, ?, ?, ?, ?, ?, 'RUNNING', ?, ?)
+				""".trimIndent(),
+				stepId, claim.workspaceId, claim.runId, role.name, sequence, semanticAttempt,
+				Timestamp.from(now), Timestamp.from(now),
+			), "ArtifactWorkflow workflow step was not inserted")
+		} else {
+			stepId = currentStep.first
+			val invocationSequence = jdbcTemplate.queryForMap(
+				"""
+				select min(logical_call_index) as logical_call_index,
+				       coalesce(max(attempt_no), 0) + 1 as attempt_no
+				from model_invocations
+				where workspace_id = ? and generation_run_id = ? and workflow_step_id = ?
+				""".trimIndent(),
+				claim.workspaceId,
+				claim.runId,
+				stepId,
+			)
+			callIndex = (invocationSequence["logical_call_index"] as Number).toInt()
+			attemptNo = (invocationSequence["attempt_no"] as Number).toInt()
+		}
+		val providerModel = jdbcTemplate.queryForMap(
+			"select provider, model_name from generation_runs where workspace_id = ? and id = ?",
+			claim.workspaceId, claim.runId,
+		)
+		requireExactlyOne(jdbcTemplate.update(
+			"""
+			insert into model_invocations (id, workspace_id, generation_run_id, workflow_step_id, role,
+			 logical_call_index, attempt_no, status, provider, model_name, started_at, created_at)
+			values (?, ?, ?, ?, ?, ?, ?, 'RUNNING', ?, ?, ?, ?)
+			""".trimIndent(),
+			invocationId, claim.workspaceId, claim.runId, stepId, role.name, callIndex, attemptNo,
+			providerModel["provider"], providerModel["model_name"], Timestamp.from(now), Timestamp.from(now),
+		), "ArtifactWorkflow model invocation was not inserted")
+		val visibleStatus = if (role == ModelRole.WRITER) "WRITING" else if (role == ModelRole.REVIEWER) "REVIEWING" else "REWRITING"
+		requireExactlyOne(
+			jdbcTemplate.update(
+				"""
+				update generation_runs
+				set status = ?, started_at = coalesce(started_at, ?), heartbeat_at = ?, updated_at = ?
+				where workspace_id = ? and id = ? and claimed_by = ? and transition_version = ?
+				  and status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
+				""".trimIndent(),
+				visibleStatus,
+				Timestamp.from(now),
+				Timestamp.from(now),
+				Timestamp.from(now),
+				claim.workspaceId,
+				claim.runId,
+				claim.workerId,
+				claim.transitionVersion,
+			),
+			"ArtifactWorkflow run claim was lost",
+		)
+		ModelInvocationLease(invocationId, stepId, role, callIndex, attemptNo)
+	}
+
+	fun scheduleInvocationRetry(
+		claim: ClaimedArtifactWorkflowRun,
+		lease: ModelInvocationLease,
+		code: String,
+		nextAttemptAt: Instant,
+		metadata: ModelCallMetadata? = null,
+	) {
+		transactionTemplate.executeWithoutResult {
+			requireClaim(claim)
+			val now = clock.instant()
+			requireExactlyOne(
+				jdbcTemplate.update(
+					"""
+					update model_invocations
+					set status = 'FAILED', provider_request_id = ?, result_metadata = ?::jsonb,
+					    prompt_token_count = ?, completion_token_count = ?, total_token_count = ?,
+					    latency_ms = ?, failure_code = ?, finished_at = ?
+					where workspace_id = ? and generation_run_id = ? and id = ? and status = 'RUNNING'
+					""".trimIndent(),
+					metadata?.responseId,
+					objectMapper.writeValueAsString(metadata?.observationAttributes ?: emptyMap<String, String>()),
+					metadata?.promptTokens,
+					metadata?.completionTokens,
+					metadata?.totalTokens,
+					metadata?.latency?.toMillis()?.toInt(),
+					code,
+					Timestamp.from(now),
+					claim.workspaceId,
+					claim.runId,
+					lease.id,
+				),
+				"ArtifactWorkflow model invocation retry was lost",
+			)
+			requireExactlyOne(
+				jdbcTemplate.update(
+					"""
+					update generation_runs
+					set next_attempt_at = ?, transition_version = transition_version + 1,
+					    claimed_by = null, claimed_at = null, heartbeat_at = null, updated_at = ?
+					where workspace_id = ? and id = ? and claimed_by = ? and transition_version = ?
+					  and status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
+					""".trimIndent(),
+					Timestamp.from(nextAttemptAt),
+					Timestamp.from(now),
+					claim.workspaceId,
+					claim.runId,
+					claim.workerId,
+					claim.transitionVersion,
+				),
+				"ArtifactWorkflow run claim was lost",
+			)
+		}
+	}
+
+	fun budgetFailureCode(claim: ClaimedArtifactWorkflowRun): String? {
+		val row = jdbcTemplate.queryForMap(
+			"""
+			select (budget_snapshot ->> 'maxModelCalls')::integer as max_calls,
+			       (budget_snapshot ->> 'maxTotalTokens')::bigint as max_tokens,
+			       (budget_snapshot ->> 'maxRunDurationMillis')::bigint as max_duration_ms,
+			       created_at
+			from generation_runs where workspace_id = ? and id = ? and claimed_by = ?
+			""".trimIndent(),
+			claim.workspaceId, claim.runId, claim.workerId,
+		)
+		val calls = jdbcTemplate.queryForObject(
+			"select count(*) from model_invocations where workspace_id = ? and generation_run_id = ?",
+			Int::class.java, claim.workspaceId, claim.runId,
+		) ?: 0
+		val tokens = jdbcTemplate.queryForObject(
+			"select coalesce(sum(total_token_count), 0) from model_invocations where workspace_id = ? and generation_run_id = ?",
+			Long::class.java, claim.workspaceId, claim.runId,
+		) ?: 0L
+		val maxCalls = (row["max_calls"] as Number?)?.toInt()
+		val maxTokens = (row["max_tokens"] as Number?)?.toLong()
+		val maxDuration = (row["max_duration_ms"] as Number?)?.toLong()
+		val createdAt = (row["created_at"] as java.sql.Timestamp).toInstant()
+		return when {
+			maxCalls != null && calls >= maxCalls -> "MODEL_CALL_BUDGET_EXHAUSTED"
+			maxTokens != null && tokens >= maxTokens -> "TOKEN_BUDGET_EXHAUSTED"
+			maxDuration != null && java.time.Duration.between(createdAt, clock.instant()).toMillis() >= maxDuration -> "TIME_BUDGET_EXHAUSTED"
+			else -> null
+		}
+	}
+
+	fun completeCheckpoint(
+		claim: ClaimedArtifactWorkflowRun,
+		lease: ModelInvocationLease,
+		state: ArtifactWorkflowState,
+		metadata: ModelCallMetadata?,
+	) {
+		transactionTemplate.executeWithoutResult {
+			requireClaim(claim)
+			val now = clock.instant()
+			requireExactlyOne(jdbcTemplate.update(
+				"""
+				update model_invocations set status = 'SUCCEEDED', provider_request_id = ?, result_metadata = ?::jsonb,
+				 prompt_token_count = ?, completion_token_count = ?, total_token_count = ?, latency_ms = ?, finished_at = ?
+				where workspace_id = ? and generation_run_id = ? and id = ? and status = 'RUNNING'
+				""".trimIndent(),
+				metadata?.responseId, objectMapper.writeValueAsString(metadata?.observationAttributes ?: emptyMap<String, String>()),
+				metadata?.promptTokens, metadata?.completionTokens, metadata?.totalTokens,
+				metadata?.latency?.toMillis()?.toInt(), Timestamp.from(now), claim.workspaceId, claim.runId, lease.id,
+			), "ArtifactWorkflow model invocation completion was lost")
+			requireExactlyOne(
+				jdbcTemplate.update(
+					"""
+					update generation_workflow_steps
+					set status = 'SUCCEEDED', finished_at = ?
+					where workspace_id = ? and generation_run_id = ? and id = ? and status = 'RUNNING'
+					""".trimIndent(),
+					Timestamp.from(now), claim.workspaceId, claim.runId, lease.stepId,
+				),
+				"ArtifactWorkflow workflow step completion was lost",
+			)
+			insertCheckpoint(claim.workspaceId, state, state.artifactType, now, lease.stepId)
+			if (state.status == ArtifactWorkflowRunStatus.READY || state.status == ArtifactWorkflowRunStatus.NEEDS_REVIEW) {
+				insertCheckpoint(claim.workspaceId, state, "FINAL_OUTPUT", now)
+				materializeTerminal(claim.workspaceId, state, now)
+			}
+			val terminal = state.status in setOf(ArtifactWorkflowRunStatus.READY, ArtifactWorkflowRunStatus.NEEDS_REVIEW, ArtifactWorkflowRunStatus.FAILED)
+			val updated = jdbcTemplate.update(
+				"""
+				update generation_runs set status = ?, semantic_rewrite_attempt = ?, transition_version = transition_version + 1,
+				 claimed_by = null, claimed_at = null, heartbeat_at = null, error_code = ?,
+				 finished_at = case when ? then ? else finished_at end, updated_at = ?
+				where workspace_id = ? and id = ? and claimed_by = ? and transition_version = ?
+				  and status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
+				""".trimIndent(),
+				state.status.name, state.semanticRewriteAttempt, state.failureCode, terminal, Timestamp.from(now), Timestamp.from(now),
+				claim.workspaceId, claim.runId, claim.workerId, claim.transitionVersion,
+			)
+			check(updated == 1) { "ArtifactWorkflow run claim was lost" }
+			artifactRunPersistence.syncWorkflowState(
+				workspaceId = claim.workspaceId,
+				workflowRunId = claim.runId,
+				status = state.status.toArtifactRunStatus(),
+				errorCode = state.failureCode,
+				now = now,
+			)
+		}
+	}
+
+	fun failCheckpoint(
+		claim: ClaimedArtifactWorkflowRun,
+		lease: ModelInvocationLease,
+		state: ArtifactWorkflowState,
+		code: String,
+		metadata: ModelCallMetadata? = null,
+	) {
+		transactionTemplate.executeWithoutResult {
+			requireClaim(claim)
+			val now = clock.instant()
+			requireExactlyOne(jdbcTemplate.update(
+				"""
+				update model_invocations set status = 'FAILED', provider_request_id = ?, result_metadata = ?::jsonb,
+				 prompt_token_count = ?, completion_token_count = ?, total_token_count = ?, latency_ms = ?, failure_code = ?, finished_at = ?
+				where workspace_id = ? and generation_run_id = ? and id = ? and status = 'RUNNING'
+				""".trimIndent(),
+				metadata?.responseId, objectMapper.writeValueAsString(metadata?.observationAttributes ?: emptyMap<String, String>()),
+				metadata?.promptTokens, metadata?.completionTokens, metadata?.totalTokens, metadata?.latency?.toMillis()?.toInt(),
+				code, Timestamp.from(now), claim.workspaceId, claim.runId, lease.id,
+			), "ArtifactWorkflow model invocation failure was lost")
+			requireExactlyOne(
+				jdbcTemplate.update(
+					"""
+					update generation_workflow_steps
+					set status = 'FAILED', failure_code = ?, finished_at = ?
+					where workspace_id = ? and generation_run_id = ? and id = ? and status = 'RUNNING'
+					""".trimIndent(),
+					code, Timestamp.from(now), claim.workspaceId, claim.runId, lease.stepId,
+				),
+				"ArtifactWorkflow workflow step failure was lost",
+			)
+			failClaimedRun(claim, state, code, now, lease.stepId)
+		}
+	}
+
+	fun failClaim(claim: ClaimedArtifactWorkflowRun, state: ArtifactWorkflowState, code: String) {
+		transactionTemplate.executeWithoutResult {
+			requireClaim(claim)
+			failClaimedRun(claim, state, code, clock.instant())
+		}
+	}
+
+	private fun failClaimedRun(
+		claim: ClaimedArtifactWorkflowRun,
+		state: ArtifactWorkflowState,
+		code: String,
+		now: Instant,
+		stepId: UUID? = null,
+	) {
+		val failed = state.asFailure(code)
+		insertCheckpoint(claim.workspaceId, failed, "FINAL_OUTPUT", now, stepId)
+		if (failed.status == ArtifactWorkflowRunStatus.NEEDS_REVIEW) materializeTerminal(claim.workspaceId, failed, now)
+		val updated = jdbcTemplate.update(
+			"""
+			update generation_runs set status = ?, error_code = ?, transition_version = transition_version + 1,
+			 claimed_by = null, claimed_at = null, heartbeat_at = null, finished_at = ?, updated_at = ?
+			where workspace_id = ? and id = ? and claimed_by = ? and transition_version = ?
+			  and status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
+			""".trimIndent(),
+			failed.status.name, code, Timestamp.from(now), Timestamp.from(now),
+			claim.workspaceId, claim.runId, claim.workerId, claim.transitionVersion,
+		)
+		check(updated == 1) { "ArtifactWorkflow run claim was lost" }
+		artifactRunPersistence.syncWorkflowState(
+			workspaceId = claim.workspaceId,
+			workflowRunId = claim.runId,
+			status = failed.status.toArtifactRunStatus(),
+			errorCode = code,
+			now = now,
+		)
+	}
+
+	fun loadState(workspaceId: UUID, runId: UUID): ArtifactWorkflowState {
+		val payload = jdbcTemplate.query(
+			"select payload::text from generation_artifacts where workspace_id = ? and generation_run_id = ? order by sequence_no desc limit 1",
+			{ rs, _ -> rs.getString(1) }, workspaceId, runId,
+		).firstOrNull() ?: throw ArtifactWorkflowRunNotFoundException(runId)
+		return objectMapper.readValue(payload, ArtifactWorkflowState::class.java)
+	}
+
+	fun loadTiming(workspaceId: UUID, runId: UUID): ArtifactWorkflowRunTimingResponse {
+		val run = jdbcTemplate.query(
+			"""
+			select gr.created_at, gr.started_at, gr.finished_at, gr.model_name,
+			       coalesce(sum(coalesce(mi.total_token_count, 0)), 0),
+			       coalesce(sum(coalesce(mi.latency_ms, 0)), 0)
+			from generation_runs gr
+			left join model_invocations mi on mi.workspace_id = gr.workspace_id and mi.generation_run_id = gr.id
+			where gr.workspace_id = ? and gr.id = ?
+			group by gr.created_at, gr.started_at, gr.finished_at, gr.model_name
+			""".trimIndent(),
+			{ rs, _ ->
+				RunTimingRow(
+					rs.getTimestamp("created_at").toInstant(),
+					rs.getTimestamp("started_at")?.toInstant(),
+					rs.getTimestamp("finished_at")?.toInstant(),
+					rs.getString("model_name"),
+					rs.getLong(5),
+					rs.getLong(6),
+				)
+			},
+			workspaceId, runId,
+		).firstOrNull() ?: throw ArtifactWorkflowRunNotFoundException(runId)
+
+		val steps = jdbcTemplate.query(
+			"""
+			select step_kind, sequence_no, status, started_at, finished_at, failure_code
+			from generation_workflow_steps
+			where workspace_id = ? and generation_run_id = ?
+			order by sequence_no
+			""".trimIndent(),
+			{ rs, _ ->
+				val startedAt = rs.getTimestamp("started_at").toInstant()
+				val finishedAt = rs.getTimestamp("finished_at")?.toInstant()
+				ArtifactWorkflowStepTimingResponse(
+					kind = rs.getString("step_kind"),
+					sequence = rs.getInt("sequence_no"),
+					status = rs.getString("status"),
+					startedAt = startedAt,
+					finishedAt = finishedAt,
+					durationMs = finishedAt?.let { Duration.between(startedAt, it).toMillis().coerceAtLeast(0) },
+					failureCode = rs.getString("failure_code"),
+				)
+			},
+			workspaceId, runId,
+		)
+
+		return ArtifactWorkflowRunTimingResponse(
+			createdAt = run.createdAt,
+			startedAt = run.startedAt,
+			finishedAt = run.finishedAt,
+			steps = steps,
+			model = ArtifactWorkflowModelTimingResponse(run.modelName, run.totalTokens, run.totalLatencyMs),
+		)
+	}
+
+	fun recoverStaleClaims(staleBefore: Instant): Int = transactionTemplate.execute {
+		val now = clock.instant()
+		val candidates = jdbcTemplate.query(
+			"""
+			select workspace_id, id, claimed_by, transition_version
+			from generation_runs
+			where claimed_by is not null and (heartbeat_at is null or heartbeat_at < ?)
+			  and status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
+			order by heartbeat_at nulls first, id
+			for update skip locked
+			""".trimIndent(),
+			{ rs, _ ->
+				StaleArtifactWorkflowClaim(
+					workspaceId = rs.getObject("workspace_id", UUID::class.java),
+					runId = rs.getObject("id", UUID::class.java),
+					workerId = rs.getString("claimed_by"),
+					transitionVersion = rs.getLong("transition_version"),
+				)
+			},
+			Timestamp.from(staleBefore),
+		)
+		candidates.sumOf { candidate ->
+			jdbcTemplate.update(
+				"""
+				update model_invocations
+				set status = 'FAILED', failure_code = 'LEASE_LOST_OUTCOME_UNKNOWN', finished_at = ?
+				where workspace_id = ? and generation_run_id = ? and status = 'RUNNING'
+				""".trimIndent(),
+				Timestamp.from(now),
+				candidate.workspaceId,
+				candidate.runId,
+			)
+			val updated = jdbcTemplate.update(
+				"""
+				update generation_runs
+				set claimed_by = null, claimed_at = null, heartbeat_at = null, next_attempt_at = null,
+				    transition_version = transition_version + 1, updated_at = ?
+				where workspace_id = ? and id = ? and claimed_by = ? and transition_version = ?
+				  and (heartbeat_at is null or heartbeat_at < ?)
+				  and status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
+				""".trimIndent(),
+				Timestamp.from(now),
+				candidate.workspaceId,
+				candidate.runId,
+				candidate.workerId,
+				candidate.transitionVersion,
+				Timestamp.from(staleBefore),
+			)
+			when (updated) {
+				0 -> 0
+				1 -> 1
+				else -> error("Stale generation claim recovery updated $updated rows")
+			}
+		}
+	}
+
+	fun createRetryAttempt(
+		workspaceId: UUID,
+		failedRunId: UUID,
+		newRunId: UUID,
+		attemptNo: Int,
+	): ArtifactWorkflowState = checkNotNull(transactionTemplate.execute {
+		require(attemptNo > 0) { "ArtifactWorkflow retry attempt must be positive" }
+		val source = jdbcTemplate.query(
+			"""
+			select work_session_id, agent_run_id, artifact_run_id, source_scope_id, created_by_user_id, idempotency_key, request_fingerprint,
+				status, provider, model_name, budget_snapshot::text, user_instruction
+			from generation_runs
+			where workspace_id = ? and id = ?
+			for update
+			""".trimIndent(),
+			{ rs, _ ->
+				RetryArtifactWorkflowSource(
+					workSessionId = rs.getObject("work_session_id", UUID::class.java),
+					agentRunId = rs.getObject("agent_run_id", UUID::class.java),
+					artifactRunId = rs.getObject("artifact_run_id", UUID::class.java),
+					sourceScopeId = rs.getObject("source_scope_id", UUID::class.java),
+					createdByUserId = rs.getObject("created_by_user_id", UUID::class.java),
+					idempotencyKey = rs.getString("idempotency_key"),
+					requestFingerprint = rs.getString("request_fingerprint"),
+					status = ArtifactWorkflowRunStatus.valueOf(rs.getString("status")),
+					provider = rs.getString("provider"),
+					modelName = rs.getString("model_name"),
+					budgetJson = rs.getString("budget_snapshot"),
+					instruction = rs.getString("user_instruction"),
+				)
+			},
+			workspaceId,
+			failedRunId,
+		).firstOrNull() ?: throw ArtifactWorkflowRunNotFoundException(failedRunId)
+		check(source.status == ArtifactWorkflowRunStatus.FAILED) { "Linked generation is not retryable" }
+		val packCount = jdbcTemplate.queryForObject(
+			"select count(*) from content_packs where workspace_id = ? and generation_run_id = ?",
+			Int::class.java,
+			workspaceId,
+			failedRunId,
+		) ?: 0
+		check(packCount == 0) { "A materialized generation cannot be retried" }
+		val previous = loadState(workspaceId, failedRunId)
+		val frozenEvidence = previous.evidence.map { evidence ->
+			evidence.copy(
+				id = uuidGenerator.next(),
+				artifactWorkflowRunId = newRunId,
+			)
+		}
+		val initial = ArtifactWorkflowState(
+			runId = newRunId,
+			evidence = frozenEvidence,
+			instruction = source.instruction,
+			status = ArtifactWorkflowRunStatus.QUEUED,
+			workSessionId = source.workSessionId,
+			agentRunId = source.agentRunId,
+		)
+		createRun(
+			ArtifactWorkflowRunReservation(
+				workspaceId = workspaceId,
+				createdByUserId = source.createdByUserId,
+				sourceScopeId = source.sourceScopeId,
+				idempotencyKey = source.idempotencyKey.withAttempt(attemptNo),
+				requestFingerprint = source.requestFingerprint,
+				state = initial,
+				provider = source.provider,
+				modelName = source.modelName,
+				budgetJson = source.budgetJson,
+				workSessionId = source.workSessionId,
+				agentRunId = source.agentRunId,
+				artifactRunId = source.artifactRunId,
+			),
+		)
+	})
+
+	private fun insertEvidence(workspaceId: UUID, evidence: EvidenceSnapshot) {
+		jdbcTemplate.update(
+			"""
+			insert into generation_inputs (id, workspace_id, generation_run_id, writing_block_id, order_index,
+			 source_scope_id, agent_run_id, agent_run_input_id,
+			 source_provider, source_kind, source_label, snapshot_title, snapshot_body, snapshot_excerpt,
+			 original_url, source_created_at, source_updated_at, content_hash, captured_at)
+			values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			""".trimIndent(),
+			evidence.id, workspaceId, evidence.artifactWorkflowRunId, evidence.writingBlockId, evidence.orderIndex,
+			evidence.sourceScopeId, evidence.agentRunId, evidence.agentRunInputId,
+			evidence.sourceProvider.name, evidence.sourceKind, evidence.sourceLabel, evidence.snapshotTitle,
+			evidence.snapshotBody, evidence.snapshotExcerpt, evidence.originalUrl,
+			evidence.sourceCreatedAt?.let(Timestamp::from), evidence.sourceUpdatedAt?.let(Timestamp::from),
+			evidence.contentHash, Timestamp.from(evidence.capturedAt),
+		)
+	}
+
+	private fun insertCheckpoint(workspaceId: UUID, state: ArtifactWorkflowState, type: String, now: Instant, stepId: UUID? = null) {
+		val version = jdbcTemplate.queryForObject(
+			"select coalesce(max(artifact_version), 0) + 1 from generation_artifacts where workspace_id = ? and generation_run_id = ? and artifact_type = ?",
+			Int::class.java, workspaceId, state.runId, type,
+		) ?: 1
+		val sequence = jdbcTemplate.queryForObject(
+			"select coalesce(max(sequence_no), -1) + 1 from generation_artifacts where workspace_id = ? and generation_run_id = ?",
+			Int::class.java, workspaceId, state.runId,
+		) ?: 0
+		jdbcTemplate.update(
+			"insert into generation_artifacts (id, workspace_id, generation_run_id, workflow_step_id, artifact_type, artifact_version, sequence_no, payload, created_at) values (?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?)",
+			uuidGenerator.next(), workspaceId, state.runId, stepId, type, version, sequence,
+			objectMapper.writeValueAsString(state), Timestamp.from(now),
+		)
+	}
+
+	private fun materializeTerminal(workspaceId: UUID, state: ArtifactWorkflowState, now: Instant, userModifiedBy: UUID? = null) {
+		if (jdbcTemplate.queryForObject("select count(*) from content_packs where workspace_id = ? and generation_run_id = ?", Int::class.java, workspaceId, state.runId)!! > 0) return
+		val packId = uuidGenerator.next()
+		val variantId = uuidGenerator.next()
+		val status = if (state.status == ArtifactWorkflowRunStatus.READY) "READY" else "NEEDS_REVIEW"
+		val releaseRequestId = jdbcTemplate.query(
+			"""
+			select request_id
+			from github_release_generation_attempts
+			where workspace_id = ? and generation_run_id = ?
+			""".trimIndent(),
+			{ rs, _ -> rs.getObject("request_id", UUID::class.java) },
+			workspaceId,
+			state.runId,
+		).firstOrNull()
+		jdbcTemplate.update(
+			"""
+			insert into content_packs (
+			 id, workspace_id, generation_run_id, release_request_id, title, status, created_at, updated_at
+			) values (?, ?, ?, ?, ?, ?, ?, ?)
+			""".trimIndent(),
+			packId, workspaceId, state.runId, releaseRequestId,
+			state.sentences.firstOrNull()?.body?.take(120), status, Timestamp.from(now), Timestamp.from(now),
+		)
+		jdbcTemplate.update(
+			"insert into content_variants (id, workspace_id, generation_run_id, content_pack_id, variant_index, status, created_at, updated_at) values (?, ?, ?, ?, 0, ?, ?, ?)",
+			variantId, workspaceId, state.runId, packId, status, Timestamp.from(now), Timestamp.from(now),
+		)
+		val revisions = state.artifacts.flatMap { it.sentences }.plus(state.sentences)
+			.distinctBy { it.revisionId }.groupBy { it.id }
+		state.sentences.sortedBy { it.orderIndex }.forEach { current ->
+			jdbcTemplate.update(
+				"insert into content_variant_sentences (id, workspace_id, generation_run_id, content_variant_id, stable_key, order_index, created_at) values (?, ?, ?, ?, ?, ?, ?)",
+				current.id, workspaceId, state.runId, variantId, current.id.toString(), current.orderIndex, Timestamp.from(now),
+			)
+			revisions.getValue(current.id).sortedBy { it.revisionNumber }.forEach { revision ->
+				jdbcTemplate.update(
+					"""
+					insert into content_variant_sentence_revisions (id, workspace_id, generation_run_id, content_variant_id,
+					 sentence_id, revision_no, origin, body, is_current, created_by_user_id, created_at)
+					values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+					""".trimIndent(),
+					revision.revisionId, workspaceId, state.runId, variantId, current.id, revision.revisionNumber,
+					revision.origin.name, revision.body, revision.revisionId == current.revisionId,
+					userModifiedBy.takeIf { revision.origin.name == "USER_MODIFIED" }, Timestamp.from(now),
+				)
+			}
+		}
+		val reviewArtifacts = state.artifacts.filter { it.kind == WorkflowArtifactKind.REVIEWER_OUTPUT }
+		val materializedSentenceIds = state.sentences.mapTo(mutableSetOf()) { it.id }
+		reviewArtifacts.forEachIndexed { reviewIndex, artifact ->
+			artifact.reviews.filter { it.sentenceId in materializedSentenceIds }.forEach { review ->
+				val sentence = artifact.sentences.single { it.id == review.sentenceId }
+				jdbcTemplate.update(
+					"insert into sentence_evaluations (id, workspace_id, generation_run_id, sentence_id, sentence_revision_id, review_attempt, verdict, reason, created_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+					uuidGenerator.next(), workspaceId, state.runId, sentence.id, sentence.revisionId, reviewIndex + 1,
+					review.verdict.name, review.reason, Timestamp.from(now),
+				)
+			}
+		}
+		state.reviews.filter { it.verdict == ReviewVerdict.SUPPORTED }.forEach { review ->
+			val sentence = state.sentences.single { it.id == review.sentenceId }
+			review.evidenceIds.forEachIndexed { citationIndex, evidenceId ->
+				jdbcTemplate.update(
+					"insert into sentence_citations (id, workspace_id, generation_run_id, content_variant_id, sentence_id, sentence_revision_id, generation_input_id, citation_order, status, created_at) values (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?)",
+					uuidGenerator.next(), workspaceId, state.runId, variantId, sentence.id, sentence.revisionId,
+					evidenceId, citationIndex, Timestamp.from(now),
+				)
+			}
+		}
+		val artifactRevisionId = uuidGenerator.next()
+		jdbcTemplate.update(
+			"""
+			insert into content_variant_revisions (
+			 id, workspace_id, generation_run_id, content_variant_id, revision_no,
+			 lexical_content, is_current, created_at
+			) values (?, ?, ?, ?, 1, ?::jsonb, true, ?)
+			""".trimIndent(),
+			artifactRevisionId, workspaceId, state.runId, variantId,
+			lexicalContentFor(state.sentences).toString(), Timestamp.from(now),
+		)
+		state.sentences.sortedBy { it.orderIndex }.forEach { sentence ->
+			jdbcTemplate.update(
+				"""
+				insert into content_variant_revision_sentences (
+				 id, workspace_id, content_variant_revision_id, generation_run_id,
+				 content_variant_id, sentence_id, sentence_revision_id, order_index
+				) values (?, ?, ?, ?, ?, ?, ?, ?)
+				""".trimIndent(),
+				uuidGenerator.next(), workspaceId, artifactRevisionId, state.runId, variantId,
+				sentence.id, sentence.revisionId, sentence.orderIndex,
+			)
+		}
+	}
+
+	private fun lexicalContentFor(sentences: List<SentenceArtifact>): tools.jackson.databind.JsonNode {
+		val document = objectMapper.createObjectNode()
+		val root = document.putObject("root")
+		val children = root.putArray("children")
+		sentences.sortedBy { it.orderIndex }.forEach { sentence ->
+			val paragraph = children.addObject()
+			val paragraphChildren = paragraph.putArray("children")
+			paragraphChildren.addObject().apply {
+				put("detail", 0)
+				put("format", 0)
+				put("mode", "normal")
+				put("style", "")
+				put("text", sentence.body)
+				put("type", "text")
+				put("version", 1)
+			}
+			paragraph.putNull("direction")
+			paragraph.put("format", "")
+			paragraph.put("indent", 0)
+			paragraph.put("type", "paragraph")
+			paragraph.put("version", 1)
+		}
+		root.putNull("direction")
+		root.put("format", "")
+		root.put("indent", 0)
+		root.put("type", "root")
+		root.put("version", 1)
+		return document
+	}
+
+	private fun requireClaim(claim: ClaimedArtifactWorkflowRun) {
+		val ownedRun = jdbcTemplate.query(
+			"""
+			select id
+			from generation_runs
+			where workspace_id = ? and id = ? and claimed_by = ? and transition_version = ?
+			  and status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
+			for update
+			""".trimIndent(),
+			{ rs, _ -> rs.getObject("id", UUID::class.java) },
+			claim.workspaceId,
+			claim.runId,
+			claim.workerId,
+			claim.transitionVersion,
+		).singleOrNull()
+		check(ownedRun != null) { "ArtifactWorkflow run claim was lost" }
+	}
+
+	private fun requireExactlyOne(updated: Int, message: String) {
+		check(updated == 1) { message }
+	}
+}
+
+private data class StaleArtifactWorkflowClaim(
+	val workspaceId: UUID,
+	val runId: UUID,
+	val workerId: String,
+	val transitionVersion: Long,
+)
+
+private data class RunTimingRow(
+	val createdAt: Instant,
+	val startedAt: Instant?,
+	val finishedAt: Instant?,
+	val modelName: String,
+	val totalTokens: Long,
+	val totalLatencyMs: Long,
+)
+
+private data class RetryArtifactWorkflowSource(
+	val workSessionId: UUID?,
+	val agentRunId: UUID?,
+	val artifactRunId: UUID?,
+	val sourceScopeId: UUID?,
+	val createdByUserId: UUID,
+	val idempotencyKey: String,
+	val requestFingerprint: String,
+	val status: ArtifactWorkflowRunStatus,
+	val provider: String,
+	val modelName: String,
+	val budgetJson: String,
+	val instruction: String?,
+)
+
+private fun String.withAttempt(attemptNo: Int): String =
+	replace(Regex(":attempt:\\d+$"), "") + ":attempt:$attemptNo"
+
+private fun ArtifactWorkflowState.asFailure(code: String): ArtifactWorkflowState = copy(
+	status = if (reviews.isEmpty()) ArtifactWorkflowRunStatus.FAILED else ArtifactWorkflowRunStatus.NEEDS_REVIEW,
+	failureCode = code,
+)
+
+private fun ArtifactWorkflowRunStatus.toArtifactRunStatus(): ArtifactRunStatus = when (this) {
+	ArtifactWorkflowRunStatus.QUEUED -> ArtifactRunStatus.QUEUED
+	ArtifactWorkflowRunStatus.WRITING -> ArtifactRunStatus.WRITING
+	ArtifactWorkflowRunStatus.REVIEWING -> ArtifactRunStatus.REVIEWING
+	ArtifactWorkflowRunStatus.REWRITING -> ArtifactRunStatus.REWRITING
+	ArtifactWorkflowRunStatus.READY -> ArtifactRunStatus.READY
+	ArtifactWorkflowRunStatus.NEEDS_REVIEW -> ArtifactRunStatus.NEEDS_REVIEW
+	ArtifactWorkflowRunStatus.FAILED -> ArtifactRunStatus.FAILED
+}
+
+class ArtifactWorkflowIdempotencyConflictException : IllegalStateException("Idempotency key was reused with different inputs")
+class ArtifactWorkflowRunNotFoundException(val runId: UUID) : IllegalStateException("ArtifactWorkflow run not found")
+
+private val ArtifactWorkflowState.artifactType: String
+	get() = when (artifacts.lastOrNull()?.kind) {
+		WorkflowArtifactKind.WRITER_OUTPUT -> "WRITER_OUTPUT"
+		WorkflowArtifactKind.REVIEWER_OUTPUT, WorkflowArtifactKind.CONFLICT -> "REVIEWER_OUTPUT"
+		WorkflowArtifactKind.REWRITER_OUTPUT -> "REWRITER_OUTPUT"
+		null -> "FINAL_OUTPUT"
+	}

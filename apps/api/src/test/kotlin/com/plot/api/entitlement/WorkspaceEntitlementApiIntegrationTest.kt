@@ -3,10 +3,10 @@ package com.plot.api.entitlement
 import com.plot.api.TestcontainersConfiguration
 import com.plot.api.common.ApiException
 import com.plot.api.dev.DevContext
-import com.plot.api.generation.GenerationPersistence
-import com.plot.api.generation.GenerationRunReservation
-import com.plot.api.generation.GenerationRunStatus
-import com.plot.api.generation.GenerationWorkflowState
+import com.plot.api.artifact.workflow.ArtifactWorkflowPersistence
+import com.plot.api.artifact.workflow.ArtifactWorkflowRunReservation
+import com.plot.api.artifact.workflow.ArtifactWorkflowRunStatus
+import com.plot.api.artifact.workflow.ArtifactWorkflowState
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -36,7 +36,7 @@ class WorkspaceEntitlementApiIntegrationTest {
 	@Autowired private lateinit var mockMvc: MockMvc
 	@Autowired private lateinit var jdbcTemplate: JdbcTemplate
 	@Autowired private lateinit var devContext: DevContext
-	@Autowired private lateinit var persistence: GenerationPersistence
+	@Autowired private lateinit var persistence: ArtifactWorkflowPersistence
 
 	@BeforeEach
 	@AfterEach
@@ -119,7 +119,7 @@ class WorkspaceEntitlementApiIntegrationTest {
 		try {
 			setDevEntitlement("trial", "trialing", "full", "now() + interval '30 days'")
 			repeat(3) {
-				val runId = insertGenerationRun("READY")
+				val runId = insertArtifactWorkflowRun("READY")
 				runIds += runId
 				val packId = UUID.randomUUID()
 				packIds += packId
@@ -134,7 +134,7 @@ class WorkspaceEntitlementApiIntegrationTest {
 					runId,
 				)
 			}
-			repeat(2) { runIds += insertGenerationRun("FAILED") }
+			repeat(2) { runIds += insertArtifactWorkflowRun("FAILED") }
 
 			mockMvc.patch("/api/sessions/${UUID.randomUUID()}") {
 				contentType = MediaType.APPLICATION_JSON
@@ -171,7 +171,7 @@ class WorkspaceEntitlementApiIntegrationTest {
 
 	@Test
 	@Transactional
-	fun failedGenerationReleasesReservedTrialCapacity() {
+	fun failedArtifactWorkflowReleasesReservedTrialCapacity() {
 		val workspaceId = UUID.randomUUID()
 		insertTrialWorkspace(workspaceId)
 		val runIds = List(3) {
@@ -202,7 +202,7 @@ class WorkspaceEntitlementApiIntegrationTest {
 		)
 	}
 
-	private fun insertGenerationRun(status: String): UUID = UUID.randomUUID().also { runId ->
+	private fun insertArtifactWorkflowRun(status: String): UUID = UUID.randomUUID().also { runId ->
 		jdbcTemplate.update(
 			"""
 			insert into generation_runs (
@@ -234,13 +234,13 @@ class WorkspaceEntitlementApiIntegrationTest {
 		)
 	}
 
-	private fun reservation(workspaceId: UUID, runId: UUID) = GenerationRunReservation(
+	private fun reservation(workspaceId: UUID, runId: UUID) = ArtifactWorkflowRunReservation(
 		workspaceId = workspaceId,
 		createdByUserId = devContext.devUserId,
 		sourceScopeId = null,
 		idempotencyKey = "quota-$runId",
 		requestFingerprint = "fingerprint-$runId",
-		state = GenerationWorkflowState(runId, emptyList(), null, GenerationRunStatus.QUEUED),
+		state = ArtifactWorkflowState(runId, emptyList(), null, ArtifactWorkflowRunStatus.QUEUED),
 		provider = "TEST",
 		modelName = "test",
 		budgetJson = "{}",

@@ -3,40 +3,40 @@ package com.plot.api.github
 import com.plot.api.common.WorkspacePrincipal
 import com.plot.api.artifact.run.ArtifactRunPersistence
 import com.plot.api.artifact.run.ArtifactRunStatus
-import com.plot.api.generation.GenerationPersistence
-import com.plot.api.generation.GenerationRunService
-import com.plot.api.generation.GenerationRunNotFoundException
-import com.plot.api.generation.GenerationRunStatus
-import com.plot.api.generation.GenerationWorkflowState
+import com.plot.api.artifact.workflow.ArtifactWorkflowPersistence
+import com.plot.api.artifact.workflow.ArtifactWorkflowRunService
+import com.plot.api.artifact.workflow.ArtifactWorkflowRunNotFoundException
+import com.plot.api.artifact.workflow.ArtifactWorkflowRunStatus
+import com.plot.api.artifact.workflow.ArtifactWorkflowState
 import com.plot.api.routine.AgentRunPersistence
 import java.util.UUID
 import org.springframework.stereotype.Component
 import org.springframework.stereotype.Service
 
-interface GitHubReleaseGenerationGateway {
+interface GitHubReleaseArtifactWorkflowGateway {
 	fun create(
 		principal: WorkspacePrincipal,
 		sourceScopeId: UUID,
 		writingBlockIds: List<UUID>,
 		instruction: String,
 		idempotencyKey: String,
-	): GenerationWorkflowState
+	): ArtifactWorkflowState
 
-	fun load(workspaceId: UUID, runId: UUID): GenerationWorkflowState
+	fun load(workspaceId: UUID, runId: UUID): ArtifactWorkflowState
 }
 
 @Component
-class DefaultGitHubReleaseGenerationGateway(
-	private val generationRunService: GenerationRunService,
-	private val generationPersistence: GenerationPersistence,
-) : GitHubReleaseGenerationGateway {
+class DefaultGitHubReleaseArtifactWorkflowGateway(
+	private val artifactWorkflowRunService: ArtifactWorkflowRunService,
+	private val artifactWorkflowPersistence: ArtifactWorkflowPersistence,
+) : GitHubReleaseArtifactWorkflowGateway {
 	override fun create(
 		principal: WorkspacePrincipal,
 		sourceScopeId: UUID,
 		writingBlockIds: List<UUID>,
 		instruction: String,
 		idempotencyKey: String,
-	): GenerationWorkflowState = generationRunService.createForPrincipal(
+	): ArtifactWorkflowState = artifactWorkflowRunService.createForPrincipal(
 		principal = principal,
 		sourceScopeId = sourceScopeId,
 		writingBlockIds = writingBlockIds,
@@ -44,8 +44,8 @@ class DefaultGitHubReleaseGenerationGateway(
 		idempotencyKey = idempotencyKey,
 	)
 
-	override fun load(workspaceId: UUID, runId: UUID): GenerationWorkflowState =
-		generationPersistence.loadState(workspaceId, runId)
+	override fun load(workspaceId: UUID, runId: UUID): ArtifactWorkflowState =
+		artifactWorkflowPersistence.loadState(workspaceId, runId)
 }
 
 @Service
@@ -54,8 +54,8 @@ class GitHubReleaseDraftOrchestrator(
 	private val scopeResolver: GitHubReleaseScopeResolver,
 	private val rangeResolver: GitHubReleaseRangeResolver,
 	private val evidenceService: GitHubReleaseEvidenceService,
-	private val generationGateway: GitHubReleaseGenerationGateway,
-	private val evidenceGenerationBinder: GitHubReleaseEvidenceGenerationBinder,
+	private val artifactWorkflowGateway: GitHubReleaseArtifactWorkflowGateway,
+	private val evidenceArtifactWorkflowBinder: GitHubReleaseEvidenceArtifactWorkflowBinder,
 	private val agentAdmission: GitHubReleaseAgentAdmission? = null,
 	private val artifactRunPersistence: ArtifactRunPersistence? = null,
 	private val agentRunPersistence: AgentRunPersistence? = null,
@@ -78,7 +78,7 @@ class GitHubReleaseDraftOrchestrator(
 				require(previouslyBound.observationId == request.observationId) {
 					"Bound release evidence observation does not match its request"
 				}
-				startAndLinkGeneration(request, context, principal, previouslyBound, lease)
+				startAndLinkArtifactWorkflow(request, context, principal, previouslyBound, lease)
 				return GitHubReleaseDraftStatus.GENERATING
 			}
 			when (val rangeResult = rangeResolver.resolve(context, request)) {
@@ -124,7 +124,7 @@ class GitHubReleaseDraftOrchestrator(
 						return GitHubReleaseDraftStatus.NO_ACTIVITY
 					}
 					lease.checkpoint()
-					var generation: GenerationWorkflowState? = null
+					var generation: ArtifactWorkflowState? = null
 					var agentRunId: UUID? = null
 					lease.transition { transitionVersion ->
 						if (agentAdmission != null) {
@@ -137,7 +137,7 @@ class GitHubReleaseDraftOrchestrator(
 								idempotencyKey = idempotencyKey(context, request),
 							).id
 						} else {
-							generation = evidenceGenerationBinder.bindAndCreate(
+							generation = evidenceArtifactWorkflowBinder.bindAndCreate(
 								request = request,
 								transitionVersion = transitionVersion,
 								principal = principal,
@@ -151,7 +151,7 @@ class GitHubReleaseDraftOrchestrator(
 					if (agentRunId != null) {
 						persistence.linkAgentRun(request.id, lease.transitionVersion, evidence.observationId, agentRunId)
 					} else {
-						linkGeneration(request, evidence, checkNotNull(generation), lease)
+						linkArtifactWorkflow(request, evidence, checkNotNull(generation), lease)
 					}
 					return GitHubReleaseDraftStatus.GENERATING
 				}
@@ -185,15 +185,15 @@ class GitHubReleaseDraftOrchestrator(
 					}
 					return@forEach
 				}
-				val runId = request.generationRunId ?: return@forEach
-				val generation = generationGateway.load(request.workspaceId, runId)
+				val runId = request.artifactWorkflowRunId ?: return@forEach
+				val generation = artifactWorkflowGateway.load(request.workspaceId, runId)
 				when (generation.status) {
-					GenerationRunStatus.READY, GenerationRunStatus.NEEDS_REVIEW -> persistence.finish(
+					ArtifactWorkflowRunStatus.READY, ArtifactWorkflowRunStatus.NEEDS_REVIEW -> persistence.finish(
 						request.id,
 						request.transitionVersion,
 						GitHubReleaseDraftStatus.READY,
 					)
-					GenerationRunStatus.FAILED -> persistence.finish(
+					ArtifactWorkflowRunStatus.FAILED -> persistence.finish(
 						request.id,
 						request.transitionVersion,
 						GitHubReleaseDraftStatus.FAILED,
@@ -201,7 +201,7 @@ class GitHubReleaseDraftOrchestrator(
 					)
 					else -> Unit
 				}
-			} catch (_: GenerationRunNotFoundException) {
+			} catch (_: ArtifactWorkflowRunNotFoundException) {
 				runCatching {
 					persistence.finish(
 						request.id,
@@ -222,7 +222,7 @@ class GitHubReleaseDraftOrchestrator(
 		}
 	}
 
-	private fun startAndLinkGeneration(
+	private fun startAndLinkArtifactWorkflow(
 		request: GitHubReleaseDraftRequest,
 		context: GitHubReleaseSourceContext,
 		principal: WorkspacePrincipal,
@@ -244,7 +244,7 @@ class GitHubReleaseDraftOrchestrator(
 			persistence.linkAgentRun(request.id, lease.transitionVersion, evidence.observationId, agentRun.id)
 			return
 		}
-		val generation = generationGateway.create(
+		val generation = artifactWorkflowGateway.create(
 			principal = principal,
 			sourceScopeId = context.sourceScopeId,
 			writingBlockIds = evidence.writingBlockIds,
@@ -252,16 +252,16 @@ class GitHubReleaseDraftOrchestrator(
 			idempotencyKey = idempotencyKey(context, request),
 		)
 		lease.checkpoint()
-		linkGeneration(request, evidence, generation, lease)
+		linkArtifactWorkflow(request, evidence, generation, lease)
 	}
 
-	private fun linkGeneration(
+	private fun linkArtifactWorkflow(
 		request: GitHubReleaseDraftRequest,
 		evidence: GitHubReleaseEvidence,
-		generation: GenerationWorkflowState,
+		generation: ArtifactWorkflowState,
 		lease: GitHubReleaseLease,
 	) {
-		persistence.linkGeneration(
+		persistence.linkArtifactWorkflow(
 			request.id,
 			lease.transitionVersion,
 			evidence.observationId,
