@@ -97,9 +97,9 @@ class ArtifactWorkflowRunService(
 				state = initialState,
 				provider = properties.provider.uppercase(),
 				modelName = properties.model?.trim().takeUnless { it.isNullOrBlank() } ?: "not-configured",
-				budgetJson = generationBudgetJson(),
+					budgetJson = artifactWorkflowBudgetJson(),
 				workSessionId = requireNotNull(agentRun.workSessionId) {
-					"Agent run must have a Chat before creating a generation"
+					"Agent run must have a Chat before creating an artifact workflow"
 				},
 				agentRunId = agentRun.id,
 				artifactRunId = artifactRunId,
@@ -140,7 +140,7 @@ class ArtifactWorkflowRunService(
 		return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(canonical.toByteArray()))
 	}
 
-	private fun generationBudgetJson(): String = objectMapper.writeValueAsString(
+	private fun artifactWorkflowBudgetJson(): String = objectMapper.writeValueAsString(
 		mapOf(
 			"maxModelCalls" to properties.maxModelCalls,
 			"maxTotalTokens" to properties.maxTotalTokens,

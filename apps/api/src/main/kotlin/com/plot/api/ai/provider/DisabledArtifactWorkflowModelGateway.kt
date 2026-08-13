@@ -13,6 +13,6 @@ class DisabledArtifactWorkflowModelGateway : ArtifactWorkflowModelGateway {
 
 	private fun notConfigured(): Nothing = throw ArtifactWorkflowModelException(
 		code = ModelFailureCode.MODEL_NOT_CONFIGURED,
-		message = "The generation model is not configured",
+		message = "The artifact workflow model is not configured",
 	)
 }

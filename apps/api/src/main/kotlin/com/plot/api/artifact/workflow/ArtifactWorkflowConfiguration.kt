@@ -75,7 +75,7 @@ class ArtifactWorkflowConfiguration {
 	@Bean(destroyMethod = "shutdown")
 	fun artifactWorkflowHeartbeatExecutor(): ScheduledExecutorService =
 		Executors.newSingleThreadScheduledExecutor { task ->
-			Thread(task, "plot-generation-heartbeat").apply { isDaemon = true }
+			Thread(task, "plot-artifact-workflow-heartbeat").apply { isDaemon = true }
 		}
 
 	@Bean
@@ -91,11 +91,11 @@ class ArtifactWorkflowConfiguration {
 	)
 
 	@Bean
-	fun generationTaskExecutor(): ThreadPoolTaskExecutor = ThreadPoolTaskExecutor().apply {
+	fun artifactWorkflowTaskExecutor(): ThreadPoolTaskExecutor = ThreadPoolTaskExecutor().apply {
 		corePoolSize = 1
 		maxPoolSize = 1
 		queueCapacity = 1
-		setThreadNamePrefix("plot-generation-")
+		setThreadNamePrefix("plot-artifact-workflow-")
 		setStrictEarlyShutdown(true)
 		setWaitForTasksToCompleteOnShutdown(true)
 		setAwaitTerminationSeconds(10)
@@ -103,11 +103,11 @@ class ArtifactWorkflowConfiguration {
 
 	@Bean
 	fun artifactWorkflowRunDispatcher(
-		@Qualifier("generationTaskExecutor") generationTaskExecutor: TaskExecutor,
+		@Qualifier("artifactWorkflowTaskExecutor") artifactWorkflowTaskExecutor: TaskExecutor,
 		worker: ArtifactWorkflowRunWorker,
 		properties: PlotAiProperties,
 	): ArtifactWorkflowRunDispatcher = ArtifactWorkflowRunDispatcher(
-		generationTaskExecutor,
+		artifactWorkflowTaskExecutor,
 		properties.workerEnabled,
 	) { worker.drain() > 0 }
 

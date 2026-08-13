@@ -107,10 +107,10 @@ class ArtifactWorkflowPhysicalAttemptIntegrationTest {
 		)
 
 		assertEquals(true, worker.processOne())
-		observations.assertThat().hasNumberOfObservationsWithNameEqualTo("plot.generation.attempt", 1)
-		observations.assertThat().hasNumberOfObservationsWithNameEqualTo("plot.generation.model_call", 1)
-		observations.assertThat().hasAnObservationWithAKeyValue("plot.generation_run_id", state.runId.toString())
-		observations.assertThat().forAllObservationsWithNameEqualTo("plot.generation.model_call") {
+		observations.assertThat().hasNumberOfObservationsWithNameEqualTo("plot.artifact_workflow.attempt", 1)
+		observations.assertThat().hasNumberOfObservationsWithNameEqualTo("plot.artifact_workflow.model_call", 1)
+		observations.assertThat().hasAnObservationWithAKeyValue("plot.artifact_workflow_run_id", state.runId.toString())
+		observations.assertThat().forAllObservationsWithNameEqualTo("plot.artifact_workflow.model_call") {
 			it.hasParentObservation()
 		}
 	}
@@ -131,7 +131,7 @@ class ArtifactWorkflowPhysicalAttemptIntegrationTest {
 		makeRunnable(state.runId)
 		assertEquals(true, worker.processOne())
 
-		observations.assertThat().hasNumberOfObservationsWithNameEqualTo("plot.generation.attempt", 2)
+		observations.assertThat().hasNumberOfObservationsWithNameEqualTo("plot.artifact_workflow.attempt", 2)
 		observations.assertThat().hasAnObservationWithAKeyValue("plot.outcome", "RETRY_SCHEDULED")
 		observations.assertThat().hasAnObservationWithAKeyValue("plot.outcome", "SUCCEEDED")
 		observations.assertThat().hasAnObservationWithAKeyValue("plot.error_code", "PROVIDER_UNAVAILABLE")

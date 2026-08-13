@@ -606,7 +606,7 @@ class AgentRunPersistence(
 		require(step.sequence == run.currentStep && step.kind == AgentStepKind.ARTIFACT_HANDOFF) {
 			"Agent handoff step is stale"
 		}
-		val generationBelongsToAgent = jdbcTemplate.queryForObject(
+		val artifactWorkflowBelongsToAgent = jdbcTemplate.queryForObject(
 			"select count(*) from generation_runs where workspace_id = ? and id = ? and agent_run_id = ? and work_session_id = ?",
 			Int::class.java,
 			claim.workspaceId,
@@ -614,7 +614,7 @@ class AgentRunPersistence(
 			claim.agentRunId,
 			requireNotNull(run.workSessionId),
 		) == 1
-		if (!generationBelongsToAgent) throw RoutineExecutionStateException("ArtifactWorkflow handoff belongs to another Agent run")
+		if (!artifactWorkflowBelongsToAgent) throw RoutineExecutionStateException("ArtifactWorkflow handoff belongs to another Agent run")
 		val stepUpdated = jdbcTemplate.update(
 			"""
 			update agent_steps
@@ -693,7 +693,7 @@ class AgentRunPersistence(
 			claim.workspaceId,
 			claim.agentRunId,
 		) == 1
-		if (!materialized) throw RoutineExecutionStateException("Agent generation is not materialized")
+		if (!materialized) throw RoutineExecutionStateException("Agent artifact workflow is not materialized")
 		terminalizeAgentRun(claim, AgentRunStatus.SUCCEEDED, null, now)
 	}
 

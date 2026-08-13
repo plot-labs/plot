@@ -246,7 +246,7 @@ class GitHubReleaseDraftRecoveryIntegrationTest {
 			failedRunId,
 			requestId,
 		)
-		persistence.finish(requestId, 2, GitHubReleaseDraftStatus.FAILED, "GENERATION_FAILED")
+		persistence.finish(requestId, 2, GitHubReleaseDraftStatus.FAILED, "AGENT_RUN_FAILED")
 
 		assertFailsWith<PlannedRetryRollback> {
 			TransactionTemplate(transactionManager).executeWithoutResult {

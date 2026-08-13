@@ -88,7 +88,7 @@ describe("ChatWorkspace", () => {
     expect(screen.queryByText("No chats yet. Start with a source-backed request.")).not.toBeInTheDocument();
   });
 
-  it("admits one Chat Agent request and navigates without a direct artifact-generation call", async () => {
+  it("admits one Chat Agent request and navigates without a direct artifact workflow call", async () => {
     mocks.createChatAgentRun.mockResolvedValue(agentRun({ id: "agent-new", chatId: "chat-new" }));
     render(<ChatWorkspace />);
     await waitFor(() => expect(screen.queryByText("Loading sources…")).not.toBeInTheDocument());

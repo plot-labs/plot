@@ -28,7 +28,7 @@ class ArtifactWorkflowRunWorker(
 	private val clock: Clock = Clock.systemUTC(),
 	private val claimTimeout: Duration = Duration.ofMinutes(2),
 	private val retryInitialDelay: Duration = Duration.ofMillis(250),
-	private val workerId: String = "generation-${UUID.randomUUID()}",
+	private val workerId: String = "artifact-workflow-${UUID.randomUUID()}",
 	private val leaseFactory: ArtifactWorkflowRunLeaseFactory = ArtifactWorkflowRunLeaseFactory { claim ->
 		ArtifactWorkflowRunLeaseHandle(
 			ArtifactWorkflowRunLease(claim, renewClaim = { _, _ -> true }, clock),
@@ -48,9 +48,9 @@ class ArtifactWorkflowRunWorker(
 			clock.instant().minus(claimTimeout),
 			includeAgentRuns = agentRunsEnabled,
 		) ?: return false
-		val observation = Observation.start("plot.generation.attempt", observationRegistry)
-			.lowCardinalityKeyValue("plot.operation", "generation")
-			.highCardinalityKeyValue("plot.generation_run_id", claim.runId.toString())
+		val observation = Observation.start("plot.artifact_workflow.attempt", observationRegistry)
+			.lowCardinalityKeyValue("plot.operation", "artifact_workflow")
+			.highCardinalityKeyValue("plot.artifact_workflow_run_id", claim.runId.toString())
 		var outcome = "SUCCEEDED"
 		var processed = true
 		try {
@@ -104,7 +104,7 @@ class ArtifactWorkflowRunWorker(
 		val invocation = runLease.commit { persistence.beginInvocation(claim, role) }
 		attemptObservation.lowCardinalityKeyValue("plot.physical_attempt", invocation.attemptNo.toString())
 		val recording = RecordingGateway(modelGateway)
-		val modelObservation = Observation.start("plot.generation.model_call", observationRegistry)
+		val modelObservation = Observation.start("plot.artifact_workflow.model_call", observationRegistry)
 			.lowCardinalityKeyValue("plot.operation", "model_invocation")
 			.lowCardinalityKeyValue("plot.model_role", role.name)
 			.lowCardinalityKeyValue("plot.physical_attempt", invocation.attemptNo.toString())

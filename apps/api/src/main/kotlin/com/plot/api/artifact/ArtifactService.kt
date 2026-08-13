@@ -1037,7 +1037,7 @@ class ArtifactService(
 		ApiException(HttpStatus.CONFLICT, "STALE_ARTIFACT_REVISION", "Artifact revision is stale", variantId)
 
 	private fun historyCause(revisionNumber: Int, createdByUserId: UUID?): String {
-		if (revisionNumber == 1) return "Initial generation"
+		if (revisionNumber == 1) return "Initial draft"
 		if (createdByUserId == devContext.devUserId) return "Edited by you"
 		val displayName = createdByUserId?.let {
 			jdbcTemplate.query(

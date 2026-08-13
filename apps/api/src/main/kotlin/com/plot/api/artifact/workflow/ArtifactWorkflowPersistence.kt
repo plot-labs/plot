@@ -91,7 +91,7 @@ class ArtifactWorkflowPersistence(
 		}
 		reservation.agentRunId?.let { agentRunId ->
 			val workSessionId = reservation.workSessionId
-				?: throw ApiException(HttpStatus.BAD_REQUEST, "INVALID_SESSION", "Routine Agent generation requires its Chat")
+				?: throw ApiException(HttpStatus.BAD_REQUEST, "INVALID_SESSION", "Routine Agent artifact workflow requires its Chat")
 			val linkedAgent = jdbcTemplate.query(
 				"""
 				select id
@@ -799,7 +799,7 @@ class ArtifactWorkflowPersistence(
 			when (updated) {
 				0 -> 0
 				1 -> 1
-				else -> error("Stale generation claim recovery updated $updated rows")
+				else -> error("Stale artifact workflow claim recovery updated $updated rows")
 			}
 		}
 	}

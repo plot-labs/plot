@@ -298,7 +298,7 @@ class ArtifactApiIntegrationTest {
 			status { isOk() }
 			jsonPath("$.length()") { value(2) }
 			jsonPath("$[0].cause") { value("Edited by you") }
-			jsonPath("$[1].cause") { value("Initial generation") }
+			jsonPath("$[1].cause") { value("Initial draft") }
 			jsonPath("$[0].revisionNumber") { doesNotExist() }
 			jsonPath("$[0].revisionId") { doesNotExist() }
 		}

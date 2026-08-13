@@ -310,7 +310,7 @@ class AgentRunWorker(
 			state.materialized && state.status in setOf(ArtifactRunStatus.READY, ArtifactRunStatus.NEEDS_REVIEW) ->
 				persistence.succeedAgentRun(claim, clock.instant())
 			state.status == ArtifactRunStatus.FAILED ->
-				persistence.failAgentRun(claim, "AGENT_GENERATION_FAILED", clock.instant())
+				persistence.failAgentRun(claim, "AGENT_ARTIFACT_WORKFLOW_FAILED", clock.instant())
 			else -> persistence.releaseAgentClaim(claim, clock.instant().plus(properties.pollDelay), clock.instant())
 		}
 	}

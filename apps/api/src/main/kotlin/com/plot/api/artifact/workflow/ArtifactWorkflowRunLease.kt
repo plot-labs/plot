@@ -26,7 +26,7 @@ class ScheduledArtifactWorkflowRunLeaseFactory(
 ) : ArtifactWorkflowRunLeaseFactory {
 	init {
 		require(!heartbeatInterval.isNegative && !heartbeatInterval.isZero) {
-			"generation heartbeat interval must be positive"
+			"artifact workflow heartbeat interval must be positive"
 		}
 	}
 

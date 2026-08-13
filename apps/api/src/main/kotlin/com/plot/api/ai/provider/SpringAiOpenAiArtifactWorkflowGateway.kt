@@ -33,7 +33,7 @@ object ModelSchemas {
 data class StructuredChatRequest(
 	val role: ModelRole,
 	val prompt: ChangelogPrompt,
-	/** Intentionally empty: generation models are never granted tools. */
+	/** Intentionally empty: artifact workflow models are never granted tools. */
 	val toolCallbacks: List<Nothing> = emptyList(),
 )
 

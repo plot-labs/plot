@@ -842,7 +842,7 @@ class AgentArtifactWorkflowModelGateway : ArtifactWorkflowModelGateway {
 	}
 
 	override fun rewrite(request: RewriteModelRequest): ModelCallResult<TargetedRewriteOutput> =
-		error("Agent generation should not require a rewrite")
+		error("Agent artifact workflow should not require a rewrite")
 
 	fun reset() {
 		calls = 0
