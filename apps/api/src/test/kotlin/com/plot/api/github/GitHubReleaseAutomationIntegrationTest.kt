@@ -287,7 +287,6 @@ class GitHubReleaseAutomationIntegrationTest {
 		val activity = assertNotNull(activityService.latest(fixture.scopeId))
 		assertEquals(ready.id, activity.id)
 		assertEquals(GitHubReleaseDraftStatus.READY, activity.status)
-		assertEquals(artifactWorkflowRunId, activity.artifactWorkflowRunId)
 		assertEquals(artifactId, activity.artifactId)
 
 		// Both a GitHub redelivery and the equivalent release.published event converge

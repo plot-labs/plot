@@ -187,7 +187,6 @@ export interface GitHubReleaseActivity {
   status: GitHubReleaseDraftStatus;
   baseSha: string | null;
   headSha: string | null;
-  generationRunId: string | null;
   artifactId: string | null;
   errorCode: string | null;
   createdAt: string;

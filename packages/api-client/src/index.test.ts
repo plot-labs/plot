@@ -219,9 +219,8 @@ describe("Plot API client", () => {
       status: "FAILED",
       baseSha: "base",
       headSha: "head",
-      generationRunId: null,
       artifactId: null,
-      errorCode: "GENERATION_FAILED",
+      errorCode: "AGENT_RUN_FAILED",
       createdAt: "2026-07-30T00:00:00Z",
       updatedAt: "2026-07-30T00:01:00Z",
     };

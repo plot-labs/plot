@@ -65,7 +65,6 @@ data class GitHubReleaseActivityRecord(
 	val baseSha: String?,
 	val headSha: String?,
 	val boundaryReason: String?,
-	val artifactWorkflowRunId: UUID?,
 	val artifactId: UUID?,
 	val errorCode: String?,
 	val transitionVersion: Long,

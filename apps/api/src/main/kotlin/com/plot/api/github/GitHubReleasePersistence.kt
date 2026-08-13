@@ -799,7 +799,7 @@ status, attempt_count, generation_attempt, transition_version, agent_run_id, gen
 """.trimIndent()
 
 private val activityColumns = """
-r.id, r.source_scope_id, r.tag_name, r.status, r.base_sha, r.head_sha, r.boundary_reason, r.generation_run_id,
+r.id, r.source_scope_id, r.tag_name, r.status, r.base_sha, r.head_sha, r.boundary_reason,
 cp.id as content_pack_id, r.error_code, r.transition_version, r.created_at, r.updated_at
 """.trimIndent()
 
@@ -870,7 +870,6 @@ private fun java.sql.ResultSet.toReleaseActivity(): GitHubReleaseActivityRecord 
 	baseSha = getString("base_sha"),
 	headSha = getString("head_sha"),
 	boundaryReason = getString("boundary_reason"),
-	artifactWorkflowRunId = getObject("generation_run_id", UUID::class.java),
 	artifactId = getObject("content_pack_id", UUID::class.java),
 	errorCode = getString("error_code"),
 	transitionVersion = getLong("transition_version"),

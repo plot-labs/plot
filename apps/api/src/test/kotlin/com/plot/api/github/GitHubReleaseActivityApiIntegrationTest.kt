@@ -80,7 +80,6 @@ class GitHubReleaseActivityApiIntegrationTest {
 				jsonPath("$.status") { value("READY") }
 				jsonPath("$.baseSha") { value("a".repeat(40)) }
 				jsonPath("$.headSha") { value("b".repeat(40)) }
-				jsonPath("$.artifactWorkflowRunId") { value(artifactWorkflowRunId.toString()) }
 				jsonPath("$.artifactId") { value(artifactId.toString()) }
 				jsonPath("$.errorCode") { doesNotExist() }
 				jsonPath("$.createdAt") { value("2026-07-30T00:00:00Z") }
