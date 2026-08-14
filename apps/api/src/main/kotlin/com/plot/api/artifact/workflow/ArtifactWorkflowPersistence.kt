@@ -14,14 +14,15 @@ import com.plot.api.artifact.workflow.model.EvidenceSnapshot
 import com.plot.api.artifact.workflow.model.ReviewVerdict
 import com.plot.api.artifact.workflow.model.SentenceArtifact
 import com.plot.api.routine.AgentToolAccessException
+import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.JooqTransactionExecutor
+import com.plot.api.persistence.SqlRow
 import java.sql.Timestamp
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
-import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.http.HttpStatus
-import org.springframework.transaction.support.TransactionTemplate
 import tools.jackson.databind.ObjectMapper
 
 data class ArtifactWorkflowRunReservation(
@@ -55,9 +56,9 @@ data class ModelInvocationLease(
 )
 
 class ArtifactWorkflowPersistence(
-	private val jdbcTemplate: JdbcTemplate,
+	private val sqlExecutor: JooqSqlExecutor,
 	private val objectMapper: ObjectMapper,
-	private val transactionTemplate: TransactionTemplate,
+	private val transactionExecutor: JooqTransactionExecutor,
 	private val uuidGenerator: UuidGenerator,
 	private val artifactRunPersistence: ArtifactRunPersistence,
 	private val clock: Clock = Clock.systemUTC(),
@@ -68,20 +69,20 @@ class ArtifactWorkflowPersistence(
 		idempotencyKey: String,
 		requestFingerprint: String,
 	): ArtifactWorkflowState? {
-		val existing = jdbcTemplate.query(
+		val existing = sqlExecutor.query(
 			"select id, request_fingerprint from generation_runs where workspace_id = ? and created_by_user_id = ? and idempotency_key = ?",
-			{ rs, _ -> rs.getObject(1, UUID::class.java) to rs.getString(2) },
+			{ rs, _ -> requireNotNull(rs.getObject(1, UUID::class.java)) to requireNotNull(rs.getString(2)) },
 			workspaceId, createdByUserId, idempotencyKey,
 		).firstOrNull() ?: return null
 		if (existing.second != requestFingerprint) throw ArtifactWorkflowIdempotencyConflictException()
 		return loadState(workspaceId, existing.first)
 	}
 
-	fun createRun(reservation: ArtifactWorkflowRunReservation): ArtifactWorkflowState = transactionTemplate.execute {
+	fun createRun(reservation: ArtifactWorkflowRunReservation): ArtifactWorkflowState = transactionExecutor.execute {
 		reservation.workSessionId?.let { sessionId ->
-			val sessionExists = jdbcTemplate.query(
+			val sessionExists = sqlExecutor.query(
 				"select id from work_sessions where workspace_id = ? and id = ? for update",
-				{ rs, _ -> rs.getObject(1, UUID::class.java) },
+				{ rs, _ -> requireNotNull(rs.getObject(1, UUID::class.java)) },
 				reservation.workspaceId,
 				sessionId,
 			).isNotEmpty()
@@ -92,14 +93,14 @@ class ArtifactWorkflowPersistence(
 		reservation.agentRunId?.let { agentRunId ->
 			val workSessionId = reservation.workSessionId
 				?: throw ApiException(HttpStatus.BAD_REQUEST, "INVALID_SESSION", "Routine Agent artifact workflow requires its Chat")
-			val linkedAgent = jdbcTemplate.query(
+			val linkedAgent = sqlExecutor.query(
 				"""
 				select id
 				from agent_runs
 				where workspace_id = ? and id = ? and created_by_user_id = ? and work_session_id = ?
 				for update
 				""".trimIndent(),
-				{ rs, _ -> rs.getObject(1, UUID::class.java) },
+				{ rs, _ -> requireNotNull(rs.getObject(1, UUID::class.java)) },
 				reservation.workspaceId,
 				agentRunId,
 				reservation.createdByUserId,
@@ -108,13 +109,13 @@ class ArtifactWorkflowPersistence(
 			if (!linkedAgent) {
 				throw ApiException(HttpStatus.BAD_REQUEST, "INVALID_AGENT_RUN", "Agent run is unavailable in this workspace")
 			}
-			val expectedSourceCount = jdbcTemplate.queryForObject(
+			val expectedSourceCount = sqlExecutor.queryForObject(
 				"select count(*) from agent_run_sources where workspace_id = ? and agent_run_id = ?",
 				Int::class.java,
 				reservation.workspaceId,
 				agentRunId,
 			) ?: 0
-			val sourceStatuses = jdbcTemplate.query(
+			val sourceStatuses = sqlExecutor.query(
 				"""
 				select scope.status, namespace.status, binding.status, connection.status
 				from agent_run_sources source
@@ -145,9 +146,9 @@ class ArtifactWorkflowPersistence(
 				throw AgentToolAccessException("SOURCE_NOT_READY")
 			}
 		}
-		val existing = jdbcTemplate.query(
+		val existing = sqlExecutor.query(
 			"select id, request_fingerprint from generation_runs where workspace_id = ? and created_by_user_id = ? and idempotency_key = ?",
-			{ rs, _ -> rs.getObject(1, UUID::class.java) to rs.getString(2) },
+			{ rs, _ -> requireNotNull(rs.getObject(1, UUID::class.java)) to requireNotNull(rs.getString(2)) },
 			reservation.workspaceId, reservation.createdByUserId, reservation.idempotencyKey,
 		).firstOrNull()
 		if (existing != null) {
@@ -168,7 +169,7 @@ class ArtifactWorkflowPersistence(
 				now = now,
 			)
 		}
-		val inserted = jdbcTemplate.update(
+		val inserted = sqlExecutor.update(
 			"""
 			insert into generation_runs (
 			 id, workspace_id, work_session_id, agent_run_id, artifact_run_id, source_scope_id, created_by_user_id, idempotency_key, request_fingerprint,
@@ -185,9 +186,9 @@ class ArtifactWorkflowPersistence(
 			Timestamp.from(now), Timestamp.from(now),
 		)
 		if (inserted == 0) {
-			val raced = jdbcTemplate.query(
+			val raced = sqlExecutor.query(
 				"select id, request_fingerprint from generation_runs where workspace_id = ? and created_by_user_id = ? and idempotency_key = ?",
-				{ rs, _ -> rs.getObject(1, UUID::class.java) to rs.getString(2) },
+			{ rs, _ -> requireNotNull(rs.getObject(1, UUID::class.java)) to requireNotNull(rs.getString(2)) },
 				reservation.workspaceId, reservation.createdByUserId, reservation.idempotencyKey,
 			).single()
 			if (raced.second != reservation.requestFingerprint) throw ArtifactWorkflowIdempotencyConflictException()
@@ -196,7 +197,7 @@ class ArtifactWorkflowPersistence(
 		reservation.state.evidence.forEach { insertEvidence(reservation.workspaceId, it) }
 		insertCheckpoint(reservation.workspaceId, reservation.state, "EVIDENCE_SET", now)
 		reservation.workSessionId?.let { sessionId ->
-			val updated = jdbcTemplate.update(
+			val updated = sqlExecutor.update(
 				"update work_sessions set latest_generation_run_id = ?, last_activity_at = ?, updated_at = ? where workspace_id = ? and id = ?",
 				reservation.state.runId,
 				Timestamp.from(now),
@@ -210,7 +211,7 @@ class ArtifactWorkflowPersistence(
 	}
 
 	private fun requireTrialArtifactWorkflowCapacity(workspaceId: UUID) {
-		val entitlement = jdbcTemplate.query(
+		val entitlement = sqlExecutor.query(
 			"select plan, entitlement_status, access_mode from workspaces where id = ? for update",
 			{ rs, _ -> Triple(rs.getString(1), rs.getString(2), rs.getString(3)) },
 			workspaceId,
@@ -224,7 +225,7 @@ class ArtifactWorkflowPersistence(
 			)
 		}
 		if (entitlement.first != "trial" || entitlement.second != "trialing") return
-		val occupiedPackSlotCount = jdbcTemplate.queryForObject(
+		val occupiedPackSlotCount = sqlExecutor.queryForObject(
 			"""
 			select
 			  (select count(*) from content_packs where workspace_id = ?)
@@ -259,8 +260,8 @@ class ArtifactWorkflowPersistence(
 		workerId: String,
 		staleBefore: Instant,
 		includeAgentRuns: Boolean = true,
-	): ClaimedArtifactWorkflowRun? = transactionTemplate.execute {
-		val row = jdbcTemplate.query(
+	): ClaimedArtifactWorkflowRun? = transactionExecutor.execute {
+		val row = sqlExecutor.query(
 			"""
 			select workspace_id, id, transition_version
 			from generation_runs
@@ -282,12 +283,12 @@ class ArtifactWorkflowPersistence(
 			for update skip locked
 			limit 1
 			""".trimIndent(),
-			{ rs, _ -> Triple(rs.getObject(1, UUID::class.java), rs.getObject(2, UUID::class.java), rs.getLong(3)) },
+			{ rs, _ -> Triple(requireNotNull(rs.getObject(1, UUID::class.java)), requireNotNull(rs.getObject(2, UUID::class.java)), rs.getLong(3)) },
 			includeAgentRuns,
 			Timestamp.from(staleBefore),
 		).firstOrNull() ?: return@execute null
 		val now = clock.instant()
-		val updated = jdbcTemplate.update(
+		val updated = sqlExecutor.update(
 			"""
 			update generation_runs
 			set claimed_by = ?, claimed_at = ?, heartbeat_at = ?,
@@ -306,9 +307,9 @@ class ArtifactWorkflowPersistence(
 		sourceScopeId: UUID,
 		now: Instant,
 		errorCode: String = "SOURCE_ACCESS_LOST",
-	): Int = transactionTemplate.execute {
+	): Int = transactionExecutor.execute {
 		require(errorCode.isNotBlank()) { "ArtifactWorkflow fence error code is required" }
-		jdbcTemplate.update(
+		sqlExecutor.update(
 			"""
 			update model_invocations
 			set status = 'FAILED', failure_code = ?, finished_at = ?
@@ -325,7 +326,7 @@ class ArtifactWorkflowPersistence(
 			workspaceId,
 			sourceScopeId,
 		)
-		jdbcTemplate.update(
+		sqlExecutor.update(
 			"""
 			update generation_workflow_steps
 			set status = 'FAILED', failure_code = ?, finished_at = ?
@@ -342,7 +343,7 @@ class ArtifactWorkflowPersistence(
 			workspaceId,
 			sourceScopeId,
 		)
-		jdbcTemplate.update(
+		sqlExecutor.update(
 			"""
 			update generation_runs
 			set status = 'FAILED', error_code = ?,
@@ -360,7 +361,7 @@ class ArtifactWorkflowPersistence(
 		)
 	}
 
-	fun renewClaim(claim: ClaimedArtifactWorkflowRun, now: Instant): Boolean = jdbcTemplate.update(
+	fun renewClaim(claim: ClaimedArtifactWorkflowRun, now: Instant): Boolean = sqlExecutor.update(
 		"""
 		update generation_runs
 		set heartbeat_at = ?, updated_at = ?
@@ -375,9 +376,9 @@ class ArtifactWorkflowPersistence(
 		claim.transitionVersion,
 	) == 1
 
-	fun beginInvocation(claim: ClaimedArtifactWorkflowRun, role: ModelRole): ModelInvocationLease = transactionTemplate.execute {
+	fun beginInvocation(claim: ClaimedArtifactWorkflowRun, role: ModelRole): ModelInvocationLease = transactionExecutor.execute {
 		requireClaim(claim)
-		val currentStep = jdbcTemplate.query(
+		val currentStep = sqlExecutor.query(
 			"""
 			select id, sequence_no
 			from generation_workflow_steps
@@ -394,21 +395,21 @@ class ArtifactWorkflowPersistence(
 		val invocationId = uuidGenerator.next()
 		val now = clock.instant()
 		if (currentStep == null) {
-			val sequence = jdbcTemplate.queryForObject(
+			val sequence = sqlExecutor.queryForObject(
 				"select coalesce(max(sequence_no), -1) + 1 from generation_workflow_steps where workspace_id = ? and generation_run_id = ?",
 				Int::class.java, claim.workspaceId, claim.runId,
 			) ?: 0
-			callIndex = jdbcTemplate.queryForObject(
+			callIndex = sqlExecutor.queryForObject(
 				"select coalesce(max(logical_call_index), -1) + 1 from model_invocations where workspace_id = ? and generation_run_id = ?",
 				Int::class.java, claim.workspaceId, claim.runId,
 			) ?: 0
 			stepId = uuidGenerator.next()
 			attemptNo = 1
-			val semanticAttempt = jdbcTemplate.queryForObject(
+			val semanticAttempt = sqlExecutor.queryForObject(
 				"select semantic_rewrite_attempt from generation_runs where workspace_id = ? and id = ?",
 				Int::class.java, claim.workspaceId, claim.runId,
 			) ?: 0
-			requireExactlyOne(jdbcTemplate.update(
+			requireExactlyOne(sqlExecutor.update(
 				"""
 				insert into generation_workflow_steps (id, workspace_id, generation_run_id, step_kind, sequence_no,
 				 semantic_attempt, status, started_at, created_at)
@@ -418,8 +419,8 @@ class ArtifactWorkflowPersistence(
 				Timestamp.from(now), Timestamp.from(now),
 			), "ArtifactWorkflow workflow step was not inserted")
 		} else {
-			stepId = currentStep.first
-			val invocationSequence = jdbcTemplate.queryForMap(
+			stepId = requireNotNull(currentStep.first)
+			val invocationSequence = sqlExecutor.queryForMap(
 				"""
 				select min(logical_call_index) as logical_call_index,
 				       coalesce(max(attempt_no), 0) + 1 as attempt_no
@@ -433,11 +434,11 @@ class ArtifactWorkflowPersistence(
 			callIndex = (invocationSequence["logical_call_index"] as Number).toInt()
 			attemptNo = (invocationSequence["attempt_no"] as Number).toInt()
 		}
-		val providerModel = jdbcTemplate.queryForMap(
+		val providerModel = sqlExecutor.queryForMap(
 			"select provider, model_name from generation_runs where workspace_id = ? and id = ?",
 			claim.workspaceId, claim.runId,
 		)
-		requireExactlyOne(jdbcTemplate.update(
+		requireExactlyOne(sqlExecutor.update(
 			"""
 			insert into model_invocations (id, workspace_id, generation_run_id, workflow_step_id, role,
 			 logical_call_index, attempt_no, status, provider, model_name, started_at, created_at)
@@ -448,7 +449,7 @@ class ArtifactWorkflowPersistence(
 		), "ArtifactWorkflow model invocation was not inserted")
 		val visibleStatus = if (role == ModelRole.WRITER) "WRITING" else if (role == ModelRole.REVIEWER) "REVIEWING" else "REWRITING"
 		requireExactlyOne(
-			jdbcTemplate.update(
+			sqlExecutor.update(
 				"""
 				update generation_runs
 				set status = ?, started_at = coalesce(started_at, ?), heartbeat_at = ?, updated_at = ?
@@ -476,11 +477,11 @@ class ArtifactWorkflowPersistence(
 		nextAttemptAt: Instant,
 		metadata: ModelCallMetadata? = null,
 	) {
-		transactionTemplate.executeWithoutResult {
+		transactionExecutor.executeWithoutResult {
 			requireClaim(claim)
 			val now = clock.instant()
 			requireExactlyOne(
-				jdbcTemplate.update(
+				sqlExecutor.update(
 					"""
 					update model_invocations
 					set status = 'FAILED', provider_request_id = ?, result_metadata = ?::jsonb,
@@ -503,7 +504,7 @@ class ArtifactWorkflowPersistence(
 				"ArtifactWorkflow model invocation retry was lost",
 			)
 			requireExactlyOne(
-				jdbcTemplate.update(
+				sqlExecutor.update(
 					"""
 					update generation_runs
 					set next_attempt_at = ?, transition_version = transition_version + 1,
@@ -524,7 +525,7 @@ class ArtifactWorkflowPersistence(
 	}
 
 	fun budgetFailureCode(claim: ClaimedArtifactWorkflowRun): String? {
-		val row = jdbcTemplate.queryForMap(
+		val row = sqlExecutor.queryForMap(
 			"""
 			select (budget_snapshot ->> 'maxModelCalls')::integer as max_calls,
 			       (budget_snapshot ->> 'maxTotalTokens')::bigint as max_tokens,
@@ -534,11 +535,11 @@ class ArtifactWorkflowPersistence(
 			""".trimIndent(),
 			claim.workspaceId, claim.runId, claim.workerId,
 		)
-		val calls = jdbcTemplate.queryForObject(
+		val calls = sqlExecutor.queryForObject(
 			"select count(*) from model_invocations where workspace_id = ? and generation_run_id = ?",
 			Int::class.java, claim.workspaceId, claim.runId,
 		) ?: 0
-		val tokens = jdbcTemplate.queryForObject(
+		val tokens = sqlExecutor.queryForObject(
 			"select coalesce(sum(total_token_count), 0) from model_invocations where workspace_id = ? and generation_run_id = ?",
 			Long::class.java, claim.workspaceId, claim.runId,
 		) ?: 0L
@@ -560,10 +561,10 @@ class ArtifactWorkflowPersistence(
 		state: ArtifactWorkflowState,
 		metadata: ModelCallMetadata?,
 	) {
-		transactionTemplate.executeWithoutResult {
+		transactionExecutor.executeWithoutResult {
 			requireClaim(claim)
 			val now = clock.instant()
-			requireExactlyOne(jdbcTemplate.update(
+			requireExactlyOne(sqlExecutor.update(
 				"""
 				update model_invocations set status = 'SUCCEEDED', provider_request_id = ?, result_metadata = ?::jsonb,
 				 prompt_token_count = ?, completion_token_count = ?, total_token_count = ?, latency_ms = ?, finished_at = ?
@@ -574,7 +575,7 @@ class ArtifactWorkflowPersistence(
 				metadata?.latency?.toMillis()?.toInt(), Timestamp.from(now), claim.workspaceId, claim.runId, lease.id,
 			), "ArtifactWorkflow model invocation completion was lost")
 			requireExactlyOne(
-				jdbcTemplate.update(
+				sqlExecutor.update(
 					"""
 					update generation_workflow_steps
 					set status = 'SUCCEEDED', finished_at = ?
@@ -590,7 +591,7 @@ class ArtifactWorkflowPersistence(
 				materializeTerminal(claim.workspaceId, state, now)
 			}
 			val terminal = state.status in setOf(ArtifactWorkflowRunStatus.READY, ArtifactWorkflowRunStatus.NEEDS_REVIEW, ArtifactWorkflowRunStatus.FAILED)
-			val updated = jdbcTemplate.update(
+			val updated = sqlExecutor.update(
 				"""
 				update generation_runs set status = ?, semantic_rewrite_attempt = ?, transition_version = transition_version + 1,
 				 claimed_by = null, claimed_at = null, heartbeat_at = null, error_code = ?,
@@ -619,10 +620,10 @@ class ArtifactWorkflowPersistence(
 		code: String,
 		metadata: ModelCallMetadata? = null,
 	) {
-		transactionTemplate.executeWithoutResult {
+		transactionExecutor.executeWithoutResult {
 			requireClaim(claim)
 			val now = clock.instant()
-			requireExactlyOne(jdbcTemplate.update(
+			requireExactlyOne(sqlExecutor.update(
 				"""
 				update model_invocations set status = 'FAILED', provider_request_id = ?, result_metadata = ?::jsonb,
 				 prompt_token_count = ?, completion_token_count = ?, total_token_count = ?, latency_ms = ?, failure_code = ?, finished_at = ?
@@ -633,7 +634,7 @@ class ArtifactWorkflowPersistence(
 				code, Timestamp.from(now), claim.workspaceId, claim.runId, lease.id,
 			), "ArtifactWorkflow model invocation failure was lost")
 			requireExactlyOne(
-				jdbcTemplate.update(
+				sqlExecutor.update(
 					"""
 					update generation_workflow_steps
 					set status = 'FAILED', failure_code = ?, finished_at = ?
@@ -648,7 +649,7 @@ class ArtifactWorkflowPersistence(
 	}
 
 	fun failClaim(claim: ClaimedArtifactWorkflowRun, state: ArtifactWorkflowState, code: String) {
-		transactionTemplate.executeWithoutResult {
+		transactionExecutor.executeWithoutResult {
 			requireClaim(claim)
 			failClaimedRun(claim, state, code, clock.instant())
 		}
@@ -664,7 +665,7 @@ class ArtifactWorkflowPersistence(
 		val failed = state.asFailure(code)
 		insertCheckpoint(claim.workspaceId, failed, "FINAL_OUTPUT", now, stepId)
 		if (failed.status == ArtifactWorkflowRunStatus.NEEDS_REVIEW) materializeTerminal(claim.workspaceId, failed, now)
-		val updated = jdbcTemplate.update(
+		val updated = sqlExecutor.update(
 			"""
 			update generation_runs set status = ?, error_code = ?, transition_version = transition_version + 1,
 			 claimed_by = null, claimed_at = null, heartbeat_at = null, finished_at = ?, updated_at = ?
@@ -685,7 +686,7 @@ class ArtifactWorkflowPersistence(
 	}
 
 	fun loadState(workspaceId: UUID, runId: UUID): ArtifactWorkflowState {
-		val payload = jdbcTemplate.query(
+		val payload = sqlExecutor.query(
 			"select payload::text from generation_artifacts where workspace_id = ? and generation_run_id = ? order by sequence_no desc limit 1",
 			{ rs, _ -> rs.getString(1) }, workspaceId, runId,
 		).firstOrNull() ?: throw ArtifactWorkflowRunNotFoundException(runId)
@@ -693,7 +694,7 @@ class ArtifactWorkflowPersistence(
 	}
 
 	fun loadTiming(workspaceId: UUID, runId: UUID): ArtifactWorkflowRunTimingResponse {
-		val run = jdbcTemplate.query(
+		val run = sqlExecutor.query(
 			"""
 			select gr.created_at, gr.started_at, gr.finished_at, gr.model_name,
 			       coalesce(sum(coalesce(mi.total_token_count, 0)), 0),
@@ -704,11 +705,11 @@ class ArtifactWorkflowPersistence(
 			group by gr.created_at, gr.started_at, gr.finished_at, gr.model_name
 			""".trimIndent(),
 			{ rs, _ ->
-				RunTimingRow(
-					rs.getTimestamp("created_at").toInstant(),
+					RunTimingRow(
+						requireNotNull(rs.getTimestamp("created_at")).toInstant(),
 					rs.getTimestamp("started_at")?.toInstant(),
 					rs.getTimestamp("finished_at")?.toInstant(),
-					rs.getString("model_name"),
+						requireNotNull(rs.getString("model_name")),
 					rs.getLong(5),
 					rs.getLong(6),
 				)
@@ -716,7 +717,7 @@ class ArtifactWorkflowPersistence(
 			workspaceId, runId,
 		).firstOrNull() ?: throw ArtifactWorkflowRunNotFoundException(runId)
 
-		val steps = jdbcTemplate.query(
+		val steps = sqlExecutor.query(
 			"""
 			select step_kind, sequence_no, status, started_at, finished_at, failure_code
 			from generation_workflow_steps
@@ -724,12 +725,12 @@ class ArtifactWorkflowPersistence(
 			order by sequence_no
 			""".trimIndent(),
 			{ rs, _ ->
-				val startedAt = rs.getTimestamp("started_at").toInstant()
+					val startedAt = requireNotNull(rs.getTimestamp("started_at")).toInstant()
 				val finishedAt = rs.getTimestamp("finished_at")?.toInstant()
 				ArtifactWorkflowStepTimingResponse(
-					kind = rs.getString("step_kind"),
+						kind = requireNotNull(rs.getString("step_kind")),
 					sequence = rs.getInt("sequence_no"),
-					status = rs.getString("status"),
+						status = requireNotNull(rs.getString("status")),
 					startedAt = startedAt,
 					finishedAt = finishedAt,
 					durationMs = finishedAt?.let { Duration.between(startedAt, it).toMillis().coerceAtLeast(0) },
@@ -748,9 +749,9 @@ class ArtifactWorkflowPersistence(
 		)
 	}
 
-	fun recoverStaleClaims(staleBefore: Instant): Int = transactionTemplate.execute {
+	fun recoverStaleClaims(staleBefore: Instant): Int = transactionExecutor.execute {
 		val now = clock.instant()
-		val candidates = jdbcTemplate.query(
+		val candidates = sqlExecutor.query(
 			"""
 			select workspace_id, id, claimed_by, transition_version
 			from generation_runs
@@ -761,16 +762,16 @@ class ArtifactWorkflowPersistence(
 			""".trimIndent(),
 			{ rs, _ ->
 				StaleArtifactWorkflowClaim(
-					workspaceId = rs.getObject("workspace_id", UUID::class.java),
-					runId = rs.getObject("id", UUID::class.java),
-					workerId = rs.getString("claimed_by"),
+						workspaceId = requireNotNull(rs.getObject("workspace_id", UUID::class.java)),
+						runId = requireNotNull(rs.getObject("id", UUID::class.java)),
+						workerId = requireNotNull(rs.getString("claimed_by")),
 					transitionVersion = rs.getLong("transition_version"),
 				)
 			},
 			Timestamp.from(staleBefore),
 		)
 		candidates.sumOf { candidate ->
-			jdbcTemplate.update(
+			sqlExecutor.update(
 				"""
 				update model_invocations
 				set status = 'FAILED', failure_code = 'LEASE_LOST_OUTCOME_UNKNOWN', finished_at = ?
@@ -780,7 +781,7 @@ class ArtifactWorkflowPersistence(
 				candidate.workspaceId,
 				candidate.runId,
 			)
-			val updated = jdbcTemplate.update(
+			val updated = sqlExecutor.update(
 				"""
 				update generation_runs
 				set claimed_by = null, claimed_at = null, heartbeat_at = null, next_attempt_at = null,
@@ -805,7 +806,7 @@ class ArtifactWorkflowPersistence(
 	}
 
 	private fun insertEvidence(workspaceId: UUID, evidence: EvidenceSnapshot) {
-		jdbcTemplate.update(
+		sqlExecutor.update(
 			"""
 			insert into generation_inputs (id, workspace_id, generation_run_id, writing_block_id, order_index,
 			 source_scope_id, agent_run_id, agent_run_input_id,
@@ -823,15 +824,15 @@ class ArtifactWorkflowPersistence(
 	}
 
 	private fun insertCheckpoint(workspaceId: UUID, state: ArtifactWorkflowState, type: String, now: Instant, stepId: UUID? = null) {
-		val version = jdbcTemplate.queryForObject(
+		val version = sqlExecutor.queryForObject(
 			"select coalesce(max(artifact_version), 0) + 1 from generation_artifacts where workspace_id = ? and generation_run_id = ? and artifact_type = ?",
 			Int::class.java, workspaceId, state.runId, type,
 		) ?: 1
-		val sequence = jdbcTemplate.queryForObject(
+		val sequence = sqlExecutor.queryForObject(
 			"select coalesce(max(sequence_no), -1) + 1 from generation_artifacts where workspace_id = ? and generation_run_id = ?",
 			Int::class.java, workspaceId, state.runId,
 		) ?: 0
-		jdbcTemplate.update(
+		sqlExecutor.update(
 			"insert into generation_artifacts (id, workspace_id, generation_run_id, workflow_step_id, artifact_type, artifact_version, sequence_no, payload, created_at) values (?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?)",
 			uuidGenerator.next(), workspaceId, state.runId, stepId, type, version, sequence,
 			objectMapper.writeValueAsString(state), Timestamp.from(now),
@@ -839,11 +840,11 @@ class ArtifactWorkflowPersistence(
 	}
 
 	private fun materializeTerminal(workspaceId: UUID, state: ArtifactWorkflowState, now: Instant, userModifiedBy: UUID? = null) {
-		if (jdbcTemplate.queryForObject("select count(*) from content_packs where workspace_id = ? and generation_run_id = ?", Int::class.java, workspaceId, state.runId)!! > 0) return
+		if (sqlExecutor.queryForObject("select count(*) from content_packs where workspace_id = ? and generation_run_id = ?", Int::class.java, workspaceId, state.runId)!! > 0) return
 		val packId = uuidGenerator.next()
 		val variantId = uuidGenerator.next()
 		val status = if (state.status == ArtifactWorkflowRunStatus.READY) "READY" else "NEEDS_REVIEW"
-		val releaseRequestId = jdbcTemplate.query(
+		val releaseRequestId = sqlExecutor.query(
 			"""
 			select request_id
 			from github_release_generation_attempts
@@ -853,7 +854,7 @@ class ArtifactWorkflowPersistence(
 			workspaceId,
 			state.runId,
 		).firstOrNull()
-		jdbcTemplate.update(
+		sqlExecutor.update(
 			"""
 			insert into content_packs (
 			 id, workspace_id, generation_run_id, release_request_id, title, status, created_at, updated_at
@@ -862,19 +863,19 @@ class ArtifactWorkflowPersistence(
 			packId, workspaceId, state.runId, releaseRequestId,
 			state.sentences.firstOrNull()?.body?.take(120), status, Timestamp.from(now), Timestamp.from(now),
 		)
-		jdbcTemplate.update(
+		sqlExecutor.update(
 			"insert into content_variants (id, workspace_id, generation_run_id, content_pack_id, variant_index, status, created_at, updated_at) values (?, ?, ?, ?, 0, ?, ?, ?)",
 			variantId, workspaceId, state.runId, packId, status, Timestamp.from(now), Timestamp.from(now),
 		)
 		val revisions = state.artifacts.flatMap { it.sentences }.plus(state.sentences)
 			.distinctBy { it.revisionId }.groupBy { it.id }
 		state.sentences.sortedBy { it.orderIndex }.forEach { current ->
-			jdbcTemplate.update(
+			sqlExecutor.update(
 				"insert into content_variant_sentences (id, workspace_id, generation_run_id, content_variant_id, stable_key, order_index, created_at) values (?, ?, ?, ?, ?, ?, ?)",
 				current.id, workspaceId, state.runId, variantId, current.id.toString(), current.orderIndex, Timestamp.from(now),
 			)
 			revisions.getValue(current.id).sortedBy { it.revisionNumber }.forEach { revision ->
-				jdbcTemplate.update(
+				sqlExecutor.update(
 					"""
 					insert into content_variant_sentence_revisions (id, workspace_id, generation_run_id, content_variant_id,
 					 sentence_id, revision_no, origin, body, is_current, created_by_user_id, created_at)
@@ -891,7 +892,7 @@ class ArtifactWorkflowPersistence(
 		reviewArtifacts.forEachIndexed { reviewIndex, artifact ->
 			artifact.reviews.filter { it.sentenceId in materializedSentenceIds }.forEach { review ->
 				val sentence = artifact.sentences.single { it.id == review.sentenceId }
-				jdbcTemplate.update(
+				sqlExecutor.update(
 					"insert into sentence_evaluations (id, workspace_id, generation_run_id, sentence_id, sentence_revision_id, review_attempt, verdict, reason, created_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
 					uuidGenerator.next(), workspaceId, state.runId, sentence.id, sentence.revisionId, reviewIndex + 1,
 					review.verdict.name, review.reason, Timestamp.from(now),
@@ -901,7 +902,7 @@ class ArtifactWorkflowPersistence(
 		state.reviews.filter { it.verdict == ReviewVerdict.SUPPORTED }.forEach { review ->
 			val sentence = state.sentences.single { it.id == review.sentenceId }
 			review.evidenceIds.forEachIndexed { citationIndex, evidenceId ->
-				jdbcTemplate.update(
+				sqlExecutor.update(
 					"insert into sentence_citations (id, workspace_id, generation_run_id, content_variant_id, sentence_id, sentence_revision_id, generation_input_id, citation_order, status, created_at) values (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?)",
 					uuidGenerator.next(), workspaceId, state.runId, variantId, sentence.id, sentence.revisionId,
 					evidenceId, citationIndex, Timestamp.from(now),
@@ -909,7 +910,7 @@ class ArtifactWorkflowPersistence(
 			}
 		}
 		val artifactRevisionId = uuidGenerator.next()
-		jdbcTemplate.update(
+		sqlExecutor.update(
 			"""
 			insert into content_variant_revisions (
 			 id, workspace_id, generation_run_id, content_variant_id, revision_no,
@@ -920,7 +921,7 @@ class ArtifactWorkflowPersistence(
 			lexicalContentFor(state.sentences).toString(), Timestamp.from(now),
 		)
 		state.sentences.sortedBy { it.orderIndex }.forEach { sentence ->
-			jdbcTemplate.update(
+			sqlExecutor.update(
 				"""
 				insert into content_variant_revision_sentences (
 				 id, workspace_id, content_variant_revision_id, generation_run_id,
@@ -964,7 +965,7 @@ class ArtifactWorkflowPersistence(
 	}
 
 	private fun requireClaim(claim: ClaimedArtifactWorkflowRun) {
-		val ownedRun = jdbcTemplate.query(
+		val ownedRun = sqlExecutor.query(
 			"""
 			select id
 			from generation_runs

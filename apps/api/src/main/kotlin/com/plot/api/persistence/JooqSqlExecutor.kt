@@ -6,6 +6,7 @@ import java.time.OffsetDateTime
 import org.jooq.DSLContext
 import org.jooq.Record
 import org.springframework.stereotype.Component
+import org.springframework.transaction.annotation.Transactional
 
 /**
  * Small bind-safe adapter for legacy SQL-shaped persistence code.
@@ -41,6 +42,29 @@ open class JooqSqlExecutor(
 		mapper: (SqlRow, Int) -> T,
 		vararg bindings: Any?,
 	): T? = query(sql, mapper, *bindings).firstOrNull()
+
+	open fun queryForMap(sql: String, vararg bindings: Any?): Map<String, Any?> {
+		val row = dsl.fetch(sql, *bindings).firstOrNull()
+			?: error("Expected one SQL row")
+		return row.fields().associate { field -> field.name to row.get(field)?.normalizeSqlValue() }
+	}
+}
+
+private fun Any.normalizeSqlValue(): Any = when (this) {
+	is OffsetDateTime -> Timestamp.from(toInstant())
+	is Instant -> Timestamp.from(this)
+	else -> this
+}
+
+@Component
+class JooqTransactionExecutor {
+	@Transactional
+	fun <T> execute(action: () -> T): T = action()
+
+	@Transactional
+	fun executeWithoutResult(action: () -> Unit) {
+		action()
+	}
 }
 
 class SqlRow internal constructor(
