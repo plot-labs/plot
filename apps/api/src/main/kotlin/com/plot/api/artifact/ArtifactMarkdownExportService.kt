@@ -1,10 +1,10 @@
 package com.plot.api.artifact
 
-import com.plot.api.generation.model.EvidenceSnapshot
-import com.plot.api.generation.model.ExportSentence
-import com.plot.api.generation.model.ExportSentenceStatus
-import com.plot.api.generation.model.ExportSource
-import com.plot.api.generation.model.MarkdownExport
+import com.plot.api.artifact.workflow.model.EvidenceSnapshot
+import com.plot.api.artifact.workflow.model.ExportSentence
+import com.plot.api.artifact.workflow.model.ExportSentenceStatus
+import com.plot.api.artifact.workflow.model.ExportSource
+import com.plot.api.artifact.workflow.model.MarkdownExport
 import java.net.URI
 import org.springframework.stereotype.Service
 

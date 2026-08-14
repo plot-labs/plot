@@ -1,5 +1,7 @@
 package com.plot.api.worksession
 
+import com.plot.api.routine.ChatAgentAdmissionService
+import com.plot.api.routine.dto.ChatAgentRunResponse
 import com.plot.api.worksession.dto.CreateWorkSessionRequest
 import com.plot.api.worksession.dto.UpdateWorkSessionRequest
 import com.plot.api.worksession.dto.WorkSessionResponse
@@ -16,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController
 @RequestMapping("/api/sessions")
 class WorkSessionController(
 	private val workSessionService: WorkSessionService,
+	private val chatAgentAdmissionService: ChatAgentAdmissionService,
 ) {
 
 	@GetMapping
@@ -23,8 +26,8 @@ class WorkSessionController(
 		return workSessionService.list()
 	}
 
-	@GetMapping("/{id}/generations")
-	fun listGenerations(@PathVariable id: UUID) = workSessionService.listGenerations(id)
+	@GetMapping("/{id}/agent-runs")
+	fun listAgentRuns(@PathVariable id: UUID): List<ChatAgentRunResponse> = chatAgentAdmissionService.listForChat(id)
 
 	@PostMapping
 	fun create(@RequestBody request: CreateWorkSessionRequest): WorkSessionResponse {

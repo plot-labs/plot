@@ -5,7 +5,7 @@ import com.openai.client.OpenAIClientAsyncImpl
 import com.openai.core.ClientOptions
 import com.plot.api.ai.prompt.ChangelogPrompt
 import com.plot.api.config.PlotAiProperties
-import com.plot.api.generation.model.WriterOutput
+import com.plot.api.artifact.workflow.model.WriterOutput
 import com.sun.net.httpserver.HttpServer
 import java.net.InetSocketAddress
 import java.nio.charset.StandardCharsets

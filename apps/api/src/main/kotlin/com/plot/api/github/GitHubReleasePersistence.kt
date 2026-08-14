@@ -5,8 +5,6 @@ import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
-import com.plot.api.common.UuidGenerator
-import com.plot.api.generation.GenerationPersistence
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Repository
 import org.springframework.transaction.support.TransactionTemplate
@@ -45,12 +43,18 @@ interface GitHubReleasePersistence {
 		transitionVersion: Long,
 		headSha: String,
 	)
-	fun linkGeneration(
+	fun linkAgentRun(
 		requestId: UUID,
 		transitionVersion: Long,
 		observationId: UUID,
-		generationRunId: UUID,
-	)
+		agentRunId: UUID,
+	): Unit = error("Agent-run release linkage is not supported by this persistence implementation")
+	fun linkAgentArtifact(
+		requestId: UUID,
+		transitionVersion: Long,
+		agentRunId: UUID,
+		artifactWorkflowRunId: UUID,
+	): Unit = error("Agent artifact release linkage is not supported by this persistence implementation")
 	fun bindEvidence(
 		requestId: UUID,
 		transitionVersion: Long,
@@ -95,8 +99,6 @@ interface GitHubReleasePersistence {
 class JdbcGitHubReleasePersistence(
 	private val jdbcTemplate: JdbcTemplate,
 	private val transactionTemplate: TransactionTemplate,
-	private val generationPersistence: GenerationPersistence,
-	private val uuidGenerator: UuidGenerator,
 	private val clock: Clock = Clock.systemUTC(),
 ) : GitHubReleasePersistence {
 	override fun insertDelivery(delivery: GitHubWebhookDelivery): GitHubWebhookDelivery {
@@ -378,41 +380,54 @@ class JdbcGitHubReleasePersistence(
 		requireExactlyOne(updated, "Release request transition was lost")
 	}
 
-	override fun linkGeneration(
+	override fun linkAgentRun(
 		requestId: UUID,
 		transitionVersion: Long,
 		observationId: UUID,
-		generationRunId: UUID,
+		agentRunId: UUID,
+	) {
+		val updated = jdbcTemplate.update(
+			"""
+			update github_release_draft_requests
+			set agent_run_id = ?, status = 'GENERATING', transition_version = transition_version + 1,
+				claimed_by = null, claimed_at = null, heartbeat_at = null, updated_at = ?
+			where id = ? and transition_version = ? and observation_id = ?
+			  and agent_run_id is null and generation_run_id is null
+			""".trimIndent(),
+			agentRunId, Timestamp.from(clock.instant()), requestId, transitionVersion, observationId,
+		)
+		requireExactlyOne(updated, "Release Agent run transition was lost")
+	}
+
+	override fun linkAgentArtifact(
+		requestId: UUID,
+		transitionVersion: Long,
+		agentRunId: UUID,
+		artifactWorkflowRunId: UUID,
 	) {
 		transactionTemplate.executeWithoutResult {
-			val now = clock.instant()
-			val insertedAttempt = jdbcTemplate.update(
-				"""
-				insert into github_release_generation_attempts (
-				 request_id, workspace_id, attempt_no, generation_run_id, created_at
-				)
-				select id, workspace_id, generation_attempt, ?, ?
-				from github_release_draft_requests
-				where id = ? and transition_version = ? and observation_id = ?
-				""".trimIndent(),
-				generationRunId,
-				Timestamp.from(now),
-				requestId,
-				transitionVersion,
-				observationId,
-			)
-			requireExactlyOne(insertedAttempt, "Release generation attempt transition was lost")
+			val now = Timestamp.from(clock.instant())
 			val updated = jdbcTemplate.update(
 				"""
 				update github_release_draft_requests
-				set observation_id = ?, generation_run_id = ?, status = 'GENERATING',
-					transition_version = transition_version + 1,
-					claimed_by = null, claimed_at = null, heartbeat_at = null, updated_at = ?
-				where id = ? and transition_version = ? and observation_id = ?
+				set generation_run_id = ?, transition_version = transition_version + 1, updated_at = ?
+				where id = ? and transition_version = ? and agent_run_id = ?
+				  and generation_run_id is null
 				""".trimIndent(),
-				observationId, generationRunId, Timestamp.from(now), requestId, transitionVersion, observationId,
+				artifactWorkflowRunId, now, requestId, transitionVersion, agentRunId,
 			)
-			requireExactlyOne(updated, "Release request transition was lost")
+			requireExactlyOne(updated, "Release Artifact workflow transition was lost")
+			val linkedPack = jdbcTemplate.update(
+				"""
+				update content_packs
+				set release_request_id = ?
+				where workspace_id = (select workspace_id from github_release_draft_requests where id = ?)
+				  and generation_run_id = ?
+				  and (release_request_id is null or release_request_id = ?)
+				""".trimIndent(),
+				requestId, requestId, artifactWorkflowRunId, requestId,
+			)
+			requireExactlyOne(linkedPack, "Release Artifact materialization was not found")
 		}
 	}
 
@@ -530,7 +545,7 @@ class JdbcGitHubReleasePersistence(
 	): GitHubReleaseRetryResult = checkNotNull(transactionTemplate.execute {
 			val retry = jdbcTemplate.query(
 				"""
-				select status, generation_attempt, generation_run_id
+				select status, generation_attempt
 				from github_release_draft_requests
 				where id = ? and workspace_id = ? and transition_version = ? and status = 'FAILED'
 				for update
@@ -538,57 +553,25 @@ class JdbcGitHubReleasePersistence(
 				{ rs, _ ->
 					ReleaseRetryRow(
 						status = GitHubReleaseDraftStatus.valueOf(rs.getString("status")),
-						generationAttempt = rs.getInt("generation_attempt"),
-						generationRunId = rs.getObject("generation_run_id", UUID::class.java),
+						runAttempt = rs.getInt("generation_attempt"),
 					)
 				},
 				requestId,
 				workspaceId,
 				transitionVersion,
 			).firstOrNull() ?: throw GitHubReleaseRetryRejectedException()
-			val nextGeneration = retry.generationRunId?.let { failedRunId ->
-				val successfulPackCount = jdbcTemplate.queryForObject(
-					"select count(*) from content_packs where workspace_id = ? and release_request_id = ?",
-					Int::class.java,
-					workspaceId,
-					requestId,
-				) ?: 0
-				if (successfulPackCount != 0) throw GitHubReleaseRetryRejectedException()
-				val nextAttempt = retry.generationAttempt + 1
-				val generation = generationPersistence.createRetryAttempt(
-					workspaceId = workspaceId,
-					failedRunId = failedRunId,
-					newRunId = uuidGenerator.next(),
-					attemptNo = nextAttempt,
-				)
-				val inserted = jdbcTemplate.update(
-					"""
-					insert into github_release_generation_attempts (
-					 request_id, workspace_id, attempt_no, generation_run_id, created_at
-					) values (?, ?, ?, ?, ?)
-					""".trimIndent(),
-					requestId,
-					workspaceId,
-					nextAttempt,
-					generation.runId,
-					Timestamp.from(clock.instant()),
-				)
-				requireExactlyOne(inserted, "Release generation retry attempt was not recorded")
-				nextAttempt to generation.runId
-			}
 			val now = clock.instant()
+		val nextAttempt = retry.runAttempt + 1
 			val updated = jdbcTemplate.update(
 				"""
 				update github_release_draft_requests
-				set status = ?, generation_attempt = ?, generation_run_id = ?,
+				set status = 'QUEUED', generation_attempt = ?, generation_run_id = null, agent_run_id = null,
 					attempt_count = 0, error_code = null, next_attempt_at = ?, finished_at = null,
 					transition_version = transition_version + 1, claimed_by = null, claimed_at = null,
 					heartbeat_at = null, updated_at = ?
 				where id = ? and workspace_id = ? and transition_version = ? and status = 'FAILED'
 				""".trimIndent(),
-				if (nextGeneration == null) GitHubReleaseDraftStatus.QUEUED.name else GitHubReleaseDraftStatus.GENERATING.name,
-				nextGeneration?.first ?: retry.generationAttempt,
-				nextGeneration?.second ?: retry.generationRunId,
+				nextAttempt,
 				Timestamp.from(now),
 				Timestamp.from(now),
 				requestId,
@@ -598,8 +581,8 @@ class JdbcGitHubReleasePersistence(
 			if (updated != 1) throw GitHubReleaseRetryRejectedException()
 			GitHubReleaseRetryResult(
 				requestId = requestId,
-				generationRunId = nextGeneration?.second,
-				generationAttempt = nextGeneration?.first ?: retry.generationAttempt,
+				artifactWorkflowRunId = null,
+			runAttempt = nextAttempt,
 			)
 		})
 
@@ -669,13 +652,13 @@ class JdbcGitHubReleasePersistence(
 				StaleReleaseClaim(
 					requestId = rs.getObject("id", UUID::class.java),
 					transitionVersion = rs.getLong("transition_version"),
-					generationRunId = rs.getObject("generation_run_id", UUID::class.java),
+					artifactWorkflowRunId = rs.getObject("generation_run_id", UUID::class.java),
 				)
 			},
 			Timestamp.from(staleBefore),
 		)
 		candidates.sumOf { candidate ->
-			val recoveredStatus = if (candidate.generationRunId == null) "QUEUED" else "GENERATING"
+			val recoveredStatus = if (candidate.artifactWorkflowRunId == null) "QUEUED" else "GENERATING"
 			val updated = jdbcTemplate.update(
 				"""
 				update github_release_draft_requests
@@ -768,11 +751,11 @@ class JdbcGitHubReleasePersistence(
 private val requestColumns = """
 id, workspace_id, source_scope_id, initial_delivery_id, tag_name, observed_head_sha,
 base_sha, head_sha, boundary_reason,
-status, attempt_count, generation_attempt, transition_version, generation_run_id, observation_id, error_code
+status, attempt_count, generation_attempt, transition_version, agent_run_id, generation_run_id, observation_id, error_code
 """.trimIndent()
 
 private val activityColumns = """
-r.id, r.source_scope_id, r.tag_name, r.status, r.base_sha, r.head_sha, r.boundary_reason, r.generation_run_id,
+r.id, r.source_scope_id, r.tag_name, r.status, r.base_sha, r.head_sha, r.boundary_reason,
 cp.id as content_pack_id, r.error_code, r.transition_version, r.created_at, r.updated_at
 """.trimIndent()
 
@@ -786,13 +769,12 @@ private val terminalStatuses = setOf(
 private data class StaleReleaseClaim(
 	val requestId: UUID,
 	val transitionVersion: Long,
-	val generationRunId: UUID?,
+	val artifactWorkflowRunId: UUID?,
 )
 
 private data class ReleaseRetryRow(
 	val status: GitHubReleaseDraftStatus,
-	val generationAttempt: Int,
-	val generationRunId: UUID?,
+	val runAttempt: Int,
 )
 
 private fun java.sql.ResultSet.toDelivery(): GitHubWebhookDelivery = GitHubWebhookDelivery(
@@ -828,10 +810,11 @@ private fun java.sql.ResultSet.toReleaseDraftRequest(): GitHubReleaseDraftReques
 	status = GitHubReleaseDraftStatus.valueOf(getString("status")),
 	attemptCount = getInt("attempt_count"),
 	transitionVersion = getLong("transition_version"),
-	generationRunId = getObject("generation_run_id", UUID::class.java),
+	agentRunId = getObject("agent_run_id", UUID::class.java),
+	artifactWorkflowRunId = getObject("generation_run_id", UUID::class.java),
 	observationId = getObject("observation_id", UUID::class.java),
 	errorCode = getString("error_code"),
-	generationAttempt = getInt("generation_attempt"),
+	runAttempt = getInt("generation_attempt"),
 	observedHeadSha = getString("observed_head_sha"),
 )
 
@@ -843,7 +826,6 @@ private fun java.sql.ResultSet.toReleaseActivity(): GitHubReleaseActivityRecord 
 	baseSha = getString("base_sha"),
 	headSha = getString("head_sha"),
 	boundaryReason = getString("boundary_reason"),
-	generationRunId = getObject("generation_run_id", UUID::class.java),
 	artifactId = getObject("content_pack_id", UUID::class.java),
 	errorCode = getString("error_code"),
 	transitionVersion = getLong("transition_version"),

@@ -174,7 +174,7 @@ class GitHubReleaseRangeResolverTest {
 		status = GitHubReleaseDraftStatus.RESOLVING,
 		attemptCount = 1,
 		transitionVersion = 3,
-		generationRunId = null,
+		artifactWorkflowRunId = null,
 		observationId = null,
 		errorCode = null,
 		observedHeadSha = observedHeadSha,
@@ -297,12 +297,6 @@ class GitHubReleaseRangeResolverTest {
 			now: Instant,
 			errorCode: String,
 		): Int = 0
-		override fun linkGeneration(
-			requestId: UUID,
-			transitionVersion: Long,
-			observationId: UUID,
-			generationRunId: UUID,
-		) = error("not used")
 		override fun bindEvidence(
 			requestId: UUID,
 			transitionVersion: Long,

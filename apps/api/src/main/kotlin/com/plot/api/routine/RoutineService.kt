@@ -153,11 +153,11 @@ class RoutineService(
 			?.takeIf { it.routineId == routine.id }
 			?: throw notFound()
 		val steps = agentPersistence.listSteps(routine.workspaceId, agentRun.id)
-		val artifacts = steps.mapNotNull { it.generationRunId }
+		val artifacts = steps.mapNotNull { it.artifactWorkflowRunId }
 			.distinct()
-			.mapNotNull { generationRunId ->
-				agentPersistence.findArtifactId(routine.workspaceId, generationRunId)
-					?.let { generationRunId to it }
+			.mapNotNull { artifactWorkflowRunId ->
+				agentPersistence.findArtifactId(routine.workspaceId, artifactWorkflowRunId)
+					?.let { artifactWorkflowRunId to it }
 			}
 			.toMap()
 		return AgentRunDetailView(agentRun, steps, artifacts)

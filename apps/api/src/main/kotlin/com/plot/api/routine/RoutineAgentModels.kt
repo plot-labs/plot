@@ -225,7 +225,7 @@ data class AgentStepRequest(
 	val argumentsJson: String = "{}",
 	val resultJson: String? = null,
 	val adoptedInputId: UUID? = null,
-	val generationRunId: UUID? = null,
+	val artifactWorkflowRunId: UUID? = null,
 	val failureCode: String? = null,
 	val startedAt: Instant? = null,
 	val finishedAt: Instant? = null,
@@ -243,7 +243,7 @@ data class AgentStepRecord(
 	val argumentsJson: String,
 	val resultJson: String?,
 	val adoptedInputId: UUID?,
-	val generationRunId: UUID?,
+	val artifactWorkflowRunId: UUID?,
 	val failureCode: String?,
 	val startedAt: Instant?,
 	val finishedAt: Instant?,
@@ -257,8 +257,8 @@ data class ClaimedAgentRun(
 	val workerId: String,
 )
 
-data class AgentGenerationState(
-	val generationRunId: UUID,
+data class AgentArtifactWorkflowState(
+	val artifactWorkflowRunId: UUID,
 	val status: String,
 	val materialized: Boolean,
 )
@@ -271,7 +271,7 @@ data class RoutineExecutionSummaryRecord(
 	val agentRunId: UUID?,
 	val agentRunStatus: AgentRunStatus?,
 	val agentFailureCode: String?,
-	val generationRunId: UUID?,
+	val artifactWorkflowRunId: UUID?,
 	val artifactId: UUID?,
 	val startedAt: Instant?,
 	val finishedAt: Instant?,

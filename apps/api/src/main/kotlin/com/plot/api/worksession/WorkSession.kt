@@ -3,6 +3,7 @@ package com.plot.api.worksession
 import jakarta.persistence.Entity
 import jakarta.persistence.Id
 import jakarta.persistence.Table
+import jakarta.persistence.Column
 import java.time.Instant
 import java.util.UUID
 
@@ -15,7 +16,8 @@ class WorkSession(
 	var title: String?,
 	var status: String,
 	var createdByUserId: UUID?,
-	var latestGenerationRunId: UUID?,
+	@Column(name = "latest_generation_run_id")
+	var latestArtifactWorkflowRunId: UUID?,
 	var lastActivityAt: Instant?,
 	var createdAt: Instant,
 	var updatedAt: Instant,

@@ -8,7 +8,6 @@ import { ArtifactCanvasWorkspace } from "./artifact-canvas-workspace";
 
 const artifact: Artifact = {
   id: "artifact-1",
-  generationRunId: "run-1",
   status: "READY",
   title: "OpenRouter summary provider",
   variant: {

@@ -44,7 +44,6 @@ data class ExportContentVariantRequest(
 
 data class ArtifactSummaryResponse(
 	val id: UUID,
-	val generationRunId: UUID,
 	val status: String,
 	val title: String?,
 	val updatedAt: Instant,
@@ -60,7 +59,6 @@ data class ArtifactPageResponse(
 
 data class ArtifactResponse(
 	val id: UUID,
-	val generationRunId: UUID,
 	val status: String,
 	val title: String?,
 	val variant: ContentVariantResponse,
