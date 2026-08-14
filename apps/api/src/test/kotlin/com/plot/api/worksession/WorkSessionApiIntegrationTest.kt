@@ -19,6 +19,7 @@ import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.patch
 import org.springframework.test.web.servlet.post
+import kotlin.test.assertEquals
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -112,6 +113,15 @@ class WorkSessionApiIntegrationTest {
 			jsonPath("$.updatedAt") { exists() }
 			jsonPath("$.workspaceId") { doesNotExist() }
 		}
+
+		assertEquals(
+			"Updated Session",
+			jdbcTemplate.queryForObject(
+				"select title from work_sessions where id = ?",
+				String::class.java,
+				sessionId,
+			),
+		)
 	}
 
 	@Test

@@ -6,6 +6,7 @@ import java.util.UUID
 import org.springframework.http.MediaType
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
 import org.springframework.context.annotation.Import
@@ -26,6 +27,9 @@ class WorkspaceApiIntegrationTest {
 
 	@Autowired
 	private lateinit var devContext: DevContext
+
+	@Autowired
+	private lateinit var jdbcTemplate: JdbcTemplate
 
 	@Test
 	fun detailReturnsSelectedWorkspace() {
@@ -83,5 +87,14 @@ class WorkspaceApiIntegrationTest {
 			jsonPath("$.name") { value("Personal") }
 			jsonPath("$.logoUrl") { doesNotExist() }
 		}
+
+		org.junit.jupiter.api.Assertions.assertEquals(
+			"Personal",
+			jdbcTemplate.queryForObject(
+				"select name from workspaces where id = ?",
+				String::class.java,
+				devContext.devWorkspaceId,
+			),
+		)
 	}
 }
