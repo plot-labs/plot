@@ -109,11 +109,6 @@ class WritingBlockRepository(
 		?.toModel()
 
 	private fun page(conditions: List<Condition>, offset: Int, limit: Int): WritingBlockPage {
-		val total = dsl
-			.selectCount()
-			.from(WRITING_BLOCKS)
-			.where(*conditions.toTypedArray())
-			.fetchOne(0, Long::class.java) ?: 0L
 		val content = select(conditions)
 			.orderBy(
 				WRITING_BLOCKS.SOURCE_CREATED_AT.desc().nullsLast(),
@@ -125,6 +120,15 @@ class WritingBlockRepository(
 			.limit(limit)
 			.fetch()
 			.map { it.toModel() }
+		val total = if (content.size < limit) {
+			offset.toLong() + content.size
+		} else {
+			dsl
+				.selectCount()
+				.from(WRITING_BLOCKS)
+				.where(*conditions.toTypedArray())
+				.fetchOne(0, Long::class.java) ?: 0L
+		}
 		return WritingBlockPage(content, total)
 	}
 

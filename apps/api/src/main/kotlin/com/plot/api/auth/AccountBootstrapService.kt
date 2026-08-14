@@ -53,7 +53,7 @@ class AccountBootstrapService(
 		val memberId = uuidGenerator.next()
 		return try {
 			transactionExecutor.execute {
-				val user = userRepository.saveAndFlush(User(
+				val user = userRepository.save(User(
 					id = userId,
 					email = email,
 					displayName = displayName,
@@ -63,7 +63,7 @@ class AccountBootstrapService(
 					createdAt = now,
 					updatedAt = now,
 				))
-				workspaceRepository.saveAndFlush(Workspace(
+				workspaceRepository.save(Workspace(
 					id = workspaceId,
 					name = "Personal",
 					slug = "personal-${userId.toString().take(8)}",

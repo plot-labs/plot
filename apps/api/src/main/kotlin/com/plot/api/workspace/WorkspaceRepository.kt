@@ -98,8 +98,6 @@ class WorkspaceRepository(
 		return workspace
 	}
 
-	fun saveAndFlush(workspace: Workspace): Workspace = save(workspace)
-
 	private fun select() = dsl.select(
 		WORKSPACES.ID,
 		WORKSPACES.NAME,

@@ -96,11 +96,6 @@ class JooqTransactionExecutor {
 
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	fun <T> executeRequiresNew(action: () -> T): T = action()
-
-	@Transactional(propagation = Propagation.REQUIRES_NEW)
-	fun executeRequiresNewWithoutResult(action: () -> Unit) {
-		action()
-	}
 }
 
 class SqlRow internal constructor(

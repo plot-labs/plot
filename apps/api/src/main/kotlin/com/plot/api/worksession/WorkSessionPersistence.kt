@@ -6,6 +6,7 @@ import java.time.OffsetDateTime
 import java.time.ZoneOffset
 import java.util.UUID
 import org.jooq.DSLContext
+import org.jooq.Field
 import org.jooq.Record
 import org.springframework.stereotype.Repository
 
@@ -13,20 +14,21 @@ import org.springframework.stereotype.Repository
 class WorkSessionPersistence(
 	private val dsl: DSLContext,
 ) {
+	private val workSessionFields: Array<Field<*>> = arrayOf(
+		WORK_SESSIONS.ID,
+		WORK_SESSIONS.WORKSPACE_ID,
+		WORK_SESSIONS.TITLE,
+		WORK_SESSIONS.STATUS,
+		WORK_SESSIONS.CREATED_BY_USER_ID,
+		WORK_SESSIONS.LAST_ACTIVITY_AT,
+		WORK_SESSIONS.CREATED_AT,
+		WORK_SESSIONS.UPDATED_AT,
+		WORK_SESSIONS.LATEST_GENERATION_RUN_ID,
+	)
+
 	fun findRecentByWorkspaceId(workspaceId: UUID): List<WorkSession> {
 		return dsl
-			.select(
-				WORK_SESSIONS.ID,
-				WORK_SESSIONS.WORKSPACE_ID,
-				WORK_SESSIONS.TITLE,
-				WORK_SESSIONS.STATUS,
-				WORK_SESSIONS.CREATED_BY_USER_ID,
-				WORK_SESSIONS.LAST_ACTIVITY_AT,
-				WORK_SESSIONS.CREATED_AT,
-				WORK_SESSIONS.UPDATED_AT,
-				WORK_SESSIONS.LATEST_GENERATION_RUN_ID,
-				WORK_SESSIONS.ROUTINE_EXECUTION_ID,
-			)
+			.select(*workSessionFields)
 			.from(WORK_SESSIONS)
 			.where(WORK_SESSIONS.WORKSPACE_ID.eq(workspaceId))
 			.orderBy(
@@ -39,18 +41,7 @@ class WorkSessionPersistence(
 
 	fun findByWorkspaceIdAndId(workspaceId: UUID, id: UUID): WorkSession? {
 		return dsl
-			.select(
-				WORK_SESSIONS.ID,
-				WORK_SESSIONS.WORKSPACE_ID,
-				WORK_SESSIONS.TITLE,
-				WORK_SESSIONS.STATUS,
-				WORK_SESSIONS.CREATED_BY_USER_ID,
-				WORK_SESSIONS.LAST_ACTIVITY_AT,
-				WORK_SESSIONS.CREATED_AT,
-				WORK_SESSIONS.UPDATED_AT,
-				WORK_SESSIONS.LATEST_GENERATION_RUN_ID,
-				WORK_SESSIONS.ROUTINE_EXECUTION_ID,
-			)
+			.select(*workSessionFields)
 			.from(WORK_SESSIONS)
 			.where(
 				WORK_SESSIONS.WORKSPACE_ID.eq(workspaceId),
@@ -72,18 +63,7 @@ class WorkSessionPersistence(
 			.set(WORK_SESSIONS.LAST_ACTIVITY_AT, workSession.lastActivityAt?.toOffsetDateTime())
 			.set(WORK_SESSIONS.CREATED_AT, workSession.createdAt.toOffsetDateTime())
 			.set(WORK_SESSIONS.UPDATED_AT, workSession.updatedAt.toOffsetDateTime())
-			.returning(
-				WORK_SESSIONS.ID,
-				WORK_SESSIONS.WORKSPACE_ID,
-				WORK_SESSIONS.TITLE,
-				WORK_SESSIONS.STATUS,
-				WORK_SESSIONS.CREATED_BY_USER_ID,
-				WORK_SESSIONS.LAST_ACTIVITY_AT,
-				WORK_SESSIONS.CREATED_AT,
-				WORK_SESSIONS.UPDATED_AT,
-				WORK_SESSIONS.LATEST_GENERATION_RUN_ID,
-				WORK_SESSIONS.ROUTINE_EXECUTION_ID,
-			)
+			.returning(*workSessionFields)
 			.fetchOne()
 			?.toModel()
 			?: error("Work session insert did not return a row")
@@ -109,18 +89,7 @@ class WorkSessionPersistence(
 				WORK_SESSIONS.WORKSPACE_ID.eq(workspaceId),
 				WORK_SESSIONS.ID.eq(id),
 			)
-			.returning(
-				WORK_SESSIONS.ID,
-				WORK_SESSIONS.WORKSPACE_ID,
-				WORK_SESSIONS.TITLE,
-				WORK_SESSIONS.STATUS,
-				WORK_SESSIONS.CREATED_BY_USER_ID,
-				WORK_SESSIONS.LAST_ACTIVITY_AT,
-				WORK_SESSIONS.CREATED_AT,
-				WORK_SESSIONS.UPDATED_AT,
-				WORK_SESSIONS.LATEST_GENERATION_RUN_ID,
-				WORK_SESSIONS.ROUTINE_EXECUTION_ID,
-			)
+			.returning(*workSessionFields)
 			.fetchOne()
 			?.toModel()
 	}

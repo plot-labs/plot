@@ -134,7 +134,7 @@ open class MixedJooqRollbackFixture(
 	@Transactional
 	open fun writeThenFail(workspaceId: UUID, sessionId: UUID) {
 		val now = Instant.parse("2026-08-14T00:00:00Z")
-		workspaceRepository.saveAndFlush(
+		workspaceRepository.save(
 			Workspace(
 				id = workspaceId,
 				name = "rollback-workspace",

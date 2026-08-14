@@ -59,8 +59,6 @@ class UserRepository(
 		return user
 	}
 
-	fun saveAndFlush(user: User): User = save(user)
-
 	private fun select() = dsl.select(
 		USERS.ID,
 		USERS.EMAIL,

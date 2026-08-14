@@ -70,15 +70,8 @@ class WorkspaceMemberRepository(
 		return member
 	}
 
-	fun saveAndFlush(member: WorkspaceMember): WorkspaceMember = save(member)
-
 	fun delete(member: WorkspaceMember) {
 		dsl.deleteFrom(WORKSPACE_MEMBERS).where(WORKSPACE_MEMBERS.ID.eq(member.id)).execute()
-	}
-
-	fun flush() {
-		// jOOQ executes each statement immediately; this method preserves the
-		// old repository contract for bootstrap cleanup callers.
 	}
 
 	private fun select() = dsl.select(
