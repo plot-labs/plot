@@ -3,7 +3,7 @@ package com.plot.api.github
 import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
-import com.plot.api.generation.GenerationPersistence
+import com.plot.api.artifact.workflow.ArtifactWorkflowPersistence
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -19,7 +19,7 @@ class GitHubSourceAccessLifecycleService(
 	private val accessChecks: GitHubRepositoryAccessCheckPersistence,
 	private val monitoringPersistence: GitHubRepositoryMonitoringPersistence,
 	private val releasePersistence: GitHubReleasePersistence,
-	private val generationPersistence: GenerationPersistence,
+	private val artifactWorkflowPersistence: ArtifactWorkflowPersistence,
 ) {
 	fun isLifecycle(webhook: ParsedGitHubWebhook): Boolean = when (webhook.eventType) {
 		"installation", "installation_repositories", "repository" -> true
@@ -178,7 +178,7 @@ class GitHubSourceAccessLifecycleService(
 		scopes.forEach { scope ->
 			monitoringPersistence.disable(scope.workspaceId, scope.scopeId, now)
 			releasePersistence.fenceSourceScope(scope.workspaceId, scope.scopeId, now)
-			generationPersistence.fenceSourceScope(scope.workspaceId, scope.scopeId, now)
+			artifactWorkflowPersistence.fenceSourceScope(scope.workspaceId, scope.scopeId, now)
 		}
 	}
 

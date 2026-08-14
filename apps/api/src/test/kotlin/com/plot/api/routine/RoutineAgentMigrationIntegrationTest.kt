@@ -473,19 +473,19 @@ class RoutineAgentMigrationIntegrationTest {
 			String::class.java,
 			schema,
 		))
-		insertGenerationRun(fixture, firstRun.id, "QUEUED", "active-first")
+		insertArtifactWorkflowRun(fixture, firstRun.id, "QUEUED", "active-first")
 		assertFailsWith<DataIntegrityViolationException> {
-			insertGenerationRun(fixture, firstRun.id, "WRITING", "active-second")
+			insertArtifactWorkflowRun(fixture, firstRun.id, "WRITING", "active-second")
 		}
-		val materializedRunId = insertGenerationRun(fixture, secondRun.id, "READY", "materialized-first")
+		val materializedRunId = insertArtifactWorkflowRun(fixture, secondRun.id, "READY", "materialized-first")
 		assertFailsWith<DataIntegrityViolationException> {
-			insertGenerationRun(fixture, secondRun.id, "NEEDS_REVIEW", "materialized-second")
+			insertArtifactWorkflowRun(fixture, secondRun.id, "NEEDS_REVIEW", "materialized-second")
 		}
 		val otherFixture = insertFixture()
 		val otherExecution = withSchema { persistence.createExecution(executionRequest(otherFixture)) }
 		val otherRun = withSchema { persistence.dispatch(otherFixture.workspaceId, otherExecution.id, dispatchRequest(otherFixture)) }
 		assertFailsWith<DataIntegrityViolationException> {
-			insertGenerationRun(fixture, otherRun.id, "QUEUED", "cross-workspace")
+			insertArtifactWorkflowRun(fixture, otherRun.id, "QUEUED", "cross-workspace")
 		}
 		assertFailsWith<DataIntegrityViolationException> {
 			withSchema {
@@ -497,7 +497,7 @@ class RoutineAgentMigrationIntegrationTest {
 						kind = AgentStepKind.ARTIFACT_HANDOFF,
 						status = AgentStepStatus.PENDING,
 						idempotencyKey = "cross-run-handoff",
-						generationRunId = materializedRunId,
+						artifactWorkflowRunId = materializedRunId,
 					),
 				)
 			}
@@ -583,7 +583,7 @@ class RoutineAgentMigrationIntegrationTest {
 		)
 	}
 
-	private fun insertGenerationRun(fixture: Fixture, agentRunId: UUID, status: String, idempotencyKey: String): UUID {
+	private fun insertArtifactWorkflowRun(fixture: Fixture, agentRunId: UUID, status: String, idempotencyKey: String): UUID {
 		val id = UUID.randomUUID()
 		val now = Timestamp.from(fixture.createdAt)
 		schemaJdbcTemplate.update(

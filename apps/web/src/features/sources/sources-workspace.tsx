@@ -4,10 +4,10 @@ import { ExternalLink, LoaderCircle, RefreshCw, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { plotApiClient, type GenerationReference } from "@/lib/api-client";
+import { plotApiClient, type SourceReference } from "@/lib/api-client";
 
 export function SourcesWorkspace() {
-  const [sources, setSources] = useState<GenerationReference[]>([]);
+  const [sources, setSources] = useState<SourceReference[]>([]);
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
@@ -25,7 +25,7 @@ export function SourcesWorkspace() {
 
     async function load() {
       try {
-        const nextSources = await plotApiClient.listGenerationReferences();
+        const nextSources = await plotApiClient.listSourceReferences();
         if (cancelled) return;
         setSources(nextSources);
         setSelectedSourceId((current) => nextSources.some((source) => source.id === current) ? current : null);

@@ -13,10 +13,10 @@ class ObservationSafetyTest {
 	@Test
 	fun allowlistedObservationDoesNotContainPrivateContentKeys() {
 		val observations = TestObservationRegistry.create()
-		Observation.start("plot.generation.model_call", observations)
+		Observation.start("plot.artifact_workflow.model_call", observations)
 			.lowCardinalityKeyValue("plot.operation", "model_invocation")
 			.lowCardinalityKeyValue("plot.outcome", "SUCCEEDED")
-			.highCardinalityKeyValue("plot.generation_run_id", UUID.randomUUID().toString())
+			.highCardinalityKeyValue("plot.artifact_workflow_run_id", UUID.randomUUID().toString())
 			.highCardinalityKeyValue("plot.model_provider", "openrouter")
 			.highCardinalityKeyValue("plot.served_model", "test-model")
 			.highCardinalityKeyValue("plot.provider_response_id", "response-1")
@@ -25,12 +25,12 @@ class ObservationSafetyTest {
 			.stopSafely()
 
 		observations.assertThat()
-			.hasObservationWithNameEqualTo("plot.generation.model_call")
+			.hasObservationWithNameEqualTo("plot.artifact_workflow.model_call")
 			.that()
 			.hasOnlyKeys(
 				"plot.operation",
 				"plot.outcome",
-				"plot.generation_run_id",
+				"plot.artifact_workflow_run_id",
 				"plot.model_provider",
 				"plot.served_model",
 				"plot.provider_response_id",
@@ -51,7 +51,7 @@ class ObservationSafetyTest {
 		})
 
 		assertDoesNotThrow {
-			Observation.start("plot.generation.attempt", registry).stopSafely()
+		Observation.start("plot.artifact_workflow.attempt", registry).stopSafely()
 		}
 	}
 

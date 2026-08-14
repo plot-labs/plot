@@ -18,7 +18,7 @@ describe("ArtifactHistoryPanel", () => {
     const client = {
       listArtifactHistory: vi.fn().mockResolvedValue([
         { position: 0, createdAt: "2026-08-01T00:01:00Z", cause: "Edited by you" },
-        { position: 1, createdAt: "2026-08-01T00:00:00Z", cause: "Initial generation" },
+        { position: 1, createdAt: "2026-08-01T00:00:00Z", cause: "Initial draft" },
       ]),
       getArtifactHistoryAt: vi.fn().mockResolvedValue(detail),
     } as unknown as PlotApiClient;
@@ -28,7 +28,7 @@ describe("ArtifactHistoryPanel", () => {
 
     expect(await screen.findByRole("button", { name: /Edited by you/ })).toBeVisible();
     expect(screen.getAllByRole("time", { name: /Aug 1, 2026/ })).toHaveLength(2);
-    fireEvent.click(screen.getByRole("button", { name: /Initial generation/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Initial draft/ }));
     await waitFor(() => expect(onSelect).toHaveBeenCalledWith(detail, 1));
     expect(client.getArtifactHistoryAt).toHaveBeenCalledWith("variant-1", 1, expect.any(Object));
   });

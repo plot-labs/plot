@@ -7,11 +7,13 @@ import com.plot.api.ai.provider.AgentDecisionGateway
 import com.plot.api.ai.provider.AgentDecisionRequest
 import com.plot.api.ai.provider.AgentInputView
 import com.plot.api.ai.provider.AgentStepView
+import com.plot.api.artifact.run.ArtifactRunPersistence
+import com.plot.api.artifact.run.ArtifactRunStatus
 import com.plot.api.common.ApiException
 import com.plot.api.common.WorkspacePrincipal
 import com.plot.api.entitlement.WorkspaceAccessService
-import com.plot.api.generation.GenerationIdempotencyConflictException
-import com.plot.api.generation.GenerationRunService
+import com.plot.api.artifact.workflow.ArtifactWorkflowIdempotencyConflictException
+import com.plot.api.artifact.workflow.ArtifactWorkflowRunService
 import com.plot.api.observability.stopSafely
 import io.micrometer.observation.Observation
 import io.micrometer.observation.ObservationRegistry
@@ -28,7 +30,8 @@ class AgentRunWorker(
 	private val persistence: RoutineAgentPersistence,
 	private val decisionGateway: AgentDecisionGateway,
 	private val tools: ReadOnlyAgentTools,
-	private val generationRunService: GenerationRunService,
+	private val artifactWorkflowRunService: ArtifactWorkflowRunService,
+	private val artifactRunPersistence: ArtifactRunPersistence,
 	private val workspaceAccessService: WorkspaceAccessService,
 	private val properties: RoutineAgentProperties,
 	private val objectMapper: ObjectMapper,
@@ -82,7 +85,7 @@ class AgentRunWorker(
 		} catch (failure: ApiException) {
 			outcome = "FAILED"
 			persistence.failAgentRun(claim, backgroundAccessCode(failure), clock.instant())
-		} catch (_: GenerationIdempotencyConflictException) {
+		} catch (_: ArtifactWorkflowIdempotencyConflictException) {
 			outcome = "FAILED"
 			persistence.failAgentRun(claim, "AGENT_HANDOFF_CONFLICT", clock.instant())
 		} catch (_: IllegalArgumentException) {
@@ -123,10 +126,10 @@ class AgentRunWorker(
 		val linkedHandoff = steps.lastOrNull {
 			it.kind == AgentStepKind.ARTIFACT_HANDOFF &&
 				it.status == AgentStepStatus.SUCCEEDED &&
-				it.generationRunId != null
+				it.artifactWorkflowRunId != null
 		}
 		if (linkedHandoff != null) {
-			observeGeneration(claim, linkedHandoff.generationRunId!!)
+			observeArtifactWorkflow(claim, linkedHandoff.artifactWorkflowRunId!!)
 			return
 		}
 
@@ -273,20 +276,23 @@ class AgentRunWorker(
 				if (evidenceCharacters > budget.maxEvidenceCharacters) {
 					throw AgentRunBudgetExceededException("AGENT_EVIDENCE_LIMIT")
 				}
-				val generation = generationRunService.createForAgent(
+				val workflow = artifactWorkflowRunService.createForAgent(
 					principal = WorkspacePrincipal(run.workspaceId, run.createdByUserId),
 					agentRun = run,
 					inputs = selected,
 					idempotencyKey = step.idempotencyKey,
 				)
-				persistence.linkGenerationStep(
+				val artifactRun = artifactRunPersistence.findWorkflowStateByWorkflowRun(run.workspaceId, workflow.runId)
+					?: throw IllegalArgumentException("Artifact run admission was not persisted")
+				persistence.linkArtifactWorkflowStep(
 					claim = claim,
 					stepId = step.id,
-					generationRunId = generation.runId,
+					artifactWorkflowRunId = workflow.runId,
 					resultJson = objectMapper.writeValueAsString(
 						mapOf(
 							"summary" to "Created an Artifact draft",
-							"generationRunId" to generation.runId,
+							"artifactWorkflowRunId" to workflow.runId,
+							"artifactRunId" to artifactRun.artifactRunId,
 							"selectedInputCount" to selected.size,
 						),
 					),
@@ -297,14 +303,14 @@ class AgentRunWorker(
 		}
 	}
 
-	private fun observeGeneration(claim: ClaimedAgentRun, generationRunId: UUID) {
-		val state = persistence.loadGenerationState(claim.workspaceId, generationRunId)
-			?: throw IllegalArgumentException("Linked generation is unavailable")
+	private fun observeArtifactWorkflow(claim: ClaimedAgentRun, artifactWorkflowRunId: UUID) {
+		val state = artifactRunPersistence.findWorkflowStateByWorkflowRun(claim.workspaceId, artifactWorkflowRunId)
+			?: throw IllegalArgumentException("Linked artifact run is unavailable")
 		when {
-			state.materialized && state.status in setOf("READY", "NEEDS_REVIEW") ->
+			state.materialized && state.status in setOf(ArtifactRunStatus.READY, ArtifactRunStatus.NEEDS_REVIEW) ->
 				persistence.succeedAgentRun(claim, clock.instant())
-			state.status == "FAILED" ->
-				persistence.failAgentRun(claim, "AGENT_GENERATION_FAILED", clock.instant())
+			state.status == ArtifactRunStatus.FAILED ->
+				persistence.failAgentRun(claim, "AGENT_ARTIFACT_WORKFLOW_FAILED", clock.instant())
 			else -> persistence.releaseAgentClaim(claim, clock.instant().plus(properties.pollDelay), clock.instant())
 		}
 	}

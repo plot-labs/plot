@@ -1,25 +1,25 @@
 package com.plot.api.artifact
 
 import com.plot.api.TestcontainersConfiguration
-import com.plot.api.ai.provider.GenerationModelGateway
+import com.plot.api.ai.provider.ArtifactWorkflowModelGateway
 import com.plot.api.ai.provider.ModelCallMetadata
 import com.plot.api.ai.provider.ModelCallResult
 import com.plot.api.ai.provider.ReviewerModelRequest
 import com.plot.api.ai.provider.RewriteModelRequest
 import com.plot.api.ai.provider.WriterModelRequest
 import com.plot.api.dev.DevContext
-import com.plot.api.generation.GenerationPersistence
-import com.plot.api.generation.GenerationRunReservation
-import com.plot.api.generation.GenerationRunWorker
-import com.plot.api.generation.GenerationWorkflowService
-import com.plot.api.generation.model.EvidenceSnapshot
-import com.plot.api.generation.model.ReviewVerdict
-import com.plot.api.generation.model.ReviewerOutput
-import com.plot.api.generation.model.SentenceReview
-import com.plot.api.generation.model.SourceProvider
-import com.plot.api.generation.model.TargetedRewriteOutput
-import com.plot.api.generation.model.WriterOutput
-import com.plot.api.generation.model.WriterSentence
+import com.plot.api.artifact.workflow.ArtifactWorkflowPersistence
+import com.plot.api.artifact.workflow.ArtifactWorkflowRunReservation
+import com.plot.api.artifact.workflow.ArtifactWorkflowRunWorker
+import com.plot.api.artifact.workflow.ArtifactWorkflowService
+import com.plot.api.artifact.workflow.model.EvidenceSnapshot
+import com.plot.api.artifact.workflow.model.ReviewVerdict
+import com.plot.api.artifact.workflow.model.ReviewerOutput
+import com.plot.api.artifact.workflow.model.SentenceReview
+import com.plot.api.artifact.workflow.model.SourceProvider
+import com.plot.api.artifact.workflow.model.TargetedRewriteOutput
+import com.plot.api.artifact.workflow.model.WriterOutput
+import com.plot.api.artifact.workflow.model.WriterSentence
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
@@ -49,8 +49,8 @@ import tools.jackson.databind.ObjectMapper
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class ArtifactApiIntegrationTest {
 	@Autowired private lateinit var mockMvc: MockMvc
-	@Autowired private lateinit var persistence: GenerationPersistence
-	@Autowired private lateinit var workflow: GenerationWorkflowService
+	@Autowired private lateinit var persistence: ArtifactWorkflowPersistence
+	@Autowired private lateinit var workflow: ArtifactWorkflowService
 	@Autowired private lateinit var jdbcTemplate: JdbcTemplate
 	@Autowired private lateinit var devContext: DevContext
 	@Autowired private lateinit var objectMapper: ObjectMapper
@@ -61,6 +61,7 @@ class ArtifactApiIntegrationTest {
 		mockMvc.get("/api/artifacts?page=0&size=25").andExpect {
 			status { isOk() }
 			jsonPath("$.items[0].id") { value(fixture.packId.toString()) }
+			jsonPath("$.items[0].artifactWorkflowRunId") { doesNotExist() }
 			jsonPath("$.items[0].updatedAt") { exists() }
 				jsonPath("$.totalItems") { value(org.hamcrest.Matchers.greaterThanOrEqualTo(1)) }
 		}
@@ -69,6 +70,7 @@ class ArtifactApiIntegrationTest {
 			status { isOk() }
 			header { string("Cache-Control", "no-store") }
 			jsonPath("$.variant.revisionNumber") { value(1) }
+			jsonPath("$.artifactWorkflowRunId") { doesNotExist() }
 			jsonPath("$.variant.revisionId") { exists() }
 			jsonPath("$.variant.sources.length()") { value(1) }
 			jsonPath("$.variant.sentences[0].body") { value("Supported sentence.") }
@@ -296,7 +298,7 @@ class ArtifactApiIntegrationTest {
 			status { isOk() }
 			jsonPath("$.length()") { value(2) }
 			jsonPath("$[0].cause") { value("Edited by you") }
-			jsonPath("$[1].cause") { value("Initial generation") }
+			jsonPath("$[1].cause") { value("Initial draft") }
 			jsonPath("$[0].revisionNumber") { doesNotExist() }
 			jsonPath("$[0].revisionId") { doesNotExist() }
 		}
@@ -711,12 +713,12 @@ class ArtifactApiIntegrationTest {
 			"Evidence body", "PRIVATE SNAPSHOT EXCERPT", sourceUrl, null, null, "hash", Instant.now(),
 		)
 		val state = workflow.start(runId, listOf(evidence), null)
-		persistence.createRun(GenerationRunReservation(
+		persistence.createRun(ArtifactWorkflowRunReservation(
 			devContext.devWorkspaceId, devContext.devUserId, null, "pack-${UUID.randomUUID()}", "fingerprint-${UUID.randomUUID()}",
 			state, "OPENAI", "scripted", "{\"maxModelCalls\":12,\"maxTotalTokens\":1000,\"maxRunDurationMillis\":60000}",
 		))
 		val gateway = PackGateway(evidence.id)
-		GenerationRunWorker(persistence, workflow, gateway, workerId = "artifact-test").drain()
+		ArtifactWorkflowRunWorker(persistence, workflow, gateway, workerId = "artifact-test").drain()
 		val row = jdbcTemplate.queryForMap(
 			"""
 			select cp.id pack_id, cv.id variant_id from content_packs cp join content_variants cv on cv.content_pack_id=cp.id
@@ -733,7 +735,7 @@ class ArtifactApiIntegrationTest {
 
 private data class Fixture(val runId: UUID, val packId: UUID, val variantId: UUID, val firstSentenceId: UUID, val secondSentenceId: UUID)
 
-private class PackGateway(private val evidenceId: UUID) : GenerationModelGateway {
+private class PackGateway(private val evidenceId: UUID) : ArtifactWorkflowModelGateway {
 	private lateinit var sentenceIds: List<UUID>
 	override fun write(request: WriterModelRequest) = result(WriterOutput(listOf(WriterSentence("Supported sentence."), WriterSentence("Stable sentence."))))
 	override fun review(request: ReviewerModelRequest): ModelCallResult<ReviewerOutput> {

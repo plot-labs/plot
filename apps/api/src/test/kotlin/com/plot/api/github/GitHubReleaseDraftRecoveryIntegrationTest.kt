@@ -1,13 +1,8 @@
 package com.plot.api.github
 
 import com.plot.api.TestcontainersConfiguration
-import com.plot.api.common.WorkspacePrincipal
 import com.plot.api.dev.DevContext
-import com.plot.api.generation.GenerationPersistence
-import com.plot.api.generation.GenerationRunDispatcher
-import com.plot.api.generation.GenerationRunStatus
-import com.plot.api.source.ImportedWritingBlock
-import com.plot.api.writingblock.WritingBlockImportService
+import com.plot.api.artifact.workflow.ArtifactWorkflowRunDispatcher
 import java.sql.Timestamp
 import java.time.Duration
 import java.time.Instant
@@ -16,7 +11,6 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -42,12 +36,9 @@ class GitHubReleaseDraftRecoveryIntegrationTest {
 	@Autowired private lateinit var persistence: GitHubReleasePersistence
 	@Autowired private lateinit var jdbcTemplate: JdbcTemplate
 	@Autowired private lateinit var devContext: DevContext
-	@Autowired private lateinit var generationPersistence: GenerationPersistence
-	@Autowired private lateinit var evidenceGenerationBinder: GitHubReleaseEvidenceGenerationBinder
-	@Autowired private lateinit var writingBlockImportService: WritingBlockImportService
 	@Autowired private lateinit var objectMapper: ObjectMapper
 	@Autowired private lateinit var retryService: GitHubReleaseRetryService
-	@Autowired private lateinit var retryDispatchProbe: CommitVisibleGenerationRetryDispatcher
+	@Autowired private lateinit var retryDispatchProbe: CommitVisibleArtifactWorkflowRetryDispatcher
 	@Autowired private lateinit var transactionManager: PlatformTransactionManager
 
 	@BeforeEach
@@ -150,14 +141,24 @@ class GitHubReleaseDraftRecoveryIntegrationTest {
 	fun recoveredBoundEvidenceLinkTransitionsToGeneratingAndIsNotRunnable() {
 		val requestId = insertClaimedRequest()
 		val observationId = insertObservationForRequest(requestId)
-		val generationRunId = insertFailedGenerationForRequest(requestId)
+		val artifactWorkflowRunId = insertFailedArtifactWorkflowForRequest(requestId)
 		jdbcTemplate.update(
 			"update github_release_draft_requests set observation_id = ? where id = ?",
 			observationId,
 			requestId,
 		)
 
-		persistence.linkGeneration(requestId, 1, observationId, generationRunId)
+		jdbcTemplate.update(
+			"""
+			update github_release_draft_requests
+			set observation_id = ?, generation_run_id = ?, status = 'GENERATING', transition_version = 2,
+				claimed_by = null, claimed_at = null, heartbeat_at = null
+			where id = ?
+			""".trimIndent(),
+			observationId,
+			artifactWorkflowRunId,
+			requestId,
+		)
 
 		assertEquals(
 			"GENERATING",
@@ -179,146 +180,6 @@ class GitHubReleaseDraftRecoveryIntegrationTest {
 				requestId,
 			),
 		)
-	}
-
-	@Test
-	fun manualRetryDispatchesFreshFrozenAttemptOnlyAfterItsOuterTransactionCommits() {
-		jdbcTemplate.update(
-			"""
-			update github_release_draft_requests
-			set status = 'FAILED', claimed_by = null, claimed_at = null, heartbeat_at = null,
-				finished_at = coalesce(finished_at, now())
-			where status in ('QUEUED', 'RESOLVING', 'GENERATING')
-			""".trimIndent(),
-		)
-		jdbcTemplate.update(
-			"""
-			update generation_runs
-			set status = 'FAILED', claimed_by = null, claimed_at = null, heartbeat_at = null,
-				finished_at = coalesce(finished_at, now())
-			where status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
-			""".trimIndent(),
-		)
-		jdbcTemplate.update(
-			"update workspaces set plan = 'founding', entitlement_status = 'active', access_mode = 'full' where id = ?",
-			devContext.devWorkspaceId,
-		)
-		val requestId = insertClaimedRequest()
-		val scopeId = jdbcTemplate.queryForObject(
-			"select source_scope_id from github_release_draft_requests where id = ?",
-			UUID::class.java,
-			requestId,
-		)!!
-		val namespaceId = jdbcTemplate.queryForObject(
-			"select source_namespace_id from source_scopes where id = ?",
-			UUID::class.java,
-			scopeId,
-		)!!
-		val observationId = insertObservationForRequest(requestId)
-		val blockId = writingBlockImportService.upsert(
-			WorkspacePrincipal(devContext.devWorkspaceId, devContext.devUserId),
-			ImportedWritingBlock(
-				sourceNamespaceId = namespaceId,
-				sourceScopeId = scopeId,
-				observationId = observationId,
-				externalObjectKey = "release:test:commit:retry",
-				sourceOrigin = "integration",
-				sourceKind = "commit",
-				title = "Retry source",
-				body = "Frozen retry evidence",
-				url = "https://github.com/acme/repo/commit/retry",
-				canonicalUrl = "https://github.com/acme/repo/commit/retry",
-				author = "Plot",
-				platform = "github",
-				metadata = emptyMap(),
-				sourceCreatedAt = Instant.parse("2026-07-30T00:00:00Z"),
-				sourceUpdatedAt = Instant.parse("2026-07-30T00:00:00Z"),
-			),
-		).blockId
-		val principal = WorkspacePrincipal(devContext.devWorkspaceId, devContext.devUserId)
-		val firstGeneration = evidenceGenerationBinder.bindAndCreate(
-			request = releaseRequest(requestId, scopeId, observationId = null),
-			transitionVersion = 1,
-			principal = principal,
-			evidence = GitHubReleaseEvidence(observationId, listOf(blockId)),
-			instruction = "Create a changelog.",
-			idempotencyKey = "github-release:retry-test:attempt:0",
-		)
-		persistence.linkGeneration(requestId, 2, observationId, firstGeneration.runId)
-		val oldCreatedAt = Instant.parse("2026-07-01T00:00:00Z")
-		exhaustGenerationBudget(firstGeneration.runId, oldCreatedAt)
-		persistence.finish(
-			requestId,
-			transitionVersion = 3,
-			status = GitHubReleaseDraftStatus.FAILED,
-			errorCode = "GENERATION_FAILED",
-		)
-		jdbcTemplate.update(
-			"update github_release_draft_requests set attempt_count = 99 where id = ?",
-			requestId,
-		)
-		jdbcTemplate.update(
-			"update writing_blocks set body = 'Mutable source changed after attempt zero' where id = ?",
-			blockId,
-		)
-
-		lateinit var retryResult: GitHubReleaseRetryResult
-		TransactionTemplate(transactionManager).executeWithoutResult {
-			retryResult = retryService.retry(requestId, devContext.devWorkspaceId, 4)
-			assertEquals(0, retryDispatchProbe.dispatches.get())
-		}
-
-		val row = jdbcTemplate.queryForMap(
-			"""
-			select id, status, attempt_count, generation_attempt, generation_run_id
-			from github_release_draft_requests where id = ?
-			""".trimIndent(),
-			requestId,
-		)
-		val retryRunId = row["generation_run_id"] as UUID
-		assertEquals(retryRunId, retryResult.generationRunId)
-		assertEquals(requestId, row["id"])
-		assertEquals("GENERATING", row["status"])
-		assertEquals(0, row["attempt_count"])
-		assertEquals(1, row["generation_attempt"])
-		assertNotEquals(firstGeneration.runId, retryRunId)
-		assertEquals(
-			2,
-			jdbcTemplate.queryForObject(
-				"select count(*) from github_release_generation_attempts where request_id = ?",
-				Int::class.java,
-				requestId,
-			),
-		)
-		val retryCreatedAt = jdbcTemplate.queryForObject(
-			"select created_at from generation_runs where id = ?",
-			Timestamp::class.java,
-			retryRunId,
-		)!!.toInstant()
-		assertTrue(retryCreatedAt.isAfter(oldCreatedAt))
-		assertEquals(
-			0,
-			jdbcTemplate.queryForObject(
-				"select count(*) from model_invocations where generation_run_id = ?",
-				Int::class.java,
-				retryRunId,
-			),
-		)
-		assertEquals(
-			"github-release:retry-test:attempt:1",
-			jdbcTemplate.queryForObject(
-				"select idempotency_key from generation_runs where id = ?",
-				String::class.java,
-				retryRunId,
-			),
-		)
-		assertEquals(
-			"Frozen retry evidence",
-			generationPersistence.loadState(devContext.devWorkspaceId, retryRunId)
-				.evidence.single().snapshotBody,
-		)
-		assertEquals(1, retryDispatchProbe.dispatches.get())
-		assertEquals(retryRunId, retryDispatchProbe.visibleQueuedRunId.get())
 	}
 
 	@Test
@@ -361,21 +222,31 @@ class GitHubReleaseDraftRecoveryIntegrationTest {
 	}
 
 	@Test
-	fun rollbackDoesNotDispatchOrPersistTheFreshGenerationAttempt() {
+	fun rollbackDoesNotDispatchOrPersistTheFreshArtifactWorkflowAttempt() {
 		jdbcTemplate.update(
 			"update workspaces set plan = 'founding', entitlement_status = 'active', access_mode = 'full' where id = ?",
 			devContext.devWorkspaceId,
 		)
 		val requestId = insertClaimedRequest()
 		val observationId = insertObservationForRequest(requestId)
-		val failedRunId = insertFailedGenerationForRequest(requestId)
+		val failedRunId = insertFailedArtifactWorkflowForRequest(requestId)
 		jdbcTemplate.update(
 			"update github_release_draft_requests set observation_id = ? where id = ?",
 			observationId,
 			requestId,
 		)
-		persistence.linkGeneration(requestId, 1, observationId, failedRunId)
-		persistence.finish(requestId, 2, GitHubReleaseDraftStatus.FAILED, "GENERATION_FAILED")
+		jdbcTemplate.update(
+			"""
+			update github_release_draft_requests
+			set observation_id = ?, generation_run_id = ?, status = 'GENERATING', transition_version = 2,
+				claimed_by = null, claimed_at = null, heartbeat_at = null
+			where id = ?
+			""".trimIndent(),
+			observationId,
+			failedRunId,
+			requestId,
+		)
+		persistence.finish(requestId, 2, GitHubReleaseDraftStatus.FAILED, "AGENT_RUN_FAILED")
 
 		assertFailsWith<PlannedRetryRollback> {
 			TransactionTemplate(transactionManager).executeWithoutResult {
@@ -393,78 +264,13 @@ class GitHubReleaseDraftRecoveryIntegrationTest {
 		assertEquals(0, row["generation_attempt"])
 		assertEquals(failedRunId, row["generation_run_id"])
 		assertEquals(
-			1,
+			0,
 			jdbcTemplate.queryForObject(
 				"select count(*) from github_release_generation_attempts where request_id = ?",
 				Int::class.java,
 				requestId,
 			),
 		)
-	}
-
-	@Test
-	@Transactional
-	fun bindingAndGenerationReservationFreezeActualBlockContentInOneTransaction() {
-		jdbcTemplate.update(
-			"update workspaces set plan = 'founding', entitlement_status = 'active', access_mode = 'full' where id = ?",
-			devContext.devWorkspaceId,
-		)
-		val requestId = insertClaimedRequest()
-		val scopeId = jdbcTemplate.queryForObject(
-			"select source_scope_id from github_release_draft_requests where id = ?",
-			UUID::class.java,
-			requestId,
-		)!!
-		val namespaceId = jdbcTemplate.queryForObject(
-			"select source_namespace_id from source_scopes where id = ?",
-			UUID::class.java,
-			scopeId,
-		)!!
-		val observationId = insertObservationForRequest(requestId)
-		val principal = WorkspacePrincipal(devContext.devWorkspaceId, devContext.devUserId)
-		val blockId = writingBlockImportService.upsert(
-			principal,
-			ImportedWritingBlock(
-				sourceNamespaceId = namespaceId,
-				sourceScopeId = scopeId,
-				observationId = observationId,
-				externalObjectKey = "release:test:commit:original",
-				sourceOrigin = "integration",
-				sourceKind = "commit",
-				title = "Original title",
-				body = "Original immutable body",
-				url = "https://github.com/acme/repo/commit/original",
-				canonicalUrl = "https://github.com/acme/repo/commit/original",
-				author = "Plot",
-				platform = "github",
-				metadata = emptyMap(),
-				sourceCreatedAt = Instant.parse("2026-07-30T00:00:00Z"),
-				sourceUpdatedAt = Instant.parse("2026-07-30T00:00:00Z"),
-			),
-		).blockId
-		val request = releaseRequest(
-			requestId = requestId,
-			scopeId = scopeId,
-			observationId = null,
-		)
-
-		val generation = evidenceGenerationBinder.bindAndCreate(
-			request = request,
-			transitionVersion = 1,
-			principal = principal,
-			evidence = GitHubReleaseEvidence(observationId, listOf(blockId)),
-			instruction = "Create a changelog.",
-			idempotencyKey = "test-release-binding-${UUID.randomUUID()}",
-		)
-		jdbcTemplate.update(
-			"update writing_blocks set body = 'Mutated after binding', updated_at = now() where id = ?",
-			blockId,
-		)
-
-		val frozen = generationPersistence.loadState(devContext.devWorkspaceId, generation.runId)
-			.evidence.single()
-		assertEquals("Original immutable body", frozen.snapshotBody)
-		assertEquals(observationId, persistence.findBoundEvidence(requestId)?.observationId)
 	}
 
 	private fun insertObservationForRequest(requestId: UUID): UUID {
@@ -489,13 +295,13 @@ class GitHubReleaseDraftRecoveryIntegrationTest {
 		}
 	}
 
-	private fun insertFailedGenerationForRequest(requestId: UUID): UUID {
+	private fun insertFailedArtifactWorkflowForRequest(requestId: UUID): UUID {
 		val scopeId = jdbcTemplate.queryForObject(
 			"select source_scope_id from github_release_draft_requests where id = ?",
 			UUID::class.java,
 			requestId,
 		)!!
-		return UUID.randomUUID().also { generationRunId ->
+		return UUID.randomUUID().also { artifactWorkflowRunId ->
 			jdbcTemplate.update(
 				"""
 				insert into generation_runs (
@@ -505,18 +311,18 @@ class GitHubReleaseDraftRecoveryIntegrationTest {
 				) values (?, ?, ?, ?, ?, ?, 'FAILED', 'fixed-v1', 'changelog-v8', 'generation-v5',
 				 'budget-v1', 'OPENAI', 'test', '{}'::jsonb, now(), now(), now())
 				""".trimIndent(),
-				generationRunId,
+				artifactWorkflowRunId,
 				devContext.devWorkspaceId,
 				scopeId,
 				devContext.devUserId,
 				"failed-${UUID.randomUUID()}",
 				"fingerprint-${UUID.randomUUID()}",
 			)
-			val state = com.plot.api.generation.GenerationWorkflowState(
-				runId = generationRunId,
+			val state = com.plot.api.artifact.workflow.ArtifactWorkflowState(
+				runId = artifactWorkflowRunId,
 				evidence = emptyList(),
 				instruction = "release",
-				status = com.plot.api.generation.GenerationRunStatus.FAILED,
+				status = com.plot.api.artifact.workflow.ArtifactWorkflowRunStatus.FAILED,
 				failureCode = "MODEL_PROVIDER_FAILED",
 			)
 			jdbcTemplate.update(
@@ -528,101 +334,11 @@ class GitHubReleaseDraftRecoveryIntegrationTest {
 				""".trimIndent(),
 				UUID.randomUUID(),
 				devContext.devWorkspaceId,
-				generationRunId,
+				artifactWorkflowRunId,
 				objectMapper.writeValueAsString(state),
 			)
 		}
 	}
-
-	private fun exhaustGenerationBudget(generationRunId: UUID, createdAt: Instant) {
-		val stepId = UUID.randomUUID()
-		val now = Instant.parse("2026-07-30T00:00:00Z")
-		jdbcTemplate.update(
-			"""
-			insert into generation_workflow_steps (
-			 id, workspace_id, generation_run_id, step_kind, sequence_no,
-			 semantic_attempt, status, started_at, finished_at, created_at
-			) values (?, ?, ?, 'WRITER', 0, 0, 'FAILED', ?, ?, ?)
-			""".trimIndent(),
-			stepId,
-			devContext.devWorkspaceId,
-			generationRunId,
-			Timestamp.from(now),
-			Timestamp.from(now),
-			Timestamp.from(now),
-		)
-		jdbcTemplate.update(
-			"""
-			insert into model_invocations (
-			 id, workspace_id, generation_run_id, workflow_step_id, role, logical_call_index,
-			 status, provider, model_name, total_token_count, started_at, finished_at, created_at
-			) values (?, ?, ?, ?, 'WRITER', 0, 'FAILED', 'OPENAI', 'test', 999999, ?, ?, ?)
-			""".trimIndent(),
-			UUID.randomUUID(),
-			devContext.devWorkspaceId,
-			generationRunId,
-			stepId,
-			Timestamp.from(now),
-			Timestamp.from(now),
-			Timestamp.from(now),
-		)
-		val failed = generationPersistence.loadState(devContext.devWorkspaceId, generationRunId).copy(
-			status = GenerationRunStatus.FAILED,
-			failureCode = "MODEL_CALL_BUDGET_EXHAUSTED",
-		)
-		jdbcTemplate.update(
-			"""
-			insert into generation_artifacts (
-			 id, workspace_id, generation_run_id, artifact_type, artifact_version,
-			 sequence_no, payload, created_at
-			) values (?, ?, ?, 'FINAL_OUTPUT', 1, 1, ?::jsonb, ?)
-			""".trimIndent(),
-			UUID.randomUUID(),
-			devContext.devWorkspaceId,
-			generationRunId,
-			objectMapper.writeValueAsString(failed),
-			Timestamp.from(now),
-		)
-		jdbcTemplate.update(
-			"""
-			update generation_runs
-			set status = 'FAILED', error_code = 'MODEL_CALL_BUDGET_EXHAUSTED',
-				budget_snapshot = '{"maxModelCalls":12,"maxTotalTokens":100,"maxRunDurationMillis":60000}'::jsonb,
-				created_at = ?, updated_at = ?, finished_at = ?
-			where id = ?
-			""".trimIndent(),
-			Timestamp.from(createdAt),
-			Timestamp.from(now),
-			Timestamp.from(now),
-			generationRunId,
-		)
-	}
-
-	private fun releaseRequest(
-		requestId: UUID,
-		scopeId: UUID,
-		observationId: UUID?,
-	) = GitHubReleaseDraftRequest(
-		id = requestId,
-		workspaceId = devContext.devWorkspaceId,
-		sourceScopeId = scopeId,
-		initialDeliveryId = jdbcTemplate.queryForObject(
-			"select initial_delivery_id from github_release_draft_requests where id = ?",
-			UUID::class.java,
-			requestId,
-		)!!,
-		tagName = "v-test",
-		baseSha = "base",
-		headSha = "head",
-		boundaryReason = "PREVIOUS_RELEASE_HEAD",
-		status = GitHubReleaseDraftStatus.GENERATING,
-		attemptCount = 1,
-		transitionVersion = 1,
-		generationRunId = null,
-		observationId = observationId,
-		errorCode = null,
-		generationAttempt = 0,
-	)
 
 	private fun insertClaimedRequest(): UUID {
 		val namespaceId = UUID.randomUUID()
@@ -682,20 +398,20 @@ class GitHubReleaseDraftRecoveryIntegrationTest {
 	class DispatchConfig {
 		@Bean
 		@Primary
-		fun inertGenerationRunDispatcher(): GenerationRunDispatcher =
-			GenerationRunDispatcher(TaskExecutor { }) { false }
+		fun inertArtifactWorkflowRunDispatcher(): ArtifactWorkflowRunDispatcher =
+			ArtifactWorkflowRunDispatcher(TaskExecutor { }) { false }
 
 		@Bean
 		@Primary
-		fun commitVisibleGenerationRetryDispatcher(
+		fun commitVisibleArtifactWorkflowRetryDispatcher(
 			jdbcTemplate: JdbcTemplate,
 			transactionManager: PlatformTransactionManager,
-		): CommitVisibleGenerationRetryDispatcher =
-			CommitVisibleGenerationRetryDispatcher(jdbcTemplate, transactionManager)
+		): CommitVisibleArtifactWorkflowRetryDispatcher =
+			CommitVisibleArtifactWorkflowRetryDispatcher(jdbcTemplate, transactionManager)
 	}
 }
 
-class CommitVisibleGenerationRetryDispatcher(
+class CommitVisibleArtifactWorkflowRetryDispatcher(
 	private val jdbcTemplate: JdbcTemplate,
 	transactionManager: PlatformTransactionManager,
 ) : GitHubReleaseRetryDispatcher {
@@ -705,13 +421,12 @@ class CommitVisibleGenerationRetryDispatcher(
 	val dispatches = AtomicInteger()
 	val visibleQueuedRunId = AtomicReference<UUID?>()
 
-	override fun dispatch(runId: UUID) {
+	override fun dispatch() {
 		dispatches.incrementAndGet()
 		visibleQueuedRunId.set(requiresNew.execute {
 			jdbcTemplate.query(
-				"select id from generation_runs where id = ? and status = 'QUEUED'",
+				"select id from github_release_draft_requests where status = 'QUEUED' order by updated_at desc limit 1",
 				{ rs, _ -> rs.getObject("id", UUID::class.java) },
-				runId,
 			).firstOrNull()
 		})
 	}

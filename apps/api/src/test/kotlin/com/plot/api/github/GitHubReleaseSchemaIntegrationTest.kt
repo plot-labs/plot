@@ -41,20 +41,20 @@ class GitHubReleaseSchemaIntegrationTest {
 	@Test
 	fun generationRunCanBelongToOnlyOneReleaseRequest() {
 		val scopeId = insertScope()
-		val generationRunId = insertGenerationRun(scopeId)
+		val artifactWorkflowRunId = insertArtifactWorkflowRun(scopeId)
 		val firstRequestId = insertRequest(scopeId, insertDelivery(), "v1.0.0")
 		val secondRequestId = insertRequest(scopeId, insertDelivery(), "v1.1.0")
 
 		jdbcTemplate.update(
 			"update github_release_draft_requests set generation_run_id = ? where id = ?",
-			generationRunId,
+			artifactWorkflowRunId,
 			firstRequestId,
 		)
 
 		assertFailsWith<DuplicateKeyException> {
 			jdbcTemplate.update(
 				"update github_release_draft_requests set generation_run_id = ? where id = ?",
-				generationRunId,
+				artifactWorkflowRunId,
 				secondRequestId,
 			)
 		}
@@ -129,7 +129,7 @@ class GitHubReleaseSchemaIntegrationTest {
 		)
 	}
 
-	private fun insertGenerationRun(sourceScopeId: UUID): UUID = UUID.randomUUID().also { id ->
+	private fun insertArtifactWorkflowRun(sourceScopeId: UUID): UUID = UUID.randomUUID().also { id ->
 		val key = UUID.randomUUID().toString()
 		jdbcTemplate.update(
 			"""

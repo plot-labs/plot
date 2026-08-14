@@ -64,7 +64,7 @@ class WorkerShutdownIntegrationTest {
 		)
 		val managedExecutors = listOf(
 			executor,
-			context.getBean("generationTaskExecutor", ThreadPoolTaskExecutor::class.java),
+			context.getBean("artifactWorkflowTaskExecutor", ThreadPoolTaskExecutor::class.java),
 			context.getBean("githubReleaseTaskExecutor", ThreadPoolTaskExecutor::class.java),
 		)
 		val monitoringId = createMonitoring(

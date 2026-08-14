@@ -55,7 +55,7 @@ data class PlotAiProperties(
 		require(!claimTimeout.isNegative && !claimTimeout.isZero) { "plot.ai.claim-timeout must be positive" }
 		require(!workerPollDelay.isNegative && !workerPollDelay.isZero) { "plot.ai.worker-poll-delay must be positive" }
 		if (enabled && !model.isNullOrBlank()) {
-			require(provider == OPENROUTER_GATEWAY) { "plot.ai.provider must be openrouter when generation is enabled" }
+			require(provider == OPENROUTER_GATEWAY) { "plot.ai.provider must be openrouter when artifact workflows are enabled" }
 			require(baseUrl == OPENROUTER_BASE_URL) { "plot.ai.base-url must be the canonical OpenRouter API origin" }
 			require(model in SUPPORTED_MODELS) { "plot.ai.model must use a supported pinned OpenRouter profile" }
 			require(!routingProvider.isNullOrBlank() && ROUTING_PROVIDER_SLUG.matches(routingProvider)) {

@@ -1,12 +1,12 @@
 package com.plot.api.artifact
 
-import com.plot.api.generation.model.CitationStatus
-import com.plot.api.generation.model.EvidenceSnapshot
-import com.plot.api.generation.model.ExportSentence
-import com.plot.api.generation.model.ExportSentenceStatus
-import com.plot.api.generation.model.ExportSource
-import com.plot.api.generation.model.SentenceCitation
-import com.plot.api.generation.model.SourceProvider
+import com.plot.api.artifact.workflow.model.CitationStatus
+import com.plot.api.artifact.workflow.model.EvidenceSnapshot
+import com.plot.api.artifact.workflow.model.ExportSentence
+import com.plot.api.artifact.workflow.model.ExportSentenceStatus
+import com.plot.api.artifact.workflow.model.ExportSource
+import com.plot.api.artifact.workflow.model.SentenceCitation
+import com.plot.api.artifact.workflow.model.SourceProvider
 import java.time.Instant
 import java.util.UUID
 import kotlin.test.Test
@@ -157,7 +157,7 @@ class ArtifactMarkdownExportServiceTest {
 		excerpt: String,
 	) = EvidenceSnapshot(
 		id = UUID.fromString(id),
-		generationRunId = runId,
+		artifactWorkflowRunId = runId,
 		writingBlockId = UUID.randomUUID(),
 		orderIndex = 0,
 		sourceProvider = SourceProvider.GITHUB,

@@ -29,7 +29,7 @@ export async function pollChatAgentRun(
     const run = initialRun ?? await client.getChatAgentRun(runId, { signal: options.signal });
     initialRun = undefined;
     options.onUpdate?.(run);
-    if (run.generationRunId || isTerminalChatAgentStatus(run.status)) return run;
+    if (run.artifactId || isTerminalChatAgentStatus(run.status)) return run;
     await abortableDelay(Math.min(fallbackDelay, maxDelay), options.signal);
     fallbackDelay = Math.min(fallbackDelay * 2, maxDelay);
   }

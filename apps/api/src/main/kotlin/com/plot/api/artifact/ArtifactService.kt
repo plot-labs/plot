@@ -16,13 +16,13 @@ import com.plot.api.artifact.dto.ContentVariantHistoryDetailResponse
 import com.plot.api.artifact.dto.ExportDisposition
 import com.plot.api.artifact.dto.ExportWarningResponse
 import com.plot.api.dev.DevContext
-import com.plot.api.generation.model.CitationStatus
-import com.plot.api.generation.model.EvidenceSnapshot
-import com.plot.api.generation.model.ExportSentence
-import com.plot.api.generation.model.ExportSentenceStatus
-import com.plot.api.generation.model.SentenceCitation
-import com.plot.api.generation.model.SourceProvider
-import com.plot.api.generation.model.ExportSource
+import com.plot.api.artifact.workflow.model.CitationStatus
+import com.plot.api.artifact.workflow.model.EvidenceSnapshot
+import com.plot.api.artifact.workflow.model.ExportSentence
+import com.plot.api.artifact.workflow.model.ExportSentenceStatus
+import com.plot.api.artifact.workflow.model.SentenceCitation
+import com.plot.api.artifact.workflow.model.SourceProvider
+import com.plot.api.artifact.workflow.model.ExportSource
 import java.net.URI
 import java.security.MessageDigest
 import java.sql.Timestamp
@@ -54,16 +54,15 @@ class ArtifactService(
 		) ?: 0L
 		val items = jdbcTemplate.query(
 			"""
-			select id, generation_run_id, status, title, updated_at from content_packs
+			select id, status, title, updated_at from content_packs
 			where workspace_id = ? order by updated_at desc, id desc limit ? offset ?
 			""".trimIndent(),
 			{ rs, _ ->
 				ArtifactSummaryResponse(
 					id = rs.getObject(1, UUID::class.java),
-					generationRunId = rs.getObject(2, UUID::class.java),
-					status = rs.getString(3),
-					title = rs.getString(4),
-					updatedAt = rs.getTimestamp(5).toInstant(),
+					status = rs.getString(2),
+					title = rs.getString(3),
+					updatedAt = rs.getTimestamp(4).toInstant(),
 				)
 			},
 			devContext.devWorkspaceId, size, page * size,
@@ -196,7 +195,8 @@ class ArtifactService(
 				throw staleArtifactRevision(variantId)
 			}
 			val projection = loadPack("cv.id = ?", variantId)
-			val evidence = loadEvidence(projection.generationRunId)
+			val artifactWorkflowRunId = artifactWorkflowRunIdForVariant(variantId)
+			val evidence = loadEvidence(artifactWorkflowRunId)
 			val publicCitations = loadPublicCitations(variantId, revision.id)
 			val exportSentences = loadExportSentences(variantId, revision.id, publicCitations)
 			val unresolved = exportSentences.filter { it.status.isUnresolved }
@@ -213,14 +213,14 @@ class ArtifactService(
 			val keyMatches = acknowledgedWarningKeys.toSet() == expectedWarningKeys
 			if (unresolved.isNotEmpty() && !acknowledge) {
 				recordExport(
-					revision, projection.generationRunId, variantId, disposition, includeSources,
+					revision, artifactWorkflowRunId, variantId, disposition, includeSources,
 					unresolved, warnings.map { it.key },  false, "REJECTED", null, null,
 				)
 				return@execute ExportAttempt.ConfirmationRequired(warnings, unresolved.map { it.id }, unresolved.map { it.revisionId })
 			}
 			if (unresolved.isNotEmpty() && acknowledge && !keyMatches && !legacyMatches) {
 				recordExport(
-					revision, projection.generationRunId, variantId, disposition, includeSources,
+					revision, artifactWorkflowRunId, variantId, disposition, includeSources,
 					unresolved, acknowledgedWarningKeys, false, "REJECTED", null, null,
 				)
 				return@execute ExportAttempt.ConfirmationRequired(warnings, unresolved.map { it.id }, unresolved.map { it.revisionId })
@@ -252,10 +252,10 @@ class ArtifactService(
 				).joinToString("|"),
 			)
 			val exportId = findSuccessfulExport(
-				revision, projection.generationRunId, variantId, disposition, includeSources,
+				revision, artifactWorkflowRunId, variantId, disposition, includeSources,
 				rendered.unresolvedCount, rendered.warningAcknowledged, inputHash, outputHash,
 			) ?: recordExport(
-				revision, projection.generationRunId, variantId, disposition, includeSources,
+				revision, artifactWorkflowRunId, variantId, disposition, includeSources,
 				exportSentences, warnings.map { it.key }, rendered.warningAcknowledged,
 				"SUCCEEDED", inputHash, outputHash,
 			)
@@ -365,7 +365,7 @@ class ArtifactService(
 			""".trimIndent(),
 			nextRevisionId,
 			devContext.devWorkspaceId,
-			currentRevision.generationRunId,
+			currentRevision.artifactWorkflowRunId,
 			variantId,
 			nextRevisionNumber,
 			sanitizedLexicalContent.toString(),
@@ -381,7 +381,7 @@ class ArtifactService(
 				) values (?, ?, ?, ?, ?, ?, ?, ?)
 				""".trimIndent(),
 				uuidGenerator.next(), devContext.devWorkspaceId, nextRevisionId,
-				currentRevision.generationRunId, variantId, statement.id,
+				currentRevision.artifactWorkflowRunId, variantId, statement.id,
 				nextRevisionBySentence.getValue(statement.id), statement.orderIndex,
 			)
 		}
@@ -603,7 +603,7 @@ class ArtifactService(
 		ApiException(HttpStatus.BAD_REQUEST, "BAD_REQUEST", message)
 
 	private fun insertNewSentence(variantId: UUID, sentenceId: UUID, now: java.time.Instant) {
-		val generationRunId = jdbcTemplate.queryForObject(
+		val artifactWorkflowRunId = jdbcTemplate.queryForObject(
 			"select generation_run_id from content_variants where workspace_id = ? and id = ?",
 			UUID::class.java, devContext.devWorkspaceId, variantId,
 		) ?: notFound()
@@ -613,7 +613,7 @@ class ArtifactService(
 		) ?: 0)
 		jdbcTemplate.update(
 			"insert into content_variant_sentences (id, workspace_id, generation_run_id, content_variant_id, stable_key, order_index, created_at) values (?, ?, ?, ?, ?, ?, ?)",
-			sentenceId, devContext.devWorkspaceId, generationRunId, variantId, sentenceId.toString(), orderIndex, Timestamp.from(now),
+			sentenceId, devContext.devWorkspaceId, artifactWorkflowRunId, variantId, sentenceId.toString(), orderIndex, Timestamp.from(now),
 		)
 	}
 
@@ -626,7 +626,7 @@ class ArtifactService(
 	}
 
 	private fun insertSentenceRevision(variantId: UUID, sentenceId: UUID, revisionNumber: Int, body: String, now: java.time.Instant): UUID {
-		val generationRunId = jdbcTemplate.queryForObject(
+		val artifactWorkflowRunId = jdbcTemplate.queryForObject(
 			"select generation_run_id from content_variants where workspace_id = ? and id = ?",
 			UUID::class.java, devContext.devWorkspaceId, variantId,
 		) ?: notFound()
@@ -638,7 +638,7 @@ class ArtifactService(
 			 revision_no, origin, body, is_current, created_by_user_id, created_at
 			) values (?, ?, ?, ?, ?, ?, 'USER_MODIFIED', ?, true, ?, ?)
 			""".trimIndent(),
-			revisionId, devContext.devWorkspaceId, generationRunId, variantId, sentenceId,
+			revisionId, devContext.devWorkspaceId, artifactWorkflowRunId, variantId, sentenceId,
 			revisionNumber, body, devContext.devUserId, Timestamp.from(now),
 		)
 		return revisionId
@@ -673,17 +673,24 @@ class ArtifactService(
 
 	private fun loadPack(predicate: String, id: UUID): ArtifactResponse = loadPackForRevision(predicate, id, null)
 
+	private fun artifactWorkflowRunIdForVariant(variantId: UUID): UUID = jdbcTemplate.queryForObject(
+		"select generation_run_id from content_variants where workspace_id = ? and id = ?",
+		UUID::class.java,
+		devContext.devWorkspaceId,
+		variantId,
+	) ?: notFound()
+
 	private fun loadPackForRevision(predicate: String, id: UUID, revisionId: UUID?): ArtifactResponse {
 		val header = jdbcTemplate.query(
 			"""
-			select cp.id, cp.generation_run_id, cp.status, cp.title, cv.id, cv.status
+			select cp.id, cp.status, cp.title, cv.id, cv.status
 			from content_packs cp join content_variants cv on cv.workspace_id = cp.workspace_id and cv.content_pack_id = cp.id
 			where cp.workspace_id = ? and $predicate and cv.variant_index = 0
 			""".trimIndent(),
-			{ rs, _ -> listOf(rs.getObject(1, UUID::class.java), rs.getObject(2, UUID::class.java), rs.getString(3), rs.getString(4), rs.getObject(5, UUID::class.java), rs.getString(6)) },
+			{ rs, _ -> listOf(rs.getObject(1, UUID::class.java), rs.getString(2), rs.getString(3), rs.getObject(4, UUID::class.java), rs.getString(5)) },
 			devContext.devWorkspaceId, id,
 		).firstOrNull() ?: notFound()
-		val variantId = header[4] as UUID
+		val variantId = header[3] as UUID
 		val revision = revisionId?.let { requestedRevision ->
 			jdbcTemplate.query(
 				"select id, generation_run_id, revision_no, lexical_content::text from content_variant_revisions where workspace_id = ? and id = ? and content_variant_id = ?",
@@ -697,12 +704,11 @@ class ArtifactService(
 		val sentences = loadSentences(variantId, revision.id, citations)
 		return ArtifactResponse(
 			header[0] as UUID,
-			header[1] as UUID,
-			header[2] as String,
-			header[3] as String?,
+			header[1] as String,
+			header[2] as String?,
 			ContentVariantResponse(
 				variantId,
-				header[5] as String,
+				header[4] as String,
 				revision.id,
 				revision.revisionNumber,
 				revision.lexicalContent,
@@ -1031,7 +1037,7 @@ class ArtifactService(
 		ApiException(HttpStatus.CONFLICT, "STALE_ARTIFACT_REVISION", "Artifact revision is stale", variantId)
 
 	private fun historyCause(revisionNumber: Int, createdByUserId: UUID?): String {
-		if (revisionNumber == 1) return "Initial generation"
+		if (revisionNumber == 1) return "Initial draft"
 		if (createdByUserId == devContext.devUserId) return "Edited by you"
 		val displayName = createdByUserId?.let {
 			jdbcTemplate.query(
@@ -1085,7 +1091,7 @@ class ArtifactService(
 
 private data class CurrentArtifactRevision(
 	val id: UUID,
-	val generationRunId: UUID,
+	val artifactWorkflowRunId: UUID,
 	val revisionNumber: Int,
 	val lexicalContent: JsonNode,
 )

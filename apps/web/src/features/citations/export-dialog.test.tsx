@@ -9,7 +9,6 @@ import { PlotApiError, type Artifact, type PlotApiClient } from "@plot/api-clien
 
 const pack: Artifact = {
   id: "pack-1",
-  generationRunId: "run-1",
   status: "NEEDS_REVIEW",
   title: "July changelog",
   variant: {

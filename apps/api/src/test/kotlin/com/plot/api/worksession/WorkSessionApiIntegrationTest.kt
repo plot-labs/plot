@@ -39,6 +39,30 @@ class WorkSessionApiIntegrationTest {
 	@BeforeEach
 	fun cleanDevSessions() {
 		jdbcTemplate.update(
+			"delete from generation_runs where workspace_id = ? and agent_run_id is not null",
+			devContext.devWorkspaceId,
+		)
+		jdbcTemplate.update(
+			"delete from artifact_runs where workspace_id = ?",
+			devContext.devWorkspaceId,
+		)
+		jdbcTemplate.update(
+			"delete from agent_steps where workspace_id = ?",
+			devContext.devWorkspaceId,
+		)
+		jdbcTemplate.update(
+			"delete from agent_run_inputs where workspace_id = ?",
+			devContext.devWorkspaceId,
+		)
+		jdbcTemplate.update(
+			"delete from agent_run_sources where workspace_id = ?",
+			devContext.devWorkspaceId,
+		)
+		jdbcTemplate.update(
+			"delete from agent_runs where workspace_id = ?",
+			devContext.devWorkspaceId,
+		)
+		jdbcTemplate.update(
 			"update generation_runs set work_session_id = null where workspace_id = ? and work_session_id is not null",
 			devContext.devWorkspaceId,
 		)
@@ -57,7 +81,7 @@ class WorkSessionApiIntegrationTest {
 			status { isOk() }
 			jsonPath("$.title") { value("Draft Session") }
 			jsonPath("$.status") { value("OPEN") }
-			jsonPath("$.latestGenerationId") { doesNotExist() }
+			jsonPath("$.latestArtifactWorkflowId") { doesNotExist() }
 			jsonPath("$.lastActivityAt") { exists() }
 			jsonPath("$.createdAt") { exists() }
 			jsonPath("$.updatedAt") { exists() }
@@ -72,7 +96,7 @@ class WorkSessionApiIntegrationTest {
 				jsonPath("$[0].id") { value(sessionId.toString()) }
 				jsonPath("$[0].title") { value("Draft Session") }
 				jsonPath("$[0].status") { value("OPEN") }
-				jsonPath("$[0].latestGenerationId") { doesNotExist() }
+				jsonPath("$[0].latestArtifactWorkflowId") { doesNotExist() }
 				jsonPath("$[0].workspaceId") { doesNotExist() }
 			}
 
@@ -87,55 +111,6 @@ class WorkSessionApiIntegrationTest {
 			jsonPath("$.lastActivityAt") { exists() }
 			jsonPath("$.updatedAt") { exists() }
 			jsonPath("$.workspaceId") { doesNotExist() }
-		}
-	}
-
-	@Test
-	fun updateLinksTheLatestGenerationAndRefreshesActivity() {
-		val sessionId = UUID.randomUUID()
-		insertSession(sessionId, title = "Linked Session", createdAt = Instant.parse("2026-01-01T00:00:00Z"))
-		val generationId = UUID.randomUUID()
-		insertGeneration(generationId)
-		jdbcTemplate.update("update work_sessions set last_activity_at = now() - interval '1 minute' where id = ?", sessionId)
-		val before = jdbcTemplate.queryForObject("select last_activity_at from work_sessions where id = ?", Instant::class.java, sessionId)!!
-
-		mockMvc.patch("/api/sessions/$sessionId") {
-			contentType = MediaType.APPLICATION_JSON
-			content = """{"latestGenerationId":"$generationId"}"""
-		}.andExpect {
-			status { isOk() }
-			jsonPath("$.title") { value("Linked Session") }
-			jsonPath("$.latestGenerationId") { value(generationId.toString()) }
-			jsonPath("$.lastActivityAt") { exists() }
-		}
-
-		val after = jdbcTemplate.queryForObject("select last_activity_at from work_sessions where id = ?", Instant::class.java, sessionId)!!
-		check(after.isAfter(before))
-	}
-
-	@Test
-	fun updateRejectsMissingOrOtherWorkspaceGeneration() {
-		val sessionId = UUID.randomUUID()
-		insertSession(sessionId, title = "Scoped Session", createdAt = Instant.parse("2026-01-01T00:00:00Z"))
-		val missingGenerationId = UUID.randomUUID()
-
-		mockMvc.patch("/api/sessions/$sessionId") {
-			contentType = MediaType.APPLICATION_JSON
-			content = """{"latestGenerationId":"$missingGenerationId"}"""
-		}.andExpect {
-			status { isBadRequest() }
-			jsonPath("$.error") { value("INVALID_GENERATION") }
-		}
-
-		val otherWorkspaceId = insertOtherWorkspace()
-		val otherGenerationId = UUID.randomUUID()
-		insertGeneration(otherGenerationId, otherWorkspaceId)
-		mockMvc.patch("/api/sessions/$sessionId") {
-			contentType = MediaType.APPLICATION_JSON
-			content = """{"latestGenerationId":"$otherGenerationId"}"""
-		}.andExpect {
-			status { isBadRequest() }
-			jsonPath("$.error") { value("INVALID_GENERATION") }
 		}
 	}
 
@@ -164,33 +139,21 @@ class WorkSessionApiIntegrationTest {
 	}
 
 	@Test
-	fun listSessionGenerationsReturnsEveryLinkedRunInChronologicalOrder() {
+	fun listSessionAgentRunsReturnsEveryChatRunInChronologicalOrder() {
 		val sessionId = UUID.randomUUID()
-		insertSession(sessionId, title = "Artifact session", createdAt = Instant.parse("2026-01-01T00:00:00Z"))
-		val firstRun = UUID.randomUUID()
-		val secondRun = UUID.randomUUID()
-		insertGeneration(firstRun, createdAt = Instant.parse("2026-01-01T01:00:00Z"), workSessionId = sessionId, instruction = "Changelog")
-		insertGeneration(secondRun, createdAt = Instant.parse("2026-01-01T02:00:00Z"), workSessionId = sessionId, instruction = "Customer update")
-		val artifactId = UUID.randomUUID()
-		jdbcTemplate.update(
-			"""
-			insert into content_packs (id, workspace_id, generation_run_id, title, status, created_at, updated_at)
-			values (?, ?, ?, 'Customer update', 'READY', now(), now())
-			""".trimIndent(),
-			artifactId, devContext.devWorkspaceId, secondRun,
-		)
+		insertSession(sessionId, title = "Agent session", createdAt = Instant.parse("2026-01-01T00:00:00Z"))
+		val firstRun = insertChatAgentRun(sessionId, Instant.parse("2026-01-01T01:00:00Z"), "Changelog")
+		val secondRun = insertChatAgentRun(sessionId, Instant.parse("2026-01-01T02:00:00Z"), "Customer update")
 
-		mockMvc.get("/api/sessions/$sessionId/generations")
+		mockMvc.get("/api/sessions/$sessionId/agent-runs")
 			.andExpect {
 				status { isOk() }
 				jsonPath("$[0].id") { value(firstRun.toString()) }
 				jsonPath("$[0].instruction") { value("Changelog") }
-				jsonPath("$[0].artifact") { doesNotExist() }
+				jsonPath("$[0].artifactWorkflowRunId") { doesNotExist() }
 				jsonPath("$[1].id") { value(secondRun.toString()) }
 				jsonPath("$[1].instruction") { value("Customer update") }
-				jsonPath("$[1].artifact.id") { value(artifactId.toString()) }
-				jsonPath("$[1].artifact.title") { value("Customer update") }
-				jsonPath("$[1].artifact.updatedAt") { exists() }
+				jsonPath("$[1].artifactWorkflowRunId") { doesNotExist() }
 			}
 	}
 
@@ -231,20 +194,6 @@ class WorkSessionApiIntegrationTest {
 		)!!
 	}
 
-	private fun insertOtherWorkspace(): UUID {
-		val workspaceId = UUID.randomUUID()
-		jdbcTemplate.update(
-			"""
-			insert into workspaces (id, name, slug, created_by_user_id, status, created_at, updated_at)
-			values (?, 'Other Session Workspace', ?, ?, 'ACTIVE', now(), now())
-			""".trimIndent(),
-			workspaceId,
-			"other-session-${workspaceId}",
-			devContext.devUserId,
-		)
-		return workspaceId
-	}
-
 	private fun insertSession(
 		id: UUID,
 		workspaceId: UUID = devContext.devWorkspaceId,
@@ -278,32 +227,28 @@ class WorkSessionApiIntegrationTest {
 		)
 	}
 
-	private fun insertGeneration(
-		id: UUID,
-		workspaceId: UUID = devContext.devWorkspaceId,
-		createdAt: Instant = Instant.now(),
-		workSessionId: UUID? = null,
-		instruction: String? = null,
-	) {
+	private fun insertChatAgentRun(sessionId: UUID, createdAt: Instant, instruction: String): UUID {
+		val id = UUID.randomUUID()
 		jdbcTemplate.update(
 			"""
-			insert into generation_runs (
-				id, workspace_id, work_session_id, created_by_user_id, idempotency_key, request_fingerprint,
-				status, workflow_version, prompt_version, output_schema_version, budget_version,
-				provider, model_name, budget_snapshot, user_instruction, created_at, updated_at
-			)
-			values (?, ?, ?, ?, ?, ?, 'QUEUED', 'fixed-v1', 'test-v1', 'generation-v5', 'budget-v1',
-				'TEST', 'test-model', '{}'::jsonb, ?, ?, ?)
+			insert into agent_runs (
+				id, workspace_id, routine_execution_id, routine_id, work_session_id, created_by_user_id,
+				origin, idempotency_key, request_fingerprint, instruction_snapshot,
+				prompt_version, tool_policy_version, budget_snapshot, status,
+				current_step, attempt_count, max_attempts, created_at, updated_at
+			) values (?, ?, null, null, ?, ?, 'CHAT', ?, ?, ?, 'chat-agent-v1', 'read-only-v1', '{}'::jsonb,
+				'SUCCEEDED', 0, 0, 3, ?, ?)
 			""".trimIndent(),
 			id,
-			workspaceId,
-			workSessionId,
+			devContext.devWorkspaceId,
+			sessionId,
 			devContext.devUserId,
-			"session-test-$id",
+			"session-agent-$id",
 			"fingerprint-$id",
 			instruction,
 			Timestamp.from(createdAt),
 			Timestamp.from(createdAt),
 		)
+		return id
 	}
 }

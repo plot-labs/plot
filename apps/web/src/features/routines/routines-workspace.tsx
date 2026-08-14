@@ -404,7 +404,6 @@ export function RoutinesWorkspace() {
                 const busy = busyRoutineId === routine.id;
                 const agentRunId = routine.latestExecution?.agentRunId;
                 const chatId = routine.latestExecution?.chatId;
-                const generationRunId = routine.latestExecution?.generationRunId;
                 const artifactId = routine.latestExecution?.artifactId;
                 const expanded = expandedRoutineId === routine.id;
                 return (
@@ -423,7 +422,7 @@ export function RoutinesWorkspace() {
                         <div className="mt-3 flex items-center justify-between gap-3">
                           <span className="truncate text-[11px] text-black/38 dark:text-white/40">{formatRoutineStatus(routine)}</span>
                           <div className="flex shrink-0 items-center gap-1">
-                            {chatId && <Link href={`/chat?chat=${encodeURIComponent(chatId)}${generationRunId ? `&generation=${encodeURIComponent(generationRunId)}` : ""}${artifactId ? `&artifact=${encodeURIComponent(artifactId)}` : ""}`} aria-label={`Open Chat for ${routine.name}`} className="inline-flex h-7 items-center rounded-[7px] px-2 text-[11px] font-medium text-black/55 transition hover:bg-black/[0.04] hover:text-black/78 dark:text-white/58 dark:hover:bg-white/10 dark:hover:text-white/82">Chat</Link>}
+                            {chatId && <Link href={`/chat?chat=${encodeURIComponent(chatId)}${artifactId ? `&artifact=${encodeURIComponent(artifactId)}` : ""}`} aria-label={`Open Chat for ${routine.name}`} className="inline-flex h-7 items-center rounded-[7px] px-2 text-[11px] font-medium text-black/55 transition hover:bg-black/[0.04] hover:text-black/78 dark:text-white/58 dark:hover:bg-white/10 dark:hover:text-white/82">Chat</Link>}
                             {artifactId && <Link href={`/artifacts?artifact=${encodeURIComponent(artifactId)}`} aria-label={`Open artifact for ${routine.name}`} className="inline-flex h-7 items-center rounded-[7px] px-2 text-[11px] font-medium text-black/55 transition hover:bg-black/[0.04] hover:text-black/78 dark:text-white/58 dark:hover:bg-white/10 dark:hover:text-white/82">Artifact</Link>}
                             {agentRunId && <button type="button" onClick={() => { void toggleAgentDetail(routine); }} aria-expanded={expanded} aria-label={`View agent activity for ${routine.name}`} className="inline-flex h-7 items-center rounded-[7px] px-2 text-[11px] font-medium text-black/55 transition hover:bg-black/[0.04] hover:text-black/78 dark:text-white/58 dark:hover:bg-white/10 dark:hover:text-white/82">Activity</button>}
                             <button type="button" onClick={() => { void runRoutine(routine); }} disabled={busyRoutineId !== null || isRoutineRunInProgress(routine)} className="inline-flex h-7 items-center gap-1.5 rounded-[7px] px-2 text-[11px] font-medium text-black/55 transition hover:bg-black/[0.04] hover:text-black/78 disabled:cursor-wait disabled:opacity-50 dark:text-white/58 dark:hover:bg-white/10 dark:hover:text-white/82"><Play className="size-3" /> Run</button>

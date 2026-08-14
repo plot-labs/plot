@@ -16,24 +16,30 @@ data class CreateChatAgentRunRequest(
 data class ChatAgentRunResponse(
 	val id: UUID,
 	val chatId: UUID,
+	val instruction: String,
 	val status: AgentRunStatus,
 	val failureCode: String?,
-	val generationRunId: UUID?,
 	val artifactId: UUID?,
+	val artifact: ChatAgentArtifactSummaryResponse?,
 	val createdAt: Instant,
 	val updatedAt: Instant,
 )
 
-fun AgentRunRecord.toChatResponse(
-	generationRunId: UUID? = null,
-	artifactId: UUID? = null,
-) = ChatAgentRunResponse(
+data class ChatAgentArtifactSummaryResponse(
+	val id: UUID,
+	val status: String,
+	val title: String?,
+	val updatedAt: Instant,
+)
+
+fun AgentRunRecord.toChatResponse(artifact: ChatAgentArtifactSummaryResponse? = null) = ChatAgentRunResponse(
 	id = id,
 	chatId = requireNotNull(workSessionId) { "Chat Agent run is missing its Chat" },
+	instruction = instructionSnapshot,
 	status = status,
 	failureCode = failureCode,
-	generationRunId = generationRunId,
-	artifactId = artifactId,
+	artifactId = artifact?.id,
+	artifact = artifact,
 	createdAt = createdAt,
 	updatedAt = updatedAt,
 )

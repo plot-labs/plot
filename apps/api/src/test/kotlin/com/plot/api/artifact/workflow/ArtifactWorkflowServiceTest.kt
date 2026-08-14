@@ -1,0 +1,230 @@
+package com.plot.api.artifact.workflow
+
+import com.plot.api.ai.provider.ArtifactWorkflowModelGateway
+import com.plot.api.ai.provider.ModelCallMetadata
+import com.plot.api.ai.provider.ModelCallResult
+import com.plot.api.ai.provider.ReviewerModelRequest
+import com.plot.api.ai.provider.RewriteModelRequest
+import com.plot.api.ai.provider.WriterModelRequest
+import com.plot.api.artifact.workflow.model.DocumentConflict
+import com.plot.api.artifact.workflow.model.EvidenceSnapshot
+import com.plot.api.artifact.workflow.model.ReviewVerdict
+import com.plot.api.artifact.workflow.model.ReviewerOutput
+import com.plot.api.artifact.workflow.model.SentenceIntent
+import com.plot.api.artifact.workflow.model.SentenceReview
+import com.plot.api.artifact.workflow.model.SourceProvider
+import com.plot.api.artifact.workflow.model.TargetedRewrite
+import com.plot.api.artifact.workflow.model.TargetedRewriteOutput
+import com.plot.api.artifact.workflow.model.WriterOutput
+import com.plot.api.artifact.workflow.model.WriterSentence
+import java.time.Duration
+import java.time.Instant
+import java.util.UUID
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
+
+class ArtifactWorkflowServiceTest {
+	private val ids = ArrayDeque((1..200).map(::uuid))
+	private val workflow = ArtifactWorkflowService(ModelOutputValidator(), idGenerator = { ids.removeFirst() })
+	private val runId = uuid(500)
+	private val evidence = listOf(evidence(1), evidence(2))
+
+	@Test
+	fun `supported and not-required sentences create a ready terminal result`() {
+		val gateway = ScriptedGateway(
+			writes = ArrayDeque(listOf(WriterOutput(listOf(WriterSentence("Shipped search."), WriterSentence("Thanks for reading."))))),
+			reviews = ArrayDeque(listOf { request -> ReviewerOutput(listOf(
+				SentenceReview(request.sentences[0].id, ReviewVerdict.SUPPORTED, listOf(evidence[0].id)),
+				SentenceReview(request.sentences[1].id, ReviewVerdict.NOT_REQUIRED),
+			)) }),
+		)
+
+		val terminal = run(workflow.start(runId, evidence, null), gateway)
+
+		assertEquals(ArtifactWorkflowRunStatus.READY, terminal.status)
+		assertEquals(listOf(ReviewVerdict.SUPPORTED, ReviewVerdict.NOT_REQUIRED), terminal.reviews.map { it.verdict })
+		assertEquals(1, gateway.writeCalls)
+		assertEquals(1, gateway.reviewCalls)
+	}
+
+	@Test
+	fun `targeted rewrite preserves non-target sentence identity text and artifacts`() {
+		val gateway = ScriptedGateway(
+			writes = ArrayDeque(listOf(WriterOutput(listOf(WriterSentence("Unsupported launch."), WriterSentence("Stable sentence."))))),
+			reviews = ArrayDeque(listOf(
+				{ request -> ReviewerOutput(listOf(
+					SentenceReview(request.sentences[0].id, ReviewVerdict.NEEDS_SUPPORT, reason = "No launch evidence"),
+					SentenceReview(request.sentences[1].id, ReviewVerdict.SUPPORTED, listOf(evidence[0].id)),
+				)) },
+				{ request -> ReviewerOutput(listOf(
+					SentenceReview(request.sentences[0].id, ReviewVerdict.SUPPORTED, listOf(evidence[1].id)),
+					SentenceReview(request.sentences[1].id, ReviewVerdict.SUPPORTED, listOf(evidence[0].id)),
+				)) },
+			)),
+			rewrites = ArrayDeque(listOf { request ->
+				TargetedRewriteOutput(listOf(TargetedRewrite(request.targetSentenceIds.single(), "Documented launch.")))
+			}),
+		)
+
+		val terminal = run(workflow.start(runId, evidence, null), gateway)
+		val writerArtifact = terminal.artifacts.first { it.kind == WorkflowArtifactKind.WRITER_OUTPUT }
+		val rewriteArtifact = terminal.artifacts.first { it.kind == WorkflowArtifactKind.REWRITER_OUTPUT }
+
+		assertEquals(ArtifactWorkflowRunStatus.READY, terminal.status)
+		assertEquals(writerArtifact.sentences[1], rewriteArtifact.sentences[1])
+		assertEquals(writerArtifact.sentences[0].id, rewriteArtifact.sentences[0].id)
+		assertNotEquals(writerArtifact.sentences[0].revisionId, rewriteArtifact.sentences[0].revisionId)
+		assertEquals("Documented launch.", rewriteArtifact.sentences[0].body)
+		assertEquals(1, gateway.rewriteCalls)
+	}
+
+	@Test
+	fun `three unsuccessful semantic rewrites preserve failed review as needs-review`() {
+		val gateway = alwaysUnsupportedGateway()
+
+		val terminal = run(workflow.start(runId, evidence, null), gateway)
+
+		assertEquals(ArtifactWorkflowRunStatus.NEEDS_REVIEW, terminal.status)
+		assertEquals(3, terminal.semanticRewriteAttempt)
+		assertEquals("Still unsupported", terminal.reviews.single().reason)
+		assertEquals(3, gateway.rewriteCalls)
+		assertEquals(4, terminal.artifacts.count { it.kind == WorkflowArtifactKind.REVIEWER_OUTPUT })
+	}
+
+	@Test
+	fun `individually supported but incompatible sentences are omitted without interrupting the user`() {
+		val gateway = ScriptedGateway(
+			writes = ArrayDeque(listOf(WriterOutput(listOf(
+				WriterSentence("Unresolved sentences must block export."),
+				WriterSentence("Unresolved sentences may be exported after acknowledgement."),
+				WriterSentence("The export command supports JSON output."),
+			)))),
+			reviews = ArrayDeque(listOf { request -> ReviewerOutput(
+				reviews = listOf(
+					SentenceReview(request.sentences[0].id, ReviewVerdict.SUPPORTED, listOf(evidence[0].id)),
+					SentenceReview(request.sentences[1].id, ReviewVerdict.SUPPORTED, listOf(evidence[1].id)),
+					SentenceReview(request.sentences[2].id, ReviewVerdict.SUPPORTED, listOf(evidence[0].id)),
+				),
+				documentConflicts = listOf(DocumentConflict(
+					sentenceIds = request.sentences.take(2).map { it.id },
+					evidenceIds = evidence.map { it.id },
+					reason = "The export policies are mutually exclusive.",
+				)),
+			) }),
+		)
+
+		val terminal = run(workflow.start(runId, evidence, null), gateway)
+
+		assertEquals(ArtifactWorkflowRunStatus.READY, terminal.status)
+		assertEquals(listOf("The export command supports JSON output."), terminal.sentences.map { it.body })
+		assertEquals(1, terminal.artifacts.count { it.kind == WorkflowArtifactKind.CONFLICT })
+		assertEquals(0, gateway.rewriteCalls)
+	}
+
+	@Test
+	fun `writer declared conflict is omitted while unrelated grounded copy becomes ready`() {
+		val gateway = ScriptedGateway(
+			writes = ArrayDeque(listOf(WriterOutput(listOf(
+				WriterSentence(
+					"The export policies conflict and require a product decision.",
+					SentenceIntent.UNRESOLVED_CONFLICT,
+					evidence.map { it.id },
+				),
+				WriterSentence("The export command supports JSON output."),
+			)))),
+			reviews = ArrayDeque(listOf { request -> ReviewerOutput(listOf(
+				SentenceReview(request.sentences[0].id, ReviewVerdict.SUPPORTED, listOf(evidence[0].id)),
+				SentenceReview(request.sentences[1].id, ReviewVerdict.SUPPORTED, listOf(evidence[0].id)),
+			)) }),
+		)
+
+		val terminal = run(workflow.start(runId, evidence, null), gateway)
+
+		assertEquals(ArtifactWorkflowRunStatus.READY, terminal.status)
+		assertEquals(listOf("The export command supports JSON output."), terminal.sentences.map { it.body })
+		assertEquals(0, gateway.rewriteCalls)
+	}
+
+	@Test
+	fun `failure without reviewed draft is failed while reviewed partial needs review`() {
+		val initial = workflow.start(runId, evidence, null)
+		assertEquals(ArtifactWorkflowRunStatus.FAILED, workflow.fail(initial, "MODEL_BUDGET_EXHAUSTED").status)
+
+		val gateway = ScriptedGateway(
+			writes = ArrayDeque(listOf(WriterOutput(listOf(WriterSentence("Unsupported."))))),
+			reviews = ArrayDeque(listOf { request -> ReviewerOutput(listOf(
+				SentenceReview(request.sentences.single().id, ReviewVerdict.NEEDS_SUPPORT, reason = "Missing evidence"),
+			)) }),
+		)
+		val afterWrite = workflow.advance(initial, gateway)
+		val reviewed = workflow.advance(afterWrite, gateway)
+		val partial = workflow.fail(reviewed, "MODEL_BUDGET_EXHAUSTED")
+
+		assertEquals(ArtifactWorkflowRunStatus.NEEDS_REVIEW, partial.status)
+		assertEquals("Missing evidence", partial.reviews.single().reason)
+	}
+
+	private fun alwaysUnsupportedGateway() = ScriptedGateway(
+		writes = ArrayDeque(listOf(WriterOutput(listOf(WriterSentence("Unsupported."))))),
+		reviews = ArrayDeque((0..3).map { { request: ReviewerModelRequest ->
+			ReviewerOutput(listOf(SentenceReview(request.sentences.single().id, ReviewVerdict.NEEDS_SUPPORT, reason = "Still unsupported")))
+		} }),
+		rewrites = ArrayDeque((0..2).map { index -> { request: RewriteModelRequest ->
+			TargetedRewriteOutput(listOf(TargetedRewrite(request.targetSentenceIds.single(), "Attempt ${index + 1}.")))
+		} }),
+	)
+
+	private fun run(initial: ArtifactWorkflowState, gateway: ArtifactWorkflowModelGateway): ArtifactWorkflowState {
+		var state = initial
+		repeat(20) {
+			if (state.status in ArtifactWorkflowRunStatus.terminalOrPaused) return state
+			state = workflow.advance(state, gateway)
+		}
+		error("Workflow did not settle")
+	}
+
+	private fun evidence(index: Int) = EvidenceSnapshot(
+		id = uuid(600 + index), artifactWorkflowRunId = runId, writingBlockId = uuid(700 + index), orderIndex = index - 1,
+		sourceProvider = SourceProvider.GITHUB, sourceKind = "pull_request", sourceLabel = "PR $index",
+		snapshotTitle = "PR $index", snapshotBody = if (index == 1) "Shipped." else "Release delayed.",
+		snapshotExcerpt = "Evidence $index", originalUrl = "https://github.test/acme/repo/pull/$index",
+		sourceCreatedAt = null, sourceUpdatedAt = null, contentHash = "hash-$index", capturedAt = Instant.EPOCH,
+	)
+
+	private fun uuid(value: Int): UUID = UUID(0, value.toLong())
+}
+
+private class ScriptedGateway(
+	private val writes: ArrayDeque<WriterOutput> = ArrayDeque(),
+	private val reviews: ArrayDeque<(ReviewerModelRequest) -> ReviewerOutput> = ArrayDeque(),
+	private val rewrites: ArrayDeque<(RewriteModelRequest) -> TargetedRewriteOutput> = ArrayDeque(),
+) : ArtifactWorkflowModelGateway {
+	var writeCalls = 0
+	var reviewCalls = 0
+	var rewriteCalls = 0
+	val rewriteRequests = mutableListOf<RewriteModelRequest>()
+	val reviewRequests = mutableListOf<ReviewerModelRequest>()
+
+	override fun write(request: WriterModelRequest): ModelCallResult<WriterOutput> {
+		writeCalls++
+		return result(writes.removeFirst())
+	}
+
+	override fun review(request: ReviewerModelRequest): ModelCallResult<ReviewerOutput> {
+		reviewCalls++
+		reviewRequests += request
+		return result(reviews.removeFirst()(request))
+	}
+
+	override fun rewrite(request: RewriteModelRequest): ModelCallResult<TargetedRewriteOutput> {
+		rewriteCalls++
+		rewriteRequests += request
+		return result(rewrites.removeFirst()(request))
+	}
+
+	private fun <T : Any> result(value: T) = ModelCallResult(
+		value,
+		ModelCallMetadata(null, "scripted", "stop", 1, 1, 2, Duration.ofMillis(1), emptyMap()),
+	)
+}

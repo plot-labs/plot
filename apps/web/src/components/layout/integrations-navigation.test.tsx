@@ -91,7 +91,7 @@ describe("Settings navigation", () => {
 
   it("does not load chat history in workspace settings", async () => {
     sidebarMocks.listSessions.mockResolvedValue([{
-      id: "chat-1", title: "Release notes", status: "OPEN", latestGenerationId: "run-1",
+      id: "chat-1", title: "Release notes", status: "OPEN",
       lastActivityAt: null, createdAt: "2026-07-01T00:00:00Z", updatedAt: "2026-07-01T00:00:00Z",
     }]);
     render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
@@ -104,7 +104,7 @@ describe("Settings navigation", () => {
   it("renders recent chats in the product sidebar history", async () => {
     sidebarMocks.pathname = "/artifacts";
     sidebarMocks.listSessions.mockResolvedValue([{
-      id: "chat-1", title: "Release notes", status: "OPEN", latestGenerationId: "run-1",
+      id: "chat-1", title: "Release notes", status: "OPEN",
       lastActivityAt: null, createdAt: "2026-07-01T00:00:00Z", updatedAt: "2026-07-01T00:00:00Z",
     }]);
     render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
@@ -117,7 +117,7 @@ describe("Settings navigation", () => {
     sidebarMocks.pathname = "/chat";
     sidebarMocks.search = "chat=chat-1";
     sidebarMocks.listSessions.mockResolvedValue([{
-      id: "chat-1", title: "Release notes", status: "OPEN", latestGenerationId: "run-1",
+      id: "chat-1", title: "Release notes", status: "OPEN",
       lastActivityAt: null, createdAt: "2026-07-01T00:00:00Z", updatedAt: "2026-07-01T00:00:00Z",
     }]);
     render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);

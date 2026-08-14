@@ -120,7 +120,7 @@ class RoutineAgentPersistence(
 				agentRunId = rs.getObject("agent_run_id", UUID::class.java),
 				agentRunStatus = rs.getString("agent_run_status")?.let(AgentRunStatus::valueOf),
 				agentFailureCode = rs.getString("agent_failure_code"),
-				generationRunId = rs.getObject("generation_run_id", UUID::class.java),
+				artifactWorkflowRunId = rs.getObject("generation_run_id", UUID::class.java),
 				artifactId = rs.getObject("artifact_id", UUID::class.java),
 				startedAt = rs.getTimestamp("started_at")?.toInstant(),
 				finishedAt = rs.getTimestamp("finished_at")?.toInstant(),
@@ -505,8 +505,8 @@ class RoutineAgentPersistence(
 	fun listSteps(workspaceId: UUID, agentRunId: UUID): List<AgentStepRecord> =
 		agentRunPersistence.listSteps(workspaceId, agentRunId)
 
-	fun findArtifactId(workspaceId: UUID, generationRunId: UUID): UUID? =
-		agentRunPersistence.findArtifactId(workspaceId, generationRunId)
+	fun findArtifactId(workspaceId: UUID, artifactWorkflowRunId: UUID): UUID? =
+		agentRunPersistence.findArtifactId(workspaceId, artifactWorkflowRunId)
 
 	fun claimNextAgentRun(
 		workerId: String,
@@ -551,17 +551,17 @@ class RoutineAgentPersistence(
 		now,
 	)
 
-	fun linkGenerationStep(
+	fun linkArtifactWorkflowStep(
 		claim: ClaimedAgentRun,
 		stepId: UUID,
-		generationRunId: UUID,
+		artifactWorkflowRunId: UUID,
 		resultJson: String,
 		nextAttemptAt: Instant,
 		now: Instant = currentInstant(),
-	): AgentStepRecord = agentRunPersistence.linkGenerationStep(
+	): AgentStepRecord = agentRunPersistence.linkArtifactWorkflowStep(
 		claim,
 		stepId,
-		generationRunId,
+		artifactWorkflowRunId,
 		resultJson,
 		nextAttemptAt,
 		now,
@@ -587,8 +587,8 @@ class RoutineAgentPersistence(
 	fun succeedAgentRun(claim: ClaimedAgentRun, now: Instant = currentInstant()): AgentRunRecord =
 		agentRunPersistence.succeedAgentRun(claim, now)
 
-	fun loadGenerationState(workspaceId: UUID, generationRunId: UUID): AgentGenerationState? =
-		agentRunPersistence.loadGenerationState(workspaceId, generationRunId)
+	fun loadArtifactWorkflowState(workspaceId: UUID, artifactWorkflowRunId: UUID): AgentArtifactWorkflowState? =
+		agentRunPersistence.loadArtifactWorkflowState(workspaceId, artifactWorkflowRunId)
 
 	fun allAgentSourcesActive(workspaceId: UUID, agentRunId: UUID): Boolean =
 		agentRunPersistence.allAgentSourcesActive(workspaceId, agentRunId)
