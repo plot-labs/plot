@@ -13,7 +13,6 @@ plugins {
 	kotlin("plugin.spring") version "2.4.0"
 	id("org.springframework.boot") version "4.0.7"
 	id("io.spring.dependency-management") version "1.1.7"
-	kotlin("plugin.jpa") version "2.4.0"
 	id("org.jooq.jooq-codegen-gradle") version "3.19.35"
 	id("org.flywaydb.flyway") version "11.14.1"
 }
@@ -37,7 +36,6 @@ extra["kotlin.version"] = "2.4.0"
 
 dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-actuator")
-	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 	implementation("org.springframework.boot:spring-boot-starter-flyway")
 	implementation("org.springframework.boot:spring-boot-starter-jooq")
 	implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
@@ -131,13 +129,6 @@ kotlin {
 		freeCompilerArgs.add("-Xjsr305=strict")
 	}
 }
-
-allOpen {
-	annotation("jakarta.persistence.Entity")
-	annotation("jakarta.persistence.MappedSuperclass")
-	annotation("jakarta.persistence.Embeddable")
-}
-
 tasks.withType<Test> {
 	useJUnitPlatform()
 	environment("SPRING_PROFILES_ACTIVE", "test")

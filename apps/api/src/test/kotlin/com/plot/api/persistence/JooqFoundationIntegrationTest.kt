@@ -49,7 +49,7 @@ class JooqFoundationIntegrationTest {
 	private lateinit var workSessionPersistence: WorkSessionPersistence
 
 	@Autowired
-	private lateinit var rollbackFixture: MixedPersistenceRollbackFixture
+	private lateinit var rollbackFixture: MixedJooqRollbackFixture
 
 	@Test
 	fun bootProvidesPostgresDslAndOneTransactionManager() {
@@ -87,7 +87,7 @@ class JooqFoundationIntegrationTest {
 	}
 
 	@Test
-	fun jpaAndJooqWritesRollBackTogether() {
+	fun jooqWritesRollBackTogether() {
 		val workspaceId = UUID.randomUUID()
 		val sessionId = UUID.randomUUID()
 
@@ -121,12 +121,12 @@ class JooqFoundationTestConfiguration {
 		devContext: DevContext,
 		workspaceRepository: WorkspaceRepository,
 		workSessionPersistence: WorkSessionPersistence,
-	): MixedPersistenceRollbackFixture {
-		return MixedPersistenceRollbackFixture(devContext, workspaceRepository, workSessionPersistence)
+	): MixedJooqRollbackFixture {
+		return MixedJooqRollbackFixture(devContext, workspaceRepository, workSessionPersistence)
 	}
 }
 
-open class MixedPersistenceRollbackFixture(
+open class MixedJooqRollbackFixture(
 	private val devContext: DevContext,
 	private val workspaceRepository: WorkspaceRepository,
 	private val workSessionPersistence: WorkSessionPersistence,

@@ -8,7 +8,6 @@ import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
-import org.springframework.data.domain.PageRequest
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import org.springframework.transaction.support.TransactionTemplate
@@ -220,9 +219,9 @@ class RoutineWorker(
 			return writingBlockRepository.findUnconsumedActiveAfterActivityCursor(
 				routine.workspaceId,
 				routine.id,
-				routine.sourceScopeId,
-				routine.activityCursorSequence,
-				PageRequest.of(0, evidenceBudget.maxBlocks + 1),
+					routine.sourceScopeId,
+					routine.activityCursorSequence,
+				evidenceBudget.maxBlocks + 1,
 			)
 		}
 

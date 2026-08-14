@@ -91,6 +91,7 @@ class WorkspaceService(
 			workspace.logoUrl = logoUrl
 		}
 		workspace.updatedAt = java.time.Instant.now()
+		workspaceRepository.save(workspace)
 
 		return workspace.toResponse(entitlementReader.resolve(workspace), selectedWorkspace?.role ?: membership.role)
 	}
