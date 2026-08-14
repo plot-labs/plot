@@ -4,13 +4,15 @@ import com.plot.api.common.UuidGenerator
 import java.sql.Timestamp
 import java.time.Clock
 import java.time.Instant
+import java.time.OffsetDateTime
 import java.util.UUID
-import org.springframework.jdbc.core.JdbcTemplate
+import org.jooq.DSLContext
+import org.jooq.Record
 import org.springframework.stereotype.Component
 
 @Component
 class ArtifactRunPersistence(
-	private val jdbcTemplate: JdbcTemplate,
+	private val dsl: DSLContext,
 	private val uuidGenerator: UuidGenerator,
 	private val clock: Clock = Clock.systemUTC(),
 ) {
@@ -34,57 +36,66 @@ class ArtifactRunPersistence(
 				throw ArtifactRunIdempotencyConflictException()
 			}
 			if (existing.status == ArtifactRunStatus.FAILED) {
-				jdbcTemplate.update(
+				execute(
 					"update artifact_runs set status = 'QUEUED', error_code = null, finished_at = null, transition_version = transition_version + 1, updated_at = ? where workspace_id = ? and id = ?",
-					Timestamp.from(now), workspaceId, existing.id,
+					Timestamp.from(now),
+					workspaceId,
+					existing.id,
 				)
 				return requireNotNull(findById(workspaceId, existing.id))
 			}
 			return existing
 		}
 
-		val ownerExists = jdbcTemplate.query(
+		val ownerExists = fetchRows(
 			"select id from agent_runs where workspace_id = ? and id = ? and created_by_user_id = ? for update",
-			{ rs, _ -> rs.getObject("id", UUID::class.java) },
-			workspaceId, agentRunId, createdByUserId,
+			workspaceId,
+			agentRunId,
+			createdByUserId,
 		).isNotEmpty()
 		check(ownerExists) { "Artifact run owner AgentRun is unavailable" }
-		jdbcTemplate.update(
+		execute(
 			"""
 			insert into artifact_runs (
 			  id, workspace_id, agent_run_id, created_by_user_id, idempotency_key,
 			  request_fingerprint, status, created_at, updated_at
 			) values (?, ?, ?, ?, ?, ?, 'QUEUED', ?, ?)
 			""".trimIndent(),
-			id, workspaceId, agentRunId, createdByUserId, key, fingerprint,
-			Timestamp.from(now), Timestamp.from(now),
+			id,
+			workspaceId,
+			agentRunId,
+			createdByUserId,
+			key,
+			fingerprint,
+			Timestamp.from(now),
+			Timestamp.from(now),
 		)
 		return requireNotNull(findById(workspaceId, id))
 	}
 
-	fun findByAgentRun(workspaceId: UUID, agentRunId: UUID, forUpdate: Boolean = false): ArtifactRunRecord? = jdbcTemplate.query(
+	fun findByAgentRun(workspaceId: UUID, agentRunId: UUID, forUpdate: Boolean = false): ArtifactRunRecord? = fetchRows(
 		selectSql + " where workspace_id = ? and agent_run_id = ?" + if (forUpdate) " for update" else "",
-		mapper,
-		workspaceId, agentRunId,
-	).firstOrNull()
+		workspaceId,
+		agentRunId,
+	).firstOrNull()?.toArtifactRun()
 
-	fun findById(workspaceId: UUID, id: UUID): ArtifactRunRecord? = jdbcTemplate.query(
+	fun findById(workspaceId: UUID, id: UUID): ArtifactRunRecord? = fetchRows(
 		selectSql + " where workspace_id = ? and id = ?",
-		mapper,
-		workspaceId, id,
-	).firstOrNull()
+		workspaceId,
+		id,
+	).firstOrNull()?.toArtifactRun()
 
-	fun findWorkflowStateByWorkflowRun(workspaceId: UUID, workflowRunId: UUID): ArtifactRunWorkflowState? = jdbcTemplate.query(
+	fun findWorkflowStateByWorkflowRun(workspaceId: UUID, workflowRunId: UUID): ArtifactRunWorkflowState? = fetchRows(
 		workflowStateSql + " where workflow.workspace_id = ? and workflow.id = ? order by workflow.created_at desc limit 1",
-		workflowStateMapper,
-		workspaceId, workflowRunId,
-	).firstOrNull()
+		workspaceId,
+		workflowRunId,
+	).firstOrNull()?.toWorkflowState()
 
-	fun findWorkflowStateByAgentRun(workspaceId: UUID, agentRunId: UUID): ArtifactRunWorkflowState? = jdbcTemplate.query(
+	fun findWorkflowStateByAgentRun(workspaceId: UUID, agentRunId: UUID): ArtifactRunWorkflowState? = fetchRows(
 		workflowStateSql + " where artifact.workspace_id = ? and artifact.agent_run_id = ? order by workflow.created_at desc nulls last limit 1",
-		workflowStateMapper,
-		workspaceId, agentRunId,
-	).firstOrNull()
+		workspaceId,
+		agentRunId,
+	).firstOrNull()?.toWorkflowState()
 
 	fun syncWorkflowState(
 		workspaceId: UUID,
@@ -93,7 +104,7 @@ class ArtifactRunPersistence(
 		errorCode: String?,
 		now: Instant = clock.instant(),
 	) {
-		jdbcTemplate.update(
+		execute(
 			"""
 			update artifact_runs artifact
 			set status = ?, error_code = ?,
@@ -108,39 +119,46 @@ class ArtifactRunPersistence(
 			      and workflow.artifact_run_id = artifact.id
 			  )
 			""".trimIndent(),
-			status.name, errorCode, status.name, Timestamp.from(now), status.name, Timestamp.from(now),
-			Timestamp.from(now), workspaceId, workflowRunId,
+			status.name,
+			errorCode,
+			status.name,
+			Timestamp.from(now),
+			status.name,
+			Timestamp.from(now),
+			Timestamp.from(now),
+			workspaceId,
+			workflowRunId,
 		)
 	}
 
-	private val mapper = { rs: java.sql.ResultSet, _: Int ->
-		ArtifactRunRecord(
-			id = rs.getObject("id", UUID::class.java),
-			workspaceId = rs.getObject("workspace_id", UUID::class.java),
-			agentRunId = rs.getObject("agent_run_id", UUID::class.java),
-			createdByUserId = rs.getObject("created_by_user_id", UUID::class.java),
-			idempotencyKey = rs.getString("idempotency_key"),
-			requestFingerprint = rs.getString("request_fingerprint"),
-			status = ArtifactRunStatus.valueOf(rs.getString("status")),
-			errorCode = rs.getString("error_code"),
-			transitionVersion = rs.getLong("transition_version"),
-			startedAt = rs.getTimestamp("started_at")?.toInstant(),
-			finishedAt = rs.getTimestamp("finished_at")?.toInstant(),
-			createdAt = rs.getTimestamp("created_at").toInstant(),
-			updatedAt = rs.getTimestamp("updated_at").toInstant(),
-		)
-	}
+	private fun Record.toArtifactRun() = ArtifactRunRecord(
+		id = requireNotNull(get("id", UUID::class.java)),
+		workspaceId = requireNotNull(get("workspace_id", UUID::class.java)),
+		agentRunId = requireNotNull(get("agent_run_id", UUID::class.java)),
+		createdByUserId = requireNotNull(get("created_by_user_id", UUID::class.java)),
+		idempotencyKey = requireNotNull(get("idempotency_key", String::class.java)),
+		requestFingerprint = requireNotNull(get("request_fingerprint", String::class.java)),
+		status = ArtifactRunStatus.valueOf(requireNotNull(get("status", String::class.java))),
+		errorCode = get("error_code", String::class.java),
+		transitionVersion = requireNotNull(get("transition_version", Long::class.javaObjectType)),
+		startedAt = get("started_at", OffsetDateTime::class.java)?.toInstant(),
+		finishedAt = get("finished_at", OffsetDateTime::class.java)?.toInstant(),
+		createdAt = requireNotNull(get("created_at", OffsetDateTime::class.java)).toInstant(),
+		updatedAt = requireNotNull(get("updated_at", OffsetDateTime::class.java)).toInstant(),
+	)
 
-	private val workflowStateMapper = { rs: java.sql.ResultSet, _: Int ->
-		ArtifactRunWorkflowState(
-			artifactRunId = rs.getObject("artifact_run_id", UUID::class.java),
-			agentRunId = rs.getObject("agent_run_id", UUID::class.java),
-			workflowRunId = rs.getObject("workflow_run_id", UUID::class.java),
-			status = ArtifactRunStatus.valueOf(rs.getString("artifact_status")),
-			errorCode = rs.getString("artifact_error_code"),
-			materialized = rs.getBoolean("materialized"),
-		)
-	}
+	private fun Record.toWorkflowState() = ArtifactRunWorkflowState(
+		artifactRunId = requireNotNull(get("artifact_run_id", UUID::class.java)),
+		agentRunId = requireNotNull(get("agent_run_id", UUID::class.java)),
+		workflowRunId = get("workflow_run_id", UUID::class.java),
+		status = ArtifactRunStatus.valueOf(requireNotNull(get("artifact_status", String::class.java))),
+		errorCode = get("artifact_error_code", String::class.java),
+		materialized = requireNotNull(get("materialized", Boolean::class.java)),
+	)
+
+	private fun fetchRows(sql: String, vararg bindings: Any?): List<Record> = dsl.fetch(sql, *bindings)
+
+	private fun execute(sql: String, vararg bindings: Any?): Int = dsl.execute(sql, *bindings)
 
 	private val selectSql = """
 		select id, workspace_id, agent_run_id, created_by_user_id, idempotency_key,
