@@ -14,6 +14,7 @@ import com.plot.api.github.GitHubPullRequest
 import com.plot.api.github.GitHubPullRequestPage
 import com.plot.api.github.GitHubRepository
 import com.plot.api.writingblock.WritingBlockRepository
+import com.plot.api.persistence.JooqTransactionExecutor
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
@@ -41,7 +42,6 @@ import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.annotation.DirtiesContext
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.TestPropertySource
-import org.springframework.transaction.support.TransactionTemplate
 import tools.jackson.databind.ObjectMapper
 
 @SpringBootTest
@@ -72,7 +72,7 @@ class RoutineBackgroundAccessIntegrationTest {
 	@Autowired private lateinit var githubClient: RoutineRefreshGitHubClient
 	@Autowired private lateinit var writingBlockRepository: WritingBlockRepository
 	@Autowired private lateinit var evidenceBudget: RoutineEvidenceBudget
-	@Autowired private lateinit var transactionTemplate: TransactionTemplate
+	@Autowired private lateinit var transactionExecutor: JooqTransactionExecutor
 	@Autowired private lateinit var agentProperties: RoutineAgentProperties
 	@Autowired private lateinit var workspaceAccessService: WorkspaceAccessService
 	@Autowired private lateinit var refreshService: GitHubRoutineRefreshService
@@ -212,7 +212,7 @@ class RoutineBackgroundAccessIntegrationTest {
 		agentPersistence,
 		writingBlockRepository,
 		evidenceBudget,
-		transactionTemplate,
+		transactionExecutor,
 		agentProperties,
 		workspaceAccessService,
 		refreshService,

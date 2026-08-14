@@ -10,7 +10,7 @@ import java.time.Instant
 import java.util.UUID
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
-import org.springframework.transaction.support.TransactionTemplate
+import com.plot.api.persistence.JooqTransactionExecutor
 import tools.jackson.databind.ObjectMapper
 
 /**
@@ -23,7 +23,7 @@ class RoutineWorker(
 	private val agentPersistence: RoutineAgentPersistence,
 	private val writingBlockRepository: WritingBlockRepository,
 	private val evidenceBudget: RoutineEvidenceBudget,
-	private val transactionTemplate: TransactionTemplate,
+	private val transactionExecutor: JooqTransactionExecutor,
 	private val agentProperties: RoutineAgentProperties,
 	private val workspaceAccessService: WorkspaceAccessService,
 	private val refreshService: GitHubRoutineRefreshService,
@@ -83,7 +83,7 @@ class RoutineWorker(
 				?: throw RoutineExecutionStateException("Routine was not found")
 			val readyExecution = refreshIfRequired(execution, routine) ?: return
 			workspaceAccessService.requireWritable(execution.workspaceId)
-			transactionTemplate.executeWithoutResult {
+			transactionExecutor.executeWithoutResult {
 				persistence.lockWorkspaceActivity(readyExecution.workspaceId)
 				processLocked(readyExecution, claimedRoutine)
 			}
@@ -426,7 +426,7 @@ class RoutineWorker(
 	) {
 		val now = currentInstant()
 		try {
-			transactionTemplate.executeWithoutResult {
+			transactionExecutor.executeWithoutResult {
 				val current = agentPersistence.findExecution(execution.workspaceId, execution.id)
 				if (current?.status == RoutineExecutionStatus.PROBING) {
 					if (current.refreshCompletedAt == null) refreshService.fail(current, workerId, now)
