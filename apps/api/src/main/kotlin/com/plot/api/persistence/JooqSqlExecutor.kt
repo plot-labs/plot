@@ -14,12 +14,12 @@ import org.springframework.stereotype.Component
  * keeps ownership of its SQL, projections, and transaction boundaries.
  */
 @Component
-class JooqSqlExecutor(
+open class JooqSqlExecutor(
 	private val dsl: DSLContext,
 ) {
-	fun update(sql: String, vararg bindings: Any?): Int = dsl.execute(sql, *bindings)
+	open fun update(sql: String, vararg bindings: Any?): Int = dsl.execute(sql, *bindings)
 
-	fun <T> query(
+	open fun <T> query(
 		sql: String,
 		mapper: (SqlRow, Int) -> T,
 		vararg bindings: Any?,
@@ -27,10 +27,10 @@ class JooqSqlExecutor(
 		mapper(SqlRow(record), index)
 	}
 
-	fun query(sql: String, vararg bindings: Any?): List<SqlRow> =
+	open fun query(sql: String, vararg bindings: Any?): List<SqlRow> =
 		dsl.fetch(sql, *bindings).map(::SqlRow)
 
-	fun <T> queryForObject(
+	open fun <T> queryForObject(
 		sql: String,
 		type: Class<T>,
 		vararg bindings: Any?,
