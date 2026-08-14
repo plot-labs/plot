@@ -14,16 +14,17 @@ import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
 import org.springframework.http.HttpStatus
-import org.springframework.jdbc.core.JdbcTemplate
+import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.JooqTransactionExecutor
+import com.plot.api.persistence.SqlRow
 import org.springframework.stereotype.Service
-import org.springframework.transaction.support.TransactionTemplate
 import tools.jackson.databind.ObjectMapper
 
 @Service
 class ChatAgentAdmissionService(
 	private val devContext: DevContext,
-	private val jdbcTemplate: JdbcTemplate,
-	private val transactionTemplate: TransactionTemplate,
+	private val sqlExecutor: JooqSqlExecutor,
+	private val transactionExecutor: JooqTransactionExecutor,
 	private val uuidGenerator: UuidGenerator,
 	private val agentRunPersistence: AgentRunPersistence,
 	private val tools: ReadOnlyAgentTools,
@@ -84,10 +85,10 @@ class ChatAgentAdmissionService(
 				writingBlockIds = writingBlockIds,
 			),
 		)
-		return transactionTemplate.execute {
+		return transactionExecutor.execute {
 			// A transaction-scoped advisory lock prevents two identical requests from
 		// creating duplicate Chats before the partial idempotency index is reached.
-			jdbcTemplate.queryForObject(
+			sqlExecutor.queryForObject(
 				"select pg_advisory_xact_lock(hashtextextended(?, 0))",
 				{ _, _ -> Unit },
 				"$workspaceId:$key",
@@ -108,7 +109,7 @@ class ChatAgentAdmissionService(
 			val chatId = resolveChat(workSessionId, workspaceId, userId, chatTitle ?: normalizedInstruction)
 			val runId = uuidGenerator.next()
 			val now = Instant.now()
-			val inserted = jdbcTemplate.update(
+			val inserted = sqlExecutor.update(
 				"""
 				insert into agent_runs (
 				  id, workspace_id, routine_execution_id, routine_id, work_session_id, created_by_user_id,
@@ -138,7 +139,7 @@ class ChatAgentAdmissionService(
 			}
 
 			sources.forEachIndexed { index, source ->
-				jdbcTemplate.update(
+				sqlExecutor.update(
 					"""
 					insert into agent_run_sources (
 					  id, workspace_id, agent_run_id, source_scope_id, source_role, order_index,
@@ -202,7 +203,7 @@ class ChatAgentAdmissionService(
 		if (workSessionId == null) {
 			val id = uuidGenerator.next()
 			val now = Instant.now()
-			jdbcTemplate.update(
+			sqlExecutor.update(
 				"""
 				insert into work_sessions (
 				  id, workspace_id, title, status, created_by_user_id, latest_generation_run_id,
@@ -220,7 +221,7 @@ class ChatAgentAdmissionService(
 			return id
 		}
 
-		val session = jdbcTemplate.query(
+		val session = sqlExecutor.query(
 			"select routine_execution_id from work_sessions where workspace_id = ? and id = ? for update",
 			{ rs, _ -> ChatSessionRow(rs.getObject("routine_execution_id", UUID::class.java)) },
 			workspaceId,
@@ -229,7 +230,7 @@ class ChatAgentAdmissionService(
 		if (session.routineExecutionId != null) {
 			throw ApiException(HttpStatus.CONFLICT, "CHAT_NOT_INTERACTIVE", "Routine Chats cannot receive interactive requests")
 		}
-		jdbcTemplate.update(
+		sqlExecutor.update(
 			"update work_sessions set last_activity_at = ?, updated_at = ? where workspace_id = ? and id = ?",
 			Timestamp.from(Instant.now()),
 			Timestamp.from(Instant.now()),
@@ -239,7 +240,7 @@ class ChatAgentAdmissionService(
 		return workSessionId
 	}
 
-	private fun lockActiveSources(workspaceId: UUID): List<FrozenSource> = jdbcTemplate.query(
+	private fun lockActiveSources(workspaceId: UUID): List<FrozenSource> = sqlExecutor.query(
 		"""
 		select scope.id,
 		       greatest(scope.status_changed_at, namespace.updated_at, binding.updated_at, connection.updated_at)
@@ -258,14 +259,14 @@ class ChatAgentAdmissionService(
 		order by scope.id
 		for update of scope, namespace, binding, connection
 		""".trimIndent(),
-		{ rs, _ -> FrozenSource(rs.getObject("id", UUID::class.java), rs.getTimestamp("lifecycle_version_at").toInstant()) },
+		{ rs, _ -> FrozenSource(requireNotNull(rs.getObject("id", UUID::class.java)), requireNotNull(rs.getTimestamp("lifecycle_version_at")).toInstant()) },
 		workspaceId,
 	)
 
 	private fun findReadableBlockSource(workspaceId: UUID, blockId: UUID, sourceScopeIds: List<UUID>): UUID? {
 		if (sourceScopeIds.isEmpty()) return null
 		val placeholders = sourceScopeIds.joinToString(",") { "?" }
-		return jdbcTemplate.query(
+		return sqlExecutor.query(
 			"""
 			select membership.source_scope_id
 			from writing_block_scopes membership
@@ -276,7 +277,7 @@ class ChatAgentAdmissionService(
 			  and membership.status = 'ACTIVE' and block.status = 'ACTIVE'
 			order by membership.source_scope_id
 			""".trimIndent(),
-			{ rs, _ -> rs.getObject("source_scope_id", UUID::class.java) },
+			{ rs, _ -> requireNotNull(rs.getObject("source_scope_id", UUID::class.java)) },
 			workspaceId,
 			blockId,
 			*sourceScopeIds.toTypedArray(),
@@ -284,7 +285,7 @@ class ChatAgentAdmissionService(
 	}
 
 	private fun insertSeed(workspaceId: UUID, agentRunId: UUID, input: AgentRunInputRequest, now: Instant) {
-		jdbcTemplate.update(
+		sqlExecutor.update(
 			"""
 			insert into agent_run_inputs (
 			  id, workspace_id, agent_run_id, routine_id, source_scope_id, writing_block_id,
