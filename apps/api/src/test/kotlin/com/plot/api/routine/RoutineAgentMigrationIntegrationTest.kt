@@ -24,9 +24,7 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.jdbc.core.JdbcTemplate
-import org.springframework.jdbc.datasource.DataSourceTransactionManager
 import org.springframework.jdbc.datasource.AbstractDataSource
-import org.springframework.transaction.support.TransactionTemplate
 
 @SpringBootTest
 @Import(TestcontainersConfiguration::class)
@@ -53,8 +51,8 @@ class RoutineAgentMigrationIntegrationTest {
 			schemaTransactionExecutor,
 			uuidGenerator,
 			AgentRunPersistence(
-				schemaJdbcTemplate,
-				TransactionTemplate(DataSourceTransactionManager(schemaDataSource)),
+				schemaSqlExecutor,
+				schemaTransactionExecutor,
 				uuidGenerator,
 			),
 		)
