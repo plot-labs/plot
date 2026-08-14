@@ -10,6 +10,7 @@ import org.jooq.exception.DataAccessException as JooqDataAccessException
 import org.springframework.stereotype.Component
 import org.springframework.dao.DataAccessException
 import org.springframework.jdbc.support.SQLStateSQLExceptionTranslator
+import org.springframework.transaction.annotation.Propagation
 import org.springframework.transaction.annotation.Transactional
 
 /**
@@ -90,6 +91,14 @@ class JooqTransactionExecutor {
 
 	@Transactional
 	fun executeWithoutResult(action: () -> Unit) {
+		action()
+	}
+
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
+	fun <T> executeRequiresNew(action: () -> T): T = action()
+
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
+	fun executeRequiresNewWithoutResult(action: () -> Unit) {
 		action()
 	}
 }
