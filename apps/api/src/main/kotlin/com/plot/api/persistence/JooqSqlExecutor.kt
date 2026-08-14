@@ -35,6 +35,12 @@ open class JooqSqlExecutor(
 		type: Class<T>,
 		vararg bindings: Any?,
 	): T? = dsl.fetch(sql, *bindings).firstOrNull()?.get(0, type)
+
+	open fun <T> queryForObject(
+		sql: String,
+		mapper: (SqlRow, Int) -> T,
+		vararg bindings: Any?,
+	): T? = query(sql, mapper, *bindings).firstOrNull()
 }
 
 class SqlRow internal constructor(

@@ -1,6 +1,7 @@
 package com.plot.api.github
 
 import com.plot.api.common.ApiException
+import com.plot.api.persistence.JooqSqlExecutor
 import java.sql.Timestamp
 import com.plot.api.dev.DevContext
 import com.plot.api.auth.RequestActorResolver
@@ -9,7 +10,6 @@ import java.nio.charset.StandardCharsets
 import java.time.Instant
 import java.util.UUID
 import org.springframework.http.HttpStatus
-import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionSynchronization
@@ -74,7 +74,7 @@ class GitHubConnectionService(
 	private val devContext: DevContext,
 	private val stateService: GitHubInstallationStateService,
 	private val githubClient: GitHubClient,
-	private val jdbcTemplate: JdbcTemplate,
+	private val sqlExecutor: JooqSqlExecutor,
 	private val objectMapper: ObjectMapper,
 	private val statusRecorder: GitHubConnectionStatusRecorder,
 	private val monitoringPersistence: GitHubRepositoryMonitoringPersistence,
@@ -107,7 +107,7 @@ class GitHubConnectionService(
 		requireCallbackOwner(state)
 		val repositories = githubClient.listInstallationRepositories(request.installationId)
 		val now = Instant.now()
-		val connectionId = jdbcTemplate.queryForObject(
+		val connectionId = sqlExecutor.queryForObject(
 			"""
 			insert into connections (
 			  id, workspace_id, provider, connection_kind, external_connection_key,
@@ -123,7 +123,7 @@ class GitHubConnectionService(
 			  updated_at = excluded.updated_at
 			returning id
 			""".trimIndent(),
-			{ rs, _ -> rs.getObject(1, UUID::class.java) },
+			{ rs, _ -> requireNotNull(rs.getObject(1, UUID::class.java)) },
 			UUID.randomUUID(),
 			state.workspaceId,
 			request.installationId.toString(),
@@ -153,7 +153,7 @@ class GitHubConnectionService(
 	@Transactional(readOnly = true)
 	fun listConnections(): List<GitHubConnectionResponse> {
 		guard.requireReadAccess()
-		val connections = jdbcTemplate.query(
+		val connections = sqlExecutor.query(
 			"""
 			select id, external_connection_key, status, status_reason
 			from connections
@@ -161,7 +161,12 @@ class GitHubConnectionService(
 			order by created_at desc, id desc
 			""".trimIndent(),
 			{ rs, _ ->
-				GitHubConnectionListRow(rs.getObject(1, UUID::class.java), rs.getString(2).toLong(), rs.getString(3), rs.getString(4))
+				GitHubConnectionListRow(
+					requireNotNull(rs.getObject(1, UUID::class.java)),
+					requireNotNull(rs.getString(2)).toLong(),
+					requireNotNull(rs.getString(3)),
+					rs.getString(4),
+				)
 			},
 			devContext.devWorkspaceId,
 		)
@@ -222,7 +227,7 @@ class GitHubConnectionService(
 		)
 		val now = Instant.now()
 		val namespaceId = bindRepositoryNamespace(connection.id, repository, now)
-		val id = jdbcTemplate.queryForObject(
+		val id = sqlExecutor.queryForObject(
 			"""
 			insert into source_scopes (
 			  id, workspace_id, source_namespace_id, provider, scope_semantics, scope_kind,
@@ -240,7 +245,7 @@ class GitHubConnectionService(
 			  updated_at = excluded.updated_at
 			returning id
 			""".trimIndent(),
-			{ rs, _ -> rs.getObject(1, UUID::class.java) },
+			{ rs, _ -> requireNotNull(rs.getObject(1, UUID::class.java)) },
 			UUID.randomUUID(),
 			devContext.devWorkspaceId,
 			namespaceId,
@@ -262,7 +267,7 @@ class GitHubConnectionService(
 		guard.requireEnabled()
 		requireOwner()
 		val now = Instant.now()
-		val updated = jdbcTemplate.update(
+		val updated = sqlExecutor.update(
 			"""
 			update source_scopes
 			set status = 'DISABLED', status_reason = 'USER_DISCONNECTED', status_changed_at = ?, updated_at = ?
@@ -311,7 +316,7 @@ class GitHubConnectionService(
 	fun recheckAccess(sourceScopeId: UUID, trigger: GitHubAccessCheckTrigger): GitHubAccessCheckResponse {
 		guard.requireEnabled()
 		requireOwner()
-		val scope = jdbcTemplate.query(
+		val scope = sqlExecutor.query(
 			"""
 			select c.id, sc.status_reason
 			from source_scopes sc
@@ -324,7 +329,7 @@ class GitHubConnectionService(
 			order by b.status = 'ACTIVE' desc, b.updated_at desc
 			limit 1
 			""".trimIndent(),
-			{ rs, _ -> rs.getObject(1, UUID::class.java) to rs.getString(2) },
+			{ rs, _ -> requireNotNull(rs.getObject(1, UUID::class.java)) to rs.getString(2) },
 			devContext.devWorkspaceId,
 			sourceScopeId,
 		).firstOrNull() ?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "GitHub repository not found")
@@ -345,7 +350,7 @@ class GitHubConnectionService(
 	fun findScope(id: UUID): GitHubScopeRecord = findScope(devContext.devWorkspaceId, id)
 
 	fun findScope(workspaceId: UUID, id: UUID): GitHubScopeRecord {
-		return jdbcTemplate.query(
+		return sqlExecutor.query(
 			"""
 			select sc.id, sc.source_namespace_id, b.id, c.id, c.external_connection_key, sc.external_scope_key,
 			       sc.external_key, sc.display_name, sc.url, sc.status, c.status
@@ -359,17 +364,17 @@ class GitHubConnectionService(
 			""".trimIndent(),
 			{ rs, _ ->
 				GitHubScopeRecord(
-					id = rs.getObject(1, UUID::class.java),
-					sourceNamespaceId = rs.getObject(2, UUID::class.java),
-					bindingId = rs.getObject(3, UUID::class.java),
-					connectionId = rs.getObject(4, UUID::class.java),
-					installationId = rs.getString(5).toLong(),
-					externalRepositoryId = rs.getString(6).toLongOrNull() ?: 0L,
+					id = requireNotNull(rs.getObject(1, UUID::class.java)),
+					sourceNamespaceId = requireNotNull(rs.getObject(2, UUID::class.java)),
+					bindingId = requireNotNull(rs.getObject(3, UUID::class.java)),
+					connectionId = requireNotNull(rs.getObject(4, UUID::class.java)),
+					installationId = requireNotNull(rs.getString(5)).toLong(),
+					externalRepositoryId = rs.getString(6)?.toLongOrNull() ?: 0L,
 					externalKey = rs.getString(7).orEmpty(),
-					displayName = rs.getString(8),
+					displayName = requireNotNull(rs.getString(8)),
 					url = rs.getString(9).orEmpty(),
-					status = rs.getString(10),
-					connectionStatus = rs.getString(11),
+					status = requireNotNull(rs.getString(10)),
+					connectionStatus = requireNotNull(rs.getString(11)),
 				)
 			},
 			workspaceId,
@@ -380,7 +385,7 @@ class GitHubConnectionService(
 	fun requireScopeActive(scope: GitHubScopeRecord) = requireScopeActive(devContext.devWorkspaceId, scope)
 
 	fun requireScopeActive(workspaceId: UUID, scope: GitHubScopeRecord) {
-		val active = jdbcTemplate.queryForObject(
+		val active = sqlExecutor.queryForObject(
 			"""
 			select count(*) from source_scopes sc
 			join source_namespaces sn on sn.workspace_id = sc.workspace_id
@@ -396,13 +401,19 @@ class GitHubConnectionService(
 	}
 
 	private fun findConnection(id: UUID): GitHubConnectionRecord {
-		return jdbcTemplate.query(
+		return sqlExecutor.query(
 			"""
 			select id, external_connection_key, status
 			from connections
 			where workspace_id = ? and id = ? and provider = 'GITHUB'
 			""".trimIndent(),
-			{ rs, _ -> GitHubConnectionRecord(rs.getObject(1, UUID::class.java), rs.getString(2).toLong(), rs.getString(3)) },
+			{ rs, _ ->
+				GitHubConnectionRecord(
+					requireNotNull(rs.getObject(1, UUID::class.java)),
+					requireNotNull(rs.getString(2)).toLong(),
+					requireNotNull(rs.getString(3)),
+				)
+			},
 			devContext.devWorkspaceId,
 			id,
 		).firstOrNull() ?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "GitHub connection not found")
@@ -421,7 +432,7 @@ class GitHubConnectionService(
 		if (actor != null && actor.userId != state.userId) {
 			throw ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "GitHub state does not belong to the authenticated user")
 		}
-		val ownerMembership = jdbcTemplate.queryForObject(
+		val ownerMembership = sqlExecutor.queryForObject(
 			"""
 			select count(*) from workspace_members
 			where workspace_id = ? and user_id = ? and status = 'ACTIVE' and role = 'OWNER'
@@ -436,7 +447,7 @@ class GitHubConnectionService(
 	}
 
 	private fun listScopesForConnection(connectionId: UUID): List<GitHubRepositoryResponse> {
-		return jdbcTemplate.query(
+		return sqlExecutor.query(
 			"""
 			select sc.id, sc.external_scope_key, sc.external_key, sc.display_name, sc.url, sc.status,
 			       sc.status_reason, ac.status
@@ -451,16 +462,16 @@ class GitHubConnectionService(
 			{ rs, _ ->
 				val externalKey = rs.getString(3).orEmpty()
 				GitHubRepositoryResponse(
-					id = rs.getObject(1, UUID::class.java),
-					externalRepositoryId = rs.getString(2).toLong(),
+					id = requireNotNull(rs.getObject(1, UUID::class.java)),
+					externalRepositoryId = requireNotNull(rs.getString(2)).toLong(),
 					owner = externalKey.substringBefore('/'),
-					name = externalKey.substringAfter('/', rs.getString(4)),
-					displayName = rs.getString(4),
+					name = externalKey.substringAfter('/', requireNotNull(rs.getString(4))),
+					displayName = requireNotNull(rs.getString(4)),
 					url = rs.getString(5).orEmpty(),
 					status = rs.getString(6),
 					monitoring = monitoringPersistence.find(
 						devContext.devWorkspaceId,
-						rs.getObject(1, UUID::class.java),
+						requireNotNull(rs.getObject(1, UUID::class.java)),
 					)?.toResponse(),
 					statusReason = rs.getString(7),
 					accessCheckStatus = rs.getString(8),
@@ -473,7 +484,7 @@ class GitHubConnectionService(
 
 	private fun bindRepositoryNamespace(connectionId: UUID, repository: GitHubRepository, now: Instant): UUID {
 		val namespaceKey = "repository:${repository.id}"
-		val namespaceId = jdbcTemplate.queryForObject(
+		val namespaceId = sqlExecutor.queryForObject(
 			"""
 			insert into source_namespaces (
 			 id, workspace_id, provider, namespace_kind, external_namespace_key,
@@ -487,7 +498,7 @@ class GitHubConnectionService(
 			UUID.randomUUID(), devContext.devWorkspaceId, "REPOSITORY", namespaceKey,
 			"${repository.owner}/${repository.name}", Timestamp.from(now), Timestamp.from(now),
 		) ?: throw ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "GitHub namespace could not be saved")
-		jdbcTemplate.update(
+		sqlExecutor.update(
 			"""
 			update connection_namespace_bindings
 			set status = 'REVOKED', valid_to = ?, updated_at = ?
@@ -495,7 +506,7 @@ class GitHubConnectionService(
 			  and connection_id <> ? and status = 'ACTIVE'
 			""".trimIndent(), Timestamp.from(now), Timestamp.from(now), devContext.devWorkspaceId, namespaceId, connectionId,
 		)
-		jdbcTemplate.update(
+		sqlExecutor.update(
 			"""
 			insert into connection_namespace_bindings (
 			 id, workspace_id, provider, connection_id, source_namespace_id, capabilities,
@@ -537,7 +548,7 @@ class GitHubConnectionService(
 @Service
 class GitHubConnectionStatusRecorder(
 	private val devContext: DevContext,
-	private val jdbcTemplate: JdbcTemplate,
+	private val sqlExecutor: JooqSqlExecutor,
 ) {
 	@Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
 	fun markNeedsReauth(connectionId: UUID) {
@@ -550,7 +561,7 @@ class GitHubConnectionStatusRecorder(
 	}
 
 	private fun updateStatus(connectionId: UUID, workspaceId: UUID) {
-		jdbcTemplate.update(
+		sqlExecutor.update(
 			"""
 			update connections
 			set status = 'NEEDS_REAUTH', status_reason = 'AUTH_EXPIRED', status_changed_at = ?, updated_at = ?
