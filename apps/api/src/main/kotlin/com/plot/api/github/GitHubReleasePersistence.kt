@@ -6,6 +6,7 @@ import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.dao.InvalidDataAccessApiUsageException
 import org.springframework.stereotype.Repository
 import org.springframework.transaction.support.TransactionTemplate
 
@@ -744,7 +745,7 @@ class JdbcGitHubReleasePersistence(
 	).firstOrNull()
 
 	private fun requireExactlyOne(updated: Int, message: String) {
-		check(updated == 1) { message }
+		if (updated != 1) throw InvalidDataAccessApiUsageException(message)
 	}
 }
 
