@@ -1,12 +1,13 @@
 package com.plot.api.github
 
-import com.plot.api.common.ApiException
-import com.plot.api.persistence.JooqSqlExecutor
-import java.sql.Timestamp
-import com.plot.api.dev.DevContext
 import com.plot.api.auth.RequestActorResolver
+import com.plot.api.common.ApiException
+import com.plot.api.dev.DevContext
+import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.JooqTransactionExecutor
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
 import org.springframework.http.HttpStatus
@@ -75,6 +76,7 @@ class GitHubConnectionService(
 	private val stateService: GitHubInstallationStateService,
 	private val githubClient: GitHubClient,
 	private val sqlExecutor: JooqSqlExecutor,
+	private val transactionExecutor: JooqTransactionExecutor,
 	private val objectMapper: ObjectMapper,
 	private val statusRecorder: GitHubConnectionStatusRecorder,
 	private val monitoringPersistence: GitHubRepositoryMonitoringPersistence,
@@ -96,7 +98,6 @@ class GitHubConnectionService(
 		)
 	}
 
-	@Transactional
 	fun completeInstallation(request: GitHubCallbackRequest): GitHubCallbackResponse {
 		guard.requireEnabled()
 		if (request.installationId <= 0L || request.state.isBlank()) {
@@ -107,41 +108,44 @@ class GitHubConnectionService(
 		requireCallbackOwner(state)
 		val repositories = githubClient.listInstallationRepositories(request.installationId)
 		val now = Instant.now()
-		val connectionId = sqlExecutor.queryForObject(
-			"""
-			insert into connections (
-			  id, workspace_id, provider, connection_kind, external_connection_key,
-			  external_account_login, permissions, status, created_by_user_id, created_at, updated_at
-			) values (?, ?, 'GITHUB', 'GITHUB_APP_INSTALLATION', ?, ?, cast(? as jsonb), 'ACTIVE', ?, ?, ?)
-			on conflict (workspace_id, provider, external_connection_key)
-			do update set
-			  external_account_login = excluded.external_account_login,
-			  permissions = excluded.permissions,
-			  status = 'ACTIVE',
-			  status_reason = null,
-			  status_changed_at = excluded.updated_at,
-			  updated_at = excluded.updated_at
-			returning id
-			""".trimIndent(),
-			{ rs, _ -> requireNotNull(rs.getObject(1, UUID::class.java)) },
-			UUID.randomUUID(),
-			state.workspaceId,
-			request.installationId.toString(),
-			repositories.firstOrNull()?.owner,
-			objectMapper.writeValueAsString(
-				mapOf(
-					"metadata" to "read",
-					"pull_requests" to "read",
-					"contents" to "read",
-					"webhook_monitoring" to "active",
+		val connectionId = transactionExecutor.execute {
+			val id = sqlExecutor.queryForObject(
+				"""
+				insert into connections (
+				  id, workspace_id, provider, connection_kind, external_connection_key,
+				  external_account_login, permissions, status, created_by_user_id, created_at, updated_at
+				) values (?, ?, 'GITHUB', 'GITHUB_APP_INSTALLATION', ?, ?, cast(? as jsonb), 'ACTIVE', ?, ?, ?)
+				on conflict (workspace_id, provider, external_connection_key)
+				do update set
+				  external_account_login = excluded.external_account_login,
+				  permissions = excluded.permissions,
+				  status = 'ACTIVE',
+				  status_reason = null,
+				  status_changed_at = excluded.updated_at,
+				  updated_at = excluded.updated_at
+				returning id
+				""".trimIndent(),
+				{ rs, _ -> requireNotNull(rs.getObject(1, UUID::class.java)) },
+				UUID.randomUUID(),
+				state.workspaceId,
+				request.installationId.toString(),
+				repositories.firstOrNull()?.owner,
+				objectMapper.writeValueAsString(
+					mapOf(
+						"metadata" to "read",
+						"pull_requests" to "read",
+						"contents" to "read",
+						"webhook_monitoring" to "active",
+					),
 				),
-			),
-			state.userId,
-			Timestamp.from(now),
-			Timestamp.from(now),
-		) ?: throw ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "GitHub connection could not be saved")
-		if (monitoringPersistence.requeueAuthenticationFailures(state.workspaceId, connectionId, now) > 0) {
-			dispatchMonitoringAfterCommit()
+				state.userId,
+				Timestamp.from(now),
+				Timestamp.from(now),
+			) ?: throw ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "GitHub connection could not be saved")
+			if (monitoringPersistence.requeueAuthenticationFailures(state.workspaceId, id, now) > 0) {
+				dispatchMonitoringAfterCommit()
+			}
+			id
 		}
 		return GitHubCallbackResponse(
 			connectionId = connectionId,
@@ -181,7 +185,6 @@ class GitHubConnectionService(
 	 * connection lookup is deliberately tenant-scoped before calling GitHub so a
 	 * guessed connection ID cannot reveal a different workspace's installation.
 	 */
-	@Transactional(readOnly = true)
 	fun listGrantedRepositories(connectionId: UUID): List<GitHubRepositoryResponse> {
 		guard.requireEnabled()
 		requireOwner()
@@ -209,7 +212,6 @@ class GitHubConnectionService(
 		}
 	}
 
-	@Transactional
 	fun connectRepository(externalRepositoryId: Long, request: GitHubConnectRepositoryRequest): GitHubRepositoryResponse {
 		guard.requireEnabled()
 		requireOwner()
@@ -226,39 +228,42 @@ class GitHubConnectionService(
 			grantedRepository.name,
 		)
 		val now = Instant.now()
-		val namespaceId = bindRepositoryNamespace(connection.id, repository, now)
-		val id = sqlExecutor.queryForObject(
-			"""
-			insert into source_scopes (
-			  id, workspace_id, source_namespace_id, provider, scope_semantics, scope_kind,
-			  external_scope_key, external_key, display_name, url, metadata, status, created_at, updated_at
-			) values (?, ?, ?, 'GITHUB', 'CONTAINER', 'REPOSITORY', ?, ?, ?, ?, cast(? as jsonb), 'ACTIVE', ?, ?)
-			on conflict (workspace_id, source_namespace_id, scope_kind, external_scope_key)
-			do update set
-			  external_key = excluded.external_key,
-			  display_name = excluded.display_name,
-			  url = excluded.url,
-			  metadata = excluded.metadata,
-			  status = 'ACTIVE',
-			  status_reason = null,
-			  status_changed_at = excluded.updated_at,
-			  updated_at = excluded.updated_at
-			returning id
-			""".trimIndent(),
-			{ rs, _ -> requireNotNull(rs.getObject(1, UUID::class.java)) },
-			UUID.randomUUID(),
-			devContext.devWorkspaceId,
-			namespaceId,
-			repository.id.toString(),
-			"${repository.owner}/${repository.name}",
-			"${repository.owner}/${repository.name}",
-			repository.url,
-			objectMapper.writeValueAsString(mapOf("repositoryId" to repository.id, "defaultBranch" to repository.defaultBranch)),
-			Timestamp.from(now),
-			Timestamp.from(now),
-		) ?: throw ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "GitHub repository could not be saved")
-		val monitoring = monitoringPersistence.activate(devContext.devWorkspaceId, id, now)
-		dispatchMonitoringAfterCommit()
+		val (id, monitoring) = transactionExecutor.execute {
+			val namespaceId = bindRepositoryNamespace(connection.id, repository, now)
+			val scopeId = sqlExecutor.queryForObject(
+				"""
+				insert into source_scopes (
+				  id, workspace_id, source_namespace_id, provider, scope_semantics, scope_kind,
+				  external_scope_key, external_key, display_name, url, metadata, status, created_at, updated_at
+				) values (?, ?, ?, 'GITHUB', 'CONTAINER', 'REPOSITORY', ?, ?, ?, ?, cast(? as jsonb), 'ACTIVE', ?, ?)
+				on conflict (workspace_id, source_namespace_id, scope_kind, external_scope_key)
+				do update set
+				  external_key = excluded.external_key,
+				  display_name = excluded.display_name,
+				  url = excluded.url,
+				  metadata = excluded.metadata,
+				  status = 'ACTIVE',
+				  status_reason = null,
+				  status_changed_at = excluded.updated_at,
+				  updated_at = excluded.updated_at
+				returning id
+				""".trimIndent(),
+				{ rs, _ -> requireNotNull(rs.getObject(1, UUID::class.java)) },
+				UUID.randomUUID(),
+				devContext.devWorkspaceId,
+				namespaceId,
+				repository.id.toString(),
+				"${repository.owner}/${repository.name}",
+				"${repository.owner}/${repository.name}",
+				repository.url,
+				objectMapper.writeValueAsString(mapOf("repositoryId" to repository.id, "defaultBranch" to repository.defaultBranch)),
+				Timestamp.from(now),
+				Timestamp.from(now),
+			) ?: throw ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "GitHub repository could not be saved")
+			val monitoring = monitoringPersistence.activate(devContext.devWorkspaceId, scopeId, now)
+			dispatchMonitoringAfterCommit()
+			scopeId to monitoring
+		}
 		return repository.toResponse(id, "ACTIVE", monitoring.toResponse())
 	}
 

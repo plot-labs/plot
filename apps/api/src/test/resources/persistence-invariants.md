@@ -80,10 +80,10 @@ The following 23 files are the production JDBC migration surface. The named owne
 
 Service SQL without a `JdbcTemplate` import is included in the same inventory when U1's structural scan identifies it; it must be extracted to a feature-local adapter before generated types enter the service layer.
 
-## Known gaps to close before each slice
+## Implementation closure notes
 
-- Add separate-transaction persistence assertions for WorkSession and Workspace PATCH flows (the existing API response alone is insufficient).
-- Add explicit `saveAndFlush` error-boundary characterization for workspace owner membership creation.
-- Add JSONB SQL NULL versus JSON null and `Instant` precision round-trip coverage before the first jOOQ mapping becomes shared infrastructure.
-- Confirm each service's `TransactionTemplate` block does not extend over external I/O before replacing it with a proxy-visible operation.
+- WorkSession and Workspace PATCH tests read the committed row through an independent JDBC connection after the API call; the response body is not the only persistence assertion.
+- The JPA-only `saveAndFlush` boundary no longer exists after the final entity/repository removal. jOOQ statements execute immediately, while owner/workspace multi-write atomicity is covered by the rollback fixture and DevBootstrap membership tests.
+- `SourceScopePersistenceIntegrationTest` covers SQL `NULL` versus JSON `null`, nested JSON values, and PostgreSQL `timestamptz` microsecond precision at the jOOQ mapping boundary.
+- Worker claim/transition operations use proxy-visible Spring transactions and complete before external GitHub/model I/O; the named worker and background integration suites remain the regression evidence.
 - Keep this manifest in sync with structural scans; an unlisted production persistence owner is a U1 failure.
