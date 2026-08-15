@@ -1,19 +1,19 @@
 package com.plot.api.routine
 
 import com.plot.api.common.UuidGenerator
-import java.sql.ResultSet
+import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.JooqTransactionExecutor
+import com.plot.api.persistence.SqlRow
 import java.sql.Timestamp
 import java.time.Clock
 import java.time.Instant
 import java.util.UUID
-import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Component
-import org.springframework.transaction.support.TransactionTemplate
 
 @Component
 class AgentRunPersistence(
-	private val jdbcTemplate: JdbcTemplate,
-	private val transactionTemplate: TransactionTemplate,
+	private val sqlExecutor: JooqSqlExecutor,
+	private val transactionExecutor: JooqTransactionExecutor,
 	private val uuidGenerator: UuidGenerator,
 	private val clock: Clock? = null,
 ) {
@@ -23,7 +23,7 @@ class AgentRunPersistence(
 		request: AgentRunDispatchRequest,
 		now: Instant = currentInstant(),
 		workerId: String? = null,
-	): AgentRunRecord = transactionTemplate.execute {
+	): AgentRunRecord = transactionExecutor.execute {
 		val execution = findExecutionForUpdate(workspaceId, executionId)
 			?: throw RoutineExecutionStateException("Routine execution was not found")
 		if (execution.status != RoutineExecutionStatus.PROBING) {
@@ -46,13 +46,13 @@ class AgentRunPersistence(
 		validateDispatchRequest(execution, request, lockedSources)
 
 		val workSessionId = uuidGenerator.next()
-		val routineName = jdbcTemplate.queryForObject(
+		val routineName = sqlExecutor.queryForObject(
 			"select name from routines where workspace_id = ? and id = ?",
 			String::class.java,
 			workspaceId,
 			execution.routineId,
 		) ?: "Routine"
-		jdbcTemplate.update(
+		sqlExecutor.update(
 			"""
 			insert into work_sessions (
 			  id, workspace_id, title, status, created_by_user_id, latest_generation_run_id,
@@ -70,7 +70,7 @@ class AgentRunPersistence(
 		)
 
 		val agentRunId = uuidGenerator.next()
-		jdbcTemplate.update(
+		sqlExecutor.update(
 			"""
 			insert into agent_runs (
 			  id, workspace_id, routine_execution_id, routine_id, work_session_id, created_by_user_id,
@@ -99,7 +99,7 @@ class AgentRunPersistence(
 
 		request.sourceScopes.forEachIndexed { index, source ->
 			val captured = lockedSources[source.sourceScopeId]
-			jdbcTemplate.update(
+			sqlExecutor.update(
 				"""
 				insert into agent_run_sources (
 				  id, workspace_id, agent_run_id, source_scope_id, source_role, order_index,
@@ -119,7 +119,7 @@ class AgentRunPersistence(
 		}
 
 		request.inputs.forEach { input ->
-			jdbcTemplate.update(
+			sqlExecutor.update(
 				"""
 				insert into agent_run_inputs (
 				  id, workspace_id, agent_run_id, routine_id, source_scope_id, writing_block_id,
@@ -161,7 +161,7 @@ class AgentRunPersistence(
 			workspaceId,
 			executionId,
 		) + ownershipArgs.asList()).toTypedArray()
-		val executionUpdated = jdbcTemplate.update(
+		val executionUpdated = sqlExecutor.update(
 			"""
 			update routine_executions
 			set status = 'DISPATCHED', activity_cursor_after = ?, refresh_completed_at = coalesce(refresh_completed_at, ?),
@@ -174,7 +174,7 @@ class AgentRunPersistence(
 		)
 		if (executionUpdated != 1) throw RoutineExecutionStateException("Routine execution transition was lost")
 		if (execution.triggerKind != RoutineExecutionTriggerKind.GITHUB) {
-			val cursorUpdated = jdbcTemplate.update(
+			val cursorUpdated = sqlExecutor.update(
 				"""
 				update routines
 				set activity_cursor_sequence = greatest(coalesce(activity_cursor_sequence, 0), ?), updated_at = ?
@@ -190,21 +190,21 @@ class AgentRunPersistence(
 		requireNotNull(findAgentRun(workspaceId, agentRunId))
 	}
 
-	fun findAgentRun(workspaceId: UUID, id: UUID): AgentRunRecord? = jdbcTemplate.query(
+	fun findAgentRun(workspaceId: UUID, id: UUID): AgentRunRecord? = sqlExecutor.query(
 		selectAgentRunSql + " where a.workspace_id = ? and a.id = ?",
 		agentRunMapper,
 		workspaceId,
 		id,
 	).firstOrNull()
 
-	fun chatExists(workspaceId: UUID, chatId: UUID): Boolean = jdbcTemplate.queryForObject(
+	fun chatExists(workspaceId: UUID, chatId: UUID): Boolean = sqlExecutor.queryForObject(
 		"select exists(select 1 from work_sessions where workspace_id = ? and id = ?)",
 		Boolean::class.java,
 		workspaceId,
 		chatId,
 	) ?: false
 
-	fun listChatAgentRuns(workspaceId: UUID, chatId: UUID): List<AgentRunRecord> = jdbcTemplate.query(
+	fun listChatAgentRuns(workspaceId: UUID, chatId: UUID): List<AgentRunRecord> = sqlExecutor.query(
 		selectAgentRunSql + " where a.workspace_id = ? and a.work_session_id = ? and a.origin = 'CHAT' order by a.created_at, a.id",
 		agentRunMapper,
 		workspaceId,
@@ -215,7 +215,7 @@ class AgentRunPersistence(
 		workspaceId: UUID,
 		idempotencyKey: String,
 		forUpdate: Boolean = false,
-	): AgentRunRecord? = jdbcTemplate.query(
+	): AgentRunRecord? = sqlExecutor.query(
 		selectAgentRunSql + " where a.workspace_id = ? and a.origin = 'CHAT' and a.idempotency_key = ?" +
 			if (forUpdate) " for update" else "",
 		agentRunMapper,
@@ -223,7 +223,7 @@ class AgentRunPersistence(
 		idempotencyKey,
 	).singleOrNull()
 
-	fun listAgentRunSources(workspaceId: UUID, agentRunId: UUID): List<AgentRunSourceRecord> = jdbcTemplate.query(
+	fun listAgentRunSources(workspaceId: UUID, agentRunId: UUID): List<AgentRunSourceRecord> = sqlExecutor.query(
 		"""
 		select id, workspace_id, agent_run_id, source_scope_id, source_role, order_index,
 		       captured_status, captured_status_changed_at, captured_at
@@ -236,7 +236,7 @@ class AgentRunPersistence(
 		agentRunId,
 	)
 
-	fun listAgentRunInputs(workspaceId: UUID, agentRunId: UUID): List<AgentRunInputRecord> = jdbcTemplate.query(
+	fun listAgentRunInputs(workspaceId: UUID, agentRunId: UUID): List<AgentRunInputRecord> = sqlExecutor.query(
 		"""
 		select id, workspace_id, agent_run_id, routine_id, source_scope_id, writing_block_id,
 		       source_provider, source_kind, source_label,
@@ -257,14 +257,14 @@ class AgentRunPersistence(
 		agentRunId: UUID,
 		input: AgentRunInputRequest,
 		now: Instant = currentInstant(),
-	): AgentRunInputRecord = transactionTemplate.execute {
+	): AgentRunInputRecord = transactionExecutor.execute {
 		require(input.orderIndex >= 0) { "Agent input order must be non-negative" }
 		require(input.inputKind == AgentRunInputKind.TOOL_RESULT) {
 			"Only tool-result inputs may be appended after dispatch"
 		}
 		require(input.routineId == null) { "Tool-result inputs must not claim seed ownership" }
 		val id = uuidGenerator.next()
-		jdbcTemplate.update(
+		sqlExecutor.update(
 			"""
 			insert into agent_run_inputs (
 			  id, workspace_id, agent_run_id, routine_id, source_scope_id, writing_block_id,
@@ -302,9 +302,9 @@ class AgentRunPersistence(
 		workspaceId: UUID,
 		request: AgentStepRequest,
 		now: Instant = currentInstant(),
-	): AgentStepRecord = transactionTemplate.execute {
+	): AgentStepRecord = transactionExecutor.execute {
 		val id = uuidGenerator.next()
-		jdbcTemplate.update(
+		sqlExecutor.update(
 			"""
 			insert into agent_steps (
 			  id, workspace_id, agent_run_id, sequence, step_kind, status, idempotency_key,
@@ -332,7 +332,7 @@ class AgentRunPersistence(
 		findStep(workspaceId, request.agentRunId, id)
 	} ?: error("Agent step transaction returned no record")
 
-	fun listSteps(workspaceId: UUID, agentRunId: UUID): List<AgentStepRecord> = jdbcTemplate.query(
+	fun listSteps(workspaceId: UUID, agentRunId: UUID): List<AgentStepRecord> = sqlExecutor.query(
 		"""
 		select id, workspace_id, agent_run_id, sequence, step_kind, status, idempotency_key,
 		       tool_name, arguments::text, result::text, adopted_input_id, generation_run_id,
@@ -346,7 +346,7 @@ class AgentRunPersistence(
 		agentRunId,
 	)
 
-	fun findArtifactId(workspaceId: UUID, artifactWorkflowRunId: UUID): UUID? = jdbcTemplate.query(
+	fun findArtifactId(workspaceId: UUID, artifactWorkflowRunId: UUID): UUID? = sqlExecutor.query(
 		"""
 		select id
 		from content_packs
@@ -357,7 +357,7 @@ class AgentRunPersistence(
 		artifactWorkflowRunId,
 	).singleOrNull()
 
-	fun findArtifactForAgentRun(workspaceId: UUID, agentRunId: UUID): AgentArtifactRecord? = jdbcTemplate.query(
+	fun findArtifactForAgentRun(workspaceId: UUID, agentRunId: UUID): AgentArtifactRecord? = sqlExecutor.query(
 		"""
 		select pack.id, pack.status, pack.title, pack.updated_at
 		from artifact_runs artifact
@@ -370,10 +370,10 @@ class AgentRunPersistence(
 		limit 1
 		""".trimIndent(),
 		{ rs, _ -> AgentArtifactRecord(
-			rs.getObject("id", UUID::class.java),
-			rs.getString("status"),
+			requireNotNull(rs.getObject("id", UUID::class.java)),
+			requireNotNull(rs.getString("status")),
 			rs.getString("title"),
-			rs.getTimestamp("updated_at").toInstant(),
+			requireNotNull(rs.getTimestamp("updated_at")).toInstant(),
 		) },
 		workspaceId,
 		agentRunId,
@@ -383,9 +383,9 @@ class AgentRunPersistence(
 		workerId: String,
 		now: Instant = currentInstant(),
 		staleBefore: Instant,
-	): ClaimedAgentRun? = transactionTemplate.execute {
+	): ClaimedAgentRun? = transactionExecutor.execute {
 		failExhaustedStaleAgentRuns(staleBefore, now)
-		val candidate = jdbcTemplate.query(
+		val candidate = sqlExecutor.query(
 			"""
 			select workspace_id, id, transition_version
 			from agent_runs
@@ -398,14 +398,14 @@ class AgentRunPersistence(
 			limit 1
 			""".trimIndent(),
 			{ rs, _ -> Triple(
-				rs.getObject("workspace_id", UUID::class.java),
-				rs.getObject("id", UUID::class.java),
+				requireNotNull(rs.getObject("workspace_id", UUID::class.java)),
+				requireNotNull(rs.getObject("id", UUID::class.java)),
 				rs.getLong("transition_version"),
 			) },
 			Timestamp.from(now),
 			Timestamp.from(staleBefore),
 		).firstOrNull() ?: return@execute null
-		val updated = jdbcTemplate.update(
+		val updated = sqlExecutor.update(
 			"""
 			update agent_runs
 			set status = 'RUNNING', claimed_by = ?, claimed_at = ?, next_attempt_at = null,
@@ -431,9 +431,9 @@ class AgentRunPersistence(
 		claim: ClaimedAgentRun,
 		now: Instant = currentInstant(),
 	) {
-		transactionTemplate.executeWithoutResult {
+		transactionExecutor.executeWithoutResult {
 			requireAgentClaim(claim)
-			val updated = jdbcTemplate.update(
+			val updated = sqlExecutor.update(
 				"""
 				update agent_runs
 				set attempt_count = attempt_count + 1,
@@ -451,14 +451,14 @@ class AgentRunPersistence(
 		}
 	}
 
-	fun beginModelDecision(claim: ClaimedAgentRun, maxModelCalls: Int): AgentRunRecord = transactionTemplate.execute {
+	fun beginModelDecision(claim: ClaimedAgentRun, maxModelCalls: Int): AgentRunRecord = transactionExecutor.execute {
 		require(maxModelCalls > 0) { "Agent model-call budget must be positive" }
 		val run = requireAgentClaim(claim)
 		requireAllAgentSourcesActiveForUpdate(claim.workspaceId, claim.agentRunId)
 		if (run.modelCallCount >= maxModelCalls) {
 			throw AgentRunBudgetExceededException("AGENT_MODEL_CALL_LIMIT")
 		}
-		val updated = jdbcTemplate.update(
+		val updated = sqlExecutor.update(
 			"""
 			update agent_runs
 			set model_call_count = model_call_count + 1, updated_at = ?
@@ -480,7 +480,7 @@ class AgentRunPersistence(
 		request: AgentStepRequest,
 		maxToolCalls: Int,
 		now: Instant = currentInstant(),
-	): AgentStepRecord = transactionTemplate.execute {
+	): AgentStepRecord = transactionExecutor.execute {
 		val run = requireAgentClaim(claim)
 		requireAllAgentSourcesActiveForUpdate(claim.workspaceId, claim.agentRunId)
 		require(request.agentRunId == claim.agentRunId) { "Agent step belongs to another run" }
@@ -496,7 +496,7 @@ class AgentRunPersistence(
 			throw AgentRunBudgetExceededException("AGENT_TOOL_CALL_LIMIT")
 		}
 		val id = uuidGenerator.next()
-		jdbcTemplate.update(
+		sqlExecutor.update(
 			"""
 			insert into agent_steps (
 			  id, workspace_id, agent_run_id, sequence, step_kind, status, idempotency_key,
@@ -515,7 +515,7 @@ class AgentRunPersistence(
 			Timestamp.from(now),
 		)
 		if (request.kind == AgentStepKind.READ_TOOL) {
-			val incremented = jdbcTemplate.update(
+			val incremented = sqlExecutor.update(
 				"""
 				update agent_runs
 				set tool_call_count = tool_call_count + 1, updated_at = ?
@@ -543,7 +543,7 @@ class AgentRunPersistence(
 		sourceStatusChangedAt: Instant? = null,
 		maxEvidenceCharacters: Int,
 		now: Instant = currentInstant(),
-	): AgentStepRecord = transactionTemplate.execute {
+	): AgentStepRecord = transactionExecutor.execute {
 		val run = requireAgentClaim(claim)
 		val step = findStepForUpdate(claim.workspaceId, claim.agentRunId, stepId)
 			?: throw RoutineExecutionStateException("Agent step was not found")
@@ -561,7 +561,7 @@ class AgentRunPersistence(
 				"Agent read may adopt only tool-result input"
 			}
 			require(input.sourceScopeId == sourceScopeId) { "Agent read result source mismatch" }
-			val currentCharacters = jdbcTemplate.queryForObject(
+			val currentCharacters = sqlExecutor.queryForObject(
 				"select coalesce(sum(length(coalesce(snapshot_title, '')) + length(snapshot_body)), 0) from agent_run_inputs where workspace_id = ? and agent_run_id = ?",
 				Long::class.java,
 				claim.workspaceId,
@@ -574,7 +574,7 @@ class AgentRunPersistence(
 				?: insertAdoptedInput(claim.workspaceId, claim.agentRunId, input, now)
 		}
 
-		val stepUpdated = jdbcTemplate.update(
+		val stepUpdated = sqlExecutor.update(
 			"""
 			update agent_steps
 			set status = 'SUCCEEDED', result = ?::jsonb, adopted_input_id = ?, finished_at = ?
@@ -599,14 +599,14 @@ class AgentRunPersistence(
 		resultJson: String,
 		nextAttemptAt: Instant,
 		now: Instant = currentInstant(),
-	): AgentStepRecord = transactionTemplate.execute {
+	): AgentStepRecord = transactionExecutor.execute {
 		val run = requireAgentClaim(claim)
 		val step = findStepForUpdate(claim.workspaceId, claim.agentRunId, stepId)
 			?: throw RoutineExecutionStateException("Agent step was not found")
 		require(step.sequence == run.currentStep && step.kind == AgentStepKind.ARTIFACT_HANDOFF) {
 			"Agent handoff step is stale"
 		}
-		val artifactWorkflowBelongsToAgent = jdbcTemplate.queryForObject(
+		val artifactWorkflowBelongsToAgent = sqlExecutor.queryForObject(
 			"select count(*) from generation_runs where workspace_id = ? and id = ? and agent_run_id = ? and work_session_id = ?",
 			Int::class.java,
 			claim.workspaceId,
@@ -615,7 +615,7 @@ class AgentRunPersistence(
 			requireNotNull(run.workSessionId),
 		) == 1
 		if (!artifactWorkflowBelongsToAgent) throw RoutineExecutionStateException("ArtifactWorkflow handoff belongs to another Agent run")
-		val stepUpdated = jdbcTemplate.update(
+		val stepUpdated = sqlExecutor.update(
 			"""
 			update agent_steps
 			set status = 'SUCCEEDED', generation_run_id = ?, result = ?::jsonb, finished_at = ?
@@ -634,7 +634,7 @@ class AgentRunPersistence(
 	}
 
 	fun releaseAgentClaim(claim: ClaimedAgentRun, nextAttemptAt: Instant, now: Instant = currentInstant()) {
-		transactionTemplate.executeWithoutResult {
+		transactionExecutor.executeWithoutResult {
 			requireAgentClaim(claim)
 			advanceAndRelease(claim, currentStep = null, now = now, nextAttemptAt = nextAttemptAt)
 		}
@@ -645,12 +645,12 @@ class AgentRunPersistence(
 		errorCode: String,
 		nextAttemptAt: Instant,
 		now: Instant = currentInstant(),
-	): AgentRunRecord = transactionTemplate.execute {
+	): AgentRunRecord = transactionExecutor.execute {
 		require(errorCode.matches(SAFE_ERROR_CODE)) { "Agent error code is invalid" }
 		val run = requireAgentClaim(claim)
 		val attempts = run.attemptCount + 1
 		val terminal = attempts >= run.maxAttempts
-		val updated = jdbcTemplate.update(
+		val updated = sqlExecutor.update(
 			"""
 			update agent_runs
 			set status = ?, attempt_count = ?, failure_code = ?, next_attempt_at = ?,
@@ -676,9 +676,9 @@ class AgentRunPersistence(
 	fun failAgentRun(claim: ClaimedAgentRun, errorCode: String, now: Instant = currentInstant()): AgentRunRecord =
 		terminalizeAgentRun(claim, AgentRunStatus.FAILED, errorCode, now)
 
-	fun succeedAgentRun(claim: ClaimedAgentRun, now: Instant = currentInstant()): AgentRunRecord = transactionTemplate.execute {
+	fun succeedAgentRun(claim: ClaimedAgentRun, now: Instant = currentInstant()): AgentRunRecord = transactionExecutor.execute {
 		requireAgentClaim(claim)
-		val materialized = jdbcTemplate.queryForObject(
+		val materialized = sqlExecutor.queryForObject(
 			"""
 			select count(*)
 			from artifact_runs artifact
@@ -697,7 +697,7 @@ class AgentRunPersistence(
 		terminalizeAgentRun(claim, AgentRunStatus.SUCCEEDED, null, now)
 	}
 
-	fun loadArtifactWorkflowState(workspaceId: UUID, artifactWorkflowRunId: UUID): AgentArtifactWorkflowState? = jdbcTemplate.query(
+	fun loadArtifactWorkflowState(workspaceId: UUID, artifactWorkflowRunId: UUID): AgentArtifactWorkflowState? = sqlExecutor.query(
 		"""
 		select generation.id, generation.status,
 		       exists (
@@ -708,8 +708,8 @@ class AgentRunPersistence(
 		where generation.workspace_id = ? and generation.id = ?
 		""".trimIndent(),
 		{ rs, _ -> AgentArtifactWorkflowState(
-			rs.getObject("id", UUID::class.java),
-			rs.getString("status"),
+			requireNotNull(rs.getObject("id", UUID::class.java)),
+			requireNotNull(rs.getString("status")),
 			rs.getBoolean("materialized"),
 		) },
 		workspaceId,
@@ -717,7 +717,7 @@ class AgentRunPersistence(
 	).singleOrNull()
 
 	fun allAgentSourcesActive(workspaceId: UUID, agentRunId: UUID): Boolean {
-		val counts = jdbcTemplate.query(
+		val counts = sqlExecutor.query(
 			"""
 			select count(*) as total,
 			       count(*) filter (
@@ -755,7 +755,7 @@ class AgentRunPersistence(
 		findStepBySequence(workspaceId, agentRunId, sequence)?.takeIf { it.status == AgentStepStatus.RUNNING }
 
 	private fun requireAgentClaim(claim: ClaimedAgentRun): AgentRunRecord {
-		val run = jdbcTemplate.query(
+		val run = sqlExecutor.query(
 			selectAgentRunSql + """
 
 			where a.workspace_id = ? and a.id = ? and a.claimed_by = ? and a.transition_version = ?
@@ -772,7 +772,7 @@ class AgentRunPersistence(
 	}
 
 	private fun findStepBySequence(workspaceId: UUID, agentRunId: UUID, sequence: Int): AgentStepRecord? =
-		jdbcTemplate.query(
+		sqlExecutor.query(
 			"""
 			select id, workspace_id, agent_run_id, sequence, step_kind, status, idempotency_key,
 			       tool_name, arguments::text, result::text, adopted_input_id, generation_run_id,
@@ -787,7 +787,7 @@ class AgentRunPersistence(
 		).singleOrNull()
 
 	private fun findStepForUpdate(workspaceId: UUID, agentRunId: UUID, stepId: UUID): AgentStepRecord? =
-		jdbcTemplate.query(
+		sqlExecutor.query(
 			"""
 			select id, workspace_id, agent_run_id, sequence, step_kind, status, idempotency_key,
 			       tool_name, arguments::text, result::text, adopted_input_id, generation_run_id,
@@ -803,13 +803,13 @@ class AgentRunPersistence(
 		).singleOrNull()
 
 	private fun requireAllAgentSourcesActiveForUpdate(workspaceId: UUID, agentRunId: UUID) {
-		val expected = jdbcTemplate.queryForObject(
+		val expected = sqlExecutor.queryForObject(
 			"select count(*) from agent_run_sources where workspace_id = ? and agent_run_id = ?",
 			Int::class.java,
 			workspaceId,
 			agentRunId,
 		) ?: 0
-		val statuses = jdbcTemplate.query(
+		val statuses = sqlExecutor.query(
 			"""
 			select scope.id, scope.status, namespace.status as namespace_status
 			from agent_run_sources source
@@ -823,14 +823,14 @@ class AgentRunPersistence(
 			for update of scope, namespace
 			""".trimIndent(),
 			{ rs, _ -> Triple(
-				rs.getObject("id", UUID::class.java),
-				rs.getString("status"),
-				rs.getString("namespace_status"),
+				requireNotNull(rs.getObject("id", UUID::class.java)),
+				requireNotNull(rs.getString("status")),
+				requireNotNull(rs.getString("namespace_status")),
 			) },
 			workspaceId,
 			agentRunId,
 		)
-		val connectedScopeIds = jdbcTemplate.query(
+		val connectedScopeIds = sqlExecutor.query(
 			"""
 			select scope.id
 			from agent_run_sources source
@@ -849,7 +849,7 @@ class AgentRunPersistence(
 			order by scope.id
 			for update of binding, connection
 			""".trimIndent(),
-			{ rs, _ -> rs.getObject("id", UUID::class.java) },
+			{ rs, _ -> requireNotNull(rs.getObject("id", UUID::class.java)) },
 			workspaceId,
 			agentRunId,
 		).toSet()
@@ -869,7 +869,7 @@ class AgentRunPersistence(
 		sourceScopeId: UUID,
 		expectedStatusChangedAt: Instant,
 	) {
-		val current = jdbcTemplate.query(
+		val current = sqlExecutor.query(
 			"""
 			select greatest(
 			  scope.status_changed_at,
@@ -892,7 +892,7 @@ class AgentRunPersistence(
 			where source.workspace_id = ? and source.agent_run_id = ? and source.source_scope_id = ?
 			  and scope.status = 'ACTIVE'
 			""".trimIndent(),
-			{ rs, _ -> rs.getTimestamp("lifecycle_version_at").toInstant() },
+			{ rs, _ -> requireNotNull(rs.getTimestamp("lifecycle_version_at")).toInstant() },
 			workspaceId,
 			agentRunId,
 			sourceScopeId,
@@ -904,7 +904,7 @@ class AgentRunPersistence(
 		workspaceId: UUID,
 		agentRunId: UUID,
 		input: AgentRunInputRequest,
-	): AgentRunInputRecord? = jdbcTemplate.query(
+	): AgentRunInputRecord? = sqlExecutor.query(
 		"""
 		select id, workspace_id, agent_run_id, routine_id, source_scope_id, writing_block_id,
 		       source_provider, source_kind, source_label,
@@ -929,14 +929,14 @@ class AgentRunPersistence(
 		input: AgentRunInputRequest,
 		now: Instant,
 	): AgentRunInputRecord {
-		val orderIndex = jdbcTemplate.queryForObject(
+		val orderIndex = sqlExecutor.queryForObject(
 			"select coalesce(max(order_index), -1) + 1 from agent_run_inputs where workspace_id = ? and agent_run_id = ?",
 			Int::class.java,
 			workspaceId,
 			agentRunId,
 		) ?: 0
 		val id = uuidGenerator.next()
-		jdbcTemplate.update(
+		sqlExecutor.update(
 			"""
 			insert into agent_run_inputs (
 			  id, workspace_id, agent_run_id, routine_id, source_scope_id, writing_block_id,
@@ -978,7 +978,7 @@ class AgentRunPersistence(
 		nextAttemptAt: Instant? = null,
 	) {
 		val updated = if (currentStep == null) {
-			jdbcTemplate.update(
+			sqlExecutor.update(
 				"""
 				update agent_runs
 				set claimed_by = null, claimed_at = null, next_attempt_at = ?,
@@ -993,7 +993,7 @@ class AgentRunPersistence(
 				claim.transitionVersion,
 			)
 		} else {
-			jdbcTemplate.update(
+			sqlExecutor.update(
 				"""
 				update agent_runs
 				set current_step = ?, claimed_by = null, claimed_at = null, next_attempt_at = ?,
@@ -1017,12 +1017,12 @@ class AgentRunPersistence(
 		status: AgentRunStatus,
 		errorCode: String?,
 		now: Instant,
-	): AgentRunRecord = transactionTemplate.execute {
+	): AgentRunRecord = transactionExecutor.execute {
 		require(status in setOf(AgentRunStatus.SUCCEEDED, AgentRunStatus.FAILED)) { "Agent terminal status is invalid" }
 		if (errorCode != null) require(errorCode.matches(SAFE_ERROR_CODE)) { "Agent error code is invalid" }
 		requireAgentClaim(claim)
 		if (status == AgentRunStatus.FAILED) {
-			jdbcTemplate.update(
+			sqlExecutor.update(
 				"""
 				update agent_steps
 				set status = 'FAILED', failure_code = ?, finished_at = coalesce(finished_at, ?)
@@ -1034,7 +1034,7 @@ class AgentRunPersistence(
 				claim.agentRunId,
 			)
 		}
-		val updated = jdbcTemplate.update(
+		val updated = sqlExecutor.update(
 			"""
 			update agent_runs
 			set status = ?, failure_code = ?, claimed_by = null, claimed_at = null, next_attempt_at = null,
@@ -1054,7 +1054,7 @@ class AgentRunPersistence(
 		requireNotNull(findAgentRun(claim.workspaceId, claim.agentRunId))
 	}
 
-	private fun findStep(workspaceId: UUID, agentRunId: UUID, id: UUID): AgentStepRecord? = jdbcTemplate.query(
+	private fun findStep(workspaceId: UUID, agentRunId: UUID, id: UUID): AgentStepRecord? = sqlExecutor.query(
 		"""
 		select id, workspace_id, agent_run_id, sequence, step_kind, status, idempotency_key,
 		       tool_name, arguments::text, result::text, adopted_input_id, generation_run_id,
@@ -1069,7 +1069,7 @@ class AgentRunPersistence(
 	).firstOrNull()
 
 	private fun failExhaustedStaleAgentRuns(staleBefore: Instant, now: Instant) {
-		val exhausted = jdbcTemplate.query(
+		val exhausted = sqlExecutor.query(
 			"""
 			select workspace_id, id
 			from agent_runs
@@ -1085,7 +1085,7 @@ class AgentRunPersistence(
 			Timestamp.from(staleBefore),
 		)
 		exhausted.forEach { (workspaceId, agentRunId) ->
-			jdbcTemplate.update(
+			sqlExecutor.update(
 				"""
 				update agent_steps
 				set status = 'FAILED', failure_code = 'AGENT_RETRY_EXHAUSTED',
@@ -1096,7 +1096,7 @@ class AgentRunPersistence(
 				workspaceId,
 				agentRunId,
 			)
-			jdbcTemplate.update(
+			sqlExecutor.update(
 				"""
 				update agent_runs
 				set status = 'FAILED', failure_code = 'AGENT_RETRY_EXHAUSTED',
@@ -1112,7 +1112,7 @@ class AgentRunPersistence(
 		}
 	}
 
-	private fun findInput(workspaceId: UUID, agentRunId: UUID, id: UUID): AgentRunInputRecord? = jdbcTemplate.query(
+	private fun findInput(workspaceId: UUID, agentRunId: UUID, id: UUID): AgentRunInputRecord? = sqlExecutor.query(
 		"""
 		select id, workspace_id, agent_run_id, routine_id, source_scope_id, writing_block_id,
 		       source_provider, source_kind, source_label,
@@ -1129,14 +1129,14 @@ class AgentRunPersistence(
 	).firstOrNull()
 
 
-	private fun findExecutionForUpdate(workspaceId: UUID, id: UUID): RoutineExecutionRecord? = jdbcTemplate.query(
+	private fun findExecutionForUpdate(workspaceId: UUID, id: UUID): RoutineExecutionRecord? = sqlExecutor.query(
 		selectExecutionSql + " where e.workspace_id = ? and e.id = ? for update",
 		executionMapper,
 		workspaceId,
 		id,
 	).firstOrNull()
 
-	private fun findRoutineCursorForUpdate(workspaceId: UUID, routineId: UUID): RoutineCursor? = jdbcTemplate.query(
+	private fun findRoutineCursorForUpdate(workspaceId: UUID, routineId: UUID): RoutineCursor? = sqlExecutor.query(
 		"select activity_cursor_sequence from routines where workspace_id = ? and id = ? for update",
 		{ rs, _ -> RoutineCursor(rs.getObject(1, Long::class.javaObjectType)) },
 		workspaceId,
@@ -1166,7 +1166,7 @@ class AgentRunPersistence(
 		require(request.sourceScopes.map { it.sourceScopeId }.distinct().size == request.sourceScopes.size) {
 			"Agent source scopes must be unique"
 		}
-		val configuredContextSources = jdbcTemplate.query(
+		val configuredContextSources = sqlExecutor.query(
 			"""
 			select source_scope_id
 			from routine_context_sources
@@ -1212,7 +1212,7 @@ class AgentRunPersistence(
 		require(sourceScopeIds.isNotEmpty()) { "Agent source scopes are required" }
 		val distinctIds = sourceScopeIds.distinct()
 		val placeholders = distinctIds.joinToString(",") { "?" }
-		val rows = jdbcTemplate.query(
+		val rows = sqlExecutor.query(
 			"""
 			select scope.id, scope.status,
 			       greatest(
@@ -1235,11 +1235,11 @@ class AgentRunPersistence(
 			order by scope.id
 			for update of scope, namespace, binding, connection
 			""".trimIndent(),
-			{ rs, _ ->
-				LockedSource(
-					id = rs.getObject("id", UUID::class.java),
-					status = rs.getString("status"),
-					statusChangedAt = rs.getTimestamp("lifecycle_version_at").toInstant(),
+				{ rs, _ ->
+					LockedSource(
+						id = requireNotNull(rs.getObject("id", UUID::class.java)),
+						status = requireNotNull(rs.getString("status")),
+						statusChangedAt = requireNotNull(rs.getTimestamp("lifecycle_version_at")).toInstant(),
 				)
 			},
 			workspaceId,
@@ -1252,11 +1252,11 @@ class AgentRunPersistence(
 	}
 
 
-	private val executionMapper = { rs: ResultSet, _: Int -> rs.toRoutineExecution() }
-	private val agentRunMapper = { rs: ResultSet, _: Int -> rs.toAgentRun() }
-	private val agentRunSourceMapper = { rs: ResultSet, _: Int -> rs.toAgentRunSource() }
-	private val agentRunInputMapper = { rs: ResultSet, _: Int -> rs.toAgentRunInput() }
-	private val agentStepMapper = { rs: ResultSet, _: Int -> rs.toAgentStep() }
+	private val executionMapper = { rs: SqlRow, _: Int -> rs.toRoutineExecution() }
+	private val agentRunMapper = { rs: SqlRow, _: Int -> rs.toAgentRun() }
+	private val agentRunSourceMapper = { rs: SqlRow, _: Int -> rs.toAgentRunSource() }
+	private val agentRunInputMapper = { rs: SqlRow, _: Int -> rs.toAgentRunInput() }
+	private val agentStepMapper = { rs: SqlRow, _: Int -> rs.toAgentStep() }
 	private data class RoutineCursor(val value: Long?)
 	private data class LockedSource(val id: UUID, val status: String, val statusChangedAt: Instant)
 	data class AgentArtifactRecord(val id: UUID, val status: String, val title: String?, val updatedAt: Instant)
@@ -1288,15 +1288,15 @@ class AgentRunPersistence(
 		from agent_runs a
 	""".trimIndent()
 
-	private fun ResultSet.toRoutineExecution() = RoutineExecutionRecord(
-		id = getObject("id", UUID::class.java),
-		workspaceId = getObject("workspace_id", UUID::class.java),
-		routineId = getObject("routine_id", UUID::class.java),
-		createdByUserId = getObject("created_by_user_id", UUID::class.java),
-		triggerSourceScopeId = getObject("trigger_source_scope_id", UUID::class.java),
-		triggerKind = RoutineExecutionTriggerKind.valueOf(getString("trigger_kind")),
-		triggerKey = getString("trigger_key"),
-		requestFingerprint = getString("request_fingerprint"),
+	private fun SqlRow.toRoutineExecution() = RoutineExecutionRecord(
+		id = requireNotNull(getObject("id", UUID::class.java)),
+		workspaceId = requireNotNull(getObject("workspace_id", UUID::class.java)),
+		routineId = requireNotNull(getObject("routine_id", UUID::class.java)),
+		createdByUserId = requireNotNull(getObject("created_by_user_id", UUID::class.java)),
+		triggerSourceScopeId = requireNotNull(getObject("trigger_source_scope_id", UUID::class.java)),
+		triggerKind = RoutineExecutionTriggerKind.valueOf(requireNotNull(getString("trigger_kind"))),
+		triggerKey = requireNotNull(getString("trigger_key")),
+		requestFingerprint = requireNotNull(getString("request_fingerprint")),
 		triggerDeliveryId = getObject("trigger_delivery_id", UUID::class.java),
 		scheduledFor = getTimestamp("scheduled_for")?.toInstant(),
 		refreshFrom = getTimestamp("refresh_from")?.toInstant(),
@@ -1305,7 +1305,7 @@ class AgentRunPersistence(
 		refreshCompletedAt = getTimestamp("refresh_completed_at")?.toInstant(),
 		activityCursorBefore = getObject("activity_cursor_before", Long::class.javaObjectType),
 		activityCursorAfter = getObject("activity_cursor_after", Long::class.javaObjectType),
-		status = RoutineExecutionStatus.valueOf(getString("status")),
+		status = RoutineExecutionStatus.valueOf(requireNotNull(getString("status"))),
 		attemptCount = getInt("attempt_count"),
 		transitionVersion = getLong("transition_version"),
 		claimedBy = getString("claimed_by"),
@@ -1314,25 +1314,25 @@ class AgentRunPersistence(
 		errorCode = getString("error_code"),
 		startedAt = getTimestamp("started_at")?.toInstant(),
 		finishedAt = getTimestamp("finished_at")?.toInstant(),
-		createdAt = getTimestamp("created_at").toInstant(),
-		updatedAt = getTimestamp("updated_at").toInstant(),
+		createdAt = requireNotNull(getTimestamp("created_at")).toInstant(),
+		updatedAt = requireNotNull(getTimestamp("updated_at")).toInstant(),
 	)
 
-	private fun ResultSet.toAgentRun() = AgentRunRecord(
-		id = getObject("id", UUID::class.java),
-		workspaceId = getObject("workspace_id", UUID::class.java),
+	private fun SqlRow.toAgentRun() = AgentRunRecord(
+		id = requireNotNull(getObject("id", UUID::class.java)),
+		workspaceId = requireNotNull(getObject("workspace_id", UUID::class.java)),
 		routineExecutionId = getObject("routine_execution_id", UUID::class.java),
 		workSessionId = getObject("work_session_id", UUID::class.java),
 		routineId = getObject("routine_id", UUID::class.java),
-		origin = AgentRunOrigin.valueOf(getString("origin")),
-		idempotencyKey = getString("idempotency_key"),
-		requestFingerprint = getString("request_fingerprint"),
-		createdByUserId = getObject("created_by_user_id", UUID::class.java),
-		instructionSnapshot = getString("instruction_snapshot"),
-		promptVersion = getString("prompt_version"),
-		toolPolicyVersion = getString("tool_policy_version"),
-		budgetSnapshotJson = getString("budget_snapshot"),
-		status = AgentRunStatus.valueOf(getString("status")),
+		origin = AgentRunOrigin.valueOf(requireNotNull(getString("origin"))),
+		idempotencyKey = requireNotNull(getString("idempotency_key")),
+		requestFingerprint = requireNotNull(getString("request_fingerprint")),
+		createdByUserId = requireNotNull(getObject("created_by_user_id", UUID::class.java)),
+		instructionSnapshot = requireNotNull(getString("instruction_snapshot")),
+		promptVersion = requireNotNull(getString("prompt_version")),
+		toolPolicyVersion = requireNotNull(getString("tool_policy_version")),
+		budgetSnapshotJson = requireNotNull(getString("budget_snapshot")),
+		status = AgentRunStatus.valueOf(requireNotNull(getString("status"))),
 		currentStep = getInt("current_step"),
 		attemptCount = getInt("attempt_count"),
 		maxAttempts = getInt("max_attempts"),
@@ -1345,62 +1345,62 @@ class AgentRunPersistence(
 		transitionVersion = getLong("transition_version"),
 		startedAt = getTimestamp("started_at")?.toInstant(),
 		finishedAt = getTimestamp("finished_at")?.toInstant(),
-		createdAt = getTimestamp("created_at").toInstant(),
-		updatedAt = getTimestamp("updated_at").toInstant(),
+		createdAt = requireNotNull(getTimestamp("created_at")).toInstant(),
+		updatedAt = requireNotNull(getTimestamp("updated_at")).toInstant(),
 	)
 
-	private fun ResultSet.toAgentRunSource() = AgentRunSourceRecord(
-		id = getObject("id", UUID::class.java),
-		workspaceId = getObject("workspace_id", UUID::class.java),
-		agentRunId = getObject("agent_run_id", UUID::class.java),
-		sourceScopeId = getObject("source_scope_id", UUID::class.java),
-		role = AgentRunSourceRole.valueOf(getString("source_role")),
+	private fun SqlRow.toAgentRunSource() = AgentRunSourceRecord(
+		id = requireNotNull(getObject("id", UUID::class.java)),
+		workspaceId = requireNotNull(getObject("workspace_id", UUID::class.java)),
+		agentRunId = requireNotNull(getObject("agent_run_id", UUID::class.java)),
+		sourceScopeId = requireNotNull(getObject("source_scope_id", UUID::class.java)),
+		role = AgentRunSourceRole.valueOf(requireNotNull(getString("source_role"))),
 		orderIndex = getInt("order_index"),
-		capturedStatus = getString("captured_status"),
-		capturedStatusChangedAt = getTimestamp("captured_status_changed_at").toInstant(),
-		capturedAt = getTimestamp("captured_at").toInstant(),
+		capturedStatus = requireNotNull(getString("captured_status")),
+		capturedStatusChangedAt = requireNotNull(getTimestamp("captured_status_changed_at")).toInstant(),
+		capturedAt = requireNotNull(getTimestamp("captured_at")).toInstant(),
 	)
 
-	private fun ResultSet.toAgentRunInput() = AgentRunInputRecord(
-		id = getObject("id", UUID::class.java),
-		workspaceId = getObject("workspace_id", UUID::class.java),
-		agentRunId = getObject("agent_run_id", UUID::class.java),
+	private fun SqlRow.toAgentRunInput() = AgentRunInputRecord(
+		id = requireNotNull(getObject("id", UUID::class.java)),
+		workspaceId = requireNotNull(getObject("workspace_id", UUID::class.java)),
+		agentRunId = requireNotNull(getObject("agent_run_id", UUID::class.java)),
 		routineId = getObject("routine_id", UUID::class.java),
-		sourceScopeId = getObject("source_scope_id", UUID::class.java),
-		writingBlockId = getObject("writing_block_id", UUID::class.java),
-		sourceProvider = getString("source_provider"),
-		sourceKind = getString("source_kind"),
-		sourceLabel = getString("source_label"),
-		inputKind = AgentRunInputKind.valueOf(getString("input_kind")),
+		sourceScopeId = requireNotNull(getObject("source_scope_id", UUID::class.java)),
+		writingBlockId = requireNotNull(getObject("writing_block_id", UUID::class.java)),
+		sourceProvider = requireNotNull(getString("source_provider")),
+		sourceKind = requireNotNull(getString("source_kind")),
+		sourceLabel = requireNotNull(getString("source_label")),
+		inputKind = AgentRunInputKind.valueOf(requireNotNull(getString("input_kind"))),
 		orderIndex = getInt("order_index"),
 		activitySequence = getObject("activity_sequence", Long::class.javaObjectType),
 		snapshotTitle = getString("snapshot_title"),
-		snapshotBody = getString("snapshot_body"),
+		snapshotBody = requireNotNull(getString("snapshot_body")),
 		snapshotExcerpt = getString("snapshot_excerpt"),
-		originalUrl = getString("original_url"),
+		originalUrl = requireNotNull(getString("original_url")),
 		sourceCreatedAt = getTimestamp("source_created_at")?.toInstant(),
 		sourceUpdatedAt = getTimestamp("source_updated_at")?.toInstant(),
-		contentHash = getString("content_hash"),
-		capturedAt = getTimestamp("captured_at").toInstant(),
+		contentHash = requireNotNull(getString("content_hash")),
+		capturedAt = requireNotNull(getTimestamp("captured_at")).toInstant(),
 	)
 
-	private fun ResultSet.toAgentStep() = AgentStepRecord(
-		id = getObject("id", UUID::class.java),
-		workspaceId = getObject("workspace_id", UUID::class.java),
-		agentRunId = getObject("agent_run_id", UUID::class.java),
+	private fun SqlRow.toAgentStep() = AgentStepRecord(
+		id = requireNotNull(getObject("id", UUID::class.java)),
+		workspaceId = requireNotNull(getObject("workspace_id", UUID::class.java)),
+		agentRunId = requireNotNull(getObject("agent_run_id", UUID::class.java)),
 		sequence = getInt("sequence"),
-		kind = AgentStepKind.valueOf(getString("step_kind")),
-		status = AgentStepStatus.valueOf(getString("status")),
-		idempotencyKey = getString("idempotency_key"),
+		kind = AgentStepKind.valueOf(requireNotNull(getString("step_kind"))),
+		status = AgentStepStatus.valueOf(requireNotNull(getString("status"))),
+		idempotencyKey = requireNotNull(getString("idempotency_key")),
 		toolName = getString("tool_name"),
-		argumentsJson = getString("arguments"),
+		argumentsJson = requireNotNull(getString("arguments")),
 		resultJson = getString("result"),
 		adoptedInputId = getObject("adopted_input_id", UUID::class.java),
 		artifactWorkflowRunId = getObject("generation_run_id", UUID::class.java),
 		failureCode = getString("failure_code"),
 		startedAt = getTimestamp("started_at")?.toInstant(),
 		finishedAt = getTimestamp("finished_at")?.toInstant(),
-		createdAt = getTimestamp("created_at").toInstant(),
+		createdAt = requireNotNull(getTimestamp("created_at")).toInstant(),
 	)
 
 }

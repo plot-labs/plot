@@ -16,12 +16,12 @@ import org.springframework.transaction.annotation.Transactional
 class WorkSessionService(
 	private val devContext: DevContext,
 	private val uuidGenerator: UuidGenerator,
-	private val workSessionRepository: WorkSessionRepository,
+	private val workSessionPersistence: WorkSessionPersistence,
 ) {
 
 	@Transactional(readOnly = true)
 	fun list(): List<WorkSessionResponse> {
-		return workSessionRepository
+		return workSessionPersistence
 			.findRecentByWorkspaceId(devContext.devWorkspaceId)
 			.map { it.toResponse() }
 	}
@@ -41,23 +41,20 @@ class WorkSessionService(
 			updatedAt = now,
 		)
 
-		return workSessionRepository.save(workSession).toResponse()
+		return workSessionPersistence.insert(workSession).toResponse()
 	}
 
 	@Transactional
 	fun update(id: UUID, request: UpdateWorkSessionRequest): WorkSessionResponse {
-		val workSession = requireSession(id)
 		val now = Instant.now()
-
-		if (request.title != null) workSession.title = request.title.trim()
-		workSession.lastActivityAt = now
-		workSession.updatedAt = now
-
-		return workSession.toResponse()
-	}
-
-	private fun requireSession(id: UUID): WorkSession {
-		return workSessionRepository.findByWorkspaceIdAndId(devContext.devWorkspaceId, id)
+		return workSessionPersistence
+			.update(
+				workspaceId = devContext.devWorkspaceId,
+				id = id,
+				title = request.title?.trim(),
+				now = now,
+			)
+			?.toResponse()
 			?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Work session not found")
 	}
 

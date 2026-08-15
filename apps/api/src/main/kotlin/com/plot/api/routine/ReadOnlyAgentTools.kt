@@ -3,10 +3,10 @@ package com.plot.api.routine
 import com.plot.api.ai.provider.AgentSourceView
 import com.plot.api.writingblock.writingBlockContentHash
 import java.net.URI
-import java.sql.ResultSet
+import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlRow
 import java.time.Instant
 import java.util.UUID
-import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Component
 
 data class AgentSearchItem(
@@ -25,11 +25,11 @@ data class AgentToolResult(
 
 @Component
 class ReadOnlyAgentTools(
-	private val jdbcTemplate: JdbcTemplate,
+	private val sqlExecutor: JooqSqlExecutor,
 	private val properties: RoutineAgentProperties,
 ) {
 	fun listAllowedSources(workspaceId: UUID, agentRunId: UUID): AgentToolResult = AgentToolResult(
-		sources = jdbcTemplate.query(
+		sources = sqlExecutor.query(
 			"""
 			select scope.id, scope.display_name, source.source_role
 			from agent_run_sources source
@@ -47,7 +47,11 @@ class ReadOnlyAgentTools(
 			where source.workspace_id = ? and source.agent_run_id = ? and scope.status = 'ACTIVE'
 			order by source.order_index, scope.id
 			""".trimIndent(),
-			{ rs, _ -> AgentSourceView(rs.getObject(1, UUID::class.java), rs.getString(2), rs.getString(3)) },
+			{ rs, _ -> AgentSourceView(
+				requireNotNull(rs.getObject(1, UUID::class.java)),
+				requireNotNull(rs.getString(2)),
+				requireNotNull(rs.getString(3)),
+			) },
 			workspaceId,
 			agentRunId,
 		),
@@ -63,7 +67,7 @@ class ReadOnlyAgentTools(
 		val normalized = query.trim().take(200)
 		require(normalized.isNotBlank()) { "Search query is required" }
 		val pattern = "%${escapeLike(normalized.lowercase())}%"
-		val matches = jdbcTemplate.query(
+		val matches = sqlExecutor.query(
 			"""
 			select block.id, block.title, block.body
 			from writing_blocks block
@@ -81,7 +85,7 @@ class ReadOnlyAgentTools(
 			""".trimIndent(),
 			{ rs, _ ->
 				AgentSearchItem(
-					writingBlockId = rs.getObject("id", UUID::class.java),
+					writingBlockId = requireNotNull(rs.getObject("id", UUID::class.java)),
 					title = rs.getString("title")?.take(MAX_RESULT_TITLE),
 					excerpt = normalizedExcerpt(rs.getString("body") ?: rs.getString("title").orEmpty()),
 				)
@@ -101,7 +105,7 @@ class ReadOnlyAgentTools(
 		writingBlockId: UUID,
 	): AgentToolResult {
 		val source = requireActiveAllowedSource(workspaceId, agentRunId, sourceScopeId)
-		val block = jdbcTemplate.query(
+		val block = sqlExecutor.query(
 			"""
 			select block.id, block.title, block.body, block.url, block.canonical_url,
 			       block.platform, block.source_kind, block.content_hash,
@@ -133,7 +137,7 @@ class ReadOnlyAgentTools(
 		workspaceId: UUID,
 		agentRunId: UUID,
 		sourceScopeId: UUID,
-	): AllowedSource = jdbcTemplate.query(
+	): AllowedSource = sqlExecutor.query(
 		"""
 		select scope.display_name,
 		       greatest(scope.status_changed_at, namespace.updated_at, binding.updated_at, connection.updated_at) as lifecycle_version_at
@@ -152,13 +156,13 @@ class ReadOnlyAgentTools(
 		where source.workspace_id = ? and source.agent_run_id = ?
 		  and source.source_scope_id = ? and scope.status = 'ACTIVE'
 		""".trimIndent(),
-		{ rs, _ -> AllowedSource(rs.getString(1), rs.getTimestamp("lifecycle_version_at").toInstant()) },
+		{ rs, _ -> AllowedSource(requireNotNull(rs.getString(1)), requireNotNull(rs.getTimestamp("lifecycle_version_at")).toInstant()) },
 		workspaceId,
 		agentRunId,
 		sourceScopeId,
 	).singleOrNull() ?: throw AgentToolAccessException("SOURCE_NOT_ALLOWED")
 
-	private fun ResultSet.toReadBlock(sourceScopeId: UUID, sourceLabel: String): AgentRunInputRequest {
+	private fun SqlRow.toReadBlock(sourceScopeId: UUID, sourceLabel: String): AgentRunInputRequest {
 		val title = getString("title")?.trim()?.takeIf { it.isNotBlank() }
 		val unboundedBody = getString("body")?.trim()?.takeIf { it.isNotBlank() } ?: title
 			?: throw AgentToolAccessException("SOURCE_ITEM_EMPTY")
@@ -168,12 +172,12 @@ class ReadOnlyAgentTools(
 		val bodyBudget = properties.maxInputCharacters - boundedTitle.orEmpty().length
 		val boundedBody = unboundedBody.take(bodyBudget)
 		val provider = getString("platform")?.uppercase()?.takeIf { it.isNotBlank() } ?: "GITHUB"
-		val sourceKind = getString("source_kind").trim()
+		val sourceKind = requireNotNull(getString("source_kind")).trim()
 		val url = canonicalHttpUrl(getString("canonical_url") ?: getString("url"))
 		return AgentRunInputRequest(
 			routineId = null,
 			sourceScopeId = sourceScopeId,
-			writingBlockId = getObject("id", UUID::class.java),
+			writingBlockId = requireNotNull(getObject("id", UUID::class.java)),
 			sourceProvider = provider,
 			sourceKind = sourceKind,
 			sourceLabel = boundedTitle ?: "$sourceLabel $sourceKind",

@@ -1,13 +1,15 @@
 package com.plot.api.github
 
+import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlRow
 import java.sql.Timestamp
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
-import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.dao.InvalidDataAccessApiUsageException
 import org.springframework.stereotype.Repository
-import org.springframework.transaction.support.TransactionTemplate
+import org.springframework.transaction.annotation.Transactional
 
 interface GitHubReleasePersistence {
 	fun insertDelivery(delivery: GitHubWebhookDelivery): GitHubWebhookDelivery
@@ -97,12 +99,11 @@ interface GitHubReleasePersistence {
 
 @Repository
 class JdbcGitHubReleasePersistence(
-	private val jdbcTemplate: JdbcTemplate,
-	private val transactionTemplate: TransactionTemplate,
+	private val sqlExecutor: JooqSqlExecutor,
 	private val clock: Clock = Clock.systemUTC(),
 ) : GitHubReleasePersistence {
 	override fun insertDelivery(delivery: GitHubWebhookDelivery): GitHubWebhookDelivery {
-		return jdbcTemplate.query(
+		return sqlExecutor.query(
 			"""
 			insert into github_webhook_deliveries (
 			 id, external_delivery_id, event_type, event_action, installation_id, repository_id, ref,
@@ -124,7 +125,7 @@ class JdbcGitHubReleasePersistence(
 			?: throw IllegalStateException("GitHub webhook delivery was not found after a conflicted insert")
 	}
 
-	override fun findDelivery(externalDeliveryId: String): GitHubWebhookDelivery? = jdbcTemplate.query(
+	override fun findDelivery(externalDeliveryId: String): GitHubWebhookDelivery? = sqlExecutor.query(
 		"""
 		select id, external_delivery_id, event_type, event_action, installation_id, repository_id, ref,
 		 before_sha, after_sha, tag_name, ref_created, ref_deleted, forced, payload_hash, disposition,
@@ -135,7 +136,7 @@ class JdbcGitHubReleasePersistence(
 		externalDeliveryId,
 	).firstOrNull()
 
-	override fun findDelivery(id: UUID): GitHubWebhookDelivery? = jdbcTemplate.query(
+	override fun findDelivery(id: UUID): GitHubWebhookDelivery? = sqlExecutor.query(
 		"""
 		select id, external_delivery_id, event_type, event_action, installation_id, repository_id, ref,
 		 before_sha, after_sha, tag_name, ref_created, ref_deleted, forced, payload_hash, disposition,
@@ -147,7 +148,7 @@ class JdbcGitHubReleasePersistence(
 	).firstOrNull()
 
 	override fun markDelivery(id: UUID, disposition: GitHubWebhookDisposition, errorCode: String?) {
-		val updated = jdbcTemplate.update(
+		val updated = sqlExecutor.update(
 			"""
 			update github_webhook_deliveries
 			set disposition = ?, error_code = ?, processed_at = ?
@@ -170,7 +171,7 @@ class JdbcGitHubReleasePersistence(
 	): GitHubReleaseDraftRequest {
 		val id = UUID.randomUUID()
 		val now = clock.instant()
-		val upserted = jdbcTemplate.query(
+		val upserted = sqlExecutor.query(
 				"""
 				insert into github_release_draft_requests
 				(id, workspace_id, source_scope_id, initial_delivery_id, tag_name, observed_head_sha,
@@ -204,7 +205,7 @@ class JdbcGitHubReleasePersistence(
 		return existing
 	}
 
-	override fun findLatest(sourceScopeId: UUID, workspaceId: UUID): GitHubReleaseDraftRequest? = jdbcTemplate.query(
+	override fun findLatest(sourceScopeId: UUID, workspaceId: UUID): GitHubReleaseDraftRequest? = sqlExecutor.query(
 		"""
 		select ${requestColumns}
 		from github_release_draft_requests
@@ -218,7 +219,7 @@ class JdbcGitHubReleasePersistence(
 	).firstOrNull()
 
 	override fun releaseScopeExists(sourceScopeId: UUID, workspaceId: UUID): Boolean =
-		jdbcTemplate.queryForObject(
+		sqlExecutor.queryForObject(
 			"""
 			select exists(
 				select 1 from source_scopes
@@ -234,7 +235,7 @@ class JdbcGitHubReleasePersistence(
 	override fun findLatestActivity(
 		sourceScopeId: UUID,
 		workspaceId: UUID,
-	): GitHubReleaseActivityRecord? = jdbcTemplate.query(
+	): GitHubReleaseActivityRecord? = sqlExecutor.query(
 		"""
 		select ${activityColumns}
 		from github_release_draft_requests r
@@ -253,7 +254,7 @@ class JdbcGitHubReleasePersistence(
 		requestId: UUID,
 		sourceScopeId: UUID,
 		workspaceId: UUID,
-	): GitHubReleaseActivityRecord? = jdbcTemplate.query(
+	): GitHubReleaseActivityRecord? = sqlExecutor.query(
 		"""
 		select ${activityColumns}
 		from github_release_draft_requests r
@@ -271,7 +272,7 @@ class JdbcGitHubReleasePersistence(
 		workspaceId: UUID,
 		sourceScopeId: UUID,
 		excludingRequestId: UUID,
-	): List<GitHubReleaseDraftRequest> = jdbcTemplate.query(
+	): List<GitHubReleaseDraftRequest> = sqlExecutor.query(
 		"""
 		select ${requestColumns}
 		from github_release_draft_requests
@@ -289,10 +290,10 @@ class JdbcGitHubReleasePersistence(
 		excludingRequestId,
 	)
 
-	override fun claimNext(workerId: String, now: Instant, leaseTimeout: Duration): GitHubReleaseDraftRequest? =
-		transactionTemplate.execute {
-			val staleBefore = now.minus(leaseTimeout)
-			val candidate = jdbcTemplate.query(
+	@Transactional
+	override fun claimNext(workerId: String, now: Instant, leaseTimeout: Duration): GitHubReleaseDraftRequest? {
+		val staleBefore = now.minus(leaseTimeout)
+		val candidate = sqlExecutor.query(
 				"""
 				select ${requestColumns}
 				from github_release_draft_requests candidate
@@ -318,12 +319,12 @@ class JdbcGitHubReleasePersistence(
 				for update skip locked
 				limit 1
 				""".trimIndent(),
-				{ rs, _ -> rs.toReleaseDraftRequest() },
+				{ row, _ -> row.toReleaseDraftRequest() },
 				Timestamp.from(now),
 				Timestamp.from(staleBefore),
-			).firstOrNull() ?: return@execute null
+			).firstOrNull() ?: return null
 
-			val updated = jdbcTemplate.update(
+		val updated = sqlExecutor.update(
 				"""
 				update github_release_draft_requests
 				set status = 'RESOLVING', attempt_count = attempt_count + 1,
@@ -331,16 +332,16 @@ class JdbcGitHubReleasePersistence(
 					updated_at = ?
 				where id = ? and transition_version = ?
 				""".trimIndent(),
-				workerId, Timestamp.from(now), Timestamp.from(now), Timestamp.from(now),
-				candidate.id, candidate.transitionVersion,
-			)
-			requireExactlyOne(updated, "Release request transition was lost")
-			candidate.copy(
-				status = GitHubReleaseDraftStatus.RESOLVING,
-				attemptCount = candidate.attemptCount + 1,
-				transitionVersion = candidate.transitionVersion + 1,
-			)
-		}
+			workerId, Timestamp.from(now), Timestamp.from(now), Timestamp.from(now),
+			candidate.id, candidate.transitionVersion,
+		)
+		requireExactlyOne(updated, "Release request transition was lost")
+		return candidate.copy(
+			status = GitHubReleaseDraftStatus.RESOLVING,
+			attemptCount = candidate.attemptCount + 1,
+			transitionVersion = candidate.transitionVersion + 1,
+		)
+	}
 
 	override fun saveResolvedRange(
 		requestId: UUID,
@@ -350,7 +351,7 @@ class JdbcGitHubReleasePersistence(
 		boundaryReason: String,
 	) {
 		val now = clock.instant()
-		val updated = jdbcTemplate.update(
+		val updated = sqlExecutor.update(
 			"""
 			update github_release_draft_requests
 			set base_sha = ?, head_sha = ?, boundary_reason = ?, status = 'GENERATING',
@@ -368,7 +369,7 @@ class JdbcGitHubReleasePersistence(
 		headSha: String,
 	) {
 		val now = clock.instant()
-		val updated = jdbcTemplate.update(
+		val updated = sqlExecutor.update(
 			"""
 			update github_release_draft_requests
 			set head_sha = ?, status = 'NEEDS_RANGE', transition_version = transition_version + 1,
@@ -386,7 +387,7 @@ class JdbcGitHubReleasePersistence(
 		observationId: UUID,
 		agentRunId: UUID,
 	) {
-		val updated = jdbcTemplate.update(
+		val updated = sqlExecutor.update(
 			"""
 			update github_release_draft_requests
 			set agent_run_id = ?, status = 'GENERATING', transition_version = transition_version + 1,
@@ -399,15 +400,15 @@ class JdbcGitHubReleasePersistence(
 		requireExactlyOne(updated, "Release Agent run transition was lost")
 	}
 
+	@Transactional
 	override fun linkAgentArtifact(
 		requestId: UUID,
 		transitionVersion: Long,
 		agentRunId: UUID,
 		artifactWorkflowRunId: UUID,
 	) {
-		transactionTemplate.executeWithoutResult {
-			val now = Timestamp.from(clock.instant())
-			val updated = jdbcTemplate.update(
+		val now = Timestamp.from(clock.instant())
+		val updated = sqlExecutor.update(
 				"""
 				update github_release_draft_requests
 				set generation_run_id = ?, transition_version = transition_version + 1, updated_at = ?
@@ -416,8 +417,8 @@ class JdbcGitHubReleasePersistence(
 				""".trimIndent(),
 				artifactWorkflowRunId, now, requestId, transitionVersion, agentRunId,
 			)
-			requireExactlyOne(updated, "Release Artifact workflow transition was lost")
-			val linkedPack = jdbcTemplate.update(
+		requireExactlyOne(updated, "Release Artifact workflow transition was lost")
+		val linkedPack = sqlExecutor.update(
 				"""
 				update content_packs
 				set release_request_id = ?
@@ -427,10 +428,10 @@ class JdbcGitHubReleasePersistence(
 				""".trimIndent(),
 				requestId, requestId, artifactWorkflowRunId, requestId,
 			)
-			requireExactlyOne(linkedPack, "Release Artifact materialization was not found")
-		}
+		requireExactlyOne(linkedPack, "Release Artifact materialization was not found")
 	}
 
+	@Transactional
 	override fun bindEvidence(
 		requestId: UUID,
 		transitionVersion: Long,
@@ -440,9 +441,8 @@ class JdbcGitHubReleasePersistence(
 		require(evidence.writingBlockIds.distinct().size == evidence.writingBlockIds.size) {
 			"Release evidence binding IDs must be unique"
 		}
-		transactionTemplate.executeWithoutResult {
-			val now = clock.instant()
-			val updated = jdbcTemplate.update(
+		val now = clock.instant()
+		val updated = sqlExecutor.update(
 				"""
 				update github_release_draft_requests
 				set observation_id = ?, transition_version = transition_version + 1,
@@ -456,9 +456,9 @@ class JdbcGitHubReleasePersistence(
 				requestId,
 				transitionVersion,
 			)
-			requireExactlyOne(updated, "Release request transition was lost")
-			evidence.writingBlockIds.forEachIndexed { index, writingBlockId ->
-				jdbcTemplate.update(
+		requireExactlyOne(updated, "Release request transition was lost")
+		evidence.writingBlockIds.forEachIndexed { index, writingBlockId ->
+			sqlExecutor.update(
 					"""
 					insert into github_release_draft_evidence
 					(request_id, workspace_id, observation_id, writing_block_id, order_index)
@@ -471,20 +471,19 @@ class JdbcGitHubReleasePersistence(
 					index,
 					requestId,
 					evidence.observationId,
-				).also { inserted ->
-					requireExactlyOne(inserted, "Release evidence binding was not inserted")
-				}
+			).also { inserted ->
+				requireExactlyOne(inserted, "Release evidence binding was not inserted")
 			}
 		}
 	}
 
 	override fun findBoundEvidence(requestId: UUID): GitHubReleaseEvidence? {
-		val observationId = jdbcTemplate.query(
+		val observationId = sqlExecutor.query(
 			"select observation_id from github_release_draft_requests where id = ?",
 			{ rs, _ -> rs.getObject(1, UUID::class.java) },
 			requestId,
 		).firstOrNull() ?: return null
-		val writingBlockIds = jdbcTemplate.query(
+		val writingBlockIds = sqlExecutor.query(
 			"""
 			select writing_block_id
 			from github_release_draft_evidence
@@ -494,7 +493,7 @@ class JdbcGitHubReleasePersistence(
 			{ rs, _ -> rs.getObject(1, UUID::class.java) },
 			requestId,
 			observationId,
-		)
+		).map(::requireNotNull)
 		check(writingBlockIds.isNotEmpty()) { "Release request has an observation without bound evidence" }
 		return GitHubReleaseEvidence(observationId, writingBlockIds)
 	}
@@ -504,7 +503,7 @@ class JdbcGitHubReleasePersistence(
 		transitionVersion: Long,
 		workerId: String,
 		now: Instant,
-	): Boolean = jdbcTemplate.update(
+	): Boolean = sqlExecutor.update(
 		"""
 		update github_release_draft_requests
 		set heartbeat_at = ?, updated_at = ?
@@ -526,7 +525,7 @@ class JdbcGitHubReleasePersistence(
 	) {
 		require(status in terminalStatuses) { "Release request finish status must be terminal" }
 		val now = clock.instant()
-		val updated = jdbcTemplate.update(
+		val updated = sqlExecutor.update(
 			"""
 			update github_release_draft_requests
 			set status = ?, error_code = ?, transition_version = transition_version + 1,
@@ -538,12 +537,13 @@ class JdbcGitHubReleasePersistence(
 		requireExactlyOne(updated, "Release request transition was lost")
 	}
 
+	@Transactional
 	override fun retry(
 		requestId: UUID,
 		workspaceId: UUID,
 		transitionVersion: Long,
-	): GitHubReleaseRetryResult = checkNotNull(transactionTemplate.execute {
-			val retry = jdbcTemplate.query(
+	): GitHubReleaseRetryResult {
+		val retry = sqlExecutor.query(
 				"""
 				select status, generation_attempt
 				from github_release_draft_requests
@@ -552,17 +552,17 @@ class JdbcGitHubReleasePersistence(
 				""".trimIndent(),
 				{ rs, _ ->
 					ReleaseRetryRow(
-						status = GitHubReleaseDraftStatus.valueOf(rs.getString("status")),
+						status = GitHubReleaseDraftStatus.valueOf(requireNotNull(rs.getString("status"))),
 						runAttempt = rs.getInt("generation_attempt"),
 					)
 				},
 				requestId,
 				workspaceId,
 				transitionVersion,
-			).firstOrNull() ?: throw GitHubReleaseRetryRejectedException()
-			val now = clock.instant()
+		).firstOrNull() ?: throw GitHubReleaseRetryRejectedException()
+		val now = clock.instant()
 		val nextAttempt = retry.runAttempt + 1
-			val updated = jdbcTemplate.update(
+		val updated = sqlExecutor.update(
 				"""
 				update github_release_draft_requests
 				set status = 'QUEUED', generation_attempt = ?, generation_run_id = null, agent_run_id = null,
@@ -578,13 +578,13 @@ class JdbcGitHubReleasePersistence(
 				workspaceId,
 				transitionVersion,
 			)
-			if (updated != 1) throw GitHubReleaseRetryRejectedException()
-			GitHubReleaseRetryResult(
-				requestId = requestId,
-				artifactWorkflowRunId = null,
+		if (updated != 1) throw GitHubReleaseRetryRejectedException()
+		return GitHubReleaseRetryResult(
+			requestId = requestId,
+			artifactWorkflowRunId = null,
 			runAttempt = nextAttempt,
-			)
-		})
+		)
+	}
 
 	override fun scheduleRetry(
 		requestId: UUID,
@@ -594,7 +594,7 @@ class JdbcGitHubReleasePersistence(
 	) {
 		require(errorCode.isNotBlank()) { "Release retry error code is required" }
 		val now = clock.instant()
-		val updated = jdbcTemplate.update(
+		val updated = sqlExecutor.update(
 			"""
 			update github_release_draft_requests
 			set status = 'QUEUED', error_code = ?, next_attempt_at = ?, finished_at = null,
@@ -619,7 +619,7 @@ class JdbcGitHubReleasePersistence(
 		errorCode: String,
 	): Int {
 		require(errorCode.isNotBlank()) { "Release fence error code is required" }
-		return jdbcTemplate.update(
+		return sqlExecutor.update(
 			"""
 			update github_release_draft_requests
 			set status = 'FAILED', error_code = ?, next_attempt_at = null,
@@ -637,9 +637,10 @@ class JdbcGitHubReleasePersistence(
 		)
 	}
 
-	override fun recoverStaleClaims(now: Instant, leaseTimeout: Duration): Int = transactionTemplate.execute {
+	@Transactional
+	override fun recoverStaleClaims(now: Instant, leaseTimeout: Duration): Int {
 		val staleBefore = now.minus(leaseTimeout)
-		val candidates = jdbcTemplate.query(
+		val candidates = sqlExecutor.query(
 			"""
 			select id, transition_version, generation_run_id
 			from github_release_draft_requests
@@ -648,18 +649,17 @@ class JdbcGitHubReleasePersistence(
 			order by heartbeat_at nulls first, id
 			for update skip locked
 			""".trimIndent(),
-			{ rs, _ ->
-				StaleReleaseClaim(
-					requestId = rs.getObject("id", UUID::class.java),
-					transitionVersion = rs.getLong("transition_version"),
-					artifactWorkflowRunId = rs.getObject("generation_run_id", UUID::class.java),
-				)
-			},
 			Timestamp.from(staleBefore),
-		)
-		candidates.sumOf { candidate ->
+		).map { row ->
+			StaleReleaseClaim(
+				requestId = row.getObject("id", UUID::class.java)!!,
+				transitionVersion = row.getLong("transition_version"),
+				artifactWorkflowRunId = row.getObject("generation_run_id", UUID::class.java),
+			)
+		}
+		return candidates.sumOf { candidate ->
 			val recoveredStatus = if (candidate.artifactWorkflowRunId == null) "QUEUED" else "GENERATING"
-			val updated = jdbcTemplate.update(
+			val updated = sqlExecutor.update(
 				"""
 				update github_release_draft_requests
 				set status = ?, transition_version = transition_version + 1, claimed_by = null,
@@ -683,11 +683,11 @@ class JdbcGitHubReleasePersistence(
 				else -> error("Stale release claim recovery updated $updated rows")
 			}
 		}
-	} ?: 0
+	}
 
 	override fun findGenerating(limit: Int): List<GitHubReleaseDraftRequest> {
 		require(limit > 0) { "Generating request limit must be positive" }
-		return jdbcTemplate.query(
+		return sqlExecutor.query(
 			"""
 			select ${requestColumns}
 			from github_release_draft_requests
@@ -708,7 +708,7 @@ class JdbcGitHubReleasePersistence(
 		require(errorCode.length in 1..100 && errorCode.all { it.isUpperCase() || it.isDigit() || it == '_' }) {
 			"Release diagnostic error code is invalid"
 		}
-		val updated = jdbcTemplate.update(
+		val updated = sqlExecutor.update(
 			"""
 			update github_release_draft_requests
 			set error_code = ?, transition_version = transition_version + 1, updated_at = ?
@@ -722,7 +722,7 @@ class JdbcGitHubReleasePersistence(
 		requireExactlyOne(updated, "Release request transition was lost")
 	}
 
-	private fun findRequest(id: UUID): GitHubReleaseDraftRequest? = jdbcTemplate.query(
+	private fun findRequest(id: UUID): GitHubReleaseDraftRequest? = sqlExecutor.query(
 		"select ${requestColumns} from github_release_draft_requests where id = ?",
 		{ rs, _ -> rs.toReleaseDraftRequest() },
 		id,
@@ -732,7 +732,7 @@ class JdbcGitHubReleasePersistence(
 		workspaceId: UUID,
 		sourceScopeId: UUID,
 		tagName: String,
-	): GitHubReleaseDraftRequest? = jdbcTemplate.query(
+	): GitHubReleaseDraftRequest? = sqlExecutor.query(
 		"""
 		select ${requestColumns} from github_release_draft_requests
 		where workspace_id = ? and source_scope_id = ? and tag_name = ?
@@ -744,7 +744,7 @@ class JdbcGitHubReleasePersistence(
 	).firstOrNull()
 
 	private fun requireExactlyOne(updated: Int, message: String) {
-		check(updated == 1) { message }
+		if (updated != 1) throw InvalidDataAccessApiUsageException(message)
 	}
 }
 
@@ -777,10 +777,10 @@ private data class ReleaseRetryRow(
 	val runAttempt: Int,
 )
 
-private fun java.sql.ResultSet.toDelivery(): GitHubWebhookDelivery = GitHubWebhookDelivery(
-	id = getObject("id", UUID::class.java),
-	externalDeliveryId = getString("external_delivery_id"),
-	eventType = getString("event_type"),
+private fun SqlRow.toDelivery(): GitHubWebhookDelivery = GitHubWebhookDelivery(
+	id = requireNotNull(getObject("id", UUID::class.java)),
+	externalDeliveryId = requireNotNull(getString("external_delivery_id")),
+	eventType = requireNotNull(getString("event_type")),
 	eventAction = getString("event_action"),
 	installationId = getObject("installation_id") as Long?,
 	repositoryId = getObject("repository_id") as Long?,
@@ -791,23 +791,23 @@ private fun java.sql.ResultSet.toDelivery(): GitHubWebhookDelivery = GitHubWebho
 	refCreated = getObject("ref_created") as Boolean?,
 	refDeleted = getObject("ref_deleted") as Boolean?,
 	forced = getObject("forced") as Boolean?,
-	payloadHash = getString("payload_hash"),
-	disposition = GitHubWebhookDisposition.valueOf(getString("disposition")),
+	payloadHash = requireNotNull(getString("payload_hash")),
+	disposition = GitHubWebhookDisposition.valueOf(requireNotNull(getString("disposition"))),
 	errorCode = getString("error_code"),
-	receivedAt = getTimestamp("received_at").toInstant(),
+	receivedAt = requireNotNull(getTimestamp("received_at")).toInstant(),
 	processedAt = getTimestamp("processed_at")?.toInstant(),
 )
 
-private fun java.sql.ResultSet.toReleaseDraftRequest(): GitHubReleaseDraftRequest = GitHubReleaseDraftRequest(
-	id = getObject("id", UUID::class.java),
-	workspaceId = getObject("workspace_id", UUID::class.java),
-	sourceScopeId = getObject("source_scope_id", UUID::class.java),
-	initialDeliveryId = getObject("initial_delivery_id", UUID::class.java),
-	tagName = getString("tag_name"),
+private fun SqlRow.toReleaseDraftRequest(): GitHubReleaseDraftRequest = GitHubReleaseDraftRequest(
+	id = requireNotNull(getObject("id", UUID::class.java)),
+	workspaceId = requireNotNull(getObject("workspace_id", UUID::class.java)),
+	sourceScopeId = requireNotNull(getObject("source_scope_id", UUID::class.java)),
+	initialDeliveryId = requireNotNull(getObject("initial_delivery_id", UUID::class.java)),
+	tagName = requireNotNull(getString("tag_name")),
 	baseSha = getString("base_sha"),
 	headSha = getString("head_sha"),
 	boundaryReason = getString("boundary_reason"),
-	status = GitHubReleaseDraftStatus.valueOf(getString("status")),
+	status = GitHubReleaseDraftStatus.valueOf(requireNotNull(getString("status"))),
 	attemptCount = getInt("attempt_count"),
 	transitionVersion = getLong("transition_version"),
 	agentRunId = getObject("agent_run_id", UUID::class.java),
@@ -818,17 +818,17 @@ private fun java.sql.ResultSet.toReleaseDraftRequest(): GitHubReleaseDraftReques
 	observedHeadSha = getString("observed_head_sha"),
 )
 
-private fun java.sql.ResultSet.toReleaseActivity(): GitHubReleaseActivityRecord = GitHubReleaseActivityRecord(
-	id = getObject("id", UUID::class.java),
-	sourceScopeId = getObject("source_scope_id", UUID::class.java),
-	tagName = getString("tag_name"),
-	status = GitHubReleaseDraftStatus.valueOf(getString("status")),
+private fun SqlRow.toReleaseActivity(): GitHubReleaseActivityRecord = GitHubReleaseActivityRecord(
+	id = requireNotNull(getObject("id", UUID::class.java)),
+	sourceScopeId = requireNotNull(getObject("source_scope_id", UUID::class.java)),
+	tagName = requireNotNull(getString("tag_name")),
+	status = GitHubReleaseDraftStatus.valueOf(requireNotNull(getString("status"))),
 	baseSha = getString("base_sha"),
 	headSha = getString("head_sha"),
 	boundaryReason = getString("boundary_reason"),
 	artifactId = getObject("content_pack_id", UUID::class.java),
 	errorCode = getString("error_code"),
 	transitionVersion = getLong("transition_version"),
-	createdAt = getTimestamp("created_at").toInstant(),
-	updatedAt = getTimestamp("updated_at").toInstant(),
+	createdAt = requireNotNull(getTimestamp("created_at")).toInstant(),
+	updatedAt = requireNotNull(getTimestamp("updated_at")).toInstant(),
 )

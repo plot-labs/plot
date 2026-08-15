@@ -4,6 +4,9 @@ import com.plot.api.common.ApiException
 import com.plot.api.dev.DevContext
 import com.plot.api.github.GitHubInstallationStateService
 import com.plot.api.github.GitHubProperties
+import com.plot.api.persistence.JooqSqlExecutor
+import org.jooq.SQLDialect
+import org.jooq.impl.DSL
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -13,16 +16,15 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import org.junit.jupiter.api.Test
-import org.springframework.jdbc.core.JdbcTemplate
 
 class GitHubInstallationStateTest {
 	@Test
 	fun stateIsBoundToContextAndCanBeConsumedOnlyOnce() {
-		val jdbc = InMemoryInstallationStateJdbcTemplate()
+		val jdbc = InMemoryInstallationStateSqlExecutor()
 		val service = GitHubInstallationStateService(
 			properties = GitHubProperties(stateSecret = "test-state-secret"),
 			devContext = DevContext(),
-			jdbcTemplate = jdbc,
+			sqlExecutor = jdbc,
 			clock = Clock.fixed(Instant.parse("2026-07-12T00:00:00Z"), ZoneOffset.UTC),
 		)
 
@@ -41,11 +43,11 @@ class GitHubInstallationStateTest {
 
 	@Test
 	fun expiredStateIsRejected() {
-		val jdbc = InMemoryInstallationStateJdbcTemplate()
+		val jdbc = InMemoryInstallationStateSqlExecutor()
 		val service = GitHubInstallationStateService(
 			properties = GitHubProperties(stateSecret = "test-state-secret", stateTtlSeconds = 1),
 			devContext = DevContext(),
-			jdbcTemplate = jdbc,
+			sqlExecutor = jdbc,
 			clock = Clock.fixed(Instant.parse("2026-07-12T00:00:00Z"), ZoneOffset.UTC),
 		)
 		val state = service.create()
@@ -55,7 +57,7 @@ class GitHubInstallationStateTest {
 	}
 }
 
-private class InMemoryInstallationStateJdbcTemplate : JdbcTemplate() {
+private class InMemoryInstallationStateSqlExecutor : JooqSqlExecutor(DSL.using(SQLDialect.POSTGRES)) {
 	var nonceHash: String? = null
 	var workspaceId: UUID? = null
 	var userId: UUID? = null

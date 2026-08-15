@@ -31,7 +31,7 @@ class WorkspaceService(
 		val userId = actor?.userId ?: devContext.devUserId
 		val now = Instant.now()
 		val workspaceId = uuidGenerator.next()
-		val workspace = workspaceRepository.saveAndFlush(Workspace(
+		val workspace = workspaceRepository.save(Workspace(
 			id = workspaceId,
 			name = request.name.trim(),
 			slug = "workspace-${workspaceId.toString().take(8)}",
@@ -42,7 +42,7 @@ class WorkspaceService(
 			trialStartedAt = now,
 			trialEndsAt = now.plus(TrialPolicy.DURATION),
 		))
-		memberRepository.saveAndFlush(WorkspaceMember(
+		memberRepository.save(WorkspaceMember(
 			id = uuidGenerator.next(),
 			workspaceId = workspace.id,
 			userId = userId,
@@ -91,6 +91,7 @@ class WorkspaceService(
 			workspace.logoUrl = logoUrl
 		}
 		workspace.updatedAt = java.time.Instant.now()
+		workspaceRepository.save(workspace)
 
 		return workspace.toResponse(entitlementReader.resolve(workspace), selectedWorkspace?.role ?: membership.role)
 	}

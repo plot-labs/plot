@@ -1,24 +1,25 @@
 package com.plot.api.github
 
-import java.sql.ResultSet
 import java.sql.Timestamp
 import java.time.Duration
 import java.time.Instant
+import java.time.OffsetDateTime
 import java.util.UUID
-import org.springframework.jdbc.core.JdbcTemplate
+import org.jooq.DSLContext
+import org.jooq.Record
+import org.springframework.dao.InvalidDataAccessApiUsageException
 import org.springframework.stereotype.Repository
-import org.springframework.transaction.support.TransactionTemplate
+import org.springframework.transaction.annotation.Transactional
 
 @Repository
 class GitHubRepositoryMonitoringPersistence(
-	private val jdbcTemplate: JdbcTemplate,
-	private val transactionTemplate: TransactionTemplate,
+	private val dsl: DSLContext,
 ) {
 	fun activate(
 		workspaceId: UUID,
 		sourceScopeId: UUID,
 		now: Instant,
-	): GitHubRepositoryMonitoringRecord = jdbcTemplate.query(
+	): GitHubRepositoryMonitoringRecord = fetchRows(
 		"""
 		insert into github_repository_monitoring (
 		  id, workspace_id, source_scope_id, monitoring_status, analysis_status,
@@ -64,12 +65,11 @@ class GitHubRepositoryMonitoringPersistence(
 		    updated_at = excluded.updated_at
 		returning $columns
 		""".trimIndent(),
-		{ rs, _ -> rs.toMonitoring() },
 		UUID.randomUUID(), workspaceId, sourceScopeId, Timestamp.from(now), Timestamp.from(now),
-	).single()
+	).single().toMonitoring()
 
 	fun disable(workspaceId: UUID, sourceScopeId: UUID, now: Instant) {
-		jdbcTemplate.update(
+		execute(
 			"""
 			update github_repository_monitoring
 			set monitoring_status = 'DISABLED', analysis_status = case
@@ -85,69 +85,69 @@ class GitHubRepositoryMonitoringPersistence(
 	}
 
 	fun find(workspaceId: UUID, sourceScopeId: UUID): GitHubRepositoryMonitoringRecord? =
-		jdbcTemplate.query(
+		fetchRows(
 			"select $columns from github_repository_monitoring where workspace_id = ? and source_scope_id = ?",
-			{ rs, _ -> rs.toMonitoring() },
 			workspaceId, sourceScopeId,
-		).firstOrNull()
+		).firstOrNull()?.toMonitoring()
 
-	fun claimNext(workerId: String, now: Instant): GitHubRepositoryMonitoringWorkItem? =
-		transactionTemplate.execute {
-			val candidate = jdbcTemplate.query(
-				"""
-				select $qualifiedColumns, c.id, c.external_connection_key, sc.external_scope_key, sc.external_key
-				from github_repository_monitoring m
-				join source_scopes sc on sc.workspace_id = m.workspace_id and sc.id = m.source_scope_id
-				  and sc.provider = 'GITHUB' and sc.scope_kind = 'REPOSITORY' and sc.status = 'ACTIVE'
-				join connection_namespace_bindings b on b.workspace_id = sc.workspace_id
-				  and b.source_namespace_id = sc.source_namespace_id and b.status = 'ACTIVE'
-				join connections c on c.workspace_id = b.workspace_id and c.id = b.connection_id
-				  and c.provider = 'GITHUB' and c.status = 'ACTIVE'
-				where m.monitoring_status = 'ACTIVE' and m.analysis_status = 'QUEUED'
-				  and (m.next_attempt_at is null or m.next_attempt_at <= ?)
-				order by m.created_at, m.id
-				for update of m skip locked
-				limit 1
-				""".trimIndent(),
-				{ rs, _ ->
-					val monitoring = rs.toMonitoring()
-					val externalKey = rs.getString(23).orEmpty()
-					GitHubRepositoryMonitoringWorkItem(
-						monitoring = monitoring,
-						connectionId = rs.getObject(20, UUID::class.java),
-						installationId = rs.getString(21).toLong(),
-						repositoryId = rs.getString(22).toLong(),
-						owner = externalKey.substringBefore('/'),
-						repository = externalKey.substringAfter('/', ""),
-					)
-				},
-				Timestamp.from(now),
-			).firstOrNull() ?: return@execute null
-			val updated = jdbcTemplate.update(
-				"""
-				update github_repository_monitoring
-				set analysis_status = 'ANALYZING', attempt_count = attempt_count + 1,
-				    transition_version = transition_version + 1, claimed_by = ?, claimed_at = ?,
-				    next_attempt_at = null, updated_at = ?
-				where id = ? and transition_version = ? and monitoring_status = 'ACTIVE'
-				  and analysis_status = 'QUEUED'
-				""".trimIndent(),
-				workerId, Timestamp.from(now), Timestamp.from(now),
-				candidate.monitoring.id, candidate.monitoring.transitionVersion,
+	@Transactional
+	fun claimNext(workerId: String, now: Instant): GitHubRepositoryMonitoringWorkItem? {
+		val candidate = fetchRows(
+			"""
+			select $qualifiedColumns, c.id as connection_id,
+			       c.external_connection_key as installation_key,
+			       sc.external_scope_key as repository_key, sc.external_key as external_key
+			from github_repository_monitoring m
+			join source_scopes sc on sc.workspace_id = m.workspace_id and sc.id = m.source_scope_id
+			  and sc.provider = 'GITHUB' and sc.scope_kind = 'REPOSITORY' and sc.status = 'ACTIVE'
+			join connection_namespace_bindings b on b.workspace_id = sc.workspace_id
+			  and b.source_namespace_id = sc.source_namespace_id and b.status = 'ACTIVE'
+			join connections c on c.workspace_id = b.workspace_id and c.id = b.connection_id
+			  and c.provider = 'GITHUB' and c.status = 'ACTIVE'
+			where m.monitoring_status = 'ACTIVE' and m.analysis_status = 'QUEUED'
+			  and (m.next_attempt_at is null or m.next_attempt_at <= ?)
+			order by m.created_at, m.id
+			for update of m skip locked
+			limit 1
+			""".trimIndent(),
+			Timestamp.from(now),
+		).firstOrNull()?.let { row ->
+			val monitoring = row.toMonitoring()
+			val externalKey = row.get("external_key", String::class.java).orEmpty()
+			GitHubRepositoryMonitoringWorkItem(
+				monitoring = monitoring,
+				connectionId = requireNotNull(row.get("connection_id", UUID::class.java)),
+				installationId = row.get("installation_key", String::class.java).toLong(),
+				repositoryId = row.get("repository_key", String::class.java).toLong(),
+				owner = externalKey.substringBefore('/'),
+				repository = externalKey.substringAfter('/', ""),
 			)
-			check(updated == 1) { "Repository monitoring claim was lost" }
-			candidate.copy(
-				monitoring = candidate.monitoring.copy(
-					analysisStatus = GitHubRepositoryAnalysisStatus.ANALYZING,
-					attemptCount = candidate.monitoring.attemptCount + 1,
-					transitionVersion = candidate.monitoring.transitionVersion + 1,
-					claimedBy = workerId,
-					claimedAt = now,
-					nextAttemptAt = null,
-					updatedAt = now,
-				),
-			)
-		}
+		} ?: return null
+		val updated = execute(
+			"""
+			update github_repository_monitoring
+			set analysis_status = 'ANALYZING', attempt_count = attempt_count + 1,
+			    transition_version = transition_version + 1, claimed_by = ?, claimed_at = ?,
+			    next_attempt_at = null, updated_at = ?
+			where id = ? and transition_version = ? and monitoring_status = 'ACTIVE'
+			  and analysis_status = 'QUEUED'
+			""".trimIndent(),
+			workerId, Timestamp.from(now), Timestamp.from(now),
+			candidate.monitoring.id, candidate.monitoring.transitionVersion,
+		)
+		requireExactlyOne(updated, "Repository monitoring claim was lost")
+		return candidate.copy(
+			monitoring = candidate.monitoring.copy(
+				analysisStatus = GitHubRepositoryAnalysisStatus.ANALYZING,
+				attemptCount = candidate.monitoring.attemptCount + 1,
+				transitionVersion = candidate.monitoring.transitionVersion + 1,
+				claimedBy = workerId,
+				claimedAt = now,
+				nextAttemptAt = null,
+				updatedAt = now,
+			),
+		)
+	}
 
 	fun complete(
 		id: UUID,
@@ -156,7 +156,7 @@ class GitHubRepositoryMonitoringPersistence(
 		analysis: GitHubReleaseConventionAnalysis,
 		now: Instant,
 	) {
-		val updated = jdbcTemplate.update(
+		val updated = execute(
 			"""
 			update github_repository_monitoring
 			set analysis_status = 'COMPLETED', release_convention = ?, tag_prefix = ?,
@@ -171,7 +171,7 @@ class GitHubRepositoryMonitoringPersistence(
 			analysis.sampleSize, analysis.sampleTruncated, Timestamp.from(now), Timestamp.from(now),
 			id, transitionVersion, workerId,
 		)
-		check(updated == 1) { "Repository monitoring completion was lost" }
+		requireExactlyOne(updated, "Repository monitoring completion was lost")
 	}
 
 	fun scheduleRetry(
@@ -181,7 +181,7 @@ class GitHubRepositoryMonitoringPersistence(
 		nextAttemptAt: Instant,
 		errorCode: String,
 	) {
-		val updated = jdbcTemplate.update(
+		val updated = execute(
 			"""
 			update github_repository_monitoring
 			set analysis_status = 'QUEUED', claimed_by = null, claimed_at = null,
@@ -192,7 +192,7 @@ class GitHubRepositoryMonitoringPersistence(
 			""".trimIndent(),
 			Timestamp.from(nextAttemptAt), errorCode, id, transitionVersion, workerId,
 		)
-		check(updated == 1) { "Repository monitoring retry transition was lost" }
+		requireExactlyOne(updated, "Repository monitoring retry transition was lost")
 	}
 
 	fun fail(
@@ -202,7 +202,7 @@ class GitHubRepositoryMonitoringPersistence(
 		errorCode: String,
 		now: Instant,
 	) {
-		val updated = jdbcTemplate.update(
+		val updated = execute(
 			"""
 			update github_repository_monitoring
 			set analysis_status = 'FAILED', claimed_by = null, claimed_at = null,
@@ -213,10 +213,10 @@ class GitHubRepositoryMonitoringPersistence(
 			""".trimIndent(),
 			errorCode, Timestamp.from(now), id, transitionVersion, workerId,
 		)
-		check(updated == 1) { "Repository monitoring failure transition was lost" }
+		requireExactlyOne(updated, "Repository monitoring failure transition was lost")
 	}
 
-	fun recoverStaleClaims(now: Instant, leaseTimeout: Duration, maxAttempts: Int): Int = jdbcTemplate.update(
+	fun recoverStaleClaims(now: Instant, leaseTimeout: Duration, maxAttempts: Int): Int = execute(
 		"""
 		update github_repository_monitoring
 		set analysis_status = case when attempt_count >= ? then 'FAILED' else 'QUEUED' end,
@@ -233,7 +233,7 @@ class GitHubRepositoryMonitoringPersistence(
 		workspaceId: UUID,
 		sourceScopeId: UUID,
 		now: Instant,
-	): GitHubRepositoryMonitoringRecord? = jdbcTemplate.query(
+	): GitHubRepositoryMonitoringRecord? = fetchRows(
 		"""
 		update github_repository_monitoring m
 		set analysis_status = 'QUEUED', attempt_count = 0, next_attempt_at = null,
@@ -249,12 +249,11 @@ class GitHubRepositoryMonitoringPersistence(
 		  )
 		returning $columns
 		""".trimIndent(),
-		{ rs, _ -> rs.toMonitoring() },
 		Timestamp.from(now), workspaceId, sourceScopeId,
-	).firstOrNull()
+	).firstOrNull()?.toMonitoring()
 
 	fun requeueAuthenticationFailures(workspaceId: UUID, connectionId: UUID, now: Instant): Int =
-		jdbcTemplate.update(
+		execute(
 			"""
 			update github_repository_monitoring m
 			set analysis_status = 'QUEUED', attempt_count = 0, next_attempt_at = null,
@@ -269,27 +268,35 @@ class GitHubRepositoryMonitoringPersistence(
 			Timestamp.from(now), workspaceId, connectionId,
 		)
 
-	private fun ResultSet.toMonitoring() = GitHubRepositoryMonitoringRecord(
-		id = getObject(1, UUID::class.java),
-		workspaceId = getObject(2, UUID::class.java),
-		sourceScopeId = getObject(3, UUID::class.java),
-		monitoringStatus = GitHubRepositoryMonitoringStatus.valueOf(getString(4)),
-		analysisStatus = GitHubRepositoryAnalysisStatus.valueOf(getString(5)),
-		releaseConvention = getString(6)?.let(GitHubReleaseConvention::valueOf),
-		tagPrefix = getString(7),
-		sampleSource = getString(8)?.let(GitHubReleaseSampleSource::valueOf),
-		sampleSize = getInt(9),
-		sampleTruncated = getBoolean(10),
-		attemptCount = getInt(11),
-		transitionVersion = getLong(12),
-		claimedBy = getString(13),
-		claimedAt = getTimestamp(14)?.toInstant(),
-		nextAttemptAt = getTimestamp(15)?.toInstant(),
-		lastErrorCode = getString(16),
-		analyzedAt = getTimestamp(17)?.toInstant(),
-		createdAt = getTimestamp(18).toInstant(),
-		updatedAt = getTimestamp(19).toInstant(),
+	private fun Record.toMonitoring() = GitHubRepositoryMonitoringRecord(
+		id = requireNotNull(get("id", UUID::class.java)),
+		workspaceId = requireNotNull(get("workspace_id", UUID::class.java)),
+		sourceScopeId = requireNotNull(get("source_scope_id", UUID::class.java)),
+		monitoringStatus = GitHubRepositoryMonitoringStatus.valueOf(requireNotNull(get("monitoring_status", String::class.java))),
+		analysisStatus = GitHubRepositoryAnalysisStatus.valueOf(requireNotNull(get("analysis_status", String::class.java))),
+		releaseConvention = get("release_convention", String::class.java)?.let(GitHubReleaseConvention::valueOf),
+		tagPrefix = get("tag_prefix", String::class.java),
+		sampleSource = get("sample_source", String::class.java)?.let(GitHubReleaseSampleSource::valueOf),
+		sampleSize = requireNotNull(get("sample_size", Int::class.javaObjectType)),
+		sampleTruncated = requireNotNull(get("sample_truncated", Boolean::class.javaObjectType)),
+		attemptCount = requireNotNull(get("attempt_count", Int::class.javaObjectType)),
+		transitionVersion = requireNotNull(get("transition_version", Long::class.javaObjectType)),
+		claimedBy = get("claimed_by", String::class.java),
+		claimedAt = get("claimed_at", OffsetDateTime::class.java)?.toInstant(),
+		nextAttemptAt = get("next_attempt_at", OffsetDateTime::class.java)?.toInstant(),
+		lastErrorCode = get("last_error_code", String::class.java),
+		analyzedAt = get("analyzed_at", OffsetDateTime::class.java)?.toInstant(),
+		createdAt = requireNotNull(get("created_at", OffsetDateTime::class.java)).toInstant(),
+		updatedAt = requireNotNull(get("updated_at", OffsetDateTime::class.java)).toInstant(),
 	)
+
+	private fun fetchRows(sql: String, vararg bindings: Any?): List<Record> = dsl.fetch(sql, *bindings)
+
+	private fun execute(sql: String, vararg bindings: Any?): Int = dsl.execute(sql, *bindings)
+
+	private fun requireExactlyOne(updated: Int, message: String) {
+		if (updated != 1) throw InvalidDataAccessApiUsageException(message)
+	}
 
 	private companion object {
 		const val columns =

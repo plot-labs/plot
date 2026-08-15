@@ -30,16 +30,17 @@ import java.time.Clock
 import java.util.HexFormat
 import java.util.UUID
 import org.springframework.http.HttpStatus
-import org.springframework.jdbc.core.JdbcTemplate
+import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.JooqTransactionExecutor
+import com.plot.api.persistence.SqlRow
 import org.springframework.stereotype.Service
-import org.springframework.transaction.support.TransactionTemplate
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.ObjectMapper
 
 @Service
 class ArtifactService(
-	private val jdbcTemplate: JdbcTemplate,
-	private val transactionTemplate: TransactionTemplate,
+	private val sqlExecutor: JooqSqlExecutor,
+	private val transactionExecutor: JooqTransactionExecutor,
 	private val devContext: DevContext,
 	private val uuidGenerator: UuidGenerator,
 	private val markdownExportService: ArtifactMarkdownExportService,
@@ -49,20 +50,20 @@ class ArtifactService(
 	fun list(page: Int, size: Int): ArtifactPageResponse {
 		require(page >= 0) { "Page must not be negative" }
 		require(size in 1..100) { "Size must be between 1 and 100" }
-		val total = jdbcTemplate.queryForObject(
+		val total = sqlExecutor.queryForObject(
 			"select count(*) from content_packs where workspace_id = ?", Long::class.java, devContext.devWorkspaceId,
 		) ?: 0L
-		val items = jdbcTemplate.query(
+		val items = sqlExecutor.query(
 			"""
 			select id, status, title, updated_at from content_packs
 			where workspace_id = ? order by updated_at desc, id desc limit ? offset ?
 			""".trimIndent(),
 			{ rs, _ ->
 				ArtifactSummaryResponse(
-					id = rs.getObject(1, UUID::class.java),
-					status = rs.getString(2),
+					id = requireNotNull(rs.getObject(1, UUID::class.java)),
+					status = requireNotNull(rs.getString(2)),
 					title = rs.getString(3),
-					updatedAt = rs.getTimestamp(4).toInstant(),
+					updatedAt = requireNotNull(rs.getTimestamp(4)).toInstant(),
 				)
 			},
 			devContext.devWorkspaceId, size, page * size,
@@ -76,7 +77,7 @@ class ArtifactService(
 
 	fun history(variantId: UUID): List<ContentVariantHistoryItemResponse> {
 		ensureArtifactRevision(variantId)
-		return jdbcTemplate.query(
+		return sqlExecutor.query(
 			"""
 			select id, revision_no, created_by_user_id, created_at
 			from content_variant_revisions
@@ -86,7 +87,7 @@ class ArtifactService(
 			{ rs, index ->
 				ContentVariantHistoryItemResponse(
 					position = index,
-					createdAt = rs.getTimestamp("created_at").toInstant(),
+					createdAt = requireNotNull(rs.getTimestamp("created_at")).toInstant(),
 					cause = historyCause(rs.getInt("revision_no"), rs.getObject("created_by_user_id", UUID::class.java)),
 				)
 			},
@@ -96,9 +97,9 @@ class ArtifactService(
 	}
 
 	fun historyDetail(variantId: UUID, revisionId: UUID): ContentVariantHistoryDetailResponse {
-		val row = jdbcTemplate.query(
+		val row = sqlExecutor.query(
 			"select revision_no, created_by_user_id, created_at from content_variant_revisions where workspace_id = ? and id = ? and content_variant_id = ?",
-			{ rs, _ -> HistoryRevisionRow(rs.getInt(1), rs.getObject(2, UUID::class.java), rs.getTimestamp(3).toInstant()) },
+				{ rs, _ -> HistoryRevisionRow(rs.getInt(1), rs.getObject(2, UUID::class.java), requireNotNull(rs.getTimestamp(3)).toInstant()) },
 			devContext.devWorkspaceId,
 			revisionId,
 			variantId,
@@ -109,7 +110,7 @@ class ArtifactService(
 
 	fun historyDetailAt(variantId: UUID, position: Int): ContentVariantHistoryDetailResponse {
 		if (position < 0) throw ApiException(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "History position must not be negative")
-		val row = jdbcTemplate.query(
+		val row = sqlExecutor.query(
 			"""
 			select id, revision_no, created_by_user_id, created_at
 			from content_variant_revisions
@@ -117,7 +118,7 @@ class ArtifactService(
 			order by created_at desc, revision_no desc, id desc
 			limit 1 offset ?
 			""".trimIndent(),
-			{ rs, _ -> HistoryRevisionRow(rs.getObject(1, UUID::class.java), rs.getInt(2), rs.getObject(3, UUID::class.java), rs.getTimestamp(4).toInstant()) },
+			{ rs, _ -> HistoryRevisionRow(requireNotNull(rs.getObject(1, UUID::class.java)), rs.getInt(2), rs.getObject(3, UUID::class.java), requireNotNull(rs.getTimestamp(4)).toInstant()) },
 			devContext.devWorkspaceId,
 			variantId,
 			position,
@@ -137,7 +138,7 @@ class ArtifactService(
 		expectedRevisionNumber: Int,
 		lexicalContent: JsonNode,
 		statements: List<ContentStatementInput>,
-	): ArtifactResponse = transactionTemplate.execute {
+	): ArtifactResponse = transactionExecutor.execute {
 		saveVariantInTransaction(variantId, expectedRevisionNumber, lexicalContent, statements)
 	}
 
@@ -147,9 +148,9 @@ class ArtifactService(
 	 * or the public-source projection.
 	 */
 	fun editSentence(variantId: UUID, sentenceId: UUID, expectedRevisionNumber: Int, body: String): ArtifactResponse =
-		transactionTemplate.execute {
+		transactionExecutor.execute {
 			lockVariant(variantId)
-			val currentSentence = jdbcTemplate.query(
+			val currentSentence = sqlExecutor.query(
 				"""
 				select r.revision_no
 				from content_variant_sentence_revisions r
@@ -183,8 +184,8 @@ class ArtifactService(
 		legacyAcknowledgedRevisionIds: List<UUID>,
 		disposition: ExportDisposition,
 	): ContentExportResponse {
-		val outcome = transactionTemplate.execute {
-			jdbcTemplate.query(
+		val outcome = transactionExecutor.execute {
+			sqlExecutor.query(
 				"select id from content_variants where workspace_id = ? and id = ? for update",
 				{ rs, _ -> rs.getObject(1, UUID::class.java) },
 				devContext.devWorkspaceId,
@@ -296,14 +297,14 @@ class ArtifactService(
 		val now = clock.instant()
 		val previousStatements = loadCurrentStatements(currentRevision.id, variantId)
 		val previousById = previousStatements.associateBy { it.id }
-		val allSentenceIds = jdbcTemplate.query(
-			"select id from content_variant_sentences where workspace_id = ? and content_variant_id = ?",
-			{ rs, _ -> rs.getObject(1, UUID::class.java) },
+			val allSentenceIds = sqlExecutor.query(
+				"select id from content_variant_sentences where workspace_id = ? and content_variant_id = ?",
+				{ rs, _ -> requireNotNull(rs.getObject(1, UUID::class.java)) },
 			devContext.devWorkspaceId, variantId,
 		).toSet()
-		val currentRevisionBySentence = jdbcTemplate.query(
+		val currentRevisionBySentence = sqlExecutor.query(
 			"select sentence_id, id, revision_no, body, origin from content_variant_sentence_revisions where workspace_id = ? and content_variant_id = ? and is_current",
-			{ rs, _ -> rs.getObject(1, UUID::class.java) to StatementRow(rs.getObject(1, UUID::class.java), rs.getObject(2, UUID::class.java), rs.getInt(3), 0, rs.getString(4), rs.getString(5)) },
+				{ rs, _ -> requireNotNull(rs.getObject(1, UUID::class.java)) to StatementRow(requireNotNull(rs.getObject(1, UUID::class.java)), requireNotNull(rs.getObject(2, UUID::class.java)), rs.getInt(3), 0, requireNotNull(rs.getString(4)), requireNotNull(rs.getString(5))) },
 			devContext.devWorkspaceId, variantId,
 		).toMap()
 		validateStatementOwnership(normalized, allSentenceIds)
@@ -328,13 +329,13 @@ class ArtifactService(
 			} else if ((previous?.body ?: existingRevision?.body) != statement.body) {
 				val previousRevisionId = previous?.revisionId ?: existingRevision!!.revisionId
 				val previousRevisionNumber = previous?.revisionNumber ?: existingRevision!!.revisionNumber
-				jdbcTemplate.update(
+				sqlExecutor.update(
 					"update content_variant_sentence_revisions set is_current = false where workspace_id = ? and id = ? and is_current",
 					devContext.devWorkspaceId, previousRevisionId,
 				)
 				val revisionId = insertSentenceRevision(variantId, statement.id, previousRevisionNumber + 1, statement.body, now)
 				nextRevisionBySentence[statement.id] = revisionId
-				jdbcTemplate.update(
+				sqlExecutor.update(
 					"update sentence_citations set status = 'STALE', stale_reason = 'STATEMENT_CHANGED', updated_at = ? where workspace_id = ? and sentence_id = ? and status = 'ACTIVE'",
 					Timestamp.from(now), devContext.devWorkspaceId, statement.id,
 				)
@@ -345,18 +346,18 @@ class ArtifactService(
 
 		val retainedIds = normalized.mapTo(linkedSetOf()) { it.id }
 		previousStatements.filter { it.id !in retainedIds }.forEach { removed ->
-			jdbcTemplate.update(
+			sqlExecutor.update(
 				"update sentence_citations set status = 'REMOVED', stale_reason = 'STATEMENT_REMOVED', updated_at = ? where workspace_id = ? and sentence_id = ? and status = 'ACTIVE'",
 				Timestamp.from(now), devContext.devWorkspaceId, removed.id,
 			)
 		}
 		val nextRevisionId = uuidGenerator.next()
 		val nextRevisionNumber = currentRevision.revisionNumber + 1
-		jdbcTemplate.update(
+		sqlExecutor.update(
 			"update content_variant_revisions set is_current = false where workspace_id = ? and id = ? and is_current",
 			devContext.devWorkspaceId, currentRevision.id,
 		)
-		jdbcTemplate.update(
+		sqlExecutor.update(
 			"""
 			insert into content_variant_revisions (
 			 id, workspace_id, generation_run_id, content_variant_id, revision_no,
@@ -373,7 +374,7 @@ class ArtifactService(
 			Timestamp.from(now),
 		)
 		normalized.sortedBy { it.orderIndex }.forEach { statement ->
-			jdbcTemplate.update(
+			sqlExecutor.update(
 				"""
 				insert into content_variant_revision_sentences (
 				 id, workspace_id, content_variant_revision_id, generation_run_id,
@@ -385,11 +386,11 @@ class ArtifactService(
 				nextRevisionBySentence.getValue(statement.id), statement.orderIndex,
 			)
 		}
-		jdbcTemplate.update(
+		sqlExecutor.update(
 			"update content_variants set updated_at = ? where workspace_id = ? and id = ?",
 			Timestamp.from(now), devContext.devWorkspaceId, variantId,
 		)
-		jdbcTemplate.update(
+		sqlExecutor.update(
 			"update content_packs set updated_at = ? where workspace_id = ? and id = (select content_pack_id from content_variants where workspace_id = ? and id = ?)",
 			Timestamp.from(now), devContext.devWorkspaceId, devContext.devWorkspaceId, variantId,
 		)
@@ -416,7 +417,7 @@ class ArtifactService(
 		statements.filter { it.id !in allSentenceIds }.forEach { statement ->
 			// New application-owned IDs are valid; only reject an ID that claims to
 			// belong to another artifact when its UUID already exists elsewhere.
-			val belongsToAnotherArtifact = jdbcTemplate.queryForObject(
+			val belongsToAnotherArtifact = sqlExecutor.queryForObject(
 				"select exists (select 1 from content_variant_sentences where id = ?)",
 				Boolean::class.java,
 				statement.id,
@@ -603,22 +604,22 @@ class ArtifactService(
 		ApiException(HttpStatus.BAD_REQUEST, "BAD_REQUEST", message)
 
 	private fun insertNewSentence(variantId: UUID, sentenceId: UUID, now: java.time.Instant) {
-		val artifactWorkflowRunId = jdbcTemplate.queryForObject(
+		val artifactWorkflowRunId = sqlExecutor.queryForObject(
 			"select generation_run_id from content_variants where workspace_id = ? and id = ?",
 			UUID::class.java, devContext.devWorkspaceId, variantId,
 		) ?: notFound()
-		val orderIndex = (jdbcTemplate.queryForObject(
+		val orderIndex = (sqlExecutor.queryForObject(
 			"select coalesce(max(order_index), -1) + 1 from content_variant_sentences where workspace_id = ? and content_variant_id = ?",
 			Int::class.java, devContext.devWorkspaceId, variantId,
 		) ?: 0)
-		jdbcTemplate.update(
+		sqlExecutor.update(
 			"insert into content_variant_sentences (id, workspace_id, generation_run_id, content_variant_id, stable_key, order_index, created_at) values (?, ?, ?, ?, ?, ?, ?)",
 			sentenceId, devContext.devWorkspaceId, artifactWorkflowRunId, variantId, sentenceId.toString(), orderIndex, Timestamp.from(now),
 		)
 	}
 
 	private fun lockVariant(variantId: UUID) {
-		jdbcTemplate.query(
+		sqlExecutor.query(
 			"select id from content_variants where workspace_id = ? and id = ? for update",
 			{ rs, _ -> rs.getObject(1, UUID::class.java) },
 			devContext.devWorkspaceId, variantId,
@@ -626,12 +627,12 @@ class ArtifactService(
 	}
 
 	private fun insertSentenceRevision(variantId: UUID, sentenceId: UUID, revisionNumber: Int, body: String, now: java.time.Instant): UUID {
-		val artifactWorkflowRunId = jdbcTemplate.queryForObject(
+		val artifactWorkflowRunId = sqlExecutor.queryForObject(
 			"select generation_run_id from content_variants where workspace_id = ? and id = ?",
 			UUID::class.java, devContext.devWorkspaceId, variantId,
 		) ?: notFound()
 		val revisionId = uuidGenerator.next()
-		jdbcTemplate.update(
+		sqlExecutor.update(
 			"""
 			insert into content_variant_sentence_revisions (
 			 id, workspace_id, generation_run_id, content_variant_id, sentence_id,
@@ -654,7 +655,7 @@ class ArtifactService(
 		acknowledged: Boolean,
 		inputHash: String,
 		outputHash: String,
-	): UUID? = jdbcTemplate.query(
+	): UUID? = sqlExecutor.query(
 		"""
 		select id from generation_export_events
 		where workspace_id = ? and generation_run_id = ? and content_variant_id = ?
@@ -673,7 +674,7 @@ class ArtifactService(
 
 	private fun loadPack(predicate: String, id: UUID): ArtifactResponse = loadPackForRevision(predicate, id, null)
 
-	private fun artifactWorkflowRunIdForVariant(variantId: UUID): UUID = jdbcTemplate.queryForObject(
+	private fun artifactWorkflowRunIdForVariant(variantId: UUID): UUID = sqlExecutor.queryForObject(
 		"select generation_run_id from content_variants where workspace_id = ? and id = ?",
 		UUID::class.java,
 		devContext.devWorkspaceId,
@@ -681,20 +682,31 @@ class ArtifactService(
 	) ?: notFound()
 
 	private fun loadPackForRevision(predicate: String, id: UUID, revisionId: UUID?): ArtifactResponse {
-		val header = jdbcTemplate.query(
+		val header = sqlExecutor.query(
 			"""
 			select cp.id, cp.status, cp.title, cv.id, cv.status
 			from content_packs cp join content_variants cv on cv.workspace_id = cp.workspace_id and cv.content_pack_id = cp.id
 			where cp.workspace_id = ? and $predicate and cv.variant_index = 0
 			""".trimIndent(),
-			{ rs, _ -> listOf(rs.getObject(1, UUID::class.java), rs.getString(2), rs.getString(3), rs.getObject(4, UUID::class.java), rs.getString(5)) },
+			{ rs, _ -> listOf(
+				requireNotNull(rs.getObject(1, UUID::class.java)),
+				requireNotNull(rs.getString(2)),
+				rs.getString(3),
+				requireNotNull(rs.getObject(4, UUID::class.java)),
+				requireNotNull(rs.getString(5)),
+			) },
 			devContext.devWorkspaceId, id,
 		).firstOrNull() ?: notFound()
 		val variantId = header[3] as UUID
 		val revision = revisionId?.let { requestedRevision ->
-			jdbcTemplate.query(
+			sqlExecutor.query(
 				"select id, generation_run_id, revision_no, lexical_content::text from content_variant_revisions where workspace_id = ? and id = ? and content_variant_id = ?",
-				{ rs, _ -> CurrentArtifactRevision(rs.getObject(1, UUID::class.java), rs.getObject(2, UUID::class.java), rs.getInt(3), objectMapper.readTree(rs.getString(4))) },
+					{ rs, _ -> CurrentArtifactRevision(
+						requireNotNull(rs.getObject(1, UUID::class.java)),
+						requireNotNull(rs.getObject(2, UUID::class.java)),
+						rs.getInt(3),
+						objectMapper.readTree(requireNotNull(rs.getString(4))),
+					) },
 				devContext.devWorkspaceId,
 				requestedRevision,
 				variantId,
@@ -722,7 +734,7 @@ class ArtifactService(
 		variantId: UUID,
 		revisionId: UUID,
 		citations: Map<UUID, List<PublicCitation>>,
-	): List<ContentSentenceResponse> = jdbcTemplate.query(
+	): List<ContentSentenceResponse> = sqlExecutor.query(
 		"""
 		select rs.sentence_id, r.id, r.revision_no, rs.order_index, r.body, r.origin
 		from content_variant_revision_sentences rs
@@ -732,14 +744,14 @@ class ArtifactService(
 		order by rs.order_index
 		""".trimIndent(),
 		{ rs, _ ->
-			val sentenceId = rs.getObject(1, UUID::class.java)
+			val sentenceId = requireNotNull(rs.getObject(1, UUID::class.java))
 			ContentSentenceResponse(
 				sentenceId,
-				rs.getObject(2, UUID::class.java),
+				requireNotNull(rs.getObject(2, UUID::class.java)),
 				rs.getInt(3),
 				rs.getInt(4),
-				rs.getString(5),
-				rs.getString(6),
+				requireNotNull(rs.getString(5)),
+				requireNotNull(rs.getString(6)),
 				citations[sentenceId].orEmpty().map { it.response },
 			)
 		},
@@ -750,7 +762,7 @@ class ArtifactService(
 		variantId: UUID,
 		revisionId: UUID,
 		includeHistoricalLifecycle: Boolean = false,
-	): Map<UUID, List<PublicCitation>> = jdbcTemplate.query(
+	): Map<UUID, List<PublicCitation>> = sqlExecutor.query(
 		"""
 		select rs.sentence_id, c.generation_input_id, i.source_provider, i.source_label, i.original_url,
 		       case
@@ -781,15 +793,15 @@ class ArtifactService(
 		""".trimIndent(),
 		{ rs, _ ->
 			val originalUrl = safeHttpUrl(rs.getString(5))
-			val accessible = rs.getBoolean(6) && originalUrl != null && approvedPublicUrl(rs.getString(3), originalUrl)
+			val accessible = rs.getBoolean(6) && originalUrl != null && approvedPublicUrl(requireNotNull(rs.getString(3)), originalUrl)
 			if (!accessible) {
 				null
 			} else {
-				PublicCitation(
-					rs.getObject(1, UUID::class.java),
-					rs.getObject(2, UUID::class.java),
-					rs.getString(3),
-					rs.getString(4).trim(),
+					PublicCitation(
+						requireNotNull(rs.getObject(1, UUID::class.java)),
+						requireNotNull(rs.getObject(2, UUID::class.java)),
+						requireNotNull(rs.getString(3)),
+						requireNotNull(rs.getString(4)).trim(),
 					originalUrl,
 				)
 			}
@@ -811,7 +823,7 @@ class ArtifactService(
 		variantId: UUID,
 		revisionId: UUID,
 		publicCitations: Map<UUID, List<PublicCitation>>,
-	): List<ExportSentence> = jdbcTemplate.query(
+	): List<ExportSentence> = sqlExecutor.query(
 		"""
 		select rs.sentence_id, r.id, r.revision_no, rs.order_index, r.body, r.origin,
 		       e.verdict, e.reason, gr.error_code
@@ -829,9 +841,9 @@ class ArtifactService(
 		order by rs.order_index
 		""".trimIndent(),
 		{ rs, _ ->
-			val sentenceId = rs.getObject(1, UUID::class.java)
-			val revisionIdValue = rs.getObject(2, UUID::class.java)
-			val origin = rs.getString(6)
+				val sentenceId = requireNotNull(rs.getObject(1, UUID::class.java))
+				val revisionIdValue = requireNotNull(rs.getObject(2, UUID::class.java))
+				val origin = requireNotNull(rs.getString(6))
 			val verdict = rs.getString(7)
 			val status = when {
 				origin == "USER_MODIFIED" -> ExportSentenceStatus.USER_MODIFIED
@@ -844,7 +856,7 @@ class ArtifactService(
 				else -> ExportSentenceStatus.NEEDS_SUPPORT
 			}
 			ExportSentence(
-				sentenceId, revisionIdValue, rs.getInt(4), rs.getString(5), status,
+					sentenceId, revisionIdValue, rs.getInt(4), requireNotNull(rs.getString(5)), status,
 				publicCitations[sentenceId].orEmpty().mapIndexed { index, citation ->
 					SentenceCitation(sentenceId, revisionIdValue, citation.evidenceId, index, CitationStatus.ACTIVE)
 				},
@@ -853,16 +865,16 @@ class ArtifactService(
 		devContext.devWorkspaceId, revisionId, variantId,
 	)
 
-	private fun loadEvidence(runId: UUID): List<EvidenceSnapshot> = jdbcTemplate.query(
+	private fun loadEvidence(runId: UUID): List<EvidenceSnapshot> = sqlExecutor.query(
 		"""
 		select id, writing_block_id, order_index, source_provider, source_kind, source_label, snapshot_title,
 		 snapshot_body, snapshot_excerpt, original_url, source_created_at, source_updated_at, content_hash, captured_at
 		from generation_inputs where workspace_id = ? and generation_run_id = ? order by order_index
 		""".trimIndent(),
-		{ rs, _ -> EvidenceSnapshot(
-			rs.getObject(1, UUID::class.java), runId, rs.getObject(2, UUID::class.java), rs.getInt(3), SourceProvider.valueOf(rs.getString(4)),
-			rs.getString(5), rs.getString(6), rs.getString(7), rs.getString(8), rs.getString(9), rs.getString(10),
-			rs.getTimestamp(11)?.toInstant(), rs.getTimestamp(12)?.toInstant(), rs.getString(13), rs.getTimestamp(14).toInstant(),
+			{ rs, _ -> EvidenceSnapshot(
+				requireNotNull(rs.getObject(1, UUID::class.java)), runId, requireNotNull(rs.getObject(2, UUID::class.java)), rs.getInt(3), SourceProvider.valueOf(requireNotNull(rs.getString(4))),
+				requireNotNull(rs.getString(5)), requireNotNull(rs.getString(6)), rs.getString(7), requireNotNull(rs.getString(8)), rs.getString(9), requireNotNull(rs.getString(10)),
+				rs.getTimestamp(11)?.toInstant(), rs.getTimestamp(12)?.toInstant(), requireNotNull(rs.getString(13)), requireNotNull(rs.getTimestamp(14)).toInstant(),
 		) },
 		devContext.devWorkspaceId, runId,
 	)
@@ -880,7 +892,7 @@ class ArtifactService(
 		inputHash: String?,
 		outputHash: String?,
 	): UUID = uuidGenerator.next().also { id ->
-			jdbcTemplate.update(
+			sqlExecutor.update(
 				"""
 				insert into generation_export_events (
 				 id, workspace_id, generation_run_id, content_variant_id, artifact_revision_id,
@@ -902,29 +914,36 @@ class ArtifactService(
 	private fun ensureArtifactRevision(variantId: UUID): CurrentArtifactRevision {
 		val existing = currentArtifactRevisionOrNull(variantId)
 		if (existing != null) return existing
-		val runId = jdbcTemplate.query(
+		val runId = sqlExecutor.query(
 			"select generation_run_id from content_variants where workspace_id = ? and id = ?",
-			{ rs, _ -> rs.getObject(1, UUID::class.java) },
+			{ rs, _ -> requireNotNull(rs.getObject(1, UUID::class.java)) },
 			devContext.devWorkspaceId, variantId,
 		).firstOrNull() ?: notFound()
-		val rows = jdbcTemplate.query(
+		val rows = sqlExecutor.query(
 			"""
 			select s.id, r.id, r.revision_no, s.order_index, r.body, r.origin
 			from content_variant_sentences s
 			join content_variant_sentence_revisions r on r.workspace_id = s.workspace_id and r.sentence_id = s.id and r.is_current
 			where s.workspace_id = ? and s.content_variant_id = ? order by s.order_index
 			""".trimIndent(),
-			{ rs, _ -> StatementRow(rs.getObject(1, UUID::class.java), rs.getObject(2, UUID::class.java), rs.getInt(3), rs.getInt(4), rs.getString(5), rs.getString(6)) },
+			{ rs, _ -> StatementRow(
+				requireNotNull(rs.getObject(1, UUID::class.java)),
+				requireNotNull(rs.getObject(2, UUID::class.java)),
+				rs.getInt(3),
+				rs.getInt(4),
+				requireNotNull(rs.getString(5)),
+				requireNotNull(rs.getString(6)),
+			) },
 			devContext.devWorkspaceId, variantId,
 		)
 		val revisionId = variantId
 		val now = clock.instant()
-		jdbcTemplate.update(
+		sqlExecutor.update(
 			"insert into content_variant_revisions (id, workspace_id, generation_run_id, content_variant_id, revision_no, lexical_content, is_current, created_at) values (?, ?, ?, ?, 1, ?::jsonb, true, ?)",
 			revisionId, devContext.devWorkspaceId, runId, variantId, lexicalContentFor(rows).toString(), Timestamp.from(now),
 		)
 		rows.forEach { row ->
-			jdbcTemplate.update(
+			sqlExecutor.update(
 				"insert into content_variant_revision_sentences (id, workspace_id, content_variant_revision_id, generation_run_id, content_variant_id, sentence_id, sentence_revision_id, order_index) values (?, ?, ?, ?, ?, ?, ?, ?)",
 				uuidGenerator.next(), devContext.devWorkspaceId, revisionId, runId, variantId, row.id, row.revisionId, row.orderIndex,
 			)
@@ -937,38 +956,57 @@ class ArtifactService(
 	private fun currentArtifactRevisionForUpdate(variantId: UUID): CurrentArtifactRevision =
 		currentArtifactRevisionOrNull(variantId, forUpdate = true) ?: ensureArtifactRevision(variantId)
 
-	private fun currentArtifactRevisionOrNull(variantId: UUID, forUpdate: Boolean = false): CurrentArtifactRevision? = jdbcTemplate.query(
+	private fun currentArtifactRevisionOrNull(variantId: UUID, forUpdate: Boolean = false): CurrentArtifactRevision? = sqlExecutor.query(
 		"select id, generation_run_id, revision_no, lexical_content::text from content_variant_revisions where workspace_id = ? and content_variant_id = ? and is_current${if (forUpdate) " for update" else ""}",
-		{ rs, _ -> CurrentArtifactRevision(rs.getObject(1, UUID::class.java), rs.getObject(2, UUID::class.java), rs.getInt(3), objectMapper.readTree(rs.getString(4))) },
+		{ rs, _ -> CurrentArtifactRevision(
+			requireNotNull(rs.getObject(1, UUID::class.java)),
+			requireNotNull(rs.getObject(2, UUID::class.java)),
+			rs.getInt(3),
+			objectMapper.readTree(requireNotNull(rs.getString(4))),
+		) },
 		devContext.devWorkspaceId, variantId,
 	).firstOrNull()
 
 	private fun loadCurrentStatements(revisionId: UUID, variantId: UUID): List<StatementRow> {
-		val artifactRevisionExists = jdbcTemplate.queryForObject(
+		val artifactRevisionExists = sqlExecutor.queryForObject(
 			"select exists (select 1 from content_variant_revisions where workspace_id = ? and id = ? and content_variant_id = ?)",
 			Boolean::class.java,
 			devContext.devWorkspaceId, revisionId, variantId,
 		) ?: false
 		if (artifactRevisionExists) {
-			return jdbcTemplate.query(
+			return sqlExecutor.query(
 				"""
 				select rs.sentence_id, rs.sentence_revision_id, r.revision_no, rs.order_index, r.body, r.origin
 				from content_variant_revision_sentences rs
 				join content_variant_sentence_revisions r on r.workspace_id = rs.workspace_id and r.id = rs.sentence_revision_id
 				where rs.workspace_id = ? and rs.content_variant_revision_id = ? and rs.content_variant_id = ? order by rs.order_index
 				""".trimIndent(),
-				{ rs, _ -> StatementRow(rs.getObject(1, UUID::class.java), rs.getObject(2, UUID::class.java), rs.getInt(3), rs.getInt(4), rs.getString(5), rs.getString(6)) },
+					{ rs, _ -> StatementRow(
+						requireNotNull(rs.getObject(1, UUID::class.java)),
+						requireNotNull(rs.getObject(2, UUID::class.java)),
+						rs.getInt(3),
+						rs.getInt(4),
+						requireNotNull(rs.getString(5)),
+						requireNotNull(rs.getString(6)),
+					) },
 				devContext.devWorkspaceId, revisionId, variantId,
 			)
 		}
-		return jdbcTemplate.query(
+		return sqlExecutor.query(
 			"""
 			select s.id, r.id, r.revision_no, s.order_index, r.body, r.origin
 			from content_variant_sentences s
 			join content_variant_sentence_revisions r on r.workspace_id = s.workspace_id and r.sentence_id = s.id and r.is_current
 			where s.workspace_id = ? and s.content_variant_id = ? order by s.order_index
 			""".trimIndent(),
-			{ rs, _ -> StatementRow(rs.getObject(1, UUID::class.java), rs.getObject(2, UUID::class.java), rs.getInt(3), rs.getInt(4), rs.getString(5), rs.getString(6)) },
+			{ rs, _ -> StatementRow(
+				requireNotNull(rs.getObject(1, UUID::class.java)),
+				requireNotNull(rs.getObject(2, UUID::class.java)),
+				rs.getInt(3),
+				rs.getInt(4),
+				requireNotNull(rs.getString(5)),
+				requireNotNull(rs.getString(6)),
+			) },
 			devContext.devWorkspaceId, variantId,
 		)
 	}
@@ -1040,7 +1078,7 @@ class ArtifactService(
 		if (revisionNumber == 1) return "Initial draft"
 		if (createdByUserId == devContext.devUserId) return "Edited by you"
 		val displayName = createdByUserId?.let {
-			jdbcTemplate.query(
+			sqlExecutor.query(
 				"select display_name from users where id = ?",
 				{ rs, _ -> rs.getString(1) },
 				it,

@@ -1,24 +1,24 @@
 package com.plot.api.routine
 
 import com.plot.api.common.UuidGenerator
-import java.sql.ResultSet
+import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.JooqTransactionExecutor
+import com.plot.api.persistence.SqlRow
 import java.sql.Timestamp
 import java.time.Clock
 import java.time.Instant
 import java.util.UUID
-import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Component
-import org.springframework.transaction.support.TransactionTemplate
 
 @Component
 class RoutineAgentPersistence(
-	private val jdbcTemplate: JdbcTemplate,
-	private val transactionTemplate: TransactionTemplate,
+	private val sqlExecutor: JooqSqlExecutor,
+	private val transactionExecutor: JooqTransactionExecutor,
 	private val uuidGenerator: UuidGenerator,
 	private val agentRunPersistence: AgentRunPersistence,
 	private val clock: Clock? = null,
 ) {
-	fun createExecution(request: RoutineExecutionRequest): RoutineExecutionRecord = transactionTemplate.execute {
+	fun createExecution(request: RoutineExecutionRequest): RoutineExecutionRecord = transactionExecutor.execute {
 		val triggerKey = request.triggerKey.trim()
 		val requestFingerprint = request.requestFingerprint.trim()
 		validateExecutionRequest(request, triggerKey, requestFingerprint)
@@ -32,7 +32,7 @@ class RoutineAgentPersistence(
 
 		val id = request.id ?: uuidGenerator.next()
 		val now = currentInstant()
-		val inserted = jdbcTemplate.update(
+		val inserted = sqlExecutor.update(
 			"""
 			insert into routine_executions (
 			  id, workspace_id, routine_id, created_by_user_id, trigger_source_scope_id,
@@ -69,14 +69,14 @@ class RoutineAgentPersistence(
 		requireNotNull(findExecution(request.workspaceId, id))
 	}
 
-	fun findExecution(workspaceId: UUID, id: UUID): RoutineExecutionRecord? = jdbcTemplate.query(
+	fun findExecution(workspaceId: UUID, id: UUID): RoutineExecutionRecord? = sqlExecutor.query(
 		selectExecutionSql + " where e.workspace_id = ? and e.id = ?",
 		executionMapper,
 		workspaceId,
 		id,
 	).firstOrNull()
 
-	fun findByTriggerKey(workspaceId: UUID, routineId: UUID, triggerKey: String): RoutineExecutionRecord? = jdbcTemplate.query(
+	fun findByTriggerKey(workspaceId: UUID, routineId: UUID, triggerKey: String): RoutineExecutionRecord? = sqlExecutor.query(
 		selectExecutionSql + " where e.workspace_id = ? and e.routine_id = ? and e.trigger_key = ?",
 		executionMapper,
 		workspaceId,
@@ -84,7 +84,7 @@ class RoutineAgentPersistence(
 		triggerKey,
 	).firstOrNull()
 
-	fun findExecutionSummary(workspaceId: UUID, executionId: UUID): RoutineExecutionSummaryRecord? = jdbcTemplate.query(
+	fun findExecutionSummary(workspaceId: UUID, executionId: UUID): RoutineExecutionSummaryRecord? = sqlExecutor.query(
 		"""
 		select execution.id as execution_id, execution.status as execution_status,
 		       execution.error_code as execution_error_code,
@@ -113,8 +113,8 @@ class RoutineAgentPersistence(
 		""".trimIndent(),
 		{ rs, _ ->
 			RoutineExecutionSummaryRecord(
-				executionId = rs.getObject("execution_id", UUID::class.java),
-				executionStatus = RoutineExecutionStatus.valueOf(rs.getString("execution_status")),
+				executionId = requireNotNull(rs.getObject("execution_id", UUID::class.java)),
+				executionStatus = RoutineExecutionStatus.valueOf(requireNotNull(rs.getString("execution_status"))),
 				executionErrorCode = rs.getString("execution_error_code"),
 				workSessionId = rs.getObject("work_session_id", UUID::class.java),
 				agentRunId = rs.getObject("agent_run_id", UUID::class.java),
@@ -162,8 +162,8 @@ class RoutineAgentPersistence(
 		workerId: String,
 		continuationJson: String,
 		now: Instant = currentInstant(),
-	): RoutineExecutionRecord = transactionTemplate.execute {
-		val updated = jdbcTemplate.update(
+	): RoutineExecutionRecord = transactionExecutor.execute {
+		val updated = sqlExecutor.update(
 			"""
 			update routine_executions
 			set refresh_continuation = ?::jsonb, error_code = null, updated_at = ?
@@ -185,8 +185,8 @@ class RoutineAgentPersistence(
 		executionId: UUID,
 		workerId: String,
 		now: Instant = currentInstant(),
-	): RoutineExecutionRecord = transactionTemplate.execute {
-		val updated = jdbcTemplate.update(
+	): RoutineExecutionRecord = transactionExecutor.execute {
+		val updated = sqlExecutor.update(
 			"""
 			update routine_executions
 			set refresh_continuation = null, refresh_completed_at = ?, error_code = null, updated_at = ?
@@ -210,9 +210,9 @@ class RoutineAgentPersistence(
 		nextAttemptAt: Instant,
 		errorCode: String? = null,
 		now: Instant = currentInstant(),
-	): RoutineExecutionRecord = transactionTemplate.execute {
+	): RoutineExecutionRecord = transactionExecutor.execute {
 		if (errorCode != null) require(errorCode.matches(SAFE_ERROR_CODE)) { "Routine refresh error code is invalid" }
-		val updated = jdbcTemplate.update(
+		val updated = sqlExecutor.update(
 			"""
 			update routine_executions
 			set claimed_by = null, claimed_at = null, next_attempt_at = ?, error_code = ?,
@@ -237,9 +237,9 @@ class RoutineAgentPersistence(
 		now: Instant = currentInstant(),
 	) {
 		if (writingBlockIds.isEmpty()) return
-		transactionTemplate.executeWithoutResult {
+		transactionExecutor.executeWithoutResult {
 			writingBlockIds.distinct().forEachIndexed { index, writingBlockId ->
-				jdbcTemplate.update(
+				sqlExecutor.update(
 					"""
 					insert into routine_execution_evidence (
 					  execution_id, workspace_id, writing_block_id, activity_sequence, order_index
@@ -258,7 +258,7 @@ class RoutineAgentPersistence(
 		}
 	}
 
-	fun listEvidence(workspaceId: UUID, executionId: UUID): List<RoutineExecutionEvidenceRecord> = jdbcTemplate.query(
+	fun listEvidence(workspaceId: UUID, executionId: UUID): List<RoutineExecutionEvidenceRecord> = sqlExecutor.query(
 		"""
 		select execution_id, workspace_id, writing_block_id, activity_sequence, order_index
 		from routine_execution_evidence
@@ -267,9 +267,9 @@ class RoutineAgentPersistence(
 		""".trimIndent(),
 		{ rs, _ ->
 			RoutineExecutionEvidenceRecord(
-				executionId = rs.getObject("execution_id", UUID::class.java),
-				workspaceId = rs.getObject("workspace_id", UUID::class.java),
-				writingBlockId = rs.getObject("writing_block_id", UUID::class.java),
+				executionId = requireNotNull(rs.getObject("execution_id", UUID::class.java)),
+				workspaceId = requireNotNull(rs.getObject("workspace_id", UUID::class.java)),
+				writingBlockId = requireNotNull(rs.getObject("writing_block_id", UUID::class.java)),
 				activitySequence = rs.getLong("activity_sequence"),
 				orderIndex = rs.getInt("order_index"),
 			)
@@ -284,10 +284,10 @@ class RoutineAgentPersistence(
 		sourceScopeId: UUID,
 		orderIndex: Int,
 		now: Instant = currentInstant(),
-	): RoutineContextSourceRecord = transactionTemplate.execute {
+	): RoutineContextSourceRecord = transactionExecutor.execute {
 		require(orderIndex >= 0) { "Context source order must be non-negative" }
 		val id = uuidGenerator.next()
-		jdbcTemplate.update(
+		sqlExecutor.update(
 			"""
 			insert into routine_context_sources (id, workspace_id, routine_id, source_scope_id, order_index, created_at)
 			values (?, ?, ?, ?, ?, ?)
@@ -300,7 +300,7 @@ class RoutineAgentPersistence(
 			orderIndex,
 			Timestamp.from(now),
 		)
-		jdbcTemplate.query(
+		sqlExecutor.query(
 			"""
 			select id, workspace_id, routine_id, source_scope_id, order_index, created_at
 			from routine_context_sources
@@ -313,7 +313,7 @@ class RoutineAgentPersistence(
 		).single()
 	}
 
-	fun listContextSources(workspaceId: UUID, routineId: UUID): List<RoutineContextSourceRecord> = jdbcTemplate.query(
+	fun listContextSources(workspaceId: UUID, routineId: UUID): List<RoutineContextSourceRecord> = sqlExecutor.query(
 		"""
 		select id, workspace_id, routine_id, source_scope_id, order_index, created_at
 		from routine_context_sources
@@ -330,7 +330,7 @@ class RoutineAgentPersistence(
 		executionId: UUID,
 		now: Instant = currentInstant(),
 		workerId: String? = null,
-	): RoutineExecutionRecord = transactionTemplate.execute {
+	): RoutineExecutionRecord = transactionExecutor.execute {
 		val ownershipClause = if (workerId == null) "" else " and claimed_by = ?"
 		val ownershipArgs: Array<Any> = workerId?.let { arrayOf<Any>(it) } ?: emptyArray()
 		val sqlArgs: Array<Any> = (listOf<Any>(
@@ -340,7 +340,7 @@ class RoutineAgentPersistence(
 			workspaceId,
 			executionId,
 		) + ownershipArgs.asList()).toTypedArray()
-		val updated = jdbcTemplate.update(
+		val updated = sqlExecutor.update(
 			"""
 			update routine_executions
 			set status = 'NO_ACTIVITY', refresh_completed_at = coalesce(refresh_completed_at, ?),
@@ -361,7 +361,7 @@ class RoutineAgentPersistence(
 		errorCode: String,
 		now: Instant = currentInstant(),
 		workerId: String? = null,
-	): RoutineExecutionRecord = transactionTemplate.execute {
+	): RoutineExecutionRecord = transactionExecutor.execute {
 		require(errorCode.matches(SAFE_ERROR_CODE)) { "Routine execution error code is invalid" }
 		val ownershipClause = if (workerId == null) "" else " and claimed_by = ?"
 		val ownershipArgs: Array<Any> = workerId?.let { arrayOf<Any>(it) } ?: emptyArray()
@@ -372,7 +372,7 @@ class RoutineAgentPersistence(
 			workspaceId,
 			executionId,
 		) + ownershipArgs.asList()).toTypedArray()
-		val updated = jdbcTemplate.update(
+		val updated = sqlExecutor.update(
 			"""
 			update routine_executions
 			set status = 'FAILED', error_code = ?, claimed_by = null, claimed_at = null,
@@ -397,7 +397,7 @@ class RoutineAgentPersistence(
 		projectionAt: Instant = now,
 	) {
 		require(status in setOf("QUEUED", "NO_ACTIVITY", "FAILED")) { "Invalid Routine projection status" }
-		val updated = jdbcTemplate.update(
+		val updated = sqlExecutor.update(
 			"""
 			update routines
 			set last_run_at = ?, next_run_at = ?, last_execution_id = ?, last_generation_run_id = null,
@@ -443,13 +443,13 @@ class RoutineAgentPersistence(
 		staleBefore: Instant,
 		where: String,
 		args: Array<Any>,
-	): RoutineExecutionRecord? = transactionTemplate.execute {
-			val candidate = jdbcTemplate.query(
+	): RoutineExecutionRecord? = transactionExecutor.execute {
+			val candidate = sqlExecutor.query(
 				selectExecutionSql + "\nwhere e.status = 'PROBING' and $where order by e.created_at, e.id for update skip locked limit 1",
 				executionMapper,
 				*args,
 			).firstOrNull() ?: return@execute null
-			val updated = jdbcTemplate.update(
+			val updated = sqlExecutor.update(
 				"""
 				update routine_executions
 				set claimed_by = ?, claimed_at = ?, attempt_count = attempt_count + 1,
@@ -610,8 +610,8 @@ class RoutineAgentPersistence(
 		}
 	}
 
-	private val executionMapper = { rs: ResultSet, _: Int -> rs.toRoutineExecution() }
-	private val contextSourceMapper = { rs: ResultSet, _: Int -> rs.toContextSource() }
+	private val executionMapper = { rs: SqlRow, _: Int -> rs.toRoutineExecution() }
+	private val contextSourceMapper = { rs: SqlRow, _: Int -> rs.toContextSource() }
 
 	private companion object {
 		val SAFE_ERROR_CODE = Regex("[A-Z][A-Z0-9_]{0,99}")
@@ -629,15 +629,15 @@ class RoutineAgentPersistence(
 		from routine_executions e
 	""".trimIndent()
 
-	private fun ResultSet.toRoutineExecution() = RoutineExecutionRecord(
-		id = getObject("id", UUID::class.java),
-		workspaceId = getObject("workspace_id", UUID::class.java),
-		routineId = getObject("routine_id", UUID::class.java),
-		createdByUserId = getObject("created_by_user_id", UUID::class.java),
-		triggerSourceScopeId = getObject("trigger_source_scope_id", UUID::class.java),
-		triggerKind = RoutineExecutionTriggerKind.valueOf(getString("trigger_kind")),
-		triggerKey = getString("trigger_key"),
-		requestFingerprint = getString("request_fingerprint"),
+	private fun SqlRow.toRoutineExecution() = RoutineExecutionRecord(
+		id = requireNotNull(getObject("id", UUID::class.java)),
+		workspaceId = requireNotNull(getObject("workspace_id", UUID::class.java)),
+		routineId = requireNotNull(getObject("routine_id", UUID::class.java)),
+		createdByUserId = requireNotNull(getObject("created_by_user_id", UUID::class.java)),
+		triggerSourceScopeId = requireNotNull(getObject("trigger_source_scope_id", UUID::class.java)),
+		triggerKind = RoutineExecutionTriggerKind.valueOf(requireNotNull(getString("trigger_kind"))),
+		triggerKey = requireNotNull(getString("trigger_key")),
+		requestFingerprint = requireNotNull(getString("request_fingerprint")),
 		triggerDeliveryId = getObject("trigger_delivery_id", UUID::class.java),
 		scheduledFor = getTimestamp("scheduled_for")?.toInstant(),
 		refreshFrom = getTimestamp("refresh_from")?.toInstant(),
@@ -646,7 +646,7 @@ class RoutineAgentPersistence(
 		refreshCompletedAt = getTimestamp("refresh_completed_at")?.toInstant(),
 		activityCursorBefore = getObject("activity_cursor_before", Long::class.javaObjectType),
 		activityCursorAfter = getObject("activity_cursor_after", Long::class.javaObjectType),
-		status = RoutineExecutionStatus.valueOf(getString("status")),
+		status = RoutineExecutionStatus.valueOf(requireNotNull(getString("status"))),
 		attemptCount = getInt("attempt_count"),
 		transitionVersion = getLong("transition_version"),
 		claimedBy = getString("claimed_by"),
@@ -655,17 +655,17 @@ class RoutineAgentPersistence(
 		errorCode = getString("error_code"),
 		startedAt = getTimestamp("started_at")?.toInstant(),
 		finishedAt = getTimestamp("finished_at")?.toInstant(),
-		createdAt = getTimestamp("created_at").toInstant(),
-		updatedAt = getTimestamp("updated_at").toInstant(),
+		createdAt = requireNotNull(getTimestamp("created_at")).toInstant(),
+		updatedAt = requireNotNull(getTimestamp("updated_at")).toInstant(),
 	)
 
-	private fun ResultSet.toContextSource() = RoutineContextSourceRecord(
-		id = getObject("id", UUID::class.java),
-		workspaceId = getObject("workspace_id", UUID::class.java),
-		routineId = getObject("routine_id", UUID::class.java),
-		sourceScopeId = getObject("source_scope_id", UUID::class.java),
+	private fun SqlRow.toContextSource() = RoutineContextSourceRecord(
+		id = requireNotNull(getObject("id", UUID::class.java)),
+		workspaceId = requireNotNull(getObject("workspace_id", UUID::class.java)),
+		routineId = requireNotNull(getObject("routine_id", UUID::class.java)),
+		sourceScopeId = requireNotNull(getObject("source_scope_id", UUID::class.java)),
 		orderIndex = getInt("order_index"),
-		createdAt = getTimestamp("created_at").toInstant(),
+		createdAt = requireNotNull(getTimestamp("created_at")).toInstant(),
 	)
 
 }

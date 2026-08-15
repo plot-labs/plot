@@ -12,26 +12,21 @@ import com.plot.api.writingblock.WritingBlockImportService
 import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
-import org.springframework.jdbc.core.JdbcTemplate
+import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.JooqTransactionExecutor
 import org.springframework.stereotype.Service
-import org.springframework.transaction.PlatformTransactionManager
-import org.springframework.transaction.TransactionDefinition
-import org.springframework.transaction.support.TransactionTemplate
 
 @Service
 class GitHubChangeRoutineService(
 	private val persistence: RoutinePersistence,
 	private val agentPersistence: RoutineAgentPersistence,
 	private val writingBlockImportService: WritingBlockImportService,
-	private val jdbcTemplate: JdbcTemplate,
+	private val sqlExecutor: JooqSqlExecutor,
 	private val uuidGenerator: UuidGenerator,
 	private val properties: GitHubProperties,
 	private val evidenceBudget: RoutineEvidenceBudget,
-	private val transactionManager: PlatformTransactionManager,
+	private val transactionExecutor: JooqTransactionExecutor,
 ) {
-	private val routineTransactionTemplate = TransactionTemplate(transactionManager).apply {
-		propagationBehavior = TransactionDefinition.PROPAGATION_REQUIRES_NEW
-	}
 
 	fun accept(
 		context: GitHubReleaseSourceContext,
@@ -42,12 +37,12 @@ class GitHubChangeRoutineService(
 		val routines = persistence.listEnabledGitHubEventRoutines(context.workspaceId, context.sourceScopeId, cadence)
 		if (routines.isEmpty()) return 0
 
-		val prepared = routineTransactionTemplate.execute {
+		val prepared = transactionExecutor.executeRequiresNew {
 			val now = delivery.receivedAt
 			val observationId = createObservation(context, delivery.externalDeliveryId, webhook.eventType, now)
 			val importer = WorkspacePrincipal(context.workspaceId, context.createdByUserId)
 			val blocks = boundedEvidenceBlocks(context, delivery.externalDeliveryId, webhook, observationId, now)
-			if (blocks.isEmpty()) return@execute PreparedEvidence(emptyList(), emptyList())
+			if (blocks.isEmpty()) return@executeRequiresNew PreparedEvidence(emptyList(), emptyList())
 			evidenceBudget.requireWithinBudget(
 				blocks.size,
 				blocks.sumOf { evidenceBudget.characters(it.title, it.body) },
@@ -69,7 +64,7 @@ class GitHubChangeRoutineService(
 		var firstAdmissionFailure: RuntimeException? = null
 		val enqueued = routines.count { routine ->
 			try {
-				routineTransactionTemplate.execute {
+				transactionExecutor.executeRequiresNew {
 					val execution = agentPersistence.createExecution(
 						RoutineExecutionRequest(
 							workspaceId = routine.workspaceId,
@@ -175,7 +170,7 @@ class GitHubChangeRoutineService(
 		eventType: String,
 		now: Instant,
 	): UUID = uuidGenerator.next().also { observationId ->
-		jdbcTemplate.update(
+		sqlExecutor.update(
 			"""
 			insert into source_observations (
 			 id, workspace_id, source_scope_id, binding_id, authority_owner, coverage_key,

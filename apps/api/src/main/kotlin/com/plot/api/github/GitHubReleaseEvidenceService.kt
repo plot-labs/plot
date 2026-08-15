@@ -3,15 +3,16 @@ package com.plot.api.github
 import com.plot.api.common.ApiException
 import com.plot.api.common.UuidGenerator
 import com.plot.api.common.WorkspacePrincipal
+import com.plot.api.persistence.JooqSqlExecutor
 import com.plot.api.source.ImportedWritingBlock
 import com.plot.api.writingblock.WritingBlockImportService
 import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
-import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.http.HttpStatus
+import org.springframework.stereotype.Component
 import org.springframework.stereotype.Service
-import org.springframework.transaction.support.TransactionTemplate
+import org.springframework.transaction.annotation.Transactional
 
 data class GitHubReleaseEvidence(
 	val observationId: UUID,
@@ -27,15 +28,104 @@ interface GitHubReleaseEvidenceService {
 	): GitHubReleaseEvidence
 }
 
+@Component
+class GitHubReleaseEvidenceTransactionService(
+	private val sqlExecutor: JooqSqlExecutor,
+	private val uuidGenerator: UuidGenerator,
+	private val writingBlockImportService: WritingBlockImportService,
+) {
+	@Transactional
+	fun reserveObservation(
+		workspaceId: UUID,
+		context: GitHubReleaseSourceContext,
+		request: GitHubReleaseDraftRequest,
+		range: GitHubReleaseRange,
+	): UUID {
+		val coverageKey = "release:${request.tagName}:${range.baseSha}...${range.headSha}"
+		sqlExecutor.query(
+			"select pg_advisory_xact_lock(hashtextextended(?, 0))",
+			{ _, _ -> Unit },
+			"$workspaceId:GITHUB_RELEASE:$coverageKey",
+		)
+		val generation = sqlExecutor.queryForObject(
+			"""
+			select coalesce(max(generation), -1) + 1
+			from source_observations
+			where workspace_id = ? and authority_owner = 'GITHUB_RELEASE' and coverage_key = ?
+			""".trimIndent(),
+			Long::class.java,
+			workspaceId,
+			coverageKey,
+		) ?: 0L
+		val observationId = uuidGenerator.next()
+		val now = Instant.now()
+		sqlExecutor.update(
+			"""
+			insert into source_observations (
+			 id, workspace_id, source_scope_id, binding_id, authority_owner, coverage_key,
+			 observation_mode, generation, status, started_at, created_at
+			) values (?, ?, ?, ?, 'GITHUB_RELEASE', ?, 'PARTIAL', ?, 'RUNNING', ?, ?)
+			""".trimIndent(),
+			observationId,
+			workspaceId,
+			context.sourceScopeId,
+			context.bindingId,
+			coverageKey,
+			generation,
+			Timestamp.from(now),
+			Timestamp.from(now),
+		)
+		return observationId
+	}
+
+	@Transactional
+	fun completeObservation(
+		principal: WorkspacePrincipal,
+		context: GitHubReleaseSourceContext,
+		observationId: UUID,
+		blocks: List<ImportedWritingBlock>,
+	): List<UUID> {
+		val now = Instant.now()
+		val ids = blocks.map { block ->
+			writingBlockImportService.upsert(principal, block, now).blockId
+		}
+		completeObservation(principal.workspaceId, context.sourceScopeId, observationId, "COMPLETED")
+		return ids
+	}
+
+	@Transactional
+	fun failObservation(workspaceId: UUID, sourceScopeId: UUID, observationId: UUID) {
+		completeObservation(workspaceId, sourceScopeId, observationId, "FAILED")
+	}
+
+	private fun completeObservation(
+		workspaceId: UUID,
+		sourceScopeId: UUID,
+		observationId: UUID,
+		status: String,
+	) {
+		val completed = sqlExecutor.update(
+			"""
+			update source_observations
+			set status = ?, completed_at = ?
+			where workspace_id = ? and id = ? and source_scope_id = ? and status = 'RUNNING'
+			""".trimIndent(),
+			status,
+			Timestamp.from(Instant.now()),
+			workspaceId,
+			observationId,
+			sourceScopeId,
+		)
+		check(completed == 1) { "Release evidence observation is no longer running" }
+	}
+}
+
 @Service
 class DefaultGitHubReleaseEvidenceService(
 	private val client: GitHubClient,
 	private val transformer: GitHubWritingBlockTransformer,
-	private val writingBlockImportService: WritingBlockImportService,
-	private val jdbcTemplate: JdbcTemplate,
-	private val uuidGenerator: UuidGenerator,
+	private val transactionService: GitHubReleaseEvidenceTransactionService,
 	private val properties: GitHubProperties,
-	private val transactionTemplate: TransactionTemplate,
 ) : GitHubReleaseEvidenceService {
 	override fun collect(
 		principal: WorkspacePrincipal,
@@ -48,9 +138,7 @@ class DefaultGitHubReleaseEvidenceService(
 		require(request.sourceScopeId == context.sourceScopeId) { "Release request source scope does not match source context" }
 		require(range.baseSha.isNotBlank() && range.headSha.isNotBlank()) { "Release range requires exact boundaries" }
 
-		val observationId = checkNotNull(transactionTemplate.execute {
-			reserveObservation(principal.workspaceId, context, request, range)
-		})
+		val observationId = transactionService.reserveObservation(principal.workspaceId, context, request, range)
 		try {
 			val lookedUpCommits = range.comparison.commits
 				.take(properties.maxCommitPullRequestLookups.coerceAtLeast(0))
@@ -132,85 +220,12 @@ class DefaultGitHubReleaseEvidenceService(
 			}
 			validateConstructedEvidence(blocks)
 
-			val blockIds = checkNotNull(transactionTemplate.execute {
-				val now = Instant.now()
-				val ids = blocks.map { block ->
-					writingBlockImportService.upsert(principal, block, now).blockId
-				}
-				completeObservation(principal.workspaceId, context.sourceScopeId, observationId, "COMPLETED")
-				ids
-			})
+			val blockIds = transactionService.completeObservation(principal, context, observationId, blocks)
 			return GitHubReleaseEvidence(observationId, blockIds)
 		} catch (exception: Exception) {
-			transactionTemplate.executeWithoutResult {
-				completeObservation(principal.workspaceId, context.sourceScopeId, observationId, "FAILED")
-			}
+			transactionService.failObservation(principal.workspaceId, context.sourceScopeId, observationId)
 			throw exception
 		}
-	}
-
-	private fun reserveObservation(
-		workspaceId: UUID,
-		context: GitHubReleaseSourceContext,
-		request: GitHubReleaseDraftRequest,
-		range: GitHubReleaseRange,
-	): UUID {
-		val coverageKey = "release:${request.tagName}:${range.baseSha}...${range.headSha}"
-		jdbcTemplate.query(
-			"select pg_advisory_xact_lock(hashtextextended(?, 0))",
-			{ _, _ -> Unit },
-			"$workspaceId:GITHUB_RELEASE:$coverageKey",
-		)
-		val generation = jdbcTemplate.queryForObject(
-			"""
-			select coalesce(max(generation), -1) + 1
-			from source_observations
-			where workspace_id = ? and authority_owner = 'GITHUB_RELEASE' and coverage_key = ?
-			""".trimIndent(),
-			Long::class.java,
-			workspaceId,
-			coverageKey,
-		) ?: 0L
-		val observationId = uuidGenerator.next()
-		val now = Instant.now()
-		jdbcTemplate.update(
-			"""
-			insert into source_observations (
-			 id, workspace_id, source_scope_id, binding_id, authority_owner, coverage_key,
-			 observation_mode, generation, status, started_at, created_at
-			) values (?, ?, ?, ?, 'GITHUB_RELEASE', ?, 'PARTIAL', ?, 'RUNNING', ?, ?)
-			""".trimIndent(),
-			observationId,
-			workspaceId,
-			context.sourceScopeId,
-			context.bindingId,
-			coverageKey,
-			generation,
-			Timestamp.from(now),
-			Timestamp.from(now),
-		)
-		return observationId
-	}
-
-	private fun completeObservation(
-		workspaceId: UUID,
-		sourceScopeId: UUID,
-		observationId: UUID,
-		status: String,
-	) {
-		val completed = jdbcTemplate.update(
-			"""
-			update source_observations
-			set status = ?, completed_at = ?
-			where workspace_id = ? and id = ? and source_scope_id = ? and status = 'RUNNING'
-			""".trimIndent(),
-			status,
-			Timestamp.from(Instant.now()),
-			workspaceId,
-			observationId,
-			sourceScopeId,
-		)
-		check(completed == 1) { "Release evidence observation is no longer running" }
 	}
 
 	private fun releaseMetadata(

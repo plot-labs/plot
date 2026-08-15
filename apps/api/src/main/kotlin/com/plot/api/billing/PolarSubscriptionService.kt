@@ -2,7 +2,6 @@ package com.plot.api.billing
 
 import com.plot.api.auth.PlotAuthProperties
 import com.plot.api.common.ApiException
-import java.sql.Timestamp
 import com.plot.api.workspace.User
 import com.plot.api.workspace.UserRepository
 import com.plot.api.workspace.Workspace
@@ -13,7 +12,6 @@ import java.time.Instant
 import java.util.UUID
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
-import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import tools.jackson.databind.JsonNode
@@ -22,7 +20,7 @@ import tools.jackson.databind.ObjectMapper
 @Service
 class PolarSubscriptionService(
 	private val objectMapper: ObjectMapper,
-	private val jdbcTemplate: JdbcTemplate,
+	private val webhookPersistence: PolarWebhookPersistence,
 	private val userRepository: UserRepository,
 	private val workspaceRepository: WorkspaceRepository,
 	private val memberRepository: WorkspaceMemberRepository,
@@ -36,19 +34,7 @@ class PolarSubscriptionService(
 			?: invalidPayload()
 		val data = payload.path("data")
 		val subscriptionId = string(data.path("id"))?.takeIf { it.isNotBlank() }
-		val inserted = jdbcTemplate.update(
-			"""
-			insert into polar_webhook_events (
-			  webhook_id, event_type, subscription_id, received_at, outcome
-			) values (?, ?, ?, ?, 'IGNORED')
-			on conflict (webhook_id) do nothing
-			""".trimIndent(),
-			webhookId,
-			eventType,
-			subscriptionId,
-			Timestamp.from(clock.instant()),
-		)
-		if (inserted == 0 || eventType !in HANDLED_EVENTS) return
+		if (!webhookPersistence.recordIfNew(webhookId, eventType, subscriptionId, clock.instant()) || eventType !in HANDLED_EVENTS) return
 		if (subscriptionId == null) {
 			recordOutcome(webhookId, "UNMATCHED", null)
 			logger.warn("Polar subscription event could not be matched: subscription_id=missing")
@@ -165,16 +151,11 @@ class PolarSubscriptionService(
 		node.takeUnless { it.isMissingNode || it.isNull }?.stringValue()
 
 	private fun recordOutcome(webhookId: String, outcome: String, target: BillingTarget?) {
-		jdbcTemplate.update(
-			"""
-			update polar_webhook_events
-			set outcome = ?, matched_user_id = ?, matched_workspace_id = ?
-			where webhook_id = ?
-			""".trimIndent(),
-			outcome,
-			target?.user?.id,
-			target?.workspace?.id,
-			webhookId,
+		webhookPersistence.recordOutcome(
+			webhookId = webhookId,
+			outcome = outcome,
+			matchedUserId = target?.user?.id,
+			matchedWorkspaceId = target?.workspace?.id,
 		)
 	}
 

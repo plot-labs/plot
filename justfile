@@ -46,6 +46,14 @@ lint: lint-web
 build-api:
     cd apps/api && ./gradlew build
 
+# Regenerate jOOQ sources from a fresh PostgreSQL 16 database and compare the baseline
+verify-jooq:
+    cd apps/api && bash scripts/regenerate-jooq.sh check
+
+# Regenerate and replace the checked-in jOOQ source baseline after review
+update-jooq:
+    cd apps/api && bash scripts/regenerate-jooq.sh update
+
 # Build the Next.js app
 build-web:
     pnpm --filter @plot/web build

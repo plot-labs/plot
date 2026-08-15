@@ -4,8 +4,10 @@ import com.plot.api.TestcontainersConfiguration
 import com.plot.api.dev.DevContext
 import java.time.Instant
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -21,6 +23,7 @@ import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.TestPropertySource
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.delete
 import org.springframework.test.web.servlet.patch
@@ -131,6 +134,16 @@ class GitHubConnectionApiIntegrationTest {
 			jsonPath("$.error") { value("INVALID_GITHUB_STATE") }
 		}
 		assertEquals(1, fakeClient.repositoryListCalls.get())
+	}
+
+	@Test
+	fun providerCallsDoNotHoldThePersistenceTransaction() {
+		val connectionId = completeInstallation()
+		connect(connectionId, 1001)
+		mockMvc.get("/api/github/connections/$connectionId/repositories")
+			.andExpect { status { isOk() } }
+
+		assertFalse(fakeClient.providerCallObservedActiveTransaction.get())
 	}
 
 	@Test
@@ -539,6 +552,7 @@ class GitHubConnectionApiIntegrationTest {
 
 class FakeGitHubClient : GitHubClient {
 	val repositoryListCalls = AtomicInteger()
+	val providerCallObservedActiveTransaction = AtomicBoolean()
 	val pullRequestCalls = AtomicInteger()
 	val releaseListCalls = AtomicInteger()
 	val tagListCalls = AtomicInteger()
@@ -558,6 +572,9 @@ class FakeGitHubClient : GitHubClient {
 
 	override fun listInstallationRepositories(installationId: Long): List<GitHubRepository> {
 		repositoryListCalls.incrementAndGet()
+		providerCallObservedActiveTransaction.set(
+			providerCallObservedActiveTransaction.get() || TransactionSynchronizationManager.isActualTransactionActive(),
+		)
 		repositoryFailureCode?.let {
 			throw com.plot.api.common.ApiException(org.springframework.http.HttpStatus.BAD_GATEWAY, it, "provider failure")
 		}
@@ -565,6 +582,9 @@ class FakeGitHubClient : GitHubClient {
 	}
 
 	override fun verifyRepositoryAccess(installationId: Long, repositoryId: Long, owner: String, repository: String): GitHubRepository {
+		providerCallObservedActiveTransaction.set(
+			providerCallObservedActiveTransaction.get() || TransactionSynchronizationManager.isActualTransactionActive(),
+		)
 		return repositories.first { it.id == repositoryId }
 	}
 
@@ -657,6 +677,7 @@ class FakeGitHubClient : GitHubClient {
 
 	fun reset() {
 		repositoryListCalls.set(0)
+		providerCallObservedActiveTransaction.set(false)
 		pullRequestCalls.set(0)
 		releaseListCalls.set(0)
 		tagListCalls.set(0)

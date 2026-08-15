@@ -1,8 +1,9 @@
 package com.plot.api.github
 
 import com.plot.api.common.ApiException
-import java.sql.Timestamp
 import com.plot.api.dev.DevContext
+import com.plot.api.persistence.JooqSqlExecutor
+import java.sql.Timestamp
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.security.SecureRandom
@@ -13,7 +14,6 @@ import java.util.UUID
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import org.springframework.http.HttpStatus
-import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -32,7 +32,7 @@ data class GitHubInstallationStateBinding(
 class GitHubInstallationStateService(
 	private val properties: GitHubProperties,
 	private val devContext: DevContext,
-	private val jdbcTemplate: JdbcTemplate,
+	private val sqlExecutor: JooqSqlExecutor,
 	private val clock: Clock = Clock.systemUTC(),
 	private val random: SecureRandom = SecureRandom(),
 ) {
@@ -46,7 +46,7 @@ class GitHubInstallationStateService(
 		val now = Instant.now(clock)
 		val expiresAt = now.plusSeconds(properties.stateTtlSeconds)
 		val id = UUID.randomUUID()
-		jdbcTemplate.update(
+		sqlExecutor.update(
 			"""
 			insert into github_installation_states
 			(id, workspace_id, user_id, nonce_hash, expires_at, created_at)
@@ -73,7 +73,7 @@ class GitHubInstallationStateService(
 		val workspaceId = runCatching { UUID.fromString(parts[1]) }.getOrNull() ?: invalid()
 		val nonce = parts[2]
 		val now = Instant.now(clock)
-		val updated = jdbcTemplate.update(
+		val updated = sqlExecutor.update(
 			"""
 			update github_installation_states
 			set consumed_at = ?

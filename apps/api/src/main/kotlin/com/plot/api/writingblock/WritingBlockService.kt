@@ -9,8 +9,6 @@ import java.util.UUID
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import org.springframework.data.domain.PageRequest
-import org.springframework.data.domain.Sort
 
 data class WritingBlockPageResponse(
 	val items: List<WritingBlockResponse>,
@@ -35,19 +33,23 @@ class WritingBlockService(
 			throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Source scope not found")
 		}
 		if (sourceScopeId != null) sourceManagedAccessGuard.requireReadable()
-		val pageable = PageRequest.of(page, size, Sort.by(
-			Sort.Order.desc("sourceCreatedAt").nullsLast(), Sort.Order.desc("externalObjectKey").nullsLast(),
-			Sort.Order.desc("createdAt"), Sort.Order.desc("id"),
-		))
+		val offset = page * size
 		val blocks = sourceScopeId?.let {
 			writingBlockRepository.findAllByWorkspaceIdAndSourceScopeId(
 				devContext.devWorkspaceId,
 				it,
-				pageable,
+				offset,
+				size,
 			)
-		} ?: writingBlockRepository.findAllByWorkspaceId(devContext.devWorkspaceId, pageable)
+		} ?: writingBlockRepository.findAllByWorkspaceId(devContext.devWorkspaceId, offset, size)
 		if (blocks.content.any { it.sourceNamespaceId != null }) sourceManagedAccessGuard.requireReadable()
-		return WritingBlockPageResponse(blocks.content.map { it.toResponse() }, page, size, blocks.totalElements, blocks.totalPages)
+		return WritingBlockPageResponse(
+			items = blocks.content.map { it.toResponse() },
+			page = page,
+			size = size,
+			totalItems = blocks.totalElements,
+			totalPages = if (blocks.totalElements == 0L) 0 else ((blocks.totalElements + size - 1) / size).toInt(),
+		)
 	}
 
 }

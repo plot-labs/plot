@@ -6,11 +6,17 @@ import io.micrometer.observation.Observation
 import io.micrometer.observation.ObservationRegistry
 import java.time.Instant
 import java.util.UUID
+import org.springframework.stereotype.Component
 import org.springframework.stereotype.Service
-import org.springframework.transaction.PlatformTransactionManager
-import org.springframework.transaction.support.TransactionTemplate
+import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionSynchronization
 import org.springframework.transaction.support.TransactionSynchronizationManager
+
+@Component
+class GitHubWebhookTransactionService {
+	@Transactional
+	fun <T> execute(action: () -> T): T = action()
+}
 
 @Service
 class GitHubWebhookService(
@@ -21,24 +27,22 @@ class GitHubWebhookService(
 	private val gitHubChangeRoutineService: GitHubChangeRoutineService,
 	private val lifecycleService: GitHubSourceAccessLifecycleService,
 	private val observationRegistry: ObservationRegistry,
-	private val transactionManager: PlatformTransactionManager,
+	private val transactionService: GitHubWebhookTransactionService,
 ) {
-	private val transactionTemplate = TransactionTemplate(transactionManager)
-
 	fun accept(webhook: ParsedGitHubWebhook): GitHubWebhookDelivery {
 		val observation = Observation.start("plot.github.webhook", observationRegistry)
 			.highCardinalityKeyValue("plot.webhook_delivery_id", webhook.externalDeliveryId)
 		try {
 			observation.openScope().use {
 				val candidate = newDelivery(webhook)
-				val inserted = requireNotNull(transactionTemplate.execute {
+				val inserted = requireNotNull(transactionService.execute {
 					persistence.insertDelivery(candidate)
 				})
 				if (inserted.id != candidate.id && inserted.disposition != GitHubWebhookDisposition.RECEIVED) {
 					observation.lowCardinalityKeyValue("plot.disposition", inserted.disposition.name)
 					return inserted
 				}
-				val delivery = requireNotNull(transactionTemplate.execute {
+				val delivery = requireNotNull(transactionService.execute {
 					process(inserted, webhook)
 				})
 				observation.lowCardinalityKeyValue("plot.disposition", delivery.disposition.name)
