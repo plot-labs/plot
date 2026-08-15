@@ -1,8 +1,9 @@
 package com.plot.api.entitlement
 
+import com.plot.api.persistence.generated.tables.ContentPacks.Companion.CONTENT_PACKS
 import com.plot.api.workspace.Workspace
 import java.time.Clock
-import org.springframework.jdbc.core.JdbcTemplate
+import org.jooq.DSLContext
 import org.springframework.stereotype.Component
 
 data class EffectiveWorkspaceEntitlement(
@@ -12,17 +13,17 @@ data class EffectiveWorkspaceEntitlement(
 
 @Component
 class WorkspaceEntitlementReader(
-	private val jdbcTemplate: JdbcTemplate,
+	private val dsl: DSLContext,
 	private val clock: Clock = Clock.systemUTC(),
 ) {
 	fun resolve(workspace: Workspace): EffectiveWorkspaceEntitlement {
 		if (workspace.entitlementStatus != "trialing") return workspace.currentEntitlement()
 		if (!workspace.trialEndsAt.isAfter(clock.instant())) return EXPIRED
-		val successfulPackCount = jdbcTemplate.queryForObject(
-			"select count(*) from content_packs where workspace_id = ?",
-			Long::class.java,
-			workspace.id,
-		) ?: 0
+		val successfulPackCount = dsl
+			.selectCount()
+			.from(CONTENT_PACKS)
+			.where(CONTENT_PACKS.WORKSPACE_ID.eq(workspace.id))
+			.fetchOne(0, Long::class.java) ?: 0
 		return if (successfulPackCount >= TrialPolicy.PACK_LIMIT) EXPIRED else workspace.currentEntitlement()
 	}
 

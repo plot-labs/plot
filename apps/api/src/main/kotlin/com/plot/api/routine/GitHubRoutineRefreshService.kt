@@ -16,9 +16,9 @@ import java.time.Instant
 import java.util.UUID
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
-import org.springframework.jdbc.core.JdbcTemplate
+import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.JooqTransactionExecutor
 import org.springframework.stereotype.Service
-import org.springframework.transaction.support.TransactionTemplate
 import tools.jackson.databind.ObjectMapper
 
 data class RoutineRefreshResult(
@@ -35,15 +35,15 @@ class GitHubRoutineRefreshService(
 	private val transformer: GitHubWritingBlockTransformer,
 	private val writingBlockImportService: WritingBlockImportService,
 	private val agentPersistence: RoutineAgentPersistence,
-	private val jdbcTemplate: JdbcTemplate,
-	private val transactionTemplate: TransactionTemplate,
+	private val sqlExecutor: JooqSqlExecutor,
+	private val transactionExecutor: JooqTransactionExecutor,
 	private val objectMapper: ObjectMapper,
 	private val uuidGenerator: UuidGenerator,
 	private val clock: Clock = Clock.systemUTC(),
 ) {
 	fun fail(execution: RoutineExecutionRecord, workerId: String, now: Instant = clock.instant()) {
 		val observationId = execution.refreshContinuationJson?.let(::parseCursor)?.observationId ?: return
-		jdbcTemplate.update(
+		sqlExecutor.update(
 			"""
 			update source_observations observation
 			set status = 'FAILED', completed_at = ?
@@ -119,8 +119,8 @@ class GitHubRoutineRefreshService(
 		}
 
 		val completedAt = clock.instant()
-		transactionTemplate.executeWithoutResult {
-			jdbcTemplate.update(
+		transactionExecutor.executeWithoutResult {
+			sqlExecutor.update(
 				"""
 				update source_observations
 				set status = 'COMPLETED', completed_at = ?
@@ -149,8 +149,8 @@ class GitHubRoutineRefreshService(
 	): RoutineRefreshCursor {
 		val now = clock.instant()
 		val cursor = RoutineRefreshCursor(uuidGenerator.next(), nextPage = null, pagesFetched = 0)
-		transactionTemplate.executeWithoutResult {
-			jdbcTemplate.update(
+		transactionExecutor.executeWithoutResult {
+			sqlExecutor.update(
 				"""
 				insert into source_observations (
 				 id, workspace_id, source_scope_id, binding_id, authority_owner, coverage_key,

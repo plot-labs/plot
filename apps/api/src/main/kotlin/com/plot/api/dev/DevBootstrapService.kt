@@ -28,7 +28,7 @@ class DevBootstrapService(
 			?.let {
 				it.email = "dev-conflict-${it.id}@plot.local"
 				it.updatedAt = now
-				userRepository.saveAndFlush(it)
+				userRepository.save(it)
 			}
 
 		val user = userRepository.findById(devContext.devUserId).orElseGet {
@@ -52,7 +52,7 @@ class DevBootstrapService(
 			?.let {
 				it.slug = "dev-workspace-conflict-${it.id}"
 				it.updatedAt = now
-				workspaceRepository.saveAndFlush(it)
+				workspaceRepository.save(it)
 			}
 
 		val workspace = workspaceRepository.findById(devContext.devWorkspaceId).orElseGet {
@@ -84,7 +84,6 @@ class DevBootstrapService(
 			.findByWorkspaceIdAndUserId(devContext.devWorkspaceId, devContext.devUserId)
 		if (existingTupleMember != null && existingTupleMember.id != devContext.devWorkspaceMemberId) {
 			workspaceMemberRepository.delete(existingTupleMember)
-			workspaceMemberRepository.flush()
 		}
 
 		val workspaceMember = workspaceMemberRepository.findById(devContext.devWorkspaceMemberId).orElseGet {

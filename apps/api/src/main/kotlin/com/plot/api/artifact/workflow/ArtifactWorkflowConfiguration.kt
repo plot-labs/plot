@@ -5,15 +5,15 @@ import com.plot.api.artifact.run.ArtifactRunPersistence
 import com.plot.api.common.UuidGenerator
 import com.plot.api.config.PlotAiProperties
 import com.plot.api.entitlement.WorkspaceAccessService
+import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.JooqTransactionExecutor
 import com.plot.api.routine.RoutineAgentProperties
 import io.micrometer.observation.ObservationRegistry
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.task.TaskExecutor
-import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
-import org.springframework.transaction.support.TransactionTemplate
 import tools.jackson.databind.ObjectMapper
 import java.time.Clock
 import java.time.Duration
@@ -37,15 +37,15 @@ class ArtifactWorkflowConfiguration {
 
 	@Bean
 	fun artifactWorkflowPersistence(
-		jdbcTemplate: JdbcTemplate,
+		sqlExecutor: JooqSqlExecutor,
 		objectMapper: ObjectMapper,
-		transactionTemplate: TransactionTemplate,
+		transactionExecutor: JooqTransactionExecutor,
 		uuidGenerator: UuidGenerator,
 		artifactRunPersistence: ArtifactRunPersistence,
 	): ArtifactWorkflowPersistence = ArtifactWorkflowPersistence(
-		jdbcTemplate,
+		sqlExecutor,
 		objectMapper,
-		transactionTemplate,
+		transactionExecutor,
 		uuidGenerator,
 		artifactRunPersistence,
 	)

@@ -2,6 +2,8 @@ package com.plot.api.routine
 
 import com.plot.api.TestcontainersConfiguration
 import com.plot.api.common.UuidGenerator
+import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.JooqTransactionExecutor
 import java.sql.Connection
 import java.sql.Timestamp
 import java.time.Instant
@@ -15,14 +17,14 @@ import org.flywaydb.core.api.MigrationVersion
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.jooq.SQLDialect
+import org.jooq.impl.DSL
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.datasource.AbstractDataSource
-import org.springframework.jdbc.datasource.DataSourceTransactionManager
-import org.springframework.transaction.support.TransactionTemplate
 
 @SpringBootTest
 @Import(TestcontainersConfiguration::class)
@@ -42,13 +44,15 @@ class RoutineAgentMigrationIntegrationTest {
 		migrateToLatest()
 		val schemaDataSource = SearchPathDataSource(dataSource, schema)
 		schemaJdbcTemplate = JdbcTemplate(schemaDataSource)
+		val schemaSqlExecutor = JooqSqlExecutor(DSL.using(schemaDataSource, SQLDialect.POSTGRES))
+		val schemaTransactionExecutor = JooqTransactionExecutor()
 		persistence = RoutineAgentPersistence(
-			schemaJdbcTemplate,
-			TransactionTemplate(DataSourceTransactionManager(schemaDataSource)),
+			schemaSqlExecutor,
+			schemaTransactionExecutor,
 			uuidGenerator,
 			AgentRunPersistence(
-				schemaJdbcTemplate,
-				TransactionTemplate(DataSourceTransactionManager(schemaDataSource)),
+				schemaSqlExecutor,
+				schemaTransactionExecutor,
 				uuidGenerator,
 			),
 		)

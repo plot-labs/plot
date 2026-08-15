@@ -1,7 +1,14 @@
 package com.plot.api.github
 
+import com.plot.api.persistence.generated.tables.ConnectionNamespaceBindings.Companion.CONNECTION_NAMESPACE_BINDINGS
+import com.plot.api.persistence.generated.tables.Connections.Companion.CONNECTIONS
+import com.plot.api.persistence.generated.tables.SourceNamespaces.Companion.SOURCE_NAMESPACES
+import com.plot.api.persistence.generated.tables.SourceScopes.Companion.SOURCE_SCOPES
 import java.util.UUID
-import org.springframework.jdbc.core.JdbcTemplate
+import org.jooq.DSLContext
+import org.jooq.Field
+import org.jooq.Record
+import org.jooq.impl.DSL.field
 import org.springframework.stereotype.Repository
 
 data class GitHubReleaseSourceContext(
@@ -24,41 +31,66 @@ interface GitHubReleaseScopeResolver {
 
 @Repository
 class JdbcGitHubReleaseScopeResolver(
-	private val jdbcTemplate: JdbcTemplate,
+	private val dsl: DSLContext,
 ) : GitHubReleaseScopeResolver {
 	override fun resolve(installationId: Long, repositoryId: Long): GitHubReleaseSourceContext? {
-		val matches = jdbcTemplate.query(
-			"""
-			select c.workspace_id, c.created_by_user_id, c.id, b.id, n.id, sc.id,
-			       sc.external_key, sc.metadata ->> 'defaultBranch'
-			from connections c
-			join connection_namespace_bindings b on b.workspace_id = c.workspace_id
-			 and b.connection_id = c.id and b.provider = 'GITHUB' and b.status = 'ACTIVE'
-			join source_namespaces n on n.workspace_id = b.workspace_id
-			 and n.id = b.source_namespace_id and n.provider = 'GITHUB' and n.status = 'ACTIVE'
-			join source_scopes sc on sc.workspace_id = n.workspace_id
-			 and sc.source_namespace_id = n.id and sc.provider = 'GITHUB'
-			 and sc.scope_kind = 'REPOSITORY' and sc.status = 'ACTIVE'
-			where c.provider = 'GITHUB' and c.status = 'ACTIVE'
-			  and c.external_connection_key = ? and sc.external_scope_key = ?
-			""".trimIndent(),
-			{ rs, _ ->
-				GitHubReleaseScopeMatch(
-					workspaceId = rs.getObject(1, UUID::class.java),
-					createdByUserId = rs.getObject(2, UUID::class.java),
-					connectionId = rs.getObject(3, UUID::class.java),
-					bindingId = rs.getObject(4, UUID::class.java),
-					sourceNamespaceId = rs.getObject(5, UUID::class.java),
-					sourceScopeId = rs.getObject(6, UUID::class.java),
-					externalKey = rs.getString(7),
-					defaultBranch = rs.getString(8),
-				)
-			},
-			installationId.toString(),
-			repositoryId.toString(),
+		val defaultBranch: Field<String?> = field(
+			"{0} ->> 'defaultBranch'",
+			String::class.java,
+			SOURCE_SCOPES.METADATA,
 		)
+		val matches = dsl
+			.select(
+				CONNECTIONS.WORKSPACE_ID,
+				CONNECTIONS.CREATED_BY_USER_ID,
+				CONNECTIONS.ID,
+				CONNECTION_NAMESPACE_BINDINGS.ID,
+				SOURCE_NAMESPACES.ID,
+				SOURCE_SCOPES.ID,
+				SOURCE_SCOPES.EXTERNAL_KEY,
+				defaultBranch,
+			)
+			.from(CONNECTIONS)
+			.join(CONNECTION_NAMESPACE_BINDINGS).on(
+				CONNECTION_NAMESPACE_BINDINGS.WORKSPACE_ID.eq(CONNECTIONS.WORKSPACE_ID),
+				CONNECTION_NAMESPACE_BINDINGS.CONNECTION_ID.eq(CONNECTIONS.ID),
+				CONNECTION_NAMESPACE_BINDINGS.PROVIDER.eq("GITHUB"),
+				CONNECTION_NAMESPACE_BINDINGS.STATUS.eq("ACTIVE"),
+			)
+			.join(SOURCE_NAMESPACES).on(
+				SOURCE_NAMESPACES.WORKSPACE_ID.eq(CONNECTION_NAMESPACE_BINDINGS.WORKSPACE_ID),
+				SOURCE_NAMESPACES.ID.eq(CONNECTION_NAMESPACE_BINDINGS.SOURCE_NAMESPACE_ID),
+				SOURCE_NAMESPACES.PROVIDER.eq("GITHUB"),
+				SOURCE_NAMESPACES.STATUS.eq("ACTIVE"),
+			)
+			.join(SOURCE_SCOPES).on(
+				SOURCE_SCOPES.WORKSPACE_ID.eq(SOURCE_NAMESPACES.WORKSPACE_ID),
+				SOURCE_SCOPES.SOURCE_NAMESPACE_ID.eq(SOURCE_NAMESPACES.ID),
+				SOURCE_SCOPES.PROVIDER.eq("GITHUB"),
+				SOURCE_SCOPES.SCOPE_KIND.eq("REPOSITORY"),
+				SOURCE_SCOPES.STATUS.eq("ACTIVE"),
+			)
+			.where(
+				CONNECTIONS.PROVIDER.eq("GITHUB"),
+				CONNECTIONS.STATUS.eq("ACTIVE"),
+				CONNECTIONS.EXTERNAL_CONNECTION_KEY.eq(installationId.toString()),
+				SOURCE_SCOPES.EXTERNAL_SCOPE_KEY.eq(repositoryId.toString()),
+			)
+			.fetch()
+			.map { record -> record.toMatch(defaultBranch) }
 		return matches.singleOrNull()?.toContext(installationId, repositoryId)
 	}
+
+	private fun Record.toMatch(defaultBranch: Field<String?>) = GitHubReleaseScopeMatch(
+		workspaceId = requireNotNull(get(CONNECTIONS.WORKSPACE_ID)),
+		createdByUserId = get(CONNECTIONS.CREATED_BY_USER_ID),
+		connectionId = requireNotNull(get(CONNECTIONS.ID)),
+		bindingId = requireNotNull(get(CONNECTION_NAMESPACE_BINDINGS.ID)),
+		sourceNamespaceId = requireNotNull(get(SOURCE_NAMESPACES.ID)),
+		sourceScopeId = requireNotNull(get(SOURCE_SCOPES.ID)),
+		externalKey = get(SOURCE_SCOPES.EXTERNAL_KEY),
+		defaultBranch = get(defaultBranch),
+	)
 }
 
 private data class GitHubReleaseScopeMatch(

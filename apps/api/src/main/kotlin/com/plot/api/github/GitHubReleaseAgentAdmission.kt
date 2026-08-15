@@ -4,7 +4,7 @@ import com.plot.api.common.WorkspacePrincipal
 import com.plot.api.routine.AgentRunRecord
 import com.plot.api.routine.ChatAgentAdmissionService
 import org.springframework.stereotype.Component
-import org.springframework.transaction.support.TransactionTemplate
+import org.springframework.transaction.annotation.Transactional
 
 interface GitHubReleaseAgentAdmission {
 	fun bindAndAdmit(
@@ -21,8 +21,8 @@ interface GitHubReleaseAgentAdmission {
 class DefaultGitHubReleaseAgentAdmission(
 	private val persistence: GitHubReleasePersistence,
 	private val chatAgentAdmissionService: ChatAgentAdmissionService,
-	private val transactionTemplate: TransactionTemplate,
 ) : GitHubReleaseAgentAdmission {
+	@Transactional
 	override fun bindAndAdmit(
 		request: GitHubReleaseDraftRequest,
 		transitionVersion: Long,
@@ -30,7 +30,7 @@ class DefaultGitHubReleaseAgentAdmission(
 		evidence: GitHubReleaseEvidence,
 		instruction: String,
 		idempotencyKey: String,
-	): AgentRunRecord = checkNotNull(transactionTemplate.execute {
+	): AgentRunRecord {
 		val evidenceTransitionVersion = if (request.observationId == null) {
 			persistence.bindEvidence(request.id, transitionVersion, evidence)
 			transitionVersion + 1
@@ -43,6 +43,6 @@ class DefaultGitHubReleaseAgentAdmission(
 			chatTitle = "GitHub release ${request.tagName}",
 		)
 		persistence.linkAgentRun(request.id, evidenceTransitionVersion, evidence.observationId, agentRun.id)
-		agentRun
-	})
+		return agentRun
+	}
 }

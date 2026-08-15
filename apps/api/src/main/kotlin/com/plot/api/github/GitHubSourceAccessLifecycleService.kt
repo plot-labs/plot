@@ -1,10 +1,10 @@
 package com.plot.api.github
 
+import com.plot.api.persistence.JooqSqlExecutor
 import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
 import com.plot.api.artifact.workflow.ArtifactWorkflowPersistence
-import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -15,7 +15,7 @@ data class GitHubLifecycleProjectionResult(
 
 @Service
 class GitHubSourceAccessLifecycleService(
-	private val jdbcTemplate: JdbcTemplate,
+	private val sqlExecutor: JooqSqlExecutor,
 	private val accessChecks: GitHubRepositoryAccessCheckPersistence,
 	private val monitoringPersistence: GitHubRepositoryMonitoringPersistence,
 	private val releasePersistence: GitHubReleasePersistence,
@@ -142,7 +142,7 @@ class GitHubSourceAccessLifecycleService(
 	}
 
 	private fun updateConnection(connection: GitHubConnectionScope, status: String, reason: String, now: Instant) {
-		jdbcTemplate.update(
+		sqlExecutor.update(
 			"""
 			update connections
 			set status = ?, status_reason = ?, status_changed_at = ?, updated_at = ?
@@ -153,7 +153,7 @@ class GitHubSourceAccessLifecycleService(
 	}
 
 	private fun markScopeInactive(scope: GitHubSourceScope, status: String, reason: String?, now: Instant) {
-		jdbcTemplate.update(
+		sqlExecutor.update(
 			"""
 			update source_scopes
 			set status = ?, status_reason = ?, status_changed_at = ?, updated_at = ?
@@ -164,7 +164,7 @@ class GitHubSourceAccessLifecycleService(
 	}
 
 	private fun revokeBinding(scope: GitHubSourceScope, now: Instant) {
-		jdbcTemplate.update(
+		sqlExecutor.update(
 			"""
 			update connection_namespace_bindings
 			set status = 'REVOKED', valid_to = ?, updated_at = ?
@@ -186,14 +186,19 @@ class GitHubSourceAccessLifecycleService(
 		accessChecks.fence(scope.workspaceId, scope.scopeId, now)
 	}
 
-	private fun connections(installationId: Long): List<GitHubConnectionScope> = jdbcTemplate.query(
+	private fun connections(installationId: Long): List<GitHubConnectionScope> = sqlExecutor.query(
 		"""
 		select workspace_id, id
 		from connections
 		where provider = 'GITHUB' and external_connection_key = ?
 		order by workspace_id, id
 		""".trimIndent(),
-		{ rs, _ -> GitHubConnectionScope(rs.getObject(1, UUID::class.java), rs.getObject(2, UUID::class.java)) },
+		{ rs, _ ->
+			GitHubConnectionScope(
+				requireNotNull(rs.getObject(1, UUID::class.java)),
+				requireNotNull(rs.getObject(2, UUID::class.java)),
+			)
+		},
 		installationId.toString(),
 	)
 
@@ -204,7 +209,7 @@ class GitHubSourceAccessLifecycleService(
 		} else {
 			arrayOf<Any>(workspaceId, connectionId, repositoryId.toString())
 		}
-		return jdbcTemplate.query(
+		return sqlExecutor.query(
 			"""
 			select sc.id, b.id, c.id, sc.status, sc.status_reason, sc.workspace_id
 			from source_scopes sc
@@ -217,11 +222,11 @@ class GitHubSourceAccessLifecycleService(
 			""".trimIndent(),
 			{ rs, _ ->
 				GitHubSourceScope(
-					workspaceId = rs.getObject(6, UUID::class.java),
-					scopeId = rs.getObject(1, UUID::class.java),
-					bindingId = rs.getObject(2, UUID::class.java),
-					connectionId = rs.getObject(3, UUID::class.java),
-					scopeStatus = rs.getString(4),
+					workspaceId = requireNotNull(rs.getObject(6, UUID::class.java)),
+					scopeId = requireNotNull(rs.getObject(1, UUID::class.java)),
+					bindingId = requireNotNull(rs.getObject(2, UUID::class.java)),
+					connectionId = requireNotNull(rs.getObject(3, UUID::class.java)),
+					scopeStatus = requireNotNull(rs.getString(4)),
 					scopeReason = rs.getString(5),
 				)
 			},

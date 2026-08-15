@@ -44,6 +44,9 @@ jobs:
       - name: Test API
         run: just test-api
 
+      - name: Verify jOOQ generation drift
+        run: just verify-jooq
+
       - name: Build API
         run: just build-api
 

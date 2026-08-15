@@ -3,6 +3,7 @@ package com.plot.api.auth
 import com.plot.api.common.ApiException
 import com.plot.api.common.UuidGenerator
 import com.plot.api.entitlement.TrialPolicy
+import com.plot.api.persistence.JooqTransactionExecutor
 import com.plot.api.workspace.User
 import com.plot.api.workspace.UserRepository
 import com.plot.api.workspace.Workspace
@@ -15,8 +16,6 @@ import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.http.HttpStatus
 import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.stereotype.Service
-import org.springframework.transaction.support.TransactionTemplate
-import org.springframework.transaction.PlatformTransactionManager
 
 data class BootstrapAccountResponse(
 	val userId: UUID,
@@ -31,7 +30,7 @@ class AccountBootstrapService(
 	private val memberRepository: WorkspaceMemberRepository,
 	private val uuidGenerator: UuidGenerator,
 	private val authProperties: PlotAuthProperties,
-	private val transactionManager: PlatformTransactionManager,
+	private val transactionExecutor: JooqTransactionExecutor,
 ) {
 	fun bootstrap(jwt: Jwt): BootstrapAccountResponse {
 		val subject = jwt.subject?.takeIf { it.isNotBlank() } ?: throw unauthorized()
@@ -53,8 +52,8 @@ class AccountBootstrapService(
 		val workspaceId = uuidGenerator.next()
 		val memberId = uuidGenerator.next()
 		return try {
-			TransactionTemplate(transactionManager).execute {
-				val user = userRepository.saveAndFlush(User(
+			transactionExecutor.execute {
+				val user = userRepository.save(User(
 					id = userId,
 					email = email,
 					displayName = displayName,
@@ -64,7 +63,7 @@ class AccountBootstrapService(
 					createdAt = now,
 					updatedAt = now,
 				))
-				workspaceRepository.saveAndFlush(Workspace(
+				workspaceRepository.save(Workspace(
 					id = workspaceId,
 					name = "Personal",
 					slug = "personal-${userId.toString().take(8)}",

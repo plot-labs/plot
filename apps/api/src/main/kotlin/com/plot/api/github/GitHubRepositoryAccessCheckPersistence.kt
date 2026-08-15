@@ -1,14 +1,15 @@
 package com.plot.api.github
 
-import java.sql.ResultSet
 import java.sql.Timestamp
 import java.time.Duration
 import java.time.Instant
+import java.time.OffsetDateTime
 import java.util.UUID
+import org.jooq.DSLContext
+import org.jooq.Record
 import org.springframework.dao.DataAccessException
-import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Repository
-import org.springframework.transaction.support.TransactionTemplate
+import org.springframework.transaction.annotation.Transactional
 
 enum class GitHubAccessCheckTrigger {
 	LIFECYCLE_EVENT,
@@ -53,19 +54,17 @@ class GitHubAccessCheckClaimLostException : DataAccessException("GitHub access c
 
 @Repository
 class GitHubRepositoryAccessCheckPersistence(
-	private val jdbcTemplate: JdbcTemplate,
-	private val transactionTemplate: TransactionTemplate,
+	private val dsl: DSLContext,
 ) {
-	fun find(workspaceId: UUID, sourceScopeId: UUID): GitHubRepositoryAccessCheckRecord? = jdbcTemplate.query(
+	fun find(workspaceId: UUID, sourceScopeId: UUID): GitHubRepositoryAccessCheckRecord? = fetchRows(
 		"""
 		select $columns
 		from github_repository_access_checks ac
 		where ac.workspace_id = ? and ac.source_scope_id = ?
 		""".trimIndent(),
-		{ rs, _ -> rs.toAccessCheck() },
 		workspaceId,
 		sourceScopeId,
-	).firstOrNull()
+	).firstOrNull()?.toAccessCheck()
 
 	fun queue(
 		workspaceId: UUID,
@@ -74,7 +73,7 @@ class GitHubRepositoryAccessCheckPersistence(
 		trigger: GitHubAccessCheckTrigger,
 		now: Instant,
 	) {
-		jdbcTemplate.update(
+		execute(
 			"""
 			insert into github_repository_access_checks (
 			  id, workspace_id, connection_id, source_scope_id, trigger, status,
@@ -112,11 +111,12 @@ class GitHubRepositoryAccessCheckPersistence(
 		)
 	}
 
+	@Transactional
 	fun claimNext(
 		workerId: String,
 		now: Instant,
-	): GitHubRepositoryAccessCheckWorkItem? = transactionTemplate.execute {
-		val candidate = jdbcTemplate.query(
+	): GitHubRepositoryAccessCheckWorkItem? {
+		val candidate = fetchRows(
 			"""
 			select $columns,
 			       c.external_connection_key as installation_key,
@@ -131,10 +131,9 @@ class GitHubRepositoryAccessCheckPersistence(
 			for update of ac skip locked
 			limit 1
 			""".trimIndent(),
-			{ rs, _ -> rs.toAccessCheckCandidate() },
 			Timestamp.from(now),
-		).firstOrNull() ?: return@execute null
-		val updated = jdbcTemplate.update(
+		).firstOrNull()?.toAccessCheckCandidate() ?: return null
+		val updated = execute(
 			"""
 			update github_repository_access_checks
 			set status = 'CHECKING', attempt_count = attempt_count + 1,
@@ -149,8 +148,8 @@ class GitHubRepositoryAccessCheckPersistence(
 			candidate.check.id,
 			candidate.check.transitionVersion,
 		)
-		if (updated != 1) return@execute null
-		candidate.copy(
+		if (updated != 1) return null
+		return candidate.copy(
 			check = candidate.check.copy(
 				status = GitHubAccessCheckStatus.CHECKING,
 				attemptCount = candidate.check.attemptCount + 1,
@@ -169,7 +168,7 @@ class GitHubRepositoryAccessCheckPersistence(
 		maxAttempts: Int,
 	): Int {
 		require(maxAttempts > 0) { "Access check max attempts must be positive" }
-		return jdbcTemplate.update(
+		return execute(
 			"""
 			update github_repository_access_checks
 			set status = case when attempt_count >= ? then 'FAILED' else 'QUEUED' end,
@@ -195,7 +194,7 @@ class GitHubRepositoryAccessCheckPersistence(
 		errorCode: String,
 		now: Instant,
 	) {
-		val updated = jdbcTemplate.update(
+		val updated = execute(
 			"""
 			update github_repository_access_checks
 			set status = 'QUEUED', error_code = ?, next_attempt_at = ?,
@@ -220,7 +219,7 @@ class GitHubRepositoryAccessCheckPersistence(
 		errorCode: String,
 		now: Instant,
 	) {
-		val updated = jdbcTemplate.update(
+		val updated = execute(
 			"""
 			update github_repository_access_checks
 			set status = 'FAILED', error_code = ?, next_attempt_at = null,
@@ -239,91 +238,90 @@ class GitHubRepositoryAccessCheckPersistence(
 		if (updated != 1) throw GitHubAccessCheckClaimLostException()
 	}
 
+	@Transactional
 	fun completeVerified(
 		item: GitHubRepositoryAccessCheckWorkItem,
 		repository: GitHubRepository,
 		now: Instant,
 	) {
-		transactionTemplate.executeWithoutResult {
-			val checked = jdbcTemplate.update(
-				"""
-				update github_repository_access_checks
-				set status = 'VERIFIED', error_code = null, verified_at = ?,
-				    claimed_by = null, claimed_at = null, next_attempt_at = null,
-				    transition_version = transition_version + 1, updated_at = ?
-				where workspace_id = ? and id = ? and transition_version = ?
-				  and claimed_by = ? and status = 'CHECKING'
-				""".trimIndent(),
-				Timestamp.from(now),
-				Timestamp.from(now),
-				item.check.workspaceId,
-				item.check.id,
-				item.check.transitionVersion,
-				item.check.claimedBy,
-			)
-			if (checked != 1) throw GitHubAccessCheckClaimLostException()
+		val checked = execute(
+			"""
+			update github_repository_access_checks
+			set status = 'VERIFIED', error_code = null, verified_at = ?,
+			    claimed_by = null, claimed_at = null, next_attempt_at = null,
+			    transition_version = transition_version + 1, updated_at = ?
+			where workspace_id = ? and id = ? and transition_version = ?
+			  and claimed_by = ? and status = 'CHECKING'
+			""".trimIndent(),
+			Timestamp.from(now),
+			Timestamp.from(now),
+			item.check.workspaceId,
+			item.check.id,
+			item.check.transitionVersion,
+			item.check.claimedBy,
+		)
+		if (checked != 1) throw GitHubAccessCheckClaimLostException()
 
-			val namespaceId = jdbcTemplate.queryForObject(
-				"select source_namespace_id from source_scopes where workspace_id = ? and id = ?",
-				UUID::class.java,
-				item.check.workspaceId,
-				item.check.sourceScopeId,
-			) ?: throw GitHubAccessCheckClaimLostException()
-			jdbcTemplate.update(
-				"""
-				update connections
-				set status = 'ACTIVE', status_reason = null, status_changed_at = ?, updated_at = ?
-				where workspace_id = ? and id = ? and provider = 'GITHUB'
-				""".trimIndent(),
-				Timestamp.from(now),
-				Timestamp.from(now),
-				item.check.workspaceId,
-				item.check.connectionId,
-			)
-			jdbcTemplate.update(
-				"""
-				update source_namespaces
-				set status = 'ACTIVE', display_name = ?, updated_at = ?
-				where workspace_id = ? and id = ? and provider = 'GITHUB'
-				""".trimIndent(),
-				"${repository.owner}/${repository.name}",
-				Timestamp.from(now),
-				item.check.workspaceId,
-				namespaceId,
-			)
-			jdbcTemplate.update(
-				"""
-				update connection_namespace_bindings
-				set status = 'ACTIVE', valid_to = null, updated_at = ?
-				where workspace_id = ? and connection_id = ? and source_namespace_id = ?
-				""".trimIndent(),
-				Timestamp.from(now),
-				item.check.workspaceId,
-				item.check.connectionId,
-				namespaceId,
-			)
-			jdbcTemplate.update(
-				"""
-				update source_scopes
-				set status = 'ACTIVE', status_reason = null, status_changed_at = ?,
-				    external_key = ?, display_name = ?, url = ?,
-				    metadata = jsonb_build_object('repositoryId', ?, 'defaultBranch', ?), updated_at = ?
-				where workspace_id = ? and id = ? and provider = 'GITHUB'
-				""".trimIndent(),
-				Timestamp.from(now),
-				"${repository.owner}/${repository.name}",
-				"${repository.owner}/${repository.name}",
-				repository.url,
-				repository.id,
-				repository.defaultBranch,
-				Timestamp.from(now),
-				item.check.workspaceId,
-				item.check.sourceScopeId,
-			)
-		}
+		val namespaceId = fetchRows(
+			"select source_namespace_id from source_scopes where workspace_id = ? and id = ?",
+			item.check.workspaceId,
+			item.check.sourceScopeId,
+		).firstOrNull()?.get("source_namespace_id", UUID::class.java)
+			?: throw GitHubAccessCheckClaimLostException()
+		execute(
+			"""
+			update connections
+			set status = 'ACTIVE', status_reason = null, status_changed_at = ?, updated_at = ?
+			where workspace_id = ? and id = ? and provider = 'GITHUB'
+			""".trimIndent(),
+			Timestamp.from(now),
+			Timestamp.from(now),
+			item.check.workspaceId,
+			item.check.connectionId,
+		)
+		execute(
+			"""
+			update source_namespaces
+			set status = 'ACTIVE', display_name = ?, updated_at = ?
+			where workspace_id = ? and id = ? and provider = 'GITHUB'
+			""".trimIndent(),
+			"${repository.owner}/${repository.name}",
+			Timestamp.from(now),
+			item.check.workspaceId,
+			namespaceId,
+		)
+		execute(
+			"""
+			update connection_namespace_bindings
+			set status = 'ACTIVE', valid_to = null, updated_at = ?
+			where workspace_id = ? and connection_id = ? and source_namespace_id = ?
+			""".trimIndent(),
+			Timestamp.from(now),
+			item.check.workspaceId,
+			item.check.connectionId,
+			namespaceId,
+		)
+		execute(
+			"""
+			update source_scopes
+			set status = 'ACTIVE', status_reason = null, status_changed_at = ?,
+			    external_key = ?, display_name = ?, url = ?,
+			    metadata = jsonb_build_object('repositoryId', ?, 'defaultBranch', ?), updated_at = ?
+			where workspace_id = ? and id = ? and provider = 'GITHUB'
+			""".trimIndent(),
+			Timestamp.from(now),
+			"${repository.owner}/${repository.name}",
+			"${repository.owner}/${repository.name}",
+			repository.url,
+			repository.id,
+			repository.defaultBranch,
+			Timestamp.from(now),
+			item.check.workspaceId,
+			item.check.sourceScopeId,
+		)
 	}
 
-	fun fence(workspaceId: UUID, sourceScopeId: UUID, now: Instant): Int = jdbcTemplate.update(
+	fun fence(workspaceId: UUID, sourceScopeId: UUID, now: Instant): Int = execute(
 		"""
 		update github_repository_access_checks
 		set status = 'FAILED', error_code = 'SOURCE_ACCESS_LOST',
@@ -335,34 +333,38 @@ class GitHubRepositoryAccessCheckPersistence(
 		Timestamp.from(now), workspaceId, sourceScopeId,
 	)
 
-	private fun ResultSet.toAccessCheckCandidate(): GitHubRepositoryAccessCheckWorkItem {
-		val externalKey = getString("external_key").orEmpty()
+	private fun Record.toAccessCheckCandidate(): GitHubRepositoryAccessCheckWorkItem {
+		val externalKey = get("external_key", String::class.java).orEmpty()
 		return GitHubRepositoryAccessCheckWorkItem(
 			check = toAccessCheck(),
-			installationId = getString("installation_key").toLongOrNull() ?: 0L,
-			repositoryId = getString("repository_key").toLongOrNull() ?: 0L,
+			installationId = get("installation_key", String::class.java).toLongOrNull() ?: 0L,
+			repositoryId = get("repository_key", String::class.java).toLongOrNull() ?: 0L,
 			owner = externalKey.substringBefore('/'),
 			repository = externalKey.substringAfter('/', ""),
 		)
 	}
 
-	private fun ResultSet.toAccessCheck() = GitHubRepositoryAccessCheckRecord(
-		id = getObject("id", UUID::class.java),
-		workspaceId = getObject("workspace_id", UUID::class.java),
-		connectionId = getObject("connection_id", UUID::class.java),
-		sourceScopeId = getObject("source_scope_id", UUID::class.java),
-		trigger = GitHubAccessCheckTrigger.valueOf(getString("trigger")),
-		status = GitHubAccessCheckStatus.valueOf(getString("status")),
-		attemptCount = getInt("attempt_count"),
-		transitionVersion = getLong("transition_version"),
-		claimedBy = getString("claimed_by"),
-		claimedAt = getTimestamp("claimed_at")?.toInstant(),
-		nextAttemptAt = getTimestamp("next_attempt_at")?.toInstant(),
-		errorCode = getString("error_code"),
-		verifiedAt = getTimestamp("verified_at")?.toInstant(),
-		createdAt = getTimestamp("created_at").toInstant(),
-		updatedAt = getTimestamp("updated_at").toInstant(),
+	private fun Record.toAccessCheck() = GitHubRepositoryAccessCheckRecord(
+		id = requireNotNull(get("id", UUID::class.java)),
+		workspaceId = requireNotNull(get("workspace_id", UUID::class.java)),
+		connectionId = requireNotNull(get("connection_id", UUID::class.java)),
+		sourceScopeId = requireNotNull(get("source_scope_id", UUID::class.java)),
+		trigger = GitHubAccessCheckTrigger.valueOf(requireNotNull(get("trigger", String::class.java))),
+		status = GitHubAccessCheckStatus.valueOf(requireNotNull(get("status", String::class.java))),
+		attemptCount = requireNotNull(get("attempt_count", Int::class.javaObjectType)),
+		transitionVersion = requireNotNull(get("transition_version", Long::class.javaObjectType)),
+		claimedBy = get("claimed_by", String::class.java),
+		claimedAt = get("claimed_at", OffsetDateTime::class.java)?.toInstant(),
+		nextAttemptAt = get("next_attempt_at", OffsetDateTime::class.java)?.toInstant(),
+		errorCode = get("error_code", String::class.java),
+		verifiedAt = get("verified_at", OffsetDateTime::class.java)?.toInstant(),
+		createdAt = requireNotNull(get("created_at", OffsetDateTime::class.java)).toInstant(),
+		updatedAt = requireNotNull(get("updated_at", OffsetDateTime::class.java)).toInstant(),
 	)
+
+	private fun fetchRows(sql: String, vararg bindings: Any?): List<Record> = dsl.fetch(sql, *bindings)
+
+	private fun execute(sql: String, vararg bindings: Any?): Int = dsl.execute(sql, *bindings)
 
 	private companion object {
 		const val columns = """
