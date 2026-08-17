@@ -1,0 +1,23 @@
+{
+  "id": "018fd000-0000-7000-8000-000000000020",
+  "externalRepositoryId": 42,
+  "owner": "acme",
+  "name": "plot",
+  "displayName": "acme/plot",
+  "url": "https://github.com/acme/plot",
+  "status": "ACTIVE",
+  "statusReason": null,
+  "accessCheckStatus": "VERIFIED",
+  "monitoring": {
+    "status": "ACTIVE",
+    "analysisStatus": "COMPLETED",
+    "releaseConvention": "SEMVER_V",
+    "tagPrefix": "v",
+    "sampleSource": "RELEASES",
+    "sampleSize": 3,
+    "sampleTruncated": false,
+    "attemptCount": 1,
+    "lastErrorCode": null,
+    "analyzedAt": "2026-08-16T12:00:00Z"
+  }
+}

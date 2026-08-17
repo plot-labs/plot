@@ -1,0 +1,39 @@
+{
+  "id": "018fd000-0000-7000-8000-000000000070",
+  "status": "READY",
+  "title": "Release note",
+  "variant": {
+    "id": "018fd000-0000-7000-8000-000000000060",
+    "status": "ACTIVE",
+    "revisionId": "018fd000-0000-7000-8000-000000000071",
+    "revisionNumber": 3,
+    "lexicalContent": { "root": { "children": [] } },
+    "sentences": [
+      {
+        "id": "018fd000-0000-7000-8000-000000000061",
+        "revisionId": "018fd000-0000-7000-8000-000000000071",
+        "revisionNumber": 3,
+        "orderIndex": 0,
+        "body": "Draft sentence",
+        "origin": "GENERATED",
+        "citations": [
+          {
+            "evidenceId": "018fd000-0000-7000-8000-000000000072",
+            "provider": "GITHUB",
+            "sourceLabel": "Release context",
+            "originalUrl": "https://github.com/acme/plot/pull/1"
+          }
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "evidenceId": "018fd000-0000-7000-8000-000000000072",
+        "provider": "GITHUB",
+        "sourceLabel": "Release context",
+        "originalUrl": "https://github.com/acme/plot/pull/1",
+        "statementIds": ["018fd000-0000-7000-8000-000000000061"]
+      }
+    ]
+  }
+}

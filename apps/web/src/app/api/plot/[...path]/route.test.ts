@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
 
 import { proxyPlotRequest, serverJwtPayload } from "./route";
 
@@ -299,4 +300,60 @@ describe("Plot same-origin proxy", () => {
     expect(response.status).toBe(404);
     expect(fetcher).not.toHaveBeenCalled();
   });
+  it("accepts every canonical contract route and forwards the declared transport", async () => {
+    const manifest = loadContractManifest();
+    for (const entry of manifest.cases) {
+      const routeUrl = new URL(entry.route, "http://web.test");
+      const path = routeUrl.pathname.split("/").filter(Boolean);
+      const body = entry.requestFixture ? JSON.stringify(readContractFixture(entry.requestFixture)) : undefined;
+      const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+        entry.errorStatus
+          ? Response.json(readContractFixture(entry.errorFixture!), { status: entry.errorStatus })
+          : Response.json(readContractFixture(entry.successFixture!), { status: entry.successStatus }),
+      );
+      const response = await proxyPlotRequest(
+        new Request(`http://web.test/api/plot${entry.route}`, {
+          method: entry.method,
+          headers: {
+            ...(entry.method === "GET" ? {} : { Origin: "http://web.test" }),
+            ...(body ? { "Content-Type": "application/json" } : {}),
+          },
+          body,
+        }),
+        path,
+        {
+          fetch: fetcher,
+          baseUrl: "http://127.0.0.1:8080",
+          getSession: async () => ({ user: { email: "member@example.com" } }),
+          getServerJwt: async () => "server-issued-jwt",
+        },
+      );
+
+      expect(response.status).toBe(entry.errorStatus ?? entry.successStatus);
+      expect(fetcher).toHaveBeenCalledOnce();
+      expect(String(fetcher.mock.calls[0]?.[0])).toBe(`http://127.0.0.1:8080/api${entry.route}`);
+      expect(fetcher.mock.calls[0]?.[1]?.method).toBe(entry.method);
+    }
+  });
+
 });
+type ProxyContractCase = {
+  route: string;
+  method: string;
+  successStatus?: number;
+  errorStatus?: number;
+  requestFixture: string | null;
+  successFixture: string | null;
+  errorFixture: string | null;
+};
+
+type ProxyContractManifest = { cases: ProxyContractCase[] };
+const contractRoot = new URL("../../../../../../../contracts/plot-api/v1/", import.meta.url);
+
+function loadContractManifest(): ProxyContractManifest {
+  return JSON.parse(readFileSync(new URL("manifest.json", contractRoot), "utf8")) as ProxyContractManifest;
+}
+
+function readContractFixture(path: string): unknown {
+  return JSON.parse(readFileSync(new URL(path, contractRoot), "utf8")) as unknown;
+}

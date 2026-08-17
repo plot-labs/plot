@@ -26,12 +26,17 @@ polar-listen:
 test-api:
     cd apps/api && ./gradlew test
 
+# Test the browser API client contract
+test-api-client:
+    pnpm --filter @plot/api-client test
+
+
 # Test the Next.js app
 test-web:
     pnpm --filter @plot/web test
 
 # Run all tests
-test: test-api test-web
+test: test-api test-api-client test-web
     @echo "Tests complete"
 
 # Lint the Next.js app

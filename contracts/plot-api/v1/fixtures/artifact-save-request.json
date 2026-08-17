@@ -1,0 +1,11 @@
+{
+  "expectedRevisionNumber": 3,
+  "lexicalContent": { "root": { "children": [] } },
+  "statements": [
+    {
+      "id": "018fd000-0000-7000-8000-000000000061",
+      "orderIndex": 0,
+      "body": "Draft sentence"
+    }
+  ]
+}

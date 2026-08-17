@@ -1,0 +1,10 @@
+{
+  "error": "EXPORT_CONFIRMATION_REQUIRED",
+  "message": "Confirm unresolved export warnings before continuing",
+  "details": {
+    "warnings": [
+      { "key": "warning-1", "sentenceNumber": 1, "excerpt": "Draft sentence" }
+    ]
+  },
+  "resourceId": "018fd000-0000-7000-8000-000000000060"
+}
