@@ -41,9 +41,6 @@ export async function POST(request: Request) {
     email: payload.email,
     firstName: role,
     unsubscribed: false,
-    properties: {
-      pain_channel: payload.painChannel,
-    },
     ...(segmentId ? { segments: [{ id: segmentId }] } : {}),
   });
 
