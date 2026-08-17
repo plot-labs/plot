@@ -25,9 +25,18 @@ open class JooqSqlExecutor(
 ) {
 	private val exceptionTranslator = SQLStateSQLExceptionTranslator()
 
+	open fun <T> executeTyped(action: (DSLContext) -> T): T = withExceptionTranslation {
+		action(dsl)
+	}
+
+	open fun <T> executeTyped(context: DSLContext, action: (DSLContext) -> T): T = withExceptionTranslation {
+		action(context)
+	}
+
 	open fun update(sql: String, vararg bindings: Any?): Int = withExceptionTranslation {
 		dsl.execute(sql, *bindings)
 	}
+
 
 	open fun <T> query(
 		sql: String,

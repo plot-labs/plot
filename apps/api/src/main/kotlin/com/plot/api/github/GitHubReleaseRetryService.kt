@@ -20,7 +20,7 @@ class DefaultGitHubReleaseRetryDispatcher(
 
 @Service
 class GitHubReleaseRetryService(
-	private val persistence: GitHubReleasePersistence,
+	private val leasePersistence: GitHubReleaseLeaseStore,
 	private val dispatcher: GitHubReleaseRetryDispatcher,
 ) {
 	@Transactional
@@ -29,7 +29,7 @@ class GitHubReleaseRetryService(
 		workspaceId: UUID,
 		transitionVersion: Long,
 	): GitHubReleaseRetryResult {
-		val result = persistence.retry(requestId, workspaceId, transitionVersion)
+		val result = leasePersistence.retry(requestId, workspaceId, transitionVersion)
 		TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
 			override fun afterCommit() {
 				dispatcher.dispatch()

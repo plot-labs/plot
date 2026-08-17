@@ -3,7 +3,7 @@ package com.plot.api.entitlement
 import com.plot.api.TestcontainersConfiguration
 import com.plot.api.common.ApiException
 import com.plot.api.dev.DevContext
-import com.plot.api.artifact.workflow.ArtifactWorkflowPersistence
+import com.plot.api.artifact.workflow.ArtifactWorkflowAdmissionPersistence
 import com.plot.api.artifact.workflow.ArtifactWorkflowRunReservation
 import com.plot.api.artifact.workflow.ArtifactWorkflowRunStatus
 import com.plot.api.artifact.workflow.ArtifactWorkflowState
@@ -36,7 +36,7 @@ class WorkspaceEntitlementApiIntegrationTest {
 	@Autowired private lateinit var mockMvc: MockMvc
 	@Autowired private lateinit var jdbcTemplate: JdbcTemplate
 	@Autowired private lateinit var devContext: DevContext
-	@Autowired private lateinit var persistence: ArtifactWorkflowPersistence
+	@Autowired private lateinit var persistence: ArtifactWorkflowAdmissionPersistence
 
 	@BeforeEach
 	@AfterEach

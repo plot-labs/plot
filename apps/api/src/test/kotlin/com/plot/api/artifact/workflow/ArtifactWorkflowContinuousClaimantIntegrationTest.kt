@@ -28,7 +28,7 @@ import org.springframework.test.context.TestPropertySource
 )
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class ArtifactWorkflowContinuousClaimantIntegrationTest {
-	@Autowired private lateinit var persistence: ArtifactWorkflowPersistence
+	@Autowired private lateinit var persistence: ArtifactWorkflowAdmissionPersistence
 	@Autowired private lateinit var workflow: ArtifactWorkflowService
 	@Autowired private lateinit var jdbcTemplate: JdbcTemplate
 	@Autowired private lateinit var devContext: DevContext

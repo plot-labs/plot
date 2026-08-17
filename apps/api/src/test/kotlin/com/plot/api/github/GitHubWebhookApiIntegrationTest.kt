@@ -770,7 +770,7 @@ class GitHubWebhookApiIntegrationTest {
 
 		@Bean
 		@Primary
-		fun failingReleasePersistence(delegate: JdbcGitHubReleasePersistence) = FailingReleasePersistence(delegate)
+		fun failingReleasePersistence(delegate: GitHubWebhookDeliveryPersistence) = FailingReleasePersistence(delegate)
 	}
 
 	private class ChunkedWebhookRequest(body: ByteArray) : MockHttpServletRequest("POST", "/api/github/webhook") {
@@ -809,8 +809,8 @@ class RecordingReleaseDispatcher : GitHubReleaseDraftDispatcher {
 }
 
 class FailingReleasePersistence(
-	private val delegate: GitHubReleasePersistence,
-) : GitHubReleasePersistence by delegate {
+	private val delegate: GitHubWebhookDeliveryStore,
+) : GitHubWebhookDeliveryStore by delegate {
 	val failQueuedMark = AtomicBoolean()
 
 	override fun markDelivery(id: UUID, disposition: GitHubWebhookDisposition, errorCode: String?) {

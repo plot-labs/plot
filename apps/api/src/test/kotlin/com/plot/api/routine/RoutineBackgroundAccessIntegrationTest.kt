@@ -69,6 +69,7 @@ class RoutineBackgroundAccessIntegrationTest {
 	@Autowired private lateinit var routinePersistence: RoutinePersistence
 	@Autowired private lateinit var agentPersistence: RoutineAgentPersistence
 	@Autowired private lateinit var worker: RoutineWorker
+	@Autowired private lateinit var agentRunAdmissionPersistence: AgentRunAdmissionPersistence
 	@Autowired private lateinit var githubClient: RoutineRefreshGitHubClient
 	@Autowired private lateinit var writingBlockRepository: WritingBlockRepository
 	@Autowired private lateinit var evidenceBudget: RoutineEvidenceBudget
@@ -210,6 +211,7 @@ class RoutineBackgroundAccessIntegrationTest {
 	private fun newWorker(workerId: String) = RoutineWorker(
 		routinePersistence,
 		agentPersistence,
+		agentRunAdmissionPersistence,
 		writingBlockRepository,
 		evidenceBudget,
 		transactionExecutor,

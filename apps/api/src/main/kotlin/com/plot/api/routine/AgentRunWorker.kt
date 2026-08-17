@@ -27,7 +27,8 @@ import tools.jackson.databind.ObjectMapper
 
 @Component
 class AgentRunWorker(
-	private val persistence: RoutineAgentPersistence,
+	private val queryPersistence: AgentRunQueryPersistence,
+	private val executionPersistence: AgentRunExecutionPersistence,
 	private val decisionGateway: AgentDecisionGateway,
 	private val tools: ReadOnlyAgentTools,
 	private val artifactWorkflowRunService: ArtifactWorkflowRunService,
@@ -47,12 +48,12 @@ class AgentRunWorker(
 	fun processOne(): Boolean {
 		if (!properties.workersEnabled) return false
 		val claimAt = clock.instant()
-		val claim = persistence.claimNextAgentRun(
+		val claim = executionPersistence.claimNextAgentRun(
 			workerId = workerId,
 			now = claimAt,
 			staleBefore = claimAt.minus(properties.claimTimeout),
 		) ?: return false
-		val origin = persistence.findAgentRun(claim.workspaceId, claim.agentRunId)?.origin?.name ?: "UNKNOWN"
+		val origin = queryPersistence.findAgentRun(claim.workspaceId, claim.agentRunId)?.origin?.name ?: "UNKNOWN"
 		val observation = Observation.start("plot.agent.attempt", observationRegistry)
 			.lowCardinalityKeyValue("plot.operation", "agent")
 			.lowCardinalityKeyValue("plot.agent_origin", origin)
@@ -67,36 +68,36 @@ class AgentRunWorker(
 			outcome = "FAILED"
 			val now = clock.instant()
 			if (failure.recoverable) {
-				persistence.scheduleAgentRetry(
+				executionPersistence.scheduleAgentRetry(
 					claim,
 					failure.code.safeCode("AGENT_PROVIDER_UNAVAILABLE"),
-					now.plus(retryDelay(persistence.findAgentRun(claim.workspaceId, claim.agentRunId)?.attemptCount ?: 0)),
+					now.plus(retryDelay(queryPersistence.findAgentRun(claim.workspaceId, claim.agentRunId)?.attemptCount ?: 0)),
 					now,
 				)
 			} else {
-				persistence.failAgentRun(claim, failure.code.safeCode("AGENT_MODEL_FAILED"), now)
+				executionPersistence.failAgentRun(claim, failure.code.safeCode("AGENT_MODEL_FAILED"), now)
 			}
 		} catch (failure: AgentRunBudgetExceededException) {
 			outcome = "FAILED"
-			persistence.failAgentRun(claim, failure.safeCode, clock.instant())
+			executionPersistence.failAgentRun(claim, failure.safeCode, clock.instant())
 		} catch (failure: AgentToolAccessException) {
 			outcome = "FAILED"
-			persistence.failAgentRun(claim, failure.safeCode, clock.instant())
+			executionPersistence.failAgentRun(claim, failure.safeCode, clock.instant())
 		} catch (failure: ApiException) {
 			outcome = "FAILED"
-			persistence.failAgentRun(claim, backgroundAccessCode(failure), clock.instant())
+			executionPersistence.failAgentRun(claim, backgroundAccessCode(failure), clock.instant())
 		} catch (_: ArtifactWorkflowIdempotencyConflictException) {
 			outcome = "FAILED"
-			persistence.failAgentRun(claim, "AGENT_HANDOFF_CONFLICT", clock.instant())
+			executionPersistence.failAgentRun(claim, "AGENT_HANDOFF_CONFLICT", clock.instant())
 		} catch (_: IllegalArgumentException) {
 			outcome = "FAILED"
-			persistence.failAgentRun(claim, "AGENT_INVALID_DECISION", clock.instant())
+			executionPersistence.failAgentRun(claim, "AGENT_INVALID_DECISION", clock.instant())
 		} catch (failure: RuntimeException) {
 			outcome = "FAILED"
 			// Unknown infrastructure outcomes retain the claim and become eligible
 			// only through bounded stale recovery; they are not misreported as terminal.
 			try {
-				persistence.recordAgentInfrastructureFailure(claim, clock.instant())
+				executionPersistence.recordAgentInfrastructureFailure(claim, clock.instant())
 			} catch (recordFailure: RuntimeException) {
 				failure.addSuppressed(recordFailure)
 			}
@@ -116,13 +117,13 @@ class AgentRunWorker(
 	}
 
 	private fun processClaim(claim: ClaimedAgentRun) {
-		val run = persistence.findAgentRun(claim.workspaceId, claim.agentRunId)
+		val run = queryPersistence.findAgentRun(claim.workspaceId, claim.agentRunId)
 			?: throw AgentRunClaimLostException()
 		val budget = frozenBudget(run)
 		if (run.startedAt != null && Duration.between(run.startedAt, clock.instant()) > Duration.ofMillis(budget.maxRunDurationMillis)) {
 			throw AgentRunBudgetExceededException("AGENT_DURATION_LIMIT")
 		}
-		val steps = persistence.listSteps(run.workspaceId, run.id)
+		val steps = queryPersistence.listSteps(run.workspaceId, run.id)
 		val linkedHandoff = steps.lastOrNull {
 			it.kind == AgentStepKind.ARTIFACT_HANDOFF &&
 				it.status == AgentStepStatus.SUCCEEDED &&
@@ -133,20 +134,20 @@ class AgentRunWorker(
 			return
 		}
 
-		val running = persistence.findRunningStep(run.workspaceId, run.id, run.currentStep)
+		val running = queryPersistence.findRunningStep(run.workspaceId, run.id, run.currentStep)
 		if (running != null) {
 			executeStep(claim, run, running, budget)
 			return
 		}
-		if (!persistence.allAgentSourcesActive(run.workspaceId, run.id)) {
+		if (!queryPersistence.allAgentSourcesActive(run.workspaceId, run.id)) {
 			throw AgentToolAccessException("SOURCE_NOT_READY")
 		}
 
 		workspaceAccessService.requireWritable(run.workspaceId)
-		val countedRun = persistence.beginModelDecision(claim, budget.maxModelCalls)
-		val inputs = persistence.listAgentRunInputs(run.workspaceId, run.id)
+		val countedRun = executionPersistence.beginModelDecision(claim, budget.maxModelCalls)
+		val inputs = queryPersistence.listAgentRunInputs(run.workspaceId, run.id)
 		val sources = tools.listAllowedSources(run.workspaceId, run.id).sources
-		if (sources.size != persistence.listAgentRunSources(run.workspaceId, run.id).size) {
+		if (sources.size != queryPersistence.listAgentRunSources(run.workspaceId, run.id).size) {
 			throw AgentToolAccessException("SOURCE_NOT_READY")
 		}
 		val decision = decisionGateway.decide(
@@ -170,7 +171,7 @@ class AgentRunWorker(
 			),
 		)
 		val arguments = validateDecision(decision, sources.map { it.id }.toSet(), inputs.map { it.id }.toSet())
-		val step = persistence.reserveStep(
+		val step = executionPersistence.reserveStep(
 			claim = claim,
 			request = AgentStepRequest(
 				agentRunId = run.id,
@@ -203,7 +204,7 @@ class AgentRunWorker(
 		when (arguments.action) {
 			AgentDecisionAction.LIST_ALLOWED_SOURCES -> {
 				val result = tools.listAllowedSources(run.workspaceId, run.id)
-				persistence.completeToolStep(
+				executionPersistence.completeToolStep(
 					claim = claim,
 					stepId = step.id,
 					resultJson = objectMapper.writeValueAsString(
@@ -225,7 +226,7 @@ class AgentRunWorker(
 					sourceScopeId,
 					requireNotNull(arguments.query),
 				)
-				persistence.completeToolStep(
+				executionPersistence.completeToolStep(
 					claim = claim,
 					stepId = step.id,
 					resultJson = objectMapper.writeValueAsString(
@@ -247,7 +248,7 @@ class AgentRunWorker(
 				val writingBlockId = requireNotNull(arguments.writingBlockId)
 				val result = tools.readWritingBlock(run.workspaceId, run.id, sourceScopeId, writingBlockId)
 				val adopted = requireNotNull(result.adoptedInput)
-				persistence.completeToolStep(
+				executionPersistence.completeToolStep(
 					claim = claim,
 					stepId = step.id,
 					resultJson = objectMapper.writeValueAsString(
@@ -268,7 +269,7 @@ class AgentRunWorker(
 			}
 
 			AgentDecisionAction.CREATE_ARTIFACT -> {
-				val allInputs = persistence.listAgentRunInputs(run.workspaceId, run.id).associateBy { it.id }
+				val allInputs = queryPersistence.listAgentRunInputs(run.workspaceId, run.id).associateBy { it.id }
 				val selected = arguments.selectedInputIds.map { id ->
 					allInputs[id] ?: throw IllegalArgumentException("Selected Agent input is unavailable")
 				}
@@ -284,7 +285,7 @@ class AgentRunWorker(
 				)
 				val artifactRun = artifactRunPersistence.findWorkflowStateByWorkflowRun(run.workspaceId, workflow.runId)
 					?: throw IllegalArgumentException("Artifact run admission was not persisted")
-				persistence.linkArtifactWorkflowStep(
+				executionPersistence.linkArtifactWorkflowStep(
 					claim = claim,
 					stepId = step.id,
 					artifactWorkflowRunId = workflow.runId,
@@ -308,10 +309,10 @@ class AgentRunWorker(
 			?: throw IllegalArgumentException("Linked artifact run is unavailable")
 		when {
 			state.materialized && state.status in setOf(ArtifactRunStatus.READY, ArtifactRunStatus.NEEDS_REVIEW) ->
-				persistence.succeedAgentRun(claim, clock.instant())
+				executionPersistence.succeedAgentRun(claim, clock.instant())
 			state.status == ArtifactRunStatus.FAILED ->
-				persistence.failAgentRun(claim, "AGENT_ARTIFACT_WORKFLOW_FAILED", clock.instant())
-			else -> persistence.releaseAgentClaim(claim, clock.instant().plus(properties.pollDelay), clock.instant())
+				executionPersistence.failAgentRun(claim, "AGENT_ARTIFACT_WORKFLOW_FAILED", clock.instant())
+			else -> executionPersistence.releaseAgentClaim(claim, clock.instant().plus(properties.pollDelay), clock.instant())
 		}
 	}
 

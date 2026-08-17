@@ -23,8 +23,9 @@ import org.springframework.test.context.TestPropertySource
 @SpringBootTest
 @Import(TestcontainersConfiguration::class)
 @TestPropertySource(properties = ["plot.dev-bootstrap.enabled=true"])
-class GitHubReleasePersistenceIntegrationTest {
-	@Autowired private lateinit var persistence: GitHubReleasePersistence
+class GitHubReleaseLifecycleIntegrationTest {
+	@Autowired private lateinit var leasePersistence: GitHubReleaseLeaseStore
+	@Autowired private lateinit var requestPersistence: GitHubReleaseRequestStore
 	@Autowired private lateinit var jdbcTemplate: JdbcTemplate
 	@Autowired private lateinit var devContext: DevContext
 
@@ -46,11 +47,11 @@ class GitHubReleasePersistenceIntegrationTest {
 	fun retryRejectsAStaleTransitionVersionWithoutOverwritingTheRequest() {
 		val requestId = insertRequest(status = "FAILED")
 
-		persistence.retry(requestId, devContext.devWorkspaceId, transitionVersion = 0)
+		leasePersistence.retry(requestId, devContext.devWorkspaceId, transitionVersion = 0)
 
 		assertEquals(ReleaseRow("QUEUED", 1, null), loadReleaseRow(requestId))
 		val rejection = assertFailsWith<RuntimeException> {
-			persistence.retry(requestId, devContext.devWorkspaceId, transitionVersion = 0)
+			leasePersistence.retry(requestId, devContext.devWorkspaceId, transitionVersion = 0)
 		}
 		assertEquals("GitHubReleaseRetryRejectedException", rejection::class.simpleName)
 		assertEquals(ReleaseRow("QUEUED", 1, null), loadReleaseRow(requestId))
@@ -64,7 +65,7 @@ class GitHubReleasePersistenceIntegrationTest {
 		markClaim(staleRequestId, transitionVersion = 4, heartbeatAt = now.minus(Duration.ofMinutes(10)))
 		markClaim(freshRequestId, transitionVersion = 9, heartbeatAt = now.minus(Duration.ofMinutes(1)))
 
-		assertEquals(1, persistence.recoverStaleClaims(now, Duration.ofMinutes(5)))
+		assertEquals(1, leasePersistence.recoverStaleClaims(now, Duration.ofMinutes(5)))
 		assertEquals(ReleaseRow("QUEUED", 5, null), loadReleaseRow(staleRequestId))
 		assertEquals(ReleaseRow("RESOLVING", 9, "worker"), loadReleaseRow(freshRequestId))
 	}
@@ -78,10 +79,10 @@ class GitHubReleasePersistenceIntegrationTest {
 			requestId,
 		)!!
 		val claim = assertNotNull(
-			persistence.claimNext("access-loss-worker", Instant.now(), Duration.ofMinutes(5)),
+			leasePersistence.claimNext("access-loss-worker", Instant.now(), Duration.ofMinutes(5)),
 		)
 
-		assertEquals(1, persistence.fenceSourceScope(devContext.devWorkspaceId, sourceScopeId, Instant.now()))
+		assertEquals(1, leasePersistence.fenceSourceScope(devContext.devWorkspaceId, sourceScopeId, Instant.now()))
 		assertEquals(ReleaseRow("FAILED", claim.transitionVersion + 1, null), loadReleaseRow(requestId))
 		assertEquals(
 			"SOURCE_ACCESS_LOST",
@@ -93,7 +94,7 @@ class GitHubReleasePersistenceIntegrationTest {
 		)
 
 		val failure = assertFailsWith<InvalidDataAccessApiUsageException> {
-			persistence.saveResolvedRange(
+			requestPersistence.saveResolvedRange(
 				requestId,
 				claim.transitionVersion,
 				"stale-base",
@@ -114,7 +115,7 @@ class GitHubReleasePersistenceIntegrationTest {
 			val claims = listOf("worker-a", "worker-b").map { workerId ->
 				executor.submit<GitHubReleaseDraftRequest?> {
 					start.await()
-					persistence.claimNext(workerId, now, Duration.ofMinutes(5))
+					leasePersistence.claimNext(workerId, now, Duration.ofMinutes(5))
 				}
 			}
 			start.countDown()
@@ -139,21 +140,21 @@ class GitHubReleasePersistenceIntegrationTest {
 		val requestId = insertRequest(status = "QUEUED")
 		val claimedAt = Instant.parse("2026-07-30T00:00:00Z")
 		val workerA = requireNotNull(
-			persistence.claimNext("worker-a", claimedAt, Duration.ofMinutes(2)),
+			leasePersistence.claimNext("worker-a", claimedAt, Duration.ofMinutes(2)),
 		)
 		jdbcTemplate.update(
 			"update github_release_draft_requests set heartbeat_at = ? where id = ?",
 			java.sql.Timestamp.from(claimedAt.minus(Duration.ofMinutes(10))),
 			requestId,
 		)
-		assertEquals(1, persistence.recoverStaleClaims(claimedAt, Duration.ofMinutes(2)))
+		assertEquals(1, leasePersistence.recoverStaleClaims(claimedAt, Duration.ofMinutes(2)))
 		val workerB = requireNotNull(
-			persistence.claimNext("worker-b", claimedAt, Duration.ofMinutes(2)),
+			leasePersistence.claimNext("worker-b", claimedAt, Duration.ofMinutes(2)),
 		)
 		val beforeLateCompletion = loadReleaseRow(requestId)
 
 		assertFailsWith<RuntimeException> {
-			persistence.saveResolvedRange(
+			requestPersistence.saveResolvedRange(
 				requestId = requestId,
 				transitionVersion = workerA.transitionVersion,
 				baseSha = "stale-base",
@@ -185,7 +186,7 @@ class GitHubReleasePersistenceIntegrationTest {
 			val claims = listOf("worker-a", "worker-b").map { workerId ->
 				executor.submit<GitHubReleaseDraftRequest?> {
 					start.await()
-					persistence.claimNext(workerId, now, Duration.ofMinutes(5))
+					leasePersistence.claimNext(workerId, now, Duration.ofMinutes(5))
 				}
 			}
 			start.countDown()
@@ -194,10 +195,10 @@ class GitHubReleasePersistenceIntegrationTest {
 			assertEquals(listOf(earlierRequestId), firstWave.mapNotNull { it?.id })
 			assertEquals(ReleaseRow("QUEUED", 0, null), loadReleaseRow(laterRequestId))
 
-			persistence.saveHeadAndFinishNeedsRange(earlierRequestId, transitionVersion = 1, headSha = "earlier-head")
-			val later = persistence.claimNext("worker-c", now, Duration.ofMinutes(5))
+			requestPersistence.saveHeadAndFinishNeedsRange(earlierRequestId, transitionVersion = 1, headSha = "earlier-head")
+			val later = leasePersistence.claimNext("worker-c", now, Duration.ofMinutes(5))
 			assertEquals(laterRequestId, later?.id)
-			persistence.saveHeadAndFinishNeedsRange(laterRequestId, transitionVersion = 1, headSha = "later-head")
+			requestPersistence.saveHeadAndFinishNeedsRange(laterRequestId, transitionVersion = 1, headSha = "later-head")
 		} finally {
 			executor.shutdownNow()
 		}

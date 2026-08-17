@@ -21,6 +21,7 @@ import tools.jackson.databind.ObjectMapper
 class RoutineWorker(
 	private val persistence: RoutinePersistence,
 	private val agentPersistence: RoutineAgentPersistence,
+	private val agentRunAdmissionPersistence: AgentRunAdmissionPersistence,
 	private val writingBlockRepository: WritingBlockRepository,
 	private val evidenceBudget: RoutineEvidenceBudget,
 	private val transactionExecutor: JooqTransactionExecutor,
@@ -189,7 +190,7 @@ class RoutineWorker(
 			}
 		}
 		val consumedThrough = selected[seedInputs.lastIndex].activitySequence
-		agentPersistence.dispatch(
+		agentRunAdmissionPersistence.dispatch(
 			workspaceId = execution.workspaceId,
 			executionId = execution.id,
 			request = AgentRunDispatchRequest(
