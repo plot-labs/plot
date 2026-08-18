@@ -2,15 +2,34 @@ import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 
 
-import type { PlotApiClient } from "./index";
+import type { PlotApiClient, WorkspaceSummary } from "./index";
 import { PlotApiError, createPlotApiClient } from "./index";
 
+function workspaceSummary(overrides: Partial<WorkspaceSummary> = {}): WorkspaceSummary {
+  return {
+    id: "workspace-1",
+    name: "Personal",
+    slug: "personal",
+    status: "ACTIVE",
+    logoUrl: null,
+    plan: "founding",
+    entitlementStatus: "active",
+    accessMode: "full",
+    trialEndsAt: "2026-09-01T00:00:00Z",
+    role: "OWNER",
+    createdAt: "2026-08-01T00:00:00Z",
+    updatedAt: "2026-08-17T00:00:00Z",
+    ...overrides,
+  };
+}
 
 describe("Plot API client", () => {
   it("creates a workspace with workspace-independent authentication", async () => {
-    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json({
-      id: "workspace-2", name: "Product", slug: "workspace-12345678", status: "ACTIVE", logoUrl: null, role: "OWNER",
-    }));
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(workspaceSummary({
+      id: "workspace-2",
+      name: "Product",
+      slug: "workspace-12345678",
+    })));
     const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
 
     await client.createWorkspace({ name: "Product" });
@@ -24,8 +43,8 @@ describe("Plot API client", () => {
 
   it("reads and updates a workspace profile with workspace scoping", async () => {
     const fetcher = vi.fn<typeof fetch>()
-      .mockResolvedValueOnce(Response.json({ id: "workspace-1", name: "Personal", slug: "personal", status: "ACTIVE", logoUrl: null, role: "OWNER" }))
-      .mockResolvedValueOnce(Response.json({ id: "workspace-1", name: "Product", slug: "personal", status: "ACTIVE", logoUrl: "data:image/png;base64,abc", role: "OWNER" }));
+      .mockResolvedValueOnce(Response.json(workspaceSummary()))
+      .mockResolvedValueOnce(Response.json(workspaceSummary({ name: "Product", logoUrl: "data:image/png;base64,abc" })));
     const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
 
     await client.getWorkspace("workspace-1");
