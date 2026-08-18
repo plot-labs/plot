@@ -71,6 +71,12 @@ export function useChatArtifactDocument({ requestedArtifactId, selectedActivityA
     setSaveState(currentArtifactId && drafts[currentArtifactId] ? "dirty" : "saved");
   }, [currentArtifactId, drafts]);
 
+  const clearArtifactSelection = useCallback(() => {
+    setGeneratedArtifact(null);
+    setHistoricalArtifact(null);
+    setHistoricalPosition(null);
+  }, []);
+
   const resetHistory = useCallback(() => {
     setHistoricalArtifact(null);
     setHistoricalPosition(null);
@@ -111,6 +117,7 @@ export function useChatArtifactDocument({ requestedArtifactId, selectedActivityA
   return {
     artifactError,
     artifactLoading,
+    clearArtifactSelection,
     currentArtifact,
     currentArtifactId,
     documentKey,

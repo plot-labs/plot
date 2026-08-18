@@ -178,7 +178,7 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
           id="chat-composer"
           key={references.map((reference) => reference.id).join(":") || "no-references"}
           placeholder="Ask Plot to create another source-backed artifact..."
-          onSubmit={(message, ids) => void agent.submitMessage(message, ids)}
+          onSubmit={(message, ids) => void agent.submitMessage(message, ids, document.clearArtifactSelection)}
           references={toComposerReferences(references)}
           busy={document.artifactLoading || agent.agentBusy || agent.activitiesLoading}
         />

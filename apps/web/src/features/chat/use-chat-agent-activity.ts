@@ -125,13 +125,14 @@ export function useChatAgentActivity({
     };
   }, [chatId, onAgentArtifact, requestedAgentId]);
 
-  async function submitMessage(message: string, referenceIds: string[]) {
+  async function submitMessage(message: string, referenceIds: string[], onRequestStart?: () => void) {
     const selected = selectReferences(references, referenceIds);
     const validationError = validateSourceSelection(references, selected, sourceError);
     if (validationError) {
       setAgentError(validationError);
       return;
     }
+    onRequestStart?.();
     agentAbortRef.current?.abort();
     const controller = new AbortController();
     agentAbortRef.current = controller;
