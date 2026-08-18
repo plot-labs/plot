@@ -7,7 +7,7 @@ const sidebarMocks = vi.hoisted(() => ({
   listSessions: vi.fn(),
   listGitHubConnections: vi.fn(),
   listGitHubRepositories: vi.fn(),
-  getGitHubReleaseActivity: vi.fn(),
+  listRoutines: vi.fn(),
   createWorkspace: vi.fn(),
   routerReplace: vi.fn(),
   pathname: "/settings/integrations",
@@ -29,7 +29,7 @@ vi.mock("@/lib/api-client", () => ({
     listSessions: sidebarMocks.listSessions,
     listGitHubConnections: sidebarMocks.listGitHubConnections,
     listGitHubRepositories: sidebarMocks.listGitHubRepositories,
-    getGitHubReleaseActivity: sidebarMocks.getGitHubReleaseActivity,
+    listRoutines: sidebarMocks.listRoutines,
     createWorkspace: sidebarMocks.createWorkspace,
   },
 }));
@@ -47,8 +47,8 @@ describe("Settings navigation", () => {
     sidebarMocks.listGitHubConnections.mockResolvedValue([]);
     sidebarMocks.listGitHubRepositories.mockReset();
     sidebarMocks.listGitHubRepositories.mockResolvedValue([]);
-    sidebarMocks.getGitHubReleaseActivity.mockReset();
-    sidebarMocks.getGitHubReleaseActivity.mockResolvedValue(null);
+    sidebarMocks.listRoutines.mockReset();
+    sidebarMocks.listRoutines.mockResolvedValue([]);
     sidebarMocks.createWorkspace.mockReset();
     sidebarMocks.routerReplace.mockReset();
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({
@@ -70,24 +70,48 @@ describe("Settings navigation", () => {
     expect(await screen.findByRole("button", { name: /Personal/ })).toBeVisible();
   });
 
-  it("does not open onboarding from completed checklist steps", async () => {
+  it("opens completed and pending onboarding steps", async () => {
     sidebarMocks.pathname = "/artifacts";
     sidebarMocks.listGitHubConnections.mockResolvedValue([{
       id: "connection-1",
       status: "ACTIVE",
-      repositories: [{ id: "repository-1", status: "ACTIVE", externalRepositoryId: 1, displayName: "plot/app" }],
+      repositories: [{ id: "repository-1", status: "ACTIVE", externalRepositoryId: 1, displayName: "plot/app", visibility: "PRIVATE" }],
     }]);
     render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
 
-    const connected = await screen.findByRole("button", { name: "Connect GitHub" });
-    expect(connected).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Select repositories" })).toBeDisabled();
-    const pending = screen.getByRole("button", { name: "Create first changelog" });
+    sidebarMocks.listGitHubRepositories.mockResolvedValue([{ id: "repository-1", status: "ACTIVE", externalRepositoryId: 1, displayName: "plot/app", visibility: "PRIVATE" }]);
+    const connected = await screen.findByRole("button", { name: "Install GitHub App" });
+    const pending = screen.getByRole("button", { name: "Create first Routine" });
+    expect(connected).toBeEnabled();
     expect(pending).toBeEnabled();
     fireEvent.click(connected);
-    expect(screen.queryByRole("dialog", { name: "Set up Plot" })).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Set up Plot" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Install the Plot GitHub App" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Close onboarding" }));
     fireEvent.click(pending);
     expect(screen.getByRole("dialog", { name: "Set up Plot" })).toBeInTheDocument();
+    expect(await screen.findByLabelText("Private repository")).toBeInTheDocument();
+  });
+
+  it("closes onboarding before navigating to routines", async () => {
+    sidebarMocks.pathname = "/artifacts";
+    sidebarMocks.listGitHubConnections.mockResolvedValue([{ id: "connection-1", status: "ACTIVE", repositories: [] }]);
+    sidebarMocks.listRoutines.mockResolvedValue([{
+      id: "routine-1",
+      name: "Release changelog",
+      sourceLabel: "plot/app",
+      latestExecution: null,
+    }]);
+    render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Create first Routine" }));
+    expect(screen.getByRole("progressbar", { name: "Step 2 of 3" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Your first Routine" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Close onboarding" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review first result" }));
+    expect(screen.getByRole("dialog", { name: "Set up Plot" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("link", { name: "View Routines" }));
+    expect(screen.queryByRole("dialog", { name: "Set up Plot" })).not.toBeInTheDocument();
   });
 
   it("announces the workspace selected after account loading", async () => {
