@@ -5,7 +5,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const sidebarMocks = vi.hoisted(() => ({
   listSessions: vi.fn(),
+  listGitHubConnections: vi.fn(),
+  listGitHubRepositories: vi.fn(),
+  getGitHubReleaseActivity: vi.fn(),
   createWorkspace: vi.fn(),
+  routerReplace: vi.fn(),
   pathname: "/settings/integrations",
   search: "",
 }));
@@ -13,13 +17,21 @@ const sidebarMocks = vi.hoisted(() => ({
 vi.mock("next/navigation", () => ({
   usePathname: () => sidebarMocks.pathname,
   useSearchParams: () => new URLSearchParams(sidebarMocks.search),
+  useRouter: () => ({ replace: sidebarMocks.routerReplace }),
 }));
 
 vi.mock("@/lib/api-client", () => ({
+  getSelectedWorkspaceId: () => window.localStorage.getItem("plot.workspaceId"),
   getProductShellData: () => ({
     workspace: { id: "workspace-1", name: "Personal" },
   }),
-  plotApiClient: { listSessions: sidebarMocks.listSessions, createWorkspace: sidebarMocks.createWorkspace },
+  plotApiClient: {
+    listSessions: sidebarMocks.listSessions,
+    listGitHubConnections: sidebarMocks.listGitHubConnections,
+    listGitHubRepositories: sidebarMocks.listGitHubRepositories,
+    getGitHubReleaseActivity: sidebarMocks.getGitHubReleaseActivity,
+    createWorkspace: sidebarMocks.createWorkspace,
+  },
 }));
 
 import { ProductSidebar } from "./product-sidebar";
@@ -31,7 +43,14 @@ describe("Settings navigation", () => {
     window.localStorage.clear();
     sidebarMocks.listSessions.mockReset();
     sidebarMocks.listSessions.mockResolvedValue([]);
+    sidebarMocks.listGitHubConnections.mockReset();
+    sidebarMocks.listGitHubConnections.mockResolvedValue([]);
+    sidebarMocks.listGitHubRepositories.mockReset();
+    sidebarMocks.listGitHubRepositories.mockResolvedValue([]);
+    sidebarMocks.getGitHubReleaseActivity.mockReset();
+    sidebarMocks.getGitHubReleaseActivity.mockResolvedValue(null);
     sidebarMocks.createWorkspace.mockReset();
+    sidebarMocks.routerReplace.mockReset();
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({
       user: { id: "user-1", email: "owner@example.com", displayName: "Owner" },
       workspaces: [{ id: "workspace-1", name: "Personal", slug: "personal", role: "OWNER" }],
@@ -49,6 +68,26 @@ describe("Settings navigation", () => {
     expect(within(productNavigation).getByRole("link", { name: "Artifacts" })).toHaveAttribute("aria-current", "page");
     expect(screen.queryByRole("navigation", { name: "Settings navigation" })).not.toBeInTheDocument();
     expect(await screen.findByRole("button", { name: /Personal/ })).toBeVisible();
+  });
+
+  it("does not open onboarding from completed checklist steps", async () => {
+    sidebarMocks.pathname = "/artifacts";
+    sidebarMocks.listGitHubConnections.mockResolvedValue([{
+      id: "connection-1",
+      status: "ACTIVE",
+      repositories: [{ id: "repository-1", status: "ACTIVE", externalRepositoryId: 1, displayName: "plot/app" }],
+    }]);
+    render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
+
+    const connected = await screen.findByRole("button", { name: "Connect GitHub" });
+    expect(connected).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Select repositories" })).toBeDisabled();
+    const pending = screen.getByRole("button", { name: "Create first changelog" });
+    expect(pending).toBeEnabled();
+    fireEvent.click(connected);
+    expect(screen.queryByRole("dialog", { name: "Set up Plot" })).not.toBeInTheDocument();
+    fireEvent.click(pending);
+    expect(screen.getByRole("dialog", { name: "Set up Plot" })).toBeInTheDocument();
   });
 
   it("announces the workspace selected after account loading", async () => {
