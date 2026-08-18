@@ -4,7 +4,8 @@ import { MoreVerticalIcon, Settings02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { LogOut, Monitor, Moon, Sun, UserRound } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
+import type { Dispatch, SetStateAction } from "react";
 
 import type { ProductTheme } from "@/components/layout/product-shell";
 import type { SidebarAccount } from "@/components/layout/use-sidebar-workspace";
@@ -22,10 +23,21 @@ type ProfileMenuProps = {
   onThemeChange: (theme: ProductTheme) => void;
   account: SidebarAccount | null;
   currentWorkspaceName: string;
+  profileMenuOpen: boolean;
+  setProfileMenuOpen: Dispatch<SetStateAction<boolean>>;
+  onOpen: () => void;
 };
 
-export function ProfileMenu({ collapsed, theme, onThemeChange, account, currentWorkspaceName }: ProfileMenuProps) {
-  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+export function ProfileMenu({
+  collapsed,
+  theme,
+  onThemeChange,
+  account,
+  currentWorkspaceName,
+  profileMenuOpen,
+  setProfileMenuOpen,
+  onOpen,
+}: ProfileMenuProps) {
   const profileMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -117,7 +129,10 @@ export function ProfileMenu({ collapsed, theme, onThemeChange, account, currentW
 
       <button
         type="button"
-        onClick={() => setProfileMenuOpen((open) => !open)}
+        onClick={() => {
+          if (!profileMenuOpen) onOpen();
+          setProfileMenuOpen(!profileMenuOpen);
+        }}
         aria-expanded={profileMenuOpen}
         aria-haspopup="menu"
         className={cn(

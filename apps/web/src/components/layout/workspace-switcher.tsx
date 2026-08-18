@@ -20,6 +20,7 @@ type WorkspaceSwitcherProps = {
   workspaceItems: WorkspaceMenuItem[];
   workspaceMenuOpen: boolean;
   setWorkspaceMenuOpen: Dispatch<SetStateAction<boolean>>;
+  onOpen: () => void;
   selectWorkspace: (id: string) => void;
   creatingWorkspace: boolean;
   setCreatingWorkspace: Dispatch<SetStateAction<boolean>>;
@@ -41,6 +42,7 @@ export function WorkspaceSwitcher({
   workspaceItems,
   workspaceMenuOpen,
   setWorkspaceMenuOpen,
+  onOpen,
   selectWorkspace,
   creatingWorkspace,
   setCreatingWorkspace,
@@ -95,7 +97,10 @@ export function WorkspaceSwitcher({
 
         <button
           type="button"
-          onClick={() => setWorkspaceMenuOpen((open) => !open)}
+          onClick={() => {
+            if (!workspaceMenuOpen) onOpen();
+            setWorkspaceMenuOpen(!workspaceMenuOpen);
+          }}
           disabled={workspaceLoading}
           aria-label={workspaceLoading ? "Loading workspace" : currentWorkspaceName}
           aria-busy={workspaceLoading}

@@ -6,6 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { useState } from "react";
 
 import { ProfileMenu } from "@/components/layout/profile-menu";
 import { SidebarNavigation } from "@/components/layout/sidebar-navigation";
@@ -31,6 +32,7 @@ export function ProductSidebar({ collapsed = false, theme, onThemeChange, onTogg
   const settingsMode = pathname === "/settings" || pathname.startsWith("/settings/");
   const workspace = useSidebarWorkspace();
   const recentChats = useRecentChats({ settingsMode, selectedWorkspaceId: workspace.currentWorkspaceId });
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
 
   return (
     <>
@@ -73,6 +75,7 @@ export function ProductSidebar({ collapsed = false, theme, onThemeChange, onTogg
           workspaceItems={workspace.workspaceItems}
           workspaceMenuOpen={workspace.workspaceMenuOpen}
           setWorkspaceMenuOpen={workspace.setWorkspaceMenuOpen}
+          onOpen={() => setProfileMenuOpen(false)}
           selectWorkspace={workspace.selectWorkspace}
           creatingWorkspace={workspace.creatingWorkspace}
           setCreatingWorkspace={workspace.setCreatingWorkspace}
@@ -113,6 +116,9 @@ export function ProductSidebar({ collapsed = false, theme, onThemeChange, onTogg
           onThemeChange={onThemeChange}
           account={workspace.account}
           currentWorkspaceName={workspace.currentWorkspaceName}
+          profileMenuOpen={profileMenuOpen}
+          setProfileMenuOpen={setProfileMenuOpen}
+          onOpen={() => workspace.setWorkspaceMenuOpen(false)}
         />
       </aside>
     </>
