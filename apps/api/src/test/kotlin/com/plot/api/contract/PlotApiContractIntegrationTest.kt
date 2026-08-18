@@ -11,6 +11,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
 import org.springframework.context.annotation.Import
@@ -18,6 +19,8 @@ import org.springframework.core.io.ClassPathResource
 import org.springframework.test.context.TestPropertySource
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.get
+import org.springframework.web.bind.annotation.RequestMethod
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.ObjectMapper
 
@@ -30,6 +33,9 @@ class PlotApiContractIntegrationTest {
 	@Autowired private lateinit var objectMapper: ObjectMapper
 	@Autowired private lateinit var lexicalValidator: ArtifactLexicalDocumentValidator
 	@Autowired private lateinit var devContext: DevContext
+	@Autowired
+	@Qualifier("requestMappingHandlerMapping")
+	private lateinit var handlerMapping: RequestMappingHandlerMapping
 
 	@Test
 	fun `manifest and fixtures define every representative transport case`() {
@@ -69,6 +75,23 @@ class PlotApiContractIntegrationTest {
 	}
 
 	@Test
+	fun `manifest routes are registered by the backend`() {
+		val mappings = handlerMapping.handlerMethods.keys.flatMap { mapping ->
+			mapping.directPaths.map { path -> normalizeRoute(path) to mapping.methodsCondition.methods }
+		}
+		resource("manifest.json").path("cases").asArray().values().forEach { contractCase ->
+			val expectedRoute = normalizeRoute("/api${contractCase.path("routeTemplate").stringValue()}")
+			val expectedMethod = RequestMethod.valueOf(contractCase.path("method").stringValue())
+			assertTrue(
+				mappings.any { (route, methods) ->
+					route == expectedRoute && (methods.isEmpty() || expectedMethod in methods)
+				},
+				"${contractCase.path("id").stringValue()} must map $expectedMethod $expectedRoute",
+			)
+		}
+	}
+
+	@Test
 	fun `artifact save fixture passes server lexical validation`() {
 		val request = fixture("fixtures/artifact-save-request.json")
 		val statements = request.path("statements").asArray().values().map { statement ->
@@ -96,6 +119,8 @@ class PlotApiContractIntegrationTest {
 		assertEquals(expected.propertyNames().toSet(), actualTree.propertyNames().toSet())
 		assertEquals(devContext.devWorkspaceId.toString(), actualTree.path("id").stringValue())
 	}
+
+	private fun normalizeRoute(route: String): String = route.replace(Regex("""\{[^}]+}"""), "{}")
 
 	private fun resource(path: String): JsonNode = objectMapper.readTree(
 		ClassPathResource(path).inputStream.use { it.readBytes() },
