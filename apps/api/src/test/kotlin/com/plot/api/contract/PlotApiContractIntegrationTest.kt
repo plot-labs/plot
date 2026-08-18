@@ -1,7 +1,10 @@
 package com.plot.api.contract
 
 import com.plot.api.TestcontainersConfiguration
+import com.plot.api.artifact.ArtifactLexicalDocumentValidator
+import com.plot.api.artifact.NormalizedStatement
 import com.plot.api.dev.DevContext
+import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -25,6 +28,7 @@ import tools.jackson.databind.ObjectMapper
 class PlotApiContractIntegrationTest {
 	@Autowired private lateinit var mockMvc: MockMvc
 	@Autowired private lateinit var objectMapper: ObjectMapper
+	@Autowired private lateinit var lexicalValidator: ArtifactLexicalDocumentValidator
 	@Autowired private lateinit var devContext: DevContext
 
 	@Test
@@ -62,6 +66,23 @@ class PlotApiContractIntegrationTest {
 				assertTrue(contractCase.path("errorStatus").intValue() >= 400)
 			}
 		}
+	}
+
+	@Test
+	fun `artifact save fixture passes server lexical validation`() {
+		val request = fixture("fixtures/artifact-save-request.json")
+		val statements = request.path("statements").asArray().values().map { statement ->
+			NormalizedStatement(
+				UUID.fromString(statement.path("id").stringValue()),
+				statement.path("orderIndex").intValue(),
+				statement.path("body").stringValue(),
+			)
+		}
+		val sanitized = lexicalValidator.validateAndSanitizeLexicalContent(
+			request.path("lexicalContent"),
+			statements,
+		)
+		assertEquals(request.path("lexicalContent"), sanitized)
 	}
 
 	@Test
