@@ -8,7 +8,9 @@ import com.plot.api.ai.provider.ReviewerModelRequest
 import com.plot.api.ai.provider.RewriteModelRequest
 import com.plot.api.ai.provider.WriterModelRequest
 import com.plot.api.dev.DevContext
-import com.plot.api.artifact.workflow.ArtifactWorkflowPersistence
+import com.plot.api.artifact.workflow.ArtifactWorkflowAdmissionPersistence
+import com.plot.api.artifact.workflow.ArtifactWorkflowExecutionPersistence
+import com.plot.api.artifact.workflow.ArtifactWorkflowQueryPersistence
 import com.plot.api.artifact.workflow.ArtifactWorkflowRunReservation
 import com.plot.api.artifact.workflow.ArtifactWorkflowRunWorker
 import com.plot.api.artifact.workflow.ArtifactWorkflowService
@@ -49,7 +51,9 @@ import tools.jackson.databind.ObjectMapper
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class ArtifactApiIntegrationTest {
 	@Autowired private lateinit var mockMvc: MockMvc
-	@Autowired private lateinit var persistence: ArtifactWorkflowPersistence
+	@Autowired private lateinit var admissionPersistence: ArtifactWorkflowAdmissionPersistence
+	@Autowired private lateinit var executionPersistence: ArtifactWorkflowExecutionPersistence
+	@Autowired private lateinit var queryPersistence: ArtifactWorkflowQueryPersistence
 	@Autowired private lateinit var workflow: ArtifactWorkflowService
 	@Autowired private lateinit var jdbcTemplate: JdbcTemplate
 	@Autowired private lateinit var devContext: DevContext
@@ -713,12 +717,12 @@ class ArtifactApiIntegrationTest {
 			"Evidence body", "PRIVATE SNAPSHOT EXCERPT", sourceUrl, null, null, "hash", Instant.now(),
 		)
 		val state = workflow.start(runId, listOf(evidence), null)
-		persistence.createRun(ArtifactWorkflowRunReservation(
+		admissionPersistence.createRun(ArtifactWorkflowRunReservation(
 			devContext.devWorkspaceId, devContext.devUserId, null, "pack-${UUID.randomUUID()}", "fingerprint-${UUID.randomUUID()}",
 			state, "OPENAI", "scripted", "{\"maxModelCalls\":12,\"maxTotalTokens\":1000,\"maxRunDurationMillis\":60000}",
 		))
 		val gateway = PackGateway(evidence.id)
-		ArtifactWorkflowRunWorker(persistence, workflow, gateway, workerId = "artifact-test").drain()
+		ArtifactWorkflowRunWorker(executionPersistence, queryPersistence, workflow, gateway, workerId = "artifact-test").drain()
 		val row = jdbcTemplate.queryForMap(
 			"""
 			select cp.id pack_id, cv.id variant_id from content_packs cp join content_variants cv on cv.content_pack_id=cp.id

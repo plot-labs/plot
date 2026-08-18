@@ -9,17 +9,18 @@
 
 ## 현재 제품
 
-Plot은 현재 하나의 완결된 흐름을 지원합니다.
+Plot은 다음 여섯 제품 표면을 함께 제공합니다.
 
-```txt
-GitHub 저장소 하나 연결
-  -> 병합된 pull request 가져오기
-  -> Plot에 changelog 요청
-  -> draft 옆에서 citation 확인
-  -> 편집 후 Markdown 복사 또는 다운로드
-```
+- **Chat** — 출처를 기반으로 하는 대화형 AgentRun 작업
+- **Routines** — 예약 또는 수동으로 시작하는 AgentRun 작업
+- **Sources** — GitHub 연결, 저장소 범위, writing block
+- **Artifacts** — 편집·리비전·출처 인용이 가능한 문서와 Markdown export
+- **GitHub release automation** — release webhook, 신뢰 가능한 범위 계산, draft 생성
+- **Billing/entitlement** — 구독, trial, plan, workspace 접근 정책
 
-게시 여부와 게시된 내용은 Plot 밖에서 사용자가 직접 관리합니다.
+[시스템 아키텍처 개요](docs/architecture/system-overview.md)에서 요청 경계,
+실행 소유권, persistence 규칙, 검증 명령을 설명합니다. 게시 여부는 계속
+Plot 밖에서 사용자가 직접 관리합니다.
 
 ## 저장소
 

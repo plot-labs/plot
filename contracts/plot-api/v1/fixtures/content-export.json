@@ -1,0 +1,12 @@
+{
+  "exportId": "018fd000-0000-7000-8000-000000000080",
+  "artifactRevisionId": "018fd000-0000-7000-8000-000000000071",
+  "artifactRevisionNumber": 3,
+  "disposition": "DOWNLOAD",
+  "filename": "release-note.md",
+  "mediaType": "text/markdown;charset=UTF-8",
+  "text": "# Release note\n\nDraft sentence",
+  "unresolvedCount": 0,
+  "warningAcknowledged": true,
+  "includeSources": true
+}

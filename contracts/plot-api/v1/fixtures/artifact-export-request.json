@@ -1,0 +1,8 @@
+{
+  "expectedRevisionNumber": 3,
+  "includeSources": true,
+  "acknowledgeUnresolved": true,
+  "acknowledgedWarningKeys": ["warning-1"],
+  "acknowledgedRevisionIds": [],
+  "disposition": "DOWNLOAD"
+}

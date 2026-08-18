@@ -121,6 +121,12 @@ dependencyManagement {
 	}
 }
 
+sourceSets {
+	test {
+		resources.srcDir(file("../../contracts/plot-api/v1"))
+	}
+}
+
 kotlin {
 	sourceSets {
 		getByName("main").kotlin.srcDir("src/generated/kotlin")

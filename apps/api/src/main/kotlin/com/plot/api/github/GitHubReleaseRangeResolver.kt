@@ -29,7 +29,7 @@ interface GitHubReleaseRangeResolver {
 @Component
 class DefaultGitHubReleaseRangeResolver(
 	private val client: GitHubClient,
-	private val persistence: GitHubReleasePersistence,
+	private val requestPersistence: GitHubReleaseRequestStore,
 	private val properties: GitHubProperties,
 ) : GitHubReleaseRangeResolver {
 	override fun resolve(
@@ -46,7 +46,7 @@ class DefaultGitHubReleaseRangeResolver(
 		if (request.observedHeadSha != null && request.observedHeadSha != headSha) {
 			throw GitHubReleasePermanentException("GITHUB_TAG_MOVED")
 		}
-		val candidates = persistence.findPreviousBoundaries(
+		val candidates = requestPersistence.findPreviousBoundaries(
 			context.workspaceId,
 			context.sourceScopeId,
 			request.id,
@@ -82,7 +82,7 @@ class DefaultGitHubReleaseRangeResolver(
 				}
 			}
 		}
-		persistence.saveHeadAndFinishNeedsRange(
+		requestPersistence.saveHeadAndFinishNeedsRange(
 			request.id,
 			request.transitionVersion,
 			headSha,

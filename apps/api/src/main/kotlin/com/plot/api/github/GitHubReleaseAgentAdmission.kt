@@ -19,7 +19,7 @@ interface GitHubReleaseAgentAdmission {
 
 @Component
 class DefaultGitHubReleaseAgentAdmission(
-	private val persistence: GitHubReleasePersistence,
+	private val requestPersistence: GitHubReleaseRequestStore,
 	private val chatAgentAdmissionService: ChatAgentAdmissionService,
 ) : GitHubReleaseAgentAdmission {
 	@Transactional
@@ -32,7 +32,7 @@ class DefaultGitHubReleaseAgentAdmission(
 		idempotencyKey: String,
 	): AgentRunRecord {
 		val evidenceTransitionVersion = if (request.observationId == null) {
-			persistence.bindEvidence(request.id, transitionVersion, evidence)
+			requestPersistence.bindEvidence(request.id, transitionVersion, evidence)
 			transitionVersion + 1
 		} else transitionVersion
 		val agentRun = chatAgentAdmissionService.admitAutomated(
@@ -42,7 +42,7 @@ class DefaultGitHubReleaseAgentAdmission(
 			idempotencyKey = idempotencyKey,
 			chatTitle = "GitHub release ${request.tagName}",
 		)
-		persistence.linkAgentRun(request.id, evidenceTransitionVersion, evidence.observationId, agentRun.id)
+		requestPersistence.linkAgentRun(request.id, evidenceTransitionVersion, evidence.observationId, agentRun.id)
 		return agentRun
 	}
 }

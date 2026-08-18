@@ -35,7 +35,7 @@ interface GitHubReleaseLeaseFactory {
 
 @Component
 class DefaultGitHubReleaseLeaseFactory(
-	private val persistence: GitHubReleasePersistence,
+	private val leasePersistence: GitHubReleaseLeaseStore,
 	@Qualifier("githubReleaseHeartbeatExecutor")
 	private val heartbeatExecutor: ScheduledExecutorService,
 	private val properties: GitHubProperties,
@@ -46,7 +46,7 @@ class DefaultGitHubReleaseLeaseFactory(
 		workerId: String,
 	): GitHubReleaseLeaseHandle {
 		val lease = DefaultGitHubReleaseLease(
-			persistence = persistence,
+			leasePersistence = leasePersistence,
 			requestId = request.id,
 			initialTransitionVersion = request.transitionVersion,
 			workerId = workerId,
@@ -67,7 +67,7 @@ class DefaultGitHubReleaseLeaseFactory(
 }
 
 class DefaultGitHubReleaseLease(
-	private val persistence: GitHubReleasePersistence,
+	private val leasePersistence: GitHubReleaseLeaseStore,
 	private val requestId: java.util.UUID,
 	initialTransitionVersion: Long,
 	override val workerId: String,
@@ -84,7 +84,7 @@ class DefaultGitHubReleaseLease(
 		if (lost.get()) return
 		synchronized(transitionLock) {
 			try {
-				if (!persistence.renewClaim(requestId, version.get(), workerId, clock.instant())) {
+				if (!leasePersistence.renewClaim(requestId, version.get(), workerId, clock.instant())) {
 					lost.set(true)
 				}
 			} catch (_: RuntimeException) {

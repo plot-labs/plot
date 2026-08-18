@@ -11,7 +11,8 @@ import com.plot.api.ai.provider.RewriteModelRequest
 import com.plot.api.ai.provider.WriterModelRequest
 import com.plot.api.common.ApiException
 import com.plot.api.dev.DevContext
-import com.plot.api.artifact.workflow.ArtifactWorkflowPersistence
+import com.plot.api.artifact.workflow.ArtifactWorkflowExecutionPersistence
+import com.plot.api.artifact.workflow.ArtifactWorkflowQueryPersistence
 import com.plot.api.artifact.workflow.ArtifactWorkflowRunDispatcher
 import com.plot.api.artifact.workflow.ArtifactWorkflowRunWorker
 import com.plot.api.artifact.workflow.ArtifactWorkflowService
@@ -42,6 +43,7 @@ import org.springframework.context.annotation.Import
 import org.springframework.context.annotation.Primary
 import org.springframework.http.HttpStatus
 import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.core.io.ClassPathResource
 import org.springframework.core.task.TaskExecutor
 import org.springframework.test.annotation.DirtiesContext
 import org.springframework.test.context.ActiveProfiles
@@ -70,8 +72,9 @@ class GitHubReleaseAutomationIntegrationTest {
 	@Autowired private lateinit var webhookService: GitHubWebhookService
 	@Autowired private lateinit var releaseWorker: GitHubReleaseDraftWorker
 	@Autowired private lateinit var activityService: GitHubReleaseActivityService
-	@Autowired private lateinit var artifactWorkflowPersistence: ArtifactWorkflowPersistence
-	@Autowired private lateinit var releasePersistence: GitHubReleasePersistence
+	@Autowired private lateinit var artifactWorkflowPersistence: ArtifactWorkflowExecutionPersistence
+	@Autowired private lateinit var artifactWorkflowQueryPersistence: ArtifactWorkflowQueryPersistence
+	@Autowired private lateinit var releasePersistence: GitHubReleaseRequestStore
 	@Autowired private lateinit var artifactWorkflowService: ArtifactWorkflowService
 	@Autowired private lateinit var github: ScriptedGitHubClient
 	@Autowired private lateinit var model: ScriptedArtifactWorkflowModelGateway
@@ -83,6 +86,7 @@ class GitHubReleaseAutomationIntegrationTest {
 	private val artifactWorkflowWorker: ArtifactWorkflowRunWorker
 		get() = ArtifactWorkflowRunWorker(
 			artifactWorkflowPersistence,
+			artifactWorkflowQueryPersistence,
 			artifactWorkflowService,
 			model,
 			workerId = "release-e2e-generation",
@@ -299,6 +303,7 @@ class GitHubReleaseAutomationIntegrationTest {
 		assertEquals(1, model.writerCalls.get())
 		assertEquals(1, model.reviewerCalls.get())
 		assertCounts(fixture, requests = 2, runs = 1, packs = 1)
+		assertOwnershipAuditClear()
 	}
 
 	@Test
@@ -642,6 +647,13 @@ class GitHubReleaseAutomationIntegrationTest {
 
 	private fun count(sql: String, vararg arguments: Any): Int =
 		jdbcTemplate.queryForObject(sql, Int::class.java, *arguments)!!
+	private fun assertOwnershipAuditClear() {
+		val sql = ClassPathResource("db/audit/v1/agent_artifact_ownership.sql")
+			.inputStream
+			.bufferedReader()
+			.use { it.readText() }
+		assertTrue(jdbcTemplate.queryForList(sql).isEmpty())
+	}
 
 	@TestConfiguration(proxyBeanMethods = false)
 	class Config {

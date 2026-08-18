@@ -1,12 +1,35 @@
 import { describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
 
+
+import type { PlotApiClient, WorkspaceSummary } from "./index";
 import { PlotApiError, createPlotApiClient } from "./index";
+
+function workspaceSummary(overrides: Partial<WorkspaceSummary> = {}): WorkspaceSummary {
+  return {
+    id: "workspace-1",
+    name: "Personal",
+    slug: "personal",
+    status: "ACTIVE",
+    logoUrl: null,
+    plan: "founding",
+    entitlementStatus: "active",
+    accessMode: "full",
+    trialEndsAt: "2026-09-01T00:00:00Z",
+    role: "OWNER",
+    createdAt: "2026-08-01T00:00:00Z",
+    updatedAt: "2026-08-17T00:00:00Z",
+    ...overrides,
+  };
+}
 
 describe("Plot API client", () => {
   it("creates a workspace with workspace-independent authentication", async () => {
-    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json({
-      id: "workspace-2", name: "Product", slug: "workspace-12345678", status: "ACTIVE", logoUrl: null, role: "OWNER",
-    }));
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(workspaceSummary({
+      id: "workspace-2",
+      name: "Product",
+      slug: "workspace-12345678",
+    })));
     const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
 
     await client.createWorkspace({ name: "Product" });
@@ -20,8 +43,8 @@ describe("Plot API client", () => {
 
   it("reads and updates a workspace profile with workspace scoping", async () => {
     const fetcher = vi.fn<typeof fetch>()
-      .mockResolvedValueOnce(Response.json({ id: "workspace-1", name: "Personal", slug: "personal", status: "ACTIVE", logoUrl: null, role: "OWNER" }))
-      .mockResolvedValueOnce(Response.json({ id: "workspace-1", name: "Product", slug: "personal", status: "ACTIVE", logoUrl: "data:image/png;base64,abc", role: "OWNER" }));
+      .mockResolvedValueOnce(Response.json(workspaceSummary()))
+      .mockResolvedValueOnce(Response.json(workspaceSummary({ name: "Product", logoUrl: "data:image/png;base64,abc" })));
     const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
 
     await client.getWorkspace("workspace-1");
@@ -406,4 +429,86 @@ describe("Plot API client", () => {
       "resolved-workspace",
     ]);
   });
+  it("matches the canonical transport manifest", async () => {
+    const manifest = loadContractManifest();
+    expect(manifest.version).toBe(1);
+    expect(manifest.cases.length).toBeGreaterThanOrEqual(10);
+    expect(manifest.cases.map((entry) => entry.surface)).toEqual(
+      expect.arrayContaining(["workspace", "github", "routine", "chat", "artifact"]),
+    );
+
+    for (const entry of manifest.cases) {
+      const success = entry.successFixture ? readContractFixture(entry.successFixture) : null;
+      const error = entry.errorFixture ? readContractFixture(entry.errorFixture) : null;
+      const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+        entry.errorStatus
+          ? Response.json(error, { status: entry.errorStatus })
+          : Response.json(success, { status: entry.successStatus }),
+      );
+      const client = createPlotApiClient({ fetch: fetcher, workspaceId: "018fd000-0000-7000-8000-000000000002" });
+
+      if (entry.errorStatus) {
+
+        const errorRecord = error && typeof error === "object" ? error as Record<string, unknown> : {};
+        await expect(invokeContractCase(client, entry)).rejects.toMatchObject({
+          status: entry.errorStatus,
+          code: errorRecord.error,
+          message: errorRecord.message,
+          details: errorRecord.details ?? null,
+          resourceId: errorRecord.resourceId ?? null,
+        });
+      } else {
+        await expect(invokeContractCase(client, entry)).resolves.toEqual(success);
+      }
+
+      const [url, init] = fetcher.mock.calls[0] ?? [];
+      expect(String(url)).toBe(`/api/plot${entry.route}`);
+      expect(init?.method ?? "GET").toBe(entry.method);
+      const headers = new Headers(init?.headers);
+      for (const requiredHeader of entry.requiredHeaders) {
+        expect(headers.has(requiredHeader), `${entry.id} requires ${requiredHeader}`).toBe(true);
+      }
+      if (entry.requestFixture) {
+        expect(init?.body).toBe(JSON.stringify(readContractFixture(entry.requestFixture)));
+      } else {
+        expect(init?.body).toBeUndefined();
+      }
+    }
+  });
+
 });
+type ContractCase = {
+  surface: string;
+  id: string;
+  clientMethod: string;
+  args: unknown[];
+  method: string;
+  route: string;
+  successStatus?: number;
+  errorStatus?: number;
+  requiredHeaders: string[];
+  requestFixture: string | null;
+  successFixture: string | null;
+  errorFixture: string | null;
+};
+
+type ContractManifest = {
+  version: number;
+  cases: ContractCase[];
+};
+
+const contractRoot = new URL("../../../contracts/plot-api/v1/", import.meta.url);
+
+function loadContractManifest(): ContractManifest {
+  return JSON.parse(readFileSync(new URL("manifest.json", contractRoot), "utf8")) as ContractManifest;
+}
+
+function readContractFixture(path: string): unknown {
+  return JSON.parse(readFileSync(new URL(path, contractRoot), "utf8")) as unknown;
+}
+
+function invokeContractCase(client: PlotApiClient, entry: ContractCase): Promise<unknown> {
+  const method = client[entry.clientMethod as keyof PlotApiClient];
+  if (typeof method !== "function") throw new Error(`Unknown PlotApiClient method ${entry.clientMethod}`);
+  return (method as unknown as (...args: unknown[]) => Promise<unknown>)(...entry.args);
+}

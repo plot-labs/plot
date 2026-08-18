@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component
 
 @Component
 class GitHubReleaseDraftWorker(
-	private val persistence: GitHubReleasePersistence,
+	private val leasePersistence: GitHubReleaseLeaseStore,
 	private val orchestrator: GitHubReleaseDraftOrchestrator,
 	private val properties: GitHubProperties,
 	private val leaseFactory: GitHubReleaseLeaseFactory,
@@ -23,7 +23,7 @@ class GitHubReleaseDraftWorker(
 ) {
 	fun drain(): Int {
 		if (!properties.releaseAutomationEnabled) return 0
-		val request = persistence.claimNext(workerId, clock.instant(), properties.releaseWorkerLeaseTimeout)
+		val request = leasePersistence.claimNext(workerId, clock.instant(), properties.releaseWorkerLeaseTimeout)
 			?: return 0
 		val observation = Observation.start("plot.github.release.attempt", observationRegistry)
 			.lowCardinalityKeyValue("plot.operation", "release_draft")
@@ -63,7 +63,7 @@ class GitHubReleaseDraftWorker(
 
 	fun recover(): Int {
 		if (!properties.releaseAutomationEnabled) return 0
-		return persistence.recoverStaleClaims(clock.instant(), properties.releaseWorkerLeaseTimeout)
+		return leasePersistence.recoverStaleClaims(clock.instant(), properties.releaseWorkerLeaseTimeout)
 	}
 
 	fun reconcile() {
@@ -76,7 +76,7 @@ class GitHubReleaseDraftWorker(
 		val errorCode = safeErrorCode(exception.cause)
 		val attemptsRemain = exception.attemptCount < properties.releaseWorkerMaxAttempts
 		if (attemptsRemain && isRetryable(exception.cause)) {
-			persistence.scheduleRetry(
+			leasePersistence.scheduleRetry(
 				exception.requestId,
 				exception.transitionVersion,
 				clock.instant().plus(retryDelay(exception.attemptCount)),
@@ -84,7 +84,7 @@ class GitHubReleaseDraftWorker(
 			)
 			return "RETRY_SCHEDULED"
 		}
-		persistence.finish(
+		leasePersistence.finish(
 			exception.requestId,
 			exception.transitionVersion,
 			GitHubReleaseDraftStatus.FAILED,

@@ -427,6 +427,8 @@ class GitHubReleaseDraftOrchestratorTest {
 		val lease = FakeReleaseLease()
 		val orchestrator = GitHubReleaseDraftOrchestrator(
 			persistence,
+			persistence,
+			persistence,
 			scope,
 			range,
 			evidenceService,
@@ -590,7 +592,7 @@ class GitHubReleaseDraftOrchestratorTest {
 	}
 
 	private class FakeReleaseAgentAdmission(
-		private val persistence: GitHubReleasePersistence,
+		private val persistence: GitHubReleaseRequestStore,
 	) : GitHubReleaseAgentAdmission {
 		val created = mutableListOf<ArtifactWorkflowCreation>()
 		val loaded = mutableMapOf<UUID, ArtifactWorkflowState>()
@@ -707,7 +709,10 @@ class GitHubReleaseDraftOrchestratorTest {
 			}
 	}
 
-	private class FakeReleasePersistence : GitHubReleasePersistence {
+	private class FakeReleasePersistence :
+		GitHubReleaseRequestStore,
+		GitHubWebhookDeliveryStore,
+		GitHubReleaseLeaseStore {
 		val deliveries = mutableMapOf<UUID, GitHubWebhookDelivery>()
 		val claims = ArrayDeque<GitHubReleaseDraftRequest>()
 		val finished = mutableListOf<FinishedRequest>()
