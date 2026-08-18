@@ -8,6 +8,7 @@
     "test:api": "just test-api",
     "test:api-client": "just test-api-client",
     "dev:web": "just dev-web",
+    "build:web": "just build-web",
     "lint:web": "just lint-web",
     "test": "just test",
     "build": "just build",
