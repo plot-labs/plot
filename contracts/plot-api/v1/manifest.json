@@ -6,33 +6,69 @@
       "id": "workspace.create",
       "surface": "workspace",
       "clientMethod": "createWorkspace",
-      "args": [{ "name": "Studio" }],
+      "args": [
+        {
+          "name": "Studio"
+        }
+      ],
       "method": "POST",
       "routeTemplate": "/workspaces",
       "route": "/workspaces",
       "successStatus": 200,
       "authContext": "workspace-member",
-      "requiredHeaders": ["accept", "content-type", "x-plot-workspace-id"],
+      "requiredHeaders": [
+        "accept",
+        "content-type",
+        "x-plot-workspace-id"
+      ],
       "requestFixture": "fixtures/workspace-create-request.json",
       "successFixture": "fixtures/workspace-summary.json",
       "errorFixture": null,
-      "enumDomains": { "status": ["ACTIVE", "DISABLED"], "accessMode": ["full", "read_only"] }
+      "enumDomains": {
+        "status": [
+          "ACTIVE",
+          "DISABLED"
+        ],
+        "accessMode": [
+          "full",
+          "read_only"
+        ]
+      }
     },
     {
       "id": "workspace.update",
       "surface": "workspace",
       "clientMethod": "updateWorkspace",
-      "args": ["018fd000-0000-7000-8000-000000000002", { "name": "Studio", "logoUrl": "data:image/png;base64,abc" }],
+      "args": [
+        "018fd000-0000-7000-8000-000000000002",
+        {
+          "name": "Studio",
+          "logoUrl": "data:image/png;base64,abc"
+        }
+      ],
       "method": "PATCH",
       "routeTemplate": "/workspaces/{workspaceId}",
       "route": "/workspaces/018fd000-0000-7000-8000-000000000002",
       "successStatus": 200,
       "authContext": "workspace-member",
-      "requiredHeaders": ["accept", "content-type", "x-plot-workspace-id"],
+      "requiredHeaders": [
+        "accept",
+        "content-type",
+        "x-plot-workspace-id"
+      ],
       "requestFixture": "fixtures/workspace-update-request.json",
       "successFixture": "fixtures/workspace-summary.json",
       "errorFixture": null,
-      "enumDomains": { "status": ["ACTIVE", "DISABLED"], "accessMode": ["full", "read_only"] }
+      "enumDomains": {
+        "status": [
+          "ACTIVE",
+          "DISABLED"
+        ],
+        "accessMode": [
+          "full",
+          "read_only"
+        ]
+      }
     },
     {
       "id": "github.connections.list",
@@ -44,151 +80,350 @@
       "route": "/github/connections",
       "successStatus": 200,
       "authContext": "workspace-member",
-      "requiredHeaders": ["accept", "x-plot-workspace-id"],
+      "requiredHeaders": [
+        "accept",
+        "x-plot-workspace-id"
+      ],
       "requestFixture": null,
       "successFixture": "fixtures/github-connections.json",
       "errorFixture": null,
-      "enumDomains": { "connectionStatus": ["ACTIVE", "DISABLED", "ERROR"], "repositoryStatus": ["ACTIVE", "DISABLED"] }
+      "enumDomains": {
+        "connectionStatus": [
+          "ACTIVE",
+          "DISABLED",
+          "ERROR"
+        ],
+        "repositoryStatus": [
+          "ACTIVE",
+          "DISABLED"
+        ]
+      }
     },
     {
       "id": "github.repository.connect",
       "surface": "github",
       "clientMethod": "connectGitHubRepository",
-      "args": ["018fd000-0000-7000-8000-000000000010", 42],
+      "args": [
+        "018fd000-0000-7000-8000-000000000010",
+        42
+      ],
       "method": "PUT",
       "routeTemplate": "/github/repositories/{externalRepositoryId}",
       "route": "/github/repositories/42",
       "successStatus": 200,
       "authContext": "workspace-member",
-      "requiredHeaders": ["accept", "content-type", "x-plot-workspace-id"],
+      "requiredHeaders": [
+        "accept",
+        "content-type",
+        "x-plot-workspace-id"
+      ],
       "requestFixture": "fixtures/github-connect-request.json",
       "successFixture": "fixtures/github-repository.json",
       "errorFixture": null,
-      "enumDomains": { "repositoryStatus": ["ACTIVE", "DISABLED"] }
+      "enumDomains": {
+        "repositoryStatus": [
+          "ACTIVE",
+          "DISABLED"
+        ]
+      }
     },
     {
       "id": "routine.create",
       "surface": "routine",
       "clientMethod": "createRoutine",
-      "args": [{ "name": "Weekly release note", "sourceScopeId": "018fd000-0000-7000-8000-000000000020", "contextSourceScopeIds": [], "instruction": "Draft a release note", "cadence": "WEEKLY" }],
+      "args": [
+        {
+          "name": "Weekly release note",
+          "sourceScopeId": "018fd000-0000-7000-8000-000000000020",
+          "contextSourceScopeIds": [],
+          "instruction": "Draft a release note",
+          "cadence": "WEEKLY"
+        }
+      ],
       "method": "POST",
       "routeTemplate": "/routines",
       "route": "/routines",
       "successStatus": 201,
       "authContext": "workspace-member",
-      "requiredHeaders": ["accept", "content-type", "x-plot-workspace-id"],
+      "requiredHeaders": [
+        "accept",
+        "content-type",
+        "x-plot-workspace-id"
+      ],
       "requestFixture": "fixtures/routine-create-request.json",
       "successFixture": "fixtures/routine.json",
       "errorFixture": null,
-      "enumDomains": { "cadence": ["DAILY", "WEEKLY", "ON_GITHUB_CHANGE", "ON_GITHUB_RELEASE", "ON_GIT_TAG"], "status": ["PROBING", "NO_ACTIVITY", "DISPATCHED", "FAILED"] }
+      "enumDomains": {
+        "cadence": [
+          "DAILY",
+          "WEEKLY",
+          "ON_GITHUB_CHANGE",
+          "ON_GITHUB_RELEASE",
+          "ON_GIT_TAG"
+        ],
+        "status": [
+          "PROBING",
+          "NO_ACTIVITY",
+          "DISPATCHED",
+          "FAILED"
+        ]
+      }
     },
     {
       "id": "routine.run-now",
       "surface": "routine",
       "clientMethod": "runRoutineNow",
-      "args": ["018fd000-0000-7000-8000-000000000030", "routine-contract-1"],
+      "args": [
+        "018fd000-0000-7000-8000-000000000030",
+        "routine-contract-1"
+      ],
       "method": "POST",
       "routeTemplate": "/routines/{routineId}/run",
       "route": "/routines/018fd000-0000-7000-8000-000000000030/run",
       "successStatus": 200,
       "authContext": "workspace-member",
-      "requiredHeaders": ["accept", "idempotency-key", "x-plot-workspace-id"],
+      "requiredHeaders": [
+        "accept",
+        "idempotency-key",
+        "x-plot-workspace-id"
+      ],
       "requestFixture": null,
       "successFixture": "fixtures/routine.json",
       "errorFixture": null,
-      "enumDomains": { "cadence": ["DAILY", "WEEKLY", "ON_GITHUB_CHANGE", "ON_GITHUB_RELEASE", "ON_GIT_TAG"] }
+      "enumDomains": {
+        "cadence": [
+          "DAILY",
+          "WEEKLY",
+          "ON_GITHUB_CHANGE",
+          "ON_GITHUB_RELEASE",
+          "ON_GIT_TAG"
+        ]
+      }
     },
     {
       "id": "chat-agent-run.create",
       "surface": "chat",
       "clientMethod": "createChatAgentRun",
-      "args": [{ "instruction": "Explore the connected source", "writingBlockIds": ["018fd000-0000-7000-8000-000000000040"] }, "chat-contract-1"],
+      "args": [
+        {
+          "instruction": "Explore the connected source",
+          "writingBlockIds": [
+            "018fd000-0000-7000-8000-000000000040"
+          ]
+        },
+        "chat-contract-1"
+      ],
       "method": "POST",
       "routeTemplate": "/agent-runs",
       "route": "/agent-runs",
       "successStatus": 202,
       "authContext": "workspace-member",
-      "requiredHeaders": ["accept", "content-type", "idempotency-key", "x-plot-workspace-id"],
+      "requiredHeaders": [
+        "accept",
+        "content-type",
+        "idempotency-key",
+        "x-plot-workspace-id"
+      ],
       "requestFixture": "fixtures/chat-agent-run-create-request.json",
       "successFixture": "fixtures/chat-agent-run.json",
       "errorFixture": null,
-      "enumDomains": { "status": ["QUEUED", "RUNNING", "SUCCEEDED", "FAILED"] }
+      "enumDomains": {
+        "status": [
+          "QUEUED",
+          "RUNNING",
+          "SUCCEEDED",
+          "FAILED"
+        ]
+      }
     },
     {
       "id": "chat-agent-run.get",
       "surface": "chat",
       "clientMethod": "getChatAgentRun",
-      "args": ["018fd000-0000-7000-8000-000000000050"],
+      "args": [
+        "018fd000-0000-7000-8000-000000000050"
+      ],
       "method": "GET",
       "routeTemplate": "/agent-runs/{agentRunId}",
       "route": "/agent-runs/018fd000-0000-7000-8000-000000000050",
       "successStatus": 200,
       "authContext": "workspace-member",
-      "requiredHeaders": ["accept", "x-plot-workspace-id"],
+      "requiredHeaders": [
+        "accept",
+        "x-plot-workspace-id"
+      ],
       "requestFixture": null,
       "successFixture": "fixtures/chat-agent-run.json",
       "errorFixture": null,
-      "enumDomains": { "status": ["QUEUED", "RUNNING", "SUCCEEDED", "FAILED"] }
+      "enumDomains": {
+        "status": [
+          "QUEUED",
+          "RUNNING",
+          "SUCCEEDED",
+          "FAILED"
+        ]
+      }
     },
     {
       "id": "artifact.read",
       "surface": "artifact",
       "clientMethod": "getArtifactVariant",
-      "args": ["018fd000-0000-7000-8000-000000000060"],
+      "args": [
+        "018fd000-0000-7000-8000-000000000060"
+      ],
       "method": "GET",
       "routeTemplate": "/artifact-variants/{variantId}",
       "route": "/artifact-variants/018fd000-0000-7000-8000-000000000060",
       "successStatus": 200,
       "authContext": "workspace-member",
-      "requiredHeaders": ["accept", "x-plot-workspace-id"],
+      "requiredHeaders": [
+        "accept",
+        "x-plot-workspace-id"
+      ],
       "requestFixture": null,
       "successFixture": "fixtures/artifact.json",
       "errorFixture": null,
-      "enumDomains": { "origin": ["GENERATED", "REWRITTEN", "USER_MODIFIED"], "disposition": ["COPY", "DOWNLOAD"] }
+      "enumDomains": {
+        "origin": [
+          "GENERATED",
+          "REWRITTEN",
+          "USER_MODIFIED"
+        ],
+        "disposition": [
+          "COPY",
+          "DOWNLOAD"
+        ]
+      }
     },
     {
       "id": "artifact.save",
       "surface": "artifact",
       "clientMethod": "saveArtifactVariant",
-      "args": ["018fd000-0000-7000-8000-000000000060", { "expectedRevisionNumber": 3, "lexicalContent": { "root": { "children": [] } }, "statements": [{ "id": "018fd000-0000-7000-8000-000000000061", "orderIndex": 0, "body": "Draft sentence" }] }],
+      "args": [
+        "018fd000-0000-7000-8000-000000000060",
+        {
+          "expectedRevisionNumber": 3,
+          "lexicalContent": {
+            "root": {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "detail": 0,
+                      "format": 0,
+                      "mode": "normal",
+                      "style": "",
+                      "text": "Draft sentence",
+                      "type": "text",
+                      "version": 1
+                    }
+                  ],
+                  "direction": null,
+                  "format": "",
+                  "indent": 0,
+                  "type": "paragraph",
+                  "version": 1
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "root",
+              "version": 1
+            }
+          },
+          "statements": [
+            {
+              "id": "018fd000-0000-7000-8000-000000000061",
+              "orderIndex": 0,
+              "body": "Draft sentence"
+            }
+          ]
+        }
+      ],
       "method": "PATCH",
       "routeTemplate": "/artifact-variants/{variantId}",
       "route": "/artifact-variants/018fd000-0000-7000-8000-000000000060",
       "successStatus": 200,
       "authContext": "workspace-member",
-      "requiredHeaders": ["accept", "content-type", "x-plot-workspace-id"],
+      "requiredHeaders": [
+        "accept",
+        "content-type",
+        "x-plot-workspace-id"
+      ],
       "requestFixture": "fixtures/artifact-save-request.json",
       "successFixture": "fixtures/artifact.json",
       "errorFixture": null,
-      "enumDomains": { "origin": ["GENERATED", "REWRITTEN", "USER_MODIFIED"] }
+      "enumDomains": {
+        "origin": [
+          "GENERATED",
+          "REWRITTEN",
+          "USER_MODIFIED"
+        ]
+      }
     },
     {
       "id": "artifact.export",
       "surface": "artifact",
       "clientMethod": "exportArtifactVariant",
-      "args": ["018fd000-0000-7000-8000-000000000060", { "expectedRevisionNumber": 3, "includeSources": true, "acknowledgeUnresolved": true, "acknowledgedWarningKeys": ["warning-1"], "acknowledgedRevisionIds": [], "disposition": "DOWNLOAD" }],
+      "args": [
+        "018fd000-0000-7000-8000-000000000060",
+        {
+          "expectedRevisionNumber": 3,
+          "includeSources": true,
+          "acknowledgeUnresolved": true,
+          "acknowledgedWarningKeys": [
+            "warning-1"
+          ],
+          "acknowledgedRevisionIds": [],
+          "disposition": "DOWNLOAD"
+        }
+      ],
       "method": "POST",
       "routeTemplate": "/artifact-variants/{variantId}/exports",
       "route": "/artifact-variants/018fd000-0000-7000-8000-000000000060/exports",
       "successStatus": 200,
       "authContext": "workspace-member",
-      "requiredHeaders": ["accept", "content-type", "x-plot-workspace-id"],
+      "requiredHeaders": [
+        "accept",
+        "content-type",
+        "x-plot-workspace-id"
+      ],
       "requestFixture": "fixtures/artifact-export-request.json",
       "successFixture": "fixtures/content-export.json",
       "errorFixture": null,
-      "enumDomains": { "disposition": ["COPY", "DOWNLOAD"] }
+      "enumDomains": {
+        "disposition": [
+          "COPY",
+          "DOWNLOAD"
+        ]
+      }
     },
     {
       "id": "artifact.export.confirmation-error",
       "surface": "artifact",
       "clientMethod": "exportArtifactVariant",
-      "args": ["018fd000-0000-7000-8000-000000000060", { "expectedRevisionNumber": 3, "includeSources": false, "acknowledgeUnresolved": false, "acknowledgedWarningKeys": [], "acknowledgedRevisionIds": [], "disposition": "COPY" }],
+      "args": [
+        "018fd000-0000-7000-8000-000000000060",
+        {
+          "expectedRevisionNumber": 3,
+          "includeSources": false,
+          "acknowledgeUnresolved": false,
+          "acknowledgedWarningKeys": [],
+          "acknowledgedRevisionIds": [],
+          "disposition": "COPY"
+        }
+      ],
       "method": "POST",
       "routeTemplate": "/artifact-variants/{variantId}/exports",
       "route": "/artifact-variants/018fd000-0000-7000-8000-000000000060/exports",
       "errorStatus": 409,
       "authContext": "workspace-member",
-      "requiredHeaders": ["accept", "content-type", "x-plot-workspace-id"],
+      "requiredHeaders": [
+        "accept",
+        "content-type",
+        "x-plot-workspace-id"
+      ],
       "requestFixture": "fixtures/artifact-export-error-request.json",
       "successFixture": null,
       "errorFixture": "fixtures/error-envelope.json",
