@@ -31,6 +31,16 @@ describe("SourceRepositoryPicker", () => {
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
   });
 
+  it("filters repositories by name", () => {
+    render(<SourceRepositoryPicker sources={sampleSources} value="repo-1" onChange={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Source repository" }));
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search repositories" }), { target: { value: "plot" } });
+
+    expect(screen.queryByRole("option", { name: "qyinm/MirrorNote" })).not.toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "plot-labs/plot" })).toBeInTheDocument();
+  });
+
   it("closes when focus leaves or outside click occurs", () => {
     render(<SourceRepositoryPicker sources={sampleSources} value="repo-1" onChange={vi.fn()} />);
 
