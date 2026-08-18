@@ -7,7 +7,7 @@ import org.springframework.context.event.EventListener
 import org.springframework.scheduling.annotation.Scheduled
 
 class ArtifactWorkflowRunRecovery(
-	private val persistence: ArtifactWorkflowPersistence,
+	private val persistence: ArtifactWorkflowRecoveryPersistence,
 	private val dispatcher: ArtifactWorkflowRunDispatcher,
 	private val clock: Clock = Clock.systemUTC(),
 	private val claimTimeout: Duration = Duration.ofMinutes(2),

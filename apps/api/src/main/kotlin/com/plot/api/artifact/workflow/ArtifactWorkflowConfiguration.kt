@@ -36,23 +36,74 @@ class ArtifactWorkflowConfiguration {
 	): ArtifactWorkflowService = ArtifactWorkflowService(validator, uuidGenerator::next)
 
 	@Bean
-	fun artifactWorkflowPersistence(
+	fun artifactWorkflowQueryPersistence(
+		sqlExecutor: JooqSqlExecutor,
+		objectMapper: ObjectMapper,
+	): ArtifactWorkflowQueryPersistence = ArtifactWorkflowQueryPersistence(
+		sqlExecutor = sqlExecutor,
+		objectMapper = objectMapper,
+	)
+
+	@Bean
+	fun artifactWorkflowMaterializationPersistence(
+		sqlExecutor: JooqSqlExecutor,
+		objectMapper: ObjectMapper,
+		uuidGenerator: UuidGenerator,
+	): ArtifactWorkflowMaterializationPersistence = ArtifactWorkflowMaterializationPersistence(
+		sqlExecutor = sqlExecutor,
+		objectMapper = objectMapper,
+		uuidGenerator = uuidGenerator,
+	)
+
+	@Bean
+	fun artifactWorkflowAdmissionPersistence(
 		sqlExecutor: JooqSqlExecutor,
 		objectMapper: ObjectMapper,
 		transactionExecutor: JooqTransactionExecutor,
 		uuidGenerator: UuidGenerator,
 		artifactRunPersistence: ArtifactRunPersistence,
-	): ArtifactWorkflowPersistence = ArtifactWorkflowPersistence(
-		sqlExecutor,
-		objectMapper,
-		transactionExecutor,
-		uuidGenerator,
-		artifactRunPersistence,
+		queryPersistence: ArtifactWorkflowQueryPersistence,
+		materializationPersistence: ArtifactWorkflowMaterializationPersistence,
+	): ArtifactWorkflowAdmissionPersistence = ArtifactWorkflowAdmissionPersistence(
+		sqlExecutor = sqlExecutor,
+		objectMapper = objectMapper,
+		transactionExecutor = transactionExecutor,
+		uuidGenerator = uuidGenerator,
+		artifactRunPersistence = artifactRunPersistence,
+		queryPersistence = queryPersistence,
+		materializationPersistence = materializationPersistence,
+	)
+
+	@Bean
+	fun artifactWorkflowExecutionPersistence(
+		sqlExecutor: JooqSqlExecutor,
+		objectMapper: ObjectMapper,
+		transactionExecutor: JooqTransactionExecutor,
+		uuidGenerator: UuidGenerator,
+		artifactRunPersistence: ArtifactRunPersistence,
+		materializationPersistence: ArtifactWorkflowMaterializationPersistence,
+	): ArtifactWorkflowExecutionPersistence = ArtifactWorkflowExecutionPersistence(
+		sqlExecutor = sqlExecutor,
+		objectMapper = objectMapper,
+		transactionExecutor = transactionExecutor,
+		uuidGenerator = uuidGenerator,
+		artifactRunPersistence = artifactRunPersistence,
+		materializationPersistence = materializationPersistence,
+	)
+
+	@Bean
+	fun artifactWorkflowRecoveryPersistence(
+		sqlExecutor: JooqSqlExecutor,
+		transactionExecutor: JooqTransactionExecutor,
+	): ArtifactWorkflowRecoveryPersistence = ArtifactWorkflowRecoveryPersistence(
+		sqlExecutor = sqlExecutor,
+		transactionExecutor = transactionExecutor,
 	)
 
 	@Bean
 	fun artifactWorkflowRunWorker(
-		persistence: ArtifactWorkflowPersistence,
+		executionPersistence: ArtifactWorkflowExecutionPersistence,
+		queryPersistence: ArtifactWorkflowQueryPersistence,
 		workflowService: ArtifactWorkflowService,
 		modelGateway: ArtifactWorkflowModelGateway,
 		properties: PlotAiProperties,
@@ -61,9 +112,10 @@ class ArtifactWorkflowConfiguration {
 		workspaceAccessService: WorkspaceAccessService,
 		routineAgentProperties: RoutineAgentProperties,
 	): ArtifactWorkflowRunWorker = ArtifactWorkflowRunWorker(
-		persistence,
-		workflowService,
-		modelGateway,
+		executionPersistence = executionPersistence,
+		queryPersistence = queryPersistence,
+		workflowService = workflowService,
+		modelGateway = modelGateway,
 		claimTimeout = properties.claimTimeout,
 		retryInitialDelay = properties.retryInitialDelay,
 		leaseFactory = leaseFactory,
@@ -81,13 +133,13 @@ class ArtifactWorkflowConfiguration {
 	@Bean
 	fun artifactWorkflowRunLeaseFactory(
 		@Qualifier("artifactWorkflowHeartbeatExecutor") heartbeatExecutor: ScheduledExecutorService,
-		persistence: ArtifactWorkflowPersistence,
+		executionPersistence: ArtifactWorkflowExecutionPersistence,
 		properties: PlotAiProperties,
 	): ArtifactWorkflowRunLeaseFactory = ScheduledArtifactWorkflowRunLeaseFactory(
 		executor = heartbeatExecutor,
 		heartbeatInterval = heartbeatInterval(properties.claimTimeout),
 		clock = Clock.systemUTC(),
-		renewClaim = persistence::renewClaim,
+		renewClaim = executionPersistence::renewClaim,
 	)
 
 	@Bean
@@ -113,11 +165,11 @@ class ArtifactWorkflowConfiguration {
 
 	@Bean
 	fun artifactWorkflowRunRecovery(
-		persistence: ArtifactWorkflowPersistence,
+		recoveryPersistence: ArtifactWorkflowRecoveryPersistence,
 		dispatcher: ArtifactWorkflowRunDispatcher,
 		properties: PlotAiProperties,
 	): ArtifactWorkflowRunRecovery = ArtifactWorkflowRunRecovery(
-		persistence,
+		recoveryPersistence,
 		dispatcher,
 		claimTimeout = properties.claimTimeout,
 		workerEnabled = properties.workerEnabled,

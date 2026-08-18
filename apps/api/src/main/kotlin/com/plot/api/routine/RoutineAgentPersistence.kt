@@ -15,7 +15,6 @@ class RoutineAgentPersistence(
 	private val sqlExecutor: JooqSqlExecutor,
 	private val transactionExecutor: JooqTransactionExecutor,
 	private val uuidGenerator: UuidGenerator,
-	private val agentRunPersistence: AgentRunPersistence,
 	private val clock: Clock? = null,
 ) {
 	fun createExecution(request: RoutineExecutionRequest): RoutineExecutionRecord = transactionExecutor.execute {
@@ -471,130 +470,6 @@ class RoutineAgentPersistence(
 			if (updated != 1) null else findExecution(candidate.workspaceId, candidate.id)
 		}
 
-
-	fun dispatch(
-		workspaceId: UUID,
-		executionId: UUID,
-		request: AgentRunDispatchRequest,
-		now: Instant = currentInstant(),
-		workerId: String? = null,
-	): AgentRunRecord = agentRunPersistence.dispatch(workspaceId, executionId, request, now, workerId)
-
-	fun findAgentRun(workspaceId: UUID, id: UUID): AgentRunRecord? =
-		agentRunPersistence.findAgentRun(workspaceId, id)
-
-	fun listAgentRunSources(workspaceId: UUID, agentRunId: UUID): List<AgentRunSourceRecord> =
-		agentRunPersistence.listAgentRunSources(workspaceId, agentRunId)
-
-	fun listAgentRunInputs(workspaceId: UUID, agentRunId: UUID): List<AgentRunInputRecord> =
-		agentRunPersistence.listAgentRunInputs(workspaceId, agentRunId)
-
-	fun appendInput(
-		workspaceId: UUID,
-		agentRunId: UUID,
-		input: AgentRunInputRequest,
-		now: Instant = currentInstant(),
-	): AgentRunInputRecord = agentRunPersistence.appendInput(workspaceId, agentRunId, input, now)
-
-	fun appendStep(
-		workspaceId: UUID,
-		request: AgentStepRequest,
-		now: Instant = currentInstant(),
-	): AgentStepRecord = agentRunPersistence.appendStep(workspaceId, request, now)
-
-	fun listSteps(workspaceId: UUID, agentRunId: UUID): List<AgentStepRecord> =
-		agentRunPersistence.listSteps(workspaceId, agentRunId)
-
-	fun findArtifactId(workspaceId: UUID, artifactWorkflowRunId: UUID): UUID? =
-		agentRunPersistence.findArtifactId(workspaceId, artifactWorkflowRunId)
-
-	fun claimNextAgentRun(
-		workerId: String,
-		now: Instant = currentInstant(),
-		staleBefore: Instant,
-	): ClaimedAgentRun? = agentRunPersistence.claimNextAgentRun(workerId, now, staleBefore)
-
-	fun recordAgentInfrastructureFailure(
-		claim: ClaimedAgentRun,
-		now: Instant = currentInstant(),
-	) {
-		agentRunPersistence.recordAgentInfrastructureFailure(claim, now)
-	}
-
-	fun beginModelDecision(claim: ClaimedAgentRun, maxModelCalls: Int): AgentRunRecord =
-		agentRunPersistence.beginModelDecision(claim, maxModelCalls)
-
-	fun reserveStep(
-		claim: ClaimedAgentRun,
-		request: AgentStepRequest,
-		maxToolCalls: Int,
-		now: Instant = currentInstant(),
-	): AgentStepRecord = agentRunPersistence.reserveStep(claim, request, maxToolCalls, now)
-
-	fun completeToolStep(
-		claim: ClaimedAgentRun,
-		stepId: UUID,
-		resultJson: String,
-		adoptedInput: AgentRunInputRequest? = null,
-		sourceScopeId: UUID? = null,
-		sourceStatusChangedAt: Instant? = null,
-		maxEvidenceCharacters: Int,
-		now: Instant = currentInstant(),
-	): AgentStepRecord = agentRunPersistence.completeToolStep(
-		claim,
-		stepId,
-		resultJson,
-		adoptedInput,
-		sourceScopeId,
-		sourceStatusChangedAt,
-		maxEvidenceCharacters,
-		now,
-	)
-
-	fun linkArtifactWorkflowStep(
-		claim: ClaimedAgentRun,
-		stepId: UUID,
-		artifactWorkflowRunId: UUID,
-		resultJson: String,
-		nextAttemptAt: Instant,
-		now: Instant = currentInstant(),
-	): AgentStepRecord = agentRunPersistence.linkArtifactWorkflowStep(
-		claim,
-		stepId,
-		artifactWorkflowRunId,
-		resultJson,
-		nextAttemptAt,
-		now,
-	)
-
-	fun releaseAgentClaim(claim: ClaimedAgentRun, nextAttemptAt: Instant, now: Instant = currentInstant()) {
-		agentRunPersistence.releaseAgentClaim(claim, nextAttemptAt, now)
-	}
-
-	fun scheduleAgentRetry(
-		claim: ClaimedAgentRun,
-		errorCode: String,
-		nextAttemptAt: Instant,
-		now: Instant = currentInstant(),
-	): AgentRunRecord = agentRunPersistence.scheduleAgentRetry(claim, errorCode, nextAttemptAt, now)
-
-	fun failAgentRun(
-		claim: ClaimedAgentRun,
-		errorCode: String,
-		now: Instant = currentInstant(),
-	): AgentRunRecord = agentRunPersistence.failAgentRun(claim, errorCode, now)
-
-	fun succeedAgentRun(claim: ClaimedAgentRun, now: Instant = currentInstant()): AgentRunRecord =
-		agentRunPersistence.succeedAgentRun(claim, now)
-
-	fun loadArtifactWorkflowState(workspaceId: UUID, artifactWorkflowRunId: UUID): AgentArtifactWorkflowState? =
-		agentRunPersistence.loadArtifactWorkflowState(workspaceId, artifactWorkflowRunId)
-
-	fun allAgentSourcesActive(workspaceId: UUID, agentRunId: UUID): Boolean =
-		agentRunPersistence.allAgentSourcesActive(workspaceId, agentRunId)
-
-	fun findRunningStep(workspaceId: UUID, agentRunId: UUID, sequence: Int): AgentStepRecord? =
-		agentRunPersistence.findRunningStep(workspaceId, agentRunId, sequence)
 
 	private fun validateExecutionRequest(
 		request: RoutineExecutionRequest,

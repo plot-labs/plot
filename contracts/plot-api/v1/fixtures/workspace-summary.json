@@ -1,0 +1,14 @@
+{
+  "id": "018fd000-0000-7000-8000-000000000002",
+  "name": "Studio",
+  "slug": "studio",
+  "status": "ACTIVE",
+  "logoUrl": "data:image/png;base64,abc",
+  "plan": "founding",
+  "entitlementStatus": "active",
+  "accessMode": "full",
+  "trialEndsAt": "2026-09-01T00:00:00Z",
+  "role": "OWNER",
+  "createdAt": "2026-08-01T00:00:00Z",
+  "updatedAt": "2026-08-17T00:00:00Z"
+}

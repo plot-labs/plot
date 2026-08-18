@@ -132,7 +132,7 @@ class GitHubWebhookAfterCommitIntegrationTest {
 
 		@Bean
 		@Primary
-		fun failingReleasePersistence(delegate: JdbcGitHubReleasePersistence) = AfterCommitFailingPersistence(delegate)
+		fun failingReleasePersistence(delegate: GitHubWebhookDeliveryPersistence) = AfterCommitFailingPersistence(delegate)
 	}
 }
 
@@ -160,8 +160,8 @@ class CommitVisibilityDispatcher(
 }
 
 class AfterCommitFailingPersistence(
-	private val delegate: GitHubReleasePersistence,
-) : GitHubReleasePersistence by delegate {
+	private val delegate: GitHubWebhookDeliveryStore,
+) : GitHubWebhookDeliveryStore by delegate {
 	val failQueuedMark = AtomicBoolean()
 
 	override fun markDelivery(id: UUID, disposition: GitHubWebhookDisposition, errorCode: String?) {

@@ -19,6 +19,7 @@ class RoutineService(
 	private val uuidGenerator: UuidGenerator,
 	private val persistence: RoutinePersistence,
 	private val agentPersistence: RoutineAgentPersistence,
+	private val agentRunQueryPersistence: AgentRunQueryPersistence,
 	private val sourceScopeRepository: SourceScopeRepository,
 	private val sourceManagedAccessGuard: SourceManagedAccessGuard,
 ) {
@@ -149,14 +150,14 @@ class RoutineService(
 	@Transactional(readOnly = true)
 	fun getAgentRun(routineId: UUID, agentRunId: UUID): AgentRunDetailView {
 		val routine = requireRoutine(routineId)
-		val agentRun = agentPersistence.findAgentRun(routine.workspaceId, agentRunId)
+		val agentRun = agentRunQueryPersistence.findAgentRun(routine.workspaceId, agentRunId)
 			?.takeIf { it.routineId == routine.id }
 			?: throw notFound()
-		val steps = agentPersistence.listSteps(routine.workspaceId, agentRun.id)
+		val steps = agentRunQueryPersistence.listSteps(routine.workspaceId, agentRun.id)
 		val artifacts = steps.mapNotNull { it.artifactWorkflowRunId }
 			.distinct()
 			.mapNotNull { artifactWorkflowRunId ->
-				agentPersistence.findArtifactId(routine.workspaceId, artifactWorkflowRunId)
+				agentRunQueryPersistence.findArtifactId(routine.workspaceId, artifactWorkflowRunId)
 					?.let { artifactWorkflowRunId to it }
 			}
 			.toMap()

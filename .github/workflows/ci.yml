@@ -79,6 +79,9 @@ jobs:
       - name: Install dependencies
         run: just install
 
+      - name: Test API client contract
+        run: just test-api-client
+
       - name: Lint web
         run: just lint-web
 

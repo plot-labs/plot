@@ -19,7 +19,7 @@ import tools.jackson.databind.ObjectMapper
 @Service
 class ArtifactWorkflowRunService(
 	private val workflowService: ArtifactWorkflowService,
-	private val persistence: ArtifactWorkflowPersistence,
+	private val persistence: ArtifactWorkflowAdmissionPersistence,
 	private val dispatcher: ArtifactWorkflowRunDispatcher,
 	private val uuidGenerator: UuidGenerator,
 	private val properties: PlotAiProperties,

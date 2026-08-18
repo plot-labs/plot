@@ -1,0 +1,39 @@
+{
+  "expectedRevisionNumber": 3,
+  "lexicalContent": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "Draft sentence",
+              "type": "text",
+              "version": 1
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1
+        }
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1
+    }
+  },
+  "statements": [
+    {
+      "id": "018fd000-0000-7000-8000-000000000061",
+      "orderIndex": 0,
+      "body": "Draft sentence"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "id": "018fd000-0000-7000-8000-000000000030",
+  "name": "Weekly release note",
+  "sourceScopeId": "018fd000-0000-7000-8000-000000000020",
+  "sourceLabel": "acme/plot",
+  "instruction": "Draft a release note",
+  "cadence": "WEEKLY",
+  "enabled": true,
+  "lastRunAt": null,
+  "nextRunAt": "2026-08-24T00:00:00Z",
+  "lastRunStatus": null,
+  "lastErrorCode": null,
+  "contextSourceScopeIds": [],
+  "latestExecution": null,
+  "createdAt": "2026-08-17T00:00:00Z",
+  "updatedAt": "2026-08-17T00:00:00Z"
+}

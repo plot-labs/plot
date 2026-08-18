@@ -26,8 +26,10 @@ import org.springframework.test.context.TestPropertySource
 @Import(TestcontainersConfiguration::class)
 @TestPropertySource(properties = ["plot.dev-bootstrap.enabled=true"])
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
-class ArtifactWorkflowPersistenceReliabilityIntegrationTest {
-	@Autowired private lateinit var persistence: ArtifactWorkflowPersistence
+class ArtifactWorkflowReliabilityIntegrationTest {
+	@Autowired private lateinit var executionPersistence: ArtifactWorkflowExecutionPersistence
+	@Autowired private lateinit var admissionPersistence: ArtifactWorkflowAdmissionPersistence
+	@Autowired private lateinit var recoveryPersistence: ArtifactWorkflowRecoveryPersistence
 	@Autowired private lateinit var workflow: ArtifactWorkflowService
 	@Autowired private lateinit var jdbcTemplate: JdbcTemplate
 	@Autowired private lateinit var devContext: DevContext
@@ -54,7 +56,7 @@ class ArtifactWorkflowPersistenceReliabilityIntegrationTest {
 			val futures = listOf("worker-a", "worker-b").map { workerId ->
 				executor.submit<ClaimedArtifactWorkflowRun?> {
 					start.await()
-					persistence.claimNext(workerId, Instant.now().minusSeconds(120))
+					executionPersistence.claimNext(workerId, Instant.now().minusSeconds(120))
 				}
 			}
 
@@ -72,15 +74,15 @@ class ArtifactWorkflowPersistenceReliabilityIntegrationTest {
 	@Test
 	fun claimAndStaleRecoveryEachAdvanceTransitionVersion() {
 		val state = reserve("claim-epoch")
-		val first = assertNotNull(persistence.claimNext("stable-worker-id", Instant.now().minusSeconds(120)))
+		val first = assertNotNull(executionPersistence.claimNext("stable-worker-id", Instant.now().minusSeconds(120)))
 		assertEquals(1L, first.transitionVersion)
 
 		expireClaim(state.runId)
-		assertEquals(1, persistence.recoverStaleClaims(Instant.now().minusSeconds(120)))
+		assertEquals(1, recoveryPersistence.recoverStaleClaims(Instant.now().minusSeconds(120)))
 		assertEquals(2L, transitionVersion(state.runId))
 
 		val replacement = assertNotNull(
-			persistence.claimNext("stable-worker-id", Instant.now().minusSeconds(120)),
+			executionPersistence.claimNext("stable-worker-id", Instant.now().minusSeconds(120)),
 		)
 		assertEquals(3L, replacement.transitionVersion)
 	}
@@ -88,29 +90,29 @@ class ArtifactWorkflowPersistenceReliabilityIntegrationTest {
 	@Test
 	fun renewalRequiresTheCurrentOwnerVersionAndRunnableState() {
 		val state = reserve("claim-renewal")
-		val first = assertNotNull(persistence.claimNext("stable-worker-id", Instant.now().minusSeconds(120)))
-		assertEquals(true, persistence.renewClaim(first, Instant.now()))
+		val first = assertNotNull(executionPersistence.claimNext("stable-worker-id", Instant.now().minusSeconds(120)))
+		assertEquals(true, executionPersistence.renewClaim(first, Instant.now()))
 
 		expireClaim(state.runId)
-		assertEquals(1, persistence.recoverStaleClaims(Instant.now().minusSeconds(120)))
+		assertEquals(1, recoveryPersistence.recoverStaleClaims(Instant.now().minusSeconds(120)))
 		val replacement = assertNotNull(
-			persistence.claimNext("stable-worker-id", Instant.now().minusSeconds(120)),
+			executionPersistence.claimNext("stable-worker-id", Instant.now().minusSeconds(120)),
 		)
 
-		assertEquals(false, persistence.renewClaim(first, Instant.now()))
-		assertEquals(true, persistence.renewClaim(replacement, Instant.now()))
+		assertEquals(false, executionPersistence.renewClaim(first, Instant.now()))
+		assertEquals(true, executionPersistence.renewClaim(replacement, Instant.now()))
 	}
 
 	@Test
 	fun staleClaimCannotWriteAfterRecoveryAndSameWorkerIdReclaim() {
 		val state = reserve("stale-write")
 		val staleClaim = assertNotNull(
-			persistence.claimNext("stable-worker-id", Instant.now().minusSeconds(120)),
+			executionPersistence.claimNext("stable-worker-id", Instant.now().minusSeconds(120)),
 		)
-		val invocation = persistence.beginInvocation(staleClaim, ModelRole.WRITER)
+		val invocation = executionPersistence.beginInvocation(staleClaim, ModelRole.WRITER)
 		expireClaim(state.runId)
 
-		assertEquals(1, persistence.recoverStaleClaims(Instant.now().minusSeconds(120)))
+		assertEquals(1, recoveryPersistence.recoverStaleClaims(Instant.now().minusSeconds(120)))
 		assertEquals(
 			"FAILED:LEASE_LOST_OUTCOME_UNKNOWN",
 			jdbcTemplate.queryForObject(
@@ -120,15 +122,15 @@ class ArtifactWorkflowPersistenceReliabilityIntegrationTest {
 			),
 		)
 		val replacement = assertNotNull(
-			persistence.claimNext("stable-worker-id", Instant.now().minusSeconds(120)),
+			executionPersistence.claimNext("stable-worker-id", Instant.now().minusSeconds(120)),
 		)
 		assertEquals(3L, replacement.transitionVersion)
 		val before = runSnapshot(state.runId)
 
-		assertLost { persistence.beginInvocation(staleClaim, ModelRole.WRITER) }
-		assertLost { persistence.failClaim(staleClaim, state, "STALE_FAILURE") }
-		assertLost { persistence.failCheckpoint(staleClaim, invocation, state, "STALE_INVOCATION_FAILURE") }
-		assertLost { persistence.completeCheckpoint(staleClaim, invocation, state, null) }
+		assertLost { executionPersistence.beginInvocation(staleClaim, ModelRole.WRITER) }
+		assertLost { executionPersistence.failClaim(staleClaim, state, "STALE_FAILURE") }
+		assertLost { executionPersistence.failCheckpoint(staleClaim, invocation, state, "STALE_INVOCATION_FAILURE") }
+		assertLost { executionPersistence.completeCheckpoint(staleClaim, invocation, state, null) }
 
 		assertEquals(before, runSnapshot(state.runId))
 		assertEquals(1, invocationCount(state.runId))
@@ -146,11 +148,11 @@ class ArtifactWorkflowPersistenceReliabilityIntegrationTest {
 		val sourceScopeId = insertSourceScope("access-loss")
 		val state = reserve("access-loss", sourceScopeId)
 		val claim = assertNotNull(
-			persistence.claimNext("access-loss-worker", Instant.now().minusSeconds(120)),
+			executionPersistence.claimNext("access-loss-worker", Instant.now().minusSeconds(120)),
 		)
-		val invocation = persistence.beginInvocation(claim, ModelRole.WRITER)
+		val invocation = executionPersistence.beginInvocation(claim, ModelRole.WRITER)
 
-		assertEquals(1, persistence.fenceSourceScope(devContext.devWorkspaceId, sourceScopeId, Instant.now()))
+		assertEquals(1, executionPersistence.fenceSourceScope(devContext.devWorkspaceId, sourceScopeId, Instant.now()))
 		assertEquals(
 			"FAILED:SOURCE_ACCESS_LOST",
 			jdbcTemplate.queryForObject(
@@ -169,7 +171,7 @@ class ArtifactWorkflowPersistenceReliabilityIntegrationTest {
 		)
 
 		val before = runSnapshot(state.runId)
-		assertLost { persistence.completeCheckpoint(claim, invocation, state, null) }
+		assertLost { executionPersistence.completeCheckpoint(claim, invocation, state, null) }
 		assertEquals(before, runSnapshot(state.runId))
 	}
 
@@ -204,7 +206,7 @@ class ArtifactWorkflowPersistenceReliabilityIntegrationTest {
 			),
 			null,
 		)
-		return persistence.createRun(
+		return admissionPersistence.createRun(
 			ArtifactWorkflowRunReservation(
 				workspaceId = devContext.devWorkspaceId,
 				createdByUserId = devContext.devUserId,

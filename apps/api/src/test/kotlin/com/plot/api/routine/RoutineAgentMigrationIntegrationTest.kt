@@ -35,7 +35,7 @@ class RoutineAgentMigrationIntegrationTest {
 
 	private lateinit var schema: String
 	private lateinit var schemaJdbcTemplate: JdbcTemplate
-	private lateinit var persistence: RoutineAgentPersistence
+	private lateinit var persistence: AgentRunMigrationPersistence
 
 	@BeforeEach
 	fun createIsolatedSchema() {
@@ -46,14 +46,26 @@ class RoutineAgentMigrationIntegrationTest {
 		schemaJdbcTemplate = JdbcTemplate(schemaDataSource)
 		val schemaSqlExecutor = JooqSqlExecutor(DSL.using(schemaDataSource, SQLDialect.POSTGRES))
 		val schemaTransactionExecutor = JooqTransactionExecutor()
-		persistence = RoutineAgentPersistence(
-			schemaSqlExecutor,
-			schemaTransactionExecutor,
-			uuidGenerator,
-			AgentRunPersistence(
+		val queryPersistence = AgentRunQueryPersistence(schemaSqlExecutor)
+		persistence = AgentRunMigrationPersistence(
+			routinePersistence = RoutineAgentPersistence(
 				schemaSqlExecutor,
 				schemaTransactionExecutor,
 				uuidGenerator,
+			),
+			admissionPersistence = AgentRunAdmissionPersistence(
+				schemaSqlExecutor,
+				schemaTransactionExecutor,
+				uuidGenerator,
+				queryPersistence,
+			),
+			queryPersistence = queryPersistence,
+			executionPersistence = AgentRunExecutionPersistence(
+				schemaSqlExecutor,
+				schemaTransactionExecutor,
+				uuidGenerator,
+				queryPersistence,
+				DSL.using(schemaDataSource, SQLDialect.POSTGRES),
 			),
 		)
 	}
@@ -748,6 +760,74 @@ class RoutineAgentMigrationIntegrationTest {
 				statement.execute("set search_path to '${this@SearchPathDataSource.schema}'")
 			}
 		}
+	}
+
+	private class AgentRunMigrationPersistence(
+		private val routinePersistence: RoutineAgentPersistence,
+		private val admissionPersistence: AgentRunAdmissionPersistence,
+		private val queryPersistence: AgentRunQueryPersistence,
+		private val executionPersistence: AgentRunExecutionPersistence,
+	) {
+		fun createExecution(request: RoutineExecutionRequest) = routinePersistence.createExecution(request)
+
+		fun claimById(
+			workerId: String,
+			workspaceId: UUID,
+			executionId: UUID,
+			now: Instant = Instant.now(),
+			staleBefore: Instant = now.minusSeconds(120),
+		) = routinePersistence.claimById(workerId, workspaceId, executionId, now, staleBefore)
+
+		fun markNoActivity(
+			workspaceId: UUID,
+			executionId: UUID,
+			now: Instant = Instant.now(),
+			workerId: String? = null,
+		) = routinePersistence.markNoActivity(workspaceId, executionId, now, workerId)
+
+		fun findExecution(workspaceId: UUID, executionId: UUID) =
+			routinePersistence.findExecution(workspaceId, executionId)
+
+		fun addContextSource(
+			workspaceId: UUID,
+			routineId: UUID,
+			sourceScopeId: UUID,
+			orderIndex: Int,
+			now: Instant = Instant.now(),
+		) = routinePersistence.addContextSource(workspaceId, routineId, sourceScopeId, orderIndex, now)
+
+		fun dispatch(
+			workspaceId: UUID,
+			executionId: UUID,
+			request: AgentRunDispatchRequest,
+			now: Instant = Instant.now(),
+			workerId: String? = null,
+		) = admissionPersistence.dispatch(workspaceId, executionId, request, now, workerId)
+
+		fun listAgentRunSources(workspaceId: UUID, agentRunId: UUID) =
+			queryPersistence.listAgentRunSources(workspaceId, agentRunId)
+
+		fun listAgentRunInputs(workspaceId: UUID, agentRunId: UUID) =
+			queryPersistence.listAgentRunInputs(workspaceId, agentRunId)
+
+		fun findAgentRun(workspaceId: UUID, agentRunId: UUID) =
+			queryPersistence.findAgentRun(workspaceId, agentRunId)
+
+		fun appendInput(
+			workspaceId: UUID,
+			agentRunId: UUID,
+			input: AgentRunInputRequest,
+			now: Instant = Instant.now(),
+		) = admissionPersistence.appendInput(workspaceId, agentRunId, input, now)
+
+		fun appendStep(
+			workspaceId: UUID,
+			request: AgentStepRequest,
+			now: Instant = Instant.now(),
+		) = executionPersistence.appendStep(workspaceId, request, now)
+
+		fun listSteps(workspaceId: UUID, agentRunId: UUID) =
+			queryPersistence.listSteps(workspaceId, agentRunId)
 	}
 
 	private data class Fixture(

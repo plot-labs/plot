@@ -22,7 +22,8 @@ class GitHubWebhookTransactionService {
 class GitHubWebhookService(
 	private val properties: GitHubProperties,
 	private val scopeResolver: GitHubReleaseScopeResolver,
-	private val persistence: GitHubReleasePersistence,
+	private val deliveryPersistence: GitHubWebhookDeliveryStore,
+	private val requestPersistence: GitHubReleaseRequestStore,
 	private val dispatcher: GitHubReleaseDraftDispatcher,
 	private val gitHubChangeRoutineService: GitHubChangeRoutineService,
 	private val lifecycleService: GitHubSourceAccessLifecycleService,
@@ -36,7 +37,7 @@ class GitHubWebhookService(
 			observation.openScope().use {
 				val candidate = newDelivery(webhook)
 				val inserted = requireNotNull(transactionService.execute {
-					persistence.insertDelivery(candidate)
+					deliveryPersistence.insertDelivery(candidate)
 				})
 				if (inserted.id != candidate.id && inserted.disposition != GitHubWebhookDisposition.RECEIVED) {
 					observation.lowCardinalityKeyValue("plot.disposition", inserted.disposition.name)
@@ -128,14 +129,14 @@ class GitHubWebhookService(
 		tagName: String,
 		observedHeadSha: String?,
 	): GitHubWebhookDelivery {
-		persistence.enqueueRelease(
+		requestPersistence.enqueueRelease(
 			context.workspaceId,
 			context.sourceScopeId,
 			delivery.id,
 			tagName,
 			observedHeadSha,
 		)
-		persistence.markDelivery(delivery.id, GitHubWebhookDisposition.QUEUED)
+		deliveryPersistence.markDelivery(delivery.id, GitHubWebhookDisposition.QUEUED)
 		if (properties.releaseAutomationEnabled) scheduleDispatchAfterCommit()
 		return delivery.copy(disposition = GitHubWebhookDisposition.QUEUED)
 	}
@@ -153,7 +154,7 @@ class GitHubWebhookService(
 	}
 
 	private fun mark(delivery: GitHubWebhookDelivery, disposition: GitHubWebhookDisposition): GitHubWebhookDelivery {
-		persistence.markDelivery(delivery.id, disposition)
+		deliveryPersistence.markDelivery(delivery.id, disposition)
 		return delivery.copy(disposition = disposition)
 	}
 }

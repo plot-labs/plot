@@ -8,6 +8,10 @@ import com.plot.api.ai.provider.ReviewerModelRequest
 import com.plot.api.ai.provider.RewriteModelRequest
 import com.plot.api.ai.provider.WriterModelRequest
 import com.plot.api.dev.DevContext
+import com.plot.api.artifact.workflow.ArtifactWorkflowAdmissionPersistence
+import com.plot.api.artifact.workflow.ArtifactWorkflowExecutionPersistence
+import com.plot.api.artifact.workflow.ArtifactWorkflowQueryPersistence
+import com.plot.api.artifact.workflow.ArtifactWorkflowRecoveryPersistence
 import com.plot.api.artifact.workflow.model.EvidenceSnapshot
 import com.plot.api.artifact.workflow.model.ReviewVerdict
 import com.plot.api.artifact.workflow.model.ReviewerOutput
@@ -39,7 +43,10 @@ import org.springframework.test.context.TestPropertySource
 @TestPropertySource(properties = ["plot.dev-bootstrap.enabled=true"])
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class ArtifactWorkflowRunRecoveryIntegrationTest {
-	@Autowired private lateinit var persistence: ArtifactWorkflowPersistence
+	@Autowired private lateinit var executionPersistence: ArtifactWorkflowExecutionPersistence
+	@Autowired private lateinit var queryPersistence: ArtifactWorkflowQueryPersistence
+	@Autowired private lateinit var admissionPersistence: ArtifactWorkflowAdmissionPersistence
+	@Autowired private lateinit var recoveryPersistence: ArtifactWorkflowRecoveryPersistence
 	@Autowired private lateinit var workflow: ArtifactWorkflowService
 	@Autowired private lateinit var jdbcTemplate: JdbcTemplate
 	@Autowired private lateinit var devContext: DevContext
@@ -62,16 +69,16 @@ class ArtifactWorkflowRunRecoveryIntegrationTest {
 		val state = reserve("claim")
 		val staleBefore = Instant.now().minusSeconds(120)
 
-		val first = persistence.claimNext("worker-a", staleBefore)
+		val first = executionPersistence.claimNext("worker-a", staleBefore)
 		assertNotNull(first)
-		assertNull(persistence.claimNext("worker-b", staleBefore))
+		assertNull(executionPersistence.claimNext("worker-b", staleBefore))
 
 		jdbcTemplate.update(
 			"update generation_runs set heartbeat_at = now() - interval '10 minutes' where id = ?",
 			state.runId,
 		)
-		assertEquals(1, persistence.recoverStaleClaims(Instant.now().minusSeconds(120)))
-		assertNotNull(persistence.claimNext("worker-b", Instant.now().minusSeconds(120)))
+		assertEquals(1, recoveryPersistence.recoverStaleClaims(Instant.now().minusSeconds(120)))
+		assertNotNull(executionPersistence.claimNext("worker-b", Instant.now().minusSeconds(120)))
 	}
 
 	@Test
@@ -81,19 +88,19 @@ class ArtifactWorkflowRunRecoveryIntegrationTest {
 			"update generation_runs set budget_snapshot = ?::jsonb, created_at = now() - interval '10 minutes' where id = ?",
 			"""{"maxModelCalls":12,"maxTotalTokens":1000,"maxRunDurationMillis":1}""", timed.runId,
 		)
-		val timeClaim = requireNotNull(persistence.claimNext("time-budget-worker", Instant.now().minusSeconds(600)))
-		assertEquals("TIME_BUDGET_EXHAUSTED", persistence.budgetFailureCode(timeClaim))
-		persistence.failClaim(timeClaim, timed, "TIME_BUDGET_EXHAUSTED")
+		val timeClaim = requireNotNull(executionPersistence.claimNext("time-budget-worker", Instant.now().minusSeconds(600)))
+		assertEquals("TIME_BUDGET_EXHAUSTED", executionPersistence.budgetFailureCode(timeClaim))
+		executionPersistence.failClaim(timeClaim, timed, "TIME_BUDGET_EXHAUSTED")
 
 		val tokened = reserve("token-budget")
 		val gateway = QueueGateway(writes = ArrayDeque(listOf(WriterOutput(listOf(WriterSentence("Draft."))))))
-		assertTrue(ArtifactWorkflowRunWorker(persistence, workflow, gateway, workerId = "token-writer").processOne())
+		assertTrue(ArtifactWorkflowRunWorker(executionPersistence, queryPersistence, workflow, gateway, workerId = "token-writer").processOne())
 		jdbcTemplate.update(
 			"update generation_runs set budget_snapshot = ?::jsonb where id = ?",
 			"""{"maxModelCalls":12,"maxTotalTokens":1,"maxRunDurationMillis":60000}""", tokened.runId,
 		)
-		val tokenClaim = requireNotNull(persistence.claimNext("token-budget-worker", Instant.now().minusSeconds(600)))
-		assertEquals("TOKEN_BUDGET_EXHAUSTED", persistence.budgetFailureCode(tokenClaim))
+		val tokenClaim = requireNotNull(executionPersistence.claimNext("token-budget-worker", Instant.now().minusSeconds(600)))
+		assertEquals("TOKEN_BUDGET_EXHAUSTED", executionPersistence.budgetFailureCode(tokenClaim))
 	}
 
 	@Test
@@ -109,7 +116,8 @@ class ArtifactWorkflowRunRecoveryIntegrationTest {
 		)
 
 		val beforeRestart = ArtifactWorkflowRunWorker(
-			persistence,
+			executionPersistence,
+			queryPersistence,
 			workflow,
 			gateway,
 			workerId = "before-restart",
@@ -117,17 +125,17 @@ class ArtifactWorkflowRunRecoveryIntegrationTest {
 		assertTrue(beforeRestart.processOne())
 		assertNull(beforeRestart.lastFailure, beforeRestart.lastFailure?.stackTraceToString())
 		assertEquals(1, gateway.writeCalls)
-		assertEquals(ArtifactWorkflowRunStatus.REVIEWING, persistence.loadState(devContext.devWorkspaceId, state.runId).status)
+		assertEquals(ArtifactWorkflowRunStatus.REVIEWING, queryPersistence.loadState(devContext.devWorkspaceId, state.runId).status)
 		assertEquals(1, jdbcTemplate.queryForObject(
 			"select count(*) from generation_artifacts where generation_run_id = ? and artifact_type = 'WRITER_OUTPUT'",
 			Int::class.java,
 			state.runId,
 		))
 
-		val afterRestart = ArtifactWorkflowRunWorker(persistence, workflow, gateway, workerId = "after-restart")
+		val afterRestart = ArtifactWorkflowRunWorker(executionPersistence, queryPersistence, workflow, gateway, workerId = "after-restart")
 		assertTrue(afterRestart.processOne())
 		assertNull(afterRestart.lastFailure, afterRestart.lastFailure?.stackTraceToString())
-		val terminal = persistence.loadState(devContext.devWorkspaceId, state.runId)
+		val terminal = queryPersistence.loadState(devContext.devWorkspaceId, state.runId)
 		assertEquals(ArtifactWorkflowRunStatus.READY, terminal.status)
 		assertEquals(1, gateway.writeCalls)
 		assertEquals(1, gateway.reviewCalls)
@@ -174,10 +182,10 @@ class ArtifactWorkflowRunRecoveryIntegrationTest {
 				)) },
 			)),
 		)
-		val worker = ArtifactWorkflowRunWorker(persistence, workflow, gateway, workerId = "conflict-worker")
+		val worker = ArtifactWorkflowRunWorker(executionPersistence, queryPersistence, workflow, gateway, workerId = "conflict-worker")
 		worker.drain()
 		assertNull(worker.lastFailure, worker.lastFailure?.stackTraceToString())
-		val terminal = persistence.loadState(devContext.devWorkspaceId, state.runId)
+		val terminal = queryPersistence.loadState(devContext.devWorkspaceId, state.runId)
 		assertEquals(ArtifactWorkflowRunStatus.READY, terminal.status)
 		assertEquals(listOf("JSON export is documented."), terminal.sentences.map { it.body })
 		assertEquals(
@@ -193,8 +201,8 @@ class ArtifactWorkflowRunRecoveryIntegrationTest {
 	fun `model-call budget distinguishes failed run from durable reviewed partial`() {
 		val noDraft = reserve("no-draft-budget", maxModelCalls = 0)
 		val unusedGateway = QueueGateway()
-		ArtifactWorkflowRunWorker(persistence, workflow, unusedGateway, workerId = "no-draft-budget-worker").drain()
-		assertEquals(ArtifactWorkflowRunStatus.FAILED, persistence.loadState(devContext.devWorkspaceId, noDraft.runId).status)
+		ArtifactWorkflowRunWorker(executionPersistence, queryPersistence, workflow, unusedGateway, workerId = "no-draft-budget-worker").drain()
+		assertEquals(ArtifactWorkflowRunStatus.FAILED, queryPersistence.loadState(devContext.devWorkspaceId, noDraft.runId).status)
 
 		val reviewed = reserve("reviewed-budget", maxModelCalls = 2)
 		val gateway = QueueGateway(
@@ -203,8 +211,8 @@ class ArtifactWorkflowRunRecoveryIntegrationTest {
 				SentenceReview(request.sentences.single().id, ReviewVerdict.NEEDS_SUPPORT, reason = "Missing evidence"),
 			)) }),
 		)
-		ArtifactWorkflowRunWorker(persistence, workflow, gateway, workerId = "reviewed-budget-worker").drain()
-		val terminal = persistence.loadState(devContext.devWorkspaceId, reviewed.runId)
+		ArtifactWorkflowRunWorker(executionPersistence, queryPersistence, workflow, gateway, workerId = "reviewed-budget-worker").drain()
+		val terminal = queryPersistence.loadState(devContext.devWorkspaceId, reviewed.runId)
 		assertEquals(ArtifactWorkflowRunStatus.NEEDS_REVIEW, terminal.status)
 		assertEquals("Missing evidence", terminal.reviews.single().reason)
 		assertEquals(1, count("content_packs", reviewed.runId))
@@ -227,7 +235,7 @@ class ArtifactWorkflowRunRecoveryIntegrationTest {
 			)
 		}
 		val state = workflow.start(runId, evidence, null)
-		return persistence.createRun(ArtifactWorkflowRunReservation(
+		return admissionPersistence.createRun(ArtifactWorkflowRunReservation(
 			devContext.devWorkspaceId, devContext.devUserId, null, "u4-$key-${UUID.randomUUID()}", "fingerprint-$key",
 			state, "OPENAI", "scripted", "{\"maxModelCalls\":$maxModelCalls}",
 		))

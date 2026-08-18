@@ -25,46 +25,50 @@ import org.springframework.web.bind.annotation.RequestParam
 
 @RestController
 @RequestMapping("/api")
-class ArtifactController(private val service: ArtifactService) {
+class ArtifactController(
+	private val queryService: ArtifactQueryService,
+	private val revisionService: ArtifactRevisionService,
+	private val exportService: ArtifactExportService,
+) {
 	@GetMapping("/artifacts")
 	fun list(
 		@RequestParam(defaultValue = "0") page: Int,
 		@RequestParam(defaultValue = "25") size: Int,
 	): ResponseEntity<ArtifactPageResponse> = ResponseEntity.ok()
-		.cacheControl(CacheControl.noStore()).body(service.list(page, size))
+		.cacheControl(CacheControl.noStore()).body(queryService.list(page, size))
 
 	@GetMapping("/artifacts/{id}")
 	fun get(@PathVariable id: UUID): ResponseEntity<ArtifactResponse> = ResponseEntity.ok()
-		.cacheControl(CacheControl.noStore()).body(service.get(id))
+		.cacheControl(CacheControl.noStore()).body(queryService.get(id))
 
 	@GetMapping("/artifact-variants/{variantId}")
 	fun getVariant(@PathVariable variantId: UUID): ResponseEntity<ArtifactResponse> = ResponseEntity.ok()
-		.cacheControl(CacheControl.noStore()).body(service.getVariant(variantId))
+		.cacheControl(CacheControl.noStore()).body(queryService.getVariant(variantId))
 
 	@GetMapping("/artifact-variants/{variantId}/history")
 	fun history(@PathVariable variantId: UUID): ResponseEntity<List<ContentVariantHistoryItemResponse>> = ResponseEntity.ok()
-		.cacheControl(CacheControl.noStore()).body(service.history(variantId))
+		.cacheControl(CacheControl.noStore()).body(queryService.history(variantId))
 
 	@GetMapping("/artifact-variants/{variantId}/history/{revisionId}")
 	fun historyDetail(
 		@PathVariable variantId: UUID,
 		@PathVariable revisionId: UUID,
 	): ResponseEntity<ContentVariantHistoryDetailResponse> = ResponseEntity.ok()
-		.cacheControl(CacheControl.noStore()).body(service.historyDetail(variantId, revisionId))
+		.cacheControl(CacheControl.noStore()).body(queryService.historyDetail(variantId, revisionId))
 
 	@GetMapping("/artifact-variants/{variantId}/history/at/{position}")
 	fun historyAt(
 		@PathVariable variantId: UUID,
 		@PathVariable position: Int,
 	): ResponseEntity<ContentVariantHistoryDetailResponse> = ResponseEntity.ok()
-		.cacheControl(CacheControl.noStore()).body(service.historyDetailAt(variantId, position))
+		.cacheControl(CacheControl.noStore()).body(queryService.historyDetailAt(variantId, position))
 
 	@PatchMapping("/artifact-variants/{variantId}")
 	fun save(
 		@PathVariable variantId: UUID,
 		@Valid @RequestBody request: SaveContentVariantRequest,
 	): ResponseEntity<ArtifactResponse> = ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(
-		service.saveVariant(
+		revisionService.saveVariant(
 			variantId,
 			requireNotNull(request.expectedRevisionNumber),
 			requireNotNull(request.lexicalContent),
@@ -84,7 +88,7 @@ class ArtifactController(private val service: ArtifactService) {
 		@PathVariable sentenceId: UUID,
 		@Valid @RequestBody request: EditSentenceRequest,
 	): ResponseEntity<ArtifactResponse> = ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(
-		service.editSentence(variantId, sentenceId, requireNotNull(request.expectedRevisionNumber), requireNotNull(request.body)),
+		revisionService.editSentence(variantId, sentenceId, requireNotNull(request.expectedRevisionNumber), requireNotNull(request.body)),
 	)
 
 	@PostMapping("/artifact-variants/{variantId}/exports")
@@ -93,7 +97,7 @@ class ArtifactController(private val service: ArtifactService) {
 		@PathVariable variantId: UUID,
 		@Valid @RequestBody request: ExportContentVariantRequest,
 	): ResponseEntity<ContentExportResponse> = ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(
-		service.export(
+		exportService.export(
 			variantId,
 			requireNotNull(request.expectedRevisionNumber),
 			requireNotNull(request.includeSources),

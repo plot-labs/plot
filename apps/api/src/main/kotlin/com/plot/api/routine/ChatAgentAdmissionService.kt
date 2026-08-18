@@ -26,7 +26,7 @@ class ChatAgentAdmissionService(
 	private val sqlExecutor: JooqSqlExecutor,
 	private val transactionExecutor: JooqTransactionExecutor,
 	private val uuidGenerator: UuidGenerator,
-	private val agentRunPersistence: AgentRunPersistence,
+	private val agentRunQueryPersistence: AgentRunQueryPersistence,
 	private val tools: ReadOnlyAgentTools,
 	private val properties: RoutineAgentProperties,
 	private val objectMapper: ObjectMapper,
@@ -42,7 +42,7 @@ class ChatAgentAdmissionService(
 			idempotencyKey = idempotencyKey,
 			chatTitle = null,
 		)
-		return run.toChatResponseFor(agentRunPersistence)
+		return run.toChatResponseFor(agentRunQueryPersistence)
 	}
 
 	fun admitAutomated(
@@ -173,27 +173,27 @@ class ChatAgentAdmissionService(
 				insertSeed(workspaceId, runId, seed, now)
 			}
 
-			val run = requireNotNull(agentRunPersistence.findAgentRun(workspaceId, runId))
+			val run = requireNotNull(agentRunQueryPersistence.findAgentRun(workspaceId, runId))
 			run
 		}
 	}
 
 	fun get(id: UUID): ChatAgentRunResponse {
-		val run = agentRunPersistence.findAgentRun(devContext.devWorkspaceId, id)
+		val run = agentRunQueryPersistence.findAgentRun(devContext.devWorkspaceId, id)
 			?.takeIf { it.origin == AgentRunOrigin.CHAT }
 			?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Agent run not found")
-		return run.toChatResponseFor(agentRunPersistence)
+		return run.toChatResponseFor(agentRunQueryPersistence)
 	}
 
 	fun listForChat(chatId: UUID): List<ChatAgentRunResponse> {
-		if (!agentRunPersistence.chatExists(devContext.devWorkspaceId, chatId)) {
+		if (!agentRunQueryPersistence.chatExists(devContext.devWorkspaceId, chatId)) {
 			throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Chat not found")
 		}
-		return agentRunPersistence.listChatAgentRuns(devContext.devWorkspaceId, chatId)
-			.map { it.toChatResponseFor(agentRunPersistence) }
+		return agentRunQueryPersistence.listChatAgentRuns(devContext.devWorkspaceId, chatId)
+			.map { it.toChatResponseFor(agentRunQueryPersistence) }
 	}
 
-	private fun AgentRunRecord.toChatResponseFor(persistence: AgentRunPersistence): ChatAgentRunResponse {
+	private fun AgentRunRecord.toChatResponseFor(persistence: AgentRunQueryPersistence): ChatAgentRunResponse {
 		return toChatResponse(artifact = persistence.findArtifactForAgentRun(workspaceId, id)?.let {
 			ChatAgentArtifactSummaryResponse(it.id, it.status, it.title, it.updatedAt)
 		})
@@ -316,7 +316,7 @@ class ChatAgentAdmissionService(
 	}
 
 	private fun findExisting(workspaceId: UUID, key: String): AgentRunRecord? =
-		agentRunPersistence.findChatAgentRunByIdempotencyKey(workspaceId, key, forUpdate = true)
+		agentRunQueryPersistence.findChatAgentRunByIdempotencyKey(workspaceId, key, forUpdate = true)
 
 	private fun budgetSnapshot(): String = objectMapper.writeValueAsString(
 		mapOf(

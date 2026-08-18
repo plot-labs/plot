@@ -26,15 +26,27 @@ This manifest is the U1 characterization baseline for the jOOQ migration. It rec
 | Current owner | Protocol that must remain | Required evidence | Target |
 | --- | --- | --- | --- |
 | `artifact/run/ArtifactRunPersistence.kt` | artifact-run state transitions and affected-row guards; transaction ownership | artifact run integration and rollback/error tests | U5 |
-| `artifact/workflow/ArtifactWorkflowPersistence.kt` | `FOR UPDATE SKIP LOCKED`, claim/lease/recovery, status + owner + transition-version fencing, multi-table atomic writes | `ArtifactWorkflowPersistenceReliabilityIntegrationTest`, `PhysicalAttempt`, `RunRecovery`, `ContinuousClaimant` | U7 |
+| `artifact/workflow/ArtifactWorkflowAdmissionPersistence.kt` | idempotent workflow admission, input snapshots, run creation, and trial capacity | workflow admission and artifact API tests | U7 |
+| `artifact/workflow/ArtifactWorkflowExecutionPersistence.kt` | model-call lease, checkpoint, retry, failure, and source-access fencing | `ArtifactWorkflowReliabilityIntegrationTest`, physical-attempt tests | U7 |
+| `artifact/workflow/ArtifactWorkflowQueryPersistence.kt` | workflow state, run timing, and materialized payload projections | workflow API and timing tests | U7 |
+| `artifact/workflow/ArtifactWorkflowRecoveryPersistence.kt` | stale claim and invocation recovery | `ArtifactWorkflowRunRecoveryIntegrationTest`, continuous claimant tests | U7 |
+| `artifact/workflow/ArtifactWorkflowMaterializationPersistence.kt` | evidence and final artifact materialization writes | workflow materialization and export tests | U7 |
 | `artifact/workflow/ArtifactWorkflowConfiguration.kt` | current transaction-template boundaries and worker lifecycle wiring | workflow rollback, shutdown, after-commit tests | U7 |
 | `routine/RoutinePersistence.kt` | routine eligibility/order, retry counters, state transitions | `RoutineWorkerIntegrationTest`, routine migration/background tests | U5 |
 | `routine/RoutineAgentPersistence.kt` | agent idempotency, fingerprint conflict, step/run state and affected-row fencing | `RoutineAgentMigrationIntegrationTest`, `AgentRunWorkerIntegrationTest` | U7 |
-| `routine/AgentRunPersistence.kt` | claim/recovery/transition-version fencing, step/attempt limits, idempotent run creation | `AgentRunWorkerIntegrationTest`, workflow reliability tests | U7 |
-| `github/GitHubReleasePersistence.kt` | release queue order, claim/lease recovery, scope serialization, stale-owner rejection | `GitHubReleasePersistenceIntegrationTest`, draft recovery | U6 |
+| `routine/AgentRunAdmissionPersistence.kt` | routine/Chat AgentRun admission and frozen input seeding | `RoutineAgentMigrationIntegrationTest`, admission tests | U7 |
+| `routine/AgentRunQueryPersistence.kt` | AgentRun, input, source, step, timing, and artifact projections | `AgentRunWorkerIntegrationTest`, read-path tests | U7 |
+| `routine/AgentRunExecutionPersistence.kt` | claim/recovery/transition-version fencing, step/attempt limits, handoff, retry, and terminal transitions | `AgentRunWorkerIntegrationTest`, workflow reliability tests | U7/U10 |
+| `github/GitHubReleaseRequestPersistence.kt` | release request admission, range/evidence linkage, and activity projections | `GitHubReleaseLifecycleIntegrationTest`, range/recovery tests | U6 |
+| `github/GitHubReleaseLeasePersistence.kt` | release queue order, claim/lease recovery, scope serialization, stale-owner rejection, terminal transitions | `GitHubReleaseLifecycleIntegrationTest`, `GitHubReleaseDraftRecoveryIntegrationTest` | U6 |
+| `github/GitHubWebhookDeliveryPersistence.kt` | webhook delivery idempotency and disposition state | `GitHubWebhookAfterCommitIntegrationTest`, `GitHubWebhookApiIntegrationTest` | U6 |
 | `github/GitHubRepositoryMonitoringPersistence.kt` | monitoring eligibility, claim/retry/failure transition and stale recovery | `GitHubRepositoryMonitoringPersistenceIntegrationTest` | U6 |
 | `github/GitHubRepositoryAccessCheckPersistence.kt` | access-check eligibility, claim/retry/failure transition and stale recovery | `GitHubRepositoryAccessCheckIntegrationTest` | U6 |
 | `writingblock/WritingBlockImportService.kt` | workspace-activity advisory lock then source-object advisory lock; partial-index `ON CONFLICT` semantics | writing-block import and routine cursor tests; two-connection lock test | U5 |
+
+## Typed transition boundary
+
+`AgentRunExecutionPersistence` and `GitHubReleaseLeasePersistence` use generated jOOQ fields for claim, renewal, retry/release, recovery, fencing, and terminal status mutations. Complex projections, evidence joins, and remaining SQL-shaped reads stay on `JooqSqlExecutor`; affected-row checks and workspace/owner/version predicates remain mandatory.
 
 ## After-commit and transaction boundaries
 
@@ -65,13 +77,16 @@ The following 23 files are the production JDBC migration surface. The named owne
 | `github/GitHubInstallationStateService.kt` | installation lifecycle | U6 |
 | `github/GitHubReleaseEvidenceService.kt` | evidence linkage and JSONB | U6 |
 | `github/GitHubSourceAccessLifecycleService.kt` | source access lifecycle | U6 |
-| `github/GitHubReleasePersistence.kt` | queue claim/fencing | U6 |
+| `github/GitHubReleaseRequestPersistence.kt` | request admission/range/evidence/activity projections | U6 |
+| `github/GitHubReleaseLeasePersistence.kt` | queue claim/recovery/fencing and terminal transitions | U6 |
+| `github/GitHubWebhookDeliveryPersistence.kt` | webhook delivery idempotency/disposition | U6 |
 | `github/GitHubRepositoryAccessCheckPersistence.kt` | queue claim/retry | U6 |
 | `github/GitHubRepositoryMonitoringPersistence.kt` | queue claim/retry | U6 |
-| `artifact/ArtifactService.kt` | aggregate/workflow writes | U7 |
+| `artifact/workflow/ArtifactWorkflowExecutionPersistence.kt` | workflow transition mutations retained as SQL-shaped operations | U7 |
+| `artifact/ArtifactRevisionService.kt` | revision and sentence mutation | U7 |
+| `artifact/ArtifactExportService.kt` | export idempotency, warnings, citations, and public-source policy | U7 |
 | `artifact/workflow/ArtifactWorkflowConfiguration.kt` | transaction wiring | U7 |
-| `artifact/workflow/ArtifactWorkflowPersistence.kt` | largest workflow protocol | U7 |
-| `routine/AgentRunPersistence.kt` | largest agent protocol | U7 |
+| `routine/AgentRunExecutionPersistence.kt` | typed AgentRun transition mutations | U7/U10 |
 | `routine/RoutineAgentPersistence.kt` | agent idempotency/fencing | U7 |
 | `routine/ChatAgentAdmissionService.kt` | admission/idempotency | U7 |
 | `routine/GitHubChangeRoutineService.kt` | transaction-template routine dispatch | U7 |

@@ -218,7 +218,13 @@ export interface WorkspaceSummary {
   slug: string;
   status: string;
   logoUrl: string | null;
+  plan: string;
+  entitlementStatus: string;
+  accessMode: "full" | "read_only";
+  trialEndsAt: string;
   role: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type RoutineCadence =

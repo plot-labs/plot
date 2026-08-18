@@ -14,7 +14,6 @@ import com.plot.api.ai.provider.RewriteModelRequest
 import com.plot.api.ai.provider.WriterModelRequest
 import com.plot.api.dev.DevBootstrapService
 import com.plot.api.dev.DevContext
-import com.plot.api.artifact.workflow.ArtifactWorkflowPersistence
 import com.plot.api.artifact.workflow.ArtifactWorkflowRunDispatcher
 import com.plot.api.artifact.workflow.ArtifactWorkflowRunWorker
 import com.plot.api.artifact.workflow.model.ReviewVerdict
@@ -41,6 +40,7 @@ import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
 import org.springframework.context.annotation.Primary
+import org.springframework.core.io.ClassPathResource
 import org.springframework.core.task.TaskExecutor
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.annotation.DirtiesContext
@@ -69,6 +69,7 @@ class AgentRunWorkerIntegrationTest {
 	@Autowired private lateinit var jdbcTemplate: JdbcTemplate
 	@Autowired private lateinit var routinePersistence: RoutinePersistence
 	@Autowired private lateinit var agentPersistence: RoutineAgentPersistence
+	@Autowired private lateinit var agentRunExecutionPersistence: AgentRunExecutionPersistence
 	@Autowired private lateinit var routineWorker: RoutineWorker
 	@Autowired private lateinit var agentWorker: AgentRunWorker
 	@Autowired private lateinit var artifactWorkflowWorker: ArtifactWorkflowRunWorker
@@ -216,6 +217,7 @@ class AgentRunWorkerIntegrationTest {
 		assertTrue(agentModel.requests.none { request ->
 			request.toString().contains("MUTATED SECRET") || request.toString().contains("Authorization")
 		})
+		assertOwnershipAuditClear()
 	}
 
 	@Test
@@ -267,6 +269,7 @@ class AgentRunWorkerIntegrationTest {
 		))
 		assertEquals(1, count("select count(*) from content_packs where generation_run_id = ?", artifactWorkflowRunId))
 		assertEquals(2, count("select count(distinct source_scope_id) from generation_inputs where generation_run_id = ?", artifactWorkflowRunId))
+		assertOwnershipAuditClear()
 	}
 
 	@Test
@@ -386,13 +389,13 @@ class AgentRunWorkerIntegrationTest {
 	fun `stale read recovery adopts one immutable result without another model call`() {
 		val admitted = admitAgent("Recovery routine", "acme/recovery")
 		val now = Instant.now()
-		val crashedClaim = assertNotNull(agentPersistence.claimNextAgentRun(
+		val crashedClaim = assertNotNull(agentRunExecutionPersistence.claimNextAgentRun(
 			workerId = "crashed-agent",
 			now = now,
 			staleBefore = now.minusSeconds(2),
 		))
-		agentPersistence.beginModelDecision(crashedClaim, 3)
-		agentPersistence.reserveStep(
+		agentRunExecutionPersistence.beginModelDecision(crashedClaim, 3)
+		agentRunExecutionPersistence.reserveStep(
 			claim = crashedClaim,
 			request = AgentStepRequest(
 				agentRunId = admitted.agentRunId,
@@ -570,6 +573,11 @@ class AgentRunWorkerIntegrationTest {
 			artifactWorkflowRunId,
 		))
 		assertEquals(0, count("select count(*) from content_packs where generation_run_id = ?", artifactWorkflowRunId))
+		jdbcTemplate.update("update agent_runs set next_attempt_at = now() where id = ?", admitted.agentRunId)
+		assertTrue(agentWorker.processOne())
+		assertEquals("FAILED", agentStatus(admitted.agentRunId))
+		assertEquals("AGENT_ARTIFACT_WORKFLOW_FAILED", agentFailure(admitted.agentRunId))
+		assertOwnershipAuditClear()
 	}
 
 	@Test
@@ -729,6 +737,13 @@ class AgentRunWorkerIntegrationTest {
 
 	private fun count(sql: String, vararg args: Any): Int =
 		jdbcTemplate.queryForObject(sql, Int::class.java, *args) ?: 0
+	private fun assertOwnershipAuditClear() {
+		val sql = ClassPathResource("db/audit/v1/agent_artifact_ownership.sql")
+			.inputStream
+			.bufferedReader()
+			.use { it.readText() }
+		assertTrue(jdbcTemplate.queryForList(sql).isEmpty())
+	}
 
 	private fun setWorkspaceAccess(status: String, accessMode: String) {
 		jdbcTemplate.update(

@@ -33,7 +33,8 @@ import tools.jackson.databind.ObjectMapper
 @Import(TestcontainersConfiguration::class, GitHubReleaseDraftRecoveryIntegrationTest.DispatchConfig::class)
 @TestPropertySource(properties = ["plot.dev-bootstrap.enabled=true"])
 class GitHubReleaseDraftRecoveryIntegrationTest {
-	@Autowired private lateinit var persistence: GitHubReleasePersistence
+	@Autowired private lateinit var leasePersistence: GitHubReleaseLeaseStore
+	@Autowired private lateinit var requestPersistence: GitHubReleaseRequestStore
 	@Autowired private lateinit var jdbcTemplate: JdbcTemplate
 	@Autowired private lateinit var devContext: DevContext
 	@Autowired private lateinit var objectMapper: ObjectMapper
@@ -61,8 +62,8 @@ class GitHubReleaseDraftRecoveryIntegrationTest {
 		val requestId = insertClaimedRequest()
 		val now = Instant.parse("2026-07-30T00:10:00Z")
 
-		assertEquals(1, persistence.recoverStaleClaims(now, Duration.ofMinutes(2)))
-		val recovered = persistence.claimNext("replacement-worker", now, Duration.ofMinutes(2))
+		assertEquals(1, leasePersistence.recoverStaleClaims(now, Duration.ofMinutes(2)))
+		val recovered = leasePersistence.claimNext("replacement-worker", now, Duration.ofMinutes(2))
 
 		assertEquals(requestId, recovered?.id)
 		assertEquals(2, recovered?.attemptCount)
@@ -75,15 +76,15 @@ class GitHubReleaseDraftRecoveryIntegrationTest {
 		val requestId = insertClaimedRequest()
 		val retryAt = Instant.parse("2026-07-30T00:15:00Z")
 
-		persistence.scheduleRetry(
+		leasePersistence.scheduleRetry(
 			requestId = requestId,
 			transitionVersion = 1,
 			nextAttemptAt = retryAt,
 			errorCode = "GITHUB_RATE_LIMITED",
 		)
 
-		assertEquals(null, persistence.claimNext("early-worker", retryAt.minusSeconds(1), Duration.ofMinutes(2)))
-		assertEquals(requestId, persistence.claimNext("ready-worker", retryAt, Duration.ofMinutes(2))?.id)
+		assertEquals(null, leasePersistence.claimNext("early-worker", retryAt.minusSeconds(1), Duration.ofMinutes(2)))
+		assertEquals(requestId, leasePersistence.claimNext("ready-worker", retryAt, Duration.ofMinutes(2))?.id)
 		assertEquals(1, countRequests(requestId))
 	}
 
@@ -103,8 +104,8 @@ class GitHubReleaseDraftRecoveryIntegrationTest {
 			requestId,
 		)
 
-		assertEquals(1, persistence.recoverStaleClaims(now, Duration.ofMinutes(2)))
-		val recovered = persistence.claimNext("replacement-worker", now, Duration.ofMinutes(2))
+		assertEquals(1, leasePersistence.recoverStaleClaims(now, Duration.ofMinutes(2)))
+		val recovered = leasePersistence.claimNext("replacement-worker", now, Duration.ofMinutes(2))
 
 		assertEquals(requestId, recovered?.id)
 		assertEquals("base", recovered?.baseSha)
@@ -118,18 +119,18 @@ class GitHubReleaseDraftRecoveryIntegrationTest {
 		val requestId = insertClaimedRequest()
 		val heartbeatAt = Instant.parse("2026-07-30T00:01:00Z")
 
-		assertEquals(true, persistence.renewClaim(requestId, 1, "dead-worker", heartbeatAt))
-		assertEquals(0, persistence.recoverStaleClaims(heartbeatAt.plusSeconds(60), Duration.ofMinutes(2)))
-		assertEquals(1, persistence.recoverStaleClaims(heartbeatAt.plusSeconds(180), Duration.ofMinutes(2)))
-		val replacement = persistence.claimNext(
+		assertEquals(true, leasePersistence.renewClaim(requestId, 1, "dead-worker", heartbeatAt))
+		assertEquals(0, leasePersistence.recoverStaleClaims(heartbeatAt.plusSeconds(60), Duration.ofMinutes(2)))
+		assertEquals(1, leasePersistence.recoverStaleClaims(heartbeatAt.plusSeconds(180), Duration.ofMinutes(2)))
+		val replacement = leasePersistence.claimNext(
 			"replacement-worker",
 			heartbeatAt.plusSeconds(180),
 			Duration.ofMinutes(2),
 		)
 
 		assertEquals(requestId, replacement?.id)
-		assertEquals(false, persistence.renewClaim(requestId, 1, "dead-worker", heartbeatAt.plusSeconds(181)))
-		assertEquals(true, persistence.renewClaim(
+		assertEquals(false, leasePersistence.renewClaim(requestId, 1, "dead-worker", heartbeatAt.plusSeconds(181)))
+		assertEquals(true, leasePersistence.renewClaim(
 			requestId,
 			checkNotNull(replacement).transitionVersion,
 			"replacement-worker",
@@ -186,14 +187,14 @@ class GitHubReleaseDraftRecoveryIntegrationTest {
 	fun noActivityTerminalRetainsItsExactIdenticalRangeForAudit() {
 		val requestId = insertClaimedRequest()
 
-		persistence.saveResolvedRange(
+		requestPersistence.saveResolvedRange(
 			requestId,
 			transitionVersion = 1,
 			baseSha = "same-sha",
 			headSha = "same-sha",
 			boundaryReason = "PREVIOUS_RELEASE_HEAD",
 		)
-		persistence.finish(requestId, 2, GitHubReleaseDraftStatus.NO_ACTIVITY)
+		leasePersistence.finish(requestId, 2, GitHubReleaseDraftStatus.NO_ACTIVITY)
 
 		val row = jdbcTemplate.queryForMap(
 			"""
@@ -211,7 +212,7 @@ class GitHubReleaseDraftRecoveryIntegrationTest {
 			UUID::class.java,
 			requestId,
 		)!!
-		val activity = persistence.findActivity(
+		val activity = requestPersistence.findActivity(
 			requestId,
 			sourceScopeId,
 			devContext.devWorkspaceId,
@@ -246,7 +247,7 @@ class GitHubReleaseDraftRecoveryIntegrationTest {
 			failedRunId,
 			requestId,
 		)
-		persistence.finish(requestId, 2, GitHubReleaseDraftStatus.FAILED, "AGENT_RUN_FAILED")
+		leasePersistence.finish(requestId, 2, GitHubReleaseDraftStatus.FAILED, "AGENT_RUN_FAILED")
 
 		assertFailsWith<PlannedRetryRollback> {
 			TransactionTemplate(transactionManager).executeWithoutResult {

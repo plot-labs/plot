@@ -1,0 +1,16 @@
+{
+  "id": "018fd000-0000-7000-8000-000000000050",
+  "chatId": "018fd000-0000-7000-8000-000000000051",
+  "instruction": "Explore the connected source",
+  "status": "SUCCEEDED",
+  "failureCode": null,
+  "artifactId": "018fd000-0000-7000-8000-000000000060",
+  "artifact": {
+    "id": "018fd000-0000-7000-8000-000000000060",
+    "status": "READY",
+    "title": "Release note",
+    "updatedAt": "2026-08-17T00:00:00Z"
+  },
+  "createdAt": "2026-08-17T00:00:00Z",
+  "updatedAt": "2026-08-17T00:01:00Z"
+}

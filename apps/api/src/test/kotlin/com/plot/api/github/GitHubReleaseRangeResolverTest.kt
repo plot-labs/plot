@@ -238,7 +238,7 @@ class GitHubReleaseRangeResolverTest {
 
 	private class FakeReleasePersistence(
 		private val previous: List<GitHubReleaseDraftRequest>,
-	) : GitHubReleasePersistence {
+	) : GitHubReleaseRequestStore {
 		var savedRange: Triple<String, String, String>? = null
 		var finishedHead: String? = null
 		var finishedRequestId: UUID? = null
@@ -268,10 +268,16 @@ class GitHubReleaseRangeResolverTest {
 			finishedHead = headSha
 		}
 
-		override fun insertDelivery(delivery: GitHubWebhookDelivery): GitHubWebhookDelivery = error("not used")
-		override fun findDelivery(id: UUID): GitHubWebhookDelivery? = error("not used")
-		override fun findDelivery(externalDeliveryId: String): GitHubWebhookDelivery? = error("not used")
-		override fun markDelivery(id: UUID, disposition: GitHubWebhookDisposition, errorCode: String?) = error("not used")
+		override fun findLatest(sourceScopeId: UUID, workspaceId: UUID): GitHubReleaseDraftRequest? = error("not used")
+		override fun releaseScopeExists(sourceScopeId: UUID, workspaceId: UUID): Boolean = error("not used")
+		override fun findLatestActivity(sourceScopeId: UUID, workspaceId: UUID): GitHubReleaseActivityRecord? = error("not used")
+		override fun findActivity(
+			requestId: UUID,
+			sourceScopeId: UUID,
+			workspaceId: UUID,
+		): GitHubReleaseActivityRecord? = error("not used")
+		override fun findBoundEvidence(requestId: UUID): GitHubReleaseEvidence? = error("not used")
+		override fun findGenerating(limit: Int): List<GitHubReleaseDraftRequest> = error("not used")
 		override fun enqueueRelease(
 			workspaceId: UUID,
 			sourceScopeId: UUID,
@@ -279,56 +285,12 @@ class GitHubReleaseRangeResolverTest {
 			tagName: String,
 			observedHeadSha: String?,
 		): GitHubReleaseDraftRequest = error("not used")
-		override fun releaseScopeExists(sourceScopeId: UUID, workspaceId: UUID): Boolean = error("not used")
-		override fun findLatestActivity(
-			sourceScopeId: UUID,
-			workspaceId: UUID,
-		): GitHubReleaseActivityRecord? = error("not used")
-		override fun findActivity(
-			requestId: UUID,
-			sourceScopeId: UUID,
-			workspaceId: UUID,
-		): GitHubReleaseActivityRecord? = error("not used")
-		override fun findLatest(sourceScopeId: UUID, workspaceId: UUID): GitHubReleaseDraftRequest? = error("not used")
-		override fun claimNext(workerId: String, now: Instant, leaseTimeout: Duration): GitHubReleaseDraftRequest? = error("not used")
-		override fun fenceSourceScope(
-			workspaceId: UUID,
-			sourceScopeId: UUID,
-			now: Instant,
-			errorCode: String,
-		): Int = 0
-		override fun bindEvidence(
-			requestId: UUID,
-			transitionVersion: Long,
-			evidence: GitHubReleaseEvidence,
-		) = error("not used")
-		override fun findBoundEvidence(requestId: UUID): GitHubReleaseEvidence? = error("not used")
-		override fun renewClaim(
-			requestId: UUID,
-			transitionVersion: Long,
-			workerId: String,
-			now: Instant,
-		): Boolean = error("not used")
-		override fun finish(
-			requestId: UUID,
-			transitionVersion: Long,
-			status: GitHubReleaseDraftStatus,
-			errorCode: String?,
-		) = error("not used")
-		override fun retry(requestId: UUID, workspaceId: UUID, transitionVersion: Long) = error("not used")
-		override fun scheduleRetry(
-			requestId: UUID,
-			transitionVersion: Long,
-			nextAttemptAt: Instant,
-			errorCode: String,
-		) = error("not used")
-		override fun recoverStaleClaims(now: Instant, leaseTimeout: Duration): Int = error("not used")
-		override fun findGenerating(limit: Int): List<GitHubReleaseDraftRequest> = error("not used")
-		override fun recordReconcileDiagnostic(
-			requestId: UUID,
-			transitionVersion: Long,
-			errorCode: String,
-		) = error("not used")
+		override fun linkAgentRun(requestId: UUID, transitionVersion: Long, observationId: UUID, agentRunId: UUID) =
+			error("not used")
+		override fun linkAgentArtifact(requestId: UUID, transitionVersion: Long, agentRunId: UUID, artifactWorkflowRunId: UUID) =
+			error("not used")
+		override fun bindEvidence(requestId: UUID, transitionVersion: Long, evidence: GitHubReleaseEvidence) =
+			error("not used")
 	}
 
 	private companion object {

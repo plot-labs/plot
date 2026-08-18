@@ -11,6 +11,10 @@ import com.plot.api.ai.provider.ReviewerModelRequest
 import com.plot.api.ai.provider.RewriteModelRequest
 import com.plot.api.ai.provider.WriterModelRequest
 import com.plot.api.dev.DevContext
+import com.plot.api.artifact.workflow.ArtifactWorkflowAdmissionPersistence
+import com.plot.api.artifact.workflow.ArtifactWorkflowExecutionPersistence
+import com.plot.api.artifact.workflow.ArtifactWorkflowQueryPersistence
+import com.plot.api.artifact.workflow.ArtifactWorkflowRecoveryPersistence
 import com.plot.api.artifact.workflow.model.EvidenceSnapshot
 import com.plot.api.artifact.workflow.model.ReviewVerdict
 import com.plot.api.artifact.workflow.model.ReviewerOutput
@@ -45,7 +49,10 @@ import org.springframework.test.context.TestPropertySource
 @TestPropertySource(properties = ["plot.dev-bootstrap.enabled=true"])
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class ArtifactWorkflowPhysicalAttemptIntegrationTest {
-	@Autowired private lateinit var persistence: ArtifactWorkflowPersistence
+	@Autowired private lateinit var executionPersistence: ArtifactWorkflowExecutionPersistence
+	@Autowired private lateinit var queryPersistence: ArtifactWorkflowQueryPersistence
+	@Autowired private lateinit var admissionPersistence: ArtifactWorkflowAdmissionPersistence
+	@Autowired private lateinit var recoveryPersistence: ArtifactWorkflowRecoveryPersistence
 	@Autowired private lateinit var workflow: ArtifactWorkflowService
 	@Autowired private lateinit var jdbcTemplate: JdbcTemplate
 	@Autowired private lateinit var devContext: DevContext
@@ -67,7 +74,7 @@ class ArtifactWorkflowPhysicalAttemptIntegrationTest {
 	fun transientFailureCreatesANewAttemptForTheSameLogicalStep() {
 		val state = reserve("transient-then-success")
 		val gateway = RetryGateway(state.evidence.single().id, transientWriterFailures = 1)
-		val worker = ArtifactWorkflowRunWorker(persistence, workflow, gateway, workerId = "retry-worker")
+		val worker = ArtifactWorkflowRunWorker(executionPersistence, queryPersistence, workflow, gateway, workerId = "retry-worker")
 
 		assertEquals(true, worker.processOne())
 		assertEquals("WRITING", runStatus(state.runId))
@@ -99,7 +106,8 @@ class ArtifactWorkflowPhysicalAttemptIntegrationTest {
 		val state = reserve("observed-success")
 		val observations = TestObservationRegistry.create()
 		val worker = ArtifactWorkflowRunWorker(
-			persistence = persistence,
+			executionPersistence = executionPersistence,
+			queryPersistence = queryPersistence,
 			workflowService = workflow,
 			modelGateway = RetryGateway(state.evidence.single().id, transientWriterFailures = 0),
 			workerId = "observed-worker",
@@ -120,7 +128,8 @@ class ArtifactWorkflowPhysicalAttemptIntegrationTest {
 		val state = reserve("observed-retry")
 		val observations = TestObservationRegistry.create()
 		val worker = ArtifactWorkflowRunWorker(
-			persistence = persistence,
+			executionPersistence = executionPersistence,
+			queryPersistence = queryPersistence,
 			workflowService = workflow,
 			modelGateway = RetryGateway(state.evidence.single().id, transientWriterFailures = 1),
 			workerId = "observed-retry-worker",
@@ -141,7 +150,8 @@ class ArtifactWorkflowPhysicalAttemptIntegrationTest {
 	fun emptyArtifactWorkflowPollDoesNotCreateAnObservation() {
 		val observations = TestObservationRegistry.create()
 		val worker = ArtifactWorkflowRunWorker(
-			persistence = persistence,
+			executionPersistence = executionPersistence,
+			queryPersistence = queryPersistence,
 			workflowService = workflow,
 			modelGateway = RetryGateway(UUID.randomUUID(), transientWriterFailures = 0),
 			workerId = "empty-observed-worker",
@@ -163,7 +173,8 @@ class ArtifactWorkflowPhysicalAttemptIntegrationTest {
 				throw IllegalStateException("telemetry endpoint unavailable")
 		})
 		val worker = ArtifactWorkflowRunWorker(
-			persistence = persistence,
+			executionPersistence = executionPersistence,
+			queryPersistence = queryPersistence,
 			workflowService = workflow,
 			modelGateway = RetryGateway(state.evidence.single().id, transientWriterFailures = 0),
 			workerId = "exporter-failure-worker",
@@ -179,7 +190,7 @@ class ArtifactWorkflowPhysicalAttemptIntegrationTest {
 	fun thirdTransientFailureStopsWithoutAFourthProviderCall() {
 		val state = reserve("bounded-retry")
 		val gateway = RetryGateway(state.evidence.single().id, transientWriterFailures = Int.MAX_VALUE)
-		val worker = ArtifactWorkflowRunWorker(persistence, workflow, gateway, workerId = "bounded-worker")
+		val worker = ArtifactWorkflowRunWorker(executionPersistence, queryPersistence, workflow, gateway, workerId = "bounded-worker")
 
 		repeat(3) { attempt ->
 			assertEquals(true, worker.processOne())
@@ -200,10 +211,10 @@ class ArtifactWorkflowPhysicalAttemptIntegrationTest {
 	fun failedAttemptMetadataCountsTowardTokenAndTimingBudgets() {
 		val state = reserve("failed-metadata", maxTotalTokens = 5)
 		insertFailedInvocationWithMetadata(state.runId, totalTokens = 7, latencyMs = 12)
-		val claim = assertNotNull(persistence.claimNext("budget-worker", Instant.now().minusSeconds(120)))
+		val claim = assertNotNull(executionPersistence.claimNext("budget-worker", Instant.now().minusSeconds(120)))
 
-		assertEquals("TOKEN_BUDGET_EXHAUSTED", persistence.budgetFailureCode(claim))
-		val timing = persistence.loadTiming(devContext.devWorkspaceId, state.runId)
+		assertEquals("TOKEN_BUDGET_EXHAUSTED", executionPersistence.budgetFailureCode(claim))
+		val timing = queryPersistence.loadTiming(devContext.devWorkspaceId, state.runId)
 		assertEquals(7, timing.model?.totalTokens)
 		assertEquals(12, timing.model?.totalLatencyMs)
 	}
@@ -211,9 +222,9 @@ class ArtifactWorkflowPhysicalAttemptIntegrationTest {
 	@Test
 	fun retryTransitionPersistsReturnedMetadataForBudgetAndTiming() {
 		val state = reserve("retry-metadata", maxTotalTokens = 5)
-		val claim = assertNotNull(persistence.claimNext("metadata-worker", Instant.now().minusSeconds(120)))
-		val invocation = persistence.beginInvocation(claim, com.plot.api.ai.provider.ModelRole.WRITER)
-		persistence.scheduleInvocationRetry(
+		val claim = assertNotNull(executionPersistence.claimNext("metadata-worker", Instant.now().minusSeconds(120)))
+		val invocation = executionPersistence.beginInvocation(claim, com.plot.api.ai.provider.ModelRole.WRITER)
+		executionPersistence.scheduleInvocationRetry(
 			claim = claim,
 			lease = invocation,
 			code = "PROVIDER_UNAVAILABLE",
@@ -231,10 +242,10 @@ class ArtifactWorkflowPhysicalAttemptIntegrationTest {
 		)
 
 		val replacement = assertNotNull(
-			persistence.claimNext("metadata-worker", Instant.now().minusSeconds(120)),
+			executionPersistence.claimNext("metadata-worker", Instant.now().minusSeconds(120)),
 		)
-		assertEquals("TOKEN_BUDGET_EXHAUSTED", persistence.budgetFailureCode(replacement))
-		val timing = persistence.loadTiming(devContext.devWorkspaceId, state.runId)
+		assertEquals("TOKEN_BUDGET_EXHAUSTED", executionPersistence.budgetFailureCode(replacement))
+		val timing = queryPersistence.loadTiming(devContext.devWorkspaceId, state.runId)
 		assertEquals(7, timing.model?.totalTokens)
 		assertEquals(12, timing.model?.totalLatencyMs)
 	}
@@ -242,18 +253,18 @@ class ArtifactWorkflowPhysicalAttemptIntegrationTest {
 	@Test
 	fun staleRecoveryCreatesTheNextAttemptForTheSameLogicalStep() {
 		val state = reserve("stale-retry")
-		val firstClaim = assertNotNull(persistence.claimNext("first-worker", Instant.now().minusSeconds(120)))
-		val firstAttempt = persistence.beginInvocation(firstClaim, ModelRole.WRITER)
+		val firstClaim = assertNotNull(executionPersistence.claimNext("first-worker", Instant.now().minusSeconds(120)))
+		val firstAttempt = executionPersistence.beginInvocation(firstClaim, ModelRole.WRITER)
 		jdbcTemplate.update(
 			"update generation_runs set heartbeat_at = now() - interval '10 minutes' where id = ?",
 			state.runId,
 		)
 
-		assertEquals(1, persistence.recoverStaleClaims(Instant.now().minusSeconds(120)))
+		assertEquals(1, recoveryPersistence.recoverStaleClaims(Instant.now().minusSeconds(120)))
 		val replacement = assertNotNull(
-			persistence.claimNext("replacement-worker", Instant.now().minusSeconds(120)),
+			executionPersistence.claimNext("replacement-worker", Instant.now().minusSeconds(120)),
 		)
-		val secondAttempt = persistence.beginInvocation(replacement, ModelRole.WRITER)
+		val secondAttempt = executionPersistence.beginInvocation(replacement, ModelRole.WRITER)
 
 		assertEquals(firstAttempt.stepId, secondAttempt.stepId)
 		assertEquals(firstAttempt.logicalCallIndex, secondAttempt.logicalCallIndex)
@@ -270,19 +281,19 @@ class ArtifactWorkflowPhysicalAttemptIntegrationTest {
 	@Test
 	fun outcomeUnknownAttemptConsumesAModelCallSlot() {
 		val state = reserve("outcome-unknown-budget", maxModelCalls = 1)
-		val claim = assertNotNull(persistence.claimNext("stale-worker", Instant.now().minusSeconds(120)))
-		persistence.beginInvocation(claim, ModelRole.WRITER)
+		val claim = assertNotNull(executionPersistence.claimNext("stale-worker", Instant.now().minusSeconds(120)))
+		executionPersistence.beginInvocation(claim, ModelRole.WRITER)
 		jdbcTemplate.update(
 			"update generation_runs set heartbeat_at = now() - interval '10 minutes' where id = ?",
 			state.runId,
 		)
 
-		assertEquals(1, persistence.recoverStaleClaims(Instant.now().minusSeconds(120)))
+		assertEquals(1, recoveryPersistence.recoverStaleClaims(Instant.now().minusSeconds(120)))
 		val replacement = assertNotNull(
-			persistence.claimNext("replacement-worker", Instant.now().minusSeconds(120)),
+			executionPersistence.claimNext("replacement-worker", Instant.now().minusSeconds(120)),
 		)
 
-		assertEquals("MODEL_CALL_BUDGET_EXHAUSTED", persistence.budgetFailureCode(replacement))
+		assertEquals("MODEL_CALL_BUDGET_EXHAUSTED", executionPersistence.budgetFailureCode(replacement))
 	}
 
 	@Test
@@ -301,7 +312,8 @@ class ArtifactWorkflowPhysicalAttemptIntegrationTest {
 			beforeWriteResult = { openedLease.get().renew() },
 		)
 		val worker = ArtifactWorkflowRunWorker(
-			persistence = persistence,
+			executionPersistence = executionPersistence,
+			queryPersistence = queryPersistence,
 			workflowService = workflow,
 			modelGateway = gateway,
 			workerId = "heartbeat-loss-worker",
@@ -353,7 +365,7 @@ class ArtifactWorkflowPhysicalAttemptIntegrationTest {
 			),
 			null,
 		)
-		return persistence.createRun(
+		return admissionPersistence.createRun(
 			ArtifactWorkflowRunReservation(
 				workspaceId = devContext.devWorkspaceId,
 				createdByUserId = devContext.devUserId,

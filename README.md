@@ -9,19 +9,18 @@
 
 ## Current Product
 
-Plot currently supports one complete path:
+Plot combines six product surfaces:
 
-```txt
-Connect one GitHub repository
-  -> Plot monitors ordinary pushes without generating onboarding content
-  -> a later trustworthy GitHub release prepares a review-ready changelog
-  -> review citations beside each factual sentence
-  -> edit, copy, or download Markdown
-```
+- **Chat** — interactive, source-grounded AgentRun work.
+- **Routines** — scheduled or explicitly started AgentRun work.
+- **Sources** — GitHub connections, repository scopes, and writing blocks.
+- **Artifacts** — editable, revisioned, source-cited documents and Markdown export.
+- **GitHub release automation** — release webhooks, trustworthy range detection, and draft generation.
+- **Billing/entitlement** — subscription, trial, plan, and workspace access policy.
 
-The first observed release establishes a trustworthy range boundary and may not
-generate a draft. A later release with an exact, non-empty range does. Publishing
-always remains under the user's control outside Plot.
+The [system architecture overview](docs/architecture/system-overview.md) describes
+the request boundary, execution ownership, persistence conventions, and verification
+commands. Publishing remains under the user's control outside Plot.
 
 ## Repository
 

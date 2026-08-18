@@ -22,7 +22,8 @@ import java.time.Duration
 import java.util.UUID
 
 class ArtifactWorkflowRunWorker(
-	private val persistence: ArtifactWorkflowPersistence,
+	private val executionPersistence: ArtifactWorkflowExecutionPersistence,
+	private val queryPersistence: ArtifactWorkflowQueryPersistence,
 	private val workflowService: ArtifactWorkflowService,
 	private val modelGateway: ArtifactWorkflowModelGateway,
 	private val clock: Clock = Clock.systemUTC(),
@@ -43,7 +44,7 @@ class ArtifactWorkflowRunWorker(
 
 	/** Processes one logical model call so every successful call becomes a durable checkpoint. */
 	fun processOne(): Boolean {
-		val claim = persistence.claimNext(
+		val claim = executionPersistence.claimNext(
 			workerId,
 			clock.instant().minus(claimTimeout),
 			includeAgentRuns = agentRunsEnabled,
@@ -80,7 +81,7 @@ class ArtifactWorkflowRunWorker(
 		runLease: ArtifactWorkflowRunLease,
 		attemptObservation: Observation,
 	): Pair<String, Boolean> {
-		val state = persistence.loadState(claim.workspaceId, claim.runId)
+		val state = queryPersistence.loadState(claim.workspaceId, claim.runId)
 		try {
 			workspaceAccessService?.requireWritable(claim.workspaceId)
 		} catch (failure: ApiException) {
@@ -89,19 +90,19 @@ class ArtifactWorkflowRunWorker(
 			} else {
 				"WORKSPACE_ACCESS_FAILED"
 			}
-			runLease.commit { persistence.failClaim(claim, state, code) }
+			runLease.commit { executionPersistence.failClaim(claim, state, code) }
 			attemptObservation.lowCardinalityKeyValue("plot.error_code", code)
 			return "FAILED" to true
 		}
-		val budgetFailure = persistence.budgetFailureCode(claim)
+		val budgetFailure = executionPersistence.budgetFailureCode(claim)
 		if (budgetFailure != null) {
-			runLease.commit { persistence.failClaim(claim, state, budgetFailure) }
+			runLease.commit { executionPersistence.failClaim(claim, state, budgetFailure) }
 			attemptObservation.lowCardinalityKeyValue("plot.error_code", budgetFailure)
 			return "FAILED" to true
 		}
 		val role = state.nextRole ?: return "NO_ACTIVITY" to false
 		attemptObservation.lowCardinalityKeyValue("plot.model_role", role.name)
-		val invocation = runLease.commit { persistence.beginInvocation(claim, role) }
+		val invocation = runLease.commit { executionPersistence.beginInvocation(claim, role) }
 		attemptObservation.lowCardinalityKeyValue("plot.physical_attempt", invocation.attemptNo.toString())
 		val recording = RecordingGateway(modelGateway)
 		val modelObservation = Observation.start("plot.artifact_workflow.model_call", observationRegistry)
@@ -122,7 +123,7 @@ class ArtifactWorkflowRunWorker(
 					metadata.totalTokens?.let { modelObservation.highCardinalityKeyValue("plot.total_tokens", it.toString()) }
 					modelObservation.highCardinalityKeyValue("plot.model_latency_ms", metadata.latency.toMillis().toString())
 				}
-				runLease.commit { persistence.completeCheckpoint(claim, invocation, advanced, recording.metadata) }
+				runLease.commit { executionPersistence.completeCheckpoint(claim, invocation, advanced, recording.metadata) }
 			}
 		} catch (failure: ArtifactWorkflowModelException) {
 			attemptObservation.lowCardinalityKeyValue("plot.error_code", failure.code.name)
@@ -132,7 +133,7 @@ class ArtifactWorkflowRunWorker(
 					failure.code == ModelFailureCode.PROVIDER_UNAVAILABLE &&
 					invocation.attemptNo < MAX_PHYSICAL_ATTEMPTS_PER_LOGICAL_CALL
 				) {
-					persistence.scheduleInvocationRetry(
+					executionPersistence.scheduleInvocationRetry(
 						claim = claim,
 						lease = invocation,
 						code = failure.code.name,
@@ -141,7 +142,7 @@ class ArtifactWorkflowRunWorker(
 					)
 					modelOutcome = "RETRY_SCHEDULED"
 				} else {
-					persistence.failCheckpoint(claim, invocation, state, failure.code.name, recording.metadata)
+					executionPersistence.failCheckpoint(claim, invocation, state, failure.code.name, recording.metadata)
 					modelOutcome = "FAILED"
 				}
 			}
@@ -150,7 +151,7 @@ class ArtifactWorkflowRunWorker(
 			modelObservation.lowCardinalityKeyValue("plot.error_code", "MALFORMED_OUTPUT")
 			modelOutcome = "FAILED"
 			runLease.commit {
-				persistence.failCheckpoint(claim, invocation, state, "MALFORMED_OUTPUT", recording.metadata)
+				executionPersistence.failCheckpoint(claim, invocation, state, "MALFORMED_OUTPUT", recording.metadata)
 			}
 		} catch (failure: ArtifactWorkflowRunLeaseLostException) {
 			modelOutcome = "LEASE_LOST"
@@ -161,7 +162,7 @@ class ArtifactWorkflowRunWorker(
 			lastFailure = failure
 			attemptObservation.lowCardinalityKeyValue("plot.error_code", "WORKFLOW_FAILED")
 			runLease.commit {
-				persistence.failCheckpoint(claim, invocation, state, "WORKFLOW_FAILED", recording.metadata)
+				executionPersistence.failCheckpoint(claim, invocation, state, "WORKFLOW_FAILED", recording.metadata)
 			}
 		} finally {
 			modelObservation.lowCardinalityKeyValue("plot.outcome", modelOutcome)

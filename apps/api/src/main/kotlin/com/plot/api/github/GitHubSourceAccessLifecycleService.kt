@@ -4,7 +4,7 @@ import com.plot.api.persistence.JooqSqlExecutor
 import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
-import com.plot.api.artifact.workflow.ArtifactWorkflowPersistence
+import com.plot.api.artifact.workflow.ArtifactWorkflowExecutionPersistence
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -18,8 +18,8 @@ class GitHubSourceAccessLifecycleService(
 	private val sqlExecutor: JooqSqlExecutor,
 	private val accessChecks: GitHubRepositoryAccessCheckPersistence,
 	private val monitoringPersistence: GitHubRepositoryMonitoringPersistence,
-	private val releasePersistence: GitHubReleasePersistence,
-	private val artifactWorkflowPersistence: ArtifactWorkflowPersistence,
+	private val releasePersistence: GitHubReleaseLeaseStore,
+	private val artifactWorkflowPersistence: ArtifactWorkflowExecutionPersistence,
 ) {
 	fun isLifecycle(webhook: ParsedGitHubWebhook): Boolean = when (webhook.eventType) {
 		"installation", "installation_repositories", "repository" -> true

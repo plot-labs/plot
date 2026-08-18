@@ -11,7 +11,7 @@ import org.springframework.transaction.annotation.Transactional
 class GitHubReleaseActivityService(
 	private val guard: GitHubGuard,
 	private val devContext: DevContext,
-	private val persistence: GitHubReleasePersistence,
+	private val requestPersistence: GitHubReleaseRequestStore,
 	private val retryService: GitHubReleaseRetryService,
 ) {
 	@Transactional(readOnly = true)
@@ -19,7 +19,7 @@ class GitHubReleaseActivityService(
 		guard.requireReadAccess()
 		val workspaceId = devContext.devWorkspaceId
 		requireScope(sourceScopeId, workspaceId)
-		return persistence.findLatestActivity(sourceScopeId, workspaceId)?.toResponse()
+		return requestPersistence.findLatestActivity(sourceScopeId, workspaceId)?.toResponse()
 	}
 
 	@Transactional
@@ -27,7 +27,7 @@ class GitHubReleaseActivityService(
 		guard.requireReadAccess()
 		val workspaceId = devContext.devWorkspaceId
 		requireScope(sourceScopeId, workspaceId)
-		val activity = persistence.findActivity(requestId, sourceScopeId, workspaceId)
+		val activity = requestPersistence.findActivity(requestId, sourceScopeId, workspaceId)
 			?: throw notFound()
 		if (activity.status != GitHubReleaseDraftStatus.FAILED) {
 			throw ApiException(
@@ -41,12 +41,12 @@ class GitHubReleaseActivityService(
 		} catch (_: GitHubReleaseRetryRejectedException) {
 			throw notRetryable()
 		}
-		return persistence.findActivity(requestId, sourceScopeId, workspaceId)?.toResponse()
+		return requestPersistence.findActivity(requestId, sourceScopeId, workspaceId)?.toResponse()
 			?: throw notFound()
 	}
 
 	private fun requireScope(sourceScopeId: UUID, workspaceId: UUID) {
-		if (!persistence.releaseScopeExists(sourceScopeId, workspaceId)) {
+		if (!requestPersistence.releaseScopeExists(sourceScopeId, workspaceId)) {
 			throw notFound()
 		}
 	}
