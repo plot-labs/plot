@@ -77,7 +77,7 @@ class PlotApiContractIntegrationTest {
 	@Test
 	fun `manifest routes are registered by the backend`() {
 		val mappings = handlerMapping.handlerMethods.keys.flatMap { mapping ->
-			mapping.directPaths.map { path -> normalizeRoute(path) to mapping.methodsCondition.methods }
+			mapping.patternValues.map { path -> normalizeRoute(path) to mapping.methodsCondition.methods }
 		}
 		resource("manifest.json").path("cases").asArray().values().forEach { contractCase ->
 			val expectedRoute = normalizeRoute("/api${contractCase.path("routeTemplate").stringValue()}")
