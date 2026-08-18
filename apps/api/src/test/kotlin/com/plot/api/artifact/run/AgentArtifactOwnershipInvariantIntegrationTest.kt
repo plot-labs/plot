@@ -63,7 +63,8 @@ class AgentArtifactOwnershipInvariantIntegrationTest {
 		val fixture = insertFixture()
 		val agentRunId = insertAgent(fixture, "FAILED")
 		val artifactRunId = insertArtifact(fixture, agentRunId, "READY")
-		insertGeneration(fixture, agentRunId, artifactRunId, "READY", "conforming")
+		val generationRunId = insertGeneration(fixture, agentRunId, artifactRunId, "READY", "conforming")
+		insertContentPack(fixture, generationRunId)
 		insertLegacyRelease(fixture)
 
 		val rows = runAudit()
@@ -78,11 +79,13 @@ class AgentArtifactOwnershipInvariantIntegrationTest {
 		val owner = insertAgent(fixture, "FAILED")
 		val otherOwner = insertAgent(fixture, "FAILED")
 		val succeededOwner = insertAgent(fixture, "SUCCEEDED")
+		val succeededUnmaterializedOwner = insertAgent(fixture, "SUCCEEDED")
 		val runningOwner = insertAgent(fixture, "RUNNING")
 		val missingAgentOwner = insertAgent(fixture, "FAILED")
 		val readyArtifact = insertArtifact(fixture, owner, "READY")
 		val failedArtifact = insertArtifact(fixture, otherOwner, "FAILED")
 		val succeededFailedArtifact = insertArtifact(fixture, succeededOwner, "FAILED")
+		insertArtifact(fixture, succeededUnmaterializedOwner, "READY")
 		val runningFailedArtifact = insertArtifact(fixture, runningOwner, "FAILED")
 		val missingAgentArtifact = insertArtifact(fixture, missingAgentOwner, "FAILED")
 
@@ -105,8 +108,12 @@ class AgentArtifactOwnershipInvariantIntegrationTest {
 			),
 			rows.map { it["violation_code"] as String }.toSet(),
 		)
-		assertEquals(5, rows.size)
+		assertEquals(6, rows.size)
 		assertTrue(rows.all { it.keys == setOf("violation_code", "workspace_id", "entity_id", "detail") })
+		assertTrue(rows.any {
+			it["entity_id"] == succeededUnmaterializedOwner
+				&& it["detail"] == "succeeded AgentRun owns an unmaterialized ArtifactRun"
+		})
 		assertFalse(rows.any { it["entity_id"] == runningOwner })
 	}
 
@@ -253,6 +260,23 @@ class AgentArtifactOwnershipInvariantIntegrationTest {
 			if (status == "READY" || status == "NEEDS_REVIEW" || status == "FAILED") now else null,
 		)
 		return id
+	}
+
+	private fun insertContentPack(fixture: Fixture, generationRunId: UUID) {
+		val id = UUID.randomUUID()
+		val now = Timestamp.from(fixture.now)
+		schemaJdbcTemplate.update(
+			"""
+			insert into content_packs (
+			  id, workspace_id, generation_run_id, title, status, created_at, updated_at
+			) values (?, ?, ?, 'Audit pack', 'READY', ?, ?)
+			""".trimIndent(),
+			id,
+			fixture.workspaceId,
+			generationRunId,
+			now,
+			now,
+		)
 	}
 
 	private fun insertLegacyRelease(fixture: Fixture) {

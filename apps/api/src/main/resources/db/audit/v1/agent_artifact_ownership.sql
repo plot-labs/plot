@@ -59,6 +59,16 @@ with violations as (
     and (
       artifact.id is null
       or artifact.status not in ('READY', 'NEEDS_REVIEW')
+      or not exists (
+        select 1
+        from generation_runs generation
+        join content_packs pack
+          on pack.workspace_id = generation.workspace_id
+         and pack.generation_run_id = generation.id
+        where generation.workspace_id = agent.workspace_id
+          and generation.agent_run_id = agent.id
+          and generation.artifact_run_id = artifact.id
+      )
     )
 
   union all
