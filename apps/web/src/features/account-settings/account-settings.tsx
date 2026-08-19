@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 
+import { UserAvatar } from "@/components/user-avatar";
+
 type AccountProfile = {
-  user: { displayName: string; email: string };
+  user: { id: string; displayName: string; email: string };
 };
 
 export function AccountSettings() {
@@ -28,8 +30,6 @@ export function AccountSettings() {
     return () => { cancelled = true; };
   }, []);
 
-  const mark = (account?.user.displayName || account?.user.email || "A").slice(0, 1).toUpperCase();
-
   return (
     <div className="h-full overflow-y-auto bg-[#f4f6f8] px-5 py-8 dark:bg-[#101112] sm:px-8 sm:py-10 lg:px-10">
       <div className="mx-auto max-w-[760px] pb-16">
@@ -52,9 +52,7 @@ export function AccountSettings() {
             {error && <p role="alert" className="text-sm text-red-700 dark:text-red-300">{error}</p>}
             {!isLoading && !error && account && (
               <div className="flex items-center gap-4">
-                <div className="flex size-12 shrink-0 items-center justify-center rounded-full border border-black/10 bg-white text-sm font-semibold text-black/65 dark:border-white/10 dark:bg-white/10 dark:text-white/75">
-                  {mark}
-                </div>
+                <UserAvatar userId={account.user.id} size={48} />
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-black/80 dark:text-white/84">{account.user.displayName}</p>
                   <p className="mt-1 truncate text-sm text-black/48 dark:text-white/48">{account.user.email}</p>
