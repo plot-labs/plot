@@ -65,6 +65,7 @@ plot.ai.provider=openrouter
 plot.ai.model=openai/gpt-5.6-luna-pro
 plot.ai.routing-provider=openai
 plot.ai.allow-fallbacks=false
+plot.ai.allow-data-collection=false
 plot.ai.content-logging-enabled=false
 plot.ai.worker-poll-delay=5s
 plot.ai.claim-timeout=10m
@@ -79,7 +80,7 @@ plot.github.access-check-lease-timeout=2m
 plot.github.access-check-max-attempts=3
 ```
 
-`openai/gpt-4o-mini-2024-07-18` is the other currently supported pinned model.
+`openai/gpt-4o-mini-2024-07-18` and `nvidia/nemotron-3.5-lightning:free` are also supported. The free Nemotron endpoint does not expose native structured-output parameters, so Plot excludes its reasoning field, provides concise role-specific JSON examples, normalizes only known null/whitespace quirks, and validates the normalized response against the same JSON schemas locally. OpenRouter requires the free endpoint to permit prompt and source-evidence use for model training; selecting it therefore also requires the explicit setting `plot.ai.allow-data-collection=true`. Keep this false for models that do not require training consent.
 The OpenRouter credential is supplied to the Spring AI OpenAI-compatible
 transport with the exact deployment secret name `SPRING_AI_OPENAI_API_KEY`.
 The corresponding GitHub deployment secret names are
