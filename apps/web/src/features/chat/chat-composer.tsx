@@ -48,7 +48,7 @@ export function ChatComposer({
       className={cn(
         "w-full",
         variant === "dock"
-          ? "border-t border-black/[0.06] bg-white/85 px-4 py-4 backdrop-blur-xl dark:border-white/[0.07] dark:bg-[#111113]/85 sm:px-8"
+          ? "bg-[#fbfbf8]/95 px-4 pb-4 pt-3 backdrop-blur-xl dark:bg-[#111113]/95 sm:px-6"
           : "px-1",
       )}
     >

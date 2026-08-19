@@ -123,8 +123,13 @@ describe("ChatWorkspace", () => {
     mocks.getChatAgentRun.mockResolvedValue(succeeded);
 
     render(<ChatWorkspace />);
-    expect(await screen.findByText("Reviewed artifact")).toBeVisible();
-    expect(screen.getByRole("button", { name: /ReleaseArtifact available/ })).toBeVisible();
+    const openArtifact = await screen.findByText("Open artifact");
+    expect(screen.queryByText("Reviewed artifact")).not.toBeInTheDocument();
+    fireEvent.click(openArtifact);
+    expect(screen.getByRole("complementary", { name: "Artifact document panel" })).toBeVisible();
+    expect(screen.getByRole("separator", { name: "Resize artifact document" })).toBeInTheDocument();
+    expect(screen.getByText("Reviewed artifact")).toBeVisible();
+    expect(screen.queryByRole("tabpanel", { name: "Assistant panel" })).not.toBeInTheDocument();
     await waitFor(() => expect(document.querySelectorAll("time")).toHaveLength(1));
     expect(screen.getByText("Source agent")).toBeVisible();
   });
@@ -136,7 +141,8 @@ describe("ChatWorkspace", () => {
     mocks.listSessionAgentRuns.mockResolvedValue([succeeded]);
 
     render(<ChatWorkspace />);
-    expect(await screen.findByText("Reviewed artifact")).toBeVisible();
+    expect(await screen.findByText("Open artifact")).toBeVisible();
+    expect(screen.queryByText("Reviewed artifact")).not.toBeInTheDocument();
     expect(screen.getByText("Source agent")).toBeVisible();
     expect(mocks.getChatAgentRun).not.toHaveBeenCalled();
   });
@@ -150,7 +156,7 @@ describe("ChatWorkspace", () => {
     mocks.createChatAgentRun.mockResolvedValue(agentRun({ id: "agent-2", status: "QUEUED", artifactId: null, artifact: null }));
 
     render(<ChatWorkspace />);
-    await screen.findByText("Reviewed artifact");
+    await screen.findByText("Open artifact");
     await waitFor(() => expect(screen.queryByText("Loading sources…")).not.toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Generate again" }));
 
@@ -166,7 +172,7 @@ describe("ChatWorkspace", () => {
     mocks.listSessionAgentRuns.mockResolvedValue([succeeded]);
     mocks.getChatAgentRun.mockResolvedValue(succeeded);
     render(<ChatWorkspace />);
-    await screen.findByText("Reviewed artifact");
+    await screen.findByText("Open artifact");
 
     window.dispatchEvent(new CustomEvent("plot:workspace-changed", { detail: { id: "workspace-2" } }));
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/chat", { scroll: false }));
@@ -179,7 +185,7 @@ describe("ChatWorkspace", () => {
     mocks.listSessionAgentRuns.mockResolvedValue([succeeded]);
     mocks.getChatAgentRun.mockResolvedValue(succeeded);
     render(<ChatWorkspace />);
-    await screen.findByText("Reviewed artifact");
+    await screen.findByText("Open artifact");
 
     const historyTrigger = screen.getAllByRole("tab", { name: "History" }).find((element) => element.getAttribute("aria-controls") === "mobile-chat-history-panel");
     expect(historyTrigger).toBeDefined();
