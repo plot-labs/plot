@@ -185,11 +185,11 @@ class ChatAgentAdmissionService(
 		return run.toChatResponseFor(agentRunQueryPersistence)
 	}
 
-	fun listForChat(chatId: UUID): List<ChatAgentRunResponse> {
-		if (!agentRunQueryPersistence.chatExists(devContext.devWorkspaceId, chatId)) {
+	fun listForSession(sessionId: UUID): List<ChatAgentRunResponse> {
+		if (!agentRunQueryPersistence.sessionExists(devContext.devWorkspaceId, sessionId)) {
 			throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Chat not found")
 		}
-		return agentRunQueryPersistence.listChatAgentRuns(devContext.devWorkspaceId, chatId)
+		return agentRunQueryPersistence.listSessionAgentRuns(devContext.devWorkspaceId, sessionId)
 			.map { it.toChatResponseFor(agentRunQueryPersistence) }
 	}
 

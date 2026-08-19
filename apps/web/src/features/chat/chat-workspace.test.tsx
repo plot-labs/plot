@@ -129,6 +129,18 @@ describe("ChatWorkspace", () => {
     expect(screen.getByText("Source agent")).toBeVisible();
   });
 
+  it("restores generated activity when History opens a session without an Agent query", async () => {
+    mocks.search = "chat=chat-1";
+    mocks.listSessions.mockResolvedValue([chat]);
+    const succeeded = agentRun({ status: "SUCCEEDED", artifactId: "artifact-1", artifact: artifactSummary });
+    mocks.listSessionAgentRuns.mockResolvedValue([succeeded]);
+
+    render(<ChatWorkspace />);
+    expect(await screen.findByText("Reviewed artifact")).toBeVisible();
+    expect(screen.getByText("Source agent")).toBeVisible();
+    expect(mocks.getChatAgentRun).not.toHaveBeenCalled();
+  });
+
   it("starts a follow-up Agent request with the active Chat linkage", async () => {
     mocks.search = "chat=chat-1&agent=agent-1";
     mocks.listSessions.mockResolvedValue([chat]);

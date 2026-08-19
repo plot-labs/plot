@@ -223,6 +223,14 @@ class AgentRunWorkerIntegrationTest {
 			routinePersistence.find(routine.workspaceId, routine.id)?.activityCursorSequence,
 		)
 		assertEquals(1, count("select count(*) from content_packs where generation_run_id = ?", artifactWorkflowRunId))
+		val routineChatId = jdbcTemplate.queryForObject(
+			"select work_session_id from agent_runs where id = ?",
+			UUID::class.java,
+			agentRunId,
+		)!!
+		val historyRuns = chatAdmission.listForSession(routineChatId)
+		assertEquals(listOf(agentRunId), historyRuns.map { it.id })
+		assertNotNull(historyRuns.single().artifactId)
 		assertEquals(3, agentModel.requests.size)
 		assertTrue(agentModel.requests.none { request ->
 			request.toString().contains("MUTATED SECRET") || request.toString().contains("Authorization")

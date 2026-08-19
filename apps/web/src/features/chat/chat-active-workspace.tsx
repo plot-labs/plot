@@ -103,7 +103,7 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
                 </ChatMessage>
               ))}
               <AgentActivityDetail
-                run={agent.agentRun}
+                run={agent.agentRun ?? agent.selectedActivity}
                 busy={agent.agentBusy}
                 error={agent.agentError}
                 instruction={agent.agentInstruction}
