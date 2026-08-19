@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -131,7 +131,10 @@ describe("ChatWorkspace", () => {
     expect(openArtifact.compareDocumentPosition(responseTime!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.queryByText("Reviewed artifact")).not.toBeInTheDocument();
     fireEvent.click(openArtifact);
-    expect(screen.getByRole("complementary", { name: "Artifact document panel" })).toBeVisible();
+    const artifactPanel = screen.getByRole("complementary", { name: "Artifact document panel" });
+    expect(artifactPanel).toBeVisible();
+    expect(within(artifactPanel).getAllByText("Release", { exact: true })).toHaveLength(1);
+    expect(artifactPanel.querySelector("h1")).not.toBeInTheDocument();
     expect(screen.getByRole("separator", { name: "Resize artifact document" })).toBeInTheDocument();
     expect(screen.getByText("Reviewed artifact")).toBeVisible();
     expect(screen.queryByRole("tabpanel", { name: "Assistant panel" })).not.toBeInTheDocument();

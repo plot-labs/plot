@@ -61,6 +61,17 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
     requestedArtifactId,
     selectedActivityArtifactId: agent.selectedActivity?.artifactId ?? null,
   });
+  const shownArtifact = document.historicalArtifact?.artifact ?? document.currentArtifact;
+  const artifactMetrics = useMemo(() => {
+    if (!shownArtifact) return null;
+    const draft = document.historicalArtifact ? undefined : document.drafts[shownArtifact.id];
+    const statements = draft?.statements ?? shownArtifact.variant.sentences;
+    const text = statements.map((statement) => statement.body).join("\n");
+    return {
+      characters: text.length.toLocaleString("en-US"),
+      words: (text.trim() ? text.trim().split(/\s+/u).length : 0).toLocaleString("en-US"),
+    };
+  }, [document.drafts, document.historicalArtifact, shownArtifact]);
 
   useEffect(() => {
     const previous = previousMobilePanelRef.current;
@@ -239,8 +250,14 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
           className="absolute inset-0 z-30 flex min-w-0 flex-col border-l border-black/[0.08] bg-[#fbfbf8] dark:border-white/10 dark:bg-[#16171a] lg:static lg:w-[var(--artifact-panel-width)] lg:max-w-[calc(100%-420px)] lg:shrink-0"
           style={{ "--artifact-panel-width": `${artifactPanel.size}px` } as CSSProperties}
         >
-          <header className="flex min-h-16 shrink-0 items-center justify-end gap-3 px-4">
-            <div className="flex items-center gap-2">
+          <header className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-black/[0.06] px-4 dark:border-white/10">
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-medium text-black/72 dark:text-white/76">{shownArtifact?.title || "Generated artifact"}</div>
+              {artifactMetrics ? (
+                <div className="mt-0.5 text-xs text-black/38 dark:text-white/42">{artifactMetrics.characters} characters · {artifactMetrics.words} words</div>
+              ) : null}
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
               <span role="status" aria-live="polite" className="hidden text-xs text-black/42 dark:text-white/45 sm:inline">
                 {document.saveState === "saving" ? "Saving…" : document.saveState === "dirty" ? "Unsaved changes" : document.saveState === "error" ? "Save needs attention" : "Saved"}
               </span>
