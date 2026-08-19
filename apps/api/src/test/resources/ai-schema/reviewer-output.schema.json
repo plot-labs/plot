@@ -19,6 +19,19 @@
           "modelSuppliedUrls": { "type": "array", "items": { "type": "string" } }
         }
       }
+    },
+    "documentConflicts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sentenceIds", "evidenceIds", "reason"],
+        "properties": {
+          "sentenceIds": { "type": "array", "items": { "type": "string", "format": "uuid" } },
+          "evidenceIds": { "type": "array", "items": { "type": "string", "format": "uuid" } },
+          "reason": { "type": "string", "minLength": 1 }
+        }
+      }
     }
   }
 }

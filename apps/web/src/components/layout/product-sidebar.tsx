@@ -10,6 +10,7 @@ import { useState } from "react";
 
 import { ProfileMenu } from "@/components/layout/profile-menu";
 import { SidebarNavigation } from "@/components/layout/sidebar-navigation";
+import { SidebarOnboarding } from "@/components/layout/sidebar-onboarding";
 import { useRecentChats } from "@/components/layout/use-recent-chats";
 import { useSidebarWorkspace } from "@/components/layout/use-sidebar-workspace";
 import { WorkspaceSwitcher } from "@/components/layout/workspace-switcher";
@@ -109,6 +110,8 @@ export function ProductSidebar({ collapsed = false, theme, onThemeChange, onTogg
           selectedChatId={selectedChatId}
           recentChats={recentChats}
         />
+
+        {!settingsMode && !collapsed && <SidebarOnboarding workspaceId={workspace.currentWorkspaceId} />}
 
         <ProfileMenu
           collapsed={collapsed}

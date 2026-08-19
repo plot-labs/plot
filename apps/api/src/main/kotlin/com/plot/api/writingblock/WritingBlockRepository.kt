@@ -1,5 +1,7 @@
 package com.plot.api.writingblock
 
+import com.plot.api.persistence.generated.tables.AgentRunInputs.Companion.AGENT_RUN_INPUTS
+import com.plot.api.persistence.generated.tables.AgentRuns.Companion.AGENT_RUNS
 import com.plot.api.persistence.generated.tables.SourceScopes.Companion.SOURCE_SCOPES
 import com.plot.api.persistence.generated.tables.WritingBlockScopes.Companion.WRITING_BLOCK_SCOPES
 import com.plot.api.persistence.generated.tables.WritingBlocks.Companion.WRITING_BLOCKS
@@ -63,13 +65,19 @@ class WritingBlockRepository(
 			activeMembership(workspaceId, sourceScopeId),
 			org.jooq.impl.DSL.notExists(
 				dsl.selectOne()
-					.from(com.plot.api.persistence.generated.tables.AgentRunInputs.Companion.AGENT_RUN_INPUTS)
+					.from(AGENT_RUN_INPUTS)
+					.join(AGENT_RUNS)
+					.on(
+						AGENT_RUNS.WORKSPACE_ID.eq(AGENT_RUN_INPUTS.WORKSPACE_ID),
+						AGENT_RUNS.ID.eq(AGENT_RUN_INPUTS.AGENT_RUN_ID),
+					)
 					.where(
-						com.plot.api.persistence.generated.tables.AgentRunInputs.Companion.AGENT_RUN_INPUTS.WORKSPACE_ID.eq(workspaceId),
-						com.plot.api.persistence.generated.tables.AgentRunInputs.Companion.AGENT_RUN_INPUTS.ROUTINE_ID.eq(routineId),
-						com.plot.api.persistence.generated.tables.AgentRunInputs.Companion.AGENT_RUN_INPUTS.WRITING_BLOCK_ID.eq(WRITING_BLOCKS.ID),
-						com.plot.api.persistence.generated.tables.AgentRunInputs.Companion.AGENT_RUN_INPUTS.ACTIVITY_SEQUENCE.eq(WRITING_BLOCKS.ACTIVITY_SEQUENCE),
-						com.plot.api.persistence.generated.tables.AgentRunInputs.Companion.AGENT_RUN_INPUTS.INPUT_KIND.eq("SEED"),
+						AGENT_RUN_INPUTS.WORKSPACE_ID.eq(workspaceId),
+						AGENT_RUN_INPUTS.ROUTINE_ID.eq(routineId),
+						AGENT_RUN_INPUTS.WRITING_BLOCK_ID.eq(WRITING_BLOCKS.ID),
+						AGENT_RUN_INPUTS.ACTIVITY_SEQUENCE.eq(WRITING_BLOCKS.ACTIVITY_SEQUENCE),
+						AGENT_RUN_INPUTS.INPUT_KIND.eq("SEED"),
+						AGENT_RUNS.STATUS.`in`("QUEUED", "RUNNING", "SUCCEEDED"),
 					),
 			),
 		)

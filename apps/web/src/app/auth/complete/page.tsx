@@ -26,7 +26,7 @@ export default function AuthCompletePage() {
         const account = await response.json() as BootstrapAccountResponse;
         if (!account.workspaceId) throw new Error("ACCESS_DENIED");
         window.localStorage.setItem("plot.workspaceId", account.workspaceId);
-        if (!cancelled) router.replace("/artifacts");
+        if (!cancelled) router.replace("/chat");
       })
       .catch((failure: unknown) => {
         if (!cancelled) setError(bootstrapErrorMessage(failure));

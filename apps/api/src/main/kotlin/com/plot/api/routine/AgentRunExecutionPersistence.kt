@@ -333,7 +333,7 @@ class AgentRunExecutionPersistence(
 	fun failAgentRun(claim: ClaimedAgentRun, errorCode: String, now: Instant = currentInstant()): AgentRunRecord =
 		terminalizeAgentRun(claim, AgentRunStatus.FAILED, errorCode, now)
 	fun succeedAgentRun(claim: ClaimedAgentRun, now: Instant = currentInstant()): AgentRunRecord = transactionExecutor.execute {
-		queryPersistence.requireAgentClaim(claim)
+		val run = queryPersistence.requireAgentClaim(claim)
 		val materialized = sqlExecutor.queryForObject(
 			"""
 			select count(*)
@@ -350,8 +350,32 @@ class AgentRunExecutionPersistence(
 			claim.agentRunId,
 		) == 1
 		if (!materialized) throw RoutineExecutionStateException("Agent artifact workflow is not materialized")
-		terminalizeAgentRun(claim, AgentRunStatus.SUCCEEDED, null, now)
+		val completed = terminalizeAgentRun(claim, AgentRunStatus.SUCCEEDED, null, now)
+		commitRoutineCursor(run, now)
+		completed
 	}
+
+	private fun commitRoutineCursor(run: AgentRunRecord, now: Instant) {
+		if (run.origin != AgentRunOrigin.ROUTINE || run.routineExecutionId == null || run.routineId == null) return
+		sqlExecutor.update(
+			"""
+			update routines routine
+			set activity_cursor_sequence = greatest(coalesce(routine.activity_cursor_sequence, 0), execution.activity_cursor_after),
+			    updated_at = ?
+			from routine_executions execution
+			where routine.workspace_id = ? and routine.id = ?
+			  and execution.workspace_id = routine.workspace_id and execution.id = ?
+			  and execution.routine_id = routine.id
+			  and execution.trigger_kind <> 'GITHUB'
+			  and execution.activity_cursor_after is not null
+			""".trimIndent(),
+			Timestamp.from(now),
+			run.workspaceId,
+			run.routineId,
+			run.routineExecutionId,
+		)
+	}
+
 	private fun findStepForUpdate(workspaceId: UUID, agentRunId: UUID, stepId: UUID): AgentStepRecord? =
 		sqlExecutor.query(
 			"""

@@ -35,6 +35,7 @@ data class GitHubRepositoryResponse(
 	val name: String,
 	val displayName: String,
 	val url: String,
+	val visibility: String,
 	val status: String?,
 	val monitoring: GitHubRepositoryMonitoringResponse?,
 	val statusReason: String? = null,
@@ -256,7 +257,7 @@ class GitHubConnectionService(
 				"${repository.owner}/${repository.name}",
 				"${repository.owner}/${repository.name}",
 				repository.url,
-				objectMapper.writeValueAsString(mapOf("repositoryId" to repository.id, "defaultBranch" to repository.defaultBranch)),
+				objectMapper.writeValueAsString(mapOf("repositoryId" to repository.id, "defaultBranch" to repository.defaultBranch, "visibility" to repository.visibility)),
 				Timestamp.from(now),
 				Timestamp.from(now),
 			) ?: throw ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "GitHub repository could not be saved")
@@ -455,7 +456,7 @@ class GitHubConnectionService(
 		return sqlExecutor.query(
 			"""
 			select sc.id, sc.external_scope_key, sc.external_key, sc.display_name, sc.url, sc.status,
-			       sc.status_reason, ac.status
+			       sc.status_reason, ac.status, sc.metadata ->> 'visibility'
 			from source_scopes sc
 			join connection_namespace_bindings b on b.workspace_id = sc.workspace_id
 			 and b.source_namespace_id = sc.source_namespace_id and b.provider = 'GITHUB'
@@ -473,6 +474,7 @@ class GitHubConnectionService(
 					name = externalKey.substringAfter('/', requireNotNull(rs.getString(4))),
 					displayName = requireNotNull(rs.getString(4)),
 					url = rs.getString(5).orEmpty(),
+					visibility = rs.getString(9) ?: "PUBLIC",
 					status = rs.getString(6),
 					monitoring = monitoringPersistence.find(
 						devContext.devWorkspaceId,
@@ -615,6 +617,7 @@ private fun GitHubRepository.toResponse(
 	name = name,
 	displayName = "$owner/$name",
 	url = url,
+	visibility = visibility,
 	status = status,
 	monitoring = monitoring,
 	statusReason = statusReason,

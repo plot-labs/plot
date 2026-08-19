@@ -132,6 +132,7 @@ export interface GitHubRepository {
   name: string;
   displayName: string;
   url: string;
+  visibility?: "PUBLIC" | "PRIVATE" | string;
   status: string | null;
   monitoring: GitHubRepositoryMonitoring | null;
   statusReason?: GitHubRepositoryStatusReason | string | null;

@@ -8,6 +8,7 @@ import com.plot.api.persistence.generated.Public
 import com.plot.api.persistence.generated.indexes.AGENT_RUN_INPUTS_ADOPTED_IDENTITY_IDX
 import com.plot.api.persistence.generated.indexes.AGENT_RUN_INPUTS_AGENT_ORDER_IDX
 import com.plot.api.persistence.generated.indexes.AGENT_RUN_INPUTS_SEED_IDENTITY_IDX
+import com.plot.api.persistence.generated.indexes.AGENT_RUN_INPUTS_SEED_PER_RUN_IDX
 import com.plot.api.persistence.generated.indexes.AGENT_RUN_INPUTS_SOURCE_PROVENANCE_KEY
 import com.plot.api.persistence.generated.keys.AGENT_RUN_INPUTS_PKEY
 import com.plot.api.persistence.generated.keys.AGENT_RUN_INPUTS_WORKSPACE_ID_AGENT_RUN_ID_ORDER_INDEX_KEY
@@ -225,7 +226,7 @@ open class AgentRunInputs(
         override fun `as`(alias: Table<*>): AgentRunInputsPath = AgentRunInputsPath(alias.qualifiedName, this)
     }
     override fun getSchema(): Schema? = if (aliased()) null else Public.PUBLIC
-    override fun getIndexes(): List<Index> = listOf(AGENT_RUN_INPUTS_ADOPTED_IDENTITY_IDX, AGENT_RUN_INPUTS_AGENT_ORDER_IDX, AGENT_RUN_INPUTS_SEED_IDENTITY_IDX, AGENT_RUN_INPUTS_SOURCE_PROVENANCE_KEY)
+    override fun getIndexes(): List<Index> = listOf(AGENT_RUN_INPUTS_ADOPTED_IDENTITY_IDX, AGENT_RUN_INPUTS_AGENT_ORDER_IDX, AGENT_RUN_INPUTS_SEED_IDENTITY_IDX, AGENT_RUN_INPUTS_SEED_PER_RUN_IDX, AGENT_RUN_INPUTS_SOURCE_PROVENANCE_KEY)
     override fun getPrimaryKey(): UniqueKey<AgentRunInputsRecord> = AGENT_RUN_INPUTS_PKEY
     override fun getUniqueKeys(): List<UniqueKey<AgentRunInputsRecord>> = listOf(AGENT_RUN_INPUTS_WORKSPACE_ID_AGENT_RUN_ID_ORDER_INDEX_KEY, AGENT_RUN_INPUTS_WORKSPACE_ID_ID_AGENT_RUN_ID_KEY, AGENT_RUN_INPUTS_WORKSPACE_ID_ID_KEY)
     override fun getReferences(): List<ForeignKey<AgentRunInputsRecord, *>> = listOf(AGENT_RUN_INPUTS__AGENT_RUN_INPUTS_WORKSPACE_ID_AGENT_RUN_ID_ROUTINE_ID_FKEY, AGENT_RUN_INPUTS__AGENT_RUN_INPUTS_WORKSPACE_ID_AGENT_RUN_ID_SOURCE_SCOPE_ID_FKEY, AGENT_RUN_INPUTS__AGENT_RUN_INPUTS_WORKSPACE_ID_ROUTINE_ID_FKEY, AGENT_RUN_INPUTS__AGENT_RUN_INPUTS_WORKSPACE_ID_WRITING_BLOCK_ID_FKEY)

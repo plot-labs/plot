@@ -9,6 +9,7 @@ data class GitHubRepository(
 	val url: String,
 	val defaultBranch: String?,
 	val ownerId: Long? = null,
+	val visibility: String = "PUBLIC",
 )
 
 data class GitHubPullRequest(

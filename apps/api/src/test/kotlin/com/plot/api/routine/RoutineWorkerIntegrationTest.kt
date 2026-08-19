@@ -111,10 +111,12 @@ class RoutineWorkerIntegrationTest {
 		val firstExecutionId = runNow(routine.id, "backlog-first")
 		assertEquals(blockIds.take(20), seedInputIds(firstExecutionId))
 		assertEquals(RoutineExecutionStatus.DISPATCHED, executionStatus(firstExecutionId))
+		completeAgent(firstExecutionId)
 
 		val secondExecutionId = runNow(routine.id, "backlog-second")
 		assertEquals(blockIds.drop(20), seedInputIds(secondExecutionId))
 		assertEquals(RoutineExecutionStatus.DISPATCHED, executionStatus(secondExecutionId))
+		completeAgent(secondExecutionId)
 
 		jdbcTemplate.update(
 			"""
@@ -193,7 +195,7 @@ class RoutineWorkerIntegrationTest {
 			cadence = RoutineCadence.DAILY,
 		)
 		val blockId = insertBlock(fixture, 1, Instant.parse("2026-08-09T00:00:00Z"))
-		runNow(routine.id, "membership-first")
+		completeAgent(runNow(routine.id, "membership-first"))
 
 		jdbcTemplate.update(
 			"update writing_block_scopes set status = 'TOMBSTONED' where writing_block_id = ? and source_scope_id = ?",
@@ -236,6 +238,7 @@ class RoutineWorkerIntegrationTest {
 			firstExecutionId,
 		))
 		assertEquals(agentProperties.maxInputCharacters, boundedCharacters)
+		completeAgent(firstExecutionId)
 
 		val secondExecutionId = runNow(routine.id, "oversized-second")
 		assertEquals(listOf(laterId), seedInputIds(secondExecutionId))
@@ -354,6 +357,22 @@ class RoutineWorkerIntegrationTest {
 	private fun executionStatus(executionId: UUID): RoutineExecutionStatus = assertNotNull(
 		agentPersistence.findExecution(devContext.devWorkspaceId, executionId),
 	).status
+
+	private fun completeAgent(executionId: UUID) {
+		jdbcTemplate.update(
+			"update agent_runs set status = 'SUCCEEDED', finished_at = now(), updated_at = now() where routine_execution_id = ?",
+			executionId,
+		)
+		jdbcTemplate.update(
+			"""
+			update routines routine
+			set activity_cursor_sequence = execution.activity_cursor_after, updated_at = now()
+			from routine_executions execution
+			where execution.id = ? and routine.id = execution.routine_id
+			""".trimIndent(),
+			executionId,
+		)
+	}
 
 	private fun seedInputIds(executionId: UUID): List<UUID> = jdbcTemplate.query(
 		"select input.writing_block_id from agent_run_inputs input join agent_runs run on run.workspace_id = input.workspace_id and run.id = input.agent_run_id where run.routine_execution_id = ? and input.input_kind = 'SEED' order by input.order_index",

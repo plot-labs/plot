@@ -116,7 +116,7 @@ export function RoutinesWorkspace() {
           .filter((connection) => connection.status === "ACTIVE")
           .flatMap((connection) => connection.repositories)
           .filter((repository): repository is GitHubRepository & { id: string } => Boolean(repository.id) && repository.status === "ACTIVE")
-          .map(({ id, displayName }) => ({ id, displayName }));
+          .map(({ id, displayName, visibility }) => ({ id, displayName, visibility }));
         setRoutines(nextRoutines);
         if (nextRoutines.some((routine) => Boolean(routine.latestExecution?.chatId))) {
           window.dispatchEvent(new Event("plot:sessions-changed"));
