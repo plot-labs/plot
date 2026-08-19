@@ -9,6 +9,7 @@ import type { Dispatch, SetStateAction } from "react";
 
 import type { ProductTheme } from "@/components/layout/product-shell";
 import type { SidebarAccount } from "@/components/layout/use-sidebar-workspace";
+import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 
 const themeOptions = [
@@ -140,12 +141,16 @@ export function ProfileMenu({
           collapsed ? "justify-center px-0" : "px-1",
         )}
       >
-        <div className={cn(
-          "flex items-center justify-center border border-black/10 bg-white text-xs font-semibold text-black/65 dark:border-white/10 dark:bg-white/10 dark:text-white/75",
-          collapsed ? "size-9 rounded-[12px]" : "size-8 rounded-full",
-        )}>
-          <UserRound className="size-4" />
-        </div>
+        {account?.user.id ? (
+          <UserAvatar userId={account.user.id} size={collapsed ? 36 : 32} />
+        ) : (
+          <div className={cn(
+            "flex items-center justify-center border border-black/10 bg-white text-xs font-semibold text-black/65 dark:border-white/10 dark:bg-white/10 dark:text-white/75",
+            collapsed ? "size-9 rounded-[12px]" : "size-8 rounded-full",
+          )}>
+            <UserRound className="size-4" />
+          </div>
+        )}
         <div className={cn("min-w-0 flex-1", collapsed && "sr-only")}>
           <div className="truncate text-[13px] font-semibold">{account?.user.displayName ?? "Plot"}</div>
           <div className="truncate text-xs text-black/45 dark:text-white/45">{account?.user.email ?? currentWorkspaceName}</div>
