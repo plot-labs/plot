@@ -7,7 +7,7 @@ import { OnboardingFlow } from "@/features/onboarding/onboarding-flow";
 import { plotApiClient } from "@/lib/api-client";
 
 export function SidebarOnboarding({ workspaceId }: { workspaceId: string | null }) {
-  const [status, setStatus] = useState<{ connected: boolean; routine: boolean; artifactId: string | null } | null>(null);
+  const [status, setStatus] = useState<{ connected: boolean; routine: boolean; firstRun: boolean } | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalStep, setModalStep] = useState<1 | 2 | 3>(1);
@@ -21,13 +21,14 @@ export function SidebarOnboarding({ workspaceId }: { workspaceId: string | null 
       plotApiClient.listRoutines({ signal: controller.signal }),
     ]).then(([connections, routines]) => {
       if (controller.signal.aborted) return;
+      const releaseRoutines = routines.filter((routine) => routine.cadence === "ON_GITHUB_RELEASE");
       setStatus({
         connected: connections.some((connection) => connection.status === "ACTIVE"),
-        routine: routines.length > 0,
-        artifactId: routines.find((routine) => routine.latestExecution?.artifactId)?.latestExecution?.artifactId ?? null,
+        routine: releaseRoutines.length > 0,
+        firstRun: releaseRoutines.some((routine) => routine.latestExecution?.status === "NO_ACTIVITY" || Boolean(routine.latestExecution?.artifactId) || routine.latestExecution?.agentRunStatus === "SUCCEEDED"),
       });
     }).catch(() => {
-      if (!controller.signal.aborted) setStatus({ connected: false, routine: false, artifactId: null });
+      if (!controller.signal.aborted) setStatus({ connected: false, routine: false, firstRun: false });
     });
     return () => controller.abort();
   }, [workspaceId, reloadNonce]);
@@ -39,13 +40,11 @@ export function SidebarOnboarding({ workspaceId }: { workspaceId: string | null 
     return () => document.removeEventListener("keydown", close);
   }, [modalOpen]);
 
-  if (!status) return null;
-  const resultReviewed = Boolean(status.artifactId && typeof window !== "undefined" && window.localStorage.getItem(`plot.onboarding.reviewed.${workspaceId}`) === status.artifactId);
-  if (resultReviewed) return null;
+  if (!status || status.firstRun) return null;
   const steps = [
     ["Install GitHub App", status.connected],
     ["Create first Routine", status.routine],
-    ["Review first result", resultReviewed],
+    ["Run first Routine", status.firstRun],
   ] as const;
   const completed = steps.filter(([, done]) => done).length;
   const initialStep: 1 | 2 | 3 = !status.connected ? 1 : !status.routine ? 2 : 3;
@@ -73,6 +72,6 @@ export function SidebarOnboarding({ workspaceId }: { workspaceId: string | null 
       )}
     </div>
 
-    {modalOpen && <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/25 p-4 backdrop-blur-[2px] dark:bg-black/55" onMouseDown={(event) => { if (event.target === event.currentTarget) setModalOpen(false); }}><section role="dialog" aria-modal="true" aria-labelledby="onboarding-modal-title" className="relative max-h-[min(820px,calc(100dvh-32px))] w-full max-w-[600px] overflow-y-auto rounded-[22px] border border-white/75 bg-[#f4f6f8]/82 px-7 pb-8 pt-7 shadow-[0_28px_80px_rgba(20,25,32,0.24),inset_0_1px_0_rgba(255,255,255,0.92)] backdrop-blur-2xl dark:border-white/13 dark:bg-[#18191b]/88 dark:shadow-[0_28px_80px_rgba(0,0,0,0.48),inset_0_1px_0_rgba(255,255,255,0.1)] sm:px-8 sm:pb-9 sm:pt-8"><h2 id="onboarding-modal-title" className="sr-only">Set up Plot</h2><button autoFocus type="button" onClick={() => setModalOpen(false)} aria-label="Close onboarding" className="absolute right-4 top-4 z-10 inline-flex size-8 items-center justify-center rounded-full text-black/40 transition hover:bg-black/[0.05] hover:text-black/70 dark:text-white/40 dark:hover:bg-white/10 dark:hover:text-white/70"><X className="size-4" /></button><OnboardingFlow embedded initialStep={modalStep} onComplete={() => { setModalOpen(false); setReloadNonce((value) => value + 1); }} onResultReview={() => { if (status.artifactId) window.localStorage.setItem(`plot.onboarding.reviewed.${workspaceId}`, status.artifactId); setModalOpen(false); setReloadNonce((value) => value + 1); }} /></section></div>}
+    {modalOpen && <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/25 p-4 backdrop-blur-[2px] dark:bg-black/55" onMouseDown={(event) => { if (event.target === event.currentTarget) setModalOpen(false); }}><section role="dialog" aria-modal="true" aria-labelledby="onboarding-modal-title" className="relative max-h-[min(820px,calc(100dvh-32px))] w-full max-w-[600px] overflow-y-auto rounded-[22px] border border-white/75 bg-[#f4f6f8]/82 px-7 pb-8 pt-7 shadow-[0_28px_80px_rgba(20,25,32,0.24),inset_0_1px_0_rgba(255,255,255,0.92)] backdrop-blur-2xl dark:border-white/13 dark:bg-[#18191b]/88 dark:shadow-[0_28px_80px_rgba(0,0,0,0.48),inset_0_1px_0_rgba(255,255,255,0.1)] sm:px-8 sm:pb-9 sm:pt-8"><h2 id="onboarding-modal-title" className="sr-only">Set up Plot</h2><button autoFocus type="button" onClick={() => setModalOpen(false)} aria-label="Close onboarding" className="absolute right-4 top-4 z-10 inline-flex size-8 items-center justify-center rounded-full text-black/40 transition hover:bg-black/[0.05] hover:text-black/70 dark:text-white/40 dark:hover:bg-white/10 dark:hover:text-white/70"><X className="size-4" /></button><OnboardingFlow embedded initialStep={modalStep} onComplete={() => { setModalOpen(false); setReloadNonce((value) => value + 1); }} onResultReview={() => { setModalOpen(false); setReloadNonce((value) => value + 1); }} /></section></div>}
   </>;
 }

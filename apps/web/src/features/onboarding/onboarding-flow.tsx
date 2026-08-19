@@ -4,7 +4,6 @@ import { CheckmarkCircle02Icon, GithubIcon, Loading03Icon } from "@hugeicons/cor
 import { HugeiconsIcon } from "@hugeicons/react";
 import Link from "next/link";
 import { LockKeyhole, Search } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { getSelectedWorkspaceId, plotApiClient, type GitHubConnection, type GitHubRepository, type Routine } from "@/lib/api-client";
@@ -17,22 +16,23 @@ const repositoryKey = ({ connectionId, repository }: RepositoryOption) => `${con
 const defaultInstruction = "Create a concise, customer-facing changelog from this release with citations.";
 
 export function OnboardingFlow({ embedded = false, initialStep = 1, onComplete, onResultReview }: { embedded?: boolean; initialStep?: Step; onComplete?: () => void; onResultReview?: () => void }) {
-  const router = useRouter();
   const [step, setStep] = useState<Step>(initialStep);
   const [connections, setConnections] = useState<GitHubConnection[]>([]);
   const [repositories, setRepositories] = useState<RepositoryOption[]>([]);
   const [routines, setRoutines] = useState<Routine[]>([]);
+  const [activeRoutineId, setActiveRoutineId] = useState<string | null>(null);
   const [selectedKey, setSelectedKey] = useState("");
   const [name, setName] = useState("Release changelog");
   const [instruction, setInstruction] = useState(defaultInstruction);
   const [setupState, setSetupState] = useState<SetupState>("loading");
-  const [busy, setBusy] = useState<"connect" | "routine" | null>(null);
+  const [busy, setBusy] = useState<"connect" | "routine" | "run" | "poll" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const activeConnections = useMemo(() => connections.filter((item) => item.status === "ACTIVE"), [connections]);
   const hasConnection = activeConnections.length > 0;
   const selectedRepository = repositories.find((repository) => repositoryKey(repository) === selectedKey) ?? null;
-  const routine = routines[0] ?? null;
+  const routine = routines.find((item) => item.id === activeRoutineId) ?? routines.find((item) => item.cadence === "ON_GITHUB_RELEASE") ?? null;
+  const routineId = routine?.id;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -53,8 +53,10 @@ export function OnboardingFlow({ embedded = false, initialStep = 1, onComplete, 
       if (controller.signal.aborted) return;
       setConnections(nextConnections);
       setRoutines(nextRoutines);
+      const releaseRoutine = nextRoutines.find((item) => item.cadence === "ON_GITHUB_RELEASE") ?? null;
+      setActiveRoutineId(releaseRoutine?.id ?? null);
       const active = nextConnections.filter((item) => item.status === "ACTIVE");
-      if (!embedded && initialStep === 1 && nextRoutines.length) setStep(3);
+      if (!embedded && initialStep === 1 && releaseRoutine) setStep(3);
       else if (!embedded && initialStep === 1 && active.length) setStep(2);
       const availableByConnection = await Promise.all(active.map(async (connection) => {
         const available = await plotApiClient.listGitHubRepositories(connection.id, { signal: controller.signal }).catch(() => []);
@@ -75,6 +77,35 @@ export function OnboardingFlow({ embedded = false, initialStep = 1, onComplete, 
 
     return () => controller.abort();
   }, [embedded, initialStep]);
+
+  useEffect(() => {
+    if (busy !== "poll" || !routineId) return;
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    async function refreshRun() {
+      try {
+        const updated = await plotApiClient.getRoutine(routineId!, { signal: controller.signal });
+        if (controller.signal.aborted) return;
+        setRoutines([updated]);
+        if (routineRunFinished(updated)) {
+          setBusy(null);
+          if (updated.latestExecution?.chatId) window.dispatchEvent(new Event("plot:sessions-changed"));
+          return;
+        }
+        timer = setTimeout(refreshRun, 1_500);
+      } catch {
+        if (!controller.signal.aborted) {
+          setBusy(null);
+          setError("Routine status could not be refreshed.");
+        }
+      }
+    }
+    timer = setTimeout(refreshRun, 1_500);
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [busy, routineId]);
 
   async function connectGitHub() {
     if (busy) return;
@@ -107,6 +138,7 @@ export function OnboardingFlow({ embedded = false, initialStep = 1, onComplete, 
         cadence: "ON_GITHUB_RELEASE",
       });
       setRoutines([created]);
+      setActiveRoutineId(created.id);
       setStep(3);
       setBusy(null);
     } catch (failure) {
@@ -115,14 +147,27 @@ export function OnboardingFlow({ embedded = false, initialStep = 1, onComplete, 
     }
   }
 
-  function finish() {
-    if (onComplete) onComplete();
-    else router.replace("/chat");
+  async function runFirstRoutine() {
+    if (!routine || busy) return;
+    setBusy("run");
+    setError(null);
+    try {
+      const to = new Date();
+      const from = new Date(to.getTime() - 366 * 24 * 60 * 60 * 1_000);
+      await plotApiClient.importGitHubRepository(routine.sourceScopeId, { from: from.toISOString(), to: to.toISOString() });
+      const updated = await plotApiClient.runRoutineNow(routine.id, crypto.randomUUID());
+      setRoutines([updated]);
+      setBusy(routineRunFinished(updated) ? null : "poll");
+      if (updated.latestExecution?.chatId) window.dispatchEvent(new Event("plot:sessions-changed"));
+    } catch (failure) {
+      setBusy(null);
+      setError(failure instanceof Error ? failure.message : "Routine could not run.");
+    }
   }
 
   return <div className={embedded ? "text-[#18181b] dark:text-white" : "min-h-full overflow-y-auto bg-[#f4f6f8] px-5 py-8 text-[#18181b] dark:bg-[#101112] dark:text-white sm:px-8 sm:py-10 lg:px-10"}><div className={embedded ? "mx-auto max-w-[600px]" : "mx-auto max-w-[600px] pb-16 pt-10 sm:pt-16"}>
     <div className="flex items-center gap-1.5" aria-label={`Step ${step} of 3`} role="progressbar">{[1, 2, 3].map((item) => <span key={item} className={`h-1.5 rounded-full transition-all ${item === step ? "w-7 bg-[#252a30] dark:bg-white" : item < step ? "w-2 bg-[#252a30]/60 dark:bg-white/60" : "w-2 bg-black/15 dark:bg-white/20"}`} />)}</div>
-    {step === 1 ? <ConnectStep connected={hasConnection} connectionCount={activeConnections.length} loading={setupState === "loading"} busy={busy === "connect"} error={error} onConnect={connectGitHub} onContinue={() => setStep(2)} /> : step === 2 ? <RoutineStep existingRoutine={routine} repositories={repositories} selectedKey={selectedKey} name={name} instruction={instruction} loading={setupState === "loading"} busy={busy === "routine"} error={error} onRepositoryChange={setSelectedKey} onNameChange={setName} onInstructionChange={setInstruction} onCreate={createFirstRoutine} onContinue={() => setStep(3)} onBack={() => setStep(1)} onSkip={onComplete} /> : <ResultStep routine={routine} onFinish={finish} onReview={onResultReview} onDismiss={onComplete} />}
+    {step === 1 ? <ConnectStep connected={hasConnection} connectionCount={activeConnections.length} loading={setupState === "loading"} busy={busy === "connect"} error={error} onConnect={connectGitHub} onContinue={() => setStep(2)} /> : step === 2 ? <RoutineStep existingRoutine={routine} repositories={repositories} selectedKey={selectedKey} name={name} instruction={instruction} loading={setupState === "loading"} busy={busy === "routine"} error={error} onRepositoryChange={setSelectedKey} onNameChange={setName} onInstructionChange={setInstruction} onCreate={createFirstRoutine} onContinue={() => setStep(3)} onBack={() => setStep(1)} onSkip={onComplete} /> : <ResultStep routine={routine} running={busy === "run" || busy === "poll"} error={error} onRun={runFirstRoutine} onReview={onResultReview} onDismiss={onComplete} />}
   </div></div>;
 }
 
@@ -141,7 +186,17 @@ function CompletedRoutineStep({ routine, onContinue, onBack, onDismiss }: { rout
   return <section className="space-y-6"><header><h1 className="font-display text-[34px] font-normal leading-[1.08] tracking-[-0.03em] sm:text-[38px]">Your first Routine</h1><p className="mt-3 text-[14px] leading-6 text-black/52 dark:text-white/50">Plot will run this Routine whenever the repository publishes a release.</p></header><dl className="border-y border-black/[0.075] text-[13px] dark:border-white/[0.09]"><div className="grid grid-cols-[96px_1fr] gap-4 border-b border-black/[0.06] py-3 dark:border-white/[0.07]"><dt className="text-black/38 dark:text-white/38">Routine</dt><dd className="font-medium text-black/76 dark:text-white/78">{routine.name}</dd></div><div className="grid grid-cols-[96px_1fr] gap-4 border-b border-black/[0.06] py-3 dark:border-white/[0.07]"><dt className="text-black/38 dark:text-white/38">Repository</dt><dd className="text-black/68 dark:text-white/70">{routine.sourceLabel}</dd></div><div className="grid grid-cols-[96px_1fr] gap-4 py-3"><dt className="text-black/38 dark:text-white/38">Trigger</dt><dd className="text-black/68 dark:text-white/70">Release published</dd></div></dl><div className="flex items-center gap-2"><button type="button" onClick={onContinue} className="inline-flex h-10 items-center rounded-full bg-[#252a30] px-4 text-[13px] font-medium text-white transition hover:-translate-y-px hover:bg-[#16191d] active:translate-y-0 dark:bg-white dark:text-[#18191b]">Continue</button><button type="button" onClick={onBack} className="inline-flex h-10 items-center rounded-full px-3.5 text-[13px] text-black/44 transition hover:bg-white/50 hover:text-black/68 dark:text-white/45 dark:hover:bg-white/[0.07] dark:hover:text-white/70">Back</button><Link href="/routines" onClick={onDismiss} className="ml-auto text-[12px] text-black/40 underline-offset-4 hover:underline dark:text-white/40">View Routines</Link></div></section>;
 }
 
-function ResultStep({ routine, onFinish, onReview, onDismiss }: { routine: Routine | null; onFinish: () => void; onReview?: () => void; onDismiss?: () => void }) {
-  const artifactId = routine?.latestExecution?.artifactId;
-  return <section className="pt-5"><header><h1 className="max-w-[460px] text-balance font-display text-[32px] font-normal leading-[1.08] tracking-[-0.035em] sm:text-[36px]">{artifactId ? "Your first result is ready" : "Plot is ready for your next release"}</h1><p className="mt-3 max-w-[500px] text-pretty text-[14px] leading-6 text-black/52 dark:text-white/50">{artifactId ? "Review the source-backed artifact Plot created." : "Publish a GitHub release as usual. Plot will run the Routine and put the result in Chat and Artifacts."}</p></header>{routine && <dl className="mt-7 border-y border-black/[0.075] text-[13px] dark:border-white/[0.09]"><div className="grid grid-cols-[96px_1fr] gap-4 border-b border-black/[0.06] py-3 dark:border-white/[0.07]"><dt className="text-black/38 dark:text-white/38">Routine</dt><dd className="font-medium text-black/76 dark:text-white/78">{routine.name}</dd></div><div className="grid grid-cols-[96px_1fr] gap-4 border-b border-black/[0.06] py-3 dark:border-white/[0.07]"><dt className="text-black/38 dark:text-white/38">Repository</dt><dd className="text-black/68 dark:text-white/70">{routine.sourceLabel}</dd></div><div className="grid grid-cols-[96px_1fr] gap-4 py-3"><dt className="text-black/38 dark:text-white/38">Trigger</dt><dd className="text-black/68 dark:text-white/70">Release published</dd></div></dl>}<div className="mt-7 flex items-center gap-2">{artifactId ? <Link href={`/artifacts?artifact=${encodeURIComponent(artifactId)}`} onClick={onReview} className="inline-flex h-10 items-center rounded-full bg-[#252a30] px-4 text-[13px] font-medium text-white transition hover:-translate-y-px hover:bg-[#16191d] active:translate-y-0 dark:bg-white dark:text-[#18191b]">Review result</Link> : <button type="button" onClick={onFinish} className="inline-flex h-10 items-center rounded-full bg-[#252a30] px-4 text-[13px] font-medium text-white transition hover:-translate-y-px hover:bg-[#16191d] active:translate-y-0 dark:bg-white dark:text-[#18191b]">Go to Chat</button>}<Link href="/routines" onClick={onDismiss} className="inline-flex h-10 items-center rounded-full px-3.5 text-[13px] text-black/44 transition hover:bg-white/50 hover:text-black/68 dark:text-white/45 dark:hover:bg-white/[0.07] dark:hover:text-white/70">View Routines</Link></div></section>;
+function ResultStep({ routine, running, error, onRun, onReview, onDismiss }: { routine: Routine | null; running: boolean; error: string | null; onRun: () => void; onReview?: () => void; onDismiss?: () => void }) {
+  const execution = routine?.latestExecution;
+  const artifactId = execution?.artifactId;
+  const noActivity = execution?.status === "NO_ACTIVITY";
+  const failed = execution?.status === "FAILED" || execution?.agentRunStatus === "FAILED";
+  const title = artifactId ? "Your first result is ready" : running ? "Creating your first result" : noActivity ? "Your Routine is ready" : failed ? "The first run did not finish" : "Run your first Routine";
+  const description = artifactId ? "Review the source-backed artifact Plot created." : running ? "Plot is importing repository activity and preparing the result." : noActivity ? "No unprocessed pull-request activity was available, so Plot completed the check without creating an artifact. The next release will trigger this Routine automatically." : failed ? "Check the repository connection and try the Routine again." : "Plot will import up to one year of repository activity and run the Routine now.";
+  return <section className="pt-5"><header><h1 className="max-w-[480px] text-balance font-display text-[32px] font-normal leading-[1.08] tracking-[-0.035em] sm:text-[36px]">{title}</h1><p className="mt-3 max-w-[500px] text-pretty text-[14px] leading-6 text-black/52 dark:text-white/50">{description}</p></header>{routine && <dl className="mt-7 border-y border-black/[0.075] text-[13px] dark:border-white/[0.09]"><div className="grid grid-cols-[96px_1fr] gap-4 border-b border-black/[0.06] py-3 dark:border-white/[0.07]"><dt className="text-black/38 dark:text-white/38">Routine</dt><dd className="font-medium text-black/76 dark:text-white/78">{routine.name}</dd></div><div className="grid grid-cols-[96px_1fr] gap-4 border-b border-black/[0.06] py-3 dark:border-white/[0.07]"><dt className="text-black/38 dark:text-white/38">Repository</dt><dd className="text-black/68 dark:text-white/70">{routine.sourceLabel}</dd></div><div className="grid grid-cols-[96px_1fr] gap-4 py-3"><dt className="text-black/38 dark:text-white/38">Trigger</dt><dd className="text-black/68 dark:text-white/70">Release published</dd></div></dl>}{error && <p className="mt-5 text-sm text-rose-700 dark:text-rose-300" role="alert">{error}</p>}<div className="mt-7 flex items-center gap-2">{artifactId ? <Link href={`/artifacts?artifact=${encodeURIComponent(artifactId)}`} onClick={onReview} className="inline-flex h-10 items-center rounded-full bg-[#252a30] px-4 text-[13px] font-medium text-white transition hover:-translate-y-px hover:bg-[#16191d] active:translate-y-0 dark:bg-white dark:text-[#18191b]">Review result</Link> : noActivity ? <Link href="/chat" onClick={onDismiss} className="inline-flex h-10 items-center rounded-full bg-[#252a30] px-4 text-[13px] font-medium text-white transition hover:-translate-y-px hover:bg-[#16191d] active:translate-y-0 dark:bg-white dark:text-[#18191b]">Done</Link> : <button type="button" onClick={onRun} disabled={!routine || running} className="inline-flex h-10 items-center gap-2 rounded-full bg-[#252a30] px-4 text-[13px] font-medium text-white transition hover:-translate-y-px hover:bg-[#16191d] active:translate-y-0 disabled:cursor-wait disabled:opacity-45 dark:bg-white dark:text-[#18191b]">{running && <HugeiconsIcon icon={Loading03Icon} size={15} className="animate-spin" strokeWidth={1.6} />}{running ? "Running Routine…" : "Run Routine"}</button>}<Link href="/routines" onClick={onDismiss} className="inline-flex h-10 items-center rounded-full px-3.5 text-[13px] text-black/44 transition hover:bg-white/50 hover:text-black/68 dark:text-white/45 dark:hover:bg-white/[0.07] dark:hover:text-white/70">View Routines</Link></div></section>;
+}
+
+function routineRunFinished(routine: Routine) {
+  const execution = routine.latestExecution;
+  return Boolean(execution?.artifactId || execution?.status === "NO_ACTIVITY" || execution?.status === "FAILED" || execution?.agentRunStatus === "SUCCEEDED" || execution?.agentRunStatus === "FAILED");
 }
