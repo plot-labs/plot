@@ -122,7 +122,7 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
   return (
     <div ref={workspaceRef} className="relative flex h-[calc(100dvh-49px)] min-h-0 bg-[#fbfbf8] dark:bg-[#111113] lg:h-full">
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex min-h-14 shrink-0 items-center border-b border-black/[0.06] bg-[#fbfbf8]/90 px-4 py-3 backdrop-blur-xl dark:border-white/[0.07] dark:bg-[#111113]/90 sm:px-6">
+        <header className="flex min-h-14 shrink-0 items-center bg-[#fbfbf8]/90 px-4 py-3 backdrop-blur-xl dark:bg-[#111113]/90 sm:px-6" style={toolbarBottomFade}>
           <div className="mx-auto flex w-full max-w-[760px] min-w-0 items-center justify-center gap-2 text-sm font-semibold text-black/78 dark:text-white/82">
             <MessageCircle aria-hidden="true" className="size-4 shrink-0 text-black/50 dark:text-white/50" />
             <h1 className="truncate text-center">{activeChat.title || "Untitled chat"}</h1>
