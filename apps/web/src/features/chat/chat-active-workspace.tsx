@@ -239,7 +239,7 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
           className="absolute inset-0 z-30 flex min-w-0 flex-col border-l border-black/[0.08] bg-[#fbfbf8] dark:border-white/10 dark:bg-[#16171a] lg:static lg:w-[var(--artifact-panel-width)] lg:max-w-[calc(100%-420px)] lg:shrink-0"
           style={{ "--artifact-panel-width": `${artifactPanel.size}px` } as CSSProperties}
         >
-          <header className="flex min-h-16 shrink-0 items-center justify-end gap-3 px-4">
+          <header className="relative z-10 flex min-h-16 shrink-0 items-center justify-end gap-3 bg-[#fbfbf8]/85 px-4 backdrop-blur-xl after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-4 after:bg-gradient-to-b after:from-[#fbfbf8]/90 after:to-transparent after:backdrop-blur-[2px] dark:bg-[#16171a]/85 dark:after:from-[#16171a]/90">
             <div className="flex items-center gap-2">
               <span role="status" aria-live="polite" className="hidden text-xs text-black/42 dark:text-white/45 sm:inline">
                 {document.saveState === "saving" ? "Saving…" : document.saveState === "dirty" ? "Unsaved changes" : document.saveState === "error" ? "Save needs attention" : "Saved"}
