@@ -38,6 +38,16 @@ export function ProductShell({ children }: { children: ReactNode }) {
 
   const darkMode = theme === "dark" || (theme === "system" && systemDark);
 
+  useEffect(() => {
+    document.documentElement.dataset.theme = darkMode ? "dark" : "light";
+  }, [darkMode]);
+
+  useEffect(() => {
+    return () => {
+      document.documentElement.dataset.theme = "light";
+    };
+  }, []);
+
   return (
     <div className={darkMode ? "dark" : undefined}>
       <div className="flex min-h-dvh bg-[#eef0f3] text-[#18181b] dark:bg-[#202126] dark:text-[#f4f4f5] lg:h-dvh lg:overflow-hidden">

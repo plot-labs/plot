@@ -1,3 +1,5 @@
+import "@astryxdesign/core/astryx.css";
+
 import type { ReactNode } from "react";
 
 import { ProductShell } from "@/components/layout/product-shell";
