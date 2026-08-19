@@ -28,6 +28,16 @@ type ChatActiveWorkspaceProps = {
   requestedArtifactId: string | null;
 };
 
+const chatBottomFade: CSSProperties = {
+  maskImage: "linear-gradient(black calc(100% - 16px), transparent 100%)",
+  WebkitMaskImage: "linear-gradient(black calc(100% - 16px), transparent 100%)",
+};
+
+const toolbarBottomFade: CSSProperties = {
+  maskImage: "linear-gradient(black calc(100% - 12px), transparent 100%)",
+  WebkitMaskImage: "linear-gradient(black calc(100% - 12px), transparent 100%)",
+};
+
 export function ChatActiveWorkspace({ activeChat, references, sourceError, requestedAgentId, requestedArtifactId }: ChatActiveWorkspaceProps) {
   const router = useRouter();
   const [mobilePanel, setMobilePanel] = useState<"assistant" | "history" | null>(null);
@@ -61,6 +71,17 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
     requestedArtifactId,
     selectedActivityArtifactId: agent.selectedActivity?.artifactId ?? null,
   });
+  const shownArtifact = document.historicalArtifact?.artifact ?? document.currentArtifact;
+  const artifactMetrics = useMemo(() => {
+    if (!shownArtifact) return null;
+    const draft = document.historicalArtifact ? undefined : document.drafts[shownArtifact.id];
+    const statements = draft?.statements ?? shownArtifact.variant.sentences;
+    const text = statements.map((statement) => statement.body).join("\n");
+    return {
+      characters: text.length.toLocaleString("en-US"),
+      words: (text.trim() ? text.trim().split(/\s+/u).length : 0).toLocaleString("en-US"),
+    };
+  }, [document.drafts, document.historicalArtifact, shownArtifact]);
 
   useEffect(() => {
     const previous = previousMobilePanelRef.current;
@@ -109,7 +130,7 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
           </div>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto bg-[#fbfbf8] dark:bg-[#16171a]">
+        <div className="min-h-0 flex-1 overflow-y-auto bg-[#fbfbf8] dark:bg-[#16171a]" style={chatBottomFade}>
           <div className="mx-auto w-full max-w-[760px] px-4 pb-12 pt-8 sm:px-6">
             <ChatMessageList density="compact" gap={4} style={{ flex: "none" }}>
               {messages.map((message) => (
@@ -239,7 +260,7 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
           className="absolute inset-0 z-30 flex min-w-0 flex-col border-l border-black/[0.08] bg-[#fbfbf8] dark:border-white/10 dark:bg-[#16171a] lg:static lg:w-[var(--artifact-panel-width)] lg:max-w-[calc(100%-420px)] lg:shrink-0"
           style={{ "--artifact-panel-width": `${artifactPanel.size}px` } as CSSProperties}
         >
-          <header className="relative z-10 flex min-h-16 shrink-0 items-center justify-end gap-3 bg-[#fbfbf8]/85 px-4 backdrop-blur-xl after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-4 after:bg-gradient-to-b after:from-[#fbfbf8]/90 after:to-transparent after:backdrop-blur-[2px] dark:bg-[#16171a]/85 dark:after:from-[#16171a]/90">
+          <header className="relative z-10 flex min-h-16 shrink-0 items-center justify-end gap-3 bg-[#fbfbf8]/85 px-4 backdrop-blur-xl dark:bg-[#16171a]/85" style={toolbarBottomFade}>
             <div className="flex items-center gap-2">
               <span role="status" aria-live="polite" className="hidden text-xs text-black/42 dark:text-white/45 sm:inline">
                 {document.saveState === "saving" ? "Saving…" : document.saveState === "dirty" ? "Unsaved changes" : document.saveState === "error" ? "Save needs attention" : "Saved"}
@@ -268,20 +289,31 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
               </button>
             </div>
           </header>
-          <div className="flex min-h-0 flex-1 items-start justify-center overflow-y-auto bg-[#fbfbf8] dark:bg-[#18181b]">
-            <ArtifactDocumentSurface
-              presentation="workspace"
-              pack={document.currentArtifact}
-              historical={document.historicalArtifact}
-              client={plotApiClient}
-              initialDraft={document.historicalArtifact ? undefined : document.drafts[document.currentArtifact.id]}
-              saveState={document.saveState}
-              saveRequestToken={artifactSaveRequestToken}
-              onSaveStateChange={document.onSaveStateChange}
-              onDraftChange={document.onDraftChange}
-              onSaveArtifact={document.onSaveArtifact}
-              onPackChange={document.onPackChange}
-            />
+          {shownArtifact ? (
+            <div className="relative z-[9] shrink-0 bg-[#fbfbf8] px-6 pb-3 pt-1 dark:bg-[#18181b]">
+              <div className="truncate text-[16px] font-medium leading-[22px] text-black/72 dark:text-white/76">{shownArtifact.title || "Generated artifact"}</div>
+              {artifactMetrics ? (
+                <div className="mt-1 text-[12px] leading-4 text-black/38 dark:text-white/42">{artifactMetrics.characters} characters · {artifactMetrics.words} words</div>
+              ) : null}
+            </div>
+          ) : null}
+          <div role="region" aria-label="Artifact document body" className="relative min-h-0 flex-1 overflow-y-auto bg-[#fbfbf8] dark:bg-[#18181b]">
+            <div aria-hidden="true" className="pointer-events-none sticky top-0 z-10 -mb-1.5 h-1.5 w-full bg-gradient-to-b from-[#fbfbf8] to-transparent dark:from-[#18181b]" />
+            <div className="flex items-start justify-center">
+              <ArtifactDocumentSurface
+                presentation="workspace"
+                pack={document.currentArtifact}
+                historical={document.historicalArtifact}
+                client={plotApiClient}
+                initialDraft={document.historicalArtifact ? undefined : document.drafts[document.currentArtifact.id]}
+                saveState={document.saveState}
+                saveRequestToken={artifactSaveRequestToken}
+                onSaveStateChange={document.onSaveStateChange}
+                onDraftChange={document.onDraftChange}
+                onSaveArtifact={document.onSaveArtifact}
+                onPackChange={document.onPackChange}
+              />
+            </div>
           </div>
         </aside>
       ) : null}
