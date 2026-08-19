@@ -1,10 +1,20 @@
 "use client";
 
+import {
+  ChatMessage,
+  ChatMessageBubble,
+  ChatMessageMetadata,
+  ChatSystemMessage,
+  ChatToolCalls,
+} from "@astryxdesign/core/Chat";
+import { Timestamp } from "@astryxdesign/core/Timestamp";
+import { Text } from "@astryxdesign/core/Text";
 import { LoaderCircle } from "lucide-react";
 
-import type { ChatAgentRun } from "@plot/api-client";
+import type { ChatAgentRun, SourceReference } from "@plot/api-client";
 import { isTerminalChatAgentStatus } from "@/lib/chat-agent-polling";
 import { agentProgressLabel, agentStatusLabel, formatActivity } from "@/features/chat/chat-workspace-utils";
+import { ChatSourceCitations } from "@/features/chat/chat-source-citations";
 
 export function ChatActivityPanel({
   activities,
@@ -80,21 +90,47 @@ export function ChatActivityPanel({
   );
 }
 
-export function AgentActivityDetail({ run, busy, error, instruction }: { run: ChatAgentRun | null; busy: boolean; error: string; instruction: string }) {
+export function AgentActivityDetail({ run, busy, error, instruction, references }: { run: ChatAgentRun | null; busy: boolean; error: string; instruction: string; references: SourceReference[] }) {
   if (!run && !busy && !error) return null;
   const status = run?.status ?? "QUEUED";
   const linkedArtifact = Boolean(run?.artifactId);
+  const toolStatus = error || run?.status === "FAILED"
+    ? "error"
+    : linkedArtifact || run?.status === "SUCCEEDED"
+      ? "complete"
+      : "running";
+
   return (
-    <section aria-label="Agent request details" className="mb-5 space-y-3">
-      <div className="rounded-xl border border-black/10 bg-black/[0.025] px-4 py-3 text-sm text-black/62 dark:border-white/10 dark:bg-white/[0.04] dark:text-white/62">
-        <div className="flex items-center gap-2 font-medium text-black/75 dark:text-white/78">
-          {!isTerminalChatAgentStatus(status) && !linkedArtifact ? <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" /> : null}
-          <span>Agent · {agentStatusLabel(status)}</span>
-        </div>
-        <p className="mt-1 text-xs leading-5 text-black/48 dark:text-white/50">
-          {linkedArtifact ? "Sources are collected. Plot is preparing the grounded artifact…" : instruction ? agentProgressLabel(status) : "Plot is preparing the request…"}
-        </p>
-      </div>
+    <section aria-label="Agent request details">
+      <ChatMessage sender="assistant">
+        <ChatMessageBubble
+          variant="ghost"
+          className="max-w-none"
+          metadata={
+            <ChatMessageMetadata
+              timestamp={run ? <Timestamp value={run.createdAt} format="time" /> : undefined}
+              footer={
+                <Text type="supporting" color="secondary">
+                  Source agent
+                </Text>
+              }
+            />
+          }
+        >
+          <p className="text-sm leading-6 text-black/65 dark:text-white/68">
+            {linkedArtifact ? "The source review is complete. The artifact is ready below." : instruction ? agentProgressLabel(status) : "Plot is preparing the request…"}
+          </p>
+          <ChatToolCalls
+            calls={[{
+              name: "Read connected sources",
+              status: toolStatus,
+              errorMessage: error || (run?.status === "FAILED" ? "Agent stopped before an artifact was produced." : undefined),
+            }]}
+            defaultIsExpanded={false}
+          />
+          <ChatSourceCitations references={references} />
+        </ChatMessageBubble>
+      </ChatMessage>
       {error ? <ErrorNotice message={error} /> : null}
       {run?.status === "FAILED" && !error ? <ErrorNotice message={`Agent stopped before an artifact was produced${run.failureCode ? ` (${run.failureCode})` : ""}. It remains available as chat activity.`} /> : null}
     </section>
@@ -102,7 +138,11 @@ export function AgentActivityDetail({ run, busy, error, instruction }: { run: Ch
 }
 
 export function EmptyArtifactState({ hasSelection }: { hasSelection: boolean }) {
-  return <div className="rounded-xl border border-dashed border-black/10 bg-black/[0.02] px-4 py-6 text-sm leading-6 text-black/48 dark:border-white/10 dark:bg-white/[0.03] dark:text-white/52">{hasSelection ? "This Agent request is still working or did not produce an artifact. Review its activity above." : "Select an Agent request to inspect its artifact."}</div>;
+  return (
+    <ChatSystemMessage>
+      {hasSelection ? "This Agent request is still working or did not produce an artifact. Review its activity above." : "Select an Agent request to inspect its artifact."}
+    </ChatSystemMessage>
+  );
 }
 
 export function ErrorNotice({ message }: { message: string }) {

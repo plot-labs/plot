@@ -1,9 +1,14 @@
 "use client";
 
-import { FileText, MoreHorizontal } from "lucide-react";
+import { MessageCircle, MoreHorizontal } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import {
+  ChatMessage,
+  ChatMessageBubble,
+  ChatMessageList,
+} from "@astryxdesign/core/Chat";
 import type { ChatAgentRun, SourceReference, WorkSessionSummary as ChatSummary } from "@plot/api-client";
 import { ArtifactDocumentSurface } from "@/features/artifacts/artifact-document-surface";
 import { ArtifactHistoryPanel } from "@/features/citations/artifact-history-panel";
@@ -69,40 +74,44 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
       .map((activity) => ({
         id: activity.id,
         role: "user" as const,
-        timestamp: formatActivity(activity.createdAt),
-        createdAt: activity.createdAt,
         content: activity.instruction!,
       }));
     return current.length
       ? current
-      : [{ id: activeChat.id, role: "user" as const, timestamp: "Request", createdAt: null, content: activeChat.title || "Untitled request" }];
+      : [{ id: activeChat.id, role: "user" as const, content: activeChat.title || "Untitled request" }];
   }, [activeChat.id, activeChat.title, agent.activities]);
 
   return (
-    <div className="flex h-screen min-h-0 bg-white dark:bg-[#111113]">
+    <div className="flex h-full min-h-dvh bg-white dark:bg-[#111113] lg:min-h-0">
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex min-h-14 shrink-0 items-center gap-4 bg-white px-4 py-3 dark:bg-[#111113] sm:px-6 lg:px-8">
+        <header className="flex min-h-14 shrink-0 items-center gap-4 border-b border-black/[0.06] bg-white/90 px-4 py-3 backdrop-blur-xl dark:border-white/[0.07] dark:bg-[#111113]/90 sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-black/78 dark:text-white/82">
-            <FileText aria-hidden="true" className="size-4 shrink-0 text-black/50 dark:text-white/50" />
+            <MessageCircle aria-hidden="true" className="size-4 shrink-0 text-black/50 dark:text-white/50" />
             <h1 className="truncate">{activeChat.title || "Untitled chat"}</h1>
             <MoreHorizontal aria-hidden="true" className="size-4 shrink-0 text-black/45 dark:text-white/45" />
           </div>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 pt-4 sm:px-6 lg:px-8 lg:pt-6">
-          <div className="mx-auto max-w-7xl space-y-5">
-            <div className="min-w-0">
-              <section aria-label="Chat conversation" className="mb-5 space-y-3">
-                {messages.map((message) => (
-                  <article key={message.id} className="flex justify-end">
-                    <div className="max-w-[min(720px,92%)] rounded-[20px] bg-black/[0.055] px-4 py-3 text-sm leading-6 text-black/80 dark:bg-white/10 dark:text-white/82">
-                      <p>{message.content}</p>
-                      <time dateTime={message.createdAt ?? undefined} className="mt-1 block text-right text-xs text-black/40 dark:text-white/42">{message.timestamp}</time>
-                    </div>
-                  </article>
-                ))}
-              </section>
-              <AgentActivityDetail run={agent.agentRun} busy={agent.agentBusy} error={agent.agentError} instruction={agent.agentInstruction} />
+        <div className="min-h-0 flex-1 overflow-y-auto bg-[#f7f8fa] dark:bg-[#16171a]">
+          <div className="mx-auto w-full max-w-5xl px-4 pb-10 pt-6 sm:px-6 lg:px-8 lg:pt-8">
+            <ChatMessageList density="compact" gap={4} style={{ flex: "none" }}>
+              {messages.map((message) => (
+                <ChatMessage key={message.id} sender="user">
+                  <ChatMessageBubble className="max-w-[min(680px,92%)]">
+                    <p>{message.content}</p>
+                  </ChatMessageBubble>
+                </ChatMessage>
+              ))}
+              <AgentActivityDetail
+                run={agent.agentRun}
+                busy={agent.agentBusy}
+                error={agent.agentError}
+                instruction={agent.agentInstruction}
+                references={references}
+              />
+            </ChatMessageList>
+
+            <div className="mt-8">
               {document.artifactError ? <ErrorNotice message={document.artifactError} /> : null}
               {document.currentArtifact ? (
                 <ArtifactDocumentSurface
@@ -121,7 +130,7 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
               ) : null}
             </div>
 
-            <div className="lg:hidden">
+            <div className="mt-5 lg:hidden">
               <div role="tablist" aria-label="Chat workspace panels" className="flex gap-2 rounded-xl border border-black/10 bg-white p-2 dark:border-white/10 dark:bg-white/[0.04]">
                 <button
                   ref={mobileAssistantTriggerRef}
@@ -174,9 +183,11 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
             </div>
           </div>
         </div>
+
         <ChatComposer
           id="chat-composer"
           key={references.map((reference) => reference.id).join(":") || "no-references"}
+          variant="dock"
           placeholder="Ask Plot to create another source-backed artifact..."
           onSubmit={(message, ids) => void agent.submitMessage(message, ids, document.clearArtifactSelection)}
           references={toComposerReferences(references)}
@@ -187,8 +198,3 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
   );
 }
 
-function formatActivity(value: string | null) {
-  if (!value) return "";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}

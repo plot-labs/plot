@@ -125,6 +125,8 @@ describe("ChatWorkspace", () => {
     render(<ChatWorkspace />);
     expect(await screen.findByText("Reviewed artifact")).toBeVisible();
     expect(screen.getByRole("button", { name: /ReleaseArtifact available/ })).toBeVisible();
+    await waitFor(() => expect(document.querySelectorAll("time")).toHaveLength(1));
+    expect(screen.getByText("Source agent")).toBeVisible();
   });
 
   it("starts a follow-up Agent request with the active Chat linkage", async () => {
