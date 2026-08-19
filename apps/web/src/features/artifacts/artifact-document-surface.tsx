@@ -34,6 +34,12 @@ export function ArtifactDocumentSurface({
 }: ArtifactDocumentSurfaceProps) {
   const readOnly = Boolean(historical);
   const shownPack = historical?.artifact ?? pack;
+  const currentStatements = !readOnly && initialDraft?.statements
+    ? initialDraft.statements
+    : shownPack.variant.sentences;
+  const documentText = currentStatements.map((statement) => statement.body).join("\n");
+  const characterCount = documentText.length;
+  const wordCount = documentText.trim() ? documentText.trim().split(/\s+/u).length : 0;
 
   if (presentation === "canvas" || presentation === "workspace") {
     const workspacePresentation = presentation === "workspace";
@@ -41,12 +47,20 @@ export function ArtifactDocumentSurface({
       <article
         aria-label="Artifact document surface"
         className={workspacePresentation
-          ? "min-h-full w-full max-w-[980px] px-6 pb-16 text-black/88 dark:text-white/90"
+          ? "min-h-full w-full max-w-[980px] px-4 pb-16 pt-4 text-black/88 dark:text-white/90"
           : "min-h-[min(956px,calc(100dvh-128px))] w-full max-w-[980px] overflow-hidden rounded-[8px] border border-black/10 bg-white px-[clamp(28px,7.35vw,72px)] pb-[52px] pt-16 shadow-[0_8px_20px_rgba(0,0,0,0.08)] dark:border-white/10 dark:bg-[#202024]"}
       >
-        {!workspacePresentation ? (
+        {workspacePresentation ? (
+          <>
+            <div className="truncate text-sm font-medium text-black/72 dark:text-white/76">{shownPack.title || "Generated artifact"}</div>
+            <p className="mt-1 text-xs text-black/38 dark:text-white/42">
+              {characterCount.toLocaleString("en-US")} characters · {wordCount.toLocaleString("en-US")} words
+            </p>
+            <h1 className="mt-8 font-display text-[24px] leading-[31px] text-black/88 dark:text-white/90">{shownPack.title || "Generated artifact"}</h1>
+          </>
+        ) : (
           <h1 className="font-display text-[30px] leading-[38px] text-black/88 dark:text-white/90">{shownPack.title || "Generated artifact"}</h1>
-        ) : null}
+        )}
         <CitedDraftEditor
           pack={shownPack}
           embedded
