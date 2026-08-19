@@ -231,6 +231,10 @@ class GitHubChangeRoutineIntegrationTest {
 		webhookService.accept(pushWebhook(deliveryId, "8".repeat(40), "New event activity", "8".repeat(64)))
 		drainOne()
 		assertEquals(null, routinePersistence.find(devContext.devWorkspaceId, routineId)?.activityCursorSequence)
+		jdbcTemplate.update(
+			"update agent_runs set status = 'SUCCEEDED', finished_at = now(), updated_at = now() where routine_execution_id = ?",
+			executionId(routineId, deliveryId),
+		)
 
 		val routine = assertNotNull(routinePersistence.find(devContext.devWorkspaceId, routineId))
 		val manual = agentPersistence.createExecution(

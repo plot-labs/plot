@@ -252,7 +252,7 @@ class RoutineAgentMigrationIntegrationTest {
 		assertEquals(RoutineExecutionStatus.DISPATCHED, withSchema {
 			persistence.findExecution(fixture.workspaceId, execution.id)?.status
 		})
-		assertEquals(10L, jdbcTemplate.queryForObject(
+		assertNull(jdbcTemplate.queryForObject(
 			"select activity_cursor_sequence from $schema.routines where id = ?",
 			Long::class.java,
 			fixture.routineId,
@@ -322,9 +322,13 @@ class RoutineAgentMigrationIntegrationTest {
 	}
 
 	@Test
-	fun `stale execution cannot dispatch after another execution advances cursor`() {
+	fun `manual execution cannot dispatch while another Routine Agent is active`() {
 		val fixture = insertFixture()
-		val firstExecution = withSchema { persistence.createExecution(executionRequest(fixture, "manual:first")) }
+		val firstExecution = withSchema {
+			persistence.createExecution(
+				executionRequest(fixture, "scheduled:first", triggerKind = RoutineExecutionTriggerKind.SCHEDULED),
+			)
+		}
 		val staleExecution = withSchema { persistence.createExecution(executionRequest(fixture, "manual:stale")) }
 		withSchema { persistence.dispatch(fixture.workspaceId, firstExecution.id, dispatchRequest(fixture)) }
 
@@ -342,7 +346,7 @@ class RoutineAgentMigrationIntegrationTest {
 		}
 		assertEquals(1, count("work_sessions"))
 		assertEquals(1, count("agent_runs"))
-		assertEquals(10L, jdbcTemplate.queryForObject(
+		assertNull(jdbcTemplate.queryForObject(
 			"select activity_cursor_sequence from $schema.routines where id = ?",
 			Long::class.java,
 			fixture.routineId,
@@ -353,32 +357,26 @@ class RoutineAgentMigrationIntegrationTest {
 	}
 
 	@Test
-	fun `seed identity conflicts across triggers while context input can reuse evidence`() {
+	fun `failed seed can be retried while active seed stays reserved`() {
 		val fixture = insertFixture()
 		val firstExecution = withSchema { persistence.createExecution(executionRequest(fixture, "manual:one")) }
-		val secondExecution = withSchema {
-			persistence.createExecution(executionRequest(fixture, "manual:two", activityCursorBefore = 10))
-		}
 		val firstRun = withSchema { persistence.dispatch(fixture.workspaceId, firstExecution.id, dispatchRequest(fixture)) }
-		val secondRun = withSchema {
-			persistence.dispatch(
-				fixture.workspaceId,
-				secondExecution.id,
-				dispatchRequest(fixture).copy(
-					inputs = listOf(seedInput(fixture, fixture.sourceScopeId).copy(activitySequence = 11)),
-					activityCursorAfter = 11,
-				),
-			)
+		val blockedExecution = withSchema { persistence.createExecution(executionRequest(fixture, "manual:blocked")) }
+		assertFailsWith<RoutineExecutionStateException> {
+			withSchema { persistence.dispatch(fixture.workspaceId, blockedExecution.id, dispatchRequest(fixture)) }
 		}
 
-		assertFailsWith<DataIntegrityViolationException> {
-			insertSeedInput(fixture, firstRun.id, orderIndex = 1, activitySequence = 11)
-		}
+		schemaJdbcTemplate.update(
+			"update agent_runs set status = 'FAILED', failure_code = 'PROVIDER_REJECTED', finished_at = now(), updated_at = now() where id = ?",
+			firstRun.id,
+		)
+		val retryExecution = withSchema { persistence.createExecution(executionRequest(fixture, "manual:retry")) }
+		val retryRun = withSchema { persistence.dispatch(fixture.workspaceId, retryExecution.id, dispatchRequest(fixture)) }
 		assertEquals(2, count("agent_run_inputs"))
 
 		val contextRun = withSchema { persistence.findAgentRun(fixture.workspaceId, firstRun.id) }
 		assertNotNull(contextRun)
-		assertEquals(fixture.routineId, secondRun.routineId)
+		assertEquals(fixture.routineId, retryRun.routineId)
 		val contextStepInput = AgentRunInputRequest(
 			routineId = null,
 			sourceScopeId = fixture.sourceScopeId,
@@ -466,6 +464,11 @@ class RoutineAgentMigrationIntegrationTest {
 		val fixture = insertFixture()
 		val firstExecution = withSchema { persistence.createExecution(executionRequest(fixture, "manual:first")) }
 		val firstRun = withSchema { persistence.dispatch(fixture.workspaceId, firstExecution.id, dispatchRequest(fixture)) }
+		schemaJdbcTemplate.update(
+			"update agent_runs set status = 'SUCCEEDED', finished_at = now(), updated_at = now() where id = ?",
+			firstRun.id,
+		)
+		schemaJdbcTemplate.update("update routines set activity_cursor_sequence = 10 where id = ?", fixture.routineId)
 		val secondExecution = withSchema {
 			persistence.createExecution(executionRequest(fixture, "manual:second", activityCursorBefore = 10))
 		}
@@ -525,13 +528,14 @@ class RoutineAgentMigrationIntegrationTest {
 		fixture: Fixture,
 		triggerKey: String = "manual:${fixture.routineId}",
 		activityCursorBefore: Long? = null,
+		triggerKind: RoutineExecutionTriggerKind = RoutineExecutionTriggerKind.MANUAL,
 	) =
 		RoutineExecutionRequest(
 			workspaceId = fixture.workspaceId,
 			routineId = fixture.routineId,
 			createdByUserId = fixture.userId,
 			triggerSourceScopeId = fixture.sourceScopeId,
-			triggerKind = RoutineExecutionTriggerKind.MANUAL,
+			triggerKind = triggerKind,
 			triggerKey = triggerKey,
 			requestFingerprint = "fingerprint-a",
 			activityCursorBefore = activityCursorBefore,
