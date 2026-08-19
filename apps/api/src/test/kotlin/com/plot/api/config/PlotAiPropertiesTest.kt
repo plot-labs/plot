@@ -3,7 +3,7 @@ package com.plot.api.config
 import java.time.Duration
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
 
 class PlotAiPropertiesTest {
@@ -21,35 +21,33 @@ class PlotAiPropertiesTest {
 
 	@Test
 	fun gpt56LunaProIsAnAllowedOpenRouterProfile() {
-		PlotAiProperties(
+		val properties = PlotAiProperties(
 			enabled = true,
 			model = PlotAiProperties.GPT_5_6_LUNA_PRO_MODEL,
 			routingProvider = "openai",
 		)
+
+		assertEquals("deny", properties.openRouterProviderPolicy["data_collection"])
 	}
 
 	@Test
-	fun nemotronFreeUsesPromptedJsonInsteadOfNativeStructuredOutput() {
+	fun deepSeekV4FlashIsAllowedWithoutDataCollection() {
 		val properties = PlotAiProperties(
 			enabled = true,
-			model = PlotAiProperties.NEMOTRON_3_5_LIGHTNING_FREE_MODEL,
-			routingProvider = "nvidia",
-			allowDataCollection = true,
+			model = PlotAiProperties.DEEPSEEK_V4_FLASH_MODEL,
+			routingProvider = "deepinfra",
 		)
 
-		assertFalse(properties.supportsNativeStructuredOutput)
-		assertEquals("allow", properties.openRouterProviderPolicy["data_collection"])
-		assertEquals(mapOf("effort" to "none", "exclude" to true), properties.openRouterExtraBody["reasoning"])
-		assertEquals(mapOf("type" to "json_object"), properties.openRouterExtraBody["response_format"])
-		assertEquals(0.0, properties.openRouterExtraBody["temperature"])
+		assertTrue(properties.supportsTemperature)
+		assertEquals("deny", properties.openRouterProviderPolicy["data_collection"])
 	}
 
 	@Test
-	fun nemotronFreeRequiresExplicitDataCollectionConsent() {
+	fun freeTrainingModelIsNotSupported() {
 		assertFailsWith<IllegalArgumentException> {
 			PlotAiProperties(
 				enabled = true,
-				model = PlotAiProperties.NEMOTRON_3_5_LIGHTNING_FREE_MODEL,
+				model = "nvidia/nemotron-3.5-lightning:free",
 				routingProvider = "nvidia",
 			)
 		}

@@ -11,7 +11,6 @@ data class PlotAiProperties(
 	val baseUrl: String = OPENROUTER_BASE_URL,
 	val routingProvider: String? = null,
 	val allowFallbacks: Boolean = false,
-	val allowDataCollection: Boolean = false,
 	val requireParameters: Boolean = false,
 	val zeroDataRetention: Boolean = false,
 	val contentLoggingEnabled: Boolean = false,
@@ -32,10 +31,7 @@ data class PlotAiProperties(
 		get() = enabled && provider == OPENROUTER_GATEWAY && !model.isNullOrBlank()
 
 	val supportsTemperature: Boolean
-		get() = model == GPT_4O_MINI_MODEL
-
-	val supportsNativeStructuredOutput: Boolean
-		get() = model != NEMOTRON_3_5_LIGHTNING_FREE_MODEL
+		get() = model == GPT_4O_MINI_MODEL || model == DEEPSEEK_V4_FLASH_MODEL
 
 	val openRouterProviderPolicy: Map<String, Any>
 		get() {
@@ -45,19 +41,9 @@ data class PlotAiProperties(
 				"only" to listOf(pinnedProvider),
 				"allow_fallbacks" to allowFallbacks,
 				"require_parameters" to requireParameters,
-				"data_collection" to if (allowDataCollection) "allow" else "deny",
+				"data_collection" to "deny",
 				"zdr" to zeroDataRetention,
 			)
-		}
-
-	val openRouterExtraBody: Map<String, Any>
-		get() = buildMap {
-			put("provider", openRouterProviderPolicy)
-			if (!supportsNativeStructuredOutput) {
-				put("reasoning", mapOf("effort" to "none", "exclude" to true))
-				put("response_format", mapOf("type" to "json_object"))
-				put("temperature", 0.0)
-			}
 		}
 
 	init {
@@ -76,11 +62,6 @@ data class PlotAiProperties(
 				"plot.ai.routing-provider must pin exactly one OpenRouter provider slug"
 			}
 			require(!allowFallbacks) { "plot.ai.allow-fallbacks must remain false" }
-			if (model == NEMOTRON_3_5_LIGHTNING_FREE_MODEL) {
-				require(allowDataCollection) {
-					"plot.ai.allow-data-collection must be true because the free Nemotron endpoint may train on prompts"
-				}
-			}
 			require(!contentLoggingEnabled) { "plot.ai.content-logging-enabled must remain false" }
 		}
 	}
@@ -91,8 +72,8 @@ data class PlotAiProperties(
 		const val GPT_5_4_NANO_MODEL = "openai/gpt-5.4-nano"
 		const val GPT_5_6_LUNA_PRO_MODEL = "openai/gpt-5.6-luna-pro"
 		const val GPT_4O_MINI_MODEL = "openai/gpt-4o-mini-2024-07-18"
-		const val NEMOTRON_3_5_LIGHTNING_FREE_MODEL = "nvidia/nemotron-3.5-lightning:free"
-		val SUPPORTED_MODELS = setOf(GPT_5_4_NANO_MODEL, GPT_5_6_LUNA_PRO_MODEL, GPT_4O_MINI_MODEL, NEMOTRON_3_5_LIGHTNING_FREE_MODEL)
+		const val DEEPSEEK_V4_FLASH_MODEL = "deepseek/deepseek-v4-flash-0731"
+		val SUPPORTED_MODELS = setOf(GPT_5_4_NANO_MODEL, GPT_5_6_LUNA_PRO_MODEL, GPT_4O_MINI_MODEL, DEEPSEEK_V4_FLASH_MODEL)
 		private val ROUTING_PROVIDER_SLUG = Regex("[a-z0-9][a-z0-9._-]*(?:/[a-z0-9][a-z0-9._-]*)*")
 	}
 }
