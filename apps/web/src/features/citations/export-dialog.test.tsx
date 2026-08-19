@@ -65,6 +65,18 @@ describe("ExportDialog", () => {
     click.mockRestore();
   });
 
+  it("offers a direct toolbar copy action", async () => {
+    const exportArtifactVariant = vi.fn().mockResolvedValue({ exportId: "export-copy", disposition: "COPY", filename: "changelog.md", mediaType: "text/markdown", text: "Ready.", unresolvedCount: 0, warningAcknowledged: false, includeSources: false });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+
+    render(<ExportDialog pack={pack} client={{ exportArtifactVariant } as unknown as PlotApiClient} presentation="copy" />);
+    fireEvent.click(screen.getByRole("button", { name: "Copy artifact" }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("Ready."));
+    expect(exportArtifactVariant).toHaveBeenCalledWith("variant-1", expect.objectContaining({ disposition: "COPY" }));
+  });
+
   it("renders human-readable warnings without UUIDs and acknowledges the exact warning keys", async () => {
     const exportArtifactVariant = vi
       .fn()

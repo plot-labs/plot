@@ -44,7 +44,7 @@ vi.mock("@/features/chat/chat-composer", () => ({
   ),
 }));
 vi.mock("@/features/citations/cited-draft-editor", () => ({ CitedDraftEditor: () => <div>Reviewed artifact</div> }));
-vi.mock("@/features/citations/export-dialog", () => ({ ExportDialog: () => null }));
+vi.mock("@/features/citations/export-dialog", () => ({ ExportDialog: ({ presentation }: { presentation?: string }) => presentation === "copy" ? <button type="button" aria-label="Copy artifact">Copy</button> : null }));
 vi.mock("@/features/citations/artifact-history-panel", () => ({ ArtifactHistoryPanel: () => <div>History</div> }));
 
 import { ChatWorkspace } from "./chat-workspace";
@@ -139,6 +139,11 @@ describe("ChatWorkspace", () => {
     expect(screen.getByRole("separator", { name: "Resize artifact document" })).toBeInTheDocument();
     expect(screen.getByText("Reviewed artifact")).toBeVisible();
     expect(artifactBody).toContainElement(screen.getByText("Reviewed artifact"));
+    expect(within(artifactPanel).getByRole("button", { name: "Copy artifact" })).toBeVisible();
+    fireEvent.click(within(artifactPanel).getByRole("button", { name: "Artifact history" }));
+    expect(screen.getByRole("complementary", { name: "Artifact history drawer" })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Close artifact history" }));
+    expect(screen.queryByRole("complementary", { name: "Artifact history drawer" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tabpanel", { name: "Assistant panel" })).not.toBeInTheDocument();
     await waitFor(() => expect(document.querySelectorAll("time")).toHaveLength(1));
     expect(screen.getByText("Source agent")).toBeVisible();

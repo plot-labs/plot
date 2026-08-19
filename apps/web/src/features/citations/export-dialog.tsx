@@ -8,7 +8,7 @@ import { PlotApiError, type Artifact, type PlotApiClient } from "@plot/api-clien
 type Disposition = "COPY" | "DOWNLOAD";
 type ExportWarning = { key: string; sentenceNumber: number; excerpt: string };
 
-export function ExportDialog({ pack, client, presentation = "buttons" }: { pack: Artifact; client: PlotApiClient; presentation?: "buttons" | "menu" }) {
+export function ExportDialog({ pack, client, presentation = "buttons" }: { pack: Artifact; client: PlotApiClient; presentation?: "buttons" | "menu" | "copy" }) {
   const [pending, setPending] = useState<Disposition | null>(null);
   const [includeSources, setIncludeSources] = useState(false);
   const [confirmation, setConfirmation] = useState<{ disposition: Disposition; warnings: ExportWarning[] } | null>(null);
@@ -46,6 +46,26 @@ export function ExportDialog({ pack, client, presentation = "buttons" }: { pack:
     } finally {
       setPending(null);
     }
+  }
+
+  if (presentation === "copy") {
+    return (
+      <div className="relative">
+        <button
+          type="button"
+          disabled={Boolean(pending)}
+          onClick={() => void requestExport("COPY", false)}
+          title="Copy artifact"
+          aria-label="Copy artifact"
+          className="inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-black/55 transition hover:bg-black/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 disabled:pointer-events-none disabled:opacity-40 dark:text-white/58 dark:hover:bg-white/[0.08] dark:focus-visible:ring-white/25"
+        >
+          <Copy aria-hidden="true" className="size-3.5" />
+          Copy
+        </button>
+        {confirmation ? <ExportConfirmation confirmation={confirmation} pending={pending} pack={pack} onCancel={() => setConfirmation(null)} onConfirm={() => void requestExport(confirmation.disposition, true, confirmation.warnings.map((warning) => warning.key))} /> : null}
+        {message ? <span role="status" aria-live="polite" className="sr-only">{message}</span> : null}
+      </div>
+    );
   }
 
   if (presentation === "menu") {

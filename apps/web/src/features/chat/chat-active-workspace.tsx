@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, MoreHorizontal, Save, X } from "lucide-react";
+import { Eye, History, MoreHorizontal, Save, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -13,6 +13,7 @@ import { ResizeHandle, useResizable } from "@astryxdesign/core/Resizable";
 import type { ChatAgentRun, SourceReference, WorkSessionSummary as ChatSummary } from "@plot/api-client";
 import { ArtifactDocumentSurface } from "@/features/artifacts/artifact-document-surface";
 import { ArtifactHistoryPanel } from "@/features/citations/artifact-history-panel";
+import { ExportDialog } from "@/features/citations/export-dialog";
 import { ChatComposer } from "@/features/chat/chat-composer";
 import { AgentActivityDetail, ChatActivityPanel, EmptyArtifactState, ErrorNotice } from "@/features/chat/chat-activity";
 import { chatHref, toComposerReferences } from "@/features/chat/chat-workspace-utils";
@@ -42,12 +43,14 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
   const router = useRouter();
   const [mobilePanel, setMobilePanel] = useState<"assistant" | "history" | null>(null);
   const [artifactPanelOpen, setArtifactPanelOpen] = useState(false);
+  const [artifactHistoryOpen, setArtifactHistoryOpen] = useState(false);
   const [artifactSaveRequestToken, setArtifactSaveRequestToken] = useState(0);
   const artifactPanel = useResizable({ defaultSize: 720, minSizePx: 420, maxSizePx: 1200 });
   const resizeArtifactPanel = artifactPanel.resize;
   const mobileAssistantTriggerRef = useRef<HTMLButtonElement>(null);
   const mobileHistoryTriggerRef = useRef<HTMLButtonElement>(null);
   const artifactTriggerRef = useRef<HTMLButtonElement>(null);
+  const artifactHistoryTriggerRef = useRef<HTMLButtonElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const artifactPanelInitializedRef = useRef(false);
   const previousMobilePanelRef = useRef<"assistant" | "history" | null>(null);
@@ -256,10 +259,27 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
         <aside
           id="artifact-editor-panel"
           aria-label="Artifact document panel"
-          className="absolute inset-0 z-30 flex min-w-0 flex-col border-l border-black/[0.08] bg-[#fbfbf8] dark:border-white/10 dark:bg-[#16171a] lg:static lg:w-[var(--artifact-panel-width)] lg:max-w-[calc(100%-420px)] lg:shrink-0"
+          className="absolute inset-0 z-30 flex min-w-0 flex-col border-l border-black/[0.08] bg-[#fbfbf8] dark:border-white/10 dark:bg-[#16171a] lg:relative lg:w-[var(--artifact-panel-width)] lg:max-w-[calc(100%-420px)] lg:shrink-0"
           style={{ "--artifact-panel-width": `${artifactPanel.size}px` } as CSSProperties}
         >
-          <header className="relative z-10 flex min-h-16 shrink-0 items-center justify-end gap-3 bg-[#fbfbf8]/85 px-4 backdrop-blur-xl dark:bg-[#16171a]/85" style={toolbarBottomFade}>
+          <header className="relative z-10 flex min-h-16 shrink-0 items-center justify-between gap-3 bg-[#fbfbf8]/85 px-4 backdrop-blur-xl dark:bg-[#16171a]/85" style={toolbarBottomFade}>
+            <div className="flex items-center gap-1">
+              {!document.historicalArtifact && shownArtifact ? (
+                <ExportDialog pack={shownArtifact} client={plotApiClient} presentation="copy" />
+              ) : null}
+              <button
+                ref={artifactHistoryTriggerRef}
+                type="button"
+                aria-label="Artifact history"
+                aria-controls="artifact-history-drawer"
+                aria-expanded={artifactHistoryOpen}
+                onClick={() => setArtifactHistoryOpen((open) => !open)}
+                className="inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-black/55 transition hover:bg-black/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 dark:text-white/58 dark:hover:bg-white/[0.08] dark:focus-visible:ring-white/25"
+              >
+                <History aria-hidden="true" className="size-3.5" />
+                History
+              </button>
+            </div>
             <div className="flex items-center gap-2">
               <span role="status" aria-live="polite" className="hidden text-xs text-black/42 dark:text-white/45 sm:inline">
                 {document.saveState === "saving" ? "Saving…" : document.saveState === "dirty" ? "Unsaved changes" : document.saveState === "error" ? "Save needs attention" : "Saved"}
@@ -279,6 +299,7 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
                 type="button"
                 aria-label="Close artifact"
                 onClick={() => {
+                  setArtifactHistoryOpen(false);
                   setArtifactPanelOpen(false);
                   artifactTriggerRef.current?.focus();
                 }}
@@ -314,6 +335,44 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
               />
             </div>
           </div>
+          {artifactHistoryOpen ? (
+            <aside
+              id="artifact-history-drawer"
+              aria-label="Artifact history drawer"
+              className="absolute inset-y-0 right-0 z-30 flex w-[min(360px,100%)] flex-col border-l border-black/[0.08] bg-[#fbfbf8] shadow-[-12px_0_28px_rgba(0,0,0,0.08)] dark:border-white/10 dark:bg-[#1b1c20]"
+            >
+              <header className="flex min-h-16 shrink-0 items-center justify-between px-4">
+                <div>
+                  <div className="text-sm font-medium text-black/72 dark:text-white/76">History</div>
+                  <div className="mt-0.5 text-xs text-black/38 dark:text-white/42">Content snapshots</div>
+                </div>
+                <button
+                  type="button"
+                  aria-label="Close artifact history"
+                  onClick={() => {
+                    setArtifactHistoryOpen(false);
+                    artifactHistoryTriggerRef.current?.focus();
+                  }}
+                  className="inline-flex size-8 items-center justify-center rounded-full text-black/45 transition hover:bg-black/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 dark:text-white/50 dark:hover:bg-white/[0.08] dark:focus-visible:ring-white/25"
+                >
+                  <X aria-hidden="true" className="size-4" />
+                </button>
+              </header>
+              <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
+                <ArtifactHistoryPanel
+                  variantId={document.currentArtifact.variant.id}
+                  client={plotApiClient}
+                  refreshKey={document.currentArtifact.variant.revisionId}
+                  selectedPosition={document.historicalPosition}
+                  presentation="drawer"
+                  onSelect={(detail, position) => {
+                    document.selectHistoricalArtifact(detail, position);
+                    setArtifactHistoryOpen(false);
+                  }}
+                />
+              </div>
+            </aside>
+          ) : null}
         </aside>
       ) : null}
     </div>
