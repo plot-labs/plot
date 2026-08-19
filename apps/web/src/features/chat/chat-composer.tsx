@@ -1,7 +1,14 @@
 "use client";
 
-import { ArrowUp } from "lucide-react";
-import { useRef, useState } from "react";
+import {
+  ChatComposer as AstryxChatComposer,
+  ChatComposerDrawer,
+  ChatComposerInput,
+  ChatSendButton,
+} from "@astryxdesign/core/Chat";
+import { Citation } from "@astryxdesign/core/Citation";
+import type { CSSProperties } from "react";
+import { useId, useRef } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -10,7 +17,7 @@ type ChatComposerProps = {
   variant?: "center" | "dock";
   id?: string;
   placeholder?: string;
-  references?: { id: string; label: string; available: boolean; groupId?: string }[];
+  references?: { id: string; label: string; available: boolean; groupId?: string; url?: string }[];
   busy?: boolean;
 };
 
@@ -22,55 +29,85 @@ export function ChatComposer({
   references = [],
   busy = false,
 }: ChatComposerProps) {
-  const [message, setMessage] = useState("");
   const submittingRef = useRef(false);
-  const [selectedReferenceIds] = useState<string[]>([]);
-  const canSubmit = !busy && Boolean(message.trim()) && references.some((reference) => reference.available);
+  const hasConnectedSource = references.some((reference) => reference.available);
+
+  function submit(value: string) {
+    if (submittingRef.current) return;
+
+    submittingRef.current = true;
+    onSubmit(value, []);
+    queueMicrotask(() => {
+      submittingRef.current = false;
+    });
+  }
 
   return (
-    <form
+    <div
       id={id}
       className={cn(
+        "w-full",
         variant === "dock"
-          ? "bg-white/95 px-4 py-4 dark:bg-[#111113]/95 sm:px-8"
-          : "w-full",
+          ? "border-t border-black/[0.06] bg-white/85 px-4 py-4 backdrop-blur-xl dark:border-white/[0.07] dark:bg-[#111113]/85 sm:px-8"
+          : "px-1",
       )}
-      onSubmit={(event) => {
-        event.preventDefault();
-        if (!canSubmit || submittingRef.current) return;
-
-        submittingRef.current = true;
-        onSubmit(message.trim(), selectedReferenceIds);
-        setMessage("");
-        queueMicrotask(() => { submittingRef.current = false; });
-      }}
     >
-      <div
-        className={cn(
-          "mx-auto w-full max-w-[760px] overflow-hidden rounded-[18px] border border-black/[0.09] bg-white shadow-[0_16px_50px_rgb(0_0_0_/_0.08)] dark:border-white/10 dark:bg-[#232326] dark:shadow-black/30",
-          variant === "dock" && "max-w-3xl shadow-[0_10px_28px_rgb(0_0_0_/_0.07)]",
-        )}
-      >
-        <textarea
-          value={message}
-          onChange={(event) => setMessage(event.target.value)}
-          className="min-h-20 w-full resize-none bg-transparent px-4 py-3 text-sm leading-6 outline-none placeholder:text-black/30 dark:placeholder:text-white/35"
-          placeholder={placeholder}
-          aria-label="Chat message"
-        />
-        <div className="flex items-center justify-end px-3 pb-3 text-xs text-black/45 dark:text-white/45">
-          <div className="flex items-center gap-1.5">
-            <button
-              type="submit"
-              disabled={!canSubmit}
-              className="inline-flex size-9 items-center justify-center rounded-full bg-black/35 text-white transition hover:bg-black/55 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white/35 dark:hover:bg-white/55"
-              aria-label="Send message"
-            >
-              <ArrowUp className="size-4" />
-            </button>
-          </div>
-        </div>
+      <AstryxChatComposer
+        onSubmit={submit}
+        placeholder={placeholder}
+        isDisabled={busy || !hasConnectedSource}
+        density={variant === "center" ? "compact" : "balanced"}
+        elevation="none"
+        drawer={references.length ? <ComposerSources references={references} /> : undefined}
+        input={<ChatComposerInput label="Chat message" maxRows={variant === "center" ? 5 : 7} />}
+        footerActions={variant === "center" ? null : <span className="text-xs text-black/42 dark:text-white/45">Enter to send</span>}
+        sendButton={<ComposerSendButton />}
+        className="mx-auto max-w-[720px]"
+        style={{
+          "--_chat-composer-radius": "12px",
+          "--_chat-composer-padding": variant === "center" ? "12px" : "10px",
+        } as CSSProperties}
+      />
+    </div>
+  );
+}
+
+function ComposerSources({
+  references,
+}: {
+  references: NonNullable<ChatComposerProps["references"]>;
+}) {
+  const visibleReferences = references.slice(0, 3);
+  const remainingCount = references.length - visibleReferences.length;
+
+  return (
+    <ChatComposerDrawer count={references.length} label="Sources" defaultIsCollapsed>
+      <div className="flex min-w-0 flex-wrap items-center gap-2" aria-label="Connected sources">
+        {visibleReferences.map((reference, index) => (
+          <Citation
+            key={reference.id}
+            source={{ title: reference.label, url: reference.url }}
+            number={index + 1}
+            variant="label"
+          />
+        ))}
+        {remainingCount > 0 ? <span className="text-xs text-black/42 dark:text-white/45">{remainingCount} more</span> : null}
       </div>
-    </form>
+    </ChatComposerDrawer>
+  );
+}
+
+function ComposerSendButton() {
+  const labelId = useId();
+
+  return (
+    <>
+      <span id={labelId} className="sr-only">Send message</span>
+      <ChatSendButton
+        aria-labelledby={labelId}
+        size="sm"
+        className="bg-primary text-primary-foreground hover:bg-[#303036] active:bg-black disabled:bg-black/25 dark:bg-[#f4f4f5] dark:text-[#18181b] dark:hover:bg-white dark:active:bg-white dark:disabled:bg-white/20"
+      />
+    </>
   );
 }

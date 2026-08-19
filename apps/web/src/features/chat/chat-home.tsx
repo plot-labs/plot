@@ -53,21 +53,28 @@ export function ChatHome({ references, referencesLoading, referencesError }: Cha
   }
 
   return (
-    <div className="flex h-screen min-h-0 flex-col bg-white dark:bg-[#111113]">
-      <div className="flex min-h-0 flex-1 items-center justify-center px-6 pb-24 pt-16">
-        <div className="w-full max-w-[760px]">
-          <h1 className="text-center text-[28px] font-medium tracking-normal text-black/82 dark:text-white/88">What should Plot create?</h1>
-          <div className="mt-9">
+    <div className="flex min-h-dvh flex-col bg-[#f7f8fa] dark:bg-[#16171a]">
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-20 pt-16 sm:px-8 sm:pt-[12vh]">
+        <div className="mx-auto w-full max-w-[720px]">
+          <header className="max-w-[520px]">
+            <h1 className="text-[27px] font-semibold tracking-[-0.025em] text-black/86 dark:text-white/90 sm:text-[30px]">
+              What should Plot create?
+            </h1>
+            <p className="mt-2 text-sm leading-6 text-black/52 dark:text-white/55">
+              Create a changelog, docs update, or customer note from connected work.
+            </p>
+          </header>
+          <div className="mt-6">
             <ChatComposer
               key={references.map((reference) => reference.id).join(":") || "no-references"}
               variant="center"
-              placeholder="Ask for a changelog, customer update, or source-backed draft..."
+              placeholder="Describe the update you need..."
               onSubmit={(message, ids) => void submitHomeRequest(message, ids)}
               references={toComposerReferences(references)}
               busy={starting || referencesLoading}
             />
           </div>
-          {referencesLoading ? <p className="mt-3 text-center text-sm text-black/45 dark:text-white/45">Loading sources…</p> : null}
+          {referencesLoading ? <p className="mt-3 text-sm text-black/45 dark:text-white/45">Loading sources…</p> : null}
           {!referencesLoading && !referencesError && references.length === 0 ? <SourceEmptyState /> : null}
           {referencesError ? <ErrorNotice message={referencesError} /> : null}
           {startError ? <ErrorNotice message={startError} /> : null}
