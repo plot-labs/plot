@@ -351,11 +351,19 @@ alter table generation_inputs
   add column agent_run_id uuid,
   add column agent_run_input_id uuid;
 
+-- generation_inputs is immutable for application writes. This migration alone
+-- enriches legacy rows with their already-recorded generation-run provenance.
+-- PostgreSQL runs this SQL migration transactionally, so an interrupted
+-- backfill also restores the trigger before another process can write rows.
+alter table generation_inputs disable trigger generation_inputs_append_only;
+
 update generation_inputs input
 set source_scope_id = run.source_scope_id
 from generation_runs run
 where run.workspace_id = input.workspace_id
   and run.id = input.generation_run_id;
+
+alter table generation_inputs enable trigger generation_inputs_append_only;
 
 alter table generation_inputs
   add constraint generation_inputs_source_scope_fk
