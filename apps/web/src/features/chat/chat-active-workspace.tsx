@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, MessageCircle, MoreHorizontal, Save, X } from "lucide-react";
+import { Eye, MoreHorizontal, Save, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -122,9 +122,8 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
   return (
     <div ref={workspaceRef} className="relative flex h-[calc(100dvh-49px)] min-h-0 bg-[#fbfbf8] dark:bg-[#111113] lg:h-full">
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex min-h-14 shrink-0 items-center bg-[#fbfbf8]/90 px-4 py-3 backdrop-blur-xl dark:bg-[#111113]/90 sm:px-6" style={toolbarBottomFade}>
-          <div className="mx-auto flex w-full max-w-[760px] min-w-0 items-center justify-start gap-2 text-sm font-semibold text-black/78 dark:text-white/82">
-            <MessageCircle aria-hidden="true" className="size-4 shrink-0 text-black/50 dark:text-white/50" />
+        <header className="flex min-h-14 shrink-0 items-center bg-[#fbfbf8]/90 px-4 py-3 backdrop-blur-xl dark:bg-[#111113]/90" style={toolbarBottomFade}>
+          <div className="flex w-full min-w-0 items-center justify-start gap-2 text-sm font-semibold text-black/78 dark:text-white/82">
             <h1 className="truncate text-left">{activeChat.title || "Untitled chat"}</h1>
             <MoreHorizontal aria-hidden="true" className="size-4 shrink-0 text-black/45 dark:text-white/45" />
           </div>
