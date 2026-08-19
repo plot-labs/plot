@@ -109,6 +109,7 @@ export function AgentActivityDetail({ run, busy, error, instruction, references,
           className="w-full min-w-0 max-w-full"
           metadata={
             <ChatMessageMetadata
+              className="mt-4"
               timestamp={run ? <Timestamp value={run.createdAt} format="time" /> : undefined}
               footer={
                 <Text type="supporting" color="secondary">
