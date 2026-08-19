@@ -125,33 +125,34 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
                 error={agent.agentError}
                 instruction={agent.agentInstruction}
                 references={references}
+                artifactAction={document.currentArtifact ? (
+                  <button
+                    ref={artifactTriggerRef}
+                    id="artifact-preview"
+                    type="button"
+                    aria-controls="artifact-editor-panel"
+                    aria-expanded={artifactPanelOpen}
+                    onClick={() => setArtifactPanelOpen(true)}
+                    className="flex w-full items-center justify-between gap-4 rounded-xl border border-black/[0.08] bg-white/70 px-4 py-3 text-left transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/[0.07] dark:focus-visible:ring-white/25"
+                  >
+                    <span className="min-w-0 truncate text-sm font-medium text-black/82 dark:text-white/85">
+                      {document.currentArtifact.title || "Generated artifact"}
+                    </span>
+                    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-black/[0.035] px-3 py-1.5 text-xs font-medium text-black/50 dark:bg-white/[0.06] dark:text-white/55">
+                      <Eye aria-hidden="true" className="size-3.5" />
+                      Open artifact
+                    </span>
+                  </button>
+                ) : undefined}
               />
             </ChatMessageList>
 
-            <div className="mt-5">
-              {document.artifactError ? <ErrorNotice message={document.artifactError} /> : null}
-              {document.currentArtifact ? (
-                <button
-                  ref={artifactTriggerRef}
-                  id="artifact-preview"
-                  type="button"
-                  aria-controls="artifact-editor-panel"
-                  aria-expanded={artifactPanelOpen}
-                  onClick={() => setArtifactPanelOpen(true)}
-                  className="flex w-full items-center justify-between gap-4 rounded-xl border border-black/[0.08] bg-white/70 px-4 py-3 text-left transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/[0.07] dark:focus-visible:ring-white/25"
-                >
-                  <span className="min-w-0 truncate text-sm font-medium text-black/82 dark:text-white/85">
-                    {document.currentArtifact.title || "Generated artifact"}
-                  </span>
-                  <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-black/[0.035] px-3 py-1.5 text-xs font-medium text-black/50 dark:bg-white/[0.06] dark:text-white/55">
-                    <Eye aria-hidden="true" className="size-3.5" />
-                    Open artifact
-                  </span>
-                </button>
-              ) : !agent.activitiesLoading && !agent.agentBusy && !agent.agentRun ? (
+            {document.artifactError ? <ErrorNotice message={document.artifactError} /> : null}
+            {!document.currentArtifact && !agent.activitiesLoading && !agent.agentBusy && !agent.agentRun ? (
+              <div className="mt-5">
                 <EmptyArtifactState hasSelection={Boolean(agent.selectedActivity)} />
-              ) : null}
-            </div>
+              </div>
+            ) : null}
 
             <div className="mt-5 lg:hidden">
               <div role="tablist" aria-label="Chat workspace panels" className="flex gap-2">

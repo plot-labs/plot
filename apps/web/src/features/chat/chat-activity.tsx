@@ -10,6 +10,7 @@ import {
 import { Timestamp } from "@astryxdesign/core/Timestamp";
 import { Text } from "@astryxdesign/core/Text";
 import { LoaderCircle } from "lucide-react";
+import type { ReactNode } from "react";
 
 import type { ChatAgentRun, SourceReference } from "@plot/api-client";
 import { isTerminalChatAgentStatus } from "@/lib/chat-agent-polling";
@@ -90,7 +91,7 @@ export function ChatActivityPanel({
   );
 }
 
-export function AgentActivityDetail({ run, busy, error, instruction, references }: { run: ChatAgentRun | null; busy: boolean; error: string; instruction: string; references: SourceReference[] }) {
+export function AgentActivityDetail({ run, busy, error, instruction, references, artifactAction }: { run: ChatAgentRun | null; busy: boolean; error: string; instruction: string; references: SourceReference[]; artifactAction?: ReactNode }) {
   if (!run && !busy && !error) return null;
   const status = run?.status ?? "QUEUED";
   const linkedArtifact = Boolean(run?.artifactId);
@@ -105,7 +106,7 @@ export function AgentActivityDetail({ run, busy, error, instruction, references 
       <ChatMessage sender="assistant">
         <ChatMessageBubble
           variant="ghost"
-          className="max-w-none"
+          className="w-full min-w-0 max-w-full"
           metadata={
             <ChatMessageMetadata
               timestamp={run ? <Timestamp value={run.createdAt} format="time" /> : undefined}
@@ -129,6 +130,7 @@ export function AgentActivityDetail({ run, busy, error, instruction, references 
             defaultIsExpanded={false}
           />
           <ChatSourceCitations references={references} />
+          {artifactAction ? <div className="mt-4">{artifactAction}</div> : null}
         </ChatMessageBubble>
       </ChatMessage>
       {error ? <ErrorNotice message={error} /> : null}

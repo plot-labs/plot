@@ -124,6 +124,11 @@ describe("ChatWorkspace", () => {
 
     render(<ChatWorkspace />);
     const openArtifact = await screen.findByText("Open artifact");
+    const agentResponse = screen.getByRole("region", { name: "Agent request details" });
+    expect(agentResponse).toContainElement(openArtifact);
+    const responseTime = agentResponse.querySelector("time");
+    expect(responseTime).not.toBeNull();
+    expect(openArtifact.compareDocumentPosition(responseTime!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.queryByText("Reviewed artifact")).not.toBeInTheDocument();
     fireEvent.click(openArtifact);
     expect(screen.getByRole("complementary", { name: "Artifact document panel" })).toBeVisible();
