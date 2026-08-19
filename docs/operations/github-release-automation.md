@@ -79,7 +79,8 @@ plot.github.access-check-lease-timeout=2m
 plot.github.access-check-max-attempts=3
 ```
 
-`openai/gpt-4o-mini-2024-07-18` is the other currently supported pinned model.
+`openai/gpt-4o-mini-2024-07-18` and `deepseek/deepseek-v4-flash-0731` are the other currently supported pinned models. Pin the DeepSeek profile to a provider that supports structured outputs, such as `deepinfra`, keep `plot.ai.require-parameters=false`, and use `plot.ai.timeout=180s` for full release evidence workloads.
+Free or training-required model profiles are intentionally unsupported. Plot hard-codes OpenRouter `provider.data_collection=deny` for every model request; production and local configuration cannot opt into provider data collection.
 The OpenRouter credential is supplied to the Spring AI OpenAI-compatible
 transport with the exact deployment secret name `SPRING_AI_OPENAI_API_KEY`.
 The corresponding GitHub deployment secret names are

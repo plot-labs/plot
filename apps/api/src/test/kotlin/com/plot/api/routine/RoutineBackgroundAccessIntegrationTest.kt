@@ -161,7 +161,7 @@ class RoutineBackgroundAccessIntegrationTest {
 		assertEquals(RoutineExecutionStatus.DISPATCHED, completed.status)
 		assertNotNull(completed.refreshCompletedAt)
 		assertEquals(2, seedCount(executionId))
-		assertNotNull(routinePersistence.find(devContext.devWorkspaceId, fixture.routineId)?.activityCursorSequence)
+		assertNull(routinePersistence.find(devContext.devWorkspaceId, fixture.routineId)?.activityCursorSequence)
 		assertEquals(listOf("<first>", continuation, continuation), githubClient.continuations)
 	}
 

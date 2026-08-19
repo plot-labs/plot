@@ -137,6 +137,26 @@ class GitHubRestClientTest {
 	}
 
 	@Test
+	fun preservesPrivateRepositoryVisibility() {
+		val transport = GitHubHttpTransport { _, uri, _, _ ->
+			when {
+				uri.path.endsWith("/access_tokens") ->
+					GitHubHttpResponse(201, emptyMap(), """{"token":"installation-token"}""")
+				else -> GitHubHttpResponse(
+					200,
+					emptyMap(),
+					"""{"repositories":[{"id":44,"name":"plot","private":true,"owner":{"login":"acme"},"html_url":"https://github.test/acme/plot","default_branch":"main"}]}""",
+				)
+			}
+		}
+		val client = GitHubRestClient(properties(), objectMapper, transport = transport)
+
+		val repository = client.listInstallationRepositories(77).single()
+
+		assertEquals("PRIVATE", repository.visibility)
+	}
+
+	@Test
 	fun readsBoundedPublishedReleaseTagsAndIgnoresDrafts() {
 		var requestedPath: String? = null
 		var requestedQuery: String? = null

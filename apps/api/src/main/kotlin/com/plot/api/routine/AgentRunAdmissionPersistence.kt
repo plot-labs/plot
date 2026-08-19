@@ -49,6 +49,12 @@ class AgentRunAdmissionPersistence(
 			request.sourceScopes.map { it.sourceScopeId },
 		)
 		validateDispatchRequest(execution, request, lockedSources)
+		if (execution.triggerKind != RoutineExecutionTriggerKind.GITHUB && hasInFlightRoutineRun(execution)) {
+			throw RoutineExecutionStateException("Routine has an in-flight Agent run")
+		}
+		if (hasReservedSeed(execution, request.inputs)) {
+			throw RoutineExecutionStateException("Routine evidence is already reserved or consumed")
+		}
 
 		val workSessionId = uuidGenerator.next()
 		val routineName = sqlExecutor.queryForObject(
@@ -178,22 +184,48 @@ class AgentRunAdmissionPersistence(
 			*sqlArgs,
 		)
 		if (executionUpdated != 1) throw RoutineExecutionStateException("Routine execution transition was lost")
-		if (execution.triggerKind != RoutineExecutionTriggerKind.GITHUB) {
-			val cursorUpdated = sqlExecutor.update(
-				"""
-				update routines
-				set activity_cursor_sequence = greatest(coalesce(activity_cursor_sequence, 0), ?), updated_at = ?
-				where workspace_id = ? and id = ?
-				""".trimIndent(),
-				request.activityCursorAfter,
-				Timestamp.from(now),
-				workspaceId,
-				execution.routineId,
-			)
-			if (cursorUpdated != 1) throw RoutineExecutionStateException("Routine cursor update was lost")
-		}
 		requireNotNull(queryPersistence.findAgentRun(workspaceId, agentRunId))
 	}
+
+	private fun hasInFlightRoutineRun(execution: RoutineExecutionRecord): Boolean = sqlExecutor.queryForObject(
+		"""
+		select exists(
+		  select 1
+		  from agent_runs run
+		  where run.workspace_id = ? and run.routine_id = ?
+		    and run.status in ('QUEUED', 'RUNNING')
+		)
+		""".trimIndent(),
+		Boolean::class.java,
+		execution.workspaceId,
+		execution.routineId,
+	) == true
+
+	private fun hasReservedSeed(
+		execution: RoutineExecutionRecord,
+		inputs: List<AgentRunInputRequest>,
+	): Boolean = inputs.any { input ->
+		sqlExecutor.queryForObject(
+			"""
+			select exists(
+			  select 1
+			  from agent_run_inputs seed
+			  join agent_runs run
+			    on run.workspace_id = seed.workspace_id and run.id = seed.agent_run_id
+			  where seed.workspace_id = ? and seed.routine_id = ?
+			    and seed.writing_block_id = ? and seed.activity_sequence = ?
+			    and seed.input_kind = 'SEED'
+			    and run.status in ('QUEUED', 'RUNNING', 'SUCCEEDED')
+			)
+			""".trimIndent(),
+			Boolean::class.java,
+			execution.workspaceId,
+			execution.routineId,
+			input.writingBlockId,
+			requireNotNull(input.activitySequence),
+		) == true
+	}
+
 	fun appendInput(
 		workspaceId: UUID,
 		agentRunId: UUID,

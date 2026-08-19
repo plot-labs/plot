@@ -491,6 +491,7 @@ class GitHubRestClient(
 			defaultBranch = node.path("default_branch").takeUnless { it.isMissingNode || it.isNull }?.stringValue(),
 			ownerId = node.path("owner").path("id").takeUnless { it.isMissingNode || it.isNull }
 				?.longValue()?.takeIf { it > 0L },
+			visibility = if (node.path("private").takeUnless { it.isMissingNode || it.isNull }?.booleanValue() == true) "PRIVATE" else "PUBLIC",
 		)
 	}
 

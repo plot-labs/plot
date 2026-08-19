@@ -138,6 +138,7 @@ class AgentRunWorkerIntegrationTest {
 			routine.workspaceId,
 			execution.id,
 		)!!
+		assertEquals(null, routinePersistence.find(routine.workspaceId, routine.id)?.activityCursorSequence)
 		agentModel.reads = listOf(trigger.scopeId to triggerBlock, context.scopeId to contextBlock)
 
 		assertTrue(agentWorker.processOne())
@@ -212,6 +213,15 @@ class AgentRunWorkerIntegrationTest {
 		assertTrue(agentWorker.processOne())
 		assertEquals("SUCCEEDED", jdbcTemplate.queryForObject("select status from agent_runs where id = ?", String::class.java, agentRunId))
 		assertEquals("READY", jdbcTemplate.queryForObject("select status from artifact_runs where workspace_id = ? and agent_run_id = ?", String::class.java, routine.workspaceId, agentRunId))
+		assertEquals(
+			jdbcTemplate.queryForObject(
+				"select activity_sequence from agent_run_inputs where agent_run_id = ? and writing_block_id = ? and input_kind = 'SEED'",
+				Long::class.java,
+				agentRunId,
+				triggerBlock,
+			),
+			routinePersistence.find(routine.workspaceId, routine.id)?.activityCursorSequence,
+		)
 		assertEquals(1, count("select count(*) from content_packs where generation_run_id = ?", artifactWorkflowRunId))
 		assertEquals(3, agentModel.requests.size)
 		assertTrue(agentModel.requests.none { request ->
@@ -275,7 +285,7 @@ class AgentRunWorkerIntegrationTest {
 	@Test
 	fun `model cannot read an unconfigured source`() {
 		val trigger = insertSource("acme/secure")
-		insertBlock(trigger, "Allowed", "Allowed body")
+		val blockId = insertBlock(trigger, "Allowed", "Allowed body")
 		val routine = routinePersistence.insert(
 			devContext.devWorkspaceId,
 			devContext.devUserId,
@@ -309,6 +319,27 @@ class AgentRunWorkerIntegrationTest {
 		assertEquals("FAILED", jdbcTemplate.queryForObject("select status from agent_runs where id = ?", String::class.java, agentRunId))
 		assertEquals("AGENT_INVALID_DECISION", jdbcTemplate.queryForObject("select failure_code from agent_runs where id = ?", String::class.java, agentRunId))
 		assertEquals(0, count("select count(*) from agent_steps where agent_run_id = ?", agentRunId))
+		assertEquals(null, routinePersistence.find(routine.workspaceId, routine.id)?.activityCursorSequence)
+
+		val retry = agentPersistence.createExecution(
+			RoutineExecutionRequest(
+				workspaceId = routine.workspaceId,
+				routineId = routine.id,
+				createdByUserId = routine.createdByUserId,
+				triggerSourceScopeId = routine.sourceScopeId,
+				triggerKind = RoutineExecutionTriggerKind.MANUAL,
+				triggerKey = "manual:${routine.id}:retry-failed-seed",
+				requestFingerprint = "retry-failed-seed:${routine.id}",
+				activityCursorBefore = null,
+			),
+		)
+		routineWorker.runNow(routine.workspaceId, routine.id, retry.id)
+
+		assertEquals(2, count(
+			"select count(*) from agent_run_inputs where routine_id = ? and writing_block_id = ? and input_kind = 'SEED'",
+			routine.id,
+			blockId,
+		))
 	}
 
 	@Test

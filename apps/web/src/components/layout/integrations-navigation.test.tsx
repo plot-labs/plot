@@ -5,7 +5,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const sidebarMocks = vi.hoisted(() => ({
   listSessions: vi.fn(),
+  listGitHubConnections: vi.fn(),
+  listGitHubRepositories: vi.fn(),
+  listRoutines: vi.fn(),
+  importGitHubRepository: vi.fn(),
+  runRoutineNow: vi.fn(),
+  getRoutine: vi.fn(),
   createWorkspace: vi.fn(),
+  routerReplace: vi.fn(),
   pathname: "/settings/integrations",
   search: "",
 }));
@@ -13,13 +20,24 @@ const sidebarMocks = vi.hoisted(() => ({
 vi.mock("next/navigation", () => ({
   usePathname: () => sidebarMocks.pathname,
   useSearchParams: () => new URLSearchParams(sidebarMocks.search),
+  useRouter: () => ({ replace: sidebarMocks.routerReplace }),
 }));
 
 vi.mock("@/lib/api-client", () => ({
+  getSelectedWorkspaceId: () => window.localStorage.getItem("plot.workspaceId"),
   getProductShellData: () => ({
     workspace: { id: "workspace-1", name: "Personal" },
   }),
-  plotApiClient: { listSessions: sidebarMocks.listSessions, createWorkspace: sidebarMocks.createWorkspace },
+  plotApiClient: {
+    listSessions: sidebarMocks.listSessions,
+    listGitHubConnections: sidebarMocks.listGitHubConnections,
+    listGitHubRepositories: sidebarMocks.listGitHubRepositories,
+    listRoutines: sidebarMocks.listRoutines,
+    importGitHubRepository: sidebarMocks.importGitHubRepository,
+    runRoutineNow: sidebarMocks.runRoutineNow,
+    getRoutine: sidebarMocks.getRoutine,
+    createWorkspace: sidebarMocks.createWorkspace,
+  },
 }));
 
 import { ProductSidebar } from "./product-sidebar";
@@ -31,7 +49,18 @@ describe("Settings navigation", () => {
     window.localStorage.clear();
     sidebarMocks.listSessions.mockReset();
     sidebarMocks.listSessions.mockResolvedValue([]);
+    sidebarMocks.listGitHubConnections.mockReset();
+    sidebarMocks.listGitHubConnections.mockResolvedValue([]);
+    sidebarMocks.listGitHubRepositories.mockReset();
+    sidebarMocks.listGitHubRepositories.mockResolvedValue([]);
+    sidebarMocks.listRoutines.mockReset();
+    sidebarMocks.listRoutines.mockResolvedValue([]);
+    sidebarMocks.importGitHubRepository.mockReset();
+    sidebarMocks.importGitHubRepository.mockResolvedValue(undefined);
+    sidebarMocks.runRoutineNow.mockReset();
+    sidebarMocks.getRoutine.mockReset();
     sidebarMocks.createWorkspace.mockReset();
+    sidebarMocks.routerReplace.mockReset();
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({
       user: { id: "user-1", email: "owner@example.com", displayName: "Owner" },
       workspaces: [{ id: "workspace-1", name: "Personal", slug: "personal", role: "OWNER" }],
@@ -49,6 +78,84 @@ describe("Settings navigation", () => {
     expect(within(productNavigation).getByRole("link", { name: "Artifacts" })).toHaveAttribute("aria-current", "page");
     expect(screen.queryByRole("navigation", { name: "Settings navigation" })).not.toBeInTheDocument();
     expect(await screen.findByRole("button", { name: /Personal/ })).toBeVisible();
+  });
+
+  it("opens completed and pending onboarding steps", async () => {
+    sidebarMocks.pathname = "/artifacts";
+    sidebarMocks.listGitHubConnections.mockResolvedValue([{
+      id: "connection-1",
+      status: "ACTIVE",
+      repositories: [{ id: "repository-1", status: "ACTIVE", externalRepositoryId: 1, displayName: "plot/app", visibility: "PRIVATE" }],
+    }]);
+    render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
+
+    sidebarMocks.listGitHubRepositories.mockResolvedValue([{ id: "repository-1", status: "ACTIVE", externalRepositoryId: 1, displayName: "plot/app", visibility: "PRIVATE" }]);
+    const connected = await screen.findByRole("button", { name: "Install GitHub App" });
+    const pending = screen.getByRole("button", { name: "Create first Routine" });
+    expect(connected).toBeEnabled();
+    expect(pending).toBeEnabled();
+    fireEvent.click(connected);
+    expect(screen.getByRole("dialog", { name: "Set up Plot" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Install the Plot GitHub App" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Close onboarding" }));
+    fireEvent.click(pending);
+    expect(screen.getByRole("dialog", { name: "Set up Plot" })).toBeInTheDocument();
+    expect(await screen.findByLabelText("Private repository")).toBeInTheDocument();
+  });
+
+  it("closes onboarding before navigating to routines", async () => {
+    sidebarMocks.pathname = "/artifacts";
+    sidebarMocks.listGitHubConnections.mockResolvedValue([{ id: "connection-1", status: "ACTIVE", repositories: [] }]);
+    sidebarMocks.listRoutines.mockResolvedValue([{
+      id: "routine-1",
+      name: "Release changelog",
+      sourceLabel: "plot/app",
+      cadence: "ON_GITHUB_RELEASE",
+      latestExecution: null,
+    }]);
+    render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Create first Routine" }));
+    expect(screen.getByRole("progressbar", { name: "Step 2 of 3" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Your first Routine" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Close onboarding" }));
+    fireEvent.click(screen.getByRole("button", { name: "Run first Routine" }));
+    expect(screen.getByRole("dialog", { name: "Set up Plot" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("link", { name: "View Routines" }));
+    expect(screen.queryByRole("dialog", { name: "Set up Plot" })).not.toBeInTheDocument();
+  });
+
+  it("runs the first Routine from onboarding", async () => {
+    sidebarMocks.pathname = "/artifacts";
+    const routine = {
+      id: "routine-1",
+      name: "Release changelog",
+      sourceScopeId: "repository-1",
+      sourceLabel: "plot/app",
+      cadence: "ON_GITHUB_RELEASE",
+      latestExecution: null,
+    };
+    sidebarMocks.listGitHubConnections.mockResolvedValue([{ id: "connection-1", status: "ACTIVE", repositories: [] }]);
+    sidebarMocks.listRoutines.mockResolvedValue([{
+      ...routine,
+      id: "wrong-routine",
+      sourceScopeId: "wrong-repository",
+      cadence: "ON_GITHUB_CHANGE",
+    }, routine]);
+    sidebarMocks.runRoutineNow.mockResolvedValue({
+      ...routine,
+      latestExecution: { artifactId: "artifact-1", status: "DISPATCHED", agentRunStatus: "SUCCEEDED", chatId: "chat-1" },
+    });
+    render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Run first Routine" }));
+    const run = screen.getByRole("button", { name: "Run Routine" });
+    await waitFor(() => expect(run).toBeEnabled());
+    fireEvent.click(run);
+
+    await waitFor(() => expect(sidebarMocks.importGitHubRepository).toHaveBeenCalledWith("repository-1", expect.any(Object)));
+    expect(sidebarMocks.runRoutineNow).toHaveBeenCalledWith("routine-1", expect.any(String));
+    expect(await screen.findByRole("link", { name: "Review result" })).toBeInTheDocument();
   });
 
   it("announces the workspace selected after account loading", async () => {
