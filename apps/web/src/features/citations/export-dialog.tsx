@@ -1,7 +1,7 @@
 "use client";
 
-import { Check, Copy, Download, ShieldAlert, X } from "lucide-react";
-import { useState } from "react";
+import { Check, ChevronDown, Copy, Download, ShieldAlert, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import { PlotApiError, type Artifact, type PlotApiClient } from "@plot/api-client";
 
@@ -13,6 +13,36 @@ export function ExportDialog({ pack, client, presentation = "buttons" }: { pack:
   const [includeSources, setIncludeSources] = useState(false);
   const [confirmation, setConfirmation] = useState<{ disposition: Disposition; warnings: ExportWarning[] } | null>(null);
   const [message, setMessage] = useState("");
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const dropdownTriggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!dropdownOpen) return;
+
+    function handleDismiss(event: Event) {
+      if (event.target instanceof Node && !dropdownRef.current?.contains(event.target)) {
+        setDropdownOpen(false);
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setDropdownOpen(false);
+        dropdownTriggerRef.current?.focus();
+      }
+    }
+
+    document.addEventListener("pointerdown", handleDismiss, true);
+    document.addEventListener("click", handleDismiss, true);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handleDismiss, true);
+      document.removeEventListener("click", handleDismiss, true);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [dropdownOpen]);
 
   async function requestExport(disposition: Disposition, acknowledgeUnresolved: boolean, acknowledgedWarningKeys: string[] = []) {
     if (pending) return;
@@ -50,19 +80,67 @@ export function ExportDialog({ pack, client, presentation = "buttons" }: { pack:
 
   if (presentation === "copy") {
     return (
-      <div className="relative">
-        <button
-          type="button"
-          disabled={Boolean(pending)}
-          onClick={() => void requestExport("COPY", false)}
-          title="Copy artifact"
-          aria-label="Copy artifact"
-          className="inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-black/55 transition hover:bg-black/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 disabled:pointer-events-none disabled:opacity-40 dark:text-white/58 dark:hover:bg-white/[0.08] dark:focus-visible:ring-white/25"
-        >
-          <Copy aria-hidden="true" className="size-3.5" />
-          Copy
-        </button>
-        {confirmation ? <ExportConfirmation confirmation={confirmation} pending={pending} pack={pack} onCancel={() => setConfirmation(null)} onConfirm={() => void requestExport(confirmation.disposition, true, confirmation.warnings.map((warning) => warning.key))} /> : null}
+      <div ref={dropdownRef} className="relative inline-flex items-center">
+        <div className="inline-flex h-8 items-stretch rounded-[8px] border border-black/15 bg-white/70 shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition dark:border-white/15 dark:bg-white/[0.04]">
+          <button
+            type="button"
+            disabled={Boolean(pending)}
+            onClick={() => void requestExport("COPY", false)}
+            title="Copy artifact"
+            aria-label="Copy artifact"
+            className="inline-flex h-full items-center gap-1.5 rounded-l-[7px] pl-2.5 pr-2 text-xs font-medium text-black/70 transition hover:bg-black/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 disabled:pointer-events-none disabled:opacity-40 dark:text-white/70 dark:hover:bg-white/[0.08] dark:focus-visible:ring-white/25"
+          >
+            <Copy aria-hidden="true" className="size-3.5 text-black/60 dark:text-white/60" />
+            <span>Copy</span>
+          </button>
+          <div className="w-px self-stretch bg-black/15 dark:bg-white/15" aria-hidden="true" />
+          <div className="relative inline-flex h-full">
+            <button
+              ref={dropdownTriggerRef}
+              type="button"
+              disabled={Boolean(pending)}
+              aria-label="Export options"
+              aria-haspopup="menu"
+              aria-expanded={dropdownOpen}
+              onClick={() => setDropdownOpen((open) => !open)}
+              className="inline-flex h-full items-center justify-center rounded-r-[7px] px-1.5 text-black/60 transition hover:bg-black/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 disabled:pointer-events-none disabled:opacity-40 dark:text-white/60 dark:hover:bg-white/[0.08] dark:focus-visible:ring-white/25"
+            >
+              <ChevronDown aria-hidden="true" className="size-3 text-black/60 dark:text-white/60" />
+            </button>
+
+            {dropdownOpen ? (
+              <div
+                role="menu"
+                aria-label="Export options"
+                className="absolute left-0 top-[calc(100%+4px)] z-50 min-w-[136px] rounded-[8px] border border-black/10 bg-white p-1 shadow-[0_4px_16px_rgba(0,0,0,0.08)] dark:border-white/10 dark:bg-[#202024]"
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={Boolean(pending)}
+                  onClick={() => {
+                    setDropdownOpen(false);
+                    void requestExport("DOWNLOAD", false);
+                  }}
+                  className="flex h-7.5 w-full items-center gap-2 rounded-[6px] px-2 text-left text-xs font-medium text-black/70 transition hover:bg-black/[0.04] focus-visible:bg-black/[0.04] focus-visible:outline-none disabled:opacity-40 dark:text-white/70 dark:hover:bg-white/[0.08]"
+                >
+                  <Download aria-hidden="true" className="size-3.5 shrink-0 text-black/60 dark:text-white/60" />
+                  <span>Download .md</span>
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        {confirmation ? (
+          <ExportConfirmation
+            confirmation={confirmation}
+            pending={pending}
+            pack={pack}
+            onCancel={() => setConfirmation(null)}
+            onConfirm={() => void requestExport(confirmation.disposition, true, confirmation.warnings.map((warning) => warning.key))}
+          />
+        ) : null}
         {message ? <span role="status" aria-live="polite" className="sr-only">{message}</span> : null}
       </div>
     );

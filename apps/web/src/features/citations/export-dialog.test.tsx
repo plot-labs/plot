@@ -77,6 +77,34 @@ describe("ExportDialog", () => {
     expect(exportArtifactVariant).toHaveBeenCalledWith("variant-1", expect.objectContaining({ disposition: "COPY" }));
   });
 
+  it("offers a dropdown menu with Download .md option in copy presentation mode", async () => {
+    const exportArtifactVariant = vi.fn().mockResolvedValue({ exportId: "export-download", disposition: "DOWNLOAD", filename: "changelog.md", mediaType: "text/markdown", text: "Markdown content", unresolvedCount: 0, warningAcknowledged: false, includeSources: false });
+    const createObjectURL = vi.fn().mockReturnValue("blob:export-md");
+    const revokeObjectURL = vi.fn();
+    Object.defineProperties(URL, { createObjectURL: { configurable: true, value: createObjectURL }, revokeObjectURL: { configurable: true, value: revokeObjectURL } });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+
+    render(<ExportDialog pack={pack} client={{ exportArtifactVariant } as unknown as PlotApiClient} presentation="copy" />);
+    
+    // Open dropdown
+    fireEvent.click(screen.getByRole("button", { name: "Export options" }));
+    const downloadItem = screen.getByRole("menuitem", { name: /download \.md/i });
+    expect(downloadItem).toBeInTheDocument();
+
+    // Click Download .md
+    fireEvent.click(downloadItem);
+    await waitFor(() => expect(click).toHaveBeenCalled());
+    expect(exportArtifactVariant).toHaveBeenCalledWith("variant-1", {
+      expectedRevisionNumber: 3,
+      includeSources: false,
+      acknowledgeUnresolved: false,
+      acknowledgedWarningKeys: [],
+      disposition: "DOWNLOAD",
+    });
+    expect(screen.queryByRole("menuitem", { name: /download \.md/i })).not.toBeInTheDocument();
+    click.mockRestore();
+  });
+
   it("renders human-readable warnings without UUIDs and acknowledges the exact warning keys", async () => {
     const exportArtifactVariant = vi
       .fn()

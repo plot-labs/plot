@@ -262,7 +262,7 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
           className="absolute inset-0 z-30 flex min-w-0 flex-col border-l border-black/[0.08] bg-[#fbfbf8] dark:border-white/10 dark:bg-[#16171a] lg:relative lg:w-[var(--artifact-panel-width)] lg:max-w-[calc(100%-420px)] lg:shrink-0"
           style={{ "--artifact-panel-width": `${artifactPanel.size}px` } as CSSProperties}
         >
-          <header className="relative z-10 flex min-h-16 shrink-0 items-center justify-between gap-3 bg-[#fbfbf8]/85 px-4 backdrop-blur-xl dark:bg-[#16171a]/85" style={toolbarBottomFade}>
+          <header className="relative z-20 flex min-h-16 shrink-0 items-center justify-between gap-3 bg-[#fbfbf8]/85 px-4 backdrop-blur-xl dark:bg-[#16171a]/85">
             <div className="flex items-center gap-1">
               {!document.historicalArtifact && shownArtifact ? (
                 <ExportDialog pack={shownArtifact} client={plotApiClient} presentation="copy" />
