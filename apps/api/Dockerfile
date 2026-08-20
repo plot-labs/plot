@@ -3,7 +3,9 @@
 FROM eclipse-temurin:21-jdk-jammy AS build
 WORKDIR /workspace
 
-COPY gradlew settings.gradle.kts build.gradle.kts ./
+ENV GRADLE_OPTS="-Dorg.gradle.jvmargs=-Xmx2g -Dkotlin.daemon.jvmargs=-Xmx2g"
+
+COPY gradlew settings.gradle.kts build.gradle.kts gradle.properties ./
 COPY gradle ./gradle
 
 COPY src ./src
