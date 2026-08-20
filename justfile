@@ -8,7 +8,7 @@ help:
 
 # Install JavaScript workspace dependencies
 install:
-    CI=true pnpm install
+    bun install
 
 # Start the Spring Boot API
 dev-api:
@@ -16,7 +16,7 @@ dev-api:
 
 # Start the Next.js app
 dev-web:
-    pnpm --filter @plot/web dev
+    bun --filter @plot/web dev
 
 # Forward Polar sandbox webhooks to the local API
 polar-listen:
@@ -28,12 +28,12 @@ test-api:
 
 # Test the browser API client contract
 test-api-client:
-    pnpm --filter @plot/api-client test
+    bun --filter @plot/api-client test
 
 
 # Test the Next.js app
 test-web:
-    pnpm --filter @plot/web test
+    bun --filter @plot/web test
 
 # Run all tests
 test: test-api test-api-client test-web
@@ -41,7 +41,7 @@ test: test-api test-api-client test-web
 
 # Lint the Next.js app
 lint-web:
-    pnpm --filter @plot/web lint
+    bun --filter @plot/web lint
 
 # Run all lint checks
 lint: lint-web
@@ -61,7 +61,7 @@ update-jooq:
 
 # Build the Next.js app
 build-web:
-    pnpm --filter @plot/web build
+    bun --filter @plot/web build
 
 # Build all apps
 build: build-api build-web

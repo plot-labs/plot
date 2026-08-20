@@ -43,12 +43,12 @@ PostgreSQL이 system of record이며,
 필요 환경:
 
 - Java 21
-- Node.js와 pnpm
+- Bun
 - Docker
 - `just`
 
 ```bash
-pnpm install
+bun install
 just dev-api
 just dev-web
 ```

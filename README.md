@@ -42,12 +42,12 @@ PostgreSQL is the system of record. Flyway migrations under
 Requirements:
 
 - Java 21
-- Node.js and pnpm
+- Bun
 - Docker
 - `just`
 
 ```bash
-pnpm install
+bun install
 just dev-api
 just dev-web
 ```
