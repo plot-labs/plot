@@ -4,7 +4,7 @@ import { Node as TiptapNode, mergeAttributes } from "@tiptap/core";
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from "@tiptap/react";
 import { Citation } from "@astryxdesign/core/Citation";
 import { ExternalLink, ChevronLeft, ChevronRight, X } from "lucide-react";
-import { useState, useId, useRef, useEffect } from "react";
+import { useState, useId, useRef, useEffect, type ReactNode } from "react";
 
 export type CitationSourceItem = {
   title: string;
