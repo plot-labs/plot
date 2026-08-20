@@ -124,27 +124,22 @@ export function ChatComposer({
   return (
     <div
       id={id}
-      className={cn(
-        "w-full",
-        variant === "dock"
-          ? "bg-[#fbfbf8]/95 px-4 pb-4 pt-3 backdrop-blur-xl dark:bg-[#111113]/95 sm:px-6"
-          : "px-1",
-      )}
+      className="w-full bg-[#fbfbf8]/95 px-4 pb-4 pt-3 backdrop-blur-xl dark:bg-[#111113]/95 sm:px-6"
     >
       <AstryxChatComposer
         onSubmit={submit}
         placeholder={placeholder}
         isDisabled={busy || !hasConnectedSource}
-        density={variant === "center" ? "compact" : "balanced"}
+        density="balanced"
         elevation="none"
         drawer={references.length ? <ComposerSources references={references} /> : undefined}
-        input={<ChatComposerInput label="Chat message" maxRows={variant === "center" ? 5 : 7} />}
-        footerActions={variant === "center" ? null : <span className="text-xs text-black/42 dark:text-white/45">Enter to send</span>}
+        input={<ChatComposerInput label="Chat message" maxRows={7} />}
+        footerActions={<span className="text-xs text-black/42 dark:text-white/45">Enter to send</span>}
         sendButton={<ComposerSendButton />}
         className="mx-auto max-w-[720px]"
         style={{
           "--_chat-composer-radius": "12px",
-          "--_chat-composer-padding": variant === "center" ? "12px" : "10px",
+          "--_chat-composer-padding": "10px",
         } as CSSProperties}
       />
     </div>
