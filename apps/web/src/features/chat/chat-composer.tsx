@@ -11,8 +11,6 @@ import { ArrowUp, Folder, Mic, Plus } from "lucide-react";
 import type { CSSProperties, KeyboardEvent } from "react";
 import { useId, useRef, useState } from "react";
 
-import { cn } from "@/lib/utils";
-
 type ChatComposerProps = {
   onSubmit: (message: string, referenceIds: string[]) => void;
   variant?: "center" | "dock";
