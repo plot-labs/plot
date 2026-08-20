@@ -15,7 +15,7 @@ type ArtifactDocumentSurfaceProps = {
   onDraftChange?: (draft: Omit<SaveArtifactInput, "expectedRevisionNumber">) => void;
   onSaveArtifact: (input: SaveArtifactInput) => Promise<Artifact>;
   onPackChange: (pack: Artifact) => void;
-  presentation?: "panel" | "canvas";
+  presentation?: "panel" | "canvas" | "workspace";
   saveRequestToken?: number;
 };
 
@@ -35,10 +35,18 @@ export function ArtifactDocumentSurface({
   const readOnly = Boolean(historical);
   const shownPack = historical?.artifact ?? pack;
 
-  if (presentation === "canvas") {
+  if (presentation === "canvas" || presentation === "workspace") {
+    const workspacePresentation = presentation === "workspace";
     return (
-      <article aria-label="Artifact document surface" className="min-h-[min(956px,calc(100dvh-128px))] w-full max-w-[980px] overflow-hidden rounded-[8px] border border-black/10 bg-white px-[clamp(28px,7.35vw,72px)] pb-[52px] pt-16 shadow-[0_8px_20px_rgba(0,0,0,0.08)] dark:border-white/10 dark:bg-[#202024]">
-        <h1 className="font-display text-[30px] leading-[38px] text-black/88 dark:text-white/90">{shownPack.title || "Generated artifact"}</h1>
+      <article
+        aria-label="Artifact document surface"
+        className={workspacePresentation
+          ? "min-h-full w-full max-w-[980px] px-6 pb-16 text-black/88 dark:text-white/90"
+          : "min-h-[min(956px,calc(100dvh-128px))] w-full max-w-[980px] overflow-hidden rounded-[8px] border border-black/10 bg-white px-[clamp(28px,7.35vw,72px)] pb-[52px] pt-16 shadow-[0_8px_20px_rgba(0,0,0,0.08)] dark:border-white/10 dark:bg-[#202024]"}
+      >
+        {!workspacePresentation ? (
+          <h1 className="font-display text-[30px] leading-[38px] text-black/88 dark:text-white/90">{shownPack.title || "Generated artifact"}</h1>
+        ) : null}
         <CitedDraftEditor
           pack={shownPack}
           embedded

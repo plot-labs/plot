@@ -15,17 +15,17 @@ class AgentRunQueryPersistence(
 		workspaceId,
 		id,
 	).firstOrNull()
-	fun chatExists(workspaceId: UUID, chatId: UUID): Boolean = sqlExecutor.queryForObject(
+	fun sessionExists(workspaceId: UUID, sessionId: UUID): Boolean = sqlExecutor.queryForObject(
 		"select exists(select 1 from work_sessions where workspace_id = ? and id = ?)",
 		Boolean::class.java,
 		workspaceId,
-		chatId,
+		sessionId,
 	) ?: false
-	fun listChatAgentRuns(workspaceId: UUID, chatId: UUID): List<AgentRunRecord> = sqlExecutor.query(
-		selectAgentRunSql + " where a.workspace_id = ? and a.work_session_id = ? and a.origin = 'CHAT' order by a.created_at, a.id",
+	fun listSessionAgentRuns(workspaceId: UUID, sessionId: UUID): List<AgentRunRecord> = sqlExecutor.query(
+		selectAgentRunSql + " where a.workspace_id = ? and a.work_session_id = ? order by a.created_at, a.id",
 		agentRunMapper,
 		workspaceId,
-		chatId,
+		sessionId,
 	)
 	fun findChatAgentRunByIdempotencyKey(
 		workspaceId: UUID,
