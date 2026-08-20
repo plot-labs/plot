@@ -27,7 +27,7 @@ class WorkSessionController(
 	}
 
 	@GetMapping("/{id}/agent-runs")
-	fun listAgentRuns(@PathVariable id: UUID): List<ChatAgentRunResponse> = chatAgentAdmissionService.listForChat(id)
+	fun listAgentRuns(@PathVariable id: UUID): List<ChatAgentRunResponse> = chatAgentAdmissionService.listForSession(id)
 
 	@PostMapping
 	fun create(@RequestBody request: CreateWorkSessionRequest): WorkSessionResponse {

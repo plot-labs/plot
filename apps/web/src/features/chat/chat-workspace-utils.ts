@@ -12,7 +12,13 @@ export function chatHref(chatId: string, agentRunId: string | null = null, artif
 }
 
 export function toComposerReferences(references: SourceReference[]) {
-  return references.map((reference) => ({ id: reference.id, label: `${reference.repositoryLabel} · ${reference.sourceLabel}`, available: true, groupId: reference.sourceScopeId }));
+  return references.map((reference) => ({
+    id: reference.id,
+    label: `${reference.repositoryLabel} / ${reference.sourceLabel}`,
+    available: true,
+    groupId: reference.sourceScopeId,
+    url: reference.originalUrl ?? undefined,
+  }));
 }
 
 export function selectReferences(references: SourceReference[], ids: string[]) {

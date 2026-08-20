@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const navigation = vi.hoisted(() => ({ pathname: "/artifacts" }));
@@ -10,19 +10,20 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/components/layout/product-sidebar", () => ({
-  ProductSidebar: () => null,
+  ProductSidebar: ({ onThemeChange }: { onThemeChange: (theme: "system" | "light" | "dark") => void }) => (
+    <div>
+      <button type="button" onClick={() => onThemeChange("light")}>Use light theme</button>
+      <button type="button" onClick={() => onThemeChange("dark")}>Use dark theme</button>
+    </div>
+  ),
 }));
 
 import { ProductShell } from "./product-shell";
 
-describe("ProductShell mobile navigation", () => {
+describe("ProductShell", () => {
   beforeEach(() => {
     navigation.pathname = "/artifacts";
-    vi.stubGlobal("matchMedia", () => ({
-      matches: false,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    }));
+    document.documentElement.dataset.theme = "light";
   });
 
   it("links directly to workspace Settings and marks Artifacts as current", () => {
@@ -52,5 +53,24 @@ describe("ProductShell mobile navigation", () => {
     expect(screen.getByRole("link", { name: "Routines" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "Chat" })).not.toHaveAttribute("aria-current");
     expect(screen.getByRole("link", { name: "Artifacts" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("keeps the document theme in sync with the product theme", async () => {
+    const { unmount } = render(
+      <ProductShell>
+        <div>Content</div>
+      </ProductShell>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Use dark theme" }));
+    await waitFor(() => expect(document.documentElement.dataset.theme).toBe("dark"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Use light theme" }));
+    await waitFor(() => expect(document.documentElement.dataset.theme).toBe("light"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Use dark theme" }));
+    await waitFor(() => expect(document.documentElement.dataset.theme).toBe("dark"));
+    unmount();
+    expect(document.documentElement.dataset.theme).toBe("light");
   });
 });
