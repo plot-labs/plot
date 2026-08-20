@@ -2,7 +2,7 @@
 
 import type { Artifact, ArtifactHistoryDetail, PlotApiClient } from "@plot/api-client";
 
-import { CitedDraftEditor, type SaveArtifactInput } from "@/features/citations/cited-draft-editor";
+import { TiptapDraftEditor, type SaveArtifactInput } from "@/features/citations/tiptap-draft-editor";
 import { ExportDialog } from "@/features/citations/export-dialog";
 
 type ArtifactDocumentSurfaceProps = {
@@ -47,7 +47,7 @@ export function ArtifactDocumentSurface({
         {!workspacePresentation ? (
           <h1 className="font-display text-[30px] leading-[38px] text-black/88 dark:text-white/90">{shownPack.title || "Generated artifact"}</h1>
         ) : null}
-        <CitedDraftEditor
+        <TiptapDraftEditor
           pack={shownPack}
           embedded
           presentation="document"
@@ -76,7 +76,7 @@ export function ArtifactDocumentSurface({
           {!readOnly ? <ExportDialog pack={shownPack} client={client} /> : <p className="text-right text-xs text-black/48 dark:text-white/52">Editing and delivery are disabled for this snapshot.</p>}
         </div>
       </header>
-      <CitedDraftEditor
+      <TiptapDraftEditor
         pack={shownPack}
         embedded
         readOnly={readOnly}
