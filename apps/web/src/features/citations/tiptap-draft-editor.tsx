@@ -105,15 +105,16 @@ function TiptapArtifactEditor({
       },
     },
     onUpdate: ({ editor: currentEditor }) => {
-      const json = currentEditor.getJSON() as Record<string, unknown>;
-      draftStateRef.current = json;
+      const json = currentEditor.getJSON();
+      const lexicalJson = tiptapToLexicalJson(json);
+      draftStateRef.current = lexicalJson;
 
       // Extract statement inputs from block nodes
       const statements = extractStatementsFromTiptap(json, sentences);
       draftStatementsRef.current = statements;
 
       if (!readOnly) {
-        onDraftChange?.({ lexicalContent: json, statements });
+        onDraftChange?.({ lexicalContent: lexicalJson, statements });
         onSaveStateChange?.("dirty");
       }
     },
@@ -351,4 +352,59 @@ function defaultStatementsFor(sentences: ContentSentence[]): ContentStatementInp
     orderIndex: sentence.orderIndex,
     body: sentence.body,
   }));
+}
+
+function tiptapToLexicalJson(doc: JSONContent): Record<string, unknown> {
+  const content = doc.content || [];
+  return {
+    root: {
+      children: content.map((block) => {
+        const paragraphChildren: Record<string, unknown>[] = [];
+        if (block.content) {
+          for (const child of block.content) {
+            if (child.type === "text" && child.text) {
+              paragraphChildren.push({
+                detail: 0,
+                format: 0,
+                mode: "normal",
+                style: "",
+                text: child.text,
+                type: "text",
+                version: 1,
+              });
+            } else if (child.type === "hardBreak") {
+              paragraphChildren.push({
+                type: "linebreak",
+                version: 1,
+              });
+            }
+          }
+        }
+        if (!paragraphChildren.length) {
+          paragraphChildren.push({
+            detail: 0,
+            format: 0,
+            mode: "normal",
+            style: "",
+            text: "",
+            type: "text",
+            version: 1,
+          });
+        }
+        return {
+          children: paragraphChildren,
+          direction: null,
+          format: "",
+          indent: 0,
+          type: "paragraph",
+          version: 1,
+        };
+      }),
+      direction: null,
+      format: "",
+      indent: 0,
+      type: "root",
+      version: 1,
+    },
+  };
 }
