@@ -1,5 +1,6 @@
 package com.plot.api.artifact.workflow
 
+import com.openai.errors.OpenAIServiceException
 import com.plot.api.ai.provider.ModelCallMetadata
 import com.plot.api.ai.provider.ModelRole
 import com.plot.api.artifact.run.ArtifactRunPersistence
@@ -469,10 +470,14 @@ class ArtifactWorkflowExecutionPersistence(
 		val chain = generateSequence(it) { f -> f.cause?.takeIf { c -> c !== f } }
 			.take(6)
 			.map { f ->
-				mapOf(
-					"type" to f::class.simpleName.orEmpty(),
-					"message" to f.message.orEmpty().take(500),
-				)
+				buildMap {
+					put("type", f::class.simpleName.orEmpty())
+					put("message", f.message.orEmpty().take(500))
+					if (f is OpenAIServiceException) {
+						put("statusCode", f.statusCode().toString())
+						put("body", runCatching { f.body().toString() }.getOrDefault("").take(2_000))
+					}
+				}
 			}
 			.toList()
 		objectMapper.writeValueAsString(mapOf("chain" to chain))
