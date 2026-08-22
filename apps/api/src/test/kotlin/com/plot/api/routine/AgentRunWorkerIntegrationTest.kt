@@ -465,6 +465,47 @@ class AgentRunWorkerIntegrationTest {
 	}
 
 	@Test
+	fun `read with an Agent input id is remapped to its writing block`() {
+		val admitted = admitAgent("Remap routine", "acme/remap")
+		val seedInputId = assertNotNull(jdbcTemplate.queryForObject(
+			"select id from agent_run_inputs where agent_run_id = ? and input_kind = 'SEED'",
+			UUID::class.java,
+			admitted.agentRunId,
+		))
+		agentModel.scriptedDecision = { request ->
+			if (request.completedSteps.none { it.toolName == AgentDecisionAction.READ_WRITING_BLOCKS.name }) {
+				AgentDecision(
+					AgentDecisionAction.READ_WRITING_BLOCKS,
+					sourceScopeId = admitted.source.scopeId,
+					writingBlockIds = listOf(seedInputId),
+				)
+			} else {
+				AgentDecision(
+					AgentDecisionAction.CREATE_ARTIFACT,
+					selectedInputIds = request.inputs.map { it.id },
+				)
+			}
+		}
+
+		assertTrue(agentWorker.processOne())
+		assertTrue(agentWorker.processOne())
+
+		assertEquals(1, count(
+			"select count(*) from agent_steps where agent_run_id = ? and step_kind = 'READ_TOOL' and status = 'SUCCEEDED'",
+			admitted.agentRunId,
+		))
+		assertEquals(admitted.blockId, jdbcTemplate.queryForObject(
+			"select writing_block_id from agent_run_inputs where agent_run_id = ? and input_kind = 'TOOL_RESULT'",
+			UUID::class.java,
+			admitted.agentRunId,
+		))
+		assertEquals(1, count(
+			"select count(*) from agent_steps where agent_run_id = ? and step_kind = 'ARTIFACT_HANDOFF'",
+			admitted.agentRunId,
+		))
+	}
+
+	@Test
 	fun `source disconnect discards a model decision before Artifact handoff`() {
 		val admitted = admitAgent("Disconnect routine", "acme/disconnect")
 		agentModel.scriptedDecision = { request ->
