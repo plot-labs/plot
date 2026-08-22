@@ -245,7 +245,7 @@ class AgentRunWorker(
 
 			AgentDecisionAction.READ_WRITING_BLOCKS -> {
 				val sourceScopeId = requireNotNull(arguments.sourceScopeId)
-				val writingBlockId = requireNotNull(arguments.writingBlockId)
+				val writingBlockId = resolveReadableBlockId(run, sourceScopeId, requireNotNull(arguments.writingBlockId))
 				val result = tools.readWritingBlock(run.workspaceId, run.id, sourceScopeId, writingBlockId)
 				val adopted = requireNotNull(result.adoptedInput)
 				executionPersistence.completeToolStep(
@@ -302,6 +302,14 @@ class AgentRunWorker(
 				)
 			}
 		}
+	}
+
+	private fun resolveReadableBlockId(run: AgentRunRecord, sourceScopeId: UUID, requestedId: UUID): UUID {
+		// Models occasionally send an agent run input id (which the decision view exposes as `id`)
+		// instead of the underlying writing block id. Remap it so the read still resolves.
+		val input = queryPersistence.listAgentRunInputs(run.workspaceId, run.id)
+			.firstOrNull { it.id == requestedId && it.sourceScopeId == sourceScopeId }
+		return input?.writingBlockId ?: requestedId
 	}
 
 	private fun observeArtifactWorkflow(claim: ClaimedAgentRun, artifactWorkflowRunId: UUID) {
