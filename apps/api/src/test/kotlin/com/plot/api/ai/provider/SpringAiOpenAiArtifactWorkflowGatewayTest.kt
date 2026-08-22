@@ -138,7 +138,24 @@ class SpringAiOpenAiArtifactWorkflowGatewayTest {
 			assertEquals("object", root["type"].stringValue())
 			assertTrue(root["required"].size() > 0)
 			assertFalse(generated.contains("\"uniqueItems\""))
+			assertStrictRequiredFields(root, resource)
 		}
+	}
+
+	private fun assertStrictRequiredFields(node: tools.jackson.databind.JsonNode, path: String) {
+		if (node.isObject) {
+			val properties = node.get("properties")
+			val type = node.get("type")
+			if (type?.isTextual == true && type.stringValue() == "object" && properties != null) {
+				val required = mutableSetOf<String>()
+				node.get("required")?.forEach { entry -> required.add(entry.stringValue()) }
+				val missing = mutableListOf<String>()
+				properties.properties().forEach { entry -> if (entry.key !in required) missing.add(entry.key) }
+				assertTrue(missing.isEmpty(), "$path: strict schema requires every property key in 'required'; missing $missing")
+			}
+			node.properties().forEach { entry -> assertStrictRequiredFields(entry.value, "$path.${entry.key}") }
+		}
+		if (node.isArray) node.values().forEachIndexed { index, child -> assertStrictRequiredFields(child, "$path[$index]") }
 	}
 
 	@Test
