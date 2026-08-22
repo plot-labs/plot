@@ -524,6 +524,49 @@ class AgentRunWorkerIntegrationTest {
 	}
 
 	@Test
+	fun `invalid artifact selection is rejected with the unknown input IDs`() {
+		val admitted = admitAgent("Selection feedback routine", "acme/selection-feedback")
+		val unknownId = UUID.randomUUID()
+		agentModel.scriptedDecision = { request ->
+			if (request.completedSteps.isEmpty()) {
+				AgentDecision(
+					AgentDecisionAction.CREATE_ARTIFACT,
+					selectedInputIds = request.inputs.map { it.id } + unknownId,
+				)
+			} else {
+				AgentDecision(
+					AgentDecisionAction.CREATE_ARTIFACT,
+					selectedInputIds = request.inputs.map { it.id },
+				)
+			}
+		}
+
+		assertTrue(agentWorker.processOne())
+
+		assertEquals("RUNNING", jdbcTemplate.queryForObject(
+			"select status from agent_runs where id = ?",
+			String::class.java,
+			admitted.agentRunId,
+		))
+		val rejection = jdbcTemplate.queryForObject(
+			"select result::text from agent_steps where agent_run_id = ? and sequence = 0",
+			String::class.java,
+			admitted.agentRunId,
+		)!!
+		assertTrue(rejection.contains(unknownId.toString()))
+		assertTrue(rejection.contains("inputs list"))
+
+		assertTrue(agentWorker.processOne())
+		assertTrue(agentModel.requests[1].completedSteps.any {
+			it.result?.contains(unknownId.toString()) == true
+		})
+		assertEquals(1, count(
+			"select count(*) from agent_steps where agent_run_id = ? and step_kind = 'ARTIFACT_HANDOFF' and status = 'SUCCEEDED'",
+			admitted.agentRunId,
+		))
+	}
+
+	@Test
 	fun `read with an Agent input id is remapped to its writing block`() {
 		val admitted = admitAgent("Remap routine", "acme/remap")
 		val seedInputId = assertNotNull(jdbcTemplate.queryForObject(
