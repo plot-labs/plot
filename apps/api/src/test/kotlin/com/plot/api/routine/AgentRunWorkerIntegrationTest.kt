@@ -477,6 +477,53 @@ class AgentRunWorkerIntegrationTest {
 	}
 
 	@Test
+	fun `invalid decision is rejected with feedback and the agent recovers`() {
+		val admitted = admitAgent("Feedback routine", "acme/feedback")
+		agentModel.scriptedDecision = { request ->
+			if (request.completedSteps.isEmpty()) {
+				AgentDecision(
+					AgentDecisionAction.READ_WRITING_BLOCKS,
+					sourceScopeId = admitted.source.scopeId,
+					writingBlockIds = listOf(admitted.blockId, admitted.blockId),
+				)
+			} else {
+				AgentDecision(
+					AgentDecisionAction.CREATE_ARTIFACT,
+					selectedInputIds = request.inputs.map { it.id },
+				)
+			}
+		}
+
+		assertTrue(agentWorker.processOne())
+
+		assertEquals("RUNNING", jdbcTemplate.queryForObject(
+			"select status from agent_runs where id = ?",
+			String::class.java,
+			admitted.agentRunId,
+		))
+		assertEquals("AGENT_INVALID_DECISION", jdbcTemplate.queryForObject(
+			"select failure_code from agent_steps where agent_run_id = ? and sequence = 0",
+			String::class.java,
+			admitted.agentRunId,
+		))
+		assertTrue(jdbcTemplate.queryForObject(
+			"select result::text from agent_steps where agent_run_id = ? and sequence = 0",
+			String::class.java,
+			admitted.agentRunId,
+		)!!.contains("Read requires exactly one source item"))
+
+		assertTrue(agentWorker.processOne())
+		assertEquals(2, agentModel.requests.size)
+		assertTrue(agentModel.requests[1].completedSteps.any {
+			it.result?.contains("Read requires exactly one source item") == true
+		})
+		assertEquals(1, count(
+			"select count(*) from agent_steps where agent_run_id = ? and step_kind = 'ARTIFACT_HANDOFF'",
+			admitted.agentRunId,
+		))
+	}
+
+	@Test
 	fun `read with an Agent input id is remapped to its writing block`() {
 		val admitted = admitAgent("Remap routine", "acme/remap")
 		val seedInputId = assertNotNull(jdbcTemplate.queryForObject(

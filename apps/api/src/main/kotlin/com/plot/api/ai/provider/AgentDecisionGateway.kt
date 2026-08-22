@@ -122,6 +122,7 @@ private class SpringAiAgentDecisionGateway(
 			READ_WRITING_BLOCKS. Never use an input ID as a `writingBlockId`.
 			Use only the source and input IDs supplied by the server. Read more context when needed,
 			then choose CREATE_ARTIFACT with the immutable input IDs that should support the draft.
+			If a previous step failed, read its error and adjust the next decision instead of repeating it.
 			Never request a write or external action. Return structured fields only and never reveal hidden reasoning.
 		""".trimIndent()
 

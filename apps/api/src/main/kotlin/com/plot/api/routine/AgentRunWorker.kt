@@ -163,14 +163,21 @@ class AgentRunWorker(
 						excerpt = (input.snapshotExcerpt ?: input.snapshotBody).take(MAX_MODEL_EXCERPT),
 					)
 				},
-				completedSteps = steps.filter { it.status == AgentStepStatus.SUCCEEDED }.map { step ->
-					AgentStepView(step.sequence, step.toolName, step.resultJson?.take(MAX_MODEL_STEP_RESULT))
-				},
+				completedSteps = steps
+					.filter { it.status == AgentStepStatus.SUCCEEDED || it.status == AgentStepStatus.FAILED }
+					.map { step ->
+						AgentStepView(step.sequence, step.toolName, step.resultJson?.take(MAX_MODEL_STEP_RESULT))
+					},
 				remainingModelCalls = (budget.maxModelCalls - countedRun.modelCallCount).coerceAtLeast(0),
 				remainingToolCalls = (budget.maxToolCalls - countedRun.toolCallCount).coerceAtLeast(0),
 			),
 		)
-		val arguments = validateDecision(decision, sources.map { it.id }.toSet(), inputs.map { it.id }.toSet())
+		val arguments = try {
+			validateDecision(decision, sources.map { it.id }.toSet(), inputs.map { it.id }.toSet())
+		} catch (failure: InvalidAgentDecisionException) {
+			rejectInvalidDecision(claim, run, decision, failure, budget)
+			return
+		}
 		val step = executionPersistence.reserveStep(
 			claim = claim,
 			request = AgentStepRequest(
@@ -312,6 +319,47 @@ class AgentRunWorker(
 		return input?.writingBlockId ?: requestedId
 	}
 
+	private fun rejectInvalidDecision(
+		claim: ClaimedAgentRun,
+		run: AgentRunRecord,
+		decision: AgentDecision,
+		failure: InvalidAgentDecisionException,
+		budget: AgentBudgetSnapshot,
+	) {
+		val now = clock.instant()
+		val step = executionPersistence.reserveStep(
+			claim = claim,
+			request = AgentStepRequest(
+				agentRunId = run.id,
+				sequence = run.currentStep,
+				kind = if (decision.action == AgentDecisionAction.CREATE_ARTIFACT) {
+					AgentStepKind.ARTIFACT_HANDOFF
+				} else {
+					AgentStepKind.READ_TOOL
+				},
+				status = AgentStepStatus.RUNNING,
+				idempotencyKey = "agent:${run.id}:step:${run.currentStep}",
+				toolName = decision.action.takeUnless { it == AgentDecisionAction.CREATE_ARTIFACT }?.name,
+				argumentsJson = objectMapper.writeValueAsString(decision),
+				startedAt = now,
+			),
+			maxToolCalls = budget.maxToolCalls,
+			now = now,
+		)
+		executionPersistence.failToolStep(
+			claim = claim,
+			stepId = step.id,
+			code = "AGENT_INVALID_DECISION",
+			resultJson = objectMapper.writeValueAsString(
+				mapOf(
+					"summary" to "Decision rejected",
+					"error" to (failure.message ?: "The decision is invalid"),
+				),
+			),
+			now = now,
+		)
+	}
+
 	private fun observeArtifactWorkflow(claim: ClaimedAgentRun, artifactWorkflowRunId: UUID) {
 		val state = artifactRunPersistence.findWorkflowStateByWorkflowRun(claim.workspaceId, artifactWorkflowRunId)
 			?: throw IllegalArgumentException("Linked artifact run is unavailable")
@@ -334,20 +382,20 @@ class AgentRunWorker(
 			val sourceScopeId = decision.sourceScopeId?.takeIf { it in allowedSourceIds }
 				?: throw IllegalArgumentException("Search source is not allowed")
 			val query = decision.query?.trim()?.take(200)?.takeIf { it.isNotBlank() }
-				?: throw IllegalArgumentException("Search query is required")
+				?: throw InvalidAgentDecisionException("Search query is required")
 			AgentStepArguments(decision.action, sourceScopeId = sourceScopeId, query = query)
 		}
 		AgentDecisionAction.READ_WRITING_BLOCKS -> {
 			val sourceScopeId = decision.sourceScopeId?.takeIf { it in allowedSourceIds }
 				?: throw IllegalArgumentException("Read source is not allowed")
 			val writingBlockId = decision.writingBlockIds.singleOrNull()
-				?: throw IllegalArgumentException("Read requires exactly one source item")
+				?: throw InvalidAgentDecisionException("Read requires exactly one source item")
 			AgentStepArguments(decision.action, sourceScopeId = sourceScopeId, writingBlockId = writingBlockId)
 		}
 		AgentDecisionAction.CREATE_ARTIFACT -> {
 			val selected = decision.selectedInputIds.distinct()
 			if (selected.isEmpty() || selected.any { it !in availableInputIds }) {
-				throw IllegalArgumentException("Artifact selection is invalid")
+				throw InvalidAgentDecisionException("Artifact selection is invalid")
 			}
 			AgentStepArguments(decision.action, selectedInputIds = selected)
 		}
@@ -392,3 +440,5 @@ class AgentRunWorker(
 		val SAFE_ERROR_CODE = Regex("[A-Z][A-Z0-9_]{0,99}")
 	}
 }
+
+class InvalidAgentDecisionException(message: String) : IllegalArgumentException(message)

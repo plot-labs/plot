@@ -255,6 +255,34 @@ class AgentRunExecutionPersistence(
 		advanceAndRelease(claim, run.currentStep + 1, now)
 		requireNotNull(queryPersistence.findStep(claim.workspaceId, claim.agentRunId, stepId))
 	}
+	fun failToolStep(
+		claim: ClaimedAgentRun,
+		stepId: UUID,
+		code: String,
+		resultJson: String,
+		now: Instant = currentInstant(),
+	): AgentStepRecord = transactionExecutor.execute {
+		val run = queryPersistence.requireAgentClaim(claim)
+		val step = findStepForUpdate(claim.workspaceId, claim.agentRunId, stepId)
+			?: throw RoutineExecutionStateException("Agent step was not found")
+		require(step.sequence == run.currentStep) { "Agent step is stale" }
+		require(step.status == AgentStepStatus.RUNNING) { "Agent step is not running" }
+		val stepUpdated = dsl.update(AGENT_STEPS)
+			.set(AGENT_STEPS.STATUS, AgentStepStatus.FAILED.name)
+			.set(AGENT_STEPS.FAILURE_CODE, code)
+			.set(AGENT_STEPS.RESULT, JSONB.valueOf(resultJson))
+			.set(AGENT_STEPS.FINISHED_AT, now.toOffsetDateTime())
+			.where(
+				AGENT_STEPS.WORKSPACE_ID.eq(claim.workspaceId),
+				AGENT_STEPS.ID.eq(stepId),
+				AGENT_STEPS.AGENT_RUN_ID.eq(claim.agentRunId),
+				AGENT_STEPS.STATUS.eq(AgentStepStatus.RUNNING.name),
+			)
+			.execute()
+		if (stepUpdated != 1) throw AgentRunClaimLostException()
+		advanceAndRelease(claim, run.currentStep + 1, now)
+		requireNotNull(queryPersistence.findStep(claim.workspaceId, claim.agentRunId, stepId))
+	}
 	fun linkArtifactWorkflowStep(
 		claim: ClaimedAgentRun,
 		stepId: UUID,
