@@ -2,7 +2,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "required": ["reviews"],
+  "required": [
+    "reviews",
+    "documentConflicts"
+  ],
   "properties": {
     "reviews": {
       "type": "array",
@@ -10,13 +13,46 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["sentenceId", "verdict", "evidenceIds", "reason", "modelSuppliedUrls"],
+        "required": [
+          "sentenceId",
+          "verdict",
+          "evidenceIds",
+          "reason",
+          "modelSuppliedUrls"
+        ],
         "properties": {
-          "sentenceId": { "type": "string", "format": "uuid" },
-          "verdict": { "type": "string", "enum": ["SUPPORTED", "NOT_REQUIRED", "NEEDS_SUPPORT", "CONFLICT"] },
-          "evidenceIds": { "type": "array", "items": { "type": "string", "format": "uuid" } },
-          "reason": { "type": ["string", "null"] },
-          "modelSuppliedUrls": { "type": "array", "items": { "type": "string" } }
+          "sentenceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "SUPPORTED",
+              "NOT_REQUIRED",
+              "NEEDS_SUPPORT",
+              "CONFLICT"
+            ]
+          },
+          "evidenceIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "modelSuppliedUrls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         }
       }
     },
@@ -25,11 +61,30 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["sentenceIds", "evidenceIds", "reason"],
+        "required": [
+          "sentenceIds",
+          "evidenceIds",
+          "reason"
+        ],
         "properties": {
-          "sentenceIds": { "type": "array", "items": { "type": "string", "format": "uuid" } },
-          "evidenceIds": { "type": "array", "items": { "type": "string", "format": "uuid" } },
-          "reason": { "type": "string", "minLength": 1 }
+          "sentenceIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "evidenceIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
     }
