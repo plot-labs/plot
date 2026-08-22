@@ -394,8 +394,15 @@ class AgentRunWorker(
 		}
 		AgentDecisionAction.CREATE_ARTIFACT -> {
 			val selected = decision.selectedInputIds.distinct()
-			if (selected.isEmpty() || selected.any { it !in availableInputIds }) {
-				throw InvalidAgentDecisionException("Artifact selection is invalid")
+			if (selected.isEmpty()) {
+				throw InvalidAgentDecisionException("Artifact selection is empty; select at least one input by its id")
+			}
+			val unknown = selected.filter { it !in availableInputIds }
+			if (unknown.isNotEmpty()) {
+				throw InvalidAgentDecisionException(
+					"Artifact selection includes unknown input IDs: ${unknown.joinToString()}. " +
+						"Copy each id exactly from the inputs list",
+				)
 			}
 			AgentStepArguments(decision.action, selectedInputIds = selected)
 		}
