@@ -511,7 +511,7 @@ class AgentRunExecutionPersistence(
 	): AgentRunRecord = transactionExecutor.execute {
 		require(status in setOf(AgentRunStatus.SUCCEEDED, AgentRunStatus.FAILED)) { "Agent terminal status is invalid" }
 		if (errorCode != null) require(errorCode.matches(safeErrorCode)) { "Agent error code is invalid" }
-		queryPersistence.requireAgentClaim(claim)
+		val run = queryPersistence.requireAgentClaim(claim)
 		if (status == AgentRunStatus.FAILED) {
 			dsl.update(AGENT_STEPS)
 				.set(AGENT_STEPS.STATUS, AgentStepStatus.FAILED.name)
@@ -542,8 +542,113 @@ class AgentRunExecutionPersistence(
 			)
 			.execute()
 		if (updated != 1) throw AgentRunClaimLostException()
+		projectRoutineTerminal(run, status, errorCode, now)
 		requireNotNull(queryPersistence.findAgentRun(claim.workspaceId, claim.agentRunId))
 	}
+
+	private fun projectRoutineTerminal(
+		run: AgentRunRecord,
+		status: AgentRunStatus,
+		errorCode: String?,
+		now: Instant,
+	) {
+		if (run.origin != AgentRunOrigin.ROUTINE) return
+		val executionId = run.routineExecutionId ?: return
+		val routineId = run.routineId ?: return
+		if (status == AgentRunStatus.FAILED) {
+			val code = requireNotNull(errorCode)
+			sqlExecutor.update(
+				"""
+				update routine_executions
+				set status = 'FAILED', error_code = ?, finished_at = coalesce(finished_at, ?),
+				    transition_version = transition_version + 1, updated_at = ?
+				where workspace_id = ? and id = ? and status = 'DISPATCHED'
+				""".trimIndent(),
+				code,
+				Timestamp.from(now),
+				Timestamp.from(now),
+				run.workspaceId,
+				executionId,
+			)
+			projectRoutineRow(run, executionId, routineId, "FAILED", code, null, now)
+			return
+		}
+		val generationRunId = sqlExecutor.queryForObject(
+			"""
+			select generation_run_id
+			from agent_steps
+			where workspace_id = ? and agent_run_id = ? and generation_run_id is not null
+			order by sequence desc, id desc
+			limit 1
+			""".trimIndent(),
+			UUID::class.java,
+			run.workspaceId,
+			run.id,
+		)
+		val artifactStatus = sqlExecutor.queryForObject(
+			"""
+			select status
+			from artifact_runs
+			where workspace_id = ? and agent_run_id = ?
+			order by created_at desc, id desc
+			limit 1
+			""".trimIndent(),
+			String::class.java,
+			run.workspaceId,
+			run.id,
+		) ?: "READY"
+		projectRoutineRow(run, executionId, routineId, artifactStatus, null, generationRunId, now)
+	}
+
+	private fun projectRoutineRow(
+		run: AgentRunRecord,
+		executionId: UUID,
+		routineId: UUID,
+		status: String,
+		errorCode: String?,
+		generationRunId: UUID?,
+		now: Instant,
+	) {
+		sqlExecutor.update(
+			"""
+			update routines
+			set last_run_at = ?, last_execution_id = ?, last_generation_run_id = ?,
+			    last_run_status = ?, last_error_code = ?,
+			    active_execution_id = case when active_execution_id = ? then null else active_execution_id end,
+			    claimed_by = case when active_execution_id = ? then null else claimed_by end,
+			    claimed_at = case when active_execution_id = ? then null else claimed_at end,
+			    transition_version = transition_version + 1, updated_at = ?
+			where workspace_id = ? and id = ?
+			  and (active_execution_id is null or active_execution_id = ?)
+			  and (
+			    last_execution_id = ?
+			    or last_run_at is null
+			    or last_run_at < ?
+			    or (last_run_at = ? and (last_execution_id is null or last_execution_id < ?))
+			  )
+			""".trimIndent(),
+			Timestamp.from(now),
+			executionId,
+			generationRunId,
+			status,
+			errorCode,
+			executionId,
+			executionId,
+			executionId,
+			Timestamp.from(now),
+			run.workspaceId,
+			routineId,
+			executionId,
+			executionId,
+			Timestamp.from(now),
+			Timestamp.from(now),
+			executionId,
+		)
+		// A newer execution may already own the public Routine projection. The
+		// terminal agent run remains authoritative; preserving the newer
+		// projection is the intended result, not a claim failure.
+	}
+
 	private fun failExhaustedStaleAgentRuns(staleBefore: Instant, now: Instant) {
 		val exhausted = sqlExecutor.query(
 			"""
@@ -586,6 +691,9 @@ class AgentRunExecutionPersistence(
 					AGENT_RUNS.STATUS.eq(AgentRunStatus.RUNNING.name),
 				)
 				.execute()
+			queryPersistence.findAgentRun(requireNotNull(workspaceId), requireNotNull(agentRunId))?.let { run ->
+				projectRoutineTerminal(run, AgentRunStatus.FAILED, "AGENT_RETRY_EXHAUSTED", now)
+			}
 		}
 	}
 }
