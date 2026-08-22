@@ -142,16 +142,16 @@ class ArtifactWorkflowRunWorker(
 					)
 					modelOutcome = "RETRY_SCHEDULED"
 				} else {
-					executionPersistence.failCheckpoint(claim, invocation, state, failure.code.name, recording.metadata)
+					executionPersistence.failCheckpoint(claim, invocation, state, failure.code.name, recording.metadata, failure)
 					modelOutcome = "FAILED"
 				}
 			}
-		} catch (_: InvalidModelOutputException) {
+		} catch (failure: InvalidModelOutputException) {
 			attemptObservation.lowCardinalityKeyValue("plot.error_code", "MALFORMED_OUTPUT")
 			modelObservation.lowCardinalityKeyValue("plot.error_code", "MALFORMED_OUTPUT")
 			modelOutcome = "FAILED"
 			runLease.commit {
-				executionPersistence.failCheckpoint(claim, invocation, state, "MALFORMED_OUTPUT", recording.metadata)
+				executionPersistence.failCheckpoint(claim, invocation, state, "MALFORMED_OUTPUT", recording.metadata, failure)
 			}
 		} catch (failure: ArtifactWorkflowRunLeaseLostException) {
 			modelOutcome = "LEASE_LOST"
@@ -162,7 +162,7 @@ class ArtifactWorkflowRunWorker(
 			lastFailure = failure
 			attemptObservation.lowCardinalityKeyValue("plot.error_code", "WORKFLOW_FAILED")
 			runLease.commit {
-				executionPersistence.failCheckpoint(claim, invocation, state, "WORKFLOW_FAILED", recording.metadata)
+				executionPersistence.failCheckpoint(claim, invocation, state, "WORKFLOW_FAILED", recording.metadata, failure)
 			}
 		} finally {
 			modelObservation.lowCardinalityKeyValue("plot.outcome", modelOutcome)

@@ -399,6 +399,7 @@ class ArtifactWorkflowExecutionPersistence(
 		state: ArtifactWorkflowState,
 		code: String,
 		metadata: ModelCallMetadata? = null,
+		failure: Throwable? = null,
 	) {
 		transactionExecutor.executeWithoutResult {
 			requireClaim(claim)
@@ -406,12 +407,12 @@ class ArtifactWorkflowExecutionPersistence(
 			requireExactlyOne(sqlExecutor.update(
 				"""
 				update model_invocations set status = 'FAILED', provider_request_id = ?, result_metadata = ?::jsonb,
-				 prompt_token_count = ?, completion_token_count = ?, total_token_count = ?, latency_ms = ?, failure_code = ?, finished_at = ?
+				 prompt_token_count = ?, completion_token_count = ?, total_token_count = ?, latency_ms = ?, failure_code = ?, failure_detail = ?::jsonb, finished_at = ?
 				where workspace_id = ? and generation_run_id = ? and id = ? and status = 'RUNNING'
 				""".trimIndent(),
 				metadata?.responseId, objectMapper.writeValueAsString(metadata?.observationAttributes ?: emptyMap<String, String>()),
 				metadata?.promptTokens, metadata?.completionTokens, metadata?.totalTokens, metadata?.latency?.toMillis()?.toInt(),
-				code, Timestamp.from(now), claim.workspaceId, claim.runId, lease.id,
+				code, failureDetailJson(failure), Timestamp.from(now), claim.workspaceId, claim.runId, lease.id,
 			), "ArtifactWorkflow model invocation failure was lost")
 			requireExactlyOne(
 				sqlExecutor.update(
@@ -464,6 +465,19 @@ class ArtifactWorkflowExecutionPersistence(
 			now = now,
 		)
 	}
+	private fun failureDetailJson(failure: Throwable?): String? = failure?.let {
+		val chain = generateSequence(it) { f -> f.cause?.takeIf { c -> c !== f } }
+			.take(6)
+			.map { f ->
+				mapOf(
+					"type" to f::class.simpleName.orEmpty(),
+					"message" to f.message.orEmpty().take(500),
+				)
+			}
+			.toList()
+		objectMapper.writeValueAsString(mapOf("chain" to chain))
+	}
+
 	private fun requireClaim(claim: ClaimedArtifactWorkflowRun) {
 		val ownedRun = sqlExecutor.query(
 			"""
