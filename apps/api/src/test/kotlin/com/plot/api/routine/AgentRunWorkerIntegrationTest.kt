@@ -213,6 +213,12 @@ class AgentRunWorkerIntegrationTest {
 		assertTrue(agentWorker.processOne())
 		assertEquals("SUCCEEDED", jdbcTemplate.queryForObject("select status from agent_runs where id = ?", String::class.java, agentRunId))
 		assertEquals("READY", jdbcTemplate.queryForObject("select status from artifact_runs where workspace_id = ? and agent_run_id = ?", String::class.java, routine.workspaceId, agentRunId))
+		routinePersistence.find(routine.workspaceId, routine.id)!!.also { projected ->
+			assertEquals(artifactWorkflowRunId, projected.lastArtifactWorkflowRunId)
+			assertEquals("READY", projected.lastRunStatus)
+			assertEquals(null, projected.lastErrorCode)
+			assertEquals(null, projected.activeExecutionId)
+		}
 		assertEquals(
 			jdbcTemplate.queryForObject(
 				"select activity_sequence from agent_run_inputs where agent_run_id = ? and writing_block_id = ? and input_kind = 'SEED'",
@@ -328,6 +334,12 @@ class AgentRunWorkerIntegrationTest {
 		assertEquals("AGENT_INVALID_DECISION", jdbcTemplate.queryForObject("select failure_code from agent_runs where id = ?", String::class.java, agentRunId))
 		assertEquals(0, count("select count(*) from agent_steps where agent_run_id = ?", agentRunId))
 		assertEquals(null, routinePersistence.find(routine.workspaceId, routine.id)?.activityCursorSequence)
+		assertEquals("FAILED", jdbcTemplate.queryForObject("select status from routine_executions where id = ?", String::class.java, execution.id))
+		routinePersistence.find(routine.workspaceId, routine.id)!!.also { projected ->
+			assertEquals("FAILED", projected.lastRunStatus)
+			assertEquals("AGENT_INVALID_DECISION", projected.lastErrorCode)
+			assertEquals(null, projected.activeExecutionId)
+		}
 
 		val retry = agentPersistence.createExecution(
 			RoutineExecutionRequest(
