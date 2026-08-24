@@ -36,8 +36,10 @@ function createAuth() {
   database: pool,
   trustedOrigins: [
     process.env.BETTER_AUTH_URL ?? "http://localhost:3000",
-    "https://useplot.xyz",
-    "https://app.useplot.xyz",
+    // The marketing and app origins are only legitimate callers in production;
+    // trusting them from dev/test instances lets those deployments accept
+    // cross-site auth calls that were never aimed at them.
+    ...(isProduction ? ["https://useplot.xyz", "https://app.useplot.xyz"] : []),
   ],
   advanced: {
     useSecureCookies: isProduction,
