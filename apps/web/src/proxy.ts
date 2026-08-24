@@ -3,7 +3,18 @@ import { getSessionCookie } from "better-auth/cookies";
 
 import { createFixedWindowLimiter } from "@/lib/rate-limit";
 
-const appHosts = new Set(["app.useplot.xyz"]);
+const gatedHosts = new Set(["app.useplot.xyz", "localhost", "127.0.0.1"]);
+const previewHostPattern = /\.vercel\.app$/;
+
+/**
+ * Hosts where the app actually serves workspace content. The cookie check is
+ * a UX gate — server-side layout guards are the real authorization — but
+ * scoping it to the production host alone left preview deployments serving
+ * the full app shell to anonymous visitors.
+ */
+export function isGatedHost(host: string): boolean {
+  return gatedHosts.has(host) || previewHostPattern.test(host);
+}
 
 // State-changing API traffic is cheap to spam and expensive to serve (auth
 // flows, AI triggers, upstream writes). Per-IP fixed window; best-effort per
@@ -30,11 +41,11 @@ export function proxy(request: NextRequest) {
   }
 
   const isPublicAuthPath = request.nextUrl.pathname === "/sign-in" || request.nextUrl.pathname === "/auth/complete" || request.nextUrl.pathname.startsWith("/api/auth");
-  if (host && appHosts.has(host) && !isPublicAuthPath && !getSessionCookie(request)) {
+  if (host && isGatedHost(host) && !isPublicAuthPath && !getSessionCookie(request)) {
     return NextResponse.redirect(new URL("/sign-in", request.url));
   }
 
-  if (host && appHosts.has(host) && request.nextUrl.pathname === "/") {
+  if (host && isGatedHost(host) && request.nextUrl.pathname === "/") {
     const url = request.nextUrl.clone();
     url.pathname = "/chat";
 
