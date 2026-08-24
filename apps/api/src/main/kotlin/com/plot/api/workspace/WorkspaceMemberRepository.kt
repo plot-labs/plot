@@ -44,6 +44,13 @@ class WorkspaceMemberRepository(
 		.fetch()
 		.map { it.toModel() }
 
+	fun countByUserIdAndStatus(userId: UUID, status: String): Int = dsl.fetchCount(
+		select().where(
+			WORKSPACE_MEMBERS.USER_ID.eq(userId),
+			WORKSPACE_MEMBERS.STATUS.eq(status),
+		),
+	)
+
 	fun save(member: WorkspaceMember): WorkspaceMember {
 		val updated = dsl.update(WORKSPACE_MEMBERS)
 			.set(WORKSPACE_MEMBERS.WORKSPACE_ID, member.workspaceId)
