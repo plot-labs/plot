@@ -83,6 +83,40 @@ class GitHubRestClient(
 		return repositories.distinctBy { it.id }
 	}
 
+	override fun getInstallation(installationId: Long): GitHubInstallation {
+		val response = request("GET", uri("/app/installations/$installationId"), appJwt())
+		val root = parse(response)
+		if (root.path("id").longValue() != installationId) invalidResponse("GitHub returned an invalid installation")
+		val account = root.path("account")
+		val accountId = account.path("id").longValue()
+		val login = account.path("login").stringValue()?.takeIf { it.isNotBlank() }
+		val type = account.path("type").stringValue()?.takeIf { it.isNotBlank() }
+		if (accountId == 0L || login == null || type == null) {
+			invalidResponse("GitHub returned an invalid installation account")
+		}
+		return GitHubInstallation(installationId, GitHubInstallationAccount(accountId, login, type))
+	}
+
+	override fun resolveAuthenticatedUser(userAccessToken: String): GitHubUserIdentity {
+		val response = request("GET", uri("/user"), userAccessToken)
+		val root = parse(response)
+		val id = root.path("id").longValue()
+		val login = root.path("login").stringValue()?.takeIf { it.isNotBlank() }
+		if (id == 0L || login == null) invalidResponse("GitHub returned an invalid user")
+		return GitHubUserIdentity(id, login)
+	}
+
+	override fun organizationMembershipRole(userAccessToken: String, org: String, username: String): String? = try {
+		val response = request(
+			"GET",
+			uri("/orgs/${path(org)}/memberships/${path(username)}"),
+			userAccessToken,
+		)
+		parse(response).path("role").stringValue()?.lowercase()?.takeIf { it.isNotBlank() }
+	} catch (exception: ApiException) {
+		if (exception.error == "GITHUB_NOT_FOUND") null else throw exception
+	}
+
 	override fun verifyRepositoryAccess(
 		installationId: Long,
 		repositoryId: Long,

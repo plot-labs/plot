@@ -74,7 +74,23 @@ class GitHubConnectionApiIntegrationTest {
 		jdbcTemplate.update("delete from source_namespaces where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from connections where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from github_installation_states where workspace_id = ?", devContext.devWorkspaceId)
+		seedLinkedGitHubAccount()
 		fakeClient.reset()
+	}
+
+	/** The dev user normally only exists after a real GitHub OAuth login; link it by hand. */
+	private fun seedLinkedGitHubAccount() {
+		jdbcTemplate.update(
+			"insert into auth_user (id, name, email, email_verified, created_at, updated_at) " +
+				"values ('auth-user-dev', 'Dev User', 'dev-github@example.com', true, now(), now()) " +
+				"on conflict (id) do nothing",
+		)
+		jdbcTemplate.update(
+			"insert into auth_account (id, account_id, provider_id, user_id, access_token, created_at, updated_at) " +
+				"values ('acct-dev', '9001', 'github', 'auth-user-dev', 'gh-token', now(), now()) " +
+				"on conflict do nothing",
+		)
+		jdbcTemplate.update("update users set auth_subject = 'auth-user-dev' where id = ?", devContext.devUserId)
 	}
 
 	@Test
@@ -134,6 +150,73 @@ class GitHubConnectionApiIntegrationTest {
 			jsonPath("$.error") { value("INVALID_GITHUB_STATE") }
 		}
 		assertEquals(1, fakeClient.repositoryListCalls.get())
+	}
+
+	@Test
+	fun installationCallbackRejectsInstallationsNotOwnedByTheCaller() {
+		fakeClient.installationAccount = GitHubInstallationAccount(999999, "victim", "User")
+		val state = mockMvc.post("/api/github/installations/requests")
+			.andReturn().response.contentAsString
+		val stateValue = Regex("\"state\":\"([^\"]+)\"").find(state)!!.groupValues[1]
+
+		mockMvc.post("/api/github/installations/callback") {
+			contentType = MediaType.APPLICATION_JSON
+			content = "{\"state\":\"$stateValue\",\"installationId\":77}"
+		}.andExpect {
+			status { isForbidden() }
+			jsonPath("$.error") { value("GITHUB_INSTALLATION_NOT_OWNED") }
+		}
+		assertEquals(0, fakeClient.repositoryListCalls.get())
+		assertEquals(
+			0,
+			jdbcTemplate.queryForObject(
+				"select count(*) from connections where workspace_id = ?",
+				Int::class.java,
+				devContext.devWorkspaceId,
+			),
+		)
+	}
+
+	@Test
+	fun installationCallbackRejectsCallersWithoutALinkedGitHubAccount() {
+		jdbcTemplate.update("update users set auth_subject = null where id = ?", devContext.devUserId)
+		val state = mockMvc.post("/api/github/installations/requests")
+			.andReturn().response.contentAsString
+		val stateValue = Regex("\"state\":\"([^\"]+)\"").find(state)!!.groupValues[1]
+
+		mockMvc.post("/api/github/installations/callback") {
+			contentType = MediaType.APPLICATION_JSON
+			content = "{\"state\":\"$stateValue\",\"installationId\":77}"
+		}.andExpect {
+			status { isForbidden() }
+			jsonPath("$.error") { value("GITHUB_INSTALLATION_NOT_OWNED") }
+		}
+	}
+
+	@Test
+	fun organizationInstallationsRequireAdminMembershipOfTheCaller() {
+		fakeClient.installationAccount = GitHubInstallationAccount(555, "acme-org", "Organization")
+		val state = mockMvc.post("/api/github/installations/requests")
+			.andReturn().response.contentAsString
+		val stateValue = Regex("\"state\":\"([^\"]+)\"").find(state)!!.groupValues[1]
+
+		fakeClient.membershipRole = "member"
+		mockMvc.post("/api/github/installations/callback") {
+			contentType = MediaType.APPLICATION_JSON
+			content = "{\"state\":\"$stateValue\",\"installationId\":77}"
+		}.andExpect {
+			status { isForbidden() }
+			jsonPath("$.error") { value("GITHUB_INSTALLATION_NOT_OWNED") }
+		}
+
+		fakeClient.membershipRole = "admin"
+		val adminState = mockMvc.post("/api/github/installations/requests")
+			.andReturn().response.contentAsString
+		val adminStateValue = Regex("\"state\":\"([^\"]+)\"").find(adminState)!!.groupValues[1]
+		mockMvc.post("/api/github/installations/callback") {
+			contentType = MediaType.APPLICATION_JSON
+			content = "{\"state\":\"$adminStateValue\",\"installationId\":77}"
+		}.andExpect { status { isOk() } }
 	}
 
 	@Test
@@ -552,10 +635,14 @@ class GitHubConnectionApiIntegrationTest {
 
 class FakeGitHubClient : GitHubClient {
 	val repositoryListCalls = AtomicInteger()
+	val installationCalls = AtomicInteger()
 	val providerCallObservedActiveTransaction = AtomicBoolean()
 	val pullRequestCalls = AtomicInteger()
 	val releaseListCalls = AtomicInteger()
 	val tagListCalls = AtomicInteger()
+	var installationAccount = GitHubInstallationAccount(9001, "acme", "User")
+	var membershipRole: String? = "admin"
+	var linkedIdentity = GitHubUserIdentity(9001, "acme")
 	var releaseTags: List<String> = emptyList()
 	var repositoryTags: List<String> = emptyList()
 	var body = "Body"
@@ -580,6 +667,15 @@ class FakeGitHubClient : GitHubClient {
 		}
 		return repositories
 	}
+
+	override fun getInstallation(installationId: Long): GitHubInstallation {
+		installationCalls.incrementAndGet()
+		return GitHubInstallation(installationId, installationAccount)
+	}
+
+	override fun resolveAuthenticatedUser(userAccessToken: String): GitHubUserIdentity = linkedIdentity
+
+	override fun organizationMembershipRole(userAccessToken: String, org: String, username: String): String? = membershipRole
 
 	override fun verifyRepositoryAccess(installationId: Long, repositoryId: Long, owner: String, repository: String): GitHubRepository {
 		providerCallObservedActiveTransaction.set(
@@ -677,6 +773,10 @@ class FakeGitHubClient : GitHubClient {
 
 	fun reset() {
 		repositoryListCalls.set(0)
+		installationCalls.set(0)
+		installationAccount = GitHubInstallationAccount(9001, "acme", "User")
+		membershipRole = "admin"
+		linkedIdentity = GitHubUserIdentity(9001, "acme")
 		providerCallObservedActiveTransaction.set(false)
 		pullRequestCalls.set(0)
 		releaseListCalls.set(0)

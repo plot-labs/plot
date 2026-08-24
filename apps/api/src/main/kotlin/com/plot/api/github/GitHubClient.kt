@@ -3,6 +3,18 @@ package com.plot.api.github
 interface GitHubClient {
 	fun listInstallationRepositories(installationId: Long): List<GitHubRepository>
 
+	/** Fetches installation metadata, including the owning account, with app-level credentials. */
+	fun getInstallation(installationId: Long): GitHubInstallation =
+		throw UnsupportedOperationException("GitHub installation lookup is not implemented")
+
+	/** Resolves the GitHub identity behind a stored user access token. */
+	fun resolveAuthenticatedUser(userAccessToken: String): GitHubUserIdentity =
+		throw UnsupportedOperationException("GitHub user lookup is not implemented")
+
+	/** Returns the user's role in an organization, or null when they are not a member. */
+	fun organizationMembershipRole(userAccessToken: String, org: String, username: String): String? =
+		throw UnsupportedOperationException("GitHub organization membership lookup is not implemented")
+
 	/** Verifies a grant with a repository-scoped installation token. */
 	fun verifyRepositoryAccess(
 		installationId: Long,
