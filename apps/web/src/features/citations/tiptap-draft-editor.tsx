@@ -87,7 +87,10 @@ function TiptapArtifactEditor({
         placeholder: "Write the source-backed artifact…",
       }),
       Markdown.configure({
-        html: true,
+        // Model output and API JSON reach this editor unreviewed; raw HTML in
+        // that stream must not become live markup. ProseMirror's schema plus
+        // the link URI guard cover the markdown itself.
+        html: false,
         tightLists: true,
       }),
       TiptapCitationExtension,
