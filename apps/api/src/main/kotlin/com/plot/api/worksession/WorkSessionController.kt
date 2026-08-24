@@ -5,6 +5,7 @@ import com.plot.api.routine.dto.ChatAgentRunResponse
 import com.plot.api.worksession.dto.CreateWorkSessionRequest
 import com.plot.api.worksession.dto.UpdateWorkSessionRequest
 import com.plot.api.worksession.dto.WorkSessionResponse
+import jakarta.validation.Valid
 import java.util.UUID
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
@@ -30,14 +31,14 @@ class WorkSessionController(
 	fun listAgentRuns(@PathVariable id: UUID): List<ChatAgentRunResponse> = chatAgentAdmissionService.listForSession(id)
 
 	@PostMapping
-	fun create(@RequestBody request: CreateWorkSessionRequest): WorkSessionResponse {
+	fun create(@Valid @RequestBody request: CreateWorkSessionRequest): WorkSessionResponse {
 		return workSessionService.create(request)
 	}
 
 	@PatchMapping("/{id}")
 	fun update(
 		@PathVariable id: UUID,
-		@RequestBody request: UpdateWorkSessionRequest,
+		@Valid @RequestBody request: UpdateWorkSessionRequest,
 	): WorkSessionResponse {
 		return workSessionService.update(id, request)
 	}
