@@ -33,6 +33,7 @@ class GitHubGuard(
 				"GitHub is not configured",
 			)
 		}
+		requirePinnedOrigins()
 		if (actorResolver?.current() != null) return
 		if (!properties.devOnly) {
 			throw ApiException(
@@ -63,11 +64,20 @@ class GitHubGuard(
 				"GitHub development routes require a loopback server address",
 			)
 		}
+	}
+
+	/**
+	 * Installation tokens and App JWTs ride the Authorization header, so the
+	 * endpoint pin is enforced for every caller regardless of authentication:
+	 * a base-url misconfiguration would otherwise leak those credentials to
+	 * whatever host was configured.
+	 */
+	private fun requirePinnedOrigins() {
 		if (properties.apiBaseUrl != "https://api.github.com" || properties.webBaseUrl != "https://github.com") {
 			throw ApiException(
 				HttpStatus.SERVICE_UNAVAILABLE,
 				"GITHUB_ORIGIN_INVALID",
-				"GitHub endpoints must use HTTPS outside local development",
+				"GitHub endpoints must point at the official GitHub origins",
 			)
 		}
 	}
