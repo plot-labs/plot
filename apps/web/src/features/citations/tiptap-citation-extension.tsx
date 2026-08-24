@@ -6,6 +6,8 @@ import { Citation } from "@astryxdesign/core/Citation";
 import { ExternalLink, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useState, useId, useRef, useEffect, type ReactNode } from "react";
 
+import { isSafeHttpUrl } from "@/lib/safe-url";
+
 export type CitationSourceItem = {
   title: string;
   url: string;
@@ -222,7 +224,7 @@ export function TiptapCitationNodeView({ node }: NodeViewProps) {
               </div>
             ) : null}
 
-            {currentSource.url && currentSource.url !== "#" ? (
+            {isSafeHttpUrl(currentSource.url) ? (
               <div className="mt-3 flex items-center justify-between border-t border-black/[0.06] pt-2.5 dark:border-white/[0.08]">
                 <span className="truncate max-w-[220px] font-mono text-[11px] text-black/40 dark:text-white/40">
                   {currentSource.url.replace(/^https?:\/\/(www\.)?/, "")}

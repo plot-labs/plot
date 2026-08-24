@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { plotApiClient, type SourceReference } from "@/lib/api-client";
+import { isSafeHttpUrl } from "@/lib/safe-url";
 
 export function SourcesWorkspace() {
   const [sources, setSources] = useState<SourceReference[]>([]);
@@ -93,7 +94,7 @@ export function SourcesWorkspace() {
               <h2 className="mt-2 text-[28px] font-semibold leading-tight text-black/88 dark:text-white/90">{selectedSource.title || "Untitled pull request"}</h2>
               <p className="mt-1 text-sm text-black/55 dark:text-white/55">{formatDate(selectedSource.sourceCreatedAt)}</p>
               {selectedSource.body && <p className="mt-5 whitespace-pre-wrap text-sm leading-6 text-black/70 dark:text-white/70">{selectedSource.body}</p>}
-              {selectedSource.originalUrl && (
+              {selectedSource.originalUrl && isSafeHttpUrl(selectedSource.originalUrl) && (
                 <a href={selectedSource.originalUrl} target="_blank" rel="noreferrer" className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-black/70 underline underline-offset-4 dark:text-white/75">
                   View on GitHub <ExternalLink className="size-3.5" />
                 </a>

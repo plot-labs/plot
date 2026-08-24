@@ -53,4 +53,25 @@ describe("SourcesWorkspace", () => {
     expect(link).toHaveAttribute("href", "/settings/integrations");
     expect(mocks.listReferences).toHaveBeenCalledTimes(1);
   });
+
+  it("drops the original link when its scheme is not http(s)", async () => {
+    mocks.listReferences.mockResolvedValue([{
+      id: "block-2",
+      sourceScopeId: "scope-2",
+      provider: "GITHUB",
+      sourceKind: "PULL_REQUEST",
+      sourceLabel: "Malicious source",
+      repositoryLabel: "acme/plot",
+      title: "Malicious source",
+      body: null,
+      originalUrl: "javascript:alert(document.domain)",
+      sourceCreatedAt: "2026-07-03T00:00:00Z",
+    }]);
+
+    render(<SourcesWorkspace />);
+    fireEvent.click(await screen.findByRole("option", { name: /Malicious source/ }));
+
+    expect(await screen.findByRole("heading", { name: "Malicious source" })).toBeVisible();
+    expect(screen.queryByRole("link", { name: /View on GitHub/ })).not.toBeInTheDocument();
+  });
 });
