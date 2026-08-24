@@ -115,8 +115,9 @@ class WorkspaceService(
 			?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Workspace not found")
 	}
 
+	// Remote logos must be https so authenticated pages never issue plain-http
+	// requests (mixed content) and self-contained raster data URLs stay valid.
 	private fun isAllowedLogoUrl(value: String): Boolean = value.startsWith("https://")
-		|| value.startsWith("http://")
 		|| RASTER_LOGO_DATA_URL.matches(value)
 
 	companion object {
