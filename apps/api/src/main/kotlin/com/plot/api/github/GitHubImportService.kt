@@ -1,6 +1,7 @@
 package com.plot.api.github
 
 import com.plot.api.common.ApiException
+import com.plot.api.auth.RequestActorResolver
 import com.plot.api.persistence.JooqSqlExecutor
 import java.sql.Timestamp
 import com.plot.api.dev.DevContext
@@ -46,9 +47,11 @@ class GitHubImportService(
 	private val reservationService: GitHubImportReservationService,
 	private val persistence: GitHubImportPersistenceService,
 	private val failureRecorder: GitHubImportFailureRecorder,
+	private val actorResolver: RequestActorResolver? = null,
 ) {
 	fun start(scopeId: UUID, request: GitHubImportRequest): GitHubImportResponse {
 		guard.requireEnabled()
+		requireOwner()
 		validateWindow(request)
 		val scope = connectionService.findScope(scopeId)
 		if (scope.status != "ACTIVE" || scope.connectionStatus != "ACTIVE") {
@@ -111,6 +114,15 @@ class GitHubImportService(
 			devContext.devWorkspaceId,
 			id,
 		).firstOrNull() ?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "GitHub import not found")
+	}
+
+	// Imports consume external quota and can flip a connection into
+	// NEEDS_REAUTH, so they stay an owner-level action like connections.
+	private fun requireOwner() {
+		val actor = actorResolver?.current()
+		if (actor != null && actorResolver.requireWorkspace().role != "OWNER") {
+			throw ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Workspace owner access is required")
+		}
 	}
 
 	private fun validateWindow(request: GitHubImportRequest) {

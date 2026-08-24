@@ -1,6 +1,7 @@
 package com.plot.api.github
 
 import com.plot.api.common.ApiException
+import com.plot.api.auth.RequestActorResolver
 import com.plot.api.dev.DevContext
 import java.util.UUID
 import org.springframework.http.HttpStatus
@@ -13,6 +14,7 @@ class GitHubReleaseActivityService(
 	private val devContext: DevContext,
 	private val requestPersistence: GitHubReleaseRequestStore,
 	private val retryService: GitHubReleaseRetryService,
+	private val actorResolver: RequestActorResolver? = null,
 ) {
 	@Transactional(readOnly = true)
 	fun latest(sourceScopeId: UUID): GitHubReleaseActivityResponse? {
@@ -25,6 +27,12 @@ class GitHubReleaseActivityService(
 	@Transactional
 	fun retry(sourceScopeId: UUID, requestId: UUID): GitHubReleaseActivityResponse {
 		guard.requireReadAccess()
+		// Retries re-drive release automation and external quota, so they stay
+		// an owner-level action like connections and monitoring.
+		val actor = actorResolver?.current()
+		if (actor != null && actorResolver.requireWorkspace().role != "OWNER") {
+			throw ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Workspace owner access is required")
+		}
 		val workspaceId = devContext.devWorkspaceId
 		requireScope(sourceScopeId, workspaceId)
 		val activity = requestPersistence.findActivity(requestId, sourceScopeId, workspaceId)
