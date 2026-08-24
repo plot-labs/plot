@@ -1,8 +1,9 @@
 import { betterAuth } from "better-auth";
+import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { jwt } from "better-auth/plugins";
 import { Pool } from "pg";
 
-import { assertAllowedEmail, normalizeEmail, parseAllowedEmails } from "./policy";
+import { assertAllowedEmail, isAllowedEmail, normalizeEmail, parseAllowedEmails } from "./policy";
 
 function createAuth() {
   const isProduction = process.env.NODE_ENV === "production";
@@ -103,6 +104,20 @@ function createAuth() {
         };
       },
     },
+  },
+  hooks: {
+    before: createAuthMiddleware(async (ctx) => {
+      // The jwt plugin's /token endpoint only checks the session cookie, so a
+      // user dropped from AUTH_ALLOWED_EMAILS could keep minting fresh API
+      // tokens for as long as their session row survives. Enforce the same
+      // gate the plot proxy applies to every request.
+      if (ctx.path !== "/token") return;
+      const session = await getSessionFromCtx(ctx);
+      const email = session?.user?.email;
+      if (!session || !email || !isAllowedEmail(email, allowedEmails)) {
+        throw new APIError("UNAUTHORIZED", { message: "Authentication is required" });
+      }
+    }),
   },
   plugins: [
     jwt({
