@@ -1,5 +1,7 @@
 package com.plot.api.worksession.dto
 
+import jakarta.validation.constraints.Size
+
 data class CreateWorkSessionRequest(
-	val title: String?,
+	@field:Size(max = 200) val title: String?,
 )
