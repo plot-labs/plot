@@ -1,6 +1,7 @@
 package com.plot.api.artifact
 
 import com.plot.api.common.ApiException
+import org.springframework.dao.DuplicateKeyException
 import com.plot.api.common.UuidGenerator
 import com.plot.api.artifact.dto.ContentCitationResponse
 import com.plot.api.artifact.dto.ContentExportResponse
@@ -215,10 +216,17 @@ class ArtifactRevisionService(
 			"select coalesce(max(order_index), -1) + 1 from content_variant_sentences where workspace_id = ? and content_variant_id = ?",
 			Int::class.java, devContext.devWorkspaceId, variantId,
 		) ?: 0)
-		sqlExecutor.update(
-			"insert into content_variant_sentences (id, workspace_id, generation_run_id, content_variant_id, stable_key, order_index, created_at) values (?, ?, ?, ?, ?, ?, ?)",
-			sentenceId, devContext.devWorkspaceId, artifactWorkflowRunId, variantId, sentenceId.toString(), orderIndex, Timestamp.from(now),
-		)
+		try {
+			sqlExecutor.update(
+				"insert into content_variant_sentences (id, workspace_id, generation_run_id, content_variant_id, stable_key, order_index, created_at) values (?, ?, ?, ?, ?, ?, ?)",
+				sentenceId, devContext.devWorkspaceId, artifactWorkflowRunId, variantId, sentenceId.toString(), orderIndex, Timestamp.from(now),
+			)
+		} catch (_: DuplicateKeyException) {
+			// The ownership check is workspace-scoped, so this can only be a
+			// globally duplicated id from outside the workspace. Answer with a
+			// generic rejection rather than a 500 or any existence signal.
+			throw ApiException(HttpStatus.BAD_REQUEST, "STATEMENT_SAVE_FAILED", "Statement could not be saved")
+		}
 	}
 
 	private fun lockVariant(variantId: UUID) {
