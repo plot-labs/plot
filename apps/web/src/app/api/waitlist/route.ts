@@ -1,9 +1,21 @@
 import { Resend } from "resend";
 import { NextResponse } from "next/server";
 
+import { createFixedWindowLimiter } from "@/lib/rate-limit";
 import { parseWaitlistPayload, roleLabel } from "@/lib/waitlist";
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+
+// Every submission creates a third-party contact and a confirmation email,
+// so unthrottled posts turn into mail-bombing and Resend quota burn. Limit
+// per source IP and per target email (spread-out bombing of one address).
+const perIpLimiter = createFixedWindowLimiter(60 * 60 * 1000, 20);
+const perEmailLimiter = createFixedWindowLimiter(60 * 60 * 1000, 3);
+
+function clientIp(request: Request): string {
+  const forwarded = request.headers.get("x-forwarded-for");
+  return forwarded?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown";
+}
 
 export async function POST(request: Request) {
   if (!resend || !process.env.RESEND_API_KEY) {
@@ -11,6 +23,11 @@ export async function POST(request: Request) {
       { error: "Waitlist is not configured yet." },
       { status: 503 },
     );
+  }
+
+  const ip = clientIp(request);
+  if (perIpLimiter.check(ip)) {
+    return NextResponse.json({ error: "Too many requests. Try again later." }, { status: 429 });
   }
 
   let body: unknown;
@@ -32,6 +49,10 @@ export async function POST(request: Request) {
 
   if (payload.website) {
     return NextResponse.json({ ok: true });
+  }
+
+  if (perEmailLimiter.check(payload.email.toLowerCase())) {
+    return NextResponse.json({ error: "Too many requests. Try again later." }, { status: 429 });
   }
 
   const role = roleLabel(payload.role);
