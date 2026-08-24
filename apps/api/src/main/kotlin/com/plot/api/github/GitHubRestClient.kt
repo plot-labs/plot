@@ -33,12 +33,35 @@ class JavaGitHubHttpTransport(private val properties: GitHubProperties) : GitHub
 		body: String?,
 	): GitHubHttpResponse {
 		val response = try {
-			client.send(buildRequest(method, uri, headers, body), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
+			client.send(buildRequest(method, uri, headers, body), HttpResponse.BodyHandlers.ofInputStream())
 		} catch (exception: InterruptedException) {
 			Thread.currentThread().interrupt()
 			throw exception
 		}
-		return GitHubHttpResponse(response.statusCode(), response.headers().map(), response.body())
+		return GitHubHttpResponse(response.statusCode(), response.headers().map(), readCapped(response.body()))
+	}
+
+	/**
+	 * Responses are streamed into a bounded buffer instead of an unbounded
+	 * string handler: if the configured base URL ever stops pointing at
+	 * GitHub, a hostile host must not be able to exhaust heap with a single
+	 * large response.
+	 */
+	private fun readCapped(stream: java.io.InputStream): String {
+		val limit = properties.maxResponseBytes
+		val buffer = java.io.ByteArrayOutputStream(minOf(limit, 64 * 1024))
+		val chunk = ByteArray(8_192)
+		stream.use { input ->
+			while (true) {
+				val read = input.read(chunk)
+				if (read < 0) break
+				if (buffer.size() + read > limit) {
+					throw ApiException(HttpStatus.CONTENT_TOO_LARGE, "GITHUB_RESPONSE_TOO_LARGE", "GitHub response exceeds the allowed size")
+				}
+				buffer.write(chunk, 0, read)
+			}
+		}
+		return buffer.toString(StandardCharsets.UTF_8)
 	}
 
 	internal fun buildRequest(

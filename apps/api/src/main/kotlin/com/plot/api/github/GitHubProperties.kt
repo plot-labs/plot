@@ -32,6 +32,7 @@ data class GitHubProperties(
 	val maxReleaseBodyCharacters: Int = 20_000,
 	val maxReleaseEvidenceCharacters: Int = 120_000,
 	val maxWebhookPayloadBytes: Int = 1_048_576,
+	val maxResponseBytes: Int = 16_777_216,
 	val httpRequestTimeout: Duration = Duration.ofSeconds(20),
 	val monitoringAnalysisPollDelay: Duration = Duration.ofSeconds(5),
 	val monitoringAnalysisLeaseTimeout: Duration = Duration.ofMinutes(2),
@@ -76,6 +77,7 @@ data class GitHubProperties(
 		require(accessCheckMaxAttempts in 1..3) {
 			"plot.github.access-check-max-attempts must be between one and three"
 		}
+		require(maxResponseBytes > 0) { "plot.github.max-response-bytes must be positive" }
 		require(maxReleasePullRequests > 0) { "plot.github.max-release-pull-requests must be positive" }
 		require(maxReleaseEvidenceBlocks > 0) { "plot.github.max-release-evidence-blocks must be positive" }
 		require(maxReleaseTitleCharacters > 0) { "plot.github.max-release-title-characters must be positive" }
