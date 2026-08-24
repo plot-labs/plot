@@ -6,6 +6,7 @@ import com.plot.api.auth.RequestActorResolver
 import com.plot.api.dev.DevContext
 import com.plot.api.entitlement.TrialPolicy
 import com.plot.api.entitlement.WorkspaceEntitlementReader
+import com.plot.api.entitlement.WorkspacePolicy
 import com.plot.api.workspace.dto.CreateWorkspaceRequest
 import com.plot.api.workspace.dto.WorkspaceResponse
 import com.plot.api.workspace.dto.UpdateWorkspaceRequest
@@ -29,12 +30,18 @@ class WorkspaceService(
 	fun create(request: CreateWorkspaceRequest): WorkspaceResponse {
 		val actor = actorResolver?.current()
 		val userId = actor?.userId ?: devContext.devUserId
+		val activeWorkspaces = memberRepository.countByUserIdAndStatus(userId, "ACTIVE")
+		if (activeWorkspaces >= WorkspacePolicy.MAX_ACTIVE_PER_USER) {
+			throw ApiException(HttpStatus.FORBIDDEN, "WORKSPACE_LIMIT_REACHED", "Workspace limit reached")
+		}
 		val now = Instant.now()
 		val workspaceId = uuidGenerator.next()
 		val workspace = workspaceRepository.save(Workspace(
 			id = workspaceId,
 			name = request.name.trim(),
-			slug = "workspace-${workspaceId.toString().take(8)}",
+			// Leading UUIDv7 characters are timestamp bits and repeat for every
+			// creation within the same window, so seed from the random tail.
+			slug = "workspace-${workspaceId.toString().replace("-", "").takeLast(12)}",
 			createdByUserId = userId,
 			status = "ACTIVE",
 			createdAt = now,

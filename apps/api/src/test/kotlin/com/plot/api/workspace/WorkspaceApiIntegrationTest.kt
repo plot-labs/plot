@@ -3,6 +3,7 @@ package com.plot.api.workspace
 import com.plot.api.TestcontainersConfiguration
 import com.plot.api.dev.DevContext
 import java.util.UUID
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.springframework.http.MediaType
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -65,6 +66,50 @@ class WorkspaceApiIntegrationTest {
 			jsonPath("$.status") { value("ACTIVE") }
 			jsonPath("$.role") { value("OWNER") }
 		}
+	}
+
+	@Test
+	fun workspaceCreationIsCappedPerUser() {
+		deleteExtraWorkspaces()
+		try {
+			// The bootstrap workspace already occupies one slot of the cap.
+			repeat(2) { index ->
+				mockMvc.post("/api/workspaces") {
+					contentType = MediaType.APPLICATION_JSON
+					content = """{"name":"Capped $index"}"""
+				}.andExpect { status { isOk() } }
+			}
+			mockMvc.post("/api/workspaces") {
+				contentType = MediaType.APPLICATION_JSON
+				content = """{"name":"One too many"}"""
+			}.andExpect {
+				status { isForbidden() }
+				jsonPath("$.error") { value("WORKSPACE_LIMIT_REACHED") }
+			}
+			assertEquals(
+				3,
+				jdbcTemplate.queryForObject(
+					"select count(*) from workspace_members where user_id = ? and status = 'ACTIVE'",
+					Int::class.java,
+					devContext.devUserId,
+				),
+			)
+		} finally {
+			deleteExtraWorkspaces()
+		}
+	}
+
+	private fun deleteExtraWorkspaces() {
+		jdbcTemplate.update(
+			"delete from workspace_members where user_id = ? and workspace_id <> ?",
+			devContext.devUserId,
+			devContext.devWorkspaceId,
+		)
+		jdbcTemplate.update(
+			"delete from workspaces where created_by_user_id = ? and id <> ?",
+			devContext.devUserId,
+			devContext.devWorkspaceId,
+		)
 	}
 
 	@Test
