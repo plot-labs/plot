@@ -107,6 +107,7 @@ class GitHubConnectionService(
 		// Consume before any provider call. A failed token exchange cannot replay the state.
 		val state = stateService.consume(request.state)
 		requireCallbackOwner(state)
+		verifyInstallationOwnership(state.userId, request.installationId)
 		val repositories = githubClient.listInstallationRepositories(request.installationId)
 		val now = Instant.now()
 		val connectionId = transactionExecutor.execute {
@@ -451,6 +452,58 @@ class GitHubConnectionService(
 			throw ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Workspace owner access is required")
 		}
 	}
+
+	/**
+	 * The callback only proves the state belongs to this workspace owner; the
+	 * installation ID arrives from the browser and could name anyone's install.
+	 * Prove the caller's linked GitHub identity controls the installation before
+	 * any token or connection is issued.
+	 */
+	private fun verifyInstallationOwnership(userId: UUID, installationId: Long) {
+		val link = findLinkedGitHubAccount(userId)
+			?: throw installationNotOwned("No linked GitHub account was found; sign in with GitHub and retry")
+		val installation = try {
+			githubClient.getInstallation(installationId)
+		} catch (exception: ApiException) {
+			if (exception.error == "GITHUB_NOT_FOUND") throw installationNotOwned()
+			throw exception
+		}
+		val owned = when (installation.account.type.uppercase()) {
+			"USER" -> installation.account.id == link.githubAccountId && link.githubAccountId > 0L
+			"ORGANIZATION" -> isOrganizationAdmin(link.accessToken, installation.account.login)
+			else -> false
+		}
+		if (!owned) throw installationNotOwned()
+	}
+
+	private fun isOrganizationAdmin(accessToken: String?, orgLogin: String): Boolean {
+		val token = accessToken?.takeIf { it.isNotBlank() } ?: return false
+		val identity = githubClient.resolveAuthenticatedUser(token)
+		return githubClient.organizationMembershipRole(token, orgLogin, identity.login) == "admin"
+	}
+
+	private fun findLinkedGitHubAccount(userId: UUID): LinkedGitHubAccount? = sqlExecutor.query(
+		"""
+		select a.account_id, a.access_token
+		from users u
+		join auth_account a on a.user_id = u.auth_subject and a.provider_id = 'github'
+		where u.id = ? and u.auth_subject is not null
+		order by a.updated_at desc
+		limit 1
+		""".trimIndent(),
+		{ rs, _ ->
+			LinkedGitHubAccount(
+				githubAccountId = rs.getString(1)?.toLongOrNull() ?: 0L,
+				accessToken = rs.getString(2),
+			)
+		},
+		userId,
+	).firstOrNull()
+
+	private fun installationNotOwned(message: String = "GitHub installation does not belong to the authenticated user") =
+		ApiException(HttpStatus.FORBIDDEN, "GITHUB_INSTALLATION_NOT_OWNED", message)
+
+	private data class LinkedGitHubAccount(val githubAccountId: Long, val accessToken: String?)
 
 	private fun listScopesForConnection(connectionId: UUID): List<GitHubRepositoryResponse> {
 		return sqlExecutor.query(

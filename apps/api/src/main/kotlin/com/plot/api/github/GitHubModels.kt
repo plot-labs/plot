@@ -56,6 +56,22 @@ data class GitHubCompareResult(
 	val filesTruncated: Boolean,
 )
 
+data class GitHubInstallationAccount(
+	val id: Long,
+	val login: String,
+	val type: String,
+)
+
+data class GitHubInstallation(
+	val id: Long,
+	val account: GitHubInstallationAccount,
+)
+
+data class GitHubUserIdentity(
+	val id: Long,
+	val login: String,
+)
+
 data class GitHubHttpResponse(
 	val status: Int,
 	val headers: Map<String, List<String>>,
