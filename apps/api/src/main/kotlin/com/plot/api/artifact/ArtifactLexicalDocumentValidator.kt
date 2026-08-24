@@ -65,11 +65,15 @@ class ArtifactLexicalDocumentValidator(
 	internal fun validateStatementOwnership(statements: List<NormalizedStatement>, allSentenceIds: Set<UUID>) {
 		statements.filter { it.id !in allSentenceIds }.forEach { statement ->
 			// New application-owned IDs are valid; only reject an ID that claims to
-			// belong to another artifact when its UUID already exists elsewhere.
+			// belong to another artifact in this workspace. The workspace filter
+			// keeps the check from answering cross-tenant existence questions — a
+			// foreign duplicate that slips through fails on the primary key at
+			// insert time instead.
 			val belongsToAnotherArtifact = sqlExecutor.queryForObject(
-				"select exists (select 1 from content_variant_sentences where id = ?)",
+				"select exists (select 1 from content_variant_sentences where id = ? and workspace_id = ?)",
 				Boolean::class.java,
 				statement.id,
+				devContext.devWorkspaceId,
 			) ?: false
 			if (belongsToAnotherArtifact) {
 				throw ApiException(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "Statement belongs to another artifact", statement.id)
