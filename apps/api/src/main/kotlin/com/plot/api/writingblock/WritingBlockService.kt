@@ -29,19 +29,21 @@ class WritingBlockService(
 	@Transactional(readOnly = true)
 	fun list(sourceScopeId: UUID? = null, page: Int = 0, size: Int = 50): WritingBlockPageResponse {
 		if (page < 0 || size !in 1..100) throw ApiException(HttpStatus.BAD_REQUEST, "INVALID_PAGE", "Page must be non-negative and size must be between 1 and 100")
+		val offset = page.toLong() * size
+		if (offset > Int.MAX_VALUE) throw ApiException(HttpStatus.BAD_REQUEST, "INVALID_PAGE", "Page is out of range")
+		val blockOffset = offset.toInt()
 		if (sourceScopeId != null && sourceScopeRepository.findByWorkspaceIdAndId(devContext.devWorkspaceId, sourceScopeId) == null) {
 			throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Source scope not found")
 		}
 		if (sourceScopeId != null) sourceManagedAccessGuard.requireReadable()
-		val offset = page * size
 		val blocks = sourceScopeId?.let {
 			writingBlockRepository.findAllByWorkspaceIdAndSourceScopeId(
 				devContext.devWorkspaceId,
 				it,
-				offset,
+				blockOffset,
 				size,
 			)
-		} ?: writingBlockRepository.findAllByWorkspaceId(devContext.devWorkspaceId, offset, size)
+		} ?: writingBlockRepository.findAllByWorkspaceId(devContext.devWorkspaceId, blockOffset, size)
 		if (blocks.content.any { it.sourceNamespaceId != null }) sourceManagedAccessGuard.requireReadable()
 		return WritingBlockPageResponse(
 			items = blocks.content.map { it.toResponse() },
