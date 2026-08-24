@@ -81,6 +81,88 @@ describe("Plot same-origin proxy", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
+  it("fails closed when neither Origin nor Referer is present", async () => {
+    const fetcher = vi.fn<typeof fetch>();
+    const request = new Request("http://web.test/api/plot/sessions", {
+      method: "POST",
+    });
+
+    const response = await proxyPlotRequest(request, ["sessions"], {
+      fetch: fetcher,
+      getSession: async () => ({ user: { email: "member@example.com" } }),
+      getServerJwt: async () => "server-issued-jwt",
+    });
+
+    expect(response.status).toBe(403);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("accepts a same-site Referer when the Origin header is absent", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ ok: true }));
+    const request = new Request("http://web.test/api/plot/sessions", {
+      method: "POST",
+      headers: { Referer: "http://web.test/dashboard" },
+    });
+
+    const response = await proxyPlotRequest(request, ["sessions"], {
+      fetch: fetcher,
+      getSession: async () => ({ user: { email: "member@example.com" } }),
+      getServerJwt: async () => "server-issued-jwt",
+    });
+
+    expect(response.status).toBe(200);
+  });
+
+  it("rejects a cross-site Referer when the Origin header is absent", async () => {
+    const fetcher = vi.fn<typeof fetch>();
+    const request = new Request("http://web.test/api/plot/sessions", {
+      method: "POST",
+      headers: { Referer: "https://attacker.test/lure" },
+    });
+
+    const response = await proxyPlotRequest(request, ["sessions"], {
+      fetch: fetcher,
+      getSession: async () => ({ user: { email: "member@example.com" } }),
+      getServerJwt: async () => "server-issued-jwt",
+    });
+
+    expect(response.status).toBe(403);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("pins same-origin checks to PLOT_APP_ORIGIN instead of the client-supplied Host", async () => {
+    process.env.PLOT_APP_ORIGIN = "https://app.useplot.xyz";
+    try {
+      const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ ok: true }));
+
+      // A hostile page that mirrors its own Host no longer defines the
+      // expected origin; only the pinned origin passes.
+      const mirroredHost = new Request("http://attacker.test/api/plot/workspaces", {
+        method: "POST",
+        headers: { Host: "attacker.test", Origin: "https://app.useplot.xyz" },
+      });
+      const accepted = await proxyPlotRequest(mirroredHost, ["workspaces"], {
+        fetch: fetcher,
+        getSession: async () => ({ user: { email: "member@example.com" } }),
+        getServerJwt: async () => "server-issued-jwt",
+      });
+      expect(accepted.status).toBe(200);
+
+      const hostMatch = new Request("http://web.test/api/plot/workspaces", {
+        method: "POST",
+        headers: { Origin: "http://web.test" },
+      });
+      const rejected = await proxyPlotRequest(hostMatch, ["workspaces"], {
+        fetch: fetcher,
+        getSession: async () => ({ user: { email: "member@example.com" } }),
+        getServerJwt: async () => "server-issued-jwt",
+      });
+      expect(rejected.status).toBe(403);
+    } finally {
+      delete process.env.PLOT_APP_ORIGIN;
+    }
+  });
+
   it("uses the browser-facing Host header for local same-origin checks", async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ ok: true }));
     const request = new Request("http://localhost:3000/api/plot/account/bootstrap", {
@@ -110,7 +192,7 @@ describe("Plot same-origin proxy", () => {
     }));
     const request = new Request("http://web.test/api/plot/agent-runs", {
       method: "POST",
-      headers: { Connection: "close", "Idempotency-Key": "key", "X-Upstream-Url": "https://attacker.test" },
+      headers: { Connection: "close", "Idempotency-Key": "key", "X-Upstream-Url": "https://attacker.test", Origin: "http://web.test" },
       body: "{}",
     });
 

@@ -270,19 +270,40 @@ function isStateChanging(method: string): boolean {
 }
 
 function isSameOrigin(request: Request): boolean {
-  const expectedOrigin = browserFacingOrigin(request);
+  const expectedOrigin = sameOriginTarget(request);
   if (!expectedOrigin) return false;
-  const origin = request.headers.get("origin");
-  if (origin) {
+  // A request carrying neither header cannot be attributed to any browsing
+  // context; state changes require positive evidence of same-origin instead
+  // of defaulting to allow.
+  const source = request.headers.get("origin") ?? request.headers.get("referer");
+  if (!source) return false;
+  try {
+    return new URL(source).origin === expectedOrigin;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The Host header is client-controlled, so a hostile page could otherwise
+ * mirror it and pass the comparison. Deployments therefore pin their real
+ * browser-facing origin via PLOT_APP_ORIGIN (absolute http(s) URL); deriving
+ * it from the request host remains as the unset/local fallback. An invalid
+ * pin fails closed rather than degrading back to trusting Host.
+ */
+function sameOriginTarget(request: Request): string | null {
+  const configured = process.env.PLOT_APP_ORIGIN?.trim();
+  if (configured) {
     try {
-      return new URL(origin).origin === expectedOrigin;
+      const url = new URL(configured);
+      if (!["http:", "https:"].includes(url.protocol)) return null;
+      if (url.username || url.password || url.pathname !== "/" || url.search || url.hash) return null;
+      return url.origin;
     } catch {
-      return false;
+      return null;
     }
   }
-  const referer = request.headers.get("referer");
-  if (!referer) return true;
-  try { return new URL(referer).origin === expectedOrigin; } catch { return false; }
+  return browserFacingOrigin(request);
 }
 
 function browserFacingOrigin(request: Request): string | null {
