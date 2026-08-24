@@ -1,10 +1,33 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSessionCookie } from "better-auth/cookies";
 
+import { createFixedWindowLimiter } from "@/lib/rate-limit";
+
 const appHosts = new Set(["app.useplot.xyz"]);
+
+// State-changing API traffic is cheap to spam and expensive to serve (auth
+// flows, AI triggers, upstream writes). Per-IP fixed window; best-effort per
+// instance, with platform-level protection as the outer layer.
+const apiWriteLimiter = createFixedWindowLimiter(60 * 1000, 60);
+
+function clientIp(request: NextRequest): string {
+  const forwarded = request.headers.get("x-forwarded-for");
+  return forwarded?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown";
+}
 
 export function proxy(request: NextRequest) {
   const host = request.headers.get("host")?.split(":")[0]?.toLowerCase();
+
+  if (
+    request.nextUrl.pathname.startsWith("/api/") &&
+    !["GET", "HEAD", "OPTIONS"].includes(request.method) &&
+    apiWriteLimiter.check(clientIp(request))
+  ) {
+    return NextResponse.json(
+      { error: "TOO_MANY_REQUESTS", message: "Too many requests" },
+      { status: 429 },
+    );
+  }
 
   const isPublicAuthPath = request.nextUrl.pathname === "/sign-in" || request.nextUrl.pathname === "/auth/complete" || request.nextUrl.pathname.startsWith("/api/auth");
   if (host && appHosts.has(host) && !isPublicAuthPath && !getSessionCookie(request)) {
