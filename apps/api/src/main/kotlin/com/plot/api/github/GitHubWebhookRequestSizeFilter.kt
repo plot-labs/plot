@@ -60,8 +60,13 @@ class GitHubWebhookRequestSizeFilter(private val properties: GitHubProperties) :
 		}
 
 		override fun getReader(): BufferedReader = BufferedReader(
-			InputStreamReader(inputStream, characterEncoding?.let(Charset::forName) ?: StandardCharsets.UTF_8),
+			InputStreamReader(inputStream, safeCharacterEncoding()),
 		)
+
+		/** A client-controlled charset value must not turn into a 500 before signature verification. */
+		private fun safeCharacterEncoding(): Charset =
+			characterEncoding?.let { encoding -> runCatching { Charset.forName(encoding) }.getOrNull() }
+				?: StandardCharsets.UTF_8
 	}
 
 	private companion object {
