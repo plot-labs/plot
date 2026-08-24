@@ -12,7 +12,6 @@ class WorkspaceAccessConfiguration(
 		registry.addInterceptor(workspaceAccessInterceptor)
 			.addPathPatterns("/api/**")
 			.excludePathPatterns(
-				"/api/auth/**",
 				"/api/account/bootstrap",
 				"/api/me",
 				"/api/polar/webhook",
