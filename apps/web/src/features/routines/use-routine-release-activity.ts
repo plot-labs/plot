@@ -44,18 +44,16 @@ export function useRoutineReleaseActivity(sourceScopeId: string | null) {
   }, [sourceScopeId]);
 
   useEffect(() => {
-    if (!sourceScopeId) {
-      setActivity(null);
-      setIsLoading(false);
-      setError(null);
-      return;
-    }
+    if (!sourceScopeId) return;
 
     const controller = new AbortController();
     const workspaceRevision = workspaceRevisionRef.current;
     fetchAbortRef.current = controller;
-    setIsLoading(true);
-    setError(null);
+    queueMicrotask(() => {
+      if (fetchAbortRef.current !== controller) return;
+      setIsLoading(true);
+      setError(null);
+    });
 
     void fetchActivity(controller.signal)
       .then((value) => {
@@ -97,7 +95,7 @@ export function useRoutineReleaseActivity(sourceScopeId: string | null) {
       controller.abort();
       window.clearInterval(intervalId);
     };
-  }, [sourceScopeId, activity?.id, activity?.status, fetchActivity]);
+  }, [sourceScopeId, activity, fetchActivity]);
 
   const retry = useCallback(async () => {
     if (!sourceScopeId || !activity || retrying) return;
@@ -140,5 +138,11 @@ export function useRoutineReleaseActivity(sourceScopeId: string | null) {
     }
   }, [sourceScopeId, activity, retrying, fetchActivity]);
 
-  return { activity, isLoading, error, retry, retrying };
+  return {
+    activity: sourceScopeId ? activity : null,
+    isLoading: sourceScopeId ? isLoading : false,
+    error: sourceScopeId ? error : null,
+    retry,
+    retrying: sourceScopeId ? retrying : false,
+  };
 }
