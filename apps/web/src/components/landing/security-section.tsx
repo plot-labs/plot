@@ -19,7 +19,7 @@ const securityFeatures = [
   {
     icon: FileCheck,
     title: "Human-controlled handoff",
-    description: "You review, edit, copy, or download the Markdown. Plot never publishes the changelog for you.",
+    description: "You choose when to publish. Plot prepares the draft; you approve before it goes live.",
   },
 ];
 

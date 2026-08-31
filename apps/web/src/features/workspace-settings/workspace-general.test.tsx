@@ -14,6 +14,7 @@ vi.mock("@/lib/api-client", () => ({
 }));
 
 import { WorkspaceGeneral } from "./workspace-general";
+import { publicChangelogUrl } from "@/lib/public-changelog-url";
 
 describe("WorkspaceGeneral", () => {
   beforeEach(() => {
@@ -33,6 +34,15 @@ describe("WorkspaceGeneral", () => {
       logoUrl: null,
       role: "OWNER",
     });
+  });
+
+  it("shows the public changelog URL with copy and view actions", async () => {
+    render(<WorkspaceGeneral />);
+
+    expect(await screen.findByText(publicChangelogUrl("personal"))).toBeVisible();
+    expect(screen.getByText("personal", { selector: ".font-mono" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy link" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "View live" })).toHaveAttribute("href", publicChangelogUrl("personal"));
   });
 
   it("loads the workspace profile and saves a renamed workspace", async () => {
