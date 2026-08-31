@@ -22,7 +22,6 @@ class ArtifactPublishService(
 	private val devContext: DevContext,
 	private val uuidGenerator: UuidGenerator,
 	private val deliveryGate: ArtifactDeliveryGate,
-	private val query: ArtifactQueryService,
 	private val workspaceRepository: WorkspaceRepository,
 	private val clock: Clock = Clock.systemUTC(),
 ) {
@@ -85,7 +84,11 @@ class ArtifactPublishService(
 					"A changelog entry already exists for release tag ${metadata.tagName}",
 				)
 			}
-			throw ApiException(HttpStatus.CONFLICT, "PUBLISH_CONFLICT", "Could not publish changelog entry")
+			throw ApiException(
+				HttpStatus.CONFLICT,
+				"PUBLISH_VARIANT_CONFLICT",
+				"This artifact variant is already published",
+			)
 		}
 		return PublishContentVariantResponse(
 			entryId = entryId,

@@ -4,5 +4,8 @@
   "title": "Release v2.4.0",
   "tagName": "v2.4.0",
   "bodyMarkdown": "Supported sentence.\n\nStable sentence.\n",
-  "publishedAt": "2026-08-31T12:00:00Z"
+  "publishedAt": "2026-08-31T12:00:00Z",
+  "workspaceSlug": "dev-workspace",
+  "workspaceName": "Dev Workspace",
+  "logoUrl": null
 }

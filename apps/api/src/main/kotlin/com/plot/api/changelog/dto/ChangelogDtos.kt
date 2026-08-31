@@ -18,6 +18,9 @@ data class PublicChangelogEntryDetailResponse(
 	val tagName: String?,
 	val bodyMarkdown: String,
 	val publishedAt: Instant,
+	val workspaceSlug: String,
+	val workspaceName: String,
+	val logoUrl: String?,
 )
 
 data class PublicChangelogResponse(

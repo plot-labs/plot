@@ -53,6 +53,11 @@ class PublicChangelogApiIntegrationTest {
 	@Autowired private lateinit var jdbcTemplate: JdbcTemplate
 	@Autowired private lateinit var devContext: DevContext
 
+	@org.junit.jupiter.api.BeforeEach
+	fun cleanPublishedEntries() {
+		jdbcTemplate.update("delete from published_changelog_entries where workspace_id = ?", devContext.devWorkspaceId)
+	}
+
 	@Test
 	fun `public changelog exposes only published entries and unknown slug returns not found`() {
 		val fixture = readyPack()
@@ -84,6 +89,8 @@ class PublicChangelogApiIntegrationTest {
 			status { isOk() }
 			jsonPath("$.entrySlug") { value(entrySlug) }
 			jsonPath("$.bodyMarkdown") { value("Supported sentence.\n\nStable sentence.\n") }
+			jsonPath("$.workspaceSlug") { value("dev-workspace") }
+			jsonPath("$.workspaceName") { exists() }
 		}
 		mockMvc.get("/api/public/changelog/dev-workspace/missing-entry").andExpect {
 			status { isNotFound() }

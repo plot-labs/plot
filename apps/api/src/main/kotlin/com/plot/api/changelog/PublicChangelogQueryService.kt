@@ -28,7 +28,12 @@ class PublicChangelogQueryService(
 	fun getEntry(workspaceSlug: String, entrySlug: String): PublicChangelogEntryDetailResponse {
 		val workspace = workspaceRepository.findBySlug(workspaceSlug)
 			?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Changelog not found")
-		return persistence.findEntry(workspace.id, entrySlug)
+		val entry = persistence.findEntry(workspace.id, entrySlug)
 			?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Changelog not found")
+		return entry.copy(
+			workspaceSlug = workspace.slug,
+			workspaceName = workspace.name,
+			logoUrl = workspace.logoUrl,
+		)
 	}
 }

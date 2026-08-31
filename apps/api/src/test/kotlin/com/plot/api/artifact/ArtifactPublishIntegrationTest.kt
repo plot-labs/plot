@@ -63,6 +63,7 @@ class ArtifactPublishIntegrationTest {
 	@BeforeEach
 	@AfterEach
 	fun restoreWritableWorkspace() {
+		jdbcTemplate.update("delete from published_changelog_entries where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update(
 			"""
 			update workspaces
@@ -144,6 +145,19 @@ class ArtifactPublishIntegrationTest {
 		}.andExpect {
 			status { isForbidden() }
 			jsonPath("$.error") { value("WORKSPACE_READ_ONLY") }
+		}
+	}
+
+	@Test
+	fun `duplicate variant publish returns conflict`() {
+		val fixture = readyPack()
+		publish(fixture.variantId, expectedRevisionNumber = 1)
+		mockMvc.post("/api/artifact-variants/${fixture.variantId}/publish") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"expectedRevisionNumber":1,"acknowledgeUnresolved":false}"""
+		}.andExpect {
+			status { isConflict() }
+			jsonPath("$.error") { value("PUBLISH_VARIANT_CONFLICT") }
 		}
 	}
 

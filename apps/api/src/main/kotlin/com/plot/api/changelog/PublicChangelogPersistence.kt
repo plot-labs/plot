@@ -43,6 +43,9 @@ class PublicChangelogPersistence(
 				tagName = rs.getString(4),
 				bodyMarkdown = requireNotNull(rs.getString(5)),
 				publishedAt = requireNotNull(rs.getTimestamp(6)).toInstant(),
+				workspaceSlug = "",
+				workspaceName = "",
+				logoUrl = null,
 			)
 		},
 		workspaceId,

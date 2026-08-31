@@ -111,6 +111,9 @@ export interface PublicChangelog {
 
 export interface PublicChangelogEntry extends PublicChangelogEntrySummary {
   bodyMarkdown: string;
+  workspaceSlug: string;
+  workspaceName: string;
+  logoUrl: string | null;
 }
 
 export interface RequestOptions { signal?: AbortSignal }
