@@ -25,6 +25,14 @@ export function selectReferences(references: SourceReference[], ids: string[]) {
   return references.filter((reference) => ids.includes(reference.id));
 }
 
+export function resolveComposerReferenceIds(
+  references: { id: string; available: boolean }[],
+  selectedIds: string[],
+): string[] {
+  if (selectedIds.length > 0) return selectedIds;
+  return references.filter((reference) => reference.available).map((reference) => reference.id);
+}
+
 export function validateSourceSelection(all: SourceReference[], _selected: SourceReference[], sourceError: string) {
   if (sourceError) return sourceError;
   if (!all.length) return "Connect and import a source before starting a Chat.";
