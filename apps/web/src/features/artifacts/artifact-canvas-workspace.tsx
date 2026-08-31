@@ -130,6 +130,11 @@ export function ArtifactCanvasWorkspace({ artifact, client, onSaveArtifact }: Ar
           }}
           onSaveArtifact={onSaveArtifact}
           onPackChange={(next) => {
+            setDrafts((current) => {
+              const nextDrafts = { ...current };
+              delete nextDrafts[next.id];
+              return nextDrafts;
+            });
             setCurrentArtifact(next);
             setHistorical(null);
             setHistoricalPosition(null);
