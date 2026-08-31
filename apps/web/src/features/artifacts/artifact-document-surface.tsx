@@ -2,8 +2,9 @@
 
 import type { Artifact, ArtifactHistoryDetail, PlotApiClient } from "@plot/api-client";
 
-import { TiptapDraftEditor, type SaveArtifactInput } from "@/features/citations/tiptap-draft-editor";
+import { ArtifactEditorStatus, artifactSaveStateLabel } from "@/features/artifacts/artifact-editor-chrome";
 import { ExportDialog } from "@/features/citations/export-dialog";
+import { TiptapDraftEditor, type SaveArtifactInput } from "@/features/citations/tiptap-draft-editor";
 
 type ArtifactDocumentSurfaceProps = {
   pack: Artifact;
@@ -41,7 +42,7 @@ export function ArtifactDocumentSurface({
       <article
         aria-label="Artifact document surface"
         className={workspacePresentation
-          ? "min-h-full w-full max-w-[980px] px-6 pb-16 text-black/88 dark:text-white/90"
+          ? "min-h-full w-full max-w-[980px] px-[clamp(24px,5vw,48px)] pb-16 text-black/88 dark:text-white/90"
           : "min-h-[min(956px,calc(100dvh-128px))] w-full max-w-[980px] overflow-hidden rounded-[8px] border border-black/10 bg-white px-[clamp(28px,7.35vw,72px)] pb-[52px] pt-16 shadow-[0_8px_20px_rgba(0,0,0,0.08)] dark:border-white/10 dark:bg-[#202024]"}
       >
         {!workspacePresentation ? (
@@ -72,7 +73,7 @@ export function ArtifactDocumentSurface({
           <p className="mt-1 text-sm text-black/52 dark:text-white/55">{historical ? `${historical.cause} · historical preview` : shownPack.status}</p>
         </div>
         <div className="flex min-w-0 flex-col items-end gap-2">
-          {saveState ? <span role="status" aria-live="polite" className="text-xs text-black/45 dark:text-white/48">{saveStateLabel(saveState, readOnly)}</span> : null}
+          {saveState ? <ArtifactEditorStatus>{saveStateLabel(saveState, readOnly)}</ArtifactEditorStatus> : null}
           {!readOnly ? <ExportDialog pack={shownPack} client={client} /> : <p className="text-right text-xs text-black/48 dark:text-white/52">Editing and delivery are disabled for this snapshot.</p>}
         </div>
       </header>
@@ -91,9 +92,5 @@ export function ArtifactDocumentSurface({
 }
 
 function saveStateLabel(state: "saved" | "saving" | "dirty" | "error", readOnly: boolean) {
-  if (readOnly) return "Saved snapshot";
-  if (state === "saving") return "Saving…";
-  if (state === "dirty") return "Unsaved changes";
-  if (state === "error") return "Save needs attention";
-  return "Saved";
+  return artifactSaveStateLabel(state, readOnly);
 }
