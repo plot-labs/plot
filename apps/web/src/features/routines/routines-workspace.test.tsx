@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   updateRoutine: vi.fn(),
   runRoutineNow: vi.fn(),
   getRoutineAgentRun: vi.fn(),
+  getGitHubReleaseActivity: vi.fn(),
+  retryGitHubReleaseDraft: vi.fn(),
 }));
 
 vi.mock("@/lib/api-client", async () => {
@@ -25,6 +27,8 @@ vi.mock("@/lib/api-client", async () => {
       updateRoutine: mocks.updateRoutine,
       runRoutineNow: mocks.runRoutineNow,
       getRoutineAgentRun: mocks.getRoutineAgentRun,
+      getGitHubReleaseActivity: mocks.getGitHubReleaseActivity,
+      retryGitHubReleaseDraft: mocks.retryGitHubReleaseDraft,
     },
   };
 });
@@ -57,6 +61,8 @@ describe("RoutinesWorkspace", () => {
     mocks.updateRoutine.mockReset();
     mocks.runRoutineNow.mockReset();
     mocks.getRoutineAgentRun.mockReset();
+    mocks.getGitHubReleaseActivity.mockReset().mockResolvedValue(null);
+    mocks.retryGitHubReleaseDraft.mockReset();
     Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
       configurable: true,
       value: vi.fn(),
@@ -382,6 +388,32 @@ describe("RoutinesWorkspace", () => {
 
     expect(screen.getByRole("heading", { name: "Routines" }).closest("section"))
       .toHaveClass("lg:h-full", "lg:overflow-y-auto");
+  });
+
+  it("shows release activity for release routines but not weekly routines", async () => {
+    mocks.getGitHubReleaseActivity.mockResolvedValue({
+      id: "request-1",
+      sourceScopeId: "source-1",
+      tagName: "v2.4.0",
+      status: "READY",
+      baseSha: "base",
+      headSha: "head",
+      artifactId: "artifact-release",
+      errorCode: null,
+      createdAt: "2026-08-10T00:00:00Z",
+      updatedAt: "2026-08-10T00:01:00Z",
+    });
+    mocks.listRoutines.mockResolvedValue([
+      routine({ id: "routine-release", name: "Release changelog", cadence: "ON_GITHUB_RELEASE" }),
+      routine({ id: "routine-weekly", name: "Weekly update", cadence: "WEEKLY" }),
+    ]);
+    render(<RoutinesWorkspace />);
+
+    expect(await screen.findByText("Latest release: v2.4.0 · Draft ready")).toBeVisible();
+    expect(screen.getByRole("link", { name: "Open artifact for Release changelog release v2.4.0" }))
+      .toHaveAttribute("href", "/artifacts?artifact=artifact-release");
+    expect(screen.queryByRole("status", { name: "Latest release for Weekly update" })).not.toBeInTheDocument();
+    expect(mocks.getGitHubReleaseActivity).toHaveBeenCalledTimes(1);
   });
 });
 
