@@ -94,7 +94,7 @@ describe("PublicChangelogEntryPage", () => {
       entries: [],
     });
     mocks.fetchPublicChangelogEntry.mockRejectedValue(
-      new PlotApiError(404, "NOT_FOUND", "Changelog entry not found"),
+      new PlotApiError(404, "NOT_FOUND", "Changelog not found"),
     );
 
     await expect(

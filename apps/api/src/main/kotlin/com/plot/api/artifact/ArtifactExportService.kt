@@ -47,13 +47,18 @@ class ArtifactExportService(
 				legacyAcknowledgedRevisionIds,
 			)) {
 				is DeliveryGateOutcome.ConfirmationRequired -> {
-					recordRejectedExport(
+					recordExport(
+						gate.revision,
+						gate.artifactWorkflowRunId,
 						variantId,
-						expectedRevisionNumber,
 						disposition,
 						includeSources,
-						gate.warnings,
-						acknowledgedWarningKeys,
+						gate.exportSentences,
+						acknowledgedWarningKeys.ifEmpty { gate.warningKeys },
+						false,
+						"REJECTED",
+						null,
+						null,
 					)
 					return@execute ExportAttempt.ConfirmationRequired(gate.warnings)
 				}
@@ -114,48 +119,8 @@ class ArtifactExportService(
 		}
 		return when (outcome) {
 			is ExportAttempt.Completed -> outcome.response
-			is ExportAttempt.ConfirmationRequired -> throw ExportConfirmationRequiredException(
-				outcome.warnings,
-				emptyList(),
-				emptyList(),
-			)
+			is ExportAttempt.ConfirmationRequired -> throw ExportConfirmationRequiredException(outcome.warnings)
 		}
-	}
-
-	private fun recordRejectedExport(
-		variantId: UUID,
-		expectedRevisionNumber: Int,
-		disposition: ExportDisposition,
-		includeSources: Boolean,
-		warnings: List<ExportWarningResponse>,
-		acknowledgedWarningKeys: List<String>,
-	) {
-		val revision = runCatching { query.getVariant(variantId).variant }
-			.getOrNull()?.let { variant ->
-				if (variant.revisionNumber != expectedRevisionNumber) return
-				CurrentArtifactRevision(
-					variant.revisionId,
-					query.artifactWorkflowRunIdForVariant(variantId),
-					variant.revisionNumber,
-					variant.lexicalContent,
-				)
-			} ?: return
-		val runId = revision.artifactWorkflowRunId
-		val publicCitations = query.loadPublicCitations(variantId, revision.id)
-		val exportSentences = query.loadExportSentences(variantId, revision.id, publicCitations)
-		recordExport(
-			revision,
-			runId,
-			variantId,
-			disposition,
-			includeSources,
-			exportSentences,
-			acknowledgedWarningKeys.ifEmpty { warnings.map { it.key } },
-			false,
-			"REJECTED",
-			null,
-			null,
-		)
 	}
 
 	private fun findSuccessfulExport(
@@ -233,6 +198,4 @@ private sealed interface ExportAttempt {
 
 class ExportConfirmationRequiredException(
 	val warnings: List<ExportWarningResponse>,
-	val sentenceIds: List<UUID>,
-	val revisionIds: List<UUID>,
 ) : IllegalStateException("Export requires explicit confirmation")

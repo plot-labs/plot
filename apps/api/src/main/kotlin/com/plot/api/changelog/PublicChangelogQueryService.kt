@@ -29,6 +29,6 @@ class PublicChangelogQueryService(
 		val workspace = workspaceRepository.findBySlug(workspaceSlug)
 			?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Changelog not found")
 		return persistence.findEntry(workspace.id, entrySlug)
-			?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Changelog entry not found")
+			?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Changelog not found")
 	}
 }

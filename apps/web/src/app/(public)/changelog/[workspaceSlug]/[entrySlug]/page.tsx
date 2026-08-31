@@ -28,7 +28,7 @@ export async function generateMetadata({ params }: PublicChangelogEntryPageProps
     };
   } catch (error) {
     if (isPublicChangelogNotFound(error)) {
-      return { title: "Changelog entry not found — Plot" };
+      return { title: "Changelog not found — Plot" };
     }
     throw error;
   }

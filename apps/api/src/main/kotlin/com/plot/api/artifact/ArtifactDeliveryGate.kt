@@ -54,10 +54,10 @@ class ArtifactDeliveryGate(
 		val legacyMatches = legacyRevisionSet == unresolved.map { it.revisionId }.toSet()
 		val keyMatches = acknowledgedWarningKeys.toSet() == expectedWarningKeys
 		if (unresolved.isNotEmpty() && !acknowledge) {
-			return DeliveryGateOutcome.ConfirmationRequired(warnings)
+			return rejectionOutcome(revision, artifactWorkflowRunId, exportSentences, warnings)
 		}
 		if (unresolved.isNotEmpty() && acknowledge && !keyMatches && !legacyMatches) {
-			return DeliveryGateOutcome.ConfirmationRequired(warnings)
+			return rejectionOutcome(revision, artifactWorkflowRunId, exportSentences, warnings)
 		}
 		val sources = publicCitations.values.flatten()
 			.distinctBy { it.originalUrl }
@@ -85,6 +85,19 @@ class ArtifactDeliveryGate(
 
 	private fun notFound(): Nothing = throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Content pack not found")
 
+	private fun rejectionOutcome(
+		revision: CurrentArtifactRevision,
+		artifactWorkflowRunId: UUID,
+		exportSentences: List<com.plot.api.artifact.workflow.model.ExportSentence>,
+		warnings: List<ExportWarningResponse>,
+	): DeliveryGateOutcome.ConfirmationRequired = DeliveryGateOutcome.ConfirmationRequired(
+		warnings = warnings,
+		revision = revision,
+		artifactWorkflowRunId = artifactWorkflowRunId,
+		exportSentences = exportSentences,
+		warningKeys = warnings.map { it.key },
+	)
+
 	internal fun warningKey(revisionId: UUID, sentence: com.plot.api.artifact.workflow.model.ExportSentence): String = sha256(
 		listOf(revisionId, sentence.id, sentence.revisionId, sentence.orderIndex, sentence.body).joinToString("|"),
 	)
@@ -100,7 +113,13 @@ class ArtifactDeliveryGate(
 }
 
 sealed interface DeliveryGateOutcome {
-	data class ConfirmationRequired(val warnings: List<ExportWarningResponse>) : DeliveryGateOutcome
+	data class ConfirmationRequired(
+		val warnings: List<ExportWarningResponse>,
+		val revision: CurrentArtifactRevision,
+		val artifactWorkflowRunId: UUID,
+		val exportSentences: List<com.plot.api.artifact.workflow.model.ExportSentence>,
+		val warningKeys: List<String>,
+	) : DeliveryGateOutcome
 	data class Ready(
 		val revision: CurrentArtifactRevision,
 		val artifactWorkflowRunId: UUID,
