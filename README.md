@@ -9,14 +9,15 @@
 
 ## Current Product
 
-Plot combines six product surfaces:
+Plot combines five product surfaces:
 
 - **Chat** — interactive, source-grounded AgentRun work.
 - **Routines** — scheduled or explicitly started AgentRun work.
-- **Sources** — GitHub connections, repository scopes, and writing blocks.
 - **Artifacts** — editable, revisioned, source-cited documents and Markdown export.
 - **GitHub release automation** — release webhooks, trustworthy range detection, and draft generation.
 - **Billing/entitlement** — subscription, trial, plan, and workspace access policy.
+
+GitHub connections, repository scopes, and writing blocks are configured in **Integrations** (workspace settings) and consumed from Chat, Routines, and Artifacts.
 
 The [system architecture overview](docs/architecture/system-overview.md) describes
 the request boundary, execution ownership, persistence conventions, and verification

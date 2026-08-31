@@ -6,19 +6,20 @@ This document describes the current runtime boundaries and ownership model. It i
 
 Plot has four runtime boundaries:
 
-1. **Browser application.** `apps/web` renders Chat, Routines, Sources, Artifacts, settings, and billing surfaces. `packages/api-client/src/index.ts` is the typed browser-facing API client.
+1. **Browser application.** `apps/web` renders Chat, Routines, Artifacts, settings (including Integrations), and billing surfaces. `packages/api-client/src/index.ts` is the typed browser-facing API client.
 2. **Same-origin BFF.** `apps/web/src/app/api/plot/[...path]/route.ts` validates browser origin, session state, route segments, and forwarded headers. It exchanges the authenticated session for a short-lived server JWT and forwards only the allowlisted request to the Kotlin API.
 3. **Kotlin resource server.** `apps/api` owns workspace authorization, product use cases, durable workers, and provider integrations. PostgreSQL is the system of record; Flyway migrations under `apps/api/src/main/resources/db/migration` define the schema.
 4. **External systems.** GitHub supplies repository and release events, model providers perform bounded Agent/Artifact work, and Polar supplies billing subscription events. External calls happen after the relevant durable claim or admission boundary is established.
 
-The six product surfaces are:
+The five product surfaces are:
 
 - **Chat:** interactive AgentRun execution and source-grounded artifact work.
 - **Routines:** scheduled or explicitly started AgentRun execution.
-- **Sources:** GitHub connections, repository scopes, writing blocks, and source lifecycle state.
 - **Artifacts:** editable, revisioned, source-cited documents and Markdown export.
 - **GitHub release automation:** release webhook ingestion, range detection, evidence capture, and draft generation.
 - **Billing/entitlement:** plan, subscription, trial, and workspace access policy.
+
+Source evidence is not a standalone browser surface. GitHub connections, repository scopes, and writing blocks are configured in Integrations (workspace settings) and consumed from Chat, Routines, and Artifacts. The Kotlin API still owns source lifecycle state, writing block persistence, and repository scope enforcement.
 
 ## Request Authorization
 

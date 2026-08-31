@@ -9,14 +9,15 @@
 
 ## 현재 제품
 
-Plot은 다음 여섯 제품 표면을 함께 제공합니다.
+Plot은 다음 다섯 제품 표면을 함께 제공합니다.
 
 - **Chat** — 출처를 기반으로 하는 대화형 AgentRun 작업
 - **Routines** — 예약 또는 수동으로 시작하는 AgentRun 작업
-- **Sources** — GitHub 연결, 저장소 범위, writing block
 - **Artifacts** — 편집·리비전·출처 인용이 가능한 문서와 Markdown export
 - **GitHub release automation** — release webhook, 신뢰 가능한 범위 계산, draft 생성
 - **Billing/entitlement** — 구독, trial, plan, workspace 접근 정책
+
+GitHub 연결, 저장소 범위, writing block은 **Integrations**(워크스페이스 설정)에서 구성하고 Chat, Routines, Artifacts에서 사용합니다.
 
 [시스템 아키텍처 개요](docs/architecture/system-overview.md)에서 요청 경계,
 실행 소유권, persistence 규칙, 검증 명령을 설명합니다. 게시 여부는 계속
