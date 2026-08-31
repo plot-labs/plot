@@ -7,6 +7,8 @@ import com.plot.api.artifact.dto.ContentVariantHistoryDetailResponse
 import com.plot.api.artifact.dto.ContentVariantHistoryItemResponse
 import com.plot.api.artifact.dto.EditSentenceRequest
 import com.plot.api.artifact.dto.ExportContentVariantRequest
+import com.plot.api.artifact.dto.PublishContentVariantRequest
+import com.plot.api.artifact.dto.PublishContentVariantResponse
 import com.plot.api.artifact.dto.SaveContentVariantRequest
 import com.plot.api.entitlement.ReadOnlyAllowed
 import jakarta.validation.Valid
@@ -29,6 +31,7 @@ class ArtifactController(
 	private val queryService: ArtifactQueryService,
 	private val revisionService: ArtifactRevisionService,
 	private val exportService: ArtifactExportService,
+	private val publishService: ArtifactPublishService,
 ) {
 	@GetMapping("/artifacts")
 	fun list(
@@ -105,6 +108,20 @@ class ArtifactController(
 			request.acknowledgedWarningKeys,
 			request.acknowledgedRevisionIds,
 			request.disposition,
+		),
+	)
+
+	@PostMapping("/artifact-variants/{variantId}/publish")
+	fun publish(
+		@PathVariable variantId: UUID,
+		@Valid @RequestBody request: PublishContentVariantRequest,
+	): ResponseEntity<PublishContentVariantResponse> = ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(
+		publishService.publish(
+			variantId,
+			requireNotNull(request.expectedRevisionNumber),
+			request.acknowledgeUnresolved,
+			request.acknowledgedWarningKeys,
+			request.acknowledgedRevisionIds,
 		),
 	)
 }
