@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, History, MoreHorizontal, Save, X } from "lucide-react";
+import { Eye, History, MoreHorizontal, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -12,6 +12,7 @@ import {
 import { ResizeHandle, useResizable } from "@astryxdesign/core/Resizable";
 import type { ChatAgentRun, SourceReference, WorkSessionSummary as ChatSummary } from "@plot/api-client";
 import { ArtifactDocumentSurface } from "@/features/artifacts/artifact-document-surface";
+import { ArtifactEditorStatus, ArtifactSaveDraftButton, artifactSaveStateLabel } from "@/features/artifacts/artifact-editor-chrome";
 import { ArtifactHistoryPanel } from "@/features/citations/artifact-history-panel";
 import { ExportDialog } from "@/features/citations/export-dialog";
 import { ChatComposer } from "@/features/chat/chat-composer";
@@ -53,6 +54,7 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
   const artifactHistoryTriggerRef = useRef<HTMLButtonElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const artifactPanelInitializedRef = useRef(false);
+  const artifactAutoOpenedRef = useRef<string | null>(null);
   const previousMobilePanelRef = useRef<"assistant" | "history" | null>(null);
 
   const onAgentArtifact = useCallback((run: ChatAgentRun) => {
@@ -93,6 +95,13 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
     }
     previousMobilePanelRef.current = mobilePanel;
   }, [mobilePanel]);
+
+  useEffect(() => {
+    if (!requestedArtifactId || document.artifactLoading || !document.currentArtifact) return;
+    if (artifactAutoOpenedRef.current === requestedArtifactId) return;
+    artifactAutoOpenedRef.current = requestedArtifactId;
+    setArtifactPanelOpen(true);
+  }, [document.artifactLoading, document.currentArtifact, requestedArtifactId]);
 
   useEffect(() => {
     if (!artifactPanelOpen || artifactPanelInitializedRef.current) return;
@@ -274,26 +283,23 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
                 aria-controls="artifact-history-drawer"
                 aria-expanded={artifactHistoryOpen}
                 onClick={() => setArtifactHistoryOpen((open) => !open)}
-                className="inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-black/55 transition hover:bg-black/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 dark:text-white/58 dark:hover:bg-white/[0.08] dark:focus-visible:ring-white/25"
+                className="inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-black/58 transition hover:bg-black/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 dark:text-white/60 dark:hover:bg-white/[0.08] dark:focus-visible:ring-white/25"
               >
                 <History aria-hidden="true" className="size-3.5" />
                 History
               </button>
             </div>
             <div className="flex items-center gap-2">
-              <span role="status" aria-live="polite" className="hidden text-xs text-black/42 dark:text-white/45 sm:inline">
-                {document.saveState === "saving" ? "Saving…" : document.saveState === "dirty" ? "Unsaved changes" : document.saveState === "error" ? "Save needs attention" : "Saved"}
+              <span className="hidden sm:inline">
+                <ArtifactEditorStatus>
+                  {artifactSaveStateLabel(document.saveState, Boolean(document.historicalArtifact))}
+                </ArtifactEditorStatus>
               </span>
               {!document.historicalArtifact ? (
-                <button
-                  type="button"
-                  disabled={document.saveState === "saving"}
+                <ArtifactSaveDraftButton
+                  saving={document.saveState === "saving"}
                   onClick={() => setArtifactSaveRequestToken((value) => value + 1)}
-                  className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-black px-3 text-xs font-medium text-white transition hover:bg-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 disabled:pointer-events-none disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-white/85 dark:focus-visible:ring-white/25"
-                >
-                  <Save aria-hidden="true" className="size-3.5" />
-                  Save draft
-                </button>
+                />
               ) : null}
               <button
                 type="button"
@@ -313,7 +319,7 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
             <div className="relative z-[9] shrink-0 bg-[#fbfbf8] px-6 pb-3 pt-1 dark:bg-[#18181b]">
               <div className="truncate text-[16px] font-medium leading-[22px] text-black/72 dark:text-white/76">{shownArtifact.title || "Generated artifact"}</div>
               {artifactMetrics ? (
-                <div className="mt-1 text-[12px] leading-4 text-black/38 dark:text-white/42">{artifactMetrics.characters} characters · {artifactMetrics.words} words</div>
+                <div className="mt-1 text-[12px] leading-4 text-black/50 dark:text-white/52">{artifactMetrics.characters} characters · {artifactMetrics.words} words</div>
               ) : null}
             </div>
           ) : null}
@@ -344,7 +350,7 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
               <header className="flex min-h-16 shrink-0 items-center justify-between px-4">
                 <div>
                   <div className="text-sm font-medium text-black/72 dark:text-white/76">History</div>
-                  <div className="mt-0.5 text-xs text-black/38 dark:text-white/42">Content snapshots</div>
+                  <div className="mt-0.5 text-xs text-black/50 dark:text-white/52">Content snapshots</div>
                 </div>
                 <button
                   type="button"

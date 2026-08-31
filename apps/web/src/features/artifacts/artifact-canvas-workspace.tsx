@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { Citation } from "@astryxdesign/core/Citation";
 import { Copy, Ellipsis, History, Library } from "lucide-react";
@@ -8,6 +7,7 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from "react"
 
 import type { Artifact, ArtifactHistoryDetail, PlotApiClient } from "@plot/api-client";
 import { ArtifactDocumentSurface } from "@/features/artifacts/artifact-document-surface";
+import { ArtifactEditorStatus, ArtifactSaveDraftButton, artifactSaveStateLabel } from "@/features/artifacts/artifact-editor-chrome";
 import { ArtifactHistoryPanel } from "@/features/citations/artifact-history-panel";
 import { ExportDialog } from "@/features/citations/export-dialog";
 import type { SaveArtifactInput } from "@/features/citations/cited-draft-editor";
@@ -25,6 +25,7 @@ export function ArtifactCanvasWorkspace({ artifact, client, onSaveArtifact }: Ar
   const [historical, setHistorical] = useState<ArtifactHistoryDetail | null>(null);
   const [historicalPosition, setHistoricalPosition] = useState<number | null>(null);
   const [saveState, setSaveState] = useState<"saved" | "saving" | "dirty" | "error">("saved");
+  const [drafts, setDrafts] = useState<Record<string, Omit<SaveArtifactInput, "expectedRevisionNumber">>>({});
   const [saveRequestToken, setSaveRequestToken] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [drawer, setDrawer] = useState<Drawer>(null);
@@ -70,31 +71,28 @@ export function ArtifactCanvasWorkspace({ artifact, client, onSaveArtifact }: Ar
   return (
     <div className="relative flex h-full min-h-[calc(100dvh-49px)] min-w-0 flex-col overflow-hidden bg-[#eef0f3] dark:bg-[#18181b] lg:min-h-0">
       <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-black/[0.08] bg-[#f8fafc] px-5 dark:border-white/10 dark:bg-[#111113]">
-        <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 font-sans text-[13px] leading-none">
+        <nav aria-label="Breadcrumb" className="flex min-w-0 flex-1 items-center gap-1.5 font-sans text-[13px] leading-none">
           <Link
             href="/artifacts"
-            className="shrink-0 rounded-sm font-medium text-black/45 transition hover:text-black/72 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15 focus-visible:ring-offset-2 dark:text-white/45 dark:hover:text-white/75"
+            className="shrink-0 rounded-sm font-medium text-black/50 transition hover:text-black/72 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15 focus-visible:ring-offset-2 dark:text-white/50 dark:hover:text-white/75"
           >
             Artifacts
           </Link>
-          <span aria-hidden="true" className="text-black/20 dark:text-white/22">/</span>
-          <span aria-current="page" title={artifactTitle} className="truncate font-medium text-black/72 dark:text-white/76">
+          <span aria-hidden="true" className="shrink-0 text-black/20 dark:text-white/22">/</span>
+          <span aria-current="page" title={artifactTitle} className="min-w-0 truncate font-medium text-black/72 dark:text-white/76">
             {artifactTitle}
           </span>
         </nav>
-        <div ref={actionsRef} className="relative flex h-9 items-center gap-2">
-          <span role="status" aria-live="polite" className="mr-1 hidden text-xs text-black/45 dark:text-white/48 sm:inline">
-            {saveStateLabel(saveState, readOnly)}
+        <div ref={actionsRef} className="relative flex shrink-0 items-center gap-2">
+          <span className="mr-1 hidden sm:inline">
+            <ArtifactEditorStatus>{saveStateLabel(saveState, readOnly)}</ArtifactEditorStatus>
           </span>
-          <button
-            type="button"
-            disabled={readOnly || saveState === "saving"}
-            onClick={() => setSaveRequestToken((value) => value + 1)}
-            className="inline-flex h-9 min-w-[104px] items-center justify-center gap-2 rounded-[8px] bg-[#c84236] px-3 text-[13px] font-medium text-white transition hover:bg-[#b73a31] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c84236]/35 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-45"
-          >
-            <Image src="/icons/product-publish.svg" alt="" width={16} height={16} className="size-4" />
-            {readOnly ? "Snapshot" : saveState === "saving" ? "Saving…" : "Save draft"}
-          </button>
+          {!readOnly ? (
+            <ArtifactSaveDraftButton
+              saving={saveState === "saving"}
+              onClick={() => setSaveRequestToken((value) => value + 1)}
+            />
+          ) : null}
           <button
             ref={overflowTriggerRef}
             type="button"
@@ -125,9 +123,19 @@ export function ArtifactCanvasWorkspace({ artifact, client, onSaveArtifact }: Ar
           presentation="canvas"
           saveRequestToken={saveRequestToken}
           saveState={saveState}
+          initialDraft={historical ? undefined : drafts[currentArtifact.id]}
           onSaveStateChange={setSaveState}
+          onDraftChange={(draft) => {
+            if (historical) return;
+            setDrafts((current) => ({ ...current, [currentArtifact.id]: draft }));
+          }}
           onSaveArtifact={onSaveArtifact}
           onPackChange={(next) => {
+            setDrafts((current) => {
+              const nextDrafts = { ...current };
+              delete nextDrafts[next.id];
+              return nextDrafts;
+            });
             setCurrentArtifact(next);
             setHistorical(null);
             setHistoricalPosition(null);
@@ -262,11 +270,7 @@ function sourceHostname(value: string) {
 }
 
 function saveStateLabel(state: "saved" | "saving" | "dirty" | "error", readOnly: boolean) {
-  if (readOnly) return "Saved snapshot";
-  if (state === "saving") return "Saving…";
-  if (state === "dirty") return "Unsaved changes";
-  if (state === "error") return "Save needs attention";
-  return "Saved";
+  return artifactSaveStateLabel(state, readOnly);
 }
 
 function focusableElements(container: HTMLElement): HTMLElement[] {

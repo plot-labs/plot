@@ -93,13 +93,32 @@ describe("ArtifactCanvasWorkspace", () => {
     await waitFor(() => expect(trigger).toHaveFocus());
   });
 
-  it("shows attached source links in the Sources drawer", () => {
-    render(<ArtifactCanvasWorkspace artifact={artifact} client={client()} onSaveArtifact={vi.fn()} />);
+  it("hides save when a historical snapshot is selected", async () => {
+    const clientWithHistory = {
+      ...client(),
+      getArtifactHistoryAt: vi.fn().mockResolvedValue({
+        cause: "Manual save",
+        artifact: {
+          ...artifact,
+          title: "Historical snapshot",
+          variant: {
+            ...artifact.variant,
+            sentences: [{
+              ...artifact.variant.sentences[0]!,
+              body: "Historical body.",
+            }],
+          },
+        },
+      }),
+    };
+
+    render(<ArtifactCanvasWorkspace artifact={artifact} client={clientWithHistory} onSaveArtifact={vi.fn()} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Artifact actions" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Sources" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "History" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Current draft|Manual save/i }));
 
-    expect(screen.getByRole("dialog", { name: "Sources" })).toBeVisible();
-    expect(screen.getByRole("doc-noteref", { name: /OpenRouter documentation/ })).toHaveAttribute("href", "https://openrouter.ai/docs");
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Save draft" })).not.toBeInTheDocument());
+    expect(screen.getByText("Saved snapshot")).toBeVisible();
   });
 });
