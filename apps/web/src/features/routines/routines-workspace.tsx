@@ -15,6 +15,8 @@ import {
   type RoutineCadence,
 } from "@/lib/api-client";
 
+import { isReleaseCadence } from "./release-activity-utils";
+import { RoutineReleaseActivity } from "./routine-release-activity";
 import { RoutineTriggerPicker } from "./routine-trigger-picker";
 import { SourceRepositoryPicker, type SourceOption } from "./source-repository-picker";
 
@@ -429,6 +431,12 @@ export function RoutinesWorkspace() {
                             <button type="button" onClick={() => { void toggleRoutine(routine); }} disabled={busyRoutineId !== null} aria-label={routine.enabled ? `Pause ${routine.name}` : `Enable ${routine.name}`} title={routine.enabled ? "Pause routine" : "Enable routine"} className="inline-flex size-7 items-center justify-center rounded-[7px] text-black/42 transition hover:bg-black/[0.04] hover:text-black/72 disabled:cursor-wait disabled:opacity-50 dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white/75">{busy ? <LoaderCircle className="size-3.5 animate-spin" /> : <Power className="size-3.5" />}</button>
                           </div>
                         </div>
+                        {isReleaseCadence(routine.cadence) ? (
+                          <RoutineReleaseActivity
+                            sourceScopeId={routine.sourceScopeId}
+                            routineName={routine.name}
+                          />
+                        ) : null}
                         {expanded && <div className="mt-3 border-t border-black/[0.07] pt-3 dark:border-white/[0.08]">
                           {agentDetailLoadingId === routine.id ? <p className="text-[11px] text-black/42 dark:text-white/45">Loading agent activity…</p> : agentDetailError ? <p role="alert" className="text-[11px] text-black/55 dark:text-white/60">{agentDetailError}</p> : agentDetail?.routineId === routine.id ? (
                             <ol aria-label={`Agent activity for ${routine.name}`} className="space-y-1.5">
