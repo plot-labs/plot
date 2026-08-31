@@ -115,6 +115,18 @@ describe("ChatWorkspace", () => {
     expect(mocks.createChatAgentRun.mock.calls[0]![1]).toBe(mocks.createChatAgentRun.mock.calls[1]![1]);
   });
 
+  it("opens the artifact panel when the chat URL includes an artifact query", async () => {
+    mocks.search = "chat=chat-1&agent=agent-1&artifact=artifact-1";
+    mocks.listSessions.mockResolvedValue([chat]);
+    const succeeded = agentRun({ status: "SUCCEEDED", artifactId: "artifact-1", artifact: artifactSummary });
+    mocks.listSessionAgentRuns.mockResolvedValue([succeeded]);
+    mocks.getChatAgentRun.mockResolvedValue(succeeded);
+
+    render(<ChatWorkspace />);
+    expect(await screen.findByRole("complementary", { name: "Artifact document panel" })).toBeVisible();
+    expect(screen.getByText("Reviewed artifact")).toBeVisible();
+  });
+
   it("loads Chat Agent activity and renders its Artifact", async () => {
     mocks.search = "chat=chat-1&agent=agent-1";
     mocks.listSessions.mockResolvedValue([chat]);
