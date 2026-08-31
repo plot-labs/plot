@@ -11,6 +11,8 @@ import { ArrowUp, Folder, Mic, Plus } from "lucide-react";
 import type { CSSProperties, KeyboardEvent } from "react";
 import { useId, useRef, useState } from "react";
 
+import { resolveComposerReferenceIds } from "./chat-workspace-utils";
+
 type ChatComposerProps = {
   onSubmit: (message: string, referenceIds: string[]) => void;
   variant?: "center" | "dock";
@@ -38,7 +40,7 @@ export function ChatComposer({
     if (!trimmed) return;
 
     submittingRef.current = true;
-    onSubmit(trimmed, []);
+    onSubmit(trimmed, resolveComposerReferenceIds(references, []));
     queueMicrotask(() => {
       submittingRef.current = false;
     });
