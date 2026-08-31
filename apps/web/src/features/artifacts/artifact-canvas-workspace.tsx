@@ -126,6 +126,7 @@ export function ArtifactCanvasWorkspace({ artifact, client, onSaveArtifact }: Ar
           initialDraft={historical ? undefined : drafts[currentArtifact.id]}
           onSaveStateChange={setSaveState}
           onDraftChange={(draft) => {
+            if (historical) return;
             setDrafts((current) => ({ ...current, [currentArtifact.id]: draft }));
           }}
           onSaveArtifact={onSaveArtifact}
