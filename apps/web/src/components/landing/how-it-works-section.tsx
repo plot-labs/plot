@@ -35,19 +35,20 @@ const sourceRows = [
 const signalRows = [
   { name: "Release boundary", detail: "Base and head are fixed", score: "91" },
   { name: "Cited sentence", detail: "Source is ready to inspect", score: "84" },
-  { name: "Human review", detail: "Edit before handoff", score: "78" },
+  { name: "Human review", detail: "Approve before publish", score: "78" },
 ];
 
 const planRows = [
   { name: "Changelog draft", detail: "Narrative with saved citations", meta: "review" },
   { name: "Sentence review", detail: "Edit and verify the important claims", meta: "human" },
-  { name: "Markdown handoff", detail: "Copy or download when ready", meta: "outside" },
+  { name: "Public changelog", detail: "Hosted at acme/changelog/v2.4.0", meta: "published" },
+  { name: "Markdown export", detail: "Copy or download when ready", meta: "export" },
 ];
 
 const lanes = [
   { title: "Source ledger", rows: sourceRows },
   { title: "Change signals", rows: signalRows },
-  { title: "Update pack", rows: planRows },
+  { title: "Publish loop", rows: planRows },
 ];
 
 export function HowItWorksSection() {

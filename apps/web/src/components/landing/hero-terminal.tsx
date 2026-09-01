@@ -14,9 +14,10 @@ const terminalLines = [
   "sentence status     visible",
   "human approval      required",
   "",
-  "$ plot changelog review",
-  "markdown            ready",
-  "publish             outside Plot",
+  "$ plot changelog publish",
+  "public page         -> /acme/changelog",
+  "snapshot            -> immutable",
+  "human approval      -> required",
 ];
 
 function TypedTerminalLines() {
@@ -98,7 +99,7 @@ export function HeroTerminal() {
                 {[
                   ["Range", "exact"],
                   ["Cites", "7"],
-                  ["Handoff", "MD"],
+                  ["Publish", "live"],
                 ].map(([label, value]) => (
                   <div
                     className="border border-[#e8e0c8]/12 bg-[#e8e0c8]/[0.035] px-2.5 py-1.5"
