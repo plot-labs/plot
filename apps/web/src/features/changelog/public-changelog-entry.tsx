@@ -77,7 +77,7 @@ export function PublicChangelogEntryView({ workspaceSlug, entry }: PublicChangel
               <blockquote className="mt-4 border-l-2 border-black/15 pl-4 text-black/60">{children}</blockquote>
             ),
             img: ({ src, alt }) => {
-              if (!src || !isSafeHttpUrl(src)) return null;
+              if (typeof src !== "string" || !isSafeHttpUrl(src)) return null;
               return (
                 // eslint-disable-next-line @next/next/no-img-element -- public markdown URLs are validated at render time
                 <img src={src} alt={alt ?? ""} className="mt-6 max-w-full rounded-lg border border-black/10" />
