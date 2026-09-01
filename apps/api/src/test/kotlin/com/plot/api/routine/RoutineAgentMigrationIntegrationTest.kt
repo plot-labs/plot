@@ -2,6 +2,7 @@ package com.plot.api.routine
 
 import com.plot.api.TestcontainersConfiguration
 import com.plot.api.common.UuidGenerator
+import com.plot.api.artifact.run.ArtifactRunPersistence
 import com.plot.api.persistence.JooqSqlExecutor
 import com.plot.api.persistence.JooqTransactionExecutor
 import java.sql.Connection
@@ -47,6 +48,10 @@ class RoutineAgentMigrationIntegrationTest {
 		val schemaSqlExecutor = JooqSqlExecutor(DSL.using(schemaDataSource, SQLDialect.POSTGRES))
 		val schemaTransactionExecutor = JooqTransactionExecutor()
 		val queryPersistence = AgentRunQueryPersistence(schemaSqlExecutor)
+		val artifactRunPersistence = ArtifactRunPersistence(
+			DSL.using(schemaDataSource, SQLDialect.POSTGRES),
+			uuidGenerator,
+		)
 		persistence = AgentRunMigrationPersistence(
 			routinePersistence = RoutineAgentPersistence(
 				schemaSqlExecutor,
@@ -65,6 +70,7 @@ class RoutineAgentMigrationIntegrationTest {
 				schemaTransactionExecutor,
 				uuidGenerator,
 				queryPersistence,
+				artifactRunPersistence,
 				DSL.using(schemaDataSource, SQLDialect.POSTGRES),
 			),
 		)

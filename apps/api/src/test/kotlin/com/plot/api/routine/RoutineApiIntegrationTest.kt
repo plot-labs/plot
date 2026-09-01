@@ -32,7 +32,7 @@ import tools.jackson.databind.ObjectMapper
 @Import(TestcontainersConfiguration::class)
 @TestPropertySource(properties = [
 	"plot.dev-bootstrap.enabled=true",
-	"plot.routines.poll-delay=PT1H",
+	"plot.routines.schedule-scan-delay=PT1H",
 	"plot.routine-agent.workers-enabled=true",
 	"server.address=127.0.0.1",
 ])

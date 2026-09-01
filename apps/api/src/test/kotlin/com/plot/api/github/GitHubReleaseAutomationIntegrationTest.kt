@@ -23,6 +23,7 @@ import com.plot.api.artifact.workflow.model.TargetedRewriteOutput
 import com.plot.api.artifact.workflow.model.WriterOutput
 import com.plot.api.artifact.workflow.model.WriterSentence
 import com.plot.api.routine.AgentRunWorker
+import com.plot.api.routine.ArtifactWorkflowAgentRunCompletionHandler
 import com.plot.api.routine.ScriptedAgentDecisionGateway
 import java.time.Duration
 import java.time.Instant
@@ -64,7 +65,7 @@ import org.springframework.test.context.TestPropertySource
 	"plot.github.state-secret=test-state-secret",
 	"plot.github.release-automation-enabled=true",
 	"plot.routine-agent.workers-enabled=true",
-	"plot.github.release-worker-poll-delay=PT24H",
+	"plot.routine-agent.auto-dispatch-enabled=false",
 	"server.address=127.0.0.1",
 ])
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
@@ -79,6 +80,7 @@ class GitHubReleaseAutomationIntegrationTest {
 	@Autowired private lateinit var github: ScriptedGitHubClient
 	@Autowired private lateinit var model: ScriptedArtifactWorkflowModelGateway
 	@Autowired private lateinit var agentWorker: AgentRunWorker
+	@Autowired private lateinit var agentRunCompletion: ArtifactWorkflowAgentRunCompletionHandler
 	@Autowired private lateinit var agentModel: ScriptedAgentDecisionGateway
 	@Autowired private lateinit var jdbcTemplate: JdbcTemplate
 	@Autowired private lateinit var devContext: DevContext
@@ -90,6 +92,7 @@ class GitHubReleaseAutomationIntegrationTest {
 			artifactWorkflowService,
 			model,
 			workerId = "release-e2e-generation",
+			agentRunCompletion = agentRunCompletion,
 		)
 
 	@BeforeEach
@@ -268,8 +271,6 @@ class GitHubReleaseAutomationIntegrationTest {
 		assertCounts(fixture, requests = 2, runs = 1, packs = 0)
 
 		assertEquals(2, artifactWorkflowWorker.drain())
-		jdbcTemplate.update("update agent_runs set next_attempt_at = now() where id = ?", agentRunId)
-		assertEquals(1, agentWorker.drain())
 		releaseWorker.reconcile()
 		val ready = release("v1.1.0", fixture)
 		assertEquals(GitHubReleaseDraftStatus.READY, ready.status)
