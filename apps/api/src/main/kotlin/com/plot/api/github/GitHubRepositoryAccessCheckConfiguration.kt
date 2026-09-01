@@ -4,8 +4,6 @@ import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.task.TaskExecutor
-import org.springframework.core.task.TaskRejectedException
-import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
 import org.springframework.stereotype.Component
 
@@ -29,25 +27,11 @@ class GitHubRepositoryAccessCheckDispatcher(
 	private val worker: GitHubRepositoryAccessCheckWorker,
 ) {
 	fun dispatch() {
-		try {
-			taskExecutor.execute { worker.drain() }
-		} catch (_: TaskRejectedException) {
-			// The durable poller will rediscover queued access checks.
-		}
-	}
-}
-
-@Component
-class GitHubRepositoryAccessCheckPoller(
-	private val worker: GitHubRepositoryAccessCheckWorker,
-	private val dispatcher: GitHubRepositoryAccessCheckDispatcher,
-	private val properties: GitHubProperties,
-) {
-	@Scheduled(fixedDelayString = "\${plot.github.access-check-poll-delay:PT5S}")
-	fun poll() {
-		if (properties.enabled) {
-			worker.recover()
-			dispatcher.dispatch()
-		}
+		GitHubWorkerDispatch.dispatchQueued(
+			taskExecutor = taskExecutor,
+			redispatch = ::dispatch,
+			recover = worker::recover,
+			drain = worker::drain,
+		)
 	}
 }
