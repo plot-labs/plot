@@ -14,10 +14,12 @@ import com.plot.api.persistence.generated.keys.CONTENT_VARIANTS__CONTENT_VARIANT
 import com.plot.api.persistence.generated.keys.CONTENT_VARIANT_REVISIONS__CONTENT_VARIANT_REVISIONS_WORKSPACE_ID_CONTENT_VARIANT_ID__FKEY
 import com.plot.api.persistence.generated.keys.CONTENT_VARIANT_SENTENCES__CONTENT_VARIANT_SENTENCES_WORKSPACE_ID_CONTENT_VARIANT_ID__FKEY
 import com.plot.api.persistence.generated.keys.GENERATION_EXPORT_EVENTS__GENERATION_EXPORT_EVENTS_WORKSPACE_ID_CONTENT_VARIANT_ID_G_FKEY
+import com.plot.api.persistence.generated.keys.PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_CONTENT_VARIANT_FK
 import com.plot.api.persistence.generated.tables.ContentPacks.ContentPacksPath
 import com.plot.api.persistence.generated.tables.ContentVariantRevisions.ContentVariantRevisionsPath
 import com.plot.api.persistence.generated.tables.ContentVariantSentences.ContentVariantSentencesPath
 import com.plot.api.persistence.generated.tables.GenerationExportEvents.GenerationExportEventsPath
+import com.plot.api.persistence.generated.tables.PublishedChangelogEntries.PublishedChangelogEntriesPath
 import com.plot.api.persistence.generated.tables.records.ContentVariantsRecord
 
 import java.time.OffsetDateTime
@@ -231,6 +233,22 @@ open class ContentVariants(
 
     val generationExportEvents: GenerationExportEventsPath
         get(): GenerationExportEventsPath = generationExportEvents()
+
+    private lateinit var _publishedChangelogEntries: PublishedChangelogEntriesPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.published_changelog_entries</code> table
+     */
+    fun publishedChangelogEntries(): PublishedChangelogEntriesPath {
+        if (!this::_publishedChangelogEntries.isInitialized)
+            _publishedChangelogEntries = PublishedChangelogEntriesPath(this, null, PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_CONTENT_VARIANT_FK.inverseKey)
+
+        return _publishedChangelogEntries;
+    }
+
+    val publishedChangelogEntries: PublishedChangelogEntriesPath
+        get(): PublishedChangelogEntriesPath = publishedChangelogEntries()
     override fun getChecks(): List<Check<ContentVariantsRecord>> = listOf(
         Internal.createCheck(this, DSL.name("content_variants_status_check"), "(((status)::text = ANY ((ARRAY['DRAFT'::character varying, 'READY'::character varying, 'NEEDS_REVIEW'::character varying, 'ARCHIVED'::character varying])::text[])))", true),
         Internal.createCheck(this, DSL.name("content_variants_variant_index_check"), "((variant_index >= 0))", true)

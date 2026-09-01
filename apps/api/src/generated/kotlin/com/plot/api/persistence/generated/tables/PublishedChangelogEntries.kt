@@ -6,12 +6,17 @@ package com.plot.api.persistence.generated.tables
 
 import com.plot.api.persistence.generated.Public
 import com.plot.api.persistence.generated.indexes.PUBLISHED_CHANGELOG_ONE_PER_TAG_IDX
+import com.plot.api.persistence.generated.indexes.PUBLISHED_CHANGELOG_ONE_PER_VARIANT_IDX
 import com.plot.api.persistence.generated.indexes.PUBLISHED_CHANGELOG_WORKSPACE_PUBLISHED_AT_IDX
 import com.plot.api.persistence.generated.keys.PUBLISHED_CHANGELOG_ENTRIES_PKEY
 import com.plot.api.persistence.generated.keys.PUBLISHED_CHANGELOG_ENTRIES_WORKSPACE_ID_ENTRY_SLUG_KEY
 import com.plot.api.persistence.generated.keys.PUBLISHED_CHANGELOG_ENTRIES_WORKSPACE_ID_ID_KEY
+import com.plot.api.persistence.generated.keys.PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_ARTIFACT_REVISION_FK
+import com.plot.api.persistence.generated.keys.PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_CONTENT_VARIANT_FK
 import com.plot.api.persistence.generated.keys.PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_PUBLISHED_BY_USER_ID_FKEY
 import com.plot.api.persistence.generated.keys.PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_WORKSPACE_ID_FKEY
+import com.plot.api.persistence.generated.tables.ContentVariantRevisions.ContentVariantRevisionsPath
+import com.plot.api.persistence.generated.tables.ContentVariants.ContentVariantsPath
 import com.plot.api.persistence.generated.tables.Users.UsersPath
 import com.plot.api.persistence.generated.tables.Workspaces.WorkspacesPath
 import com.plot.api.persistence.generated.tables.records.PublishedChangelogEntriesRecord
@@ -177,10 +182,42 @@ open class PublishedChangelogEntries(
         override fun `as`(alias: Table<*>): PublishedChangelogEntriesPath = PublishedChangelogEntriesPath(alias.qualifiedName, this)
     }
     override fun getSchema(): Schema? = if (aliased()) null else Public.PUBLIC
-    override fun getIndexes(): List<Index> = listOf(PUBLISHED_CHANGELOG_ONE_PER_TAG_IDX, PUBLISHED_CHANGELOG_WORKSPACE_PUBLISHED_AT_IDX)
+    override fun getIndexes(): List<Index> = listOf(PUBLISHED_CHANGELOG_ONE_PER_TAG_IDX, PUBLISHED_CHANGELOG_ONE_PER_VARIANT_IDX, PUBLISHED_CHANGELOG_WORKSPACE_PUBLISHED_AT_IDX)
     override fun getPrimaryKey(): UniqueKey<PublishedChangelogEntriesRecord> = PUBLISHED_CHANGELOG_ENTRIES_PKEY
     override fun getUniqueKeys(): List<UniqueKey<PublishedChangelogEntriesRecord>> = listOf(PUBLISHED_CHANGELOG_ENTRIES_WORKSPACE_ID_ENTRY_SLUG_KEY, PUBLISHED_CHANGELOG_ENTRIES_WORKSPACE_ID_ID_KEY)
-    override fun getReferences(): List<ForeignKey<PublishedChangelogEntriesRecord, *>> = listOf(PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_PUBLISHED_BY_USER_ID_FKEY, PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_WORKSPACE_ID_FKEY)
+    override fun getReferences(): List<ForeignKey<PublishedChangelogEntriesRecord, *>> = listOf(PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_ARTIFACT_REVISION_FK, PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_CONTENT_VARIANT_FK, PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_PUBLISHED_BY_USER_ID_FKEY, PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_WORKSPACE_ID_FKEY)
+
+    private lateinit var _contentVariantRevisions: ContentVariantRevisionsPath
+
+    /**
+     * Get the implicit join path to the
+     * <code>public.content_variant_revisions</code> table.
+     */
+    fun contentVariantRevisions(): ContentVariantRevisionsPath {
+        if (!this::_contentVariantRevisions.isInitialized)
+            _contentVariantRevisions = ContentVariantRevisionsPath(this, PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_ARTIFACT_REVISION_FK, null)
+
+        return _contentVariantRevisions;
+    }
+
+    val contentVariantRevisions: ContentVariantRevisionsPath
+        get(): ContentVariantRevisionsPath = contentVariantRevisions()
+
+    private lateinit var _contentVariants: ContentVariantsPath
+
+    /**
+     * Get the implicit join path to the <code>public.content_variants</code>
+     * table.
+     */
+    fun contentVariants(): ContentVariantsPath {
+        if (!this::_contentVariants.isInitialized)
+            _contentVariants = ContentVariantsPath(this, PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_CONTENT_VARIANT_FK, null)
+
+        return _contentVariants;
+    }
+
+    val contentVariants: ContentVariantsPath
+        get(): ContentVariantsPath = contentVariants()
 
     private lateinit var _users: UsersPath
 
