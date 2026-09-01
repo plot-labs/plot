@@ -17,14 +17,18 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.test.context.TestConfiguration
+import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
+import org.springframework.context.annotation.Lazy
+import org.springframework.context.annotation.Primary
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.TestPropertySource
 
 @SpringBootTest
-@Import(TestcontainersConfiguration::class)
+@Import(TestcontainersConfiguration::class, GitHubChangeRoutineIntegrationTest.Config::class)
 @TestPropertySource(properties = [
-	"plot.routines.poll-delay=PT1H",
+	"plot.routines.schedule-scan-delay=PT1H",
 	"plot.routine-agent.workers-enabled=true",
 ])
 class GitHubChangeRoutineIntegrationTest {
@@ -554,10 +558,37 @@ class GitHubChangeRoutineIntegrationTest {
 	) ?: 0
 
 	private fun drainOne() {
-		assertEquals(true, routineWorker.drain())
+		assertEquals(1, routineWorker.drain())
 	}
 
 	private fun randomPositiveLong(): Long = UUID.randomUUID().mostSignificantBits and Long.MAX_VALUE
+
+	@TestConfiguration(proxyBeanMethods = false)
+	class Config {
+		@Bean
+		@Primary
+		fun noOpRoutineRunDispatcher(
+			@org.springframework.beans.factory.annotation.Qualifier("routineTaskExecutor") taskExecutor: org.springframework.core.task.TaskExecutor,
+			@Lazy worker: RoutineWorker,
+			agentProperties: RoutineAgentProperties,
+			@org.springframework.beans.factory.annotation.Qualifier("routineRetryExecutor") retryExecutor: java.util.concurrent.ScheduledExecutorService,
+		): RoutineRunDispatcher = object : RoutineRunDispatcher(taskExecutor, worker, agentProperties, retryExecutor, java.time.Clock.systemUTC()) {
+			override fun dispatch() {}
+			override fun scheduleDelayed(at: java.time.Instant) {}
+		}
+
+		@Bean
+		@Primary
+		fun noOpAgentRunDispatcher(
+			@org.springframework.beans.factory.annotation.Qualifier("agentRunTaskExecutor") taskExecutor: org.springframework.core.task.TaskExecutor,
+			@Lazy worker: AgentRunWorker,
+			properties: RoutineAgentProperties,
+			@org.springframework.beans.factory.annotation.Qualifier("agentRunRetryExecutor") retryExecutor: java.util.concurrent.ScheduledExecutorService,
+		): AgentRunDispatcher = object : AgentRunDispatcher(taskExecutor, worker, properties, retryExecutor, java.time.Clock.systemUTC()) {
+			override fun dispatch() {}
+			override fun scheduleDelayed(at: java.time.Instant) {}
+		}
+	}
 }
 
 private data class RepositoryFixture(

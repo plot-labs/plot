@@ -8,8 +8,10 @@ import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
-import org.springframework.scheduling.annotation.Scheduled
+import org.springframework.context.annotation.Lazy
 import org.springframework.stereotype.Component
+import org.springframework.transaction.support.TransactionSynchronization
+import org.springframework.transaction.support.TransactionSynchronizationManager
 import com.plot.api.persistence.JooqTransactionExecutor
 import tools.jackson.databind.ObjectMapper
 
@@ -29,24 +31,34 @@ class RoutineWorker(
 	private val workspaceAccessService: WorkspaceAccessService,
 	private val refreshService: GitHubRoutineRefreshService,
 	private val objectMapper: ObjectMapper,
+	@Lazy private val agentRunDispatcher: AgentRunDispatcher,
+	@Lazy private val routineRunDispatcher: RoutineRunDispatcher,
 	private val clock: Clock? = null,
 	private val workerId: String = "routine-${UUID.randomUUID()}",
 	private val claimTimeout: Duration = Duration.ofMinutes(2),
 ) {
-	@Scheduled(fixedDelayString = "\${plot.routines.poll-delay:PT5S}")
-	fun poll() {
-		drain()
+	fun recover(): Int {
+		if (!agentProperties.workersEnabled) return 0
+		val now = currentInstant()
+		val staleBefore = now.minus(claimTimeout)
+		return agentPersistence.recoverStaleExecutionClaims(staleBefore, now) +
+			persistence.recoverStaleRoutineClaims(staleBefore, now)
 	}
 
-	fun drain(): Boolean {
-		if (!agentProperties.workersEnabled) return false
+	fun drain(): Int {
+		if (!agentProperties.workersEnabled) return 0
 		val now = currentInstant()
 		val canonicalExecution = agentPersistence.claimNext(workerId, now, now.minus(claimTimeout))
 		if (canonicalExecution != null) {
 			process(canonicalExecution, claimedRoutine = null)
-			return true
+			return 1
 		}
+		return 0
+	}
 
+	fun claimScheduledDue(): Boolean {
+		if (!agentProperties.workersEnabled) return false
+		val now = currentInstant()
 		val routine = persistence.claimNext(workerId, now, now.minus(claimTimeout)) ?: return false
 		val scheduledExecution = ensureScheduledExecution(routine)
 		val claimedExecution = agentPersistence.claimById(
@@ -82,7 +94,10 @@ class RoutineWorker(
 			workspaceAccessService.requireWritable(execution.workspaceId)
 			val routine = persistence.find(execution.workspaceId, execution.routineId)
 				?: throw RoutineExecutionStateException("Routine was not found")
-			val readyExecution = refreshIfRequired(execution, routine) ?: return
+			val readyExecution = refreshIfRequired(execution, routine) ?: run {
+				releaseRoutineClaimIfHeld(claimedRoutine)
+				return
+			}
 			workspaceAccessService.requireWritable(execution.workspaceId)
 			transactionExecutor.executeWithoutResult {
 				persistence.lockWorkspaceActivity(readyExecution.workspaceId)
@@ -93,6 +108,7 @@ class RoutineWorker(
 		} catch (failure: ApiException) {
 			if (isRecoverableRefreshFailure(failure) && execution.refreshCompletedAt == null) {
 				releaseRefreshRetry(execution, safeApiCode(failure))
+				releaseRoutineClaimIfHeld(claimedRoutine)
 			} else {
 				failClaimedExecution(execution, claimedRoutine, safeApiCode(failure))
 			}
@@ -115,13 +131,15 @@ class RoutineWorker(
 		}
 		val result = refreshService.refreshOnePage(execution, workerId)
 		if (!result.completed) {
+			val nextAttemptAt = currentInstant().plus(agentProperties.retryInitialDelay)
 			agentPersistence.releaseExecutionForRetry(
 				execution.workspaceId,
 				execution.id,
 				workerId,
-				currentInstant().plus(agentProperties.retryInitialDelay),
+				nextAttemptAt,
 				now = currentInstant(),
 			)
+			routineRunDispatcher.scheduleDelayed(nextAttemptAt)
 			return null
 		}
 		return agentPersistence.findExecution(execution.workspaceId, execution.id)
@@ -206,6 +224,7 @@ class RoutineWorker(
 			now = now,
 			workerId = workerId,
 		)
+		scheduleAgentRunDispatchAfterCommit()
 		finishProjection(
 			execution,
 			claimedRoutine,
@@ -404,19 +423,46 @@ class RoutineWorker(
 	private fun isRecoverableRefreshFailure(failure: ApiException): Boolean =
 		failure.error in setOf("GITHUB_NETWORK_ERROR", "GITHUB_RATE_LIMITED", "GITHUB_PROVIDER_UNAVAILABLE")
 
+	private fun releaseRoutineClaimIfHeld(claimedRoutine: RoutineRecord?) {
+		if (claimedRoutine == null) return
+		try {
+			persistence.releaseClaim(claimedRoutine, currentInstant())
+		} catch (_: RoutineClaimLostException) {
+			// A stale replacement owns this routine claim now.
+		}
+	}
+
 	private fun releaseRefreshRetry(execution: RoutineExecutionRecord, errorCode: String) {
 		try {
 			val now = currentInstant()
+			val nextAttemptAt = now.plus(agentProperties.retryInitialDelay)
 			agentPersistence.releaseExecutionForRetry(
 				execution.workspaceId,
 				execution.id,
 				workerId,
-				now.plus(agentProperties.retryInitialDelay),
+				nextAttemptAt,
 				errorCode,
 				now,
 			)
+			routineRunDispatcher.scheduleDelayed(nextAttemptAt)
 		} catch (_: RoutineClaimLostException) {
 			// A stale replacement owns this execution now.
+		}
+	}
+
+	private fun scheduleAgentRunDispatchAfterCommit() {
+		if (!agentProperties.autoDispatchEnabled) return
+		if (
+			TransactionSynchronizationManager.isSynchronizationActive() &&
+				TransactionSynchronizationManager.isActualTransactionActive()
+		) {
+			TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+				override fun afterCommit() {
+					agentRunDispatcher.dispatch()
+				}
+			})
+		} else {
+			agentRunDispatcher.dispatch()
 		}
 	}
 
