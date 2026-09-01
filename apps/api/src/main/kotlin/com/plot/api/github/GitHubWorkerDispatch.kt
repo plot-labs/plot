@@ -1,11 +1,11 @@
 package com.plot.api.github
 
-import com.plot.api.common.WorkerWakeup
+import com.plot.api.common.WorkerTurnRecovery
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.ScheduledExecutorService
 import org.springframework.core.task.TaskExecutor
-import org.springframework.core.task.TaskRejectedException
 
 /**
  * Drains one GitHub queue on demand and re-arms itself for the earliest retry
@@ -18,21 +18,24 @@ internal class GitHubWorkerDispatch(
 	private val drain: () -> Int,
 	private val earliestRetryAt: () -> Instant?,
 	private val onQueueEmpty: () -> Unit = {},
+	failureRecoveryDelay: Duration = Duration.ofMinutes(2),
 	clock: Clock = Clock.systemUTC(),
 ) {
-	private val wakeup = WorkerWakeup(retryExecutor, clock, ::dispatch)
+	private val recovery = WorkerTurnRecovery(
+		taskExecutor = taskExecutor,
+		retryExecutor = retryExecutor,
+		clock = clock,
+		failureRecoveryDelay = failureRecoveryDelay,
+		earliestRetryAt = earliestRetryAt,
+		dispatch = ::dispatch,
+	)
 
 	fun dispatch() {
-		try {
-			taskExecutor.execute {
-				do {
-					recover()
-				} while (drain() > 0)
-				onQueueEmpty()
-				wakeup.scheduleAt(earliestRetryAt())
-			}
-		} catch (_: TaskRejectedException) {
-			// A worker turn is already running or queued; it will drain remaining work.
+		recovery.dispatch {
+			do {
+				recover()
+			} while (drain() > 0)
+			onQueueEmpty()
 		}
 	}
 }

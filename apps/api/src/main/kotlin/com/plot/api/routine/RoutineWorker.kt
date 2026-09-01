@@ -45,6 +45,11 @@ class RoutineWorker(
 			persistence.recoverStaleRoutineClaims(staleBefore, now)
 	}
 
+	fun earliestNextAttemptAt(): Instant? {
+		if (!agentProperties.workersEnabled) return null
+		return agentPersistence.earliestNextAttemptAt(currentInstant())
+	}
+
 	fun drain(): Int {
 		if (!agentProperties.workersEnabled) return 0
 		val now = currentInstant()

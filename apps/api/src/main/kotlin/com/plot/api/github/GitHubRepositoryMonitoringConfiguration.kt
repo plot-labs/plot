@@ -13,6 +13,7 @@ class GitHubRepositoryMonitoringDispatcher(
 	@Qualifier("githubRepositoryMonitoringTaskExecutor") taskExecutor: TaskExecutor,
 	@Qualifier("githubWorkerRetryExecutor") retryExecutor: ScheduledExecutorService,
 	worker: GitHubRepositoryMonitoringWorker,
+	properties: GitHubProperties,
 ) {
 	private val delegate = GitHubWorkerDispatch(
 		taskExecutor = taskExecutor,
@@ -20,6 +21,7 @@ class GitHubRepositoryMonitoringDispatcher(
 		recover = worker::recover,
 		drain = worker::drain,
 		earliestRetryAt = worker::nextRetryAt,
+		failureRecoveryDelay = properties.monitoringAnalysisLeaseTimeout,
 	)
 
 	fun dispatch() = delegate.dispatch()

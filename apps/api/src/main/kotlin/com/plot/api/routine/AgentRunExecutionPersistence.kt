@@ -16,7 +16,11 @@ import java.time.ZoneOffset
 import java.util.UUID
 import org.jooq.DSLContext
 import org.jooq.JSONB
+import org.springframework.context.annotation.Lazy
 import org.springframework.stereotype.Component
+import org.springframework.transaction.support.TransactionSynchronization
+import org.springframework.transaction.support.TransactionSynchronizationManager
+import com.plot.api.github.GitHubReleaseReconciliationTrigger
 
 @Component
 class AgentRunExecutionPersistence(
@@ -25,6 +29,7 @@ class AgentRunExecutionPersistence(
 	private val uuidGenerator: UuidGenerator,
 	private val queryPersistence: AgentRunQueryPersistence,
 	private val artifactRunPersistence: ArtifactRunPersistence,
+	@Lazy private val releaseReconciliation: GitHubReleaseReconciliationTrigger? = null,
 	dslContext: DSLContext,
 	private val clock: Clock? = null,
 ) {
@@ -693,7 +698,24 @@ class AgentRunExecutionPersistence(
 			.execute()
 		if (updated != 1) throw AgentRunClaimLostException()
 		projectRoutineTerminal(run, status, errorCode, now)
-		requireNotNull(queryPersistence.findAgentRun(claim.workspaceId, claim.agentRunId))
+		val terminal = requireNotNull(queryPersistence.findAgentRun(claim.workspaceId, claim.agentRunId))
+		notifyReleaseReconciliationAfterCommit(terminal.workspaceId, terminal.id)
+		terminal
+	}
+
+	private fun notifyReleaseReconciliationAfterCommit(workspaceId: UUID, agentRunId: UUID) {
+		if (
+			TransactionSynchronizationManager.isSynchronizationActive() &&
+				TransactionSynchronizationManager.isActualTransactionActive()
+		) {
+			TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+				override fun afterCommit() {
+					releaseReconciliation?.afterAgentRunTerminal(workspaceId, agentRunId)
+				}
+			})
+		} else {
+			releaseReconciliation?.afterAgentRunTerminal(workspaceId, agentRunId)
+		}
 	}
 
 	private fun projectRoutineTerminal(

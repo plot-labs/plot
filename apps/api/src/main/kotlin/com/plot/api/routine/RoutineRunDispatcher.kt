@@ -1,5 +1,6 @@
 package com.plot.api.routine
 
+import com.plot.api.common.WorkerTurnRecovery
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
@@ -8,7 +9,6 @@ import java.util.concurrent.TimeUnit
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.context.annotation.Lazy
 import org.springframework.core.task.TaskExecutor
-import org.springframework.core.task.TaskRejectedException
 import org.springframework.stereotype.Component
 
 @Component
@@ -21,17 +21,21 @@ open class RoutineRunDispatcher(
 	private val retryExecutor: ScheduledExecutorService,
 	private val clock: Clock = Clock.systemUTC(),
 ) {
+	private val recovery = WorkerTurnRecovery(
+		taskExecutor = taskExecutor,
+		retryExecutor = retryExecutor,
+		clock = clock,
+		failureRecoveryDelay = agentProperties.claimTimeout,
+		earliestRetryAt = worker::earliestNextAttemptAt,
+		dispatch = ::dispatch,
+	)
+
 	open fun dispatch() {
 		if (!agentProperties.workersEnabled) return
-		try {
-			taskExecutor.execute {
-				// One turn drains every runnable execution; the single worker slot serialises turns.
-				do {
-					worker.recover()
-				} while (worker.drain() > 0)
-			}
-		} catch (_: TaskRejectedException) {
-			// A worker turn is already running or queued; it will drain remaining work.
+		recovery.dispatch {
+			do {
+				worker.recover()
+			} while (worker.drain() > 0)
 		}
 	}
 

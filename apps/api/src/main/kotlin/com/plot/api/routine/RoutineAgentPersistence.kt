@@ -240,6 +240,16 @@ class RoutineAgentPersistence(
 		Timestamp.from(staleBefore),
 	)
 
+	fun earliestNextAttemptAt(after: Instant): Instant? = sqlExecutor.query(
+		"""
+		select min(next_attempt_at) as next_attempt_at
+		from routine_executions
+		where status = 'PROBING' and next_attempt_at is not null and next_attempt_at > ?
+		""".trimIndent(),
+		{ rs, _ -> rs.getTimestamp("next_attempt_at")?.toInstant() },
+		Timestamp.from(after),
+	).firstOrNull()
+
 	fun addEvidence(
 		workspaceId: UUID,
 		executionId: UUID,

@@ -47,6 +47,11 @@ class AgentRunWorker(
 			executionPersistence.reconcileWaitingArtifactHandoffs(now)
 	}
 
+	fun earliestNextAttemptAt(): Instant? {
+		if (!properties.workersEnabled) return null
+		return queryPersistence.earliestNextAttemptAt(clock.instant())
+	}
+
 	fun processOne(): Boolean {
 		if (!properties.workersEnabled) return false
 		val claimAt = clock.instant()

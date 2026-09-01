@@ -30,8 +30,7 @@ class WorkerWakeup(
 		val delay = Duration.between(clock.instant(), at).toMillis().coerceAtLeast(1)
 		executor.schedule(
 			{
-				armedFor.compareAndSet(at, null)
-				dispatch()
+				if (armedFor.compareAndSet(at, null)) dispatch()
 			},
 			delay,
 			TimeUnit.MILLISECONDS,

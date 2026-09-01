@@ -173,6 +173,7 @@ class ArtifactWorkflowConfiguration {
 		taskExecutor = artifactWorkflowTaskExecutor,
 		enabled = properties.workerEnabled,
 		retryExecutor = retryExecutor,
+		failureRecoveryDelay = properties.claimTimeout,
 		earliestRetryAt = recoveryPersistence::earliestNextAttemptAt,
 	) { worker.drain() > 0 }
 

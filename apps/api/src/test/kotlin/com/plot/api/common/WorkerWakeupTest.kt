@@ -66,6 +66,24 @@ class WorkerWakeupTest {
 	}
 
 	@Test
+	fun `a superseded later timer does not dispatch again`() {
+		val executor = Executors.newSingleThreadScheduledExecutor()
+		try {
+			val dispatches = AtomicInteger()
+			val wakeup = WorkerWakeup(executor, clock) { dispatches.incrementAndGet() }
+
+			wakeup.scheduleAt(now.plusMillis(200))
+			Thread.sleep(25)
+			wakeup.scheduleAt(now.plusMillis(50))
+			Thread.sleep(500)
+
+			assertEquals(1, dispatches.get())
+		} finally {
+			executor.shutdownNow()
+		}
+	}
+
+	@Test
 	fun `no wakeup is armed without a pending retry or executor`() {
 		val executor = Executors.newSingleThreadScheduledExecutor()
 		try {

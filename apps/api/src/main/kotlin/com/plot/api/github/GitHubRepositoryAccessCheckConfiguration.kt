@@ -27,6 +27,7 @@ class GitHubRepositoryAccessCheckDispatcher(
 	@Qualifier("githubRepositoryAccessCheckTaskExecutor") taskExecutor: TaskExecutor,
 	@Qualifier("githubWorkerRetryExecutor") retryExecutor: ScheduledExecutorService,
 	worker: GitHubRepositoryAccessCheckWorker,
+	properties: GitHubProperties,
 ) {
 	private val delegate = GitHubWorkerDispatch(
 		taskExecutor = taskExecutor,
@@ -34,6 +35,7 @@ class GitHubRepositoryAccessCheckDispatcher(
 		recover = worker::recover,
 		drain = worker::drain,
 		earliestRetryAt = worker::nextRetryAt,
+		failureRecoveryDelay = properties.accessCheckLeaseTimeout,
 	)
 
 	fun dispatch() = delegate.dispatch()

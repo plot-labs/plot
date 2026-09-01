@@ -71,7 +71,8 @@ class RoutineAgentMigrationIntegrationTest {
 				uuidGenerator,
 				queryPersistence,
 				artifactRunPersistence,
-				DSL.using(schemaDataSource, SQLDialect.POSTGRES),
+				releaseReconciliation = null,
+				dslContext = DSL.using(schemaDataSource, SQLDialect.POSTGRES),
 			),
 		)
 	}

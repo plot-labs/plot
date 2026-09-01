@@ -1,6 +1,7 @@
 package com.plot.api.routine
 
 import com.plot.api.persistence.JooqSqlExecutor
+import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
 import org.springframework.stereotype.Component
@@ -303,6 +304,16 @@ class AgentRunQueryPersistence(
 			throw AgentToolAccessException("SOURCE_NOT_READY")
 		}
 	}
+
+	fun earliestNextAttemptAt(after: Instant): Instant? = sqlExecutor.query(
+		"""
+		select min(next_attempt_at) as next_attempt_at
+		from agent_runs
+		where status = 'QUEUED' and next_attempt_at is not null and next_attempt_at > ?
+		""".trimIndent(),
+		{ rs, _ -> rs.getTimestamp("next_attempt_at")?.toInstant() },
+		Timestamp.from(after),
+	).firstOrNull()
 }
 
 data class AgentArtifactRecord(

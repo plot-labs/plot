@@ -23,6 +23,7 @@ interface GitHubReleaseRequestStore {
 	): List<GitHubReleaseDraftRequest>
 	fun findBoundEvidence(requestId: UUID): GitHubReleaseEvidence?
 	fun findGenerating(limit: Int): List<GitHubReleaseDraftRequest>
+	fun hasGeneratingRequestForAgentRun(workspaceId: UUID, agentRunId: UUID): Boolean
 	fun enqueueRelease(
 		workspaceId: UUID,
 		sourceScopeId: UUID,

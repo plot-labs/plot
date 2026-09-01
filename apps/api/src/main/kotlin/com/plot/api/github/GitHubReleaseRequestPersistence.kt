@@ -148,6 +148,20 @@ class GitHubReleaseRequestPersistence(
 		)
 	}
 
+	override fun hasGeneratingRequestForAgentRun(workspaceId: UUID, agentRunId: UUID): Boolean =
+		sqlExecutor.queryForObject(
+			"""
+			select exists(
+				select 1
+				from github_release_draft_requests
+				where workspace_id = ? and agent_run_id = ? and status = 'GENERATING'
+			)
+			""".trimIndent(),
+			Boolean::class.java,
+			workspaceId,
+			agentRunId,
+		) ?: false
+
 	fun findRequest(id: UUID): GitHubReleaseDraftRequest? = sqlExecutor.query(
 		"select ${requestColumns} from github_release_draft_requests where id = ?",
 		{ rs, _ -> rs.toReleaseDraftRequest() },

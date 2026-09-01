@@ -11,6 +11,7 @@ class DefaultGitHubReleaseDraftDispatcher(
 	taskExecutor: TaskExecutor,
 	retryExecutor: ScheduledExecutorService?,
 	worker: GitHubReleaseDraftWorker,
+	properties: GitHubProperties,
 ) : GitHubReleaseDraftDispatcher {
 	private val delegate = GitHubWorkerDispatch(
 		taskExecutor = taskExecutor,
@@ -19,6 +20,7 @@ class DefaultGitHubReleaseDraftDispatcher(
 		drain = worker::drain,
 		earliestRetryAt = worker::nextRetryAt,
 		onQueueEmpty = worker::reconcile,
+		failureRecoveryDelay = properties.releaseWorkerLeaseTimeout,
 	)
 
 	override fun dispatch() = delegate.dispatch()
