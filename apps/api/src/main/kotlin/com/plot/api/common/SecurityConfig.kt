@@ -50,6 +50,7 @@ class SecurityConfig(
 					// Next.js BFF, and a blanket permitAll here would silently publish
 					// any future same-prefixed route.
 					requests.requestMatchers("/actuator/health", "/api/polar/webhook").permitAll()
+						.requestMatchers(HttpMethod.GET, "/api/public/**").permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/github/webhook").permitAll()
 						.requestMatchers("/api/account/bootstrap", "/api/me").authenticated()
 						.anyRequest().authenticated()

@@ -56,6 +56,7 @@ function client() {
     listArtifactHistory: vi.fn().mockResolvedValue([{ position: 0, createdAt: "2026-08-07T05:32:00Z", cause: "Current draft" }]),
     getArtifactHistoryAt: vi.fn(),
     exportArtifactVariant: vi.fn(),
+    publishArtifactVariant: vi.fn(),
   } as unknown as PlotApiClient;
 }
 
@@ -79,6 +80,14 @@ describe("ArtifactCanvasWorkspace", () => {
       expectedRevisionNumber: 1,
       statements: [{ id: "sentence-1", orderIndex: 0, body: "OpenRouter is selectable as a summary provider." }],
     })));
+  });
+
+  it("shows publish and export actions in the header", () => {
+    render(<ArtifactCanvasWorkspace artifact={artifact} client={client()} onSaveArtifact={vi.fn()} />);
+
+    expect(screen.getByRole("button", { name: "Save draft" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Copy artifact" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Publish changelog" })).toBeVisible();
   });
 
   it("opens the Figma-aligned History drawer and restores focus", async () => {

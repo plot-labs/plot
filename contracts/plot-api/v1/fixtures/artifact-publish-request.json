@@ -1,0 +1,6 @@
+{
+  "expectedRevisionNumber": 3,
+  "acknowledgeUnresolved": true,
+  "acknowledgedWarningKeys": ["warning-1"],
+  "acknowledgedRevisionIds": []
+}

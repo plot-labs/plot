@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getSessionCookie } from "better-auth/cookies";
 
 import { createFixedWindowLimiter } from "@/lib/rate-limit";
+import { isPublicChangelogPath } from "@/lib/public-changelog-url";
 
 const gatedHosts = new Set(["app.useplot.xyz", "localhost", "127.0.0.1"]);
 const previewHostPattern = /\.vercel\.app$/;
@@ -40,8 +41,12 @@ export function proxy(request: NextRequest) {
     );
   }
 
-  const isPublicAuthPath = request.nextUrl.pathname === "/sign-in" || request.nextUrl.pathname === "/auth/complete" || request.nextUrl.pathname.startsWith("/api/auth");
-  if (host && isGatedHost(host) && !isPublicAuthPath && !getSessionCookie(request)) {
+  const isPublicPath =
+    request.nextUrl.pathname === "/sign-in" ||
+    request.nextUrl.pathname === "/auth/complete" ||
+    request.nextUrl.pathname.startsWith("/api/auth") ||
+    isPublicChangelogPath(request.nextUrl.pathname);
+  if (host && isGatedHost(host) && !isPublicPath && !getSessionCookie(request)) {
     return NextResponse.redirect(new URL("/sign-in", request.url));
   }
 

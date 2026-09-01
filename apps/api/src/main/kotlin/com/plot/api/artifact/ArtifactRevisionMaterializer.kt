@@ -212,7 +212,7 @@ class ArtifactRevisionMaterializer(
     private fun notFound(): Nothing = throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Content pack not found")
 }
 
-internal data class CurrentArtifactRevision(
+data class CurrentArtifactRevision(
     val id: UUID,
     val artifactWorkflowRunId: UUID,
     val revisionNumber: Int,
