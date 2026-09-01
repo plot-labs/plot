@@ -12,13 +12,21 @@ class RoutineScheduleScanner(
 	@Scheduled(fixedDelayString = "\${plot.routines.schedule-scan-delay:PT1H}")
 	fun scan() {
 		if (!agentProperties.workersEnabled) return
-		if (worker.claimScheduledDue()) {
+		if (claimAllScheduledDue() > 0) {
 			dispatcher.dispatch()
 		}
 	}
 
 	fun scanDue(): Boolean {
 		if (!agentProperties.workersEnabled) return false
-		return worker.claimScheduledDue()
+		return claimAllScheduledDue() > 0
+	}
+
+	private fun claimAllScheduledDue(): Int {
+		var claimed = 0
+		while (worker.claimScheduledDue()) {
+			claimed++
+		}
+		return claimed
 	}
 }
