@@ -28,7 +28,7 @@ import org.springframework.test.context.TestPropertySource
 @SpringBootTest
 @Import(TestcontainersConfiguration::class, RoutineWorkerIntegrationTest.Config::class)
 @TestPropertySource(properties = [
-	"plot.routines.poll-delay=PT1H",
+	"plot.routines.schedule-scan-delay=PT1H",
 	"plot.routine-agent.workers-enabled=true",
 ])
 class RoutineWorkerIntegrationTest {
@@ -322,7 +322,7 @@ class RoutineWorkerIntegrationTest {
 			routine.id,
 		)
 
-		assertTrue(worker.drain())
+		assertTrue(worker.claimScheduledDue())
 
 		assertEquals(Timestamp.from(dueAt), jdbcTemplate.queryForObject(
 			"select scheduled_for from routine_executions where routine_id = ? and trigger_kind = 'SCHEDULED'",
@@ -450,6 +450,18 @@ class RoutineWorkerIntegrationTest {
 				repository: String,
 				pageCap: Int,
 			): List<GitHubPullRequest> = emptyList()
+		}
+
+		@Bean
+		@Primary
+		fun noOpAgentRunDispatcher(
+			@org.springframework.beans.factory.annotation.Qualifier("agentRunTaskExecutor") taskExecutor: org.springframework.core.task.TaskExecutor,
+			@org.springframework.context.annotation.Lazy worker: AgentRunWorker,
+			properties: RoutineAgentProperties,
+			@org.springframework.beans.factory.annotation.Qualifier("agentRunRetryExecutor") retryExecutor: java.util.concurrent.ScheduledExecutorService,
+		): AgentRunDispatcher = object : AgentRunDispatcher(taskExecutor, worker, properties, retryExecutor, java.time.Clock.systemUTC()) {
+			override fun dispatch() {}
+			override fun scheduleDelayed(at: java.time.Instant) {}
 		}
 	}
 
