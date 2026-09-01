@@ -65,9 +65,9 @@ export function StyleSection() {
             </h2>
             <p className="mb-10 max-w-xl text-xl leading-relaxed text-muted-foreground">
               The private beta stays focused on a source-cited changelog that a
-              human can review and hand off. Docs impact suggestions,
-              customer-update variants, voice and style rules, and more sources
-              come next.
+              human can review and publish. After the changelog loop works, the
+              same ship evidence can power announcement, in-app, and docs
+              snippets — separate outputs, same trust.
             </p>
 
             <div className="grid gap-px overflow-hidden rounded-xl border border-foreground/10 bg-foreground/10 sm:grid-cols-3">

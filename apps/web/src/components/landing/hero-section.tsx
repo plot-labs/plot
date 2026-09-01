@@ -40,19 +40,20 @@ export function HeroSection() {
         <div className="mb-8">
           <span className="inline-flex items-center gap-3 font-mono text-sm text-muted-foreground">
             <span className="h-px w-8 bg-foreground/30" />
-            Shipped work. Review-ready changelog.
+            Shipped work. Customer-ready changelog.
           </span>
         </div>
 
         <div className="mb-12">
           <h1 className="text-6xl font-display leading-[0.9] tracking-tight md:text-8xl lg:text-[8rem] xl:text-[8.75rem]">
             <span className="block">From shipped</span>
-            <span className="block">release to</span>
+            <span className="block">release to cited</span>
             <span className="block">
               <span className="relative inline-block align-baseline">
-                <span className="inline-flex whitespace-nowrap">review-ready</span>
+                <span className="inline-flex whitespace-nowrap">changelog</span>
                 <span className="absolute -bottom-2 left-0 right-0 h-3 bg-foreground/10" />
-              </span>{" "}changelog.
+              </span>{" "}
+              you can publish.
             </span>
           </h1>
         </div>
@@ -60,8 +61,8 @@ export function HeroSection() {
         <div className="max-w-xl">
           <p className="max-w-xl text-xl leading-relaxed text-muted-foreground lg:text-2xl">
             Connect one GitHub repository and let Plot resolve each published
-            release range into a source-cited changelog you can edit, copy, or
-            download. Publishing stays outside Plot.
+            release range into a source-cited changelog you can review, publish
+            to your public changelog page, or export as Markdown.
           </p>
 
           <div className="mt-9 flex flex-col items-start gap-4 sm:flex-row">

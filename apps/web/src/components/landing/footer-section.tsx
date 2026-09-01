@@ -42,7 +42,7 @@ export function FooterSection() {
 
               <p className="text-muted-foreground leading-relaxed mb-8 max-w-xs">
                 Plot turns a shipped GitHub release into a source-cited changelog
-                your team can review and hand off in Markdown.
+                your team can review, publish, and share.
               </p>
 
               {/* Social Links */}

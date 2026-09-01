@@ -18,8 +18,9 @@ const securityFeatures = [
   },
   {
     icon: FileCheck,
-    title: "Human-controlled handoff",
-    description: "You choose when to publish. Plot prepares the draft; you approve before it goes live.",
+    title: "Human-approved publish",
+    description:
+      "Your hosted changelog page goes live only when you publish. Plot prepares the draft; you approve every public release.",
   },
 ];
 
@@ -43,8 +44,8 @@ export function SecuritySection() {
             </h2>
             <p className="text-xl text-muted-foreground leading-relaxed mb-12">
               Plot should not invent a product story. It shows which saved
-              sources support a changelog draft and leaves review and publish
-              decisions with you outside Plot.
+              sources support a changelog draft. Plot never auto-publishes —
+              you approve every public release.
             </p>
 
             {/* Certifications */}
