@@ -45,7 +45,7 @@ describe("PublishDialog", () => {
     const publishArtifactVariant = vi.fn().mockResolvedValue({
       entryId: "entry-1",
       entrySlug: "v2.4.0",
-      publicPath: "/changelog/acme/v2.4.0",
+      publicPath: "/acme/changelog/v2.4.0",
       publishedAt: "2026-08-31T12:00:00Z",
     });
 
@@ -53,20 +53,20 @@ describe("PublishDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Publish changelog" }));
 
     await screen.findByText("Changelog published");
-    expect(screen.getByText(/\/changelog\/acme\/v2\.4\.0/)).toBeInTheDocument();
+    expect(screen.getByText(/\/acme\/changelog\/v2\.4\.0/)).toBeInTheDocument();
     expect(publishArtifactVariant).toHaveBeenCalledWith("variant-1", {
       expectedRevisionNumber: 3,
       acknowledgeUnresolved: false,
       acknowledgedWarningKeys: [],
     });
-    expect(screen.getByRole("link", { name: "View live" })).toHaveAttribute("href", publicChangelogEntryUrl("/changelog/acme/v2.4.0"));
+    expect(screen.getByRole("link", { name: "View live" })).toHaveAttribute("href", publicChangelogEntryUrl("/acme/changelog/v2.4.0"));
   });
 
   it("copies the public URL after publish", async () => {
     const publishArtifactVariant = vi.fn().mockResolvedValue({
       entryId: "entry-1",
       entrySlug: "v2.4.0",
-      publicPath: "/changelog/acme/v2.4.0",
+      publicPath: "/acme/changelog/v2.4.0",
       publishedAt: "2026-08-31T12:00:00Z",
     });
     const writeText = vi.fn().mockResolvedValue(undefined);
@@ -76,7 +76,7 @@ describe("PublishDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Publish changelog" }));
     fireEvent.click(await screen.findByRole("button", { name: "Copy link" }));
 
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith(publicChangelogEntryUrl("/changelog/acme/v2.4.0")));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(publicChangelogEntryUrl("/acme/changelog/v2.4.0")));
     expect(await screen.findByRole("button", { name: "Copied" })).toBeInTheDocument();
   });
 
@@ -89,7 +89,7 @@ describe("PublishDialog", () => {
       .mockResolvedValueOnce({
         entryId: "entry-1",
         entrySlug: "v2.4.0",
-        publicPath: "/changelog/acme/v2.4.0",
+        publicPath: "/acme/changelog/v2.4.0",
         publishedAt: "2026-08-31T12:00:00Z",
       });
 

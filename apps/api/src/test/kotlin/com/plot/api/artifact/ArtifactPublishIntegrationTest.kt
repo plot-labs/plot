@@ -108,7 +108,7 @@ class ArtifactPublishIntegrationTest {
 		}.andExpect {
 			status { isOk() }
 			jsonPath("$.entrySlug") { exists() }
-			jsonPath("$.publicPath") { value(org.hamcrest.Matchers.startsWith("/changelog/dev-workspace/")) }
+			jsonPath("$.publicPath") { value(org.hamcrest.Matchers.startsWith("/dev-workspace/changelog/")) }
 			jsonPath("$.publishedAt") { exists() }
 		}.andReturn().response.contentAsString
 		val entrySlug = objectMapper.readTree(published).path("entrySlug").stringValue()

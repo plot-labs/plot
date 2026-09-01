@@ -30,8 +30,8 @@ describe("PublicChangelogList", () => {
     );
 
     expect(screen.getByRole("heading", { level: 1, name: "Updates" })).toBeVisible();
-    expect(screen.getByRole("link", { name: "Release v2.4.0" })).toHaveAttribute("href", "/changelog/acme/v2.4.0");
-    expect(screen.getByRole("link", { name: "Release v2.3.0" })).toHaveAttribute("href", "/changelog/acme/v2.3.0");
+    expect(screen.getByRole("link", { name: "Release v2.4.0" })).toHaveAttribute("href", "/acme/changelog/v2.4.0");
+    expect(screen.getByRole("link", { name: "Release v2.3.0" })).toHaveAttribute("href", "/acme/changelog/v2.3.0");
     expect(screen.getByText("v2.4.0")).toBeVisible();
     expect(screen.queryByText("v2.3.0")).not.toBeInTheDocument();
   });

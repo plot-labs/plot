@@ -93,7 +93,7 @@ class ArtifactPublishService(
 		return PublishContentVariantResponse(
 			entryId = entryId,
 			entrySlug = entrySlug,
-			publicPath = "/changelog/${workspace.slug}/$entrySlug",
+			publicPath = "/${workspace.slug}/changelog/$entrySlug",
 			publishedAt = publishedAt,
 		)
 	}

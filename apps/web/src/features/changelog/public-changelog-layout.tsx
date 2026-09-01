@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { isSafeHttpUrl } from "@/lib/safe-url";
+import { publicChangelogPath } from "@/lib/public-changelog-url";
 import { cn } from "@/lib/utils";
 
 type PublicChangelogLayoutProps = {
@@ -28,7 +29,7 @@ export function PublicChangelogLayout({
           <span className="font-display text-2xl leading-none">Plot</span>
         </Link>
         <Link
-          href={`/changelog/${workspaceSlug}`}
+          href={publicChangelogPath(workspaceSlug)}
           className="flex min-w-0 items-center gap-2 text-sm text-black/55 transition-colors hover:text-black"
         >
           {safeLogoUrl ? (

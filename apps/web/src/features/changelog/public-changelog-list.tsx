@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import type { PublicChangelogEntrySummary } from "@plot/api-client";
+import { publicChangelogEntryPath } from "@/lib/public-changelog-url";
 
 type PublicChangelogListProps = {
   workspaceSlug: string;
@@ -57,7 +58,7 @@ export function PublicChangelogList({ workspaceSlug, entries }: PublicChangelogL
               </div>
               <h2 className="mt-3 font-display text-3xl tracking-[-0.02em]">
                 <Link
-                  href={`/changelog/${workspaceSlug}/${entry.entrySlug}`}
+                  href={publicChangelogEntryPath(workspaceSlug, entry.entrySlug)}
                   className="transition-colors hover:text-black/70"
                 >
                   {entry.title}

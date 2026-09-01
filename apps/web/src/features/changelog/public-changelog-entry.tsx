@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import type { PublicChangelogEntry } from "@plot/api-client";
+import { publicChangelogPath } from "@/lib/public-changelog-url";
 import { isSafeHttpUrl } from "@/lib/safe-url";
 
 type PublicChangelogEntryViewProps = {
@@ -24,7 +25,7 @@ export function PublicChangelogEntryView({ workspaceSlug, entry }: PublicChangel
   return (
     <article aria-labelledby="changelog-entry-heading">
       <Link
-        href={`/changelog/${workspaceSlug}`}
+        href={publicChangelogPath(workspaceSlug)}
         className="text-sm text-black/55 transition-colors hover:text-black"
       >
         ← All updates

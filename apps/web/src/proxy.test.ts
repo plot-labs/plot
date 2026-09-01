@@ -20,11 +20,15 @@ describe("application proxy", () => {
   });
 
   it("allows unauthenticated access to public changelog pages on gated hosts", () => {
-    const request = new NextRequest("http://localhost:3000/changelog/acme", {
+    const listRequest = new NextRequest("http://localhost:3000/acme/changelog", {
+      headers: { host: "localhost:3000" },
+    });
+    const entryRequest = new NextRequest("http://localhost:3000/acme/changelog/v2.4.0", {
       headers: { host: "localhost:3000" },
     });
 
-    expect(proxy(request).status).toBe(200);
+    expect(proxy(listRequest).status).toBe(200);
+    expect(proxy(entryRequest).status).toBe(200);
   });
 
   it("redirects unauthenticated visitors away from gated app routes", () => {
