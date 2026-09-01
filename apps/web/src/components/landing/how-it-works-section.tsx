@@ -41,13 +41,14 @@ const signalRows = [
 const planRows = [
   { name: "Changelog draft", detail: "Narrative with saved citations", meta: "review" },
   { name: "Sentence review", detail: "Edit and verify the important claims", meta: "human" },
-  { name: "Hosted publish", detail: "Publish to your changelog when ready", meta: "plot" },
+  { name: "Public changelog", detail: "Hosted at acme/changelog/v2.4.0", meta: "published" },
+  { name: "Markdown export", detail: "Copy or download when ready", meta: "export" },
 ];
 
 const lanes = [
   { title: "Source ledger", rows: sourceRows },
   { title: "Change signals", rows: signalRows },
-  { title: "Update pack", rows: planRows },
+  { title: "Publish loop", rows: planRows },
 ];
 
 export function HowItWorksSection() {

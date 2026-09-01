@@ -331,26 +331,30 @@ function StyleMemoryVisual() {
 }
 
 function PackVisual() {
-  const channels = ["Changelog", "Copy", "Download"];
+  const channels = [
+    { name: "Public page", status: "published" },
+    { name: "Markdown", status: "export" },
+    { name: "Snapshot", status: "immutable" },
+  ];
 
   return (
     <FeatureShell>
       <VisualStage>
         <FlowLayer>
-          <FlowPath d="M232 139 H292 V97 H350" dot={[292, 97]} opacity={0.2} />
-          <FlowPath d="M232 139 H292 V166 H350" dot={[292, 166]} opacity={0.16} />
-          <FlowPath d="M232 139 H292 V235 H350" dot={[292, 235]} opacity={0.12} />
+          <FlowPath d="M232 139 H292 V89 H350" dot={[292, 89]} opacity={0.2} />
+          <FlowPath d="M232 139 H292 V141 H350" dot={[292, 141]} opacity={0.16} />
+          <FlowPath d="M232 139 H292 V193 H350" dot={[292, 193]} opacity={0.12} />
         </FlowLayer>
 
         <div className="absolute left-[42px] top-[70px] w-[190px] rounded-lg border border-foreground/15 bg-background p-4 shadow-[0_18px_54px_rgb(18_17_15_/_0.08)]">
           <div className="mb-3 font-mono text-[10px] uppercase text-muted-foreground">
-            Review-ready draft
+            Reviewed draft
           </div>
           <p className="mb-4 text-sm font-medium leading-snug text-foreground">
-            Source-cited changelog.
+            Ready to publish.
           </p>
           <div className="flex gap-1.5">
-            {["Brief", "3 sources"].map((chip) => (
+            {["Cited", "Approved"].map((chip) => (
               <span
                 className="rounded-full border border-foreground/10 px-2 py-1 font-mono text-[8px] uppercase text-muted-foreground"
                 key={chip}
@@ -364,21 +368,23 @@ function PackVisual() {
         <div className="absolute left-[350px] top-[28px] w-[182px] rounded-lg border border-foreground/10 bg-background/95 p-3 shadow-sm">
           <div className="mb-2.5 flex items-center gap-2 font-mono text-[10px] uppercase text-muted-foreground">
             <Sparkles className="size-3.5 text-foreground" />
-            Handoff
+            Publish loop
           </div>
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {channels.map((channel) => (
               <div
-                className="rounded-md border border-foreground/10 bg-background p-2.5"
-                key={channel}
+                className="rounded-md border border-foreground/10 bg-background p-2"
+                key={channel.name}
               >
-                <div className="mb-1.5 font-mono text-[10px] uppercase text-foreground">
-                  {channel}
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <div className="font-mono text-[10px] uppercase text-foreground">
+                    {channel.name}
+                  </div>
+                  <span className="rounded-full border border-foreground/10 px-2 py-0.5 font-mono text-[8px] uppercase text-muted-foreground">
+                    {channel.status}
+                  </span>
                 </div>
-                <div className="space-y-1.5">
-                  <div className="h-1.5 w-full rounded-full bg-foreground/18" />
-                  <div className="h-1.5 w-2/3 rounded-full bg-foreground/10" />
-                </div>
+                <div className="h-1.5 w-full rounded-full bg-foreground/18" />
               </div>
             ))}
           </div>
