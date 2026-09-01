@@ -15,6 +15,7 @@ import com.plot.api.persistence.generated.keys.GENERATION_EXPORT_EVENTS__GENERAT
 import com.plot.api.persistence.generated.keys.GENERATION_RUNS__GENERATION_RUNS_CREATED_BY_USER_ID_FKEY
 import com.plot.api.persistence.generated.keys.GITHUB_INSTALLATION_STATES__GITHUB_INSTALLATION_STATES_USER_ID_FKEY
 import com.plot.api.persistence.generated.keys.POLAR_WEBHOOK_EVENTS__POLAR_WEBHOOK_EVENTS_MATCHED_USER_ID_FKEY
+import com.plot.api.persistence.generated.keys.PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_PUBLISHED_BY_USER_ID_FKEY
 import com.plot.api.persistence.generated.keys.ROUTINES__ROUTINES_CREATED_BY_USER_ID_FKEY
 import com.plot.api.persistence.generated.keys.ROUTINE_EXECUTIONS__ROUTINE_EXECUTIONS_CREATED_BY_USER_ID_FKEY
 import com.plot.api.persistence.generated.keys.USERS_EMAIL_KEY
@@ -32,6 +33,7 @@ import com.plot.api.persistence.generated.tables.GenerationExportEvents.Generati
 import com.plot.api.persistence.generated.tables.GenerationRuns.GenerationRunsPath
 import com.plot.api.persistence.generated.tables.GithubInstallationStates.GithubInstallationStatesPath
 import com.plot.api.persistence.generated.tables.PolarWebhookEvents.PolarWebhookEventsPath
+import com.plot.api.persistence.generated.tables.PublishedChangelogEntries.PublishedChangelogEntriesPath
 import com.plot.api.persistence.generated.tables.RoutineExecutions.RoutineExecutionsPath
 import com.plot.api.persistence.generated.tables.Routines.RoutinesPath
 import com.plot.api.persistence.generated.tables.WorkSessions.WorkSessionsPath
@@ -326,6 +328,22 @@ open class Users(
 
     val polarWebhookEvents: PolarWebhookEventsPath
         get(): PolarWebhookEventsPath = polarWebhookEvents()
+
+    private lateinit var _publishedChangelogEntries: PublishedChangelogEntriesPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.published_changelog_entries</code> table
+     */
+    fun publishedChangelogEntries(): PublishedChangelogEntriesPath {
+        if (!this::_publishedChangelogEntries.isInitialized)
+            _publishedChangelogEntries = PublishedChangelogEntriesPath(this, null, PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_PUBLISHED_BY_USER_ID_FKEY.inverseKey)
+
+        return _publishedChangelogEntries;
+    }
+
+    val publishedChangelogEntries: PublishedChangelogEntriesPath
+        get(): PublishedChangelogEntriesPath = publishedChangelogEntries()
 
     private lateinit var _routineExecutions: RoutineExecutionsPath
 

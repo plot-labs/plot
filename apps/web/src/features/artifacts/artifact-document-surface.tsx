@@ -4,6 +4,7 @@ import type { Artifact, ArtifactHistoryDetail, PlotApiClient } from "@plot/api-c
 
 import { ArtifactEditorStatus, artifactSaveStateLabel } from "@/features/artifacts/artifact-editor-chrome";
 import { ExportDialog } from "@/features/citations/export-dialog";
+import { PublishDialog } from "@/features/citations/publish-dialog";
 import { TiptapDraftEditor, type SaveArtifactInput } from "@/features/citations/tiptap-draft-editor";
 
 type ArtifactDocumentSurfaceProps = {
@@ -74,7 +75,16 @@ export function ArtifactDocumentSurface({
         </div>
         <div className="flex min-w-0 flex-col items-end gap-2">
           {saveState ? <ArtifactEditorStatus>{saveStateLabel(saveState, readOnly)}</ArtifactEditorStatus> : null}
-          {!readOnly ? <ExportDialog pack={shownPack} client={client} /> : <p className="text-right text-xs text-black/48 dark:text-white/52">Editing and delivery are disabled for this snapshot.</p>}
+          {!readOnly ? (
+            <div className="flex flex-col items-end gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <ExportDialog pack={shownPack} client={client} />
+                <PublishDialog pack={shownPack} client={client} presentation="inline" />
+              </div>
+            </div>
+          ) : (
+            <p className="text-right text-xs text-black/48 dark:text-white/52">Editing and delivery are disabled for this snapshot.</p>
+          )}
         </div>
       </header>
       <TiptapDraftEditor

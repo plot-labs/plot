@@ -37,6 +37,7 @@ import com.plot.api.persistence.generated.tables.GithubRepositoryMonitoring
 import com.plot.api.persistence.generated.tables.GithubWebhookDeliveries
 import com.plot.api.persistence.generated.tables.ModelInvocations
 import com.plot.api.persistence.generated.tables.PolarWebhookEvents
+import com.plot.api.persistence.generated.tables.PublishedChangelogEntries
 import com.plot.api.persistence.generated.tables.RoutineContextSources
 import com.plot.api.persistence.generated.tables.RoutineExecutionEvidence
 import com.plot.api.persistence.generated.tables.RoutineExecutions
@@ -236,6 +237,11 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
     val POLAR_WEBHOOK_EVENTS: PolarWebhookEvents get() = PolarWebhookEvents.POLAR_WEBHOOK_EVENTS
 
     /**
+     * The table <code>public.published_changelog_entries</code>.
+     */
+    val PUBLISHED_CHANGELOG_ENTRIES: PublishedChangelogEntries get() = PublishedChangelogEntries.PUBLISHED_CHANGELOG_ENTRIES
+
+    /**
      * The table <code>public.routine_context_sources</code>.
      */
     val ROUTINE_CONTEXT_SOURCES: RoutineContextSources get() = RoutineContextSources.ROUTINE_CONTEXT_SOURCES
@@ -354,6 +360,7 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
         GithubWebhookDeliveries.GITHUB_WEBHOOK_DELIVERIES,
         ModelInvocations.MODEL_INVOCATIONS,
         PolarWebhookEvents.POLAR_WEBHOOK_EVENTS,
+        PublishedChangelogEntries.PUBLISHED_CHANGELOG_ENTRIES,
         RoutineContextSources.ROUTINE_CONTEXT_SOURCES,
         RoutineExecutionEvidence.ROUTINE_EXECUTION_EVIDENCE,
         RoutineExecutions.ROUTINE_EXECUTIONS,

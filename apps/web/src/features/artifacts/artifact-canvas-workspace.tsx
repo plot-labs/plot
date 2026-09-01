@@ -10,6 +10,7 @@ import { ArtifactDocumentSurface } from "@/features/artifacts/artifact-document-
 import { ArtifactEditorStatus, ArtifactSaveDraftButton, artifactSaveStateLabel } from "@/features/artifacts/artifact-editor-chrome";
 import { ArtifactHistoryPanel } from "@/features/citations/artifact-history-panel";
 import { ExportDialog } from "@/features/citations/export-dialog";
+import { PublishDialog } from "@/features/citations/publish-dialog";
 import type { SaveArtifactInput } from "@/features/citations/cited-draft-editor";
 
 type ArtifactCanvasWorkspaceProps = {
@@ -88,10 +89,14 @@ export function ArtifactCanvasWorkspace({ artifact, client, onSaveArtifact }: Ar
             <ArtifactEditorStatus>{saveStateLabel(saveState, readOnly)}</ArtifactEditorStatus>
           </span>
           {!readOnly ? (
-            <ArtifactSaveDraftButton
-              saving={saveState === "saving"}
-              onClick={() => setSaveRequestToken((value) => value + 1)}
-            />
+            <>
+              <ArtifactSaveDraftButton
+                saving={saveState === "saving"}
+                onClick={() => setSaveRequestToken((value) => value + 1)}
+              />
+              <ExportDialog pack={shownArtifact} client={client} presentation="copy" />
+              <PublishDialog pack={shownArtifact} client={client} />
+            </>
           ) : null}
           <button
             ref={overflowTriggerRef}
@@ -109,7 +114,6 @@ export function ArtifactCanvasWorkspace({ artifact, client, onSaveArtifact }: Ar
             <div role="menu" aria-label="Artifact actions" className="absolute right-0 top-[54px] z-40 w-[196px] rounded-[8px] border border-black/10 bg-white p-2 text-[13px] text-[#18181b] shadow-[0_8px_20px_rgba(0,0,0,0.1)] dark:border-white/10 dark:bg-[#242529] dark:text-white">
               <MenuButton icon={History} onClick={() => openDrawer("history")}>History</MenuButton>
               <MenuButton icon={Library} onClick={() => openDrawer("sources")}>Sources</MenuButton>
-              <ExportDialog pack={shownArtifact} client={client} presentation="menu" />
             </div>
           ) : null}
         </div>

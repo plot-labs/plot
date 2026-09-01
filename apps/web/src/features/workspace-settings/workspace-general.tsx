@@ -4,9 +4,10 @@ import { ImageAdd01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import { LoaderCircle, Trash2 } from "lucide-react";
+import { LoaderCircle, Trash2, Copy, ExternalLink } from "lucide-react";
 
 import { getSelectedWorkspaceId, plotApiClient, type WorkspaceSummary } from "@/lib/api-client";
+import { publicChangelogUrl } from "@/lib/public-changelog-url";
 
 const maxLogoBytes = 400_000;
 
@@ -21,6 +22,7 @@ export function WorkspaceGeneral() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloadNonce, setReloadNonce] = useState(0);
+  const [copyState, setCopyState] = useState<"idle" | "copied">("idle");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -122,6 +124,14 @@ export function WorkspaceGeneral() {
   };
 
   const mark = (name || workspace?.name || "W").slice(0, 1).toUpperCase();
+  const changelogUrl = workspace ? publicChangelogUrl(workspace.slug) : "";
+
+  const copyChangelogUrl = async () => {
+    if (!changelogUrl) return;
+    await navigator.clipboard.writeText(changelogUrl);
+    setCopyState("copied");
+    window.setTimeout(() => setCopyState("idle"), 2_000);
+  };
 
   return (
     <div className="h-full overflow-y-auto bg-[#f4f6f8] px-5 py-8 dark:bg-[#101112] sm:px-8 sm:py-10 lg:px-10">
@@ -219,6 +229,45 @@ export function WorkspaceGeneral() {
             </div>
           </div>
         </section>
+
+        {workspace && !isLoading ? (
+          <section className="mt-6 overflow-hidden rounded-[14px] border border-black/[0.09] bg-white shadow-[0_1px_2px_rgb(15_23_42_/_0.025)] dark:border-white/10 dark:bg-white/[0.045]" aria-labelledby="public-changelog-heading">
+            <div className="border-b border-black/[0.07] px-5 py-5 dark:border-white/[0.08] sm:px-6">
+              <h2 id="public-changelog-heading" className="text-[15px] font-semibold text-black/82 dark:text-white/86">Public changelog</h2>
+              <p className="mt-1 text-[13px] leading-5 text-black/48 dark:text-white/48">Share this URL after you publish changelog entries from an artifact.</p>
+            </div>
+            <div className="space-y-4 px-5 py-6 sm:px-6">
+              <div>
+                <p className="text-[13px] font-medium text-black/72 dark:text-white/76">Public changelog URL</p>
+                <p className="mt-2 truncate rounded-[9px] border border-black/10 bg-[#f8fafc] px-3 py-2.5 text-sm text-black/68 dark:border-white/12 dark:bg-white/[0.04] dark:text-white/72" title={changelogUrl}>
+                  {changelogUrl}
+                </p>
+                <p className="mt-2 text-[12px] leading-5 text-black/45 dark:text-white/45">
+                  Workspace slug: <span className="font-mono text-black/62 dark:text-white/62">{workspace.slug}</span>
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => { void copyChangelogUrl(); }}
+                  className="inline-flex h-8 items-center gap-2 rounded-[8px] border border-black/10 px-3 text-[13px] font-medium text-black/65 transition hover:bg-black/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 dark:border-white/12 dark:text-white/65 dark:hover:bg-white/10 dark:focus-visible:ring-white/25"
+                >
+                  <Copy className="size-3.5" aria-hidden="true" />
+                  {copyState === "copied" ? "Copied" : "Copy link"}
+                </button>
+                <a
+                  href={changelogUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex h-8 items-center gap-2 rounded-[8px] bg-[#ef3f2c] px-3 text-[13px] font-semibold text-white shadow-[0_3px_10px_rgb(239_63_44_/_0.18)] transition hover:bg-[#dc3828] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ef3f2c]/35"
+                >
+                  <ExternalLink className="size-3.5" aria-hidden="true" />
+                  View live
+                </a>
+              </div>
+            </div>
+          </section>
+        ) : null}
       </div>
     </div>
   );

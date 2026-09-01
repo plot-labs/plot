@@ -14,9 +14,11 @@ import com.plot.api.persistence.generated.keys.CONTENT_VARIANT_REVISIONS__CONTEN
 import com.plot.api.persistence.generated.keys.CONTENT_VARIANT_REVISIONS__CONTENT_VARIANT_REVISIONS_WORKSPACE_ID_CONTENT_VARIANT_ID__FKEY
 import com.plot.api.persistence.generated.keys.CONTENT_VARIANT_REVISION_SENTENCES__CONTENT_VARIANT_REVISION_SENT_WORKSPACE_ID_CONTENT_VARIANT_FKEY
 import com.plot.api.persistence.generated.keys.GENERATION_EXPORT_EVENTS__GENERATION_EXPORT_EVENTS_ARTIFACT_REVISION_FK
+import com.plot.api.persistence.generated.keys.PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_ARTIFACT_REVISION_FK
 import com.plot.api.persistence.generated.tables.ContentVariantRevisionSentences.ContentVariantRevisionSentencesPath
 import com.plot.api.persistence.generated.tables.ContentVariants.ContentVariantsPath
 import com.plot.api.persistence.generated.tables.GenerationExportEvents.GenerationExportEventsPath
+import com.plot.api.persistence.generated.tables.PublishedChangelogEntries.PublishedChangelogEntriesPath
 import com.plot.api.persistence.generated.tables.Users.UsersPath
 import com.plot.api.persistence.generated.tables.records.ContentVariantRevisionsRecord
 
@@ -239,6 +241,22 @@ open class ContentVariantRevisions(
 
     val generationExportEvents: GenerationExportEventsPath
         get(): GenerationExportEventsPath = generationExportEvents()
+
+    private lateinit var _publishedChangelogEntries: PublishedChangelogEntriesPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.published_changelog_entries</code> table
+     */
+    fun publishedChangelogEntries(): PublishedChangelogEntriesPath {
+        if (!this::_publishedChangelogEntries.isInitialized)
+            _publishedChangelogEntries = PublishedChangelogEntriesPath(this, null, PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_ARTIFACT_REVISION_FK.inverseKey)
+
+        return _publishedChangelogEntries;
+    }
+
+    val publishedChangelogEntries: PublishedChangelogEntriesPath
+        get(): PublishedChangelogEntriesPath = publishedChangelogEntries()
     override fun getChecks(): List<Check<ContentVariantRevisionsRecord>> = listOf(
         Internal.createCheck(this, DSL.name("content_variant_revisions_lexical_content_check"), "((jsonb_typeof(lexical_content) = 'object'::text))", true),
         Internal.createCheck(this, DSL.name("content_variant_revisions_revision_no_check"), "((revision_no > 0))", true)

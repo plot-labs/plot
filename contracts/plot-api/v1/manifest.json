@@ -428,6 +428,77 @@
       "successFixture": null,
       "errorFixture": "fixtures/error-envelope.json",
       "enumDomains": {}
+    },
+    {
+      "id": "artifact.publish",
+      "surface": "artifact",
+      "clientMethod": "publishArtifactVariant",
+      "args": [
+        "018fd000-0000-7000-8000-000000000060",
+        {
+          "expectedRevisionNumber": 3,
+          "acknowledgeUnresolved": true,
+          "acknowledgedWarningKeys": [
+            "warning-1"
+          ],
+          "acknowledgedRevisionIds": []
+        }
+      ],
+      "method": "POST",
+      "routeTemplate": "/artifact-variants/{variantId}/publish",
+      "route": "/artifact-variants/018fd000-0000-7000-8000-000000000060/publish",
+      "successStatus": 200,
+      "authContext": "workspace-member",
+      "requiredHeaders": [
+        "accept",
+        "content-type",
+        "x-plot-workspace-id"
+      ],
+      "requestFixture": "fixtures/artifact-publish-request.json",
+      "successFixture": "fixtures/artifact-publish-response.json",
+      "errorFixture": null,
+      "enumDomains": {}
+    },
+    {
+      "id": "changelog.public.list",
+      "surface": "changelog",
+      "clientMethod": "fetchPublicChangelog",
+      "args": [
+        "acme"
+      ],
+      "method": "GET",
+      "routeTemplate": "/public/changelog/{workspaceSlug}",
+      "route": "/public/changelog/acme",
+      "successStatus": 200,
+      "authContext": "public",
+      "requiredHeaders": [
+        "accept"
+      ],
+      "requestFixture": null,
+      "successFixture": "fixtures/public-changelog.json",
+      "errorFixture": null,
+      "enumDomains": {}
+    },
+    {
+      "id": "changelog.public.entry",
+      "surface": "changelog",
+      "clientMethod": "fetchPublicChangelogEntry",
+      "args": [
+        "acme",
+        "v2.4.0"
+      ],
+      "method": "GET",
+      "routeTemplate": "/public/changelog/{workspaceSlug}/{entrySlug}",
+      "route": "/public/changelog/acme/v2.4.0",
+      "successStatus": 200,
+      "authContext": "public",
+      "requiredHeaders": [
+        "accept"
+      ],
+      "requestFixture": null,
+      "successFixture": "fixtures/public-changelog-entry.json",
+      "errorFixture": null,
+      "enumDomains": {}
     }
   ]
 }

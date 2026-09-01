@@ -259,6 +259,7 @@ describe("Plot same-origin proxy", () => {
     ["PUT", ["artifact-variants", "variant-1"]],
     ["PATCH", ["artifact-variants", "variant-1", "sentences", "sentence-1"]],
     ["POST", ["artifact-variants", "variant-1", "exports"]],
+    ["POST", ["artifact-variants", "variant-1", "publish"]],
   ])("allows the explicit artifact route %s %o", async (method, path) => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ ok: true }));
     const request = new Request(`http://web.test/api/plot/${path.join("/")}`, {
@@ -385,6 +386,7 @@ describe("Plot same-origin proxy", () => {
   it("accepts every canonical contract route and forwards the declared transport", async () => {
     const manifest = loadContractManifest();
     for (const entry of manifest.cases) {
+      if (entry.route.startsWith("/public/")) continue;
       const routeUrl = new URL(entry.route, "http://web.test");
       const path = routeUrl.pathname.split("/").filter(Boolean);
       const body = entry.requestFixture ? JSON.stringify(readContractFixture(entry.requestFixture)) : undefined;

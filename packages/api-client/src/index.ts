@@ -87,6 +87,35 @@ export interface ContentExport {
   includeSources: boolean;
 }
 
+export interface PublishContentVariantResult {
+  entryId: string;
+  entrySlug: string;
+  publicPath: string;
+  publishedAt: string;
+}
+
+export interface PublicChangelogEntrySummary {
+  id: string;
+  entrySlug: string;
+  title: string;
+  tagName: string | null;
+  publishedAt: string;
+}
+
+export interface PublicChangelog {
+  workspaceSlug: string;
+  workspaceName: string;
+  logoUrl: string | null;
+  entries: PublicChangelogEntrySummary[];
+}
+
+export interface PublicChangelogEntry extends PublicChangelogEntrySummary {
+  bodyMarkdown: string;
+  workspaceSlug: string;
+  workspaceName: string;
+  logoUrl: string | null;
+}
+
 export interface RequestOptions { signal?: AbortSignal }
 
 export interface GitHubInstallationRequest {
@@ -386,6 +415,7 @@ export interface PlotApiClient {
   saveArtifactVariant(variantId: string, input: { expectedRevisionNumber: number; lexicalContent: Record<string, unknown>; statements: ContentStatementInput[] }, options?: RequestOptions): Promise<Artifact>;
   editSentence(variantId: string, sentenceId: string, input: { expectedRevisionNumber: number; body: string }, options?: RequestOptions): Promise<Artifact>;
   exportArtifactVariant(variantId: string, input: { expectedRevisionNumber: number; includeSources: boolean; acknowledgeUnresolved: boolean; acknowledgedWarningKeys?: string[]; acknowledgedRevisionIds?: string[]; disposition: "COPY" | "DOWNLOAD" }, options?: RequestOptions): Promise<ContentExport>;
+  publishArtifactVariant(variantId: string, input: { expectedRevisionNumber: number; acknowledgeUnresolved: boolean; acknowledgedWarningKeys?: string[]; acknowledgedRevisionIds?: string[] }, options?: RequestOptions): Promise<PublishContentVariantResult>;
   listArtifactHistory(variantId: string, options?: RequestOptions): Promise<ArtifactHistoryItem[]>;
   getArtifactHistoryAt(variantId: string, position: number, options?: RequestOptions): Promise<ArtifactHistoryDetail>;
 }
@@ -562,6 +592,10 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
       `/artifact-variants/${encodeURIComponent(variantId)}/exports`,
       { method: "POST", body: JSON.stringify(input), signal: requestOptions?.signal },
     ),
+    publishArtifactVariant: (variantId, input, requestOptions) => request(
+      `/artifact-variants/${encodeURIComponent(variantId)}/publish`,
+      { method: "POST", body: JSON.stringify(input), signal: requestOptions?.signal },
+    ),
     listArtifactHistory: (variantId, requestOptions) => request(
       `/artifact-variants/${encodeURIComponent(variantId)}/history`,
       { signal: requestOptions?.signal },
@@ -571,6 +605,60 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
       { signal: requestOptions?.signal },
     ),
   };
+}
+
+export async function fetchPublicChangelog(
+  workspaceSlug: string,
+  options: { baseUrl: string; fetch?: typeof fetch; signal?: AbortSignal } ,
+): Promise<PublicChangelog> {
+  const baseUrl = options.baseUrl.replace(/\/$/, "");
+  const fetcher = options.fetch ?? globalThis.fetch;
+  const response = await fetcher(`${baseUrl}/api/public/changelog/${encodeURIComponent(workspaceSlug)}`, {
+    cache: "no-store",
+    headers: { Accept: "application/json" },
+    signal: options.signal,
+  });
+  const payload = await parsePayload(response);
+  if (!response.ok) {
+    const error = isRecord(payload) ? payload : {};
+    throw new PlotApiError(
+      response.status,
+      typeof error.error === "string" ? error.error : "API_ERROR",
+      typeof error.message === "string" ? error.message : `Plot API request failed (${response.status})`,
+      isRecord(error.details) ? error.details : null,
+      typeof error.resourceId === "string" ? error.resourceId : null,
+    );
+  }
+  return payload as PublicChangelog;
+}
+
+export async function fetchPublicChangelogEntry(
+  workspaceSlug: string,
+  entrySlug: string,
+  options: { baseUrl: string; fetch?: typeof fetch; signal?: AbortSignal },
+): Promise<PublicChangelogEntry> {
+  const baseUrl = options.baseUrl.replace(/\/$/, "");
+  const fetcher = options.fetch ?? globalThis.fetch;
+  const response = await fetcher(
+    `${baseUrl}/api/public/changelog/${encodeURIComponent(workspaceSlug)}/${encodeURIComponent(entrySlug)}`,
+    {
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+      signal: options.signal,
+    },
+  );
+  const payload = await parsePayload(response);
+  if (!response.ok) {
+    const error = isRecord(payload) ? payload : {};
+    throw new PlotApiError(
+      response.status,
+      typeof error.error === "string" ? error.error : "API_ERROR",
+      typeof error.message === "string" ? error.message : `Plot API request failed (${response.status})`,
+      isRecord(error.details) ? error.details : null,
+      typeof error.resourceId === "string" ? error.resourceId : null,
+    );
+  }
+  return payload as PublicChangelogEntry;
 }
 
 async function parsePayload(response: Response): Promise<unknown> {

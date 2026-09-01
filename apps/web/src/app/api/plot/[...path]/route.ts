@@ -204,7 +204,8 @@ function isAllowed(method: string, path: string[]): boolean {
   if (method === "PATCH" && /^artifact-variants\/[^/]+$/.test(route)) return true;
   if (method === "PUT" && /^artifact-variants\/[^/]+$/.test(route)) return true;
   if (method === "PATCH" && /^artifact-variants\/[^/]+\/sentences\/[^/]+$/.test(route)) return true;
-  return method === "POST" && /^artifact-variants\/[^/]+\/exports$/.test(route);
+  if (method === "POST" && /^artifact-variants\/[^/]+\/exports$/.test(route)) return true;
+  return method === "POST" && /^artifact-variants\/[^/]+\/publish$/.test(route);
 }
 
 type AuthResult = { ok: true; jwt: string } | { ok: false; response: Response };

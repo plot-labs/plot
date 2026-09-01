@@ -130,3 +130,18 @@ data class ContentExportResponse(
 	val warningAcknowledged: Boolean,
 	val includeSources: Boolean,
 )
+
+data class PublishContentVariantRequest(
+	@field:NotNull val expectedRevisionNumber: Int?,
+	val acknowledgeUnresolved: Boolean = false,
+	@field:Size(max = 1_000) val acknowledgedWarningKeys: List<String> = emptyList(),
+	/** @deprecated use acknowledgedWarningKeys; retained for old private clients. */
+	val acknowledgedRevisionIds: List<UUID> = emptyList(),
+)
+
+data class PublishContentVariantResponse(
+	val entryId: UUID,
+	val entrySlug: String,
+	val publicPath: String,
+	val publishedAt: Instant,
+)

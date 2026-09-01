@@ -45,7 +45,7 @@ class PlotApiContractIntegrationTest {
 		val cases = manifest.path("cases").asArray().values().toList()
 		assertTrue(cases.size >= 10)
 		assertEquals(
-			setOf("workspace", "github", "routine", "chat", "artifact"),
+			setOf("workspace", "github", "routine", "chat", "artifact", "changelog"),
 			cases.map { it.path("surface").stringValue() }.toSet(),
 		)
 

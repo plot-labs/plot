@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 
 
 import type { PlotApiClient, WorkspaceSummary } from "./index";
-import { PlotApiError, createPlotApiClient } from "./index";
+import { PlotApiError, createPlotApiClient, fetchPublicChangelog, fetchPublicChangelogEntry } from "./index";
 
 function workspaceSummary(overrides: Partial<WorkspaceSummary> = {}): WorkspaceSummary {
   return {
@@ -434,7 +434,7 @@ describe("Plot API client", () => {
     expect(manifest.version).toBe(1);
     expect(manifest.cases.length).toBeGreaterThanOrEqual(10);
     expect(manifest.cases.map((entry) => entry.surface)).toEqual(
-      expect.arrayContaining(["workspace", "github", "routine", "chat", "artifact"]),
+      expect.arrayContaining(["workspace", "github", "routine", "chat", "artifact", "changelog"]),
     );
 
     for (const entry of manifest.cases) {
@@ -446,11 +446,12 @@ describe("Plot API client", () => {
           : Response.json(success, { status: entry.successStatus }),
       );
       const client = createPlotApiClient({ fetch: fetcher, workspaceId: "018fd000-0000-7000-8000-000000000002" });
+      const publicBaseUrl = "http://api.test";
 
       if (entry.errorStatus) {
 
         const errorRecord = error && typeof error === "object" ? error as Record<string, unknown> : {};
-        await expect(invokeContractCase(client, entry)).rejects.toMatchObject({
+        await expect(invokeContractCase(client, entry, publicBaseUrl, fetcher)).rejects.toMatchObject({
           status: entry.errorStatus,
           code: errorRecord.error,
           message: errorRecord.message,
@@ -458,11 +459,15 @@ describe("Plot API client", () => {
           resourceId: errorRecord.resourceId ?? null,
         });
       } else {
-        await expect(invokeContractCase(client, entry)).resolves.toEqual(success);
+        await expect(invokeContractCase(client, entry, publicBaseUrl, fetcher)).resolves.toEqual(success);
       }
 
       const [url, init] = fetcher.mock.calls[0] ?? [];
-      expect(String(url)).toBe(`/api/plot${entry.route}`);
+      if (entry.surface === "changelog") {
+        expect(String(url)).toBe(`${publicBaseUrl}/api${entry.route}`);
+      } else {
+        expect(String(url)).toBe(`/api/plot${entry.route}`);
+      }
       expect(init?.method ?? "GET").toBe(entry.method);
       const headers = new Headers(init?.headers);
       for (const requiredHeader of entry.requiredHeaders) {
@@ -507,7 +512,18 @@ function readContractFixture(path: string): unknown {
   return JSON.parse(readFileSync(new URL(path, contractRoot), "utf8")) as unknown;
 }
 
-function invokeContractCase(client: PlotApiClient, entry: ContractCase): Promise<unknown> {
+function invokeContractCase(
+  client: PlotApiClient,
+  entry: ContractCase,
+  publicBaseUrl: string,
+  fetcher: typeof fetch,
+): Promise<unknown> {
+  if (entry.clientMethod === "fetchPublicChangelog") {
+    return fetchPublicChangelog(String(entry.args[0]), { baseUrl: publicBaseUrl, fetch: fetcher });
+  }
+  if (entry.clientMethod === "fetchPublicChangelogEntry") {
+    return fetchPublicChangelogEntry(String(entry.args[0]), String(entry.args[1]), { baseUrl: publicBaseUrl, fetch: fetcher });
+  }
   const method = client[entry.clientMethod as keyof PlotApiClient];
   if (typeof method !== "function") throw new Error(`Unknown PlotApiClient method ${entry.clientMethod}`);
   return (method as unknown as (...args: unknown[]) => Promise<unknown>)(...entry.args);

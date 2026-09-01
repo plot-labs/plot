@@ -5,6 +5,7 @@ import com.plot.api.artifact.workflow.ArtifactWorkflowSourceAccessException
 import com.plot.api.routine.RoutineExecutionIdempotencyConflictException
 import com.plot.api.routine.AgentRunIdempotencyConflictException
 import com.plot.api.artifact.ExportConfirmationRequiredException
+import com.plot.api.artifact.PublishConfirmationRequiredException
 import org.springframework.http.CacheControl
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -63,6 +64,15 @@ class ApiExceptionHandler {
 		.body(ApiErrorResponse(
 			"EXPORT_CONFIRMATION_REQUIRED",
 			exception.message ?: "Export requires explicit confirmation",
+			details = mapOf("warnings" to exception.warnings),
+		))
+
+	@ExceptionHandler(PublishConfirmationRequiredException::class)
+	fun handlePublishConfirmation(exception: PublishConfirmationRequiredException): ResponseEntity<ApiErrorResponse> = ResponseEntity
+		.status(HttpStatus.CONFLICT).cacheControl(CacheControl.noStore())
+		.body(ApiErrorResponse(
+			"PUBLISH_CONFIRMATION_REQUIRED",
+			exception.message ?: "Publish requires explicit confirmation",
 			details = mapOf("warnings" to exception.warnings),
 		))
 

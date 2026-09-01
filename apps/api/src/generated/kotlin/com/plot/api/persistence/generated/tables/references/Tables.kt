@@ -36,6 +36,7 @@ import com.plot.api.persistence.generated.tables.GithubRepositoryMonitoring
 import com.plot.api.persistence.generated.tables.GithubWebhookDeliveries
 import com.plot.api.persistence.generated.tables.ModelInvocations
 import com.plot.api.persistence.generated.tables.PolarWebhookEvents
+import com.plot.api.persistence.generated.tables.PublishedChangelogEntries
 import com.plot.api.persistence.generated.tables.RoutineContextSources
 import com.plot.api.persistence.generated.tables.RoutineExecutionEvidence
 import com.plot.api.persistence.generated.tables.RoutineExecutions
@@ -214,6 +215,11 @@ val MODEL_INVOCATIONS: ModelInvocations = ModelInvocations.MODEL_INVOCATIONS
  * The table <code>public.polar_webhook_events</code>.
  */
 val POLAR_WEBHOOK_EVENTS: PolarWebhookEvents = PolarWebhookEvents.POLAR_WEBHOOK_EVENTS
+
+/**
+ * The table <code>public.published_changelog_entries</code>.
+ */
+val PUBLISHED_CHANGELOG_ENTRIES: PublishedChangelogEntries = PublishedChangelogEntries.PUBLISHED_CHANGELOG_ENTRIES
 
 /**
  * The table <code>public.routine_context_sources</code>.
