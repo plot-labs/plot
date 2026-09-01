@@ -40,8 +40,12 @@ export function proxy(request: NextRequest) {
     );
   }
 
-  const isPublicAuthPath = request.nextUrl.pathname === "/sign-in" || request.nextUrl.pathname === "/auth/complete" || request.nextUrl.pathname.startsWith("/api/auth");
-  if (host && isGatedHost(host) && !isPublicAuthPath && !getSessionCookie(request)) {
+  const isPublicPath =
+    request.nextUrl.pathname === "/sign-in" ||
+    request.nextUrl.pathname === "/auth/complete" ||
+    request.nextUrl.pathname.startsWith("/api/auth") ||
+    request.nextUrl.pathname.startsWith("/changelog/");
+  if (host && isGatedHost(host) && !isPublicPath && !getSessionCookie(request)) {
     return NextResponse.redirect(new URL("/sign-in", request.url));
   }
 

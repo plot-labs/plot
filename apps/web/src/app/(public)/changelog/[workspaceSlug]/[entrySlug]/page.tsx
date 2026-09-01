@@ -31,22 +31,23 @@ export async function generateMetadata({ params }: PublicChangelogEntryPageProps
 export default async function PublicChangelogEntryPage({ params }: PublicChangelogEntryPageProps) {
   const { workspaceSlug, entrySlug } = await params;
 
+  let entry;
   try {
-    const entry = await fetchPublicChangelogEntry(workspaceSlug, entrySlug);
-
-    return (
-      <PublicChangelogLayout
-        workspaceName={entry.workspaceName}
-        workspaceSlug={entry.workspaceSlug}
-        logoUrl={entry.logoUrl}
-      >
-        <PublicChangelogEntryView workspaceSlug={entry.workspaceSlug} entry={entry} />
-      </PublicChangelogLayout>
-    );
+    entry = await fetchPublicChangelogEntry(workspaceSlug, entrySlug);
   } catch (error) {
     if (isPublicChangelogNotFound(error)) {
       notFound();
     }
     throw error;
   }
+
+  return (
+    <PublicChangelogLayout
+      workspaceName={entry.workspaceName}
+      workspaceSlug={entry.workspaceSlug}
+      logoUrl={entry.logoUrl}
+    >
+      <PublicChangelogEntryView workspaceSlug={entry.workspaceSlug} entry={entry} />
+    </PublicChangelogLayout>
+  );
 }
