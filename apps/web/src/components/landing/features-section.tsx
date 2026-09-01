@@ -36,9 +36,9 @@ const features: CapabilityFeature[] = [
   },
   {
     number: "03",
-    title: "Hand off when it is ready",
+    title: "Publish when it is ready",
     description:
-      "Copy the reviewed draft or download it as Markdown. Plot prepares the handoff; you publish on the channel your team already uses.",
+      "Publish to your hosted public changelog page or export Markdown. Plot never auto-publishes — you approve before anything goes live.",
     visual: "pack",
   },
   {

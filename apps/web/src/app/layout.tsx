@@ -20,13 +20,13 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.useplot.xyz"),
-  title: "Plot — Autonomous update packs from shipped work",
+  title: "Plot — Cited changelogs from shipped work",
   description:
-    "For AI and devtool teams shipping every week. Plot turns merged PRs, releases, and issues into source-backed, on-style changelogs, docs updates, customer updates, and launch drafts — with human approval before publish.",
+    "Plot turns release evidence into a source-cited changelog your team can review and publish to a hosted page. Changelog is the first customer content output.",
   openGraph: {
     title: "Plot — Ship fast. Write less. Stay source-backed.",
     description:
-      "Autonomous update packs from your repo. Docs, changelogs, and launch copy in your team's voice.",
+      "Release evidence to cited changelog to human review to publish. Changelog is where Plot starts.",
     url: "https://www.useplot.xyz",
     siteName: "Plot",
     type: "website",
@@ -35,15 +35,15 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Plot turns shipped work into source-backed update packs ready for approval.",
+        alt: "Plot turns shipped work into cited changelogs ready for review and publish.",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Plot — Autonomous update packs from shipped work",
+    title: "Plot — Cited changelogs from shipped work",
     description:
-      "Turn merged work into source-backed update packs your team approves.",
+      "Release evidence to cited changelog to human review to publish.",
     images: ["/og-image.png"],
   },
   icons: {

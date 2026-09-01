@@ -16,15 +16,24 @@ vi.mock("@/components/landing/animated-wave", () => ({
 import Home from "./page";
 
 describe("public landing page", () => {
-  it("describes the current release-to-changelog workflow and labels future scope", () => {
+  it("describes the cited publish wedge and labels future scope", () => {
     render(<Home />);
 
-    expect(screen.getByRole("heading", { level: 1, name: /review-ready changelog/i })).toBeVisible();
+    expect(
+      screen.getByRole("heading", {
+        level: 1,
+        name: /you can publish/i,
+      }),
+    ).toBeVisible();
     expect(screen.getByText(/published release range/i)).toBeVisible();
-    expect(screen.getAllByText(/copy.*download.*Markdown/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/publish/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/public changelog/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText("Coming next").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/docs impact suggestions/i).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: "Coming next" })[0]).toHaveAttribute("href", "#style");
+
+    expect(screen.queryByText(/outside Plot/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/publish outside/i)).not.toBeInTheDocument();
 
     expect(screen.queryByText(/Choose a shipping window and release cadence/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/docs gaps, customer impact/i)).not.toBeInTheDocument();

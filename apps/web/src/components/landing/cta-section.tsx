@@ -25,8 +25,8 @@ export function CtaSection() {
 
 	                <p className="mb-10 max-w-xl text-xl leading-relaxed text-muted-foreground">
                   Connect one GitHub repository. When a published release arrives,
-                  Plot prepares a source-cited changelog you can review, copy, or
-                  download and publish on your existing channel.
+                  Plot prepares a source-cited changelog you can review, publish
+                  to your public changelog page, or export as Markdown.
                 </p>
 
                 <WaitlistForm />
