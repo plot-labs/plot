@@ -4,6 +4,8 @@ import com.plot.api.persistence.generated.tables.AgentRuns.Companion.AGENT_RUNS
 import com.plot.api.persistence.generated.tables.AgentRunInputs.Companion.AGENT_RUN_INPUTS
 import com.plot.api.persistence.generated.tables.AgentSteps.Companion.AGENT_STEPS
 import com.plot.api.common.UuidGenerator
+import com.plot.api.artifact.run.ArtifactRunPersistence
+import com.plot.api.artifact.run.ArtifactRunStatus
 import com.plot.api.persistence.JooqSqlExecutor
 import com.plot.api.persistence.JooqTransactionExecutor
 import java.sql.Timestamp
@@ -22,6 +24,7 @@ class AgentRunExecutionPersistence(
 	private val transactionExecutor: JooqTransactionExecutor,
 	private val uuidGenerator: UuidGenerator,
 	private val queryPersistence: AgentRunQueryPersistence,
+	private val artifactRunPersistence: ArtifactRunPersistence,
 	dslContext: DSLContext,
 	private val clock: Clock? = null,
 ) {
@@ -30,6 +33,55 @@ class AgentRunExecutionPersistence(
 		.dsl()
 	private val safeErrorCode = Regex("[A-Z][A-Z0-9_]{0,99}")
 	private fun currentInstant(): Instant = clock?.instant() ?: Instant.now()
+
+	fun recoverStaleAgentRuns(staleBefore: Instant, now: Instant = currentInstant()): Int {
+		failExhaustedStaleAgentRuns(staleBefore, now)
+		return sqlExecutor.update(
+			"""
+			update agent_runs
+			set claimed_by = null, claimed_at = null,
+			    transition_version = transition_version + 1, updated_at = ?
+			where status = 'RUNNING' and claimed_by is not null and claimed_at < ?
+			  and attempt_count < max_attempts
+			""".trimIndent(),
+			Timestamp.from(now),
+			Timestamp.from(staleBefore),
+		)
+	}
+
+	fun completeWaitingArtifactHandoff(
+		workspaceId: UUID,
+		artifactWorkflowRunId: UUID,
+		now: Instant = currentInstant(),
+	): Boolean = transactionExecutor.execute {
+		val agentRunId = sqlExecutor.query(
+			"""
+			select agent_run_id
+			from generation_runs
+			where workspace_id = ? and id = ? and agent_run_id is not null
+			""".trimIndent(),
+			{ rs, _ -> requireNotNull(rs.getObject("agent_run_id", UUID::class.java)) },
+			workspaceId,
+			artifactWorkflowRunId,
+		).firstOrNull() ?: return@execute false
+		val run = queryPersistence.findAgentRun(workspaceId, agentRunId) ?: return@execute false
+		if (run.status != AgentRunStatus.RUNNING) return@execute false
+		val claim = claimRunningAgentRun(run, "artifact-completion-${UUID.randomUUID()}", now)
+			?: return@execute false
+		val state = artifactRunPersistence.findWorkflowStateByWorkflowRun(workspaceId, artifactWorkflowRunId)
+			?: throw IllegalArgumentException("Linked artifact run is unavailable")
+		when {
+			state.materialized && state.status in setOf(ArtifactRunStatus.READY, ArtifactRunStatus.NEEDS_REVIEW) -> {
+				succeedAgentRun(claim, now)
+				true
+			}
+			state.status == ArtifactRunStatus.FAILED -> {
+				failAgentRun(claim, "AGENT_ARTIFACT_WORKFLOW_FAILED", now)
+				true
+			}
+			else -> false
+		}
+	} ?: false
 
 	fun appendStep(
 		workspaceId: UUID,
@@ -507,6 +559,29 @@ class AgentRunExecutionPersistence(
 		return queryPersistence.findAdoptedInput(workspaceId, agentRunId, input)
 			?: throw RoutineExecutionStateException("Agent read result could not be adopted")
 	}
+	private fun claimRunningAgentRun(run: AgentRunRecord, workerId: String, now: Instant): ClaimedAgentRun? {
+		val updated = dsl.update(AGENT_RUNS)
+			.set(AGENT_RUNS.CLAIMED_BY, workerId)
+			.set(AGENT_RUNS.CLAIMED_AT, now.toOffsetDateTime())
+			.set(AGENT_RUNS.TRANSITION_VERSION, AGENT_RUNS.TRANSITION_VERSION.plus(1))
+			.set(AGENT_RUNS.UPDATED_AT, now.toOffsetDateTime())
+			.where(
+				AGENT_RUNS.WORKSPACE_ID.eq(run.workspaceId),
+				AGENT_RUNS.ID.eq(run.id),
+				AGENT_RUNS.STATUS.eq(AgentRunStatus.RUNNING.name),
+				AGENT_RUNS.CLAIMED_BY.isNull,
+				AGENT_RUNS.TRANSITION_VERSION.eq(run.transitionVersion),
+			)
+			.execute()
+		if (updated != 1) return null
+		return ClaimedAgentRun(
+			workspaceId = run.workspaceId,
+			agentRunId = run.id,
+			transitionVersion = run.transitionVersion + 1,
+			workerId = workerId,
+		)
+	}
+
 	private fun advanceAndRelease(
 		claim: ClaimedAgentRun,
 		currentStep: Int?,

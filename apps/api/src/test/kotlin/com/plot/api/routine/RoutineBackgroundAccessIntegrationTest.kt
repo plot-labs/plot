@@ -36,6 +36,7 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
+import org.springframework.context.annotation.Lazy
 import org.springframework.context.annotation.Primary
 import org.springframework.http.HttpStatus
 import org.springframework.jdbc.core.JdbcTemplate
@@ -49,9 +50,9 @@ import tools.jackson.databind.ObjectMapper
 @ActiveProfiles("test")
 @TestPropertySource(properties = [
 	"plot.dev-bootstrap.enabled=true",
-	"plot.routines.poll-delay=PT1H",
+	"plot.routines.schedule-scan-delay=PT1H",
 	"plot.routine-agent.workers-enabled=true",
-	"plot.routine-agent.poll-delay=PT1H",
+	"plot.routine-agent.claim-timeout=PT1S",
 	"plot.routine-agent.retry-initial-delay=PT0S",
 	"plot.github.enabled=true",
 	"plot.github.dev-only=true",
@@ -78,6 +79,8 @@ class RoutineBackgroundAccessIntegrationTest {
 	@Autowired private lateinit var workspaceAccessService: WorkspaceAccessService
 	@Autowired private lateinit var refreshService: GitHubRoutineRefreshService
 	@Autowired private lateinit var objectMapper: ObjectMapper
+	@Autowired private lateinit var agentRunDispatcher: AgentRunDispatcher
+	@Autowired private lateinit var routineRunDispatcher: RoutineRunDispatcher
 
 	private val fixtures = mutableListOf<RefreshFixture>()
 
@@ -107,7 +110,7 @@ class RoutineBackgroundAccessIntegrationTest {
 		logger.addAppender(appender)
 
 		try {
-			assertTrue(worker.drain())
+			assertTrue(worker.claimScheduledDue())
 		} finally {
 			logger.detachAppender(appender)
 			appender.stop()
@@ -139,7 +142,7 @@ class RoutineBackgroundAccessIntegrationTest {
 		))
 		githubClient.enqueue(GitHubPullRequestPage(listOf(pullRequest(202, dueAt.minusSeconds(60))), null))
 
-		assertTrue(worker.drain())
+		assertTrue(worker.claimScheduledDue())
 		val executionId = routinePersistence.find(devContext.devWorkspaceId, fixture.routineId)?.lastExecutionId
 		assertNotNull(executionId)
 		val afterFirstPage = assertNotNull(agentPersistence.findExecution(devContext.devWorkspaceId, executionId))
@@ -148,7 +151,7 @@ class RoutineBackgroundAccessIntegrationTest {
 		assertNull(routinePersistence.find(devContext.devWorkspaceId, fixture.routineId)?.activityCursorSequence)
 		assertEquals(0, count("agent_runs", "routine_id", fixture.routineId))
 
-		assertTrue(worker.drain())
+		assertTrue(worker.drain() > 0)
 		val afterFailure = assertNotNull(agentPersistence.findExecution(devContext.devWorkspaceId, executionId))
 		assertEquals(RoutineExecutionStatus.PROBING, afterFailure.status)
 		assertEquals("ROUTINE_REFRESH_RETRY", afterFailure.errorCode)
@@ -156,7 +159,7 @@ class RoutineBackgroundAccessIntegrationTest {
 		assertNull(routinePersistence.find(devContext.devWorkspaceId, fixture.routineId)?.activityCursorSequence)
 		assertEquals(0, count("agent_runs", "routine_id", fixture.routineId))
 
-		assertTrue(worker.drain())
+		assertTrue(worker.drain() > 0)
 		val completed = assertNotNull(agentPersistence.findExecution(devContext.devWorkspaceId, executionId))
 		assertEquals(RoutineExecutionStatus.DISPATCHED, completed.status)
 		assertNotNull(completed.refreshCompletedAt)
@@ -171,7 +174,7 @@ class RoutineBackgroundAccessIntegrationTest {
 		githubClient.enqueue(GitHubPullRequestPage(emptyList(), null))
 		setWorkspaceAccess("revoked", "read_only")
 
-		assertTrue(worker.drain())
+		assertTrue(worker.claimScheduledDue())
 
 		val execution = execution(fixture.routineId)
 		assertEquals(RoutineExecutionStatus.FAILED, execution.status)
@@ -195,7 +198,7 @@ class RoutineBackgroundAccessIntegrationTest {
 			listOf(first, second).map { candidate ->
 				executor.submit<Boolean> {
 					start.await()
-					candidate.drain()
+					candidate.claimScheduledDue()
 				}
 			}.also { start.countDown() }.map { it.get() }
 		} finally {
@@ -219,6 +222,8 @@ class RoutineBackgroundAccessIntegrationTest {
 		workspaceAccessService,
 		refreshService,
 		objectMapper,
+		agentRunDispatcher,
+		routineRunDispatcher,
 		workerId = workerId,
 		claimTimeout = agentProperties.claimTimeout,
 	)
@@ -342,9 +347,9 @@ class RoutineBackgroundAccessIntegrationTest {
 @ActiveProfiles("test")
 @TestPropertySource(properties = [
 	"plot.dev-bootstrap.enabled=true",
-	"plot.routines.poll-delay=PT1H",
+	"plot.routines.schedule-scan-delay=PT1H",
 	"plot.routine-agent.workers-enabled=false",
-	"plot.routine-agent.poll-delay=PT1H",
+	"plot.routine-agent.claim-timeout=PT1S",
 	"server.address=127.0.0.1",
 ])
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
@@ -465,8 +470,8 @@ class RoutineWorkersDisabledIntegrationTest {
 		)
 
 		try {
-			assertFalse(worker.drain())
-			assertFalse(worker.drain())
+			assertEquals(0, worker.drain())
+			assertEquals(0, worker.drain())
 			assertFalse(agentWorker.processOne())
 			assertFalse(agentWorker.processOne())
 			assertFalse(artifactWorkflowWorker.processOne())
@@ -508,6 +513,18 @@ class RoutineBackgroundTestConfig {
 	@Bean
 	@Primary
 	fun routineRefreshGitHubClient() = RoutineRefreshGitHubClient()
+
+	@Bean
+	@Primary
+	fun noOpRoutineRunDispatcher(
+		@org.springframework.beans.factory.annotation.Qualifier("routineTaskExecutor") taskExecutor: org.springframework.core.task.TaskExecutor,
+		@Lazy worker: RoutineWorker,
+		agentProperties: RoutineAgentProperties,
+		@org.springframework.beans.factory.annotation.Qualifier("routineRetryExecutor") retryExecutor: java.util.concurrent.ScheduledExecutorService,
+	): RoutineRunDispatcher = object : RoutineRunDispatcher(taskExecutor, worker, agentProperties, retryExecutor, java.time.Clock.systemUTC()) {
+		override fun dispatch() {}
+		override fun scheduleDelayed(at: java.time.Instant) {}
+	}
 }
 
 class RoutineRefreshGitHubClient : GitHubClient {

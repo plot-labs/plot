@@ -52,9 +52,9 @@ import org.springframework.test.context.TestPropertySource
 @ActiveProfiles("test")
 @TestPropertySource(properties = [
 	"plot.dev-bootstrap.enabled=true",
-	"plot.routines.poll-delay=PT1H",
+	"plot.routines.schedule-scan-delay=PT1H",
 	"plot.routine-agent.workers-enabled=true",
-	"plot.routine-agent.poll-delay=PT1H",
+	"plot.routine-agent.auto-dispatch-enabled=false",
 	"plot.routine-agent.claim-timeout=PT1S",
 	"plot.routine-agent.retry-initial-delay=PT0S",
 	"plot.routine-agent.max-attempts=2",
@@ -209,8 +209,6 @@ class AgentRunWorkerIntegrationTest {
 		))
 
 		assertEquals(2, artifactWorkflowWorker.drain())
-		jdbcTemplate.update("update agent_runs set next_attempt_at = now() where id = ?", agentRunId)
-		assertTrue(agentWorker.processOne())
 		assertEquals("SUCCEEDED", jdbcTemplate.queryForObject("select status from agent_runs where id = ?", String::class.java, agentRunId))
 		assertEquals("READY", jdbcTemplate.queryForObject("select status from artifact_runs where workspace_id = ? and agent_run_id = ?", String::class.java, routine.workspaceId, agentRunId))
 		routinePersistence.find(routine.workspaceId, routine.id)!!.also { projected ->
@@ -276,8 +274,6 @@ class AgentRunWorkerIntegrationTest {
 		assertEquals(routineCountBefore, count("select count(*) from routine_executions"))
 
 		assertEquals(2, artifactWorkflowWorker.drain())
-		jdbcTemplate.update("update agent_runs set next_attempt_at = now() where id = ?", chat.id)
-		assertTrue(agentWorker.processOne())
 		assertEquals("SUCCEEDED", jdbcTemplate.queryForObject("select status from agent_runs where id = ?", String::class.java, chat.id))
 		assertEquals("READY", jdbcTemplate.queryForObject("select status from artifact_runs where workspace_id = ? and agent_run_id = ?", String::class.java, devContext.devWorkspaceId, chat.id))
 		val artifactId = assertNotNull(chatAdmission.get(chat.id).artifactId)
@@ -653,8 +649,6 @@ class AgentRunWorkerIntegrationTest {
 			admitted.source.scopeId,
 		)
 		assertEquals(2, artifactWorkflowWorker.drain())
-		jdbcTemplate.update("update agent_runs set next_attempt_at = now() where id = ?", admitted.agentRunId)
-		assertTrue(agentWorker.processOne())
 
 		assertEquals("SUCCEEDED", jdbcTemplate.queryForObject(
 			"select status from agent_runs where id = ?",
@@ -755,8 +749,6 @@ class AgentRunWorkerIntegrationTest {
 			artifactWorkflowRunId,
 		))
 		assertEquals(0, count("select count(*) from content_packs where generation_run_id = ?", artifactWorkflowRunId))
-		jdbcTemplate.update("update agent_runs set next_attempt_at = now() where id = ?", admitted.agentRunId)
-		assertTrue(agentWorker.processOne())
 		assertEquals("FAILED", agentStatus(admitted.agentRunId))
 		assertEquals("AGENT_ARTIFACT_WORKFLOW_FAILED", agentFailure(admitted.agentRunId))
 		assertOwnershipAuditClear()

@@ -8,7 +8,6 @@ import com.plot.api.ai.provider.AgentDecisionRequest
 import com.plot.api.ai.provider.AgentInputView
 import com.plot.api.ai.provider.AgentStepView
 import com.plot.api.artifact.run.ArtifactRunPersistence
-import com.plot.api.artifact.run.ArtifactRunStatus
 import com.plot.api.common.ApiException
 import com.plot.api.common.WorkspacePrincipal
 import com.plot.api.entitlement.WorkspaceAccessService
@@ -21,7 +20,7 @@ import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
-import org.springframework.scheduling.annotation.Scheduled
+import org.springframework.context.annotation.Lazy
 import org.springframework.stereotype.Component
 import tools.jackson.databind.ObjectMapper
 
@@ -36,13 +35,15 @@ class AgentRunWorker(
 	private val workspaceAccessService: WorkspaceAccessService,
 	private val properties: RoutineAgentProperties,
 	private val objectMapper: ObjectMapper,
+	@Lazy private val agentRunDispatcher: AgentRunDispatcher,
 	private val clock: Clock = Clock.systemUTC(),
 	private val workerId: String = "routine-agent-${UUID.randomUUID()}",
 	private val observationRegistry: ObservationRegistry = ObservationRegistry.NOOP,
 ) {
-	@Scheduled(fixedDelayString = "\${plot.routine-agent.poll-delay:PT5S}")
-	fun poll() {
-		processOne()
+	fun recover(): Int {
+		if (!properties.workersEnabled) return 0
+		val now = clock.instant()
+		return executionPersistence.recoverStaleAgentRuns(now.minus(properties.claimTimeout), now)
 	}
 
 	fun processOne(): Boolean {
@@ -68,12 +69,14 @@ class AgentRunWorker(
 			outcome = "FAILED"
 			val now = clock.instant()
 			if (failure.recoverable) {
+				val nextAttemptAt = now.plus(retryDelay(queryPersistence.findAgentRun(claim.workspaceId, claim.agentRunId)?.attemptCount ?: 0))
 				executionPersistence.scheduleAgentRetry(
 					claim,
 					failure.code.safeCode("AGENT_PROVIDER_UNAVAILABLE"),
-					now.plus(retryDelay(queryPersistence.findAgentRun(claim.workspaceId, claim.agentRunId)?.attemptCount ?: 0)),
+					nextAttemptAt,
 					now,
 				)
+				agentRunDispatcher.scheduleDelayed(nextAttemptAt)
 			} else {
 				executionPersistence.failAgentRun(claim, failure.code.safeCode("AGENT_MODEL_FAILED"), now)
 			}
@@ -124,16 +127,6 @@ class AgentRunWorker(
 			throw AgentRunBudgetExceededException("AGENT_DURATION_LIMIT")
 		}
 		val steps = queryPersistence.listSteps(run.workspaceId, run.id)
-		val linkedHandoff = steps.lastOrNull {
-			it.kind == AgentStepKind.ARTIFACT_HANDOFF &&
-				it.status == AgentStepStatus.SUCCEEDED &&
-				it.artifactWorkflowRunId != null
-		}
-		if (linkedHandoff != null) {
-			observeArtifactWorkflow(claim, linkedHandoff.artifactWorkflowRunId!!)
-			return
-		}
-
 		val running = queryPersistence.findRunningStep(run.workspaceId, run.id, run.currentStep)
 		if (running != null) {
 			executeStep(claim, run, running, budget)
@@ -304,7 +297,7 @@ class AgentRunWorker(
 							"selectedInputCount" to selected.size,
 						),
 					),
-					nextAttemptAt = clock.instant().plus(properties.pollDelay),
+					nextAttemptAt = ARTIFACT_HANDOFF_WAIT_UNTIL,
 					now = clock.instant(),
 				)
 			}
@@ -358,18 +351,6 @@ class AgentRunWorker(
 			),
 			now = now,
 		)
-	}
-
-	private fun observeArtifactWorkflow(claim: ClaimedAgentRun, artifactWorkflowRunId: UUID) {
-		val state = artifactRunPersistence.findWorkflowStateByWorkflowRun(claim.workspaceId, artifactWorkflowRunId)
-			?: throw IllegalArgumentException("Linked artifact run is unavailable")
-		when {
-			state.materialized && state.status in setOf(ArtifactRunStatus.READY, ArtifactRunStatus.NEEDS_REVIEW) ->
-				executionPersistence.succeedAgentRun(claim, clock.instant())
-			state.status == ArtifactRunStatus.FAILED ->
-				executionPersistence.failAgentRun(claim, "AGENT_ARTIFACT_WORKFLOW_FAILED", clock.instant())
-			else -> executionPersistence.releaseAgentClaim(claim, clock.instant().plus(properties.pollDelay), clock.instant())
-		}
 	}
 
 	private fun validateDecision(
@@ -445,6 +426,7 @@ class AgentRunWorker(
 		const val MAX_RETRY_SHIFT = 8
 		val MAX_RETRY_DELAY: Duration = Duration.ofMinutes(15)
 		val SAFE_ERROR_CODE = Regex("[A-Z][A-Z0-9_]{0,99}")
+		val ARTIFACT_HANDOFF_WAIT_UNTIL: Instant = Instant.parse("9999-12-31T23:59:59Z")
 	}
 }
 
