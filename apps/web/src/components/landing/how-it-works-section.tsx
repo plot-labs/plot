@@ -35,13 +35,13 @@ const sourceRows = [
 const signalRows = [
   { name: "Release boundary", detail: "Base and head are fixed", score: "91" },
   { name: "Cited sentence", detail: "Source is ready to inspect", score: "84" },
-  { name: "Human review", detail: "Edit before handoff", score: "78" },
+  { name: "Human review", detail: "Edit before publish", score: "78" },
 ];
 
 const planRows = [
   { name: "Changelog draft", detail: "Narrative with saved citations", meta: "review" },
   { name: "Sentence review", detail: "Edit and verify the important claims", meta: "human" },
-  { name: "Markdown handoff", detail: "Copy or download when ready", meta: "outside" },
+  { name: "Hosted publish", detail: "Publish to your changelog when ready", meta: "plot" },
 ];
 
 const lanes = [
