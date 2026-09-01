@@ -5,20 +5,24 @@ import { useEffect, useMemo, useState } from "react";
 
 const terminalLines = [
   "$ plot release review",
-  "repository          -> connected",
-  "release boundary    -> exact",
-  "citations           -> attached",
+  "repository        -> connected",
+  "release boundary  -> exact",
+  "citations         -> attached",
   "",
   "$ plot changelog checks",
-  "source review       ready",
-  "sentence status     visible",
-  "human approval      required",
+  "source review     ready",
+  "sentence status   visible",
+  "human approval    required",
   "",
   "$ plot changelog publish",
-  "public page         -> /acme/changelog",
-  "snapshot            -> immutable",
-  "human approval      -> required",
+  "public page       -> /acme/changelog",
+  "snapshot          -> immutable",
+  "human approval    -> required",
 ];
+
+// The console screen is a fixed slice of the frame image, so the sequence is
+// scrolled like a real terminal instead of overflowing past the last rows.
+const visibleLineCount = 9;
 
 function TypedTerminalLines() {
   const fullText = useMemo(() => terminalLines.join("\n"), []);
@@ -48,9 +52,11 @@ function TypedTerminalLines() {
     return () => window.clearTimeout(timeoutId);
   }, [fullText]);
 
+  const windowedText = visibleText.split("\n").slice(-visibleLineCount).join("\n");
+
   return (
-    <pre className="whitespace-pre-wrap font-mono text-[9px] leading-[1.58] text-[#e8e0c8] xl:text-[10px]">
-      {visibleText}
+    <pre className="whitespace-pre font-mono text-[9px] leading-[1.58] text-[#e8e0c8] xl:text-[10px]">
+      {windowedText}
       <span className="inline-block h-3 w-1.5 translate-y-0.5 bg-[#e8e0c8] hero-terminal-cursor" />
     </pre>
   );
