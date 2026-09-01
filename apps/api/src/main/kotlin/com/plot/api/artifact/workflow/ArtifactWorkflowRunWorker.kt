@@ -20,6 +20,7 @@ import io.micrometer.observation.ObservationRegistry
 import java.time.Clock
 import java.time.Duration
 import java.util.UUID
+import com.plot.api.routine.ArtifactWorkflowAgentRunCompletionHandler
 
 class ArtifactWorkflowRunWorker(
 	private val executionPersistence: ArtifactWorkflowExecutionPersistence,
@@ -38,6 +39,7 @@ class ArtifactWorkflowRunWorker(
 	private val observationRegistry: ObservationRegistry = ObservationRegistry.NOOP,
 	private val workspaceAccessService: WorkspaceAccessService? = null,
 	private val agentRunsEnabled: Boolean = true,
+	private val agentRunCompletion: ArtifactWorkflowAgentRunCompletionHandler? = null,
 ) {
 	internal var lastFailure: RuntimeException? = null
 		private set
@@ -92,12 +94,14 @@ class ArtifactWorkflowRunWorker(
 			}
 			runLease.commit { executionPersistence.failClaim(claim, state, code) }
 			attemptObservation.lowCardinalityKeyValue("plot.error_code", code)
+			notifyAgentRunIfTerminal(claim)
 			return "FAILED" to true
 		}
 		val budgetFailure = executionPersistence.budgetFailureCode(claim)
 		if (budgetFailure != null) {
 			runLease.commit { executionPersistence.failClaim(claim, state, budgetFailure) }
 			attemptObservation.lowCardinalityKeyValue("plot.error_code", budgetFailure)
+			notifyAgentRunIfTerminal(claim)
 			return "FAILED" to true
 		}
 		val role = state.nextRole ?: return "NO_ACTIVITY" to false
@@ -168,7 +172,14 @@ class ArtifactWorkflowRunWorker(
 			modelObservation.lowCardinalityKeyValue("plot.outcome", modelOutcome)
 			modelObservation.stopSafely()
 		}
+		notifyAgentRunIfTerminal(claim)
 		return modelOutcome to true
+	}
+
+	private fun notifyAgentRunIfTerminal(claim: ClaimedArtifactWorkflowRun) {
+		val state = queryPersistence.loadState(claim.workspaceId, claim.runId)
+		if (state.status !in TERMINAL_STATUSES) return
+		agentRunCompletion?.onTerminal(claim.workspaceId, claim.runId)
 	}
 
 	fun drain(maxCheckpoints: Int = 16): Int {
@@ -188,6 +199,11 @@ class ArtifactWorkflowRunWorker(
 		const val MAX_PHYSICAL_ATTEMPTS_PER_LOGICAL_CALL = 3
 		const val MAX_RETRY_SHIFT = 8
 		val MAX_RETRY_DELAY: Duration = Duration.ofMinutes(15)
+		val TERMINAL_STATUSES = setOf(
+			ArtifactWorkflowRunStatus.READY,
+			ArtifactWorkflowRunStatus.NEEDS_REVIEW,
+			ArtifactWorkflowRunStatus.FAILED,
+		)
 	}
 }
 

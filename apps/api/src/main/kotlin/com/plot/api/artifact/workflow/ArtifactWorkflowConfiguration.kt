@@ -8,6 +8,7 @@ import com.plot.api.entitlement.WorkspaceAccessService
 import com.plot.api.persistence.JooqSqlExecutor
 import com.plot.api.persistence.JooqTransactionExecutor
 import com.plot.api.routine.RoutineAgentProperties
+import com.plot.api.routine.ArtifactWorkflowAgentRunCompletionHandler
 import io.micrometer.observation.ObservationRegistry
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.context.annotation.Bean
@@ -111,6 +112,7 @@ class ArtifactWorkflowConfiguration {
 		observationRegistry: ObservationRegistry,
 		workspaceAccessService: WorkspaceAccessService,
 		routineAgentProperties: RoutineAgentProperties,
+		agentRunCompletion: ArtifactWorkflowAgentRunCompletionHandler,
 	): ArtifactWorkflowRunWorker = ArtifactWorkflowRunWorker(
 		executionPersistence = executionPersistence,
 		queryPersistence = queryPersistence,
@@ -122,6 +124,7 @@ class ArtifactWorkflowConfiguration {
 		observationRegistry = observationRegistry,
 		workspaceAccessService = workspaceAccessService,
 		agentRunsEnabled = routineAgentProperties.workersEnabled,
+		agentRunCompletion = agentRunCompletion,
 	)
 
 	@Bean(destroyMethod = "shutdown")
