@@ -1,5 +1,6 @@
 package com.plot.api.github
 
+import java.util.concurrent.ScheduledExecutorService
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -23,15 +24,17 @@ class GitHubRepositoryAccessCheckConfiguration {
 
 @Component
 class GitHubRepositoryAccessCheckDispatcher(
-	@Qualifier("githubRepositoryAccessCheckTaskExecutor") private val taskExecutor: TaskExecutor,
-	private val worker: GitHubRepositoryAccessCheckWorker,
+	@Qualifier("githubRepositoryAccessCheckTaskExecutor") taskExecutor: TaskExecutor,
+	@Qualifier("githubWorkerRetryExecutor") retryExecutor: ScheduledExecutorService,
+	worker: GitHubRepositoryAccessCheckWorker,
 ) {
-	fun dispatch() {
-		GitHubWorkerDispatch.dispatchQueued(
-			taskExecutor = taskExecutor,
-			redispatch = ::dispatch,
-			recover = worker::recover,
-			drain = worker::drain,
-		)
-	}
+	private val delegate = GitHubWorkerDispatch(
+		taskExecutor = taskExecutor,
+		retryExecutor = retryExecutor,
+		recover = worker::recover,
+		drain = worker::drain,
+		earliestRetryAt = worker::nextRetryAt,
+	)
+
+	fun dispatch() = delegate.dispatch()
 }

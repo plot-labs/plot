@@ -32,6 +32,7 @@ class GitHubReleaseAutomationConfiguration {
 	@Bean
 	fun githubReleaseDraftDispatcher(
 		@Qualifier("githubReleaseTaskExecutor") taskExecutor: TaskExecutor,
+		@Qualifier("githubWorkerRetryExecutor") retryExecutor: ScheduledExecutorService,
 		worker: GitHubReleaseDraftWorker,
-	): GitHubReleaseDraftDispatcher = DefaultGitHubReleaseDraftDispatcher(taskExecutor, worker)
+	): GitHubReleaseDraftDispatcher = DefaultGitHubReleaseDraftDispatcher(taskExecutor, retryExecutor, worker)
 }

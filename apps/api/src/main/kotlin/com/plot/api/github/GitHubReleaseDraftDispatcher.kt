@@ -1,5 +1,6 @@
 package com.plot.api.github
 
+import java.util.concurrent.ScheduledExecutorService
 import org.springframework.core.task.TaskExecutor
 
 fun interface GitHubReleaseDraftDispatcher {
@@ -7,16 +8,18 @@ fun interface GitHubReleaseDraftDispatcher {
 }
 
 class DefaultGitHubReleaseDraftDispatcher(
-	private val taskExecutor: TaskExecutor,
-	private val worker: GitHubReleaseDraftWorker,
+	taskExecutor: TaskExecutor,
+	retryExecutor: ScheduledExecutorService?,
+	worker: GitHubReleaseDraftWorker,
 ) : GitHubReleaseDraftDispatcher {
-	override fun dispatch() {
-		GitHubWorkerDispatch.dispatchQueued(
-			taskExecutor = taskExecutor,
-			redispatch = ::dispatch,
-			recover = worker::recover,
-			drain = worker::drain,
-			onQueueEmpty = worker::reconcile,
-		)
-	}
+	private val delegate = GitHubWorkerDispatch(
+		taskExecutor = taskExecutor,
+		retryExecutor = retryExecutor,
+		recover = worker::recover,
+		drain = worker::drain,
+		earliestRetryAt = worker::nextRetryAt,
+		onQueueEmpty = worker::reconcile,
+	)
+
+	override fun dispatch() = delegate.dispatch()
 }

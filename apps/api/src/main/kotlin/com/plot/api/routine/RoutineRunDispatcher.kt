@@ -21,22 +21,14 @@ open class RoutineRunDispatcher(
 	private val retryExecutor: ScheduledExecutorService,
 	private val clock: Clock = Clock.systemUTC(),
 ) {
-	private val draining = ThreadLocal.withInitial { false }
-
 	open fun dispatch() {
-		if (!agentProperties.workersEnabled || draining.get()) return
+		if (!agentProperties.workersEnabled) return
 		try {
 			taskExecutor.execute {
-				if (draining.get()) return@execute
-				draining.set(true)
-				try {
+				// One turn drains every runnable execution; the single worker slot serialises turns.
+				do {
 					worker.recover()
-					if (worker.drain() > 0) {
-						dispatch()
-					}
-				} finally {
-					draining.set(false)
-				}
+				} while (worker.drain() > 0)
 			}
 		} catch (_: TaskRejectedException) {
 			// A worker turn is already running or queued; it will drain remaining work.
@@ -47,7 +39,7 @@ open class RoutineRunDispatcher(
 		if (!agentProperties.workersEnabled) return
 		val delay = Duration.between(clock.instant(), at).coerceAtLeast(Duration.ZERO)
 		if (delay.isZero) {
-			if (!draining.get()) dispatch()
+			dispatch()
 			return
 		}
 		retryExecutor.schedule({ dispatch() }, delay.toMillis(), TimeUnit.MILLISECONDS)

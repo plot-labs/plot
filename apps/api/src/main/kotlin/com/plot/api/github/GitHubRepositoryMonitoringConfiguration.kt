@@ -1,5 +1,6 @@
 package com.plot.api.github
 
+import java.util.concurrent.ScheduledExecutorService
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -9,17 +10,19 @@ import org.springframework.stereotype.Component
 
 @Component
 class GitHubRepositoryMonitoringDispatcher(
-	@Qualifier("githubRepositoryMonitoringTaskExecutor") private val taskExecutor: TaskExecutor,
-	private val worker: GitHubRepositoryMonitoringWorker,
+	@Qualifier("githubRepositoryMonitoringTaskExecutor") taskExecutor: TaskExecutor,
+	@Qualifier("githubWorkerRetryExecutor") retryExecutor: ScheduledExecutorService,
+	worker: GitHubRepositoryMonitoringWorker,
 ) {
-	fun dispatch() {
-		GitHubWorkerDispatch.dispatchQueued(
-			taskExecutor = taskExecutor,
-			redispatch = ::dispatch,
-			recover = worker::recover,
-			drain = worker::drain,
-		)
-	}
+	private val delegate = GitHubWorkerDispatch(
+		taskExecutor = taskExecutor,
+		retryExecutor = retryExecutor,
+		recover = worker::recover,
+		drain = worker::drain,
+		earliestRetryAt = worker::nextRetryAt,
+	)
+
+	fun dispatch() = delegate.dispatch()
 }
 
 @Configuration(proxyBeanMethods = false)

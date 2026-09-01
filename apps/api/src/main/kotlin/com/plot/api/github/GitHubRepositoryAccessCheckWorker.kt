@@ -3,6 +3,7 @@ package com.plot.api.github
 import com.plot.api.common.ApiException
 import java.time.Clock
 import java.time.Duration
+import java.time.Instant
 import java.util.UUID
 import org.springframework.dao.DataAccessException
 import org.springframework.dao.TransientDataAccessException
@@ -47,6 +48,12 @@ class GitHubRepositoryAccessCheckWorker(
 			handleFailure(item, exception)
 		}
 		return 1
+	}
+
+	/** Earliest persisted retry that is not yet due, used to re-arm the dispatcher. */
+	fun nextRetryAt(): Instant? {
+		if (!properties.enabled) return null
+		return persistence.earliestNextAttemptAt(clock.instant())
 	}
 
 	fun recover(): Int {

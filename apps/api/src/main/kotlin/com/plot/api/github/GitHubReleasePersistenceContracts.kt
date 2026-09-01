@@ -61,5 +61,9 @@ interface GitHubReleaseLeaseStore {
 		errorCode: String = "SOURCE_ACCESS_LOST",
 	): Int
 	fun recoverStaleClaims(now: Instant, leaseTimeout: Duration): Int
+
 	fun recordReconcileDiagnostic(requestId: UUID, transitionVersion: Long, errorCode: String)
+
+	/** Earliest persisted retry that becomes eligible after [after], or null when none is pending. */
+	fun earliestNextAttemptAt(after: Instant): Instant? = null
 }

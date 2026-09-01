@@ -216,6 +216,16 @@ class GitHubRepositoryMonitoringPersistence(
 		requireExactlyOne(updated, "Repository monitoring failure transition was lost")
 	}
 
+	/** Earliest queued retry that becomes eligible after [after], or null when none is pending. */
+	fun earliestNextAttemptAt(after: Instant): Instant? = fetchRows(
+		"""
+		select min(next_attempt_at) as next_attempt_at
+		from github_repository_monitoring
+		where monitoring_status = 'ACTIVE' and analysis_status = 'QUEUED' and next_attempt_at > ?
+		""".trimIndent(),
+		Timestamp.from(after),
+	).firstOrNull()?.get("next_attempt_at", OffsetDateTime::class.java)?.toInstant()
+
 	fun recoverStaleClaims(now: Instant, leaseTimeout: Duration, maxAttempts: Int): Int = execute(
 		"""
 		update github_repository_monitoring

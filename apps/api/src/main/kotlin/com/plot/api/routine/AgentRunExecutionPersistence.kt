@@ -79,9 +79,40 @@ class AgentRunExecutionPersistence(
 				failAgentRun(claim, "AGENT_ARTIFACT_WORKFLOW_FAILED", now)
 				true
 			}
-			else -> false
+			else -> {
+				releaseArtifactHandoffClaim(claim, now)
+				false
+			}
 		}
 	} ?: false
+
+	/**
+	 * Resumes every agent run parked on an artifact workflow that already reached a
+	 * terminal state, so a completion that raced with the handoff or was lost to a
+	 * restart still finishes the run.
+	 */
+	fun reconcileWaitingArtifactHandoffs(now: Instant = currentInstant()): Int {
+		val waiting = sqlExecutor.query(
+			"""
+			select workflow.workspace_id, workflow.id
+			from generation_runs workflow
+			join artifact_runs artifact
+			  on artifact.workspace_id = workflow.workspace_id and artifact.id = workflow.artifact_run_id
+			join agent_runs run
+			  on run.workspace_id = workflow.workspace_id and run.id = workflow.agent_run_id
+			where workflow.agent_run_id is not null
+			  and artifact.status in ('READY', 'NEEDS_REVIEW', 'FAILED')
+			  and run.status = 'RUNNING' and run.claimed_by is null
+			""".trimIndent(),
+			{ rs, _ ->
+				requireNotNull(rs.getObject("workspace_id", UUID::class.java)) to
+					requireNotNull(rs.getObject("id", UUID::class.java))
+			},
+		)
+		return waiting.count { (workspaceId, workflowRunId) ->
+			completeWaitingArtifactHandoff(workspaceId, workflowRunId, now)
+		}
+	}
 
 	fun appendStep(
 		workspaceId: UUID,
@@ -580,6 +611,22 @@ class AgentRunExecutionPersistence(
 			transitionVersion = run.transitionVersion + 1,
 			workerId = workerId,
 		)
+	}
+
+	private fun releaseArtifactHandoffClaim(claim: ClaimedAgentRun, now: Instant) {
+		dsl.update(AGENT_RUNS)
+			.set(AGENT_RUNS.CLAIMED_BY, null as String?)
+			.set(AGENT_RUNS.CLAIMED_AT, null as OffsetDateTime?)
+			.set(AGENT_RUNS.TRANSITION_VERSION, AGENT_RUNS.TRANSITION_VERSION.plus(1))
+			.set(AGENT_RUNS.UPDATED_AT, now.toOffsetDateTime())
+			.where(
+				AGENT_RUNS.WORKSPACE_ID.eq(claim.workspaceId),
+				AGENT_RUNS.ID.eq(claim.agentRunId),
+				AGENT_RUNS.CLAIMED_BY.eq(claim.workerId),
+				AGENT_RUNS.TRANSITION_VERSION.eq(claim.transitionVersion),
+				AGENT_RUNS.STATUS.eq(AgentRunStatus.RUNNING.name),
+			)
+			.execute()
 	}
 
 	private fun advanceAndRelease(

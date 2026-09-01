@@ -156,14 +156,24 @@ class ArtifactWorkflowConfiguration {
 		setAwaitTerminationSeconds(10)
 	}
 
+	@Bean(destroyMethod = "shutdown")
+	fun artifactWorkflowRetryExecutor(): ScheduledExecutorService =
+		Executors.newSingleThreadScheduledExecutor { task ->
+			Thread(task, "plot-artifact-workflow-retry").apply { isDaemon = true }
+		}
+
 	@Bean
 	fun artifactWorkflowRunDispatcher(
 		@Qualifier("artifactWorkflowTaskExecutor") artifactWorkflowTaskExecutor: TaskExecutor,
+		@Qualifier("artifactWorkflowRetryExecutor") retryExecutor: ScheduledExecutorService,
 		worker: ArtifactWorkflowRunWorker,
+		recoveryPersistence: ArtifactWorkflowRecoveryPersistence,
 		properties: PlotAiProperties,
 	): ArtifactWorkflowRunDispatcher = ArtifactWorkflowRunDispatcher(
-		artifactWorkflowTaskExecutor,
-		properties.workerEnabled,
+		taskExecutor = artifactWorkflowTaskExecutor,
+		enabled = properties.workerEnabled,
+		retryExecutor = retryExecutor,
+		earliestRetryAt = recoveryPersistence::earliestNextAttemptAt,
 	) { worker.drain() > 0 }
 
 	@Bean

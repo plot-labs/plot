@@ -43,7 +43,8 @@ class AgentRunWorker(
 	fun recover(): Int {
 		if (!properties.workersEnabled) return 0
 		val now = clock.instant()
-		return executionPersistence.recoverStaleAgentRuns(now.minus(properties.claimTimeout), now)
+		return executionPersistence.recoverStaleAgentRuns(now.minus(properties.claimTimeout), now) +
+			executionPersistence.reconcileWaitingArtifactHandoffs(now)
 	}
 
 	fun processOne(): Boolean {
@@ -298,6 +299,13 @@ class AgentRunWorker(
 						),
 					),
 					nextAttemptAt = ARTIFACT_HANDOFF_WAIT_UNTIL,
+					now = clock.instant(),
+				)
+				// The workflow may already be terminal, in which case its completion callback
+				// ran before the handoff was linked and could not claim this run.
+				executionPersistence.completeWaitingArtifactHandoff(
+					workspaceId = run.workspaceId,
+					artifactWorkflowRunId = workflow.runId,
 					now = clock.instant(),
 				)
 			}
