@@ -341,9 +341,9 @@ function PackVisual() {
     <FeatureShell>
       <VisualStage>
         <FlowLayer>
-          <FlowPath d="M232 139 H292 V97 H350" dot={[292, 97]} opacity={0.2} />
-          <FlowPath d="M232 139 H292 V166 H350" dot={[292, 166]} opacity={0.16} />
-          <FlowPath d="M232 139 H292 V235 H350" dot={[292, 235]} opacity={0.12} />
+          <FlowPath d="M232 139 H292 V89 H350" dot={[292, 89]} opacity={0.2} />
+          <FlowPath d="M232 139 H292 V141 H350" dot={[292, 141]} opacity={0.16} />
+          <FlowPath d="M232 139 H292 V193 H350" dot={[292, 193]} opacity={0.12} />
         </FlowLayer>
 
         <div className="absolute left-[42px] top-[70px] w-[190px] rounded-lg border border-foreground/15 bg-background p-4 shadow-[0_18px_54px_rgb(18_17_15_/_0.08)]">
@@ -370,13 +370,13 @@ function PackVisual() {
             <Sparkles className="size-3.5 text-foreground" />
             Publish loop
           </div>
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {channels.map((channel) => (
               <div
-                className="rounded-md border border-foreground/10 bg-background p-2.5"
+                className="rounded-md border border-foreground/10 bg-background p-2"
                 key={channel.name}
               >
-                <div className="mb-1.5 flex items-center justify-between gap-2">
+                <div className="mb-1 flex items-center justify-between gap-2">
                   <div className="font-mono text-[10px] uppercase text-foreground">
                     {channel.name}
                   </div>
@@ -384,10 +384,7 @@ function PackVisual() {
                     {channel.status}
                   </span>
                 </div>
-                <div className="space-y-1.5">
-                  <div className="h-1.5 w-full rounded-full bg-foreground/18" />
-                  <div className="h-1.5 w-2/3 rounded-full bg-foreground/10" />
-                </div>
+                <div className="h-1.5 w-full rounded-full bg-foreground/18" />
               </div>
             ))}
           </div>
