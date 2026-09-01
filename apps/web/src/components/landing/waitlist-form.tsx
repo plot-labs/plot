@@ -166,7 +166,7 @@ export function WaitlistForm() {
       ) : null}
 
       <p className="text-sm font-mono text-muted-foreground">
-        Source-backed packs. You publish outside Plot.
+        Cited drafts. You approve before anything goes live.
       </p>
     </form>
   );

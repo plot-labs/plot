@@ -19,10 +19,10 @@ const steps = [
   },
   {
     number: "III",
-    label: "Review + handoff",
-    title: "Inspect citations, then export Markdown.",
+    label: "Review + publish",
+    title: "Inspect citations, then publish.",
     description:
-      "Edit the sentences that need your judgment, inspect their saved sources, then Copy or Download. Publishing stays on your existing channel.",
+      "Edit the sentences that need your judgment, inspect their saved sources, then publish to your hosted changelog or copy and download Markdown.",
   },
 ];
 
@@ -124,7 +124,7 @@ export function HowItWorksSection() {
                   </div>
                 </div>
                   <div className="font-mono text-[10px] uppercase text-background/45">
-                  Publish outside Plot
+                  Your public changelog
                 </div>
               </div>
 
