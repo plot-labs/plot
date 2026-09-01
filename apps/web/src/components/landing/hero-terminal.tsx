@@ -105,7 +105,7 @@ export function HeroTerminal() {
                 {[
                   ["Range", "exact"],
                   ["Cites", "7"],
-                  ["Publish", "live"],
+                  ["Publish", "Live"],
                 ].map(([label, value]) => (
                   <div
                     className="border border-[#e8e0c8]/12 bg-[#e8e0c8]/[0.035] px-2.5 py-1.5"

@@ -35,7 +35,7 @@ const sourceRows = [
 const signalRows = [
   { name: "Release boundary", detail: "Base and head are fixed", score: "91" },
   { name: "Cited sentence", detail: "Source is ready to inspect", score: "84" },
-  { name: "Human review", detail: "Approve before publish", score: "78" },
+  { name: "Human review", detail: "Edit before publish", score: "78" },
 ];
 
 const planRows = [
