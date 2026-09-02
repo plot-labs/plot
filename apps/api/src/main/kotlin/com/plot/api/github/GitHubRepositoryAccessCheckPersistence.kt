@@ -315,7 +315,7 @@ class GitHubRepositoryAccessCheckPersistence(
 			update source_scopes
 			set status = 'ACTIVE', status_reason = null, status_changed_at = ?,
 			    external_key = ?, display_name = ?, url = ?,
-			    metadata = jsonb_build_object('repositoryId', ?, 'defaultBranch', ?), updated_at = ?
+			    metadata = jsonb_build_object('repositoryId', ?, 'defaultBranch', ?, 'visibility', ?), updated_at = ?
 			where workspace_id = ? and id = ? and provider = 'GITHUB'
 			""".trimIndent(),
 			Timestamp.from(now),
@@ -324,6 +324,7 @@ class GitHubRepositoryAccessCheckPersistence(
 			repository.url,
 			repository.id,
 			repository.defaultBranch,
+			repository.visibility,
 			Timestamp.from(now),
 			item.check.workspaceId,
 			item.check.sourceScopeId,

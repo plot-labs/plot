@@ -37,6 +37,8 @@ import com.plot.api.persistence.generated.tables.GithubWebhookDeliveries
 import com.plot.api.persistence.generated.tables.ModelInvocations
 import com.plot.api.persistence.generated.tables.PolarWebhookEvents
 import com.plot.api.persistence.generated.tables.PublishedChangelogEntries
+import com.plot.api.persistence.generated.tables.PublishedChangelogEntryCitations
+import com.plot.api.persistence.generated.tables.PublishedChangelogEntrySentences
 import com.plot.api.persistence.generated.tables.RoutineContextSources
 import com.plot.api.persistence.generated.tables.RoutineExecutionEvidence
 import com.plot.api.persistence.generated.tables.RoutineExecutions
@@ -220,6 +222,16 @@ val POLAR_WEBHOOK_EVENTS: PolarWebhookEvents = PolarWebhookEvents.POLAR_WEBHOOK_
  * The table <code>public.published_changelog_entries</code>.
  */
 val PUBLISHED_CHANGELOG_ENTRIES: PublishedChangelogEntries = PublishedChangelogEntries.PUBLISHED_CHANGELOG_ENTRIES
+
+/**
+ * The table <code>public.published_changelog_entry_citations</code>.
+ */
+val PUBLISHED_CHANGELOG_ENTRY_CITATIONS: PublishedChangelogEntryCitations = PublishedChangelogEntryCitations.PUBLISHED_CHANGELOG_ENTRY_CITATIONS
+
+/**
+ * The table <code>public.published_changelog_entry_sentences</code>.
+ */
+val PUBLISHED_CHANGELOG_ENTRY_SENTENCES: PublishedChangelogEntrySentences = PublishedChangelogEntrySentences.PUBLISHED_CHANGELOG_ENTRY_SENTENCES
 
 /**
  * The table <code>public.routine_context_sources</code>.

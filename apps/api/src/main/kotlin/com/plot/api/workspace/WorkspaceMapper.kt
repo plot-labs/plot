@@ -13,6 +13,7 @@ fun Workspace.toResponse(
 		slug = slug,
 		status = status,
 		logoUrl = logoUrl,
+		publicCitationsEnabled = publicCitationsEnabled,
 		plan = plan,
 		entitlementStatus = entitlement.status,
 		accessMode = entitlement.accessMode,

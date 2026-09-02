@@ -12,6 +12,7 @@ function workspaceSummary(overrides: Partial<WorkspaceSummary> = {}): WorkspaceS
     slug: "personal",
     status: "ACTIVE",
     logoUrl: null,
+    publicCitationsEnabled: true,
     plan: "founding",
     entitlementStatus: "active",
     accessMode: "full",
@@ -48,7 +49,11 @@ describe("Plot API client", () => {
     const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
 
     await client.getWorkspace("workspace-1");
-    await client.updateWorkspace("workspace-1", { name: "Product", logoUrl: "data:image/png;base64,abc" });
+    await client.updateWorkspace("workspace-1", {
+      name: "Product",
+      logoUrl: "data:image/png;base64,abc",
+      publicCitationsEnabled: false,
+    });
 
     expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
       "/api/plot/workspaces/workspace-1",
@@ -56,7 +61,11 @@ describe("Plot API client", () => {
     ]);
     expect(fetcher.mock.calls[1]?.[1]).toMatchObject({
       method: "PATCH",
-      body: JSON.stringify({ name: "Product", logoUrl: "data:image/png;base64,abc" }),
+      body: JSON.stringify({
+        name: "Product",
+        logoUrl: "data:image/png;base64,abc",
+        publicCitationsEnabled: false,
+      }),
     });
     expect(new Headers(fetcher.mock.calls[1]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
   });

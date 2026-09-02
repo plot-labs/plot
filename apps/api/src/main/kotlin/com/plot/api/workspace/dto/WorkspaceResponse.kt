@@ -9,6 +9,7 @@ data class WorkspaceResponse(
 	val slug: String,
 	val status: String,
 	val logoUrl: String?,
+	val publicCitationsEnabled: Boolean,
 	val plan: String,
 	val entitlementStatus: String,
 	val accessMode: String,

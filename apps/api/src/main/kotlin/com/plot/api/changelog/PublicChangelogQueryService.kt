@@ -30,7 +30,14 @@ class PublicChangelogQueryService(
 			?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Changelog not found")
 		val entry = persistence.findEntry(workspace.id, entrySlug)
 			?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Changelog not found")
-		return entry.copy(
+		val publicEntry = if (workspace.publicCitationsEnabled) {
+			entry
+		} else {
+			entry.copy(sentences = entry.sentences.map { sentence ->
+				sentence.copy(citations = emptyList())
+			})
+		}
+		return publicEntry.copy(
 			workspaceSlug = workspace.slug,
 			workspaceName = workspace.name,
 			logoUrl = workspace.logoUrl,

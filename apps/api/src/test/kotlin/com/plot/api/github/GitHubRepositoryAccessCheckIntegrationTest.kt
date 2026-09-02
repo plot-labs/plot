@@ -55,8 +55,9 @@ class GitHubRepositoryAccessCheckIntegrationTest {
 			id = 44,
 			owner = "new-owner",
 			name = "plot",
-			url = "https://github.com/new-owner/plot",
+			url = "https://github.test/new-owner/plot",
 			defaultBranch = "trunk",
+			visibility = "PUBLIC",
 		)
 
 		persistence.completeVerified(item, repository, Instant.now())
@@ -76,6 +77,49 @@ class GitHubRepositoryAccessCheckIntegrationTest {
 			"trunk",
 			jdbcTemplate.queryForObject(
 				"select metadata ->> 'defaultBranch' from source_scopes where id = ?",
+				String::class.java,
+				fixture.scopeId,
+			),
+		)
+		assertEquals(
+			"PUBLIC",
+			jdbcTemplate.queryForObject(
+				"select metadata ->> 'visibility' from source_scopes where id = ?",
+				String::class.java,
+				fixture.scopeId,
+			),
+		)
+	}
+
+	@Test
+	fun verifiedAccessRefreshesRepositoryVisibilityFromGitHub() {
+		val fixture = createScope(metadata = """{"repositoryId":44,"defaultBranch":"main","visibility":"PRIVATE"}""")
+		persistence.queue(
+			devContext.devWorkspaceId,
+			fixture.connectionId,
+			fixture.scopeId,
+			GitHubAccessCheckTrigger.RETRY,
+			Instant.now(),
+		)
+		val item = assertNotNull(persistence.claimNext("access-check-worker", Instant.now()))
+
+		persistence.completeVerified(
+			item,
+			GitHubRepository(
+				id = 44,
+				owner = "new-owner",
+				name = "plot",
+				url = "https://github.test/new-owner/plot",
+				defaultBranch = "trunk",
+				visibility = "PUBLIC",
+			),
+			Instant.now(),
+		)
+
+		assertEquals(
+			"PUBLIC",
+			jdbcTemplate.queryForObject(
+				"select metadata ->> 'visibility' from source_scopes where id = ?",
 				String::class.java,
 				fixture.scopeId,
 			),
@@ -103,7 +147,7 @@ class GitHubRepositoryAccessCheckIntegrationTest {
 		assertFailsWith<GitHubAccessCheckClaimLostException> {
 			persistence.completeVerified(
 				item,
-				GitHubRepository(44, "acme", "plot", "https://github.com/acme/plot", "main"),
+				GitHubRepository(44, "acme", "plot", "https://github.test/acme/plot", "main"),
 				Instant.now(),
 			)
 		}
@@ -140,7 +184,7 @@ class GitHubRepositoryAccessCheckIntegrationTest {
 		)
 	}
 
-	private fun createScope(): ScopeFixture {
+	private fun createScope(metadata: String = """{"repositoryId":44,"defaultBranch":"main"}"""): ScopeFixture {
 		val connectionId = UUID.randomUUID()
 		val namespaceId = UUID.randomUUID()
 		val bindingId = UUID.randomUUID()
@@ -178,7 +222,7 @@ class GitHubRepositoryAccessCheckIntegrationTest {
 			(id, workspace_id, source_namespace_id, provider, scope_semantics, scope_kind, external_scope_key,
 			 external_key, display_name, url, metadata, status, status_reason, created_at, updated_at)
 			values (?, ?, ?, 'GITHUB', 'CONTAINER', 'REPOSITORY', '44', 'acme/plot', 'acme/plot',
-			 'https://github.com/acme/plot', '{"repositoryId":44,"defaultBranch":"main"}'::jsonb,
+			 'https://github.test/acme/plot', '$metadata'::jsonb,
 			 'ERROR', 'REPOSITORY_TRANSFERRED', now(), now())
 			""".trimIndent(),
 			scopeId, devContext.devWorkspaceId, namespaceId,

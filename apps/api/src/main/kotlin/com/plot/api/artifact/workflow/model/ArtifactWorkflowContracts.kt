@@ -112,6 +112,7 @@ data class MarkdownExport(
 	val markdown: String,
 	val unresolvedCount: Int,
 	val warningAcknowledged: Boolean,
+	val renderedSentences: Map<UUID, String> = emptyMap(),
 )
 
 data class ExportSource(

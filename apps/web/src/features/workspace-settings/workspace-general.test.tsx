@@ -24,6 +24,7 @@ describe("WorkspaceGeneral", () => {
       slug: "personal",
       status: "ACTIVE",
       logoUrl: null,
+      publicCitationsEnabled: true,
       role: "OWNER",
     });
     mocks.updateWorkspace.mockReset().mockResolvedValue({
@@ -32,6 +33,7 @@ describe("WorkspaceGeneral", () => {
       slug: "personal",
       status: "ACTIVE",
       logoUrl: null,
+      publicCitationsEnabled: true,
       role: "OWNER",
     });
   });
@@ -56,8 +58,25 @@ describe("WorkspaceGeneral", () => {
     await waitFor(() => expect(mocks.updateWorkspace).toHaveBeenCalledWith("workspace-1", {
       name: "Product",
       logoUrl: "",
+      publicCitationsEnabled: true,
     }));
     expect(await screen.findByRole("status")).toHaveTextContent("Workspace settings saved.");
+  });
+
+  it("saves the public citation visibility setting", async () => {
+    render(<WorkspaceGeneral />);
+
+    const toggle = await screen.findByRole("switch", { name: "Public citations" });
+    expect(toggle).toHaveAttribute("aria-checked", "true");
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-checked", "false");
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(mocks.updateWorkspace).toHaveBeenCalledWith("workspace-1", {
+      name: "Personal",
+      logoUrl: "",
+      publicCitationsEnabled: false,
+    }));
   });
 
   it("reloads the profile when the selected workspace changes", async () => {

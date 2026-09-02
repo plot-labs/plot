@@ -17,6 +17,8 @@ export function WorkspaceGeneral() {
   const [savedName, setSavedName] = useState("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [savedLogoUrl, setSavedLogoUrl] = useState<string | null>(null);
+  const [publicCitationsEnabled, setPublicCitationsEnabled] = useState(true);
+  const [savedPublicCitationsEnabled, setSavedPublicCitationsEnabled] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -32,6 +34,8 @@ export function WorkspaceGeneral() {
       setSavedName("");
       setLogoUrl(null);
       setSavedLogoUrl(null);
+      setPublicCitationsEnabled(true);
+      setSavedPublicCitationsEnabled(true);
       setMessage(null);
       setError(null);
       setIsLoading(true);
@@ -63,6 +67,9 @@ export function WorkspaceGeneral() {
         setSavedName(value.name);
         setLogoUrl(nextLogoUrl);
         setSavedLogoUrl(nextLogoUrl);
+        const nextPublicCitationsEnabled = value.publicCitationsEnabled !== false;
+        setPublicCitationsEnabled(nextPublicCitationsEnabled);
+        setSavedPublicCitationsEnabled(nextPublicCitationsEnabled);
       })
       .catch(() => {
         if (!cancelled) setError("Workspace settings could not be loaded.");
@@ -74,7 +81,9 @@ export function WorkspaceGeneral() {
     return () => { cancelled = true; };
   }, [reloadNonce]);
 
-  const dirty = name.trim() !== savedName || logoUrl !== savedLogoUrl;
+  const dirty = name.trim() !== savedName
+    || logoUrl !== savedLogoUrl
+    || publicCitationsEnabled !== savedPublicCitationsEnabled;
   const canEdit = workspace?.role === "OWNER";
 
   const onLogoSelected = (file: File | undefined) => {
@@ -105,15 +114,24 @@ export function WorkspaceGeneral() {
       const updated = await plotApiClient.updateWorkspace(workspace.id, {
         name: name.trim(),
         logoUrl: logoUrl ?? "",
+        publicCitationsEnabled,
       });
       const nextLogoUrl = updated.logoUrl ?? null;
+      const nextPublicCitationsEnabled = updated.publicCitationsEnabled !== false;
       setWorkspace(updated);
       setName(updated.name);
       setSavedName(updated.name);
       setLogoUrl(nextLogoUrl);
       setSavedLogoUrl(nextLogoUrl);
+      setPublicCitationsEnabled(nextPublicCitationsEnabled);
+      setSavedPublicCitationsEnabled(nextPublicCitationsEnabled);
       window.dispatchEvent(new CustomEvent("plot:workspace-updated", {
-        detail: { id: updated.id, name: updated.name, logoUrl: nextLogoUrl },
+        detail: {
+          id: updated.id,
+          name: updated.name,
+          logoUrl: nextLogoUrl,
+          publicCitationsEnabled: nextPublicCitationsEnabled,
+        },
       }));
       setMessage("Workspace settings saved.");
     } catch {
@@ -264,6 +282,30 @@ export function WorkspaceGeneral() {
                   <ExternalLink className="size-3.5" aria-hidden="true" />
                   View live
                 </a>
+              </div>
+              <div className="flex items-start justify-between gap-4 border-t border-black/[0.07] pt-5 dark:border-white/[0.08]">
+                <div className="min-w-0">
+                  <p className="text-[13px] font-medium text-black/72 dark:text-white/76">Public citations</p>
+                  <p className="mt-1 max-w-[520px] text-[12px] leading-5 text-black/45 dark:text-white/45">
+                    Show citation chips and the Sources list on published changelog entries.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-label="Public citations"
+                  aria-checked={publicCitationsEnabled}
+                  disabled={!canEdit}
+                  onClick={() => setPublicCitationsEnabled((enabled) => !enabled)}
+                  className="relative mt-0.5 inline-flex h-6 w-11 shrink-0 items-center rounded-full bg-black/15 p-0.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ef3f2c]/35 focus-visible:ring-offset-2 aria-checked:bg-[#ef3f2c] disabled:cursor-not-allowed disabled:opacity-45 dark:bg-white/15 dark:aria-checked:bg-[#ef3f2c]"
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`size-5 rounded-full bg-white shadow-sm transition-transform ${
+                      publicCitationsEnabled ? "translate-x-5" : ""
+                    }`}
+                  />
+                </button>
               </div>
             </div>
           </section>

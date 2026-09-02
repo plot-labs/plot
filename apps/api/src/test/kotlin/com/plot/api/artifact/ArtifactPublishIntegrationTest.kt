@@ -63,6 +63,14 @@ class ArtifactPublishIntegrationTest {
 	@BeforeEach
 	@AfterEach
 	fun restoreWritableWorkspace() {
+		jdbcTemplate.update(
+			"delete from published_changelog_entry_citations where workspace_id = ?",
+			devContext.devWorkspaceId,
+		)
+		jdbcTemplate.update(
+			"delete from published_changelog_entry_sentences where workspace_id = ?",
+			devContext.devWorkspaceId,
+		)
 		jdbcTemplate.update("delete from published_changelog_entries where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update(
 			"""

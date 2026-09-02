@@ -109,11 +109,24 @@ export interface PublicChangelog {
   entries: PublicChangelogEntrySummary[];
 }
 
+export interface PublicChangelogCitation {
+  provider: string;
+  sourceLabel: string;
+  originalUrl: string;
+}
+
+export interface PublicChangelogSentence {
+  orderIndex: number;
+  body: string;
+  citations: PublicChangelogCitation[];
+}
+
 export interface PublicChangelogEntry extends PublicChangelogEntrySummary {
   bodyMarkdown: string;
   workspaceSlug: string;
   workspaceName: string;
   logoUrl: string | null;
+  sentences: PublicChangelogSentence[];
 }
 
 export interface RequestOptions { signal?: AbortSignal }
@@ -248,6 +261,7 @@ export interface WorkspaceSummary {
   slug: string;
   status: string;
   logoUrl: string | null;
+  publicCitationsEnabled: boolean;
   plan: string;
   entitlementStatus: string;
   accessMode: "full" | "read_only";
@@ -395,7 +409,7 @@ export interface PlotApiClient {
   retryGitHubReleaseDraft(sourceScopeId: string, requestId: string, options?: RequestOptions): Promise<GitHubReleaseActivity>;
   createWorkspace(input: { name: string }, options?: RequestOptions): Promise<WorkspaceSummary>;
   getWorkspace(id: string, options?: RequestOptions): Promise<WorkspaceSummary>;
-  updateWorkspace(id: string, input: { name?: string; logoUrl?: string }, options?: RequestOptions): Promise<WorkspaceSummary>;
+  updateWorkspace(id: string, input: { name?: string; logoUrl?: string; publicCitationsEnabled?: boolean }, options?: RequestOptions): Promise<WorkspaceSummary>;
   listRoutines(options?: RequestOptions): Promise<Routine[]>;
   getRoutine(id: string, options?: RequestOptions): Promise<Routine>;
   createRoutine(input: { name: string; sourceScopeId: string; contextSourceScopeIds?: string[]; instruction: string; cadence: RoutineCadence }, options?: RequestOptions): Promise<Routine>;

@@ -7,5 +7,18 @@
   "publishedAt": "2026-08-31T12:00:00Z",
   "workspaceSlug": "dev-workspace",
   "workspaceName": "Dev Workspace",
-  "logoUrl": null
+  "logoUrl": null,
+  "sentences": [
+    {
+      "orderIndex": 0,
+      "body": "Supported sentence.",
+      "citations": [
+        {
+          "provider": "GITHUB",
+          "sourceLabel": "PR #42",
+          "originalUrl": "https://github.com/acme/plot/pull/42"
+        }
+      ]
+    }
+  ]
 }

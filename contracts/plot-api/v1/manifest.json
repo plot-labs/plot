@@ -43,7 +43,8 @@
         "018fd000-0000-7000-8000-000000000002",
         {
           "name": "Studio",
-          "logoUrl": "data:image/png;base64,abc"
+          "logoUrl": "data:image/png;base64,abc",
+          "publicCitationsEnabled": true
         }
       ],
       "method": "PATCH",

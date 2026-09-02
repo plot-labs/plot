@@ -73,6 +73,7 @@ class WorkspaceRepository(
 			.set(WORKSPACES.TRIAL_STARTED_AT, workspace.trialStartedAt.toOffsetDateTime())
 			.set(WORKSPACES.TRIAL_ENDS_AT, workspace.trialEndsAt.toOffsetDateTime())
 			.set(WORKSPACES.LOGO_URL, workspace.logoUrl)
+			.set(WORKSPACES.PUBLIC_CITATIONS_ENABLED, workspace.publicCitationsEnabled)
 			.where(WORKSPACES.ID.eq(workspace.id))
 			.execute()
 		if (updated == 0) {
@@ -93,6 +94,7 @@ class WorkspaceRepository(
 				.set(WORKSPACES.TRIAL_STARTED_AT, workspace.trialStartedAt.toOffsetDateTime())
 				.set(WORKSPACES.TRIAL_ENDS_AT, workspace.trialEndsAt.toOffsetDateTime())
 				.set(WORKSPACES.LOGO_URL, workspace.logoUrl)
+				.set(WORKSPACES.PUBLIC_CITATIONS_ENABLED, workspace.publicCitationsEnabled)
 				.execute()
 		}
 		return workspace
@@ -115,6 +117,7 @@ class WorkspaceRepository(
 		WORKSPACES.TRIAL_STARTED_AT,
 		WORKSPACES.TRIAL_ENDS_AT,
 		WORKSPACES.LOGO_URL,
+		WORKSPACES.PUBLIC_CITATIONS_ENABLED,
 	).from(WORKSPACES)
 
 	private fun Record.toModel() = Workspace(
@@ -134,6 +137,7 @@ class WorkspaceRepository(
 		accessMode = requireNotNull(get(WORKSPACES.ACCESS_MODE)),
 		trialStartedAt = requireNotNull(get(WORKSPACES.TRIAL_STARTED_AT)).toInstant(),
 		trialEndsAt = requireNotNull(get(WORKSPACES.TRIAL_ENDS_AT)).toInstant(),
+		publicCitationsEnabled = requireNotNull(get(WORKSPACES.PUBLIC_CITATIONS_ENABLED)),
 	)
 }
 

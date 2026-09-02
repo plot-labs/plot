@@ -7,4 +7,5 @@ data class UpdateWorkspaceRequest(
 	val name: String? = null,
 	@field:Size(max = 600_000)
 	val logoUrl: String? = null,
+	val publicCitationsEnabled: Boolean? = null,
 )

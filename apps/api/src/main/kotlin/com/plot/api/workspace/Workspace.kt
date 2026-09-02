@@ -12,6 +12,7 @@ class Workspace(
 	var createdAt: Instant,
 	var updatedAt: Instant,
 	var logoUrl: String? = null,
+	var publicCitationsEnabled: Boolean = true,
 	var plan: String = "trial",
 	var polarSubscriptionId: String? = null,
 	var polarCustomerId: String? = null,
