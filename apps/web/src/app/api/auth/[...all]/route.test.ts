@@ -1,34 +1,43 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { authHandler } = vi.hoisted(() => ({
-  authHandler: vi.fn<(request: Request) => Promise<Response>>(),
-}));
-
-vi.mock("@/lib/auth", () => ({
-  // The production auth export is a lazy Proxy with an empty object target.
-  // Accessing handler initializes Better Auth, while `"handler" in auth` is false.
-  auth: new Proxy({}, {
-    get(_target, property) {
-      return property === "handler" ? authHandler : undefined;
-    },
-  }),
-}));
+const fetchMock = vi.fn<typeof fetch>();
 
 import { GET, POST } from "./route";
 
-describe("Better Auth Next.js route", () => {
+describe("auth upstream proxy route", () => {
   beforeEach(() => {
-    authHandler.mockReset();
-    authHandler.mockResolvedValue(new Response(null, { status: 204 }));
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+    delete process.env.PLOT_API_BASE_URL;
   });
 
-  it.each([GET, POST])("delegates to the lazy auth handler", async (routeHandler) => {
-    const request = new Request("http://127.0.0.1:3000/api/auth/test");
+  it("proxies GET requests to the Kotlin auth API", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ user: { id: "user-1" } }), {
+      status: 200,
+      headers: { "content-type": "application/json", "set-cookie": "plot.session=abc; Path=/" },
+    }));
 
-    const response = await routeHandler(request);
+    const response = await GET(new Request("http://127.0.0.1:3000/api/auth/session", {
+      headers: { cookie: "plot.session=abc" },
+    }));
+
+    expect(response.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const upstreamUrl = new URL(String(fetchMock.mock.calls[0]?.[0]));
+    expect(upstreamUrl.origin).toBe("http://127.0.0.1:8080");
+    expect(upstreamUrl.pathname).toBe("/api/auth/session");
+    expect(response.headers.get("set-cookie")).toContain("plot.session=abc");
+  });
+
+  it("proxies POST sign-out requests", async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+
+    const response = await POST(new Request("http://127.0.0.1:3000/api/auth/sign-out", {
+      method: "POST",
+      headers: { cookie: "plot.session=abc" },
+    }));
 
     expect(response.status).toBe(204);
-    expect(authHandler).toHaveBeenCalledOnce();
-    expect(authHandler).toHaveBeenCalledWith(request);
+    expect(fetchMock.mock.calls[0]?.[1]?.method).toBe("POST");
   });
 });
