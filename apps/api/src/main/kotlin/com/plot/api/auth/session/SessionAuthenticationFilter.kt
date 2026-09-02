@@ -10,7 +10,8 @@ class SessionAuthenticationFilter(
 	private val authSessionService: AuthSessionService,
 ) : OncePerRequestFilter() {
 	override fun shouldNotFilter(request: HttpServletRequest): Boolean {
-		val path = request.servletPath
+		val path = request.servletPath.takeIf { it.isNotBlank() }
+			?: request.requestURI.removePrefix(request.contextPath)
 		return path != "/api/auth/session" && path != "/api/auth/token" && path != "/api/auth/sign-out"
 	}
 
