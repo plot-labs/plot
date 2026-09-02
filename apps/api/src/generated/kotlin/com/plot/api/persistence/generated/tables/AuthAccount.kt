@@ -5,6 +5,7 @@ package com.plot.api.persistence.generated.tables
 
 
 import com.plot.api.persistence.generated.Public
+import com.plot.api.persistence.generated.indexes.AUTH_ACCOUNT_ISSUER_ACCOUNT_ID_UIDX
 import com.plot.api.persistence.generated.indexes.AUTH_ACCOUNT_USER_ID_IDX
 import com.plot.api.persistence.generated.keys.AUTH_ACCOUNT_PKEY
 import com.plot.api.persistence.generated.keys.AUTH_ACCOUNT_PROVIDER_ID_ACCOUNT_ID_KEY
@@ -143,6 +144,11 @@ open class AuthAccount(
      */
     val UPDATED_AT: TableField<AuthAccountRecord, OffsetDateTime?> = createField(DSL.name("updated_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false), this, "")
 
+    /**
+     * The column <code>public.auth_account.issuer</code>.
+     */
+    val ISSUER: TableField<AuthAccountRecord, String?> = createField(DSL.name("issuer"), SQLDataType.CLOB.nullable(false), this, "")
+
     private constructor(alias: Name, aliased: Table<AuthAccountRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<AuthAccountRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<AuthAccountRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)
@@ -175,7 +181,7 @@ open class AuthAccount(
         override fun `as`(alias: Table<*>): AuthAccountPath = AuthAccountPath(alias.qualifiedName, this)
     }
     override fun getSchema(): Schema? = if (aliased()) null else Public.PUBLIC
-    override fun getIndexes(): List<Index> = listOf(AUTH_ACCOUNT_USER_ID_IDX)
+    override fun getIndexes(): List<Index> = listOf(AUTH_ACCOUNT_ISSUER_ACCOUNT_ID_UIDX, AUTH_ACCOUNT_USER_ID_IDX)
     override fun getPrimaryKey(): UniqueKey<AuthAccountRecord> = AUTH_ACCOUNT_PKEY
     override fun getUniqueKeys(): List<UniqueKey<AuthAccountRecord>> = listOf(AUTH_ACCOUNT_PROVIDER_ID_ACCOUNT_ID_KEY)
     override fun getReferences(): List<ForeignKey<AuthAccountRecord, *>> = listOf(AUTH_ACCOUNT__AUTH_ACCOUNT_USER_ID_FKEY)
