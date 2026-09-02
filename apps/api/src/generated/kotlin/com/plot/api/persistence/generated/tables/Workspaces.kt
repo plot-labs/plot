@@ -194,6 +194,11 @@ open class Workspaces(
      */
     val LOGO_URL: TableField<WorkspacesRecord, String?> = createField(DSL.name("logo_url"), SQLDataType.CLOB, this, "")
 
+    /**
+     * The column <code>public.workspaces.public_citations_enabled</code>.
+     */
+    val PUBLIC_CITATIONS_ENABLED: TableField<WorkspacesRecord, Boolean?> = createField(DSL.name("public_citations_enabled"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("true"), SQLDataType.BOOLEAN)), this, "")
+
     private constructor(alias: Name, aliased: Table<WorkspacesRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<WorkspacesRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<WorkspacesRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)

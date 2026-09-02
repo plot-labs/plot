@@ -1,4 +1,5 @@
 {
   "name": "Studio",
-  "logoUrl": "data:image/png;base64,abc"
+  "logoUrl": "data:image/png;base64,abc",
+  "publicCitationsEnabled": true
 }

@@ -97,6 +97,9 @@ class WorkspaceService(
 			}
 			workspace.logoUrl = logoUrl
 		}
+		request.publicCitationsEnabled?.let { enabled ->
+			workspace.publicCitationsEnabled = enabled
+		}
 		workspace.updatedAt = java.time.Instant.now()
 		workspaceRepository.save(workspace)
 

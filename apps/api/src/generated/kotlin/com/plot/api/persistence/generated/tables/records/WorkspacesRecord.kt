@@ -83,6 +83,10 @@ open class WorkspacesRecord() : UpdatableRecordImpl<WorkspacesRecord>(Workspaces
         set(value): Unit = set(15, value)
         get(): String? = get(15) as String?
 
+    open var publicCitationsEnabled: Boolean?
+        set(value): Unit = set(16, value)
+        get(): Boolean? = get(16) as Boolean?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -92,7 +96,7 @@ open class WorkspacesRecord() : UpdatableRecordImpl<WorkspacesRecord>(Workspaces
     /**
      * Create a detached, initialised WorkspacesRecord
      */
-    constructor(id: UUID? = null, name: String? = null, slug: String? = null, createdByUserId: UUID? = null, status: String? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, plan: String? = null, polarSubscriptionId: String? = null, polarCustomerId: String? = null, planUpdatedAt: OffsetDateTime? = null, entitlementStatus: String? = null, accessMode: String? = null, trialStartedAt: OffsetDateTime? = null, trialEndsAt: OffsetDateTime? = null, logoUrl: String? = null): this() {
+    constructor(id: UUID? = null, name: String? = null, slug: String? = null, createdByUserId: UUID? = null, status: String? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, plan: String? = null, polarSubscriptionId: String? = null, polarCustomerId: String? = null, planUpdatedAt: OffsetDateTime? = null, entitlementStatus: String? = null, accessMode: String? = null, trialStartedAt: OffsetDateTime? = null, trialEndsAt: OffsetDateTime? = null, logoUrl: String? = null, publicCitationsEnabled: Boolean? = null): this() {
         this.id = id
         this.name = name
         this.slug = slug
@@ -109,6 +113,7 @@ open class WorkspacesRecord() : UpdatableRecordImpl<WorkspacesRecord>(Workspaces
         this.trialStartedAt = trialStartedAt
         this.trialEndsAt = trialEndsAt
         this.logoUrl = logoUrl
+        this.publicCitationsEnabled = publicCitationsEnabled
         resetChangedOnNotNull()
     }
 }
