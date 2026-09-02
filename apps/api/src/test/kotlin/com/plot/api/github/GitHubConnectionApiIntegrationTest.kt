@@ -86,8 +86,8 @@ class GitHubConnectionApiIntegrationTest {
 				"on conflict (id) do nothing",
 		)
 		jdbcTemplate.update(
-			"insert into auth_account (id, account_id, provider_id, user_id, access_token, created_at, updated_at) " +
-				"values ('acct-dev', '9001', 'github', 'auth-user-dev', 'gh-token', now(), now()) " +
+			"insert into auth_account (id, account_id, provider_id, issuer, user_id, access_token, created_at, updated_at) " +
+				"values ('acct-dev', '9001', 'github', 'local:oauth:github', 'auth-user-dev', 'gh-token', now(), now()) " +
 				"on conflict do nothing",
 		)
 		jdbcTemplate.update("update users set auth_subject = 'auth-user-dev' where id = ?", devContext.devUserId)
