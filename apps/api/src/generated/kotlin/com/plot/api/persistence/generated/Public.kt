@@ -38,6 +38,8 @@ import com.plot.api.persistence.generated.tables.GithubWebhookDeliveries
 import com.plot.api.persistence.generated.tables.ModelInvocations
 import com.plot.api.persistence.generated.tables.PolarWebhookEvents
 import com.plot.api.persistence.generated.tables.PublishedChangelogEntries
+import com.plot.api.persistence.generated.tables.PublishedChangelogEntryCitations
+import com.plot.api.persistence.generated.tables.PublishedChangelogEntrySentences
 import com.plot.api.persistence.generated.tables.RoutineContextSources
 import com.plot.api.persistence.generated.tables.RoutineExecutionEvidence
 import com.plot.api.persistence.generated.tables.RoutineExecutions
@@ -242,6 +244,16 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
     val PUBLISHED_CHANGELOG_ENTRIES: PublishedChangelogEntries get() = PublishedChangelogEntries.PUBLISHED_CHANGELOG_ENTRIES
 
     /**
+     * The table <code>public.published_changelog_entry_citations</code>.
+     */
+    val PUBLISHED_CHANGELOG_ENTRY_CITATIONS: PublishedChangelogEntryCitations get() = PublishedChangelogEntryCitations.PUBLISHED_CHANGELOG_ENTRY_CITATIONS
+
+    /**
+     * The table <code>public.published_changelog_entry_sentences</code>.
+     */
+    val PUBLISHED_CHANGELOG_ENTRY_SENTENCES: PublishedChangelogEntrySentences get() = PublishedChangelogEntrySentences.PUBLISHED_CHANGELOG_ENTRY_SENTENCES
+
+    /**
      * The table <code>public.routine_context_sources</code>.
      */
     val ROUTINE_CONTEXT_SOURCES: RoutineContextSources get() = RoutineContextSources.ROUTINE_CONTEXT_SOURCES
@@ -361,6 +373,8 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
         ModelInvocations.MODEL_INVOCATIONS,
         PolarWebhookEvents.POLAR_WEBHOOK_EVENTS,
         PublishedChangelogEntries.PUBLISHED_CHANGELOG_ENTRIES,
+        PublishedChangelogEntryCitations.PUBLISHED_CHANGELOG_ENTRY_CITATIONS,
+        PublishedChangelogEntrySentences.PUBLISHED_CHANGELOG_ENTRY_SENTENCES,
         RoutineContextSources.ROUTINE_CONTEXT_SOURCES,
         RoutineExecutionEvidence.ROUTINE_EXECUTION_EVIDENCE,
         RoutineExecutions.ROUTINE_EXECUTIONS,

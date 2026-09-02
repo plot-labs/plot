@@ -11,6 +11,18 @@ data class PublicChangelogEntrySummaryResponse(
 	val publishedAt: Instant,
 )
 
+data class PublicChangelogCitationResponse(
+	val provider: String,
+	val sourceLabel: String,
+	val originalUrl: String,
+)
+
+data class PublicChangelogSentenceResponse(
+	val orderIndex: Int,
+	val body: String,
+	val citations: List<PublicChangelogCitationResponse>,
+)
+
 data class PublicChangelogEntryDetailResponse(
 	val id: UUID,
 	val entrySlug: String,
@@ -21,6 +33,7 @@ data class PublicChangelogEntryDetailResponse(
 	val workspaceSlug: String,
 	val workspaceName: String,
 	val logoUrl: String?,
+	val sentences: List<PublicChangelogSentenceResponse>,
 )
 
 data class PublicChangelogResponse(

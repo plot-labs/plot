@@ -60,6 +60,7 @@ describe("PublicChangelogEntryPage", () => {
       workspaceSlug: "acme",
       workspaceName: "Acme",
       logoUrl: null,
+      sentences: [],
     });
 
     const page = await PublicChangelogEntryPage({

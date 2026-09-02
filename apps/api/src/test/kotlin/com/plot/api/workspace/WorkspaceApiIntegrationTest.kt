@@ -43,6 +43,7 @@ class WorkspaceApiIntegrationTest {
 				jsonPath("$.entitlementStatus") { value("active") }
 				jsonPath("$.accessMode") { value("full") }
 				jsonPath("$.role") { value("OWNER") }
+				jsonPath("$.publicCitationsEnabled") { value(true) }
 			}
 	}
 
@@ -122,6 +123,7 @@ class WorkspaceApiIntegrationTest {
 			jsonPath("$.name") { value("Product") }
 			jsonPath("$.logoUrl") { value("data:image/png;base64,abc") }
 			jsonPath("$.role") { value("OWNER") }
+			jsonPath("$.publicCitationsEnabled") { value(true) }
 		}
 
 		mockMvc.patch("/api/workspaces/${devContext.devWorkspaceId}") {
@@ -141,5 +143,32 @@ class WorkspaceApiIntegrationTest {
 				devContext.devWorkspaceId,
 			),
 		)
+	}
+
+	@Test
+	fun ownerCanTogglePublicCitations() {
+		mockMvc.patch("/api/workspaces/${devContext.devWorkspaceId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"publicCitationsEnabled":false}"""
+		}.andExpect {
+			status { isOk() }
+			jsonPath("$.publicCitationsEnabled") { value(false) }
+		}
+		assertEquals(
+			false,
+			jdbcTemplate.queryForObject(
+				"select public_citations_enabled from workspaces where id = ?",
+				Boolean::class.java,
+				devContext.devWorkspaceId,
+			),
+		)
+
+		mockMvc.patch("/api/workspaces/${devContext.devWorkspaceId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"publicCitationsEnabled":true}"""
+		}.andExpect {
+			status { isOk() }
+			jsonPath("$.publicCitationsEnabled") { value(true) }
+		}
 	}
 }

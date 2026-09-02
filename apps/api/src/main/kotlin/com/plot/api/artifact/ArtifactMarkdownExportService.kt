@@ -25,12 +25,15 @@ class ArtifactMarkdownExportService {
 			throw IllegalArgumentException("Sentence order must be unique")
 		}
 		if (orderedSentences.any { it.body.isBlank() }) throw IllegalArgumentException("Export sentence is blank")
+		val renderedSentences = orderedSentences.associate { sentence ->
+			sentence.id to neutralizeUntrustedText(sentence.body.trim())
+		}
 		val unresolvedCount = orderedSentences.count { it.status.isUnresolved }
 		if (unresolvedCount > 0 && !acknowledgeUnresolved) throw UnresolvedExportException(unresolvedCount)
 
 		val evidenceById = evidence.associateBy { it.id }
 		val markdown = buildString {
-			append(orderedSentences.joinToString("\n\n") { neutralizeUntrustedText(it.body.trim()) })
+			append(renderedSentences.values.joinToString("\n\n"))
 			if (includeSources) {
 				val publicSources = sources
 					.distinctBy { it.originalUrl }
@@ -53,6 +56,7 @@ class ArtifactMarkdownExportService {
 			markdown = markdown,
 			unresolvedCount = unresolvedCount,
 			warningAcknowledged = acknowledgeUnresolved && unresolvedCount > 0,
+			renderedSentences = renderedSentences,
 		)
 	}
 

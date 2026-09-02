@@ -90,12 +90,55 @@ class ArtifactPublishService(
 				"This artifact variant is already published",
 			)
 		}
+		insertCitationSnapshot(entryId, gate)
 		return PublishContentVariantResponse(
 			entryId = entryId,
 			entrySlug = entrySlug,
 			publicPath = "/${workspace.slug}/changelog/$entrySlug",
 			publishedAt = publishedAt,
 		)
+	}
+
+	private fun insertCitationSnapshot(entryId: UUID, gate: DeliveryGateOutcome.Ready) {
+		gate.exportSentences
+			.sortedBy { it.orderIndex }
+			.forEach { sentence ->
+				val sentenceId = uuidGenerator.next()
+				val body = gate.rendered.renderedSentences[sentence.id]
+					?: throw IllegalStateException("Rendered sentence is missing for ${sentence.id}")
+				sqlExecutor.update(
+					"""
+					insert into published_changelog_entry_sentences (
+					  id, workspace_id, published_changelog_entry_id, order_index, body
+					) values (?, ?, ?, ?, ?)
+					""".trimIndent(),
+					sentenceId,
+					devContext.devWorkspaceId,
+					entryId,
+					sentence.orderIndex,
+					body,
+				)
+
+				gate.publicCitations[sentence.id].orEmpty()
+					.filter { it.sourceVisibility.equals("PUBLIC", ignoreCase = true) }
+					.forEachIndexed { citationOrder, citation ->
+						sqlExecutor.update(
+							"""
+							insert into published_changelog_entry_citations (
+							  id, workspace_id, published_changelog_entry_sentence_id,
+							  citation_order, provider, source_label, original_url
+							) values (?, ?, ?, ?, ?, ?, ?)
+							""".trimIndent(),
+							uuidGenerator.next(),
+							devContext.devWorkspaceId,
+							sentenceId,
+							citationOrder,
+							citation.provider,
+							citation.sourceLabel,
+							citation.originalUrl,
+						)
+					}
+			}
 	}
 
 	private fun loadPublishMetadata(variantId: UUID): PublishMetadata {
@@ -126,7 +169,7 @@ class ArtifactPublishService(
 		return normalized.replace(SLUG_UNSAFE, "-").trim('-').ifEmpty { shortEntrySlug(uuidGenerator.next()) }
 	}
 
-	private fun shortEntrySlug(entryId: UUID): String = entryId.toString().replace("-", "").take(8)
+	private fun shortEntrySlug(entryId: UUID): String = entryId.toString().replace("-", "").takeLast(8)
 
 	private data class PublishMetadata(val title: String?, val tagName: String?)
 

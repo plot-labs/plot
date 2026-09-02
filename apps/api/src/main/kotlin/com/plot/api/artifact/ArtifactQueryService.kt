@@ -225,6 +225,7 @@ class ArtifactQueryService(
 		         ) then true
 		         else false
 		       end as source_access
+		       , sc.metadata ->> 'visibility' as source_visibility
 		from content_variant_revision_sentences rs
 		join sentence_citations c
 		  on c.workspace_id = rs.workspace_id and c.sentence_id = rs.sentence_id
@@ -248,6 +249,7 @@ class ArtifactQueryService(
 						requireNotNull(rs.getString(3)),
 						requireNotNull(rs.getString(4)).trim(),
 					originalUrl,
+					rs.getString(7),
 				)
 			}
 		},
@@ -370,6 +372,7 @@ internal data class PublicCitation(
     val provider: String,
     val sourceLabel: String,
     val originalUrl: String,
+    val sourceVisibility: String?,
 ) {
     val response: ContentCitationResponse
         get() = ContentCitationResponse(evidenceId, provider, sourceLabel, originalUrl)

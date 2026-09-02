@@ -15,8 +15,10 @@ import com.plot.api.persistence.generated.keys.PUBLISHED_CHANGELOG_ENTRIES__PUBL
 import com.plot.api.persistence.generated.keys.PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_CONTENT_VARIANT_FK
 import com.plot.api.persistence.generated.keys.PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_PUBLISHED_BY_USER_ID_FKEY
 import com.plot.api.persistence.generated.keys.PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_WORKSPACE_ID_FKEY
+import com.plot.api.persistence.generated.keys.PUBLISHED_CHANGELOG_ENTRY_SENTENCES__PUBLISHED_CHANGELOG_ENTRY_SEN_WORKSPACE_ID_PUBLISHED_CHANG_FKEY
 import com.plot.api.persistence.generated.tables.ContentVariantRevisions.ContentVariantRevisionsPath
 import com.plot.api.persistence.generated.tables.ContentVariants.ContentVariantsPath
+import com.plot.api.persistence.generated.tables.PublishedChangelogEntrySentences.PublishedChangelogEntrySentencesPath
 import com.plot.api.persistence.generated.tables.Users.UsersPath
 import com.plot.api.persistence.generated.tables.Workspaces.WorkspacesPath
 import com.plot.api.persistence.generated.tables.records.PublishedChangelogEntriesRecord
@@ -248,6 +250,22 @@ open class PublishedChangelogEntries(
 
     val workspaces: WorkspacesPath
         get(): WorkspacesPath = workspaces()
+
+    private lateinit var _publishedChangelogEntrySentences: PublishedChangelogEntrySentencesPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.published_changelog_entry_sentences</code> table
+     */
+    fun publishedChangelogEntrySentences(): PublishedChangelogEntrySentencesPath {
+        if (!this::_publishedChangelogEntrySentences.isInitialized)
+            _publishedChangelogEntrySentences = PublishedChangelogEntrySentencesPath(this, null, PUBLISHED_CHANGELOG_ENTRY_SENTENCES__PUBLISHED_CHANGELOG_ENTRY_SEN_WORKSPACE_ID_PUBLISHED_CHANG_FKEY.inverseKey)
+
+        return _publishedChangelogEntrySentences;
+    }
+
+    val publishedChangelogEntrySentences: PublishedChangelogEntrySentencesPath
+        get(): PublishedChangelogEntrySentencesPath = publishedChangelogEntrySentences()
     override fun `as`(alias: String): PublishedChangelogEntries = PublishedChangelogEntries(DSL.name(alias), this)
     override fun `as`(alias: Name): PublishedChangelogEntries = PublishedChangelogEntries(alias, this)
     override fun `as`(alias: Table<*>): PublishedChangelogEntries = PublishedChangelogEntries(alias.qualifiedName, this)

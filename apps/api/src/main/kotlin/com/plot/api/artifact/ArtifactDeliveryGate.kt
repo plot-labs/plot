@@ -19,7 +19,7 @@ class ArtifactDeliveryGate(
 	private val materializer: ArtifactRevisionMaterializer,
 	private val markdownExportService: ArtifactMarkdownExportService,
 ) {
-	fun prepare(
+	internal fun prepare(
 		variantId: UUID,
 		expectedRevisionNumber: Int,
 		includeSources: Boolean,
@@ -74,6 +74,7 @@ class ArtifactDeliveryGate(
 			artifactWorkflowRunId = artifactWorkflowRunId,
 			exportSentences = exportSentences,
 			rendered = rendered,
+			publicCitations = publicCitations,
 			warnings = warnings,
 			warningKeys = warnings.map { it.key },
 			sources = sources,
@@ -112,7 +113,7 @@ class ArtifactDeliveryGate(
 	}
 }
 
-sealed interface DeliveryGateOutcome {
+internal sealed interface DeliveryGateOutcome {
 	data class ConfirmationRequired(
 		val warnings: List<ExportWarningResponse>,
 		val revision: CurrentArtifactRevision,
@@ -125,6 +126,7 @@ sealed interface DeliveryGateOutcome {
 		val artifactWorkflowRunId: UUID,
 		val exportSentences: List<com.plot.api.artifact.workflow.model.ExportSentence>,
 		val rendered: com.plot.api.artifact.workflow.model.MarkdownExport,
+		val publicCitations: Map<UUID, List<PublicCitation>>,
 		val warnings: List<ExportWarningResponse>,
 		val warningKeys: List<String>,
 		val sources: List<ExportSource>,
