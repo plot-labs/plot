@@ -90,8 +90,9 @@ class AuthApiIntegrationTest {
 			jsonPath("$.keys") { isArray() }
 		}
 
-		val signOutResult = mockMvc.post("/api/auth/sign-out") { cookie(sessionCookie) }.andReturn()
-		assertEquals(204, signOutResult.response.status, signOutResult.response.contentAsString)
+		mockMvc.post("/api/auth/sign-out") { cookie(sessionCookie) }.andExpect {
+			status { isNoContent() }
+		}
 
 		mockMvc.get("/api/auth/session") { cookie(sessionCookie) }.andExpect {
 			status { isUnauthorized() }
