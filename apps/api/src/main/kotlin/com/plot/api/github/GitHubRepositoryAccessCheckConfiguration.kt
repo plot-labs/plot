@@ -1,11 +1,10 @@
 package com.plot.api.github
 
+import java.util.concurrent.ScheduledExecutorService
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.task.TaskExecutor
-import org.springframework.core.task.TaskRejectedException
-import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
 import org.springframework.stereotype.Component
 
@@ -25,29 +24,19 @@ class GitHubRepositoryAccessCheckConfiguration {
 
 @Component
 class GitHubRepositoryAccessCheckDispatcher(
-	@Qualifier("githubRepositoryAccessCheckTaskExecutor") private val taskExecutor: TaskExecutor,
-	private val worker: GitHubRepositoryAccessCheckWorker,
+	@Qualifier("githubRepositoryAccessCheckTaskExecutor") taskExecutor: TaskExecutor,
+	@Qualifier("githubWorkerRetryExecutor") retryExecutor: ScheduledExecutorService,
+	worker: GitHubRepositoryAccessCheckWorker,
+	properties: GitHubProperties,
 ) {
-	fun dispatch() {
-		try {
-			taskExecutor.execute { worker.drain() }
-		} catch (_: TaskRejectedException) {
-			// The durable poller will rediscover queued access checks.
-		}
-	}
-}
+	private val delegate = GitHubWorkerDispatch(
+		taskExecutor = taskExecutor,
+		retryExecutor = retryExecutor,
+		recover = worker::recover,
+		drain = worker::drain,
+		earliestRetryAt = worker::nextRetryAt,
+		failureRecoveryDelay = properties.accessCheckLeaseTimeout,
+	)
 
-@Component
-class GitHubRepositoryAccessCheckPoller(
-	private val worker: GitHubRepositoryAccessCheckWorker,
-	private val dispatcher: GitHubRepositoryAccessCheckDispatcher,
-	private val properties: GitHubProperties,
-) {
-	@Scheduled(fixedDelayString = "\${plot.github.access-check-poll-delay:PT5S}")
-	fun poll() {
-		if (properties.enabled) {
-			worker.recover()
-			dispatcher.dispatch()
-		}
-	}
+	fun dispatch() = delegate.dispatch()
 }

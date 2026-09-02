@@ -819,6 +819,9 @@ class GitHubReleaseDraftOrchestratorTest {
 		}
 
 		override fun findGenerating(limit: Int): List<GitHubReleaseDraftRequest> = generating.take(limit)
+
+		override fun hasGeneratingRequestForAgentRun(workspaceId: UUID, agentRunId: UUID): Boolean =
+			generating.any { it.workspaceId == workspaceId && it.agentRunId == agentRunId }
 		override fun recoverStaleClaims(now: Instant, leaseTimeout: Duration): Int = 0
 		override fun fenceSourceScope(
 			workspaceId: UUID,

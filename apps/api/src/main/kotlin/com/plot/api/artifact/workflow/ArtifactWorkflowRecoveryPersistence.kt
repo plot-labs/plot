@@ -12,6 +12,17 @@ class ArtifactWorkflowRecoveryPersistence(
 	private val transactionExecutor: JooqTransactionExecutor,
 	private val clock: Clock = Clock.systemUTC(),
 ) {
+	/** Earliest persisted invocation retry, including rows already due, or null when none is pending. */
+	fun earliestNextAttemptAt(): Instant? = sqlExecutor.query(
+		"""
+		select min(next_attempt_at) as next_attempt_at
+		from generation_runs
+		where status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
+		  and claimed_by is null and next_attempt_at is not null
+		""".trimIndent(),
+		{ rs, _ -> rs.getTimestamp("next_attempt_at")?.toInstant() },
+	).firstOrNull()
+
 	fun recoverStaleClaims(staleBefore: Instant): Int = transactionExecutor.execute {
 		val now = clock.instant()
 		val candidates = sqlExecutor.query(

@@ -294,6 +294,15 @@ class GitHubReleaseLeasePersistence(
 		}
 	}
 
+	override fun earliestNextAttemptAt(after: Instant): Instant? = sqlExecutor.queryForObject(
+		"""
+		select min(next_attempt_at)
+		from github_release_draft_requests
+		where status in ('QUEUED', 'RESOLVING') and next_attempt_at is not null
+		""".trimIndent(),
+		OffsetDateTime::class.java,
+	)?.toInstant()
+
 	override fun recordReconcileDiagnostic(requestId: UUID, transitionVersion: Long, errorCode: String) {
 		require(errorCode.length in 1..100 && errorCode.all { it.isUpperCase() || it.isDigit() || it == '_' }) {
 			"Release diagnostic error code is invalid"

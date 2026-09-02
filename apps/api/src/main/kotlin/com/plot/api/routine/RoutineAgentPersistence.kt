@@ -229,6 +229,26 @@ class RoutineAgentPersistence(
 		requireNotNull(findExecution(workspaceId, executionId))
 	}
 
+	fun recoverStaleExecutionClaims(staleBefore: Instant, now: Instant): Int = sqlExecutor.update(
+		"""
+		update routine_executions
+		set claimed_by = null, claimed_at = null,
+		    transition_version = transition_version + 1, updated_at = ?
+		where status = 'PROBING' and claimed_by is not null and claimed_at < ?
+		""".trimIndent(),
+		Timestamp.from(now),
+		Timestamp.from(staleBefore),
+	)
+
+	fun earliestNextAttemptAt(after: Instant): Instant? = sqlExecutor.query(
+		"""
+		select min(next_attempt_at) as next_attempt_at
+		from routine_executions
+		where status = 'PROBING' and next_attempt_at is not null
+		""".trimIndent(),
+		{ rs, _ -> rs.getTimestamp("next_attempt_at")?.toInstant() },
+	).firstOrNull()
+
 	fun addEvidence(
 		workspaceId: UUID,
 		executionId: UUID,

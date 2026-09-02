@@ -4,6 +4,8 @@ import com.plot.api.persistence.generated.tables.AgentRuns.Companion.AGENT_RUNS
 import com.plot.api.persistence.generated.tables.AgentRunInputs.Companion.AGENT_RUN_INPUTS
 import com.plot.api.persistence.generated.tables.AgentSteps.Companion.AGENT_STEPS
 import com.plot.api.common.UuidGenerator
+import com.plot.api.artifact.run.ArtifactRunPersistence
+import com.plot.api.artifact.run.ArtifactRunStatus
 import com.plot.api.persistence.JooqSqlExecutor
 import com.plot.api.persistence.JooqTransactionExecutor
 import java.sql.Timestamp
@@ -14,7 +16,11 @@ import java.time.ZoneOffset
 import java.util.UUID
 import org.jooq.DSLContext
 import org.jooq.JSONB
+import org.springframework.context.annotation.Lazy
 import org.springframework.stereotype.Component
+import org.springframework.transaction.support.TransactionSynchronization
+import org.springframework.transaction.support.TransactionSynchronizationManager
+import com.plot.api.github.GitHubReleaseReconciliationTrigger
 
 @Component
 class AgentRunExecutionPersistence(
@@ -22,6 +28,8 @@ class AgentRunExecutionPersistence(
 	private val transactionExecutor: JooqTransactionExecutor,
 	private val uuidGenerator: UuidGenerator,
 	private val queryPersistence: AgentRunQueryPersistence,
+	private val artifactRunPersistence: ArtifactRunPersistence,
+	@Lazy private val releaseReconciliation: GitHubReleaseReconciliationTrigger? = null,
 	dslContext: DSLContext,
 	private val clock: Clock? = null,
 ) {
@@ -30,6 +38,86 @@ class AgentRunExecutionPersistence(
 		.dsl()
 	private val safeErrorCode = Regex("[A-Z][A-Z0-9_]{0,99}")
 	private fun currentInstant(): Instant = clock?.instant() ?: Instant.now()
+
+	fun recoverStaleAgentRuns(staleBefore: Instant, now: Instant = currentInstant()): Int {
+		failExhaustedStaleAgentRuns(staleBefore, now)
+		return sqlExecutor.update(
+			"""
+			update agent_runs
+			set claimed_by = null, claimed_at = null,
+			    transition_version = transition_version + 1, updated_at = ?
+			where status = 'RUNNING' and claimed_by is not null and claimed_at < ?
+			  and attempt_count < max_attempts
+			""".trimIndent(),
+			Timestamp.from(now),
+			Timestamp.from(staleBefore),
+		)
+	}
+
+	fun completeWaitingArtifactHandoff(
+		workspaceId: UUID,
+		artifactWorkflowRunId: UUID,
+		now: Instant = currentInstant(),
+	): Boolean = transactionExecutor.execute {
+		val agentRunId = sqlExecutor.query(
+			"""
+			select agent_run_id
+			from generation_runs
+			where workspace_id = ? and id = ? and agent_run_id is not null
+			""".trimIndent(),
+			{ rs, _ -> requireNotNull(rs.getObject("agent_run_id", UUID::class.java)) },
+			workspaceId,
+			artifactWorkflowRunId,
+		).firstOrNull() ?: return@execute false
+		val run = queryPersistence.findAgentRun(workspaceId, agentRunId) ?: return@execute false
+		if (run.status != AgentRunStatus.RUNNING) return@execute false
+		val claim = claimRunningAgentRun(run, "artifact-completion-${UUID.randomUUID()}", now)
+			?: return@execute false
+		val state = artifactRunPersistence.findWorkflowStateByWorkflowRun(workspaceId, artifactWorkflowRunId)
+			?: throw IllegalArgumentException("Linked artifact run is unavailable")
+		when {
+			state.materialized && state.status in setOf(ArtifactRunStatus.READY, ArtifactRunStatus.NEEDS_REVIEW) -> {
+				succeedAgentRun(claim, now)
+				true
+			}
+			state.status == ArtifactRunStatus.FAILED -> {
+				failAgentRun(claim, "AGENT_ARTIFACT_WORKFLOW_FAILED", now)
+				true
+			}
+			else -> {
+				releaseArtifactHandoffClaim(claim, now)
+				false
+			}
+		}
+	} ?: false
+
+	/**
+	 * Resumes every agent run parked on an artifact workflow that already reached a
+	 * terminal state, so a completion that raced with the handoff or was lost to a
+	 * restart still finishes the run.
+	 */
+	fun reconcileWaitingArtifactHandoffs(now: Instant = currentInstant()): Int {
+		val waiting = sqlExecutor.query(
+			"""
+			select workflow.workspace_id, workflow.id
+			from generation_runs workflow
+			join artifact_runs artifact
+			  on artifact.workspace_id = workflow.workspace_id and artifact.id = workflow.artifact_run_id
+			join agent_runs run
+			  on run.workspace_id = workflow.workspace_id and run.id = workflow.agent_run_id
+			where workflow.agent_run_id is not null
+			  and artifact.status in ('READY', 'NEEDS_REVIEW', 'FAILED')
+			  and run.status = 'RUNNING' and run.claimed_by is null
+			""".trimIndent(),
+			{ rs, _ ->
+				requireNotNull(rs.getObject("workspace_id", UUID::class.java)) to
+					requireNotNull(rs.getObject("id", UUID::class.java))
+			},
+		)
+		return waiting.count { (workspaceId, workflowRunId) ->
+			completeWaitingArtifactHandoff(workspaceId, workflowRunId, now)
+		}
+	}
 
 	fun appendStep(
 		workspaceId: UUID,
@@ -507,6 +595,45 @@ class AgentRunExecutionPersistence(
 		return queryPersistence.findAdoptedInput(workspaceId, agentRunId, input)
 			?: throw RoutineExecutionStateException("Agent read result could not be adopted")
 	}
+	private fun claimRunningAgentRun(run: AgentRunRecord, workerId: String, now: Instant): ClaimedAgentRun? {
+		val updated = dsl.update(AGENT_RUNS)
+			.set(AGENT_RUNS.CLAIMED_BY, workerId)
+			.set(AGENT_RUNS.CLAIMED_AT, now.toOffsetDateTime())
+			.set(AGENT_RUNS.TRANSITION_VERSION, AGENT_RUNS.TRANSITION_VERSION.plus(1))
+			.set(AGENT_RUNS.UPDATED_AT, now.toOffsetDateTime())
+			.where(
+				AGENT_RUNS.WORKSPACE_ID.eq(run.workspaceId),
+				AGENT_RUNS.ID.eq(run.id),
+				AGENT_RUNS.STATUS.eq(AgentRunStatus.RUNNING.name),
+				AGENT_RUNS.CLAIMED_BY.isNull,
+				AGENT_RUNS.TRANSITION_VERSION.eq(run.transitionVersion),
+			)
+			.execute()
+		if (updated != 1) return null
+		return ClaimedAgentRun(
+			workspaceId = run.workspaceId,
+			agentRunId = run.id,
+			transitionVersion = run.transitionVersion + 1,
+			workerId = workerId,
+		)
+	}
+
+	private fun releaseArtifactHandoffClaim(claim: ClaimedAgentRun, now: Instant) {
+		dsl.update(AGENT_RUNS)
+			.set(AGENT_RUNS.CLAIMED_BY, null as String?)
+			.set(AGENT_RUNS.CLAIMED_AT, null as OffsetDateTime?)
+			.set(AGENT_RUNS.TRANSITION_VERSION, AGENT_RUNS.TRANSITION_VERSION.plus(1))
+			.set(AGENT_RUNS.UPDATED_AT, now.toOffsetDateTime())
+			.where(
+				AGENT_RUNS.WORKSPACE_ID.eq(claim.workspaceId),
+				AGENT_RUNS.ID.eq(claim.agentRunId),
+				AGENT_RUNS.CLAIMED_BY.eq(claim.workerId),
+				AGENT_RUNS.TRANSITION_VERSION.eq(claim.transitionVersion),
+				AGENT_RUNS.STATUS.eq(AgentRunStatus.RUNNING.name),
+			)
+			.execute()
+	}
+
 	private fun advanceAndRelease(
 		claim: ClaimedAgentRun,
 		currentStep: Int?,
@@ -571,7 +698,24 @@ class AgentRunExecutionPersistence(
 			.execute()
 		if (updated != 1) throw AgentRunClaimLostException()
 		projectRoutineTerminal(run, status, errorCode, now)
-		requireNotNull(queryPersistence.findAgentRun(claim.workspaceId, claim.agentRunId))
+		val terminal = requireNotNull(queryPersistence.findAgentRun(claim.workspaceId, claim.agentRunId))
+		notifyReleaseReconciliationAfterCommit(terminal.workspaceId, terminal.id)
+		terminal
+	}
+
+	private fun notifyReleaseReconciliationAfterCommit(workspaceId: UUID, agentRunId: UUID) {
+		if (
+			TransactionSynchronizationManager.isSynchronizationActive() &&
+				TransactionSynchronizationManager.isActualTransactionActive()
+		) {
+			TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+				override fun afterCommit() {
+					releaseReconciliation?.afterAgentRunTerminal(workspaceId, agentRunId)
+				}
+			})
+		} else {
+			releaseReconciliation?.afterAgentRunTerminal(workspaceId, agentRunId)
+		}
 	}
 
 	private fun projectRoutineTerminal(

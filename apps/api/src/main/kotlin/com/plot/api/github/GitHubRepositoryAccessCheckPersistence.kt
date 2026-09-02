@@ -162,6 +162,15 @@ class GitHubRepositoryAccessCheckPersistence(
 		)
 	}
 
+	/** Earliest persisted retry, including rows already due, or null when none is pending. */
+	fun earliestNextAttemptAt(after: Instant): Instant? = fetchRows(
+		"""
+		select min(next_attempt_at) as next_attempt_at
+		from github_repository_access_checks
+		where status = 'QUEUED' and next_attempt_at is not null
+		""".trimIndent(),
+	).firstOrNull()?.get("next_attempt_at", OffsetDateTime::class.java)?.toInstant()
+
 	fun recoverStaleClaims(
 		now: Instant,
 		leaseTimeout: Duration,

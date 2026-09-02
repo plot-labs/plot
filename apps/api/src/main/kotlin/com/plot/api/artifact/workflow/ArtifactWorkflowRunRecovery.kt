@@ -4,7 +4,6 @@ import java.time.Clock
 import java.time.Duration
 import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.event.EventListener
-import org.springframework.scheduling.annotation.Scheduled
 
 class ArtifactWorkflowRunRecovery(
 	private val persistence: ArtifactWorkflowRecoveryPersistence,
@@ -18,14 +17,6 @@ class ArtifactWorkflowRunRecovery(
 		val releasedClaims = persistence.recoverStaleClaims(clock.instant().minus(claimTimeout))
 		if (workerEnabled) dispatcher.dispatch()
 		return RecoveryResult(releasedClaims, 0)
-	}
-
-	@Scheduled(
-		fixedDelayString = "\${plot.ai.worker-poll-delay:PT5S}",
-		initialDelayString = "\${plot.ai.worker-poll-delay:PT5S}",
-	)
-	fun poll() {
-		recover()
 	}
 }
 

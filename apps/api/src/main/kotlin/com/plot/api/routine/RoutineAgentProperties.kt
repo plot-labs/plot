@@ -6,7 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties
 @ConfigurationProperties("plot.routine-agent")
 data class RoutineAgentProperties(
 	val workersEnabled: Boolean = true,
-	val pollDelay: Duration = Duration.ofSeconds(5),
+	val autoDispatchEnabled: Boolean = true,
 	val claimTimeout: Duration = Duration.ofMinutes(2),
 	val retryInitialDelay: Duration = Duration.ofSeconds(1),
 	val maxAttempts: Int = 3,
@@ -18,7 +18,6 @@ data class RoutineAgentProperties(
 	val searchResultLimit: Int = 8,
 ) {
 	init {
-		require(!pollDelay.isNegative && !pollDelay.isZero) { "plot.routine-agent.poll-delay must be positive" }
 		require(!claimTimeout.isNegative && !claimTimeout.isZero) { "plot.routine-agent.claim-timeout must be positive" }
 		require(!retryInitialDelay.isNegative) { "plot.routine-agent.retry-initial-delay must not be negative" }
 		require(maxAttempts > 0) { "plot.routine-agent.max-attempts must be positive" }

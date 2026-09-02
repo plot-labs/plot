@@ -2,6 +2,7 @@ package com.plot.api.github
 
 import com.plot.api.observability.stopSafely
 import com.plot.api.routine.GitHubChangeRoutineService
+import com.plot.api.routine.RoutineRunDispatcher
 import io.micrometer.observation.Observation
 import io.micrometer.observation.ObservationRegistry
 import java.time.Instant
@@ -24,8 +25,10 @@ class GitHubWebhookService(
 	private val scopeResolver: GitHubReleaseScopeResolver,
 	private val deliveryPersistence: GitHubWebhookDeliveryStore,
 	private val requestPersistence: GitHubReleaseRequestStore,
-	private val dispatcher: GitHubReleaseDraftDispatcher,
+	private val releaseDispatcher: GitHubReleaseDraftDispatcher,
+	private val accessCheckDispatcher: GitHubRepositoryAccessCheckDispatcher,
 	private val gitHubChangeRoutineService: GitHubChangeRoutineService,
+	private val routineRunDispatcher: RoutineRunDispatcher,
 	private val lifecycleService: GitHubSourceAccessLifecycleService,
 	private val observationRegistry: ObservationRegistry,
 	private val transactionService: GitHubWebhookTransactionService,
@@ -85,6 +88,9 @@ class GitHubWebhookService(
 
 		if (lifecycleService.isLifecycle(webhook)) {
 			val projection = lifecycleService.project(webhook)
+			if (projection.disposition == GitHubWebhookDisposition.QUEUED) {
+				scheduleAccessCheckDispatchAfterCommit()
+			}
 			return mark(delivery, projection.disposition)
 		}
 
@@ -98,6 +104,7 @@ class GitHubWebhookService(
 				mark(delivery, GitHubWebhookDisposition.IGNORED)
 			webhook.eventType == "push" && webhook.tagName != null -> {
 				val queued = gitHubChangeRoutineService.accept(context, delivery, webhook)
+				if (queued > 0) scheduleRoutineDispatchAfterCommit()
 				if (gitHubChangeRoutineService.hasReleaseEventRoutines(context)) {
 					mark(delivery, if (queued > 0) GitHubWebhookDisposition.QUEUED else GitHubWebhookDisposition.OBSERVED)
 				} else {
@@ -106,6 +113,7 @@ class GitHubWebhookService(
 			}
 			webhook.eventType == "push" && webhook.ref == "refs/heads/${context.defaultBranch}" -> {
 				val queued = gitHubChangeRoutineService.accept(context, delivery, webhook)
+				if (queued > 0) scheduleRoutineDispatchAfterCommit()
 				mark(delivery, if (queued > 0) GitHubWebhookDisposition.QUEUED else GitHubWebhookDisposition.OBSERVED)
 			}
 			webhook.eventType == "push" -> mark(delivery, GitHubWebhookDisposition.IGNORED)
@@ -113,6 +121,7 @@ class GitHubWebhookService(
 			// contributes an immutable observed head SHA to the release request.
 			webhook.eventType == "release" && webhook.eventAction == "published" && webhook.tagName != null -> {
 				val queued = gitHubChangeRoutineService.accept(context, delivery, webhook)
+				if (queued > 0) scheduleRoutineDispatchAfterCommit()
 				if (gitHubChangeRoutineService.hasReleaseEventRoutines(context)) {
 					mark(delivery, if (queued > 0) GitHubWebhookDisposition.QUEUED else GitHubWebhookDisposition.OBSERVED)
 				} else {
@@ -137,18 +146,42 @@ class GitHubWebhookService(
 			observedHeadSha,
 		)
 		deliveryPersistence.markDelivery(delivery.id, GitHubWebhookDisposition.QUEUED)
-		if (properties.releaseAutomationEnabled) scheduleDispatchAfterCommit()
+		if (properties.releaseAutomationEnabled) scheduleReleaseDispatchAfterCommit()
 		return delivery.copy(disposition = GitHubWebhookDisposition.QUEUED)
 	}
 
-	private fun scheduleDispatchAfterCommit() {
+	private fun scheduleReleaseDispatchAfterCommit() {
 		check(
 			TransactionSynchronizationManager.isSynchronizationActive() &&
 				TransactionSynchronizationManager.isActualTransactionActive(),
 		) { "GitHub release dispatch requires an active transaction" }
 		TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
 			override fun afterCommit() {
-				dispatcher.dispatch()
+				releaseDispatcher.dispatch()
+			}
+		})
+	}
+
+	private fun scheduleRoutineDispatchAfterCommit() {
+		check(
+			TransactionSynchronizationManager.isSynchronizationActive() &&
+				TransactionSynchronizationManager.isActualTransactionActive(),
+		) { "Routine dispatch requires an active transaction" }
+		TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+			override fun afterCommit() {
+				routineRunDispatcher.dispatch()
+			}
+		})
+	}
+
+	private fun scheduleAccessCheckDispatchAfterCommit() {
+		check(
+			TransactionSynchronizationManager.isSynchronizationActive() &&
+				TransactionSynchronizationManager.isActualTransactionActive(),
+		) { "GitHub access-check dispatch requires an active transaction" }
+		TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+			override fun afterCommit() {
+				accessCheckDispatcher.dispatch()
 			}
 		})
 	}

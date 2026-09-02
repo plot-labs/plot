@@ -163,6 +163,23 @@ class RoutinePersistence(
 		)
 	}
 
+	fun releaseClaim(claim: RoutineRecord, now: Instant = currentInstant()) {
+		val updated = execute(
+			"""
+			update routines
+			set claimed_by = null, claimed_at = null,
+			    transition_version = transition_version + 1, updated_at = ?
+			where workspace_id = ? and id = ? and claimed_by = ? and transition_version = ?
+			""".trimIndent(),
+			Timestamp.from(now),
+			claim.workspaceId,
+			claim.id,
+			claim.claimedBy,
+			claim.transitionVersion,
+		)
+		if (updated != 1) throw RoutineClaimLostException()
+	}
+
 	fun finish(
 		claim: RoutineRecord,
 		now: Instant,
@@ -199,6 +216,17 @@ class RoutinePersistence(
 		)
 		if (updated != 1) throw RoutineClaimLostException()
 	}
+
+	fun recoverStaleRoutineClaims(staleBefore: Instant, now: Instant): Int = execute(
+		"""
+		update routines
+		set claimed_by = null, claimed_at = null,
+		    transition_version = transition_version + 1, updated_at = ?
+		where claimed_by is not null and claimed_at < ?
+		""".trimIndent(),
+		Timestamp.from(now),
+		Timestamp.from(staleBefore),
+	)
 
 	private fun claim(
 		workerId: String,

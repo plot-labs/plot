@@ -23,21 +23,22 @@ import org.springframework.test.context.TestPropertySource
 		"plot.dev-bootstrap.enabled=true",
 		"plot.ai.enabled=false",
 		"plot.ai.worker-enabled=true",
-		"plot.ai.worker-poll-delay=50ms",
 	],
 )
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class ArtifactWorkflowContinuousClaimantIntegrationTest {
 	@Autowired private lateinit var persistence: ArtifactWorkflowAdmissionPersistence
 	@Autowired private lateinit var workflow: ArtifactWorkflowService
+	@Autowired private lateinit var dispatcher: ArtifactWorkflowRunDispatcher
 	@Autowired private lateinit var jdbcTemplate: JdbcTemplate
 	@Autowired private lateinit var devContext: DevContext
 
 	@Test
-	fun queuedRunCreatedAfterStartupIsClaimedWithoutAnExplicitDispatch() {
+	fun queuedRunIsClaimedAfterExplicitDispatch() {
 		val runId = reserve()
+		dispatcher.dispatch()
 
-		assertTrue(awaitTerminal(runId), "scheduled claimant did not process the queued run")
+		assertTrue(awaitTerminal(runId), "dispatcher did not process the queued run")
 		assertEquals(
 			"FAILED:MODEL_NOT_CONFIGURED",
 			jdbcTemplate.queryForObject(

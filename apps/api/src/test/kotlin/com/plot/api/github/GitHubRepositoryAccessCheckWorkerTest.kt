@@ -13,6 +13,7 @@ import org.mockito.Mockito.ignoreStubs
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.verifyNoMoreInteractions
+import org.springframework.dao.TransientDataAccessResourceException
 import org.springframework.http.HttpStatus
 
 class GitHubRepositoryAccessCheckWorkerTest {
@@ -21,6 +22,17 @@ class GitHubRepositoryAccessCheckWorkerTest {
 	private val properties = GitHubProperties(enabled = true)
 	private val persistence = mock(GitHubRepositoryAccessCheckPersistence::class.java)
 	private val client = AccessCheckGitHubClient()
+
+	@Test
+	fun claimFailurePropagatesForFailureRecovery() {
+		doThrow(TransientDataAccessResourceException("database unavailable"))
+			.`when`(persistence)
+			.claimNext("access-check-worker", now)
+
+		kotlin.test.assertFailsWith<TransientDataAccessResourceException> {
+			worker().drain()
+		}
+	}
 
 	@Test
 	fun successfulVerificationRestoresTheSameScope() {

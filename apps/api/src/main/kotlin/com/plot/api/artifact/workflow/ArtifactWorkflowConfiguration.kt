@@ -8,6 +8,8 @@ import com.plot.api.entitlement.WorkspaceAccessService
 import com.plot.api.persistence.JooqSqlExecutor
 import com.plot.api.persistence.JooqTransactionExecutor
 import com.plot.api.routine.RoutineAgentProperties
+import com.plot.api.routine.ArtifactWorkflowAgentRunCompletionHandler
+import com.plot.api.routine.AgentRunExecutionPersistence
 import io.micrometer.observation.ObservationRegistry
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.context.annotation.Bean
@@ -111,6 +113,7 @@ class ArtifactWorkflowConfiguration {
 		observationRegistry: ObservationRegistry,
 		workspaceAccessService: WorkspaceAccessService,
 		routineAgentProperties: RoutineAgentProperties,
+		agentRunCompletion: ArtifactWorkflowAgentRunCompletionHandler,
 	): ArtifactWorkflowRunWorker = ArtifactWorkflowRunWorker(
 		executionPersistence = executionPersistence,
 		queryPersistence = queryPersistence,
@@ -122,6 +125,7 @@ class ArtifactWorkflowConfiguration {
 		observationRegistry = observationRegistry,
 		workspaceAccessService = workspaceAccessService,
 		agentRunsEnabled = routineAgentProperties.workersEnabled,
+		agentRunCompletion = agentRunCompletion,
 	)
 
 	@Bean(destroyMethod = "shutdown")
@@ -153,14 +157,27 @@ class ArtifactWorkflowConfiguration {
 		setAwaitTerminationSeconds(10)
 	}
 
+	@Bean(destroyMethod = "shutdown")
+	fun artifactWorkflowRetryExecutor(): ScheduledExecutorService =
+		Executors.newSingleThreadScheduledExecutor { task ->
+			Thread(task, "plot-artifact-workflow-retry").apply { isDaemon = true }
+		}
+
 	@Bean
 	fun artifactWorkflowRunDispatcher(
 		@Qualifier("artifactWorkflowTaskExecutor") artifactWorkflowTaskExecutor: TaskExecutor,
+		@Qualifier("artifactWorkflowRetryExecutor") retryExecutor: ScheduledExecutorService,
 		worker: ArtifactWorkflowRunWorker,
+		recoveryPersistence: ArtifactWorkflowRecoveryPersistence,
+		executionPersistence: AgentRunExecutionPersistence,
 		properties: PlotAiProperties,
 	): ArtifactWorkflowRunDispatcher = ArtifactWorkflowRunDispatcher(
-		artifactWorkflowTaskExecutor,
-		properties.workerEnabled,
+		taskExecutor = artifactWorkflowTaskExecutor,
+		enabled = properties.workerEnabled,
+		retryExecutor = retryExecutor,
+		failureRecoveryDelay = properties.claimTimeout,
+		earliestRetryAt = recoveryPersistence::earliestNextAttemptAt,
+		afterTurn = { executionPersistence.reconcileWaitingArtifactHandoffs() },
 	) { worker.drain() > 0 }
 
 	@Bean

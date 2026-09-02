@@ -25,6 +25,17 @@ class GitHubRepositoryMonitoringWorkerTest {
 	private val client = MonitoringGitHubClient()
 
 	@Test
+	fun claimFailurePropagatesForFailureRecovery() {
+		doThrow(TransientDataAccessResourceException("database unavailable"))
+			.`when`(persistence)
+			.claimNext("monitoring-worker", now)
+
+		kotlin.test.assertFailsWith<TransientDataAccessResourceException> {
+			worker().drain()
+		}
+	}
+
+	@Test
 	fun transientGitHubErrorSchedulesTheSameRowWithBoundedBackoff() {
 		val item = workItem(attemptCount = 1)
 		doReturn(item).`when`(persistence).claimNext("monitoring-worker", now)

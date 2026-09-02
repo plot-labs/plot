@@ -278,6 +278,7 @@ class GitHubReleaseRangeResolverTest {
 		): GitHubReleaseActivityRecord? = error("not used")
 		override fun findBoundEvidence(requestId: UUID): GitHubReleaseEvidence? = error("not used")
 		override fun findGenerating(limit: Int): List<GitHubReleaseDraftRequest> = error("not used")
+		override fun hasGeneratingRequestForAgentRun(workspaceId: UUID, agentRunId: UUID): Boolean = false
 		override fun enqueueRelease(
 			workspaceId: UUID,
 			sourceScopeId: UUID,

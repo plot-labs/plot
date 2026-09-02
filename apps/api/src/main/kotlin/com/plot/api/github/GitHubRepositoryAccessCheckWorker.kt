@@ -3,12 +3,11 @@ package com.plot.api.github
 import com.plot.api.common.ApiException
 import java.time.Clock
 import java.time.Duration
+import java.time.Instant
 import java.util.UUID
-import org.springframework.dao.DataAccessException
 import org.springframework.dao.TransientDataAccessException
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Component
-import org.springframework.transaction.TransactionException
 
 @Component
 class GitHubRepositoryAccessCheckWorker(
@@ -20,12 +19,7 @@ class GitHubRepositoryAccessCheckWorker(
 ) {
 	fun drain(): Int {
 		if (!properties.enabled) return 0
-		val item = try {
-			persistence.claimNext(workerId, clock.instant())
-		} catch (exception: RuntimeException) {
-			if (exception !is DataAccessException && exception !is TransactionException) throw exception
-			null
-		} ?: return 0
+		val item = persistence.claimNext(workerId, clock.instant()) ?: return 0
 		try {
 			if (item.installationId <= 0L || item.repositoryId <= 0L || item.owner.isBlank() || item.repository.isBlank()) {
 				throw ApiException(HttpStatus.BAD_GATEWAY, "GITHUB_INVALID_RESPONSE", "GitHub repository identity is invalid")
@@ -47,6 +41,12 @@ class GitHubRepositoryAccessCheckWorker(
 			handleFailure(item, exception)
 		}
 		return 1
+	}
+
+	/** Earliest persisted retry that is not yet due, used to re-arm the dispatcher. */
+	fun nextRetryAt(): Instant? {
+		if (!properties.enabled) return null
+		return persistence.earliestNextAttemptAt(clock.instant())
 	}
 
 	fun recover(): Int {

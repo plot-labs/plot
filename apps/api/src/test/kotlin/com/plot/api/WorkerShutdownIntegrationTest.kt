@@ -51,9 +51,7 @@ class WorkerShutdownIntegrationTest {
 				"spring.datasource.password=${postgres.password}",
 				"plot.dev-bootstrap.enabled=true",
 				"plot.github.enabled=true",
-				"plot.github.monitoring-analysis-poll-delay=1h",
 				"plot.github.release-automation-enabled=false",
-				"plot.ai.worker-poll-delay=1h",
 			)
 			.run()
 		val client = context.getBean(BlockingShutdownGitHubClient::class.java)

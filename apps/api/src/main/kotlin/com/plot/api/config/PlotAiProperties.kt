@@ -23,7 +23,6 @@ data class PlotAiProperties(
 	val maxRunDuration: Duration = Duration.ofMinutes(5),
 	val claimTimeout: Duration = Duration.ofMinutes(10),
 	val workerEnabled: Boolean = true,
-	val workerPollDelay: Duration = Duration.ofSeconds(5),
 	val retryInitialDelay: Duration = Duration.ofMillis(250),
 	val maxEvidenceCharacters: Int = 120_000,
 ) {
@@ -53,7 +52,6 @@ data class PlotAiProperties(
 		require(maxEvidenceCharacters > 0) { "plot.ai.max-evidence-characters must be positive" }
 		require(!retryInitialDelay.isNegative) { "plot.ai.retry-initial-delay must not be negative" }
 		require(!claimTimeout.isNegative && !claimTimeout.isZero) { "plot.ai.claim-timeout must be positive" }
-		require(!workerPollDelay.isNegative && !workerPollDelay.isZero) { "plot.ai.worker-poll-delay must be positive" }
 		if (enabled && !model.isNullOrBlank()) {
 			require(provider == OPENROUTER_GATEWAY) { "plot.ai.provider must be openrouter when artifact workflows are enabled" }
 			require(baseUrl == OPENROUTER_BASE_URL) { "plot.ai.base-url must be the canonical OpenRouter API origin" }

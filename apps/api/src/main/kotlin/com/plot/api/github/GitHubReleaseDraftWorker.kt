@@ -6,6 +6,7 @@ import io.micrometer.observation.Observation
 import io.micrometer.observation.ObservationRegistry
 import java.time.Clock
 import java.time.Duration
+import java.time.Instant
 import java.util.UUID
 import org.springframework.core.task.TaskRejectedException
 import org.springframework.dao.TransientDataAccessException
@@ -64,6 +65,12 @@ class GitHubReleaseDraftWorker(
 	fun recover(): Int {
 		if (!properties.releaseAutomationEnabled) return 0
 		return leasePersistence.recoverStaleClaims(clock.instant(), properties.releaseWorkerLeaseTimeout)
+	}
+
+	/** Earliest persisted retry that is not yet due, used to re-arm the dispatcher. */
+	fun nextRetryAt(): Instant? {
+		if (!properties.releaseAutomationEnabled) return null
+		return leasePersistence.earliestNextAttemptAt(clock.instant())
 	}
 
 	fun reconcile() {
