@@ -17,7 +17,8 @@ class AllowedEmailPolicy(
 
 	fun normalizeEmail(value: String): String = value.trim().lowercase()
 
-	fun isAllowed(email: String): Boolean = properties.allowedEmails.contains(normalizeEmail(email))
+	fun isAllowed(email: String): Boolean =
+		properties.allowedEmails.any { normalizeEmail(it) == normalizeEmail(email) }
 
 	fun assertAllowed(email: String) {
 		if (!isAllowed(email)) throw AccessDeniedException()

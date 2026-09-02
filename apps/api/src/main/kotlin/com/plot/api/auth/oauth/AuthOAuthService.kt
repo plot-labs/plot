@@ -9,6 +9,7 @@ import com.plot.api.auth.policy.AllowedEmailPolicy
 import com.plot.api.auth.session.AuthSessionService
 import com.plot.api.auth.session.AuthenticatedSession
 import com.plot.api.common.UuidGenerator
+import com.plot.api.persistence.JooqTransactionExecutor
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import java.time.Instant
@@ -22,6 +23,7 @@ class AuthOAuthService(
 	private val authAccountRepository: AuthAccountRepository,
 	private val authSessionService: AuthSessionService,
 	private val uuidGenerator: UuidGenerator,
+	private val transactionExecutor: JooqTransactionExecutor,
 ) {
 	fun completeGitHubLogin(
 		code: String,
@@ -37,13 +39,16 @@ class AuthOAuthService(
 
 		val now = Instant.now()
 		val existingAccount = authAccountRepository.findByIssuerAndAccountId(GITHUB_ISSUER, profile.id)
-		val user = when {
-			existingAccount != null -> authUserRepository.findById(existingAccount.userId)
-				?.let { updateUser(it, profile, email, now) }
-				?: throw IllegalStateException("Linked auth user is missing")
-			else -> createUser(profile, email, now)
+		val user = transactionExecutor.execute {
+			val resolvedUser = when {
+				existingAccount != null -> authUserRepository.findById(existingAccount.userId)
+					?.let { updateUser(it, profile, email, now) }
+					?: throw IllegalStateException("Linked auth user is missing")
+				else -> createUser(profile, email, now)
+			}
+			authAccountRepository.save(buildAccount(existingAccount, profile, resolvedUser, accessToken, now))
+			resolvedUser
 		}
-		authAccountRepository.save(buildAccount(existingAccount, profile, user, accessToken, now))
 		val authenticated = authSessionService.createSession(user, request)
 		authSessionService.writeSessionCookie(response, authenticated.session.token)
 		return authenticated

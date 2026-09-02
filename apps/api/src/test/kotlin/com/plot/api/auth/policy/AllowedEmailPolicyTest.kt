@@ -19,4 +19,14 @@ class AllowedEmailPolicyTest {
 		assertTrue(policy.isAllowed(" Member@Example.com "))
 		assertFalse(policy.isAllowed("other@example.com"))
 	}
+
+	@Test
+	fun normalizesConfiguredAllowlistEntries() {
+		val policy = AllowedEmailPolicy(
+			PlotAuthProperties(allowedEmails = setOf("Member@Example.com")),
+			environment,
+		)
+
+		assertTrue(policy.isAllowed("member@example.com"))
+	}
 }
