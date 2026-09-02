@@ -95,6 +95,11 @@ open class AuthJwks(
      */
     val EXPIRES_AT: TableField<AuthJwksRecord, OffsetDateTime?> = createField(DSL.name("expires_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "")
 
+    /**
+     * The column <code>public.auth_jwks.alg</code>.
+     */
+    val ALG: TableField<AuthJwksRecord, String?> = createField(DSL.name("alg"), SQLDataType.CLOB.nullable(false), this, "")
+
     private constructor(alias: Name, aliased: Table<AuthJwksRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<AuthJwksRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<AuthJwksRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)

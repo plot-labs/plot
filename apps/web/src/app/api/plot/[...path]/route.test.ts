@@ -1,21 +1,10 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 
 import { proxyPlotRequest, serverJwtPayload } from "./route";
 
 describe("Plot same-origin proxy", () => {
-  const previousAllowedEmails = process.env.AUTH_ALLOWED_EMAILS;
-
-  beforeAll(() => {
-    process.env.AUTH_ALLOWED_EMAILS = "member@example.com";
-  });
-
-  afterAll(() => {
-    if (previousAllowedEmails === undefined) delete process.env.AUTH_ALLOWED_EMAILS;
-    else process.env.AUTH_ALLOWED_EMAILS = previousAllowedEmails;
-  });
-
-  it("builds Kotlin JWT claims from the verified Better Auth session", () => {
+  it("builds Kotlin JWT claims from the verified auth session", () => {
     expect(serverJwtPayload({ user: { id: " auth-user ", email: " Member@Example.com ", name: " Plot Member " } })).toEqual({
       sub: "auth-user",
       email: "member@example.com",
@@ -30,7 +19,7 @@ describe("Plot same-origin proxy", () => {
       method: "POST",
       headers: {
         Authorization: "Bearer forged",
-        Cookie: "better-auth.session_token=browser-session",
+        Cookie: "plot.session=browser-session",
         Origin: "http://web.test",
         "X-Plot-Workspace-Id": "018fd000-0000-7000-8000-000000000002",
       },
@@ -50,7 +39,7 @@ describe("Plot same-origin proxy", () => {
     expect(initHeaders.get("x-plot-workspace-id")).toBe("018fd000-0000-7000-8000-000000000002");
   });
 
-  it("rejects an expired or missing Better Auth session before reaching Kotlin", async () => {
+  it("rejects a missing auth session before reaching Kotlin", async () => {
     const fetcher = vi.fn<typeof fetch>();
     const request = new Request("http://web.test/api/plot/me");
 

@@ -1,17 +1,16 @@
-import { auth } from "@/lib/auth";
-import { isAllowedEmail, isUuid, parseAllowedEmails } from "@plot/auth/policy";
+import { fetchPlotAuthSession, fetchPlotAuthToken, type PlotAuthSession } from "@/lib/plot-auth";
 
 const allowedRequestHeaders = new Set(["accept", "content-type", "idempotency-key", "x-plot-workspace-id"]);
 const allowedResponseHeaders = new Set(["cache-control", "content-disposition", "content-type", "location"]);
 const safeSegment = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type RouteContext = { params: Promise<{ path: string[] }> };
-type ProxySession = { user?: { id?: string; email?: string | null; name?: string | null } } | null;
 type ProxyDependencies = {
   fetch?: typeof fetch;
   baseUrl?: string;
-  getSession?: (request: Request) => Promise<ProxySession>;
-  getServerJwt?: (session: ProxySession) => Promise<string | null>;
+  getSession?: (request: Request) => Promise<PlotAuthSession>;
+  getServerJwt?: (session: PlotAuthSession, cookieHeader: string | null) => Promise<string | null>;
 };
 
 export const dynamic = "force-dynamic";
@@ -75,7 +74,7 @@ export async function proxyPlotRequest(
     if (allowedRequestHeaders.has(key.toLowerCase())) headers.set(key, value);
   });
   const workspace = headers.get("x-plot-workspace-id");
-  if (workspace && !isUuid(workspace)) {
+  if (workspace && !uuidPattern.test(workspace)) {
     return Response.json({ error: "WORKSPACE_INVALID", message: "Workspace header is invalid" }, {
       status: 400,
       headers: { "Cache-Control": "no-store" },
@@ -134,7 +133,7 @@ async function githubInstallationCallbackRedirect(request: Request, upstreamResp
   if (upstreamResponse.ok) {
     const payload = await readJsonRecord(upstreamResponse);
     const connectionId = payload?.connectionId;
-    if (typeof connectionId === "string" && isUuid(connectionId)) {
+    if (typeof connectionId === "string" && uuidPattern.test(connectionId)) {
       integrationsUrl.searchParams.set("githubConnection", connectionId);
       return Response.redirect(integrationsUrl, 303);
     }
@@ -211,54 +210,42 @@ function isAllowed(method: string, path: string[]): boolean {
 type AuthResult = { ok: true; jwt: string } | { ok: false; response: Response };
 
 async function authenticateRequest(request: Request, dependencies: ProxyDependencies): Promise<AuthResult> {
-  // Existing route unit tests inject an upstream fetcher. Production requests
-  // always take the Better Auth session path.
   if (process.env.NODE_ENV === "test" && dependencies.fetch && !dependencies.getSession && !dependencies.getServerJwt) {
     return { ok: true, jwt: "test-injected" };
   }
-  const sessionHeaders = new Headers(request.headers);
-  sessionHeaders.delete("authorization");
-  // Auth adapters only need URL and headers. Do not clone the body: doing so
-  // would consume a one-shot request stream before it reaches Kotlin.
-  const sessionRequest = new Request(request.url, {
-    method: request.method,
-    headers: sessionHeaders,
-  });
-  let session: ProxySession;
+  const cookieHeader = request.headers.get("cookie");
+  let session: PlotAuthSession;
   try {
     session = dependencies.getSession
-      ? await dependencies.getSession(sessionRequest)
-      : await auth.api.getSession({ headers: sessionHeaders });
+      ? await dependencies.getSession(request)
+      : await fetchPlotAuthSession(cookieHeader);
   } catch {
-    return { ok: false, response: Response.json({ error: "UNAUTHORIZED", message: "Authentication is required" }, { status: 401, headers: { "Cache-Control": "no-store" } }) };
+    return unauthorizedResponse();
   }
-  const email = session?.user?.email;
-  const allowed = parseAllowedEmails(process.env.AUTH_ALLOWED_EMAILS);
-  if (!session || !email || !isAllowedEmail(email, allowed)) {
-    return { ok: false, response: Response.json({ error: "UNAUTHORIZED", message: "Authentication is required" }, { status: 401, headers: { "Cache-Control": "no-store" } }) };
-  }
+  if (!session?.user?.email) return unauthorizedResponse();
   let jwt: string | null;
   try {
     jwt = dependencies.getServerJwt
-      ? await dependencies.getServerJwt(session)
-      : await getServerJwt(session);
+      ? await dependencies.getServerJwt(session, cookieHeader)
+      : await fetchPlotAuthToken(cookieHeader);
   } catch {
     jwt = null;
   }
-  if (!jwt) {
-    return { ok: false, response: Response.json({ error: "UNAUTHORIZED", message: "Authentication is required" }, { status: 401, headers: { "Cache-Control": "no-store" } }) };
-  }
+  if (!jwt) return unauthorizedResponse();
   return { ok: true, jwt };
 }
 
-async function getServerJwt(session: ProxySession): Promise<string | null> {
-  const payload = serverJwtPayload(session);
-  if (!payload) return null;
-  const result = await auth.api.signJWT({ body: { payload } });
-  return result?.token ?? null;
+function unauthorizedResponse(): AuthResult {
+  return {
+    ok: false,
+    response: Response.json({ error: "UNAUTHORIZED", message: "Authentication is required" }, {
+      status: 401,
+      headers: { "Cache-Control": "no-store" },
+    }),
+  };
 }
 
-export function serverJwtPayload(session: ProxySession): { sub: string; email: string; name: string } | null {
+export function serverJwtPayload(session: PlotAuthSession): { sub: string; email: string; name: string } | null {
   const subject = session?.user?.id?.trim();
   const email = session?.user?.email?.trim().toLowerCase();
   if (!subject || !email) return null;

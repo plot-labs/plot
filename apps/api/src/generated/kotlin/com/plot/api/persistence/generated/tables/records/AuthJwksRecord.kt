@@ -38,6 +38,10 @@ open class AuthJwksRecord() : UpdatableRecordImpl<AuthJwksRecord>(AuthJwks.AUTH_
         set(value): Unit = set(4, value)
         get(): OffsetDateTime? = get(4) as OffsetDateTime?
 
+    open var alg: String?
+        set(value): Unit = set(5, value)
+        get(): String? = get(5) as String?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -47,12 +51,13 @@ open class AuthJwksRecord() : UpdatableRecordImpl<AuthJwksRecord>(AuthJwks.AUTH_
     /**
      * Create a detached, initialised AuthJwksRecord
      */
-    constructor(id: String? = null, publicKey: String? = null, privateKey: String? = null, createdAt: OffsetDateTime? = null, expiresAt: OffsetDateTime? = null): this() {
+    constructor(id: String? = null, publicKey: String? = null, privateKey: String? = null, createdAt: OffsetDateTime? = null, expiresAt: OffsetDateTime? = null, alg: String? = null): this() {
         this.id = id
         this.publicKey = publicKey
         this.privateKey = privateKey
         this.createdAt = createdAt
         this.expiresAt = expiresAt
+        this.alg = alg
         resetChangedOnNotNull()
     }
 }
