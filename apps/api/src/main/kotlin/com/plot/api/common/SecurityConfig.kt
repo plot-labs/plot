@@ -36,7 +36,7 @@ class SecurityConfig(
 		val enforce = authProperties.enabled && authProperties.required && !environment.allowsDevelopmentAuthBypass()
 		if (enforce) {
 			http
-				.csrf { it.ignoringRequestMatchers("/api/**") }
+				.csrf { it.disable() }
 				.addFilterBefore(sessionAuthenticationFilter, UsernamePasswordAuthenticationFilter::class.java)
 				.authorizeHttpRequests { requests ->
 					requests.requestMatchers("/actuator/health", "/api/polar/webhook").permitAll()
