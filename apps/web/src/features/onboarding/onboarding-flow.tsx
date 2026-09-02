@@ -6,7 +6,7 @@ import Link from "next/link";
 import { LockKeyhole, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import { getSelectedWorkspaceId, plotApiClient, type GitHubConnection, type GitHubRepository, type Routine } from "@/lib/api-client";
+import { getSelectedWorkspaceId, plotApiClient, PlotApiError, type GitHubConnection, type GitHubRepository, type Routine } from "@/lib/api-client";
 
 type RepositoryOption = { connectionId: string; repository: GitHubRepository };
 type SetupState = "loading" | "ready" | "error";
@@ -112,6 +112,32 @@ export function OnboardingFlow({ embedded = false, initialStep = 1, onComplete, 
     setBusy("connect");
     setError(null);
     try {
+      let synced = false;
+      try {
+        await plotApiClient.syncGitHubInstallation();
+        synced = true;
+      } catch (failure) {
+        if (!(failure instanceof PlotApiError && failure.code === "GITHUB_INSTALLATION_NOT_FOUND")) {
+          throw failure;
+        }
+      }
+      if (synced) {
+        const nextConnections = await plotApiClient.listGitHubConnections();
+        setConnections(nextConnections);
+        const active = nextConnections.filter((item) => item.status === "ACTIVE");
+        const availableByConnection = await Promise.all(active.map(async (connection) => {
+          const available = await plotApiClient.listGitHubRepositories(connection.id).catch(() => []);
+          const merged = new Map<number, GitHubRepository>();
+          [...connection.repositories, ...available].forEach((repository) => merged.set(repository.externalRepositoryId, repository));
+          return [...merged.values()].map((repository) => ({ connectionId: connection.id, repository }));
+        }));
+        const nextRepositories = availableByConnection.flat();
+        setRepositories(nextRepositories);
+        setSelectedKey(nextRepositories[0] ? repositoryKey(nextRepositories[0]) : "");
+        setStep(2);
+        setBusy(null);
+        return;
+      }
       const request = await plotApiClient.createGitHubInstallationRequest();
       window.location.assign(request.installUrl);
     } catch (failure) {

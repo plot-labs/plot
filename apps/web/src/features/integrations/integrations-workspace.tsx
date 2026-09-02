@@ -187,6 +187,16 @@ export function IntegrationsWorkspace() {
     setMessage(null);
     setMessageRequestId(null);
     try {
+      try {
+        await plotApiClient.syncGitHubInstallation();
+        setReloadNonce((value) => value + 1);
+        setMessage("GitHub App connected.");
+        return;
+      } catch (error) {
+        if (!(error instanceof PlotApiError && error.code === "GITHUB_INSTALLATION_NOT_FOUND")) {
+          throw error;
+        }
+      }
       const request = await plotApiClient.createGitHubInstallationRequest();
       window.location.assign(request.installUrl);
     } catch (error) {

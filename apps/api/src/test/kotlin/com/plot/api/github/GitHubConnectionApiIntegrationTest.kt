@@ -126,6 +126,35 @@ class GitHubConnectionApiIntegrationTest {
 	}
 
 	@Test
+	fun syncExistingInstallationLinksAlreadyInstalledGitHubApp() {
+		mockMvc.post("/api/github/installations/sync")
+			.andExpect {
+				status { isOk() }
+				jsonPath("$.connectionId") { exists() }
+				jsonPath("$.installationId") { value(77) }
+				header { string("Cache-Control", "no-store") }
+			}
+
+		mockMvc.get("/api/github/connections")
+			.andExpect {
+				status { isOk() }
+				jsonPath("$.length()") { value(1) }
+				jsonPath("$[0].status") { value("ACTIVE") }
+			}
+	}
+
+	@Test
+	fun syncExistingInstallationReturnsNotFoundWhenGitHubHasNoPlotInstall() {
+		fakeClient.userInstallations = emptyList()
+
+		mockMvc.post("/api/github/installations/sync")
+			.andExpect {
+				status { isNotFound() }
+				jsonPath("$.error") { value("GITHUB_INSTALLATION_NOT_FOUND") }
+			}
+	}
+
+	@Test
 	fun installationCallbackListsGrantedRepositoriesAndStateCannotBeReused() {
 		val state = mockMvc.post("/api/github/installations/requests")
 			.andExpect { status { isOk() }; header { string("Cache-Control", "no-store") } }
@@ -668,6 +697,12 @@ class FakeGitHubClient : GitHubClient {
 		return repositories
 	}
 
+	var userInstallations: List<GitHubUserInstallation> = listOf(
+		GitHubUserInstallation(installationId = 77, appId = "1", accountId = 9001, accountLogin = "acme", accountType = "User"),
+	)
+
+	override fun listUserInstallations(userAccessToken: String): List<GitHubUserInstallation> = userInstallations
+
 	override fun getInstallation(installationId: Long): GitHubInstallation {
 		installationCalls.incrementAndGet()
 		return GitHubInstallation(installationId, installationAccount)
@@ -785,6 +820,9 @@ class FakeGitHubClient : GitHubClient {
 		repositoryTags = emptyList()
 		body = "Body"
 		updatedAt = Instant.parse("2026-01-02T00:00:00Z")
+		userInstallations = listOf(
+			GitHubUserInstallation(installationId = 77, appId = "1", accountId = 9001, accountLogin = "acme", accountType = "User"),
+		)
 		failImports = false
 		failureCode = null
 		repositoryFailureCode = null
