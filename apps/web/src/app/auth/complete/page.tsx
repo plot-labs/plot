@@ -46,7 +46,7 @@ export default function AuthCompletePage() {
 export function bootstrapErrorMessage(failure: unknown): string {
   const code = failure instanceof Error ? failure.message : "ACCESS_DENIED";
   if (code === "ACCOUNT_LINK_REQUIRED") return "This email is already linked to another Plot account.";
-  if (code === "UNAUTHORIZED") return "Your sign-in session expired. Please sign in again.";
+  if (code === "UNAUTHORIZED") return "Sign-in could not be completed. Please try again.";
   if (code === "ACCESS_DENIED") return "Plot could not create your workspace (ACCESS_DENIED).";
   if (code === "PLOT_UPSTREAM_UNAVAILABLE") return "Plot API is unavailable. Please try again.";
   return "Plot could not create your workspace. Please try again.";

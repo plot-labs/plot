@@ -13,14 +13,15 @@ describe("local development config", () => {
     const webEnv = readEnv("../.env.example");
     const apiEnv = readEnv("../../api/.env.example");
     const appUrl = new URL(webEnv.NEXT_PUBLIC_APP_URL);
+    const apiUrl = new URL(webEnv.PLOT_API_BASE_URL);
     const packageJson = JSON.parse(
       readFileSync(new URL("../package.json", import.meta.url), "utf8"),
     ) as { scripts: { dev: string } };
 
     expect(packageJson.scripts.dev).toContain(`--hostname ${appUrl.hostname}`);
-    expect(webEnv.BETTER_AUTH_URL).toBe(appUrl.origin);
-    expect(webEnv.PLOT_AUTH_JWT_ISSUER).toBe(appUrl.origin);
+    expect(webEnv.PLOT_API_BASE_URL).toBe(apiUrl.origin);
     expect(apiEnv.PLOT_AUTH_ISSUER).toBe(appUrl.origin);
-    expect(apiEnv.PLOT_AUTH_JWKSURI).toBe(`${appUrl.origin}/api/auth/jwks`);
+    expect(apiEnv.PLOT_AUTH_APP_ORIGIN).toBe(appUrl.origin);
+    expect(apiEnv.PLOT_AUTH_API_ORIGIN).toBe(appUrl.origin);
   });
 });

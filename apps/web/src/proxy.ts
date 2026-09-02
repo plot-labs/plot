@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getSessionCookie } from "better-auth/cookies";
 
+import { SESSION_COOKIE } from "@/lib/plot-auth";
 import { createFixedWindowLimiter } from "@/lib/rate-limit";
 import { isPublicChangelogPath } from "@/lib/public-changelog-url";
 
@@ -46,7 +46,7 @@ export function proxy(request: NextRequest) {
     request.nextUrl.pathname === "/auth/complete" ||
     request.nextUrl.pathname.startsWith("/api/auth") ||
     isPublicChangelogPath(request.nextUrl.pathname);
-  if (host && isGatedHost(host) && !isPublicPath && !getSessionCookie(request)) {
+  if (host && isGatedHost(host) && !isPublicPath && !request.cookies.has(SESSION_COOKIE)) {
     return NextResponse.redirect(new URL("/sign-in", request.url));
   }
 

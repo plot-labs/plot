@@ -10,20 +10,12 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace }),
 }));
 
-vi.mock("@/components/auth/animated-dither-artwork", () => ({
-  AnimatedDitherArtwork: () => null,
-}));
-
-vi.mock("@/lib/auth-client", () => ({
-  authClient: {},
-}));
-
 import AuthCompletePage, { bootstrapErrorMessage } from "./page";
 
 describe("bootstrapErrorMessage", () => {
   it.each([
     [new Error("ACCOUNT_LINK_REQUIRED"), "This email is already linked to another Plot account."],
-    [new Error("UNAUTHORIZED"), "Your sign-in session expired. Please sign in again."],
+    [new Error("UNAUTHORIZED"), "Sign-in could not be completed. Please try again."],
     [new Error("ACCESS_DENIED"), "Plot could not create your workspace (ACCESS_DENIED)."],
     [new Error("PLOT_UPSTREAM_UNAVAILABLE"), "Plot API is unavailable. Please try again."],
     [new Error("PRIVATE_UPSTREAM_DETAIL"), "Plot could not create your workspace. Please try again."],
