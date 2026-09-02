@@ -14,7 +14,7 @@ import jakarta.servlet.http.HttpServletResponse
 import org.springframework.http.CacheControl
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
-import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestMapping
@@ -59,8 +59,8 @@ class AuthController(
 	}
 
 	@GetMapping("/session")
-	fun session(@AuthenticationPrincipal principal: Any?): ResponseEntity<AuthSessionResponse> {
-		val authenticated = authenticatedSession(principal)
+	fun session(authentication: Authentication?): ResponseEntity<AuthSessionResponse> {
+		val authenticated = authenticatedSession(authentication)
 		val user = authenticated.user
 		return ResponseEntity.ok()
 			.cacheControl(CacheControl.noStore())
@@ -79,8 +79,8 @@ class AuthController(
 	}
 
 	@GetMapping("/token")
-	fun token(@AuthenticationPrincipal principal: Any?): ResponseEntity<AuthTokenResponse> {
-		val user = authenticatedSession(principal).user
+	fun token(authentication: Authentication?): ResponseEntity<AuthTokenResponse> {
+		val user = authenticatedSession(authentication).user
 		if (!allowedEmailPolicy.isAllowed(user.email)) {
 			throw ApiException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Authentication is required")
 		}
@@ -104,8 +104,8 @@ class AuthController(
 		.cacheControl(CacheControl.noStore())
 		.body(plotJwtService.publicJwks())
 
-	private fun authenticatedSession(principal: Any?) = when (principal) {
-		is SessionAuthenticationToken -> principal.authenticatedSession
+	private fun authenticatedSession(authentication: Authentication?) = when (authentication) {
+		is SessionAuthenticationToken -> authentication.authenticatedSession
 		else -> throw ApiException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Authentication is required")
 	}
 }
