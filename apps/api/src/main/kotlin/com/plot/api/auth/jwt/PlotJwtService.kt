@@ -152,7 +152,7 @@ private class NimbusBackedJwtDecoder(
 			}
 			.claims { claims ->
 				claimsSet.claims.filterValues { it != null }.forEach { (key, value) ->
-					claims[key] = value!!
+					claims[key] = normalizeJwtClaim(value!!)
 				}
 			}
 			.build()
@@ -165,6 +165,12 @@ private class NimbusBackedJwtDecoder(
 		}
 		return jwt
 	}
+}
+
+private fun normalizeJwtClaim(value: Any): Any = when (value) {
+	is Instant -> value
+	is Date -> value.toInstant()
+	else -> value
 }
 
 private class AudienceValidator(private val audience: String) : OAuth2TokenValidator<Jwt> {
