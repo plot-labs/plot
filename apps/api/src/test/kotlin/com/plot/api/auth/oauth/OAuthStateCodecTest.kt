@@ -52,4 +52,18 @@ class OAuthStateCodecTest {
 		val tampered = encoded.substringBeforeLast('.') + ".invalid"
 		assertFailsWith<IllegalArgumentException> { codec.decode(tampered) }
 	}
+
+	@Test
+	fun rejectsMalformedSignatureEncoding() {
+		val codec = OAuthStateCodec(
+			objectMapper = objectMapper,
+			uuidGenerator = UuidGenerator(),
+			authProperties = PlotAuthProperties(githubClientSecret = "test-secret"),
+			oauthStateNonceStore = OAuthStateNonceStore(),
+		)
+
+		val encoded = codec.encode("/dashboard")
+		val malformed = encoded.substringBeforeLast('.') + ".%%not-base64%%"
+		assertFailsWith<IllegalArgumentException> { codec.decode(malformed) }
+	}
 }

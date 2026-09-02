@@ -3,6 +3,7 @@ package com.plot.api.auth.oauth
 import tools.jackson.databind.ObjectMapper
 import com.plot.api.auth.PlotAuthProperties
 import com.plot.api.common.UuidGenerator
+import java.security.MessageDigest
 import java.time.Instant
 import java.util.Base64
 import javax.crypto.Mac
@@ -40,7 +41,12 @@ class OAuthStateCodec(
 		val parts = value.split('.', limit = 2)
 		require(parts.size == 2) { "Invalid OAuth state" }
 		val payload = parts[0]
-		require(sign(payload) == parts[1]) { "Invalid OAuth state signature" }
+		val providedSignature = try {
+			Base64.getUrlDecoder().decode(parts[1])
+		} catch (_: IllegalArgumentException) {
+			throw IllegalArgumentException("Invalid OAuth state signature")
+		}
+		require(MessageDigest.isEqual(signBytes(payload), providedSignature)) { "Invalid OAuth state signature" }
 		val state = objectMapper.readValue(Base64.getUrlDecoder().decode(payload), OAuthState::class.java)
 		val expiresAt = Instant.ofEpochSecond(state.expiresAtEpochSeconds)
 		require(expiresAt >= Instant.now()) { "OAuth state expired" }
@@ -56,13 +62,15 @@ class OAuthStateCodec(
 		return trimmed
 	}
 
-	private fun sign(payload: String): String {
+	private fun sign(payload: String): String =
+		Base64.getUrlEncoder().withoutPadding().encodeToString(signBytes(payload))
+
+	private fun signBytes(payload: String): ByteArray {
 		val secret = authProperties.githubClientSecret.takeIf { it.isNotBlank() }
 			?: error("plot.auth.github-client-secret is required for OAuth state signing")
 		val mac = Mac.getInstance("HmacSHA256")
 		mac.init(SecretKeySpec(secret.toByteArray(), "HmacSHA256"))
-		val digest = mac.doFinal(payload.toByteArray())
-		return Base64.getUrlEncoder().withoutPadding().encodeToString(digest)
+		return mac.doFinal(payload.toByteArray())
 	}
 
 	private companion object {
