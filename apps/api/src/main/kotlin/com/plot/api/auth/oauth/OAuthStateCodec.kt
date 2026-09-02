@@ -1,6 +1,6 @@
 package com.plot.api.auth.oauth
 
-import com.fasterxml.jackson.databind.ObjectMapper
+import tools.jackson.databind.ObjectMapper
 import com.plot.api.common.UuidGenerator
 import java.security.MessageDigest
 import java.time.Instant
