@@ -1,12 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
 import { LoaderCircle, LockKeyhole } from "lucide-react";
 
 import { AnimatedDitherArtwork } from "@/components/auth/animated-dither-artwork";
-import { authClient } from "@/lib/auth-client";
 
 function GitHubMark({ className = "" }: { className?: string }) {
   return (
@@ -25,20 +24,10 @@ export default function SignInPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  async function signInWithGitHub() {
+  function signInWithGitHub() {
     setLoading(true);
     setError(null);
-    try {
-      const result = await authClient.signIn.social({
-        provider: "github",
-        callbackURL: "/auth/complete",
-      });
-      if (result.error) setError("Access denied");
-    } catch {
-      setError("GitHub sign-in could not start. Please try again.");
-    } finally {
-      setLoading(false);
-    }
+    window.location.assign("/api/auth/sign-in/github?callbackURL=%2Fauth%2Fcomplete");
   }
 
   return (
