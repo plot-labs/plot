@@ -70,6 +70,10 @@ open class AuthAccountRecord() : UpdatableRecordImpl<AuthAccountRecord>(AuthAcco
         set(value): Unit = set(12, value)
         get(): OffsetDateTime? = get(12) as OffsetDateTime?
 
+    open var issuer: String?
+        set(value): Unit = set(13, value)
+        get(): String? = get(13) as String?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -79,7 +83,7 @@ open class AuthAccountRecord() : UpdatableRecordImpl<AuthAccountRecord>(AuthAcco
     /**
      * Create a detached, initialised AuthAccountRecord
      */
-    constructor(id: String? = null, accountId: String? = null, providerId: String? = null, userId: String? = null, accessToken: String? = null, refreshToken: String? = null, idToken: String? = null, accessTokenExpiresAt: OffsetDateTime? = null, refreshTokenExpiresAt: OffsetDateTime? = null, scope: String? = null, password: String? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null): this() {
+    constructor(id: String? = null, accountId: String? = null, providerId: String? = null, userId: String? = null, accessToken: String? = null, refreshToken: String? = null, idToken: String? = null, accessTokenExpiresAt: OffsetDateTime? = null, refreshTokenExpiresAt: OffsetDateTime? = null, scope: String? = null, password: String? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, issuer: String? = null): this() {
         this.id = id
         this.accountId = accountId
         this.providerId = providerId
@@ -93,6 +97,7 @@ open class AuthAccountRecord() : UpdatableRecordImpl<AuthAccountRecord>(AuthAcco
         this.password = password
         this.createdAt = createdAt
         this.updatedAt = updatedAt
+        this.issuer = issuer
         resetChangedOnNotNull()
     }
 }
