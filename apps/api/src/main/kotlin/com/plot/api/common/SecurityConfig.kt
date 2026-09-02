@@ -44,7 +44,8 @@ class SecurityConfig(
 						.requestMatchers(HttpMethod.POST, "/api/github/webhook").permitAll()
 						.requestMatchers("/api/auth/sign-in/**", "/api/auth/callback/**").permitAll()
 						.requestMatchers(HttpMethod.GET, "/api/auth/jwks").permitAll()
-						.requestMatchers("/api/auth/session", "/api/auth/token", "/api/auth/sign-out").authenticated()
+						.requestMatchers(HttpMethod.POST, "/api/auth/sign-out").permitAll()
+						.requestMatchers("/api/auth/session", "/api/auth/token").authenticated()
 						.requestMatchers("/api/account/bootstrap", "/api/me").authenticated()
 						.anyRequest().authenticated()
 				}
