@@ -14,6 +14,8 @@ import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
 import org.springframework.http.HttpStatus
+import org.springframework.transaction.support.TransactionSynchronization
+import org.springframework.transaction.support.TransactionSynchronizationManager
 import com.plot.api.persistence.JooqSqlExecutor
 import com.plot.api.persistence.JooqTransactionExecutor
 import com.plot.api.persistence.SqlRow
@@ -31,6 +33,7 @@ class ChatAgentAdmissionService(
 	private val properties: RoutineAgentProperties,
 	private val objectMapper: ObjectMapper,
 	private val sourceManagedAccessGuard: SourceManagedAccessGuard,
+	private val agentRunDispatcher: AgentRunDispatcher,
 ) {
 	fun admit(request: CreateChatAgentRunRequest, idempotencyKey: String): ChatAgentRunResponse {
 		sourceManagedAccessGuard.requireReadable()
@@ -174,7 +177,24 @@ class ChatAgentAdmissionService(
 			}
 
 			val run = requireNotNull(agentRunQueryPersistence.findAgentRun(workspaceId, runId))
+			scheduleAgentRunDispatchAfterCommit()
 			run
+		}
+	}
+
+	private fun scheduleAgentRunDispatchAfterCommit() {
+		if (!properties.autoDispatchEnabled) return
+		if (
+			TransactionSynchronizationManager.isSynchronizationActive() &&
+				TransactionSynchronizationManager.isActualTransactionActive()
+		) {
+			TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+				override fun afterCommit() {
+					agentRunDispatcher.dispatch()
+				}
+			})
+		} else {
+			agentRunDispatcher.dispatch()
 		}
 	}
 

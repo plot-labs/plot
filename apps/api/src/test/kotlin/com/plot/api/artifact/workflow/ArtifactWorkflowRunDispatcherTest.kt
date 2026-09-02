@@ -1,12 +1,15 @@
 package com.plot.api.artifact.workflow
 
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import org.springframework.core.task.SyncTaskExecutor
 
 class ArtifactWorkflowRunDispatcherTest {
@@ -31,18 +34,53 @@ class ArtifactWorkflowRunDispatcherTest {
 	}
 
 	@Test
-	fun `unexpected drain failure stops the current dispatch turn`() {
-		val attempts = AtomicInteger()
-		val retried = CountDownLatch(1)
-		val dispatcher = ArtifactWorkflowRunDispatcher(SyncTaskExecutor()) {
-			if (attempts.incrementAndGet() == 1) error("database unavailable")
-			retried.countDown()
-			false
+	fun `dispatch redispatches at the persisted retry time`() {
+		val retryExecutor = Executors.newSingleThreadScheduledExecutor()
+		try {
+			val drains = AtomicInteger()
+			val retried = CountDownLatch(2)
+			val retryAt = Instant.parse("2026-01-01T00:00:00Z").plusMillis(50)
+			val dispatcher = ArtifactWorkflowRunDispatcher(
+				taskExecutor = SyncTaskExecutor(),
+				retryExecutor = retryExecutor,
+				clock = Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC),
+				earliestRetryAt = { retryAt.takeIf { drains.get() < 2 } },
+			) {
+				drains.incrementAndGet()
+				retried.countDown()
+				false
+			}
+
+			dispatcher.dispatch()
+
+			assertTrue(retried.await(2, TimeUnit.SECONDS))
+		} finally {
+			retryExecutor.shutdownNow()
 		}
+	}
 
-		assertFailsWith<IllegalStateException> { dispatcher.dispatch() }
+	@Test
+	fun `unexpected drain failure schedules claim-timeout recovery`() {
+		val retryExecutor = Executors.newSingleThreadScheduledExecutor()
+		try {
+			val attempts = AtomicInteger()
+			val recovered = CountDownLatch(1)
+			val dispatcher = ArtifactWorkflowRunDispatcher(
+				taskExecutor = SyncTaskExecutor(),
+				retryExecutor = retryExecutor,
+				failureRecoveryDelay = java.time.Duration.ofMillis(50),
+			) {
+				if (attempts.incrementAndGet() == 1) error("database unavailable")
+				recovered.countDown()
+				false
+			}
 
-		assertFalse(retried.await(1200, TimeUnit.MILLISECONDS))
-		assertEquals(1, attempts.get())
+			dispatcher.dispatch()
+
+			assertTrue(recovered.await(2, TimeUnit.SECONDS))
+			assertEquals(2, attempts.get())
+		} finally {
+			retryExecutor.shutdownNow()
+		}
 	}
 }

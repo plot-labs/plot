@@ -1,23 +1,27 @@
 package com.plot.api.github
 
+import java.util.concurrent.ScheduledExecutorService
 import org.springframework.core.task.TaskExecutor
-import org.springframework.core.task.TaskRejectedException
 
 fun interface GitHubReleaseDraftDispatcher {
 	fun dispatch()
 }
 
 class DefaultGitHubReleaseDraftDispatcher(
-	private val taskExecutor: TaskExecutor,
-	private val worker: GitHubReleaseDraftWorker,
+	taskExecutor: TaskExecutor,
+	retryExecutor: ScheduledExecutorService?,
+	worker: GitHubReleaseDraftWorker,
+	properties: GitHubProperties,
 ) : GitHubReleaseDraftDispatcher {
-	override fun dispatch() {
-		try {
-			taskExecutor.execute {
-				worker.drain()
-			}
-		} catch (_: TaskRejectedException) {
-			// The single-thread worker already has a turn running or queued.
-		}
-	}
+	private val delegate = GitHubWorkerDispatch(
+		taskExecutor = taskExecutor,
+		retryExecutor = retryExecutor,
+		recover = worker::recover,
+		drain = worker::drain,
+		earliestRetryAt = worker::nextRetryAt,
+		onQueueEmpty = worker::reconcile,
+		failureRecoveryDelay = properties.releaseWorkerLeaseTimeout,
+	)
+
+	override fun dispatch() = delegate.dispatch()
 }

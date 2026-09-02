@@ -1,4 +1,4 @@
-package com.plot.api.artifact.workflow
+package com.plot.api.github
 
 import com.plot.api.common.WorkerTurnRecovery
 import java.time.Clock
@@ -8,18 +8,18 @@ import java.util.concurrent.ScheduledExecutorService
 import org.springframework.core.task.TaskExecutor
 
 /**
- * Runs artifact workflow checkpoints on demand and re-arms itself for the
- * earliest invocation retry that is persisted but not yet due.
+ * Drains one GitHub queue on demand and re-arms itself for the earliest retry
+ * that is persisted but not yet due.
  */
-class ArtifactWorkflowRunDispatcher(
+internal class GitHubWorkerDispatch(
 	private val taskExecutor: TaskExecutor,
-	private val enabled: Boolean = true,
-	retryExecutor: ScheduledExecutorService? = null,
-	clock: Clock = Clock.systemUTC(),
+	retryExecutor: ScheduledExecutorService?,
+	private val recover: () -> Int,
+	private val drain: () -> Int,
+	private val earliestRetryAt: () -> Instant?,
+	private val onQueueEmpty: () -> Unit = {},
 	failureRecoveryDelay: Duration = Duration.ofMinutes(2),
-	private val earliestRetryAt: () -> Instant? = { null },
-	private val afterTurn: () -> Unit = {},
-	private val drainBatch: () -> Boolean,
+	clock: Clock = Clock.systemUTC(),
 ) {
 	private val recovery = WorkerTurnRecovery(
 		taskExecutor = taskExecutor,
@@ -31,12 +31,11 @@ class ArtifactWorkflowRunDispatcher(
 	)
 
 	fun dispatch() {
-		if (!enabled) return
 		recovery.dispatch {
-			while (drainBatch()) {
-				// Continue in bounded batches until no runnable checkpoint remains.
-			}
-			afterTurn()
+			do {
+				recover()
+			} while (drain() > 0)
+			onQueueEmpty()
 		}
 	}
 }

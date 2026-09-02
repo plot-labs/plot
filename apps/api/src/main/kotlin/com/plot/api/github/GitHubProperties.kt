@@ -19,7 +19,6 @@ data class GitHubProperties(
 	val repositoryPageCap: Int = 100,
 	val webhookSecret: String? = null,
 	val releaseAutomationEnabled: Boolean = false,
-	val releaseWorkerPollDelay: Duration = Duration.ofSeconds(5),
 	val releaseWorkerLeaseTimeout: Duration = Duration.ofMinutes(2),
 	val releaseWorkerMaxAttempts: Int = 5,
 	val comparePageCap: Int = 10,
@@ -34,25 +33,17 @@ data class GitHubProperties(
 	val maxWebhookPayloadBytes: Int = 1_048_576,
 	val maxResponseBytes: Int = 16_777_216,
 	val httpRequestTimeout: Duration = Duration.ofSeconds(20),
-	val monitoringAnalysisPollDelay: Duration = Duration.ofSeconds(5),
 	val monitoringAnalysisLeaseTimeout: Duration = Duration.ofMinutes(2),
 	val monitoringAnalysisMaxAttempts: Int = 5,
 	val monitoringAnalysisSampleLimit: Int = 50,
-	val accessCheckPollDelay: Duration = Duration.ofSeconds(5),
 	val accessCheckLeaseTimeout: Duration = Duration.ofMinutes(2),
 	val accessCheckMaxAttempts: Int = 3,
 ) {
 	init {
-		require(!releaseWorkerPollDelay.isNegative && !releaseWorkerPollDelay.isZero) {
-			"plot.github.release-worker-poll-delay must be positive"
-		}
 		require(!releaseWorkerLeaseTimeout.isNegative && !releaseWorkerLeaseTimeout.isZero) {
 			"plot.github.release-worker-lease-timeout must be positive"
 		}
 		require(releaseWorkerMaxAttempts > 0) { "plot.github.release-worker-max-attempts must be positive" }
-		require(!monitoringAnalysisPollDelay.isNegative && !monitoringAnalysisPollDelay.isZero) {
-			"plot.github.monitoring-analysis-poll-delay must be positive"
-		}
 		require(!monitoringAnalysisLeaseTimeout.isNegative && !monitoringAnalysisLeaseTimeout.isZero) {
 			"plot.github.monitoring-analysis-lease-timeout must be positive"
 		}
@@ -67,9 +58,6 @@ data class GitHubProperties(
 		}
 		require(monitoringAnalysisSampleLimit in 1..50) {
 			"plot.github.monitoring-analysis-sample-limit must be between 1 and 50"
-		}
-		require(!accessCheckPollDelay.isNegative && !accessCheckPollDelay.isZero) {
-			"plot.github.access-check-poll-delay must be positive"
 		}
 		require(!accessCheckLeaseTimeout.isNegative && !accessCheckLeaseTimeout.isZero) {
 			"plot.github.access-check-lease-timeout must be positive"
