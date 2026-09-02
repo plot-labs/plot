@@ -298,10 +298,9 @@ class GitHubReleaseLeasePersistence(
 		"""
 		select min(next_attempt_at)
 		from github_release_draft_requests
-		where status in ('QUEUED', 'RESOLVING') and next_attempt_at > ?
+		where status in ('QUEUED', 'RESOLVING') and next_attempt_at is not null
 		""".trimIndent(),
 		OffsetDateTime::class.java,
-		after.toOffsetDateTime(),
 	)?.toInstant()
 
 	override fun recordReconcileDiagnostic(requestId: UUID, transitionVersion: Long, errorCode: String) {

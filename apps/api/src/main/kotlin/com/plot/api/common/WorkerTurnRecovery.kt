@@ -30,11 +30,20 @@ internal class WorkerTurnRecovery(
 				} catch (_: RuntimeException) {
 					scheduleFailureRecovery()
 				} finally {
-					wakeup.scheduleAt(earliestRetryAt())
+					armEarliestRetry()
 				}
 			}
 		} catch (_: TaskRejectedException) {
 			// A worker turn is already running or queued; it will drain remaining work.
+		}
+	}
+
+	private fun armEarliestRetry() {
+		val retryAt = earliestRetryAt() ?: return
+		if (!retryAt.isAfter(clock.instant())) {
+			dispatch()
+		} else {
+			wakeup.scheduleAt(retryAt)
 		}
 	}
 

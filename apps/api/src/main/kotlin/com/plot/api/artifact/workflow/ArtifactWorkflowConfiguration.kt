@@ -9,6 +9,7 @@ import com.plot.api.persistence.JooqSqlExecutor
 import com.plot.api.persistence.JooqTransactionExecutor
 import com.plot.api.routine.RoutineAgentProperties
 import com.plot.api.routine.ArtifactWorkflowAgentRunCompletionHandler
+import com.plot.api.routine.AgentRunExecutionPersistence
 import io.micrometer.observation.ObservationRegistry
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.context.annotation.Bean
@@ -168,6 +169,7 @@ class ArtifactWorkflowConfiguration {
 		@Qualifier("artifactWorkflowRetryExecutor") retryExecutor: ScheduledExecutorService,
 		worker: ArtifactWorkflowRunWorker,
 		recoveryPersistence: ArtifactWorkflowRecoveryPersistence,
+		executionPersistence: AgentRunExecutionPersistence,
 		properties: PlotAiProperties,
 	): ArtifactWorkflowRunDispatcher = ArtifactWorkflowRunDispatcher(
 		taskExecutor = artifactWorkflowTaskExecutor,
@@ -175,6 +177,7 @@ class ArtifactWorkflowConfiguration {
 		retryExecutor = retryExecutor,
 		failureRecoveryDelay = properties.claimTimeout,
 		earliestRetryAt = recoveryPersistence::earliestNextAttemptAt,
+		afterTurn = { executionPersistence.reconcileWaitingArtifactHandoffs() },
 	) { worker.drain() > 0 }
 
 	@Bean

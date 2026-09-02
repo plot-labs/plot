@@ -40,6 +40,28 @@ class WorkerTurnRecoveryTest {
 	}
 
 	@Test
+	fun `due retry redispatches immediately`() {
+		val retryExecutor = Executors.newSingleThreadScheduledExecutor()
+		try {
+			val redispatched = CountDownLatch(1)
+			val recovery = WorkerTurnRecovery(
+				taskExecutor = SyncTaskExecutor(),
+				retryExecutor = retryExecutor,
+				clock = clock,
+				failureRecoveryDelay = Duration.ofMinutes(5),
+				earliestRetryAt = { now.minusSeconds(1) },
+				dispatch = { redispatched.countDown() },
+			)
+
+			recovery.dispatch { }
+
+			assertTrue(redispatched.await(2, TimeUnit.SECONDS))
+		} finally {
+			retryExecutor.shutdownNow()
+		}
+	}
+
+	@Test
 	fun `successful turn arms the earliest persisted retry`() {
 		val retryExecutor = Executors.newSingleThreadScheduledExecutor()
 		try {

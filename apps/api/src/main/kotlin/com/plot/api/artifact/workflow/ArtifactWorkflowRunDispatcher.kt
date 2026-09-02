@@ -18,6 +18,7 @@ class ArtifactWorkflowRunDispatcher(
 	clock: Clock = Clock.systemUTC(),
 	failureRecoveryDelay: Duration = Duration.ofMinutes(2),
 	private val earliestRetryAt: () -> Instant? = { null },
+	private val afterTurn: () -> Unit = {},
 	private val drainBatch: () -> Boolean,
 ) {
 	private val recovery = WorkerTurnRecovery(
@@ -35,6 +36,7 @@ class ArtifactWorkflowRunDispatcher(
 			while (drainBatch()) {
 				// Continue in bounded batches until no runnable checkpoint remains.
 			}
+			afterTurn()
 		}
 	}
 }

@@ -6,10 +6,8 @@ import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 import org.springframework.core.task.TaskRejectedException
-import org.springframework.dao.DataAccessException
 import org.springframework.dao.TransientDataAccessException
 import org.springframework.stereotype.Component
-import org.springframework.transaction.TransactionException
 
 @Component
 class GitHubRepositoryMonitoringWorker(
@@ -23,12 +21,7 @@ class GitHubRepositoryMonitoringWorker(
 ) {
 	fun drain(): Int {
 		if (!properties.enabled) return 0
-		val item = try {
-			persistence.claimNext(workerId, clock.instant())
-		} catch (exception: RuntimeException) {
-			if (exception !is DataAccessException && exception !is TransactionException) throw exception
-			null
-		} ?: return 0
+		val item = persistence.claimNext(workerId, clock.instant()) ?: return 0
 		try {
 			val releases = githubClient.listPublishedReleaseTags(
 				item.installationId,

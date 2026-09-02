@@ -309,10 +309,9 @@ class AgentRunQueryPersistence(
 		"""
 		select min(next_attempt_at) as next_attempt_at
 		from agent_runs
-		where status = 'QUEUED' and next_attempt_at is not null and next_attempt_at > ?
+		where status = 'QUEUED' and next_attempt_at is not null
 		""".trimIndent(),
 		{ rs, _ -> rs.getTimestamp("next_attempt_at")?.toInstant() },
-		Timestamp.from(after),
 	).firstOrNull()
 }
 

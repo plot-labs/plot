@@ -22,7 +22,11 @@ class DefaultArtifactWorkflowAgentRunCompletion(
 ) : ArtifactWorkflowAgentRunCompletionHandler {
 	override fun onTerminal(workspaceId: UUID, workflowRunId: UUID) {
 		if (!properties.workersEnabled) return
-		if (executionPersistence.completeWaitingArtifactHandoff(workspaceId, workflowRunId, clock.instant())) {
+		try {
+			if (executionPersistence.completeWaitingArtifactHandoff(workspaceId, workflowRunId, clock.instant())) {
+				agentRunDispatcher.dispatch()
+			}
+		} catch (_: RuntimeException) {
 			agentRunDispatcher.dispatch()
 		}
 		notifyReleaseReconciliationAfterCommit(workspaceId, workflowRunId)
