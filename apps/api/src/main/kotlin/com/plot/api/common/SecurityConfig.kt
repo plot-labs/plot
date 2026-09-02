@@ -1,57 +1,50 @@
 package com.plot.api.common
 
 import com.plot.api.auth.PlotAuthProperties
+import com.plot.api.auth.jwt.PlotJwtService
+import com.plot.api.auth.session.SessionAuthenticationFilter
+import com.plot.api.auth.session.AuthSessionService
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.env.Environment
 import org.springframework.http.HttpMethod
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
-import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator
-import org.springframework.security.oauth2.core.OAuth2Error
-import org.springframework.security.oauth2.core.OAuth2TokenValidator
-import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult
-import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.security.oauth2.jwt.JwtDecoder
-import org.springframework.security.oauth2.jwt.JwtValidators
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder
-import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm
 import org.springframework.security.web.SecurityFilterChain
-import org.springframework.security.authentication.BadCredentialsException
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter
 
 @Configuration
 @EnableWebSecurity
 class SecurityConfig(
 	private val authProperties: PlotAuthProperties,
 	private val environment: Environment,
+	private val plotJwtService: PlotJwtService,
+	private val authSessionService: AuthSessionService,
 ) {
 	@Bean
-	fun jwtDecoder(): JwtDecoder {
-		val uri = authProperties.jwksUri.trim()
-		if (uri.isBlank()) return JwtDecoder { throw BadCredentialsException("JWT JWKS is not configured") }
-		val decoder = NimbusJwtDecoder.withJwkSetUri(uri)
-			.jwsAlgorithm(SignatureAlgorithm.ES256)
-			.build()
-		decoder.setJwtValidator(DelegatingOAuth2TokenValidator(
-			JwtValidators.createDefaultWithIssuer(authProperties.issuer),
-			AudienceValidator(authProperties.audience),
-		))
-		return decoder
-	}
+	fun jwtDecoder(): JwtDecoder = plotJwtService.decoder()
 
 	@Bean
-	fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+	fun sessionAuthenticationFilter(): SessionAuthenticationFilter = SessionAuthenticationFilter(authSessionService)
+
+	@Bean
+	fun securityFilterChain(
+		http: HttpSecurity,
+		sessionAuthenticationFilter: SessionAuthenticationFilter,
+	): SecurityFilterChain {
 		val enforce = authProperties.enabled && authProperties.required && !environment.allowsDevelopmentAuthBypass()
 		if (enforce) {
 			http
 				.csrf { it.ignoringRequestMatchers("/api/**") }
+				.addFilterBefore(sessionAuthenticationFilter, UsernamePasswordAuthenticationFilter::class.java)
 				.authorizeHttpRequests { requests ->
-					// No controller serves /api/auth/** here; that surface lives in the
-					// Next.js BFF, and a blanket permitAll here would silently publish
-					// any future same-prefixed route.
 					requests.requestMatchers("/actuator/health", "/api/polar/webhook").permitAll()
 						.requestMatchers(HttpMethod.GET, "/api/public/**").permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/github/webhook").permitAll()
+						.requestMatchers("/api/auth/sign-in/**", "/api/auth/callback/**").permitAll()
+						.requestMatchers(HttpMethod.GET, "/api/auth/jwks").permitAll()
+						.requestMatchers("/api/auth/session", "/api/auth/token", "/api/auth/sign-out").authenticated()
 						.requestMatchers("/api/account/bootstrap", "/api/me").authenticated()
 						.anyRequest().authenticated()
 				}
@@ -67,13 +60,3 @@ class SecurityConfig(
 
 internal fun Environment.allowsDevelopmentAuthBypass(): Boolean =
 	activeProfiles.any { it in setOf("local", "test") }
-
-private class AudienceValidator(private val audience: String) : OAuth2TokenValidator<Jwt> {
-	private val error = OAuth2Error("invalid_token", "The required audience is missing", null)
-
-	override fun validate(token: Jwt): OAuth2TokenValidatorResult = if (token.audience.contains(audience)) {
-		OAuth2TokenValidatorResult.success()
-	} else {
-		OAuth2TokenValidatorResult.failure(error)
-	}
-}
