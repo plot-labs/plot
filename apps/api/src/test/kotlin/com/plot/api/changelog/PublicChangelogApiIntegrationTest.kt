@@ -126,6 +126,25 @@ class PublicChangelogApiIntegrationTest {
 	}
 
 	@Test
+	fun `agent artifacts retain public citations from per-input source scopes`() {
+		val fixture = readyAgentPack()
+		val publish = mockMvc.post("/api/artifact-variants/${fixture.variantId}/publish") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"expectedRevisionNumber":1,"acknowledgeUnresolved":false}"""
+		}.andExpect { status { isOk() } }.andReturn().response.contentAsString
+		val entrySlug = Regex(""""entrySlug"\s*:\s*"([^"]+)"""").find(publish)?.groupValues?.get(1)
+			?: error("Missing entry slug")
+
+		mockMvc.get("/api/public/changelog/dev-workspace/$entrySlug").andExpect {
+			status { isOk() }
+			jsonPath("$.sentences[0].citations.length()") { value(1) }
+			jsonPath("$.sentences[0].citations[0].provider") { value("GITHUB") }
+			jsonPath("$.sentences[0].citations[0].sourceLabel") { value("PR 1") }
+			jsonPath("$.sentences[0].citations[0].originalUrl") { value("https://github.test/acme/repo/pull/1") }
+		}
+	}
+
+	@Test
 	fun `private and unknown source visibility are omitted from public citation snapshots`() {
 		listOf("PRIVATE", null).forEach { visibility ->
 			val fixture = readyPack(visibility)
@@ -231,6 +250,38 @@ class PublicChangelogApiIntegrationTest {
 		))
 		val gateway = PublicPackGateway(evidence.id)
 		ArtifactWorkflowRunWorker(executionPersistence, queryPersistence, workflow, gateway, workerId = "public-changelog-test").drain()
+		val variantId = jdbcTemplate.queryForObject(
+			"select cv.id from content_packs cp join content_variants cv on cv.content_pack_id = cp.id where cp.generation_run_id = ?",
+			UUID::class.java,
+			runId,
+		)!!
+		return PublicFixture(variantId)
+	}
+
+	private fun readyAgentPack(): PublicFixture {
+		val runId = UUID.randomUUID()
+		val blockId = UUID.randomUUID()
+		val sourceScopeId = insertSourceScope("PUBLIC")
+		jdbcTemplate.update(
+			"""
+			insert into writing_blocks (id, workspace_id, source_origin, source_kind, title, body, url,
+			 content_hash, ingested_at, status, created_by_user_id, created_at, updated_at)
+			values (?, ?, 'github', 'pull_request', 'PR', 'evidence', ?,
+			 'block-hash', now(), 'ACTIVE', ?, now(), now())
+			""".trimIndent(), blockId, devContext.devWorkspaceId, "https://github.test/acme/repo/pull/1", devContext.devUserId,
+		)
+		val evidence = EvidenceSnapshot(
+			UUID.randomUUID(), runId, blockId, 0, SourceProvider.GITHUB, "pull_request", "PR 1", "PR 1",
+			"Evidence body", "PRIVATE SNAPSHOT EXCERPT", "https://github.test/acme/repo/pull/1", null, null, "hash", Instant.now(),
+			sourceScopeId = sourceScopeId,
+		)
+		val state = workflow.start(runId, listOf(evidence), null)
+		admissionPersistence.createRun(ArtifactWorkflowRunReservation(
+			devContext.devWorkspaceId, devContext.devUserId, null, "pack-${UUID.randomUUID()}", "fingerprint-${UUID.randomUUID()}",
+			state, "OPENAI", "scripted", "{\"maxModelCalls\":12,\"maxTotalTokens\":1000,\"maxRunDurationMillis\":60000}",
+		))
+		val gateway = PublicPackGateway(evidence.id)
+		ArtifactWorkflowRunWorker(executionPersistence, queryPersistence, workflow, gateway, workerId = "public-changelog-agent-test").drain()
 		val variantId = jdbcTemplate.queryForObject(
 			"select cv.id from content_packs cp join content_variants cv on cv.content_pack_id = cp.id where cp.generation_run_id = ?",
 			UUID::class.java,

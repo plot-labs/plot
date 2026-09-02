@@ -211,7 +211,7 @@ class ArtifactQueryService(
 		"""
 		select rs.sentence_id, c.generation_input_id, i.source_provider, i.source_label, i.original_url,
 		       case
-		         when gr.source_scope_id is null then true
+		         when i.source_scope_id is null then true
 		         when sc.status = 'ACTIVE' and exists (
 		           select 1
 		           from connection_namespace_bindings b
@@ -233,7 +233,7 @@ class ArtifactQueryService(
 		 and c.status ${if (includeHistoricalLifecycle) "in ('ACTIVE', 'STALE', 'REMOVED')" else "= 'ACTIVE'"}
 		join generation_inputs i on i.workspace_id = c.workspace_id and i.id = c.generation_input_id
 		join generation_runs gr on gr.workspace_id = c.workspace_id and gr.id = i.generation_run_id
-		left join source_scopes sc on sc.workspace_id = gr.workspace_id and sc.id = gr.source_scope_id
+		left join source_scopes sc on sc.workspace_id = i.workspace_id and sc.id = i.source_scope_id
 		where rs.workspace_id = ? and rs.content_variant_revision_id = ? and rs.content_variant_id = ?
 		order by rs.sentence_id, c.citation_order
 		""".trimIndent(),
