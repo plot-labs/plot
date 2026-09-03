@@ -19,8 +19,9 @@ Plot은 다음 다섯 제품 표면을 함께 제공합니다.
 
 GitHub 연결, 저장소 범위, writing block은 **Integrations**(워크스페이스 설정)에서 구성하고 Chat, Routines, Artifacts에서 사용합니다.
 
-[시스템 아키텍처 개요](docs/architecture/system-overview.md)에서 요청 경계,
-실행 소유권, persistence 규칙, 검증 명령을 설명합니다. 게시 여부는 계속
+[디자인 명세](DESIGN.md)는 구현 가능한 헌법입니다: UI 법칙, 제품 표면, 보이스 레지스터,
+시각 시스템, 컴포넌트 규칙, 화면 목록. [시스템 아키텍처 개요](docs/architecture/system-overview.md)에서
+요청 경계, 실행 소유권, persistence 규칙, 검증 명령을 설명합니다. 게시 여부는 계속
 Plot 밖에서 사용자가 직접 관리합니다.
 
 ## 저장소
