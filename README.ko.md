@@ -2,12 +2,16 @@
   <img src="apps/web/public/plot-icon.svg" alt="Plot logo" width="88" />
   <h1>Plot</h1>
   <p><strong>빠르게 출시하고, 적게 쓰세요.</strong></p>
-  <p>병합된 제품 작업을 편집 가능하고 출처가 표시된 changelog로 만듭니다.</p>
+  <p>출시된 작업을 검증 가능하고 출처가 표시된 고객용 콘텐츠로 만듭니다.</p>
 </div>
 
 [English](README.md) | [한국어](README.ko.md)
 
-## 현재 제품
+## 제품
+
+에이전트 시대에 출시는 빨라졌습니다. 하지만 고객에게 도달하는 콘텐츠는 여전히 느립니다. Plot은 이 격차를 메우기 위해 존재합니다.
+
+**Changelog는 첫 번째 쐐기입니다.** 현재 제품은 출시된 GitHub release를 출처가 표시된 changelog draft로 만들고, 운영자가 검토하여 게시합니다. 동일한 신뢰 루프 — 정확한 출처 범위, 검증 가능한 인용, 휴먼 승인 게시, 절대 자동 게시 금지 — 는 미래 콘텐츠 표면의 토대입니다.
 
 Plot은 다음 다섯 제품 표면을 함께 제공합니다.
 
@@ -19,7 +23,7 @@ Plot은 다음 다섯 제품 표면을 함께 제공합니다.
 
 GitHub 연결, 저장소 범위, writing block은 **Integrations**(워크스페이스 설정)에서 구성하고 Chat, Routines, Artifacts에서 사용합니다.
 
-[디자인 명세](DESIGN.md)는 구현 가능한 헌법입니다: UI 법칙, 제품 표면, 보이스 레지스터,
+[디자인 명세](DESIGN.md)는 구현 가능한 헌법입니다: 7가지 법칙, 제품 표면, 보이스 레지스터,
 시각 시스템, 컴포넌트 규칙, 화면 목록. [시스템 아키텍처 개요](docs/architecture/system-overview.md)에서
 요청 경계, 실행 소유권, persistence 규칙, 검증 명령을 설명합니다. 게시 여부는 계속
 Plot 밖에서 사용자가 직접 관리합니다.

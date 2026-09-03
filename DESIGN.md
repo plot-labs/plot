@@ -3,81 +3,89 @@
 This is the constitution the team agreed to, written as a spec Product Engineer can implement and QA can fail a deploy against.
 
 **Product:** [useplot.xyz](https://useplot.xyz)  
-**Tagline:** Ship fast. Write less. Source-cited changelogs from shipped work.  
-**Principle:** Human review, never auto-publish.
+**Tagline:** Ship fast. Write less.  
+**Product Thesis:** Agent-era shipping got faster. The content that reaches customers is still slow. Plot exists to close that gap.  
+**Trust Principle:** Human review, never auto-publish.
 
 ---
 
 ## Purpose and Non-Goals
 
 ### Purpose
-Plot generates source-cited changelog drafts from shipped GitHub releases and lets operators review, edit, and publish them to a hosted public changelog or export as Markdown.
+Plot is a shipping-to-customer-content system. It turns shipped work into inspectable, source-cited content that operators review and approve before customers see it.
+
+**Changelog is wedge 1.** The current product generates source-cited changelog drafts from shipped GitHub releases and lets operators review, edit, and publish them to a hosted public changelog or export as Markdown.
+
+The same trust loop — exact source range, inspectable citations, human-approved publish, never auto-publish — is the foundation for future content surfaces (docs impact suggestions, customer-update variants, voice and style rules, additional shipped-work sources). Those surfaces are not live yet and are labeled as coming next when referenced in the product.
 
 ### Non-Goals
-- Automatic publication without human review
+- Automatic publication without human review (applies to all content surfaces)
 - Multi-repository release aggregation before single-repo loop is proven
+- Shipping later content wedges as live UI before the changelog loop is proven
 - Speculative or incomplete feature previews in production UI
-- Citation-free claims in any published surface
+- Citation-free claims in any published surface (current or future)
 
 ---
 
 ## The Seven Laws
 
-### 1. No claim in the UI without an inspectable citation; otherwise it stays draft.
-**Implication:** Every sentence in a changelog artifact must be backed by captured source evidence or marked as user-edited. Uncited AI-generated claims cannot reach the publish step. The UI surfaces citations through chips, popovers, and sources panels.
+These laws are the trust constitution for every content surface Plot ships — current changelog wedge and all future content types. They are not changelog-specific decorations; they are the product foundation.
 
-**Enforced in:**
+### 1. No claim in the UI without an inspectable citation; otherwise it stays draft.
+**Foundation:** Every AI-generated claim must be backed by captured source evidence or marked as user-edited. Uncited claims cannot reach publish. This applies to changelog today and will apply to docs impact, customer updates, and any future content surface.
+
+**Current enforcement (changelog wedge):**
 - `SourcesPopover` (artifact editor)
 - `PublicCitationChip` (public changelog)
 - `PublishDialog` confirmation flow
 
 ### 2. Human is the last mile. Drafts may be automated; publish is never automatic. No "looks done" states that skip review.
-**Implication:** The publish action requires explicit user confirmation. Draft generation happens on release webhooks; publication requires a button press. Status labels distinguish `draft`, `needs review`, `cited`, and `published` states. No state may silently become published.
+**Foundation:** The publish action requires explicit user confirmation. Draft generation may be triggered by events; publication always requires a button press. No state may silently become published. This is the core of Plot's trust model for all content.
 
-**Enforced in:**
+**Current enforcement (changelog wedge):**
 - `PublishDialog` requires manual trigger
 - Artifact states: `DRAFT`, `NEEDS_REVIEW`, `READY`, `PUBLISHED`
 - No auto-publish on routine completion
 
 ### 3. Range must be exact (base/head, release boundary, in/out). Fuzzy range cannot ship.
-**Implication:** GitHub release automation captures exact commit SHAs for base and head. Releases with ambiguous boundaries stay in `NEEDS_RANGE` status until resolution. The UI displays tag names, release boundaries, and range verification status.
+**Foundation:** The source boundary must be precise and inspectable. For changelog, this means exact commit SHAs. For future wedges, this means exact scope boundaries for whatever shipped work is being transformed into customer content. Ambiguous ranges stay in needs-resolution status.
 
-**Enforced in:**
+**Current enforcement (changelog wedge):**
 - `GitHubReleaseRequestPersistence` (API)
 - `RoutineReleaseActivity` displays range status
 - Release monitoring checks exact boundaries
 
 ### 4. One workspace, one release source until the loop is proven. Do not sprawl repos/surfaces/variants early.
-**Implication:** Private beta focuses on a single GitHub repository per workspace. Routines workspace and integrations settings configure one primary source. Multi-repo aggregation is deferred.
+**Foundation:** Prove the trust loop with focused scope before expanding. Currently: one GitHub repository per workspace. Future: one additional content surface only after changelog proves the model. No premature multi-repo or multi-surface sprawl.
 
-**Enforced in:**
+**Current enforcement (changelog wedge):**
 - Onboarding flow configures one repository
 - Routines create one `ON_GITHUB_RELEASE` automation
 - No multi-repo picker in current product
 
 ### 5. Coming next must be labeled as coming next. Do not present planned features as live.
-**Implication:** Landing page features section includes a "Coming next" card (04) that explicitly labels future capabilities. Marketing copy must not claim unshipped features as available.
+**Foundation:** Future capabilities are part of the product path, not marketing footnotes. But they must be explicitly labeled as not-yet-live in any UI or marketing surface. This keeps user expectations accurate while showing where Plot is headed.
 
-**Enforced in:**
+**Current enforcement:**
 - `FeaturesSection` card 04: "Coming next"
-- Feature labels: "blocks", "signals", "style", "pack"
+- Future content surfaces (docs impact, customer-update variants, voice/style rules) labeled as planned when referenced
 
-### 6. One primary action per screen. Workspace is an operator review tool; public changelog is customer-readable prose. Same facts, different register.
-**Implication:** Each workspace screen has a single primary CTA. Artifacts workspace focuses on editing and publishing. Public changelog focuses on reading published entries with citations. Layout, density, and language differ; factual content remains consistent.
+### 6. One primary action per screen. Workspace is an operator review tool; published surface is customer-readable content. Same facts, different register.
+**Foundation:** Operator tools are dense and action-focused. Customer-facing content is readable prose. The factual content is identical; the presentation register differs. This will extend to all future content types: operators review/approve in workspace UI, customers read polished output in their context.
 
-**Enforced in:**
+**Current enforcement (changelog wedge):**
 - Artifacts: primary action is "Publish" or "Save draft"
 - Chat: primary action is send message
 - Routines: primary action is "Create routine"
 - Public changelog: no actions, only navigation and citation inspection
 
 ### 7. Copy prefers evidence over confidence. Marketing must use the same facts as the product. No inflated metrics.
-**Implication:** Marketing landing page uses factual descriptions of what Plot does: "resolves the exact range", "prepares a changelog draft with saved citations", "you approve before anything goes live." No unsubstantiated claims or fake metrics.
+**Foundation:** All surfaces — product UI, public content, marketing — use factual descriptions backed by what Plot actually does. No superlatives without substance. No fake metrics. No claiming future capabilities as present. This applies to changelog today and every future content surface.
 
-**Enforced in:**
-- `HeroSection`: "From shipped release to cited changelog you can publish."
-- `FeaturesSection`: factual descriptions with no superlatives
-- `HowItWorksSection`: process-based explanation
+**Current enforcement:**
+- `HeroSection`: "Ship fast. Write less."
+- `FeaturesSection`: factual descriptions, card 04 labeled "Coming next"
+- `HowItWorksSection`: process-based explanation with current changelog flow
 
 ---
 
@@ -198,6 +206,16 @@ Plot generates source-cited changelog drafts from shipped GitHub releases and le
 - `README.ko.md` provides Korean translations
 - UI components support Korean text (fonts: Instrument Sans, Instrument Serif, JetBrains Mono)
 - Product surfaces are English-first; localization is future work
+
+### Future Content Surfaces
+The 7 laws establish the trust foundation for content surfaces beyond changelog. When Plot ships docs impact suggestions, customer-update variants, voice and style rules, or new shipped-work sources, they will follow the same trust loop:
+
+- **Same facts, new audience/register** — operators review in workspace UI, customers see polished output in their context
+- **Still human-approved** — Law 2 applies: drafts may be automated, publish requires explicit confirmation
+- **Still cited** — Law 1 applies: every claim must be inspectable or marked as user-edited
+- **Exact boundaries** — Law 3 applies: source scope must be precise, not fuzzy
+
+These surfaces are **not live yet** and are labeled "Coming next" when referenced in current product or marketing (Law 5). The changelog wedge proves the model first.
 
 ---
 
@@ -548,6 +566,18 @@ Plot uses a neutral, near-monochrome palette with minimal color accents.
 - [Private Repository Certification](docs/operations/private-repository-production-certification.md) — security and access controls
 - [README](README.md) — repository overview, development setup, verification commands
 - [README.ko.md](README.ko.md) — Korean translation of repository overview
+
+---
+
+## Product Identity Summary
+
+**Plot is not a changelog app.** Changelog is wedge 1 of a shipping-to-customer-content system.
+
+**The gap Plot closes:** Agent-era shipping got faster. The content that reaches customers is still slow. Plot exists to close that gap.
+
+**The trust constitution:** The 7 laws are the foundation for all content surfaces — current and future. Human review, inspectable citations, exact boundaries, never auto-publish. These are not changelog constraints; they are Plot's contract with users.
+
+**When Plot expands** to docs impact, customer updates, voice/style rules, or new shipped-work sources, those surfaces will follow the same trust loop. They are part of the product path, not footnotes. They are labeled "Coming next" until they are proven and live.
 
 ---
 
