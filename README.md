@@ -23,8 +23,8 @@ Plot combines five product surfaces:
 
 GitHub connections, repository scopes, and writing blocks are configured in **Integrations** (workspace settings) and consumed from Chat, Routines, and Artifacts.
 
-The [design specification](DESIGN.md) is the implementable constitution: the 7 laws,
-product surfaces, voice registers, visual system, component rules, and screen inventory.
+The [visual identity](DESIGN.md) defines Plot's editorial paper aesthetic for coding agents
+(DESIGN.md format): colors, typography, components, and visual rationale.
 The [system architecture overview](docs/architecture/system-overview.md) describes
 the request boundary, execution ownership, persistence conventions, and verification
 commands. Publishing remains under the user's control outside Plot.

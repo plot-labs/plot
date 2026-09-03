@@ -1,584 +1,348 @@
-# Plot Design Specification
-
-This is the constitution the team agreed to, written as a spec Product Engineer can implement and QA can fail a deploy against.
-
-**Product:** [useplot.xyz](https://useplot.xyz)  
-**Tagline:** Ship fast. Write less.  
-**Product Thesis:** Agent-era shipping got faster. The content that reaches customers is still slow. Plot exists to close that gap.  
-**Trust Principle:** Human review, never auto-publish.
-
+---
+version: alpha
+name: Plot
+description: Source-cited content system with editorial paper aesthetic
+colors:
+  background: oklch(0.985 0 0)
+  foreground: oklch(0.145 0 0)
+  primary: oklch(0.145 0 0)
+  primary-foreground: oklch(0.985 0 0)
+  secondary: oklch(0.96 0 0)
+  secondary-foreground: oklch(0.145 0 0)
+  muted: oklch(0.94 0 0)
+  muted-foreground: oklch(0.45 0 0)
+  accent: oklch(0.92 0 0)
+  accent-foreground: oklch(0.145 0 0)
+  destructive: oklch(0.577 0.245 27.325)
+  border: oklch(0.88 0 0)
+  citation-red: "#ef3f2c"
+  citation-red-bg: "#fff4f1"
+  focus-amber: "#f59e0b"
+typography:
+  display-lg:
+    fontFamily: Instrument Serif
+    fontSize: 96px
+    fontWeight: 400
+    lineHeight: 0.9
+    letterSpacing: -0.03em
+  display-md:
+    fontFamily: Instrument Serif
+    fontSize: 72px
+    fontWeight: 400
+    lineHeight: 0.9
+    letterSpacing: -0.02em
+  headline-lg:
+    fontFamily: Instrument Serif
+    fontSize: 48px
+    fontWeight: 400
+    lineHeight: 1.1
+    letterSpacing: -0.02em
+  headline-md:
+    fontFamily: Instrument Serif
+    fontSize: 32px
+    fontWeight: 400
+    lineHeight: 1.2
+    letterSpacing: -0.02em
+  body-lg:
+    fontFamily: Instrument Sans
+    fontSize: 18px
+    fontWeight: 400
+    lineHeight: 1.6
+  body-md:
+    fontFamily: Instrument Sans
+    fontSize: 16px
+    fontWeight: 400
+    lineHeight: 1.5
+  body-sm:
+    fontFamily: Instrument Sans
+    fontSize: 14px
+    fontWeight: 400
+    lineHeight: 1.5
+  body-xs:
+    fontFamily: Instrument Sans
+    fontSize: 12px
+    fontWeight: 400
+    lineHeight: 1.5
+  label-md:
+    fontFamily: JetBrains Mono
+    fontSize: 12px
+    fontWeight: 600
+    lineHeight: 1
+    letterSpacing: 0.08em
+  label-sm:
+    fontFamily: JetBrains Mono
+    fontSize: 11px
+    fontWeight: 600
+    lineHeight: 1
+    letterSpacing: 0.08em
+  label-xs:
+    fontFamily: JetBrains Mono
+    fontSize: 10px
+    fontWeight: 600
+    lineHeight: 1
+    letterSpacing: 0.12em
+rounded:
+  sm: 0.125rem
+  md: 0.1875rem
+  DEFAULT: 0.25rem
+  lg: 0.25rem
+  xl: 0.375rem
+  "2xl": 1rem
+  full: 9999px
+spacing:
+  unit: 4px
+  dense: 8px
+  base: 16px
+  comfortable: 24px
+  spacious: 32px
+components:
+  button-primary:
+    backgroundColor: "{colors.foreground}"
+    textColor: "{colors.primary-foreground}"
+    typography: "{typography.body-xs}"
+    rounded: "{rounded.lg}"
+    height: 32px
+    padding: 0 12px
+  button-primary-hover:
+    backgroundColor: "rgba(18, 18, 18, 0.8)"
+  button-secondary:
+    backgroundColor: "rgba(0, 0, 0, 0.04)"
+    textColor: "{colors.foreground}"
+    typography: "{typography.body-xs}"
+    rounded: "{rounded.lg}"
+    height: 32px
+    padding: 0 12px
+  button-secondary-hover:
+    backgroundColor: "rgba(0, 0, 0, 0.08)"
+  button-ghost:
+    backgroundColor: transparent
+    textColor: "{colors.foreground}"
+    typography: "{typography.body-xs}"
+    rounded: "{rounded.lg}"
+    height: 32px
+    padding: 0 12px
+  button-ghost-hover:
+    backgroundColor: "rgba(0, 0, 0, 0.04)"
+  citation-chip:
+    backgroundColor: "{colors.citation-red-bg}"
+    textColor: "{colors.citation-red}"
+    typography: "{typography.label-sm}"
+    rounded: "{rounded.full}"
+    padding: 0 6px
+    height: 24px
+  citation-chip-hover:
+    backgroundColor: "#ffeae5"
+  input:
+    backgroundColor: "{colors.accent}"
+    textColor: "{colors.foreground}"
+    typography: "{typography.body-md}"
+    rounded: "{rounded.lg}"
+    height: 40px
+    padding: 0 12px
+  card:
+    backgroundColor: "#ffffff"
+    textColor: "{colors.foreground}"
+    rounded: "{rounded.xl}"
+    padding: 16px
+  card-dense:
+    backgroundColor: "{colors.secondary}"
+    textColor: "{colors.foreground}"
+    rounded: "{rounded.lg}"
+    padding: 12px
+  sidebar-nav-item:
+    backgroundColor: transparent
+    textColor: "rgba(0, 0, 0, 0.65)"
+    typography: "{typography.body-sm}"
+    rounded: "{rounded.lg}"
+    height: 32px
+    padding: 0 10px
+  sidebar-nav-item-active:
+    backgroundColor: "rgba(255, 255, 255, 0.75)"
+    textColor: "#18181b"
+  sidebar-nav-item-hover:
+    backgroundColor: "rgba(0, 0, 0, 0.04)"
+  tag:
+    backgroundColor: "rgba(0, 0, 0, 0.05)"
+    textColor: "{colors.muted-foreground}"
+    typography: "{typography.label-xs}"
+    rounded: "{rounded.full}"
+    padding: 0 8px
+    height: 20px
 ---
 
-## Purpose and Non-Goals
+## Overview
 
-### Purpose
-Plot is a shipping-to-customer-content system. It turns shipped work into inspectable, source-cited content that operators review and approve before customers see it.
+Plot's visual identity is rooted in editorial paper aesthetics: near-monochrome ink on off-white stock, monospace labels for metadata, and serif headlines for narrative weight. The system evokes evidence review and journalistic rigor — not glossy product marketing or glassmorphic depth.
 
-**Changelog is wedge 1.** The current product generates source-cited changelog drafts from shipped GitHub releases and lets operators review, edit, and publish them to a hosted public changelog or export as Markdown.
+The design communicates **inspection and approval**: operators review source-cited drafts in a workspace with dense controls and technical clarity; customers read published content in a generous, readable register. Both surfaces share the same factual foundation (exact ranges, inspectable citations) but present it in registers suited to their audience.
 
-The same trust loop — exact source range, inspectable citations, human-approved publish, never auto-publish — is the foundation for future content surfaces (docs impact suggestions, customer-update variants, voice and style rules, additional shipped-work sources). Those surfaces are not live yet and are labeled as coming next when referenced in the product.
+The palette stays neutral except for two functional accents: **citation red** (`#ef3f2c`) marks inspectable sources in public-facing content, and **amber** (`#f59e0b`) highlights focus states and warnings in the workspace. This restraint keeps attention on content structure and evidence links, not decorative color.
 
-### Non-Goals
-- Automatic publication without human review (applies to all content surfaces)
-- Multi-repository release aggregation before single-repo loop is proven
-- Shipping later content wedges as live UI before the changelog loop is proven
-- Speculative or incomplete feature previews in production UI
-- Citation-free claims in any published surface (current or future)
+Fonts reinforce the editorial metaphor:
+- **Instrument Serif** for display headlines (journalistic authority)
+- **Instrument Sans** for body text (contemporary readability)
+- **JetBrains Mono** for all metadata, labels, and technical annotations (precision, not decoration)
 
----
+The result is a workspace that feels like a CMS for factual content: grid backgrounds, minimal shadows, pill-shaped primary actions, and monospace uppercase labels. The published changelog reads like editorial output — generous line height, citation footnotes, numbered sources — not a SaaS dashboard.
 
-## The Seven Laws
+## Colors
 
-These laws are the trust constitution for every content surface Plot ships — current changelog wedge and all future content types. They are not changelog-specific decorations; they are the product foundation.
-
-### 1. No claim in the UI without an inspectable citation; otherwise it stays draft.
-**Foundation:** Every AI-generated claim must be backed by captured source evidence or marked as user-edited. Uncited claims cannot reach publish. This applies to changelog today and will apply to docs impact, customer updates, and any future content surface.
+The color system is deliberately constrained. Near-black ink (`oklch(0.145 0 0)`) on off-white paper (`oklch(0.985 0 0)`) provides maximum readability. Grays step through subtle neutral tones for borders (`oklch(0.88 0 0)`), muted backgrounds (`oklch(0.94 0 0)`), and secondary text (`oklch(0.45 0 0)`).
 
-**Current enforcement (changelog wedge):**
-- `SourcesPopover` (artifact editor)
-- `PublicCitationChip` (public changelog)
-- `PublishDialog` confirmation flow
-
-### 2. Human is the last mile. Drafts may be automated; publish is never automatic. No "looks done" states that skip review.
-**Foundation:** The publish action requires explicit user confirmation. Draft generation may be triggered by events; publication always requires a button press. No state may silently become published. This is the core of Plot's trust model for all content.
-
-**Current enforcement (changelog wedge):**
-- `PublishDialog` requires manual trigger
-- Artifact states: `DRAFT`, `NEEDS_REVIEW`, `READY`, `PUBLISHED`
-- No auto-publish on routine completion
-
-### 3. Range must be exact (base/head, release boundary, in/out). Fuzzy range cannot ship.
-**Foundation:** The source boundary must be precise and inspectable. For changelog, this means exact commit SHAs. For future wedges, this means exact scope boundaries for whatever shipped work is being transformed into customer content. Ambiguous ranges stay in needs-resolution status.
-
-**Current enforcement (changelog wedge):**
-- `GitHubReleaseRequestPersistence` (API)
-- `RoutineReleaseActivity` displays range status
-- Release monitoring checks exact boundaries
-
-### 4. One workspace, one release source until the loop is proven. Do not sprawl repos/surfaces/variants early.
-**Foundation:** Prove the trust loop with focused scope before expanding. Currently: one GitHub repository per workspace. Future: one additional content surface only after changelog proves the model. No premature multi-repo or multi-surface sprawl.
-
-**Current enforcement (changelog wedge):**
-- Onboarding flow configures one repository
-- Routines create one `ON_GITHUB_RELEASE` automation
-- No multi-repo picker in current product
-
-### 5. Coming next must be labeled as coming next. Do not present planned features as live.
-**Foundation:** Future capabilities are part of the product path, not marketing footnotes. But they must be explicitly labeled as not-yet-live in any UI or marketing surface. This keeps user expectations accurate while showing where Plot is headed.
-
-**Current enforcement:**
-- `FeaturesSection` card 04: "Coming next"
-- Future content surfaces (docs impact, customer-update variants, voice/style rules) labeled as planned when referenced
-
-### 6. One primary action per screen. Workspace is an operator review tool; published surface is customer-readable content. Same facts, different register.
-**Foundation:** Operator tools are dense and action-focused. Customer-facing content is readable prose. The factual content is identical; the presentation register differs. This will extend to all future content types: operators review/approve in workspace UI, customers read polished output in their context.
-
-**Current enforcement (changelog wedge):**
-- Artifacts: primary action is "Publish" or "Save draft"
-- Chat: primary action is send message
-- Routines: primary action is "Create routine"
-- Public changelog: no actions, only navigation and citation inspection
-
-### 7. Copy prefers evidence over confidence. Marketing must use the same facts as the product. No inflated metrics.
-**Foundation:** All surfaces — product UI, public content, marketing — use factual descriptions backed by what Plot actually does. No superlatives without substance. No fake metrics. No claiming future capabilities as present. This applies to changelog today and every future content surface.
-
-**Current enforcement:**
-- `HeroSection`: "Ship fast. Write less."
-- `FeaturesSection`: factual descriptions, card 04 labeled "Coming next"
-- `HowItWorksSection`: process-based explanation with current changelog flow
-
----
-
-## Product Surfaces
-
-### Internal / Operator Surfaces
-
-#### Landing (`/`)
-- **Purpose:** Marketing and waitlist capture
-- **Primary action:** Join waitlist
-- **Laws enforced:** 5 (coming next labeled), 7 (factual copy)
-- **Layout:** `Navigation` → `HeroSection` → `FeaturesSection` → `StyleSection` → `HowItWorksSection` → `SecuritySection` → `CtaSection` → `FooterSection`
-
-#### Sign-in (`/sign-in`)
-- **Purpose:** Authentication entry
-- **Primary action:** Sign in with GitHub
-- **Layout:** Centered auth card with `AnimatedDitherArtwork`
-
-#### Onboarding (`/onboarding`)
-- **Purpose:** First-run setup: GitHub connection → repository selection → release routine creation → first run
-- **Primary action:** Step-specific (Connect GitHub / Create routine / Run routine)
-- **Laws enforced:** 4 (one workspace, one release source)
-- **States:** Step 1 (connect), Step 2 (select repo), Step 3 (create routine)
-- **Component:** `OnboardingFlow`
-
-#### Home (`/home`)
-- **Purpose:** Activity dashboard (current implementation redirects to Chat)
-- **Primary action:** View recent activity
-- **Layout:** TBD (currently redirects)
-
-#### Chat (`/chat`)
-- **Purpose:** Interactive, source-grounded AgentRun work
-- **Primary action:** Send message
-- **Laws enforced:** 1 (citations in responses), 6 (one primary action)
-- **Layout:** `ChatHome` (empty state) or `ChatActiveWorkspace` (active thread)
-- **Components:** `ChatComposer`, `ChatThread`, `ChatSourceCitations`
-- **Query params:** `?chat=<id>`, `?agent=<id>`, `?artifact=<id>`
-
-#### Routines (`/routines`)
-- **Purpose:** Scheduled or explicitly started AgentRun work
-- **Primary action:** Create routine
-- **Laws enforced:** 3 (exact range), 4 (one source), 6 (one primary action)
-- **Layout:** Routines list + create panel + activity detail
-- **Components:** `RoutinesWorkspace`, `RoutineTriggerPicker`, `SourceRepositoryPicker`, `RoutineReleaseActivity`
-- **States:** `ACTIVE`, `PAUSED`, `DISABLED`
-- **Cadences:** `ON_GITHUB_RELEASE`, `DAILY`, `WEEKLY`, `MONTHLY`, `MANUAL`
-
-#### Artifacts (`/artifacts`)
-- **Purpose:** Editable, revisioned, source-cited documents and Markdown export
-- **Primary action:** Publish or Save draft
-- **Laws enforced:** 1 (citations required), 2 (human review), 6 (one primary action)
-- **Layout:** Artifacts list or canvas workspace
-- **Components:** `ArtifactsWorkspace`, `ArtifactCanvasWorkspace`, `ArtifactEditorChrome`, `TiptapDraftEditor`, `CitedDraftEditor`, `SourcesPopover`, `PublishDialog`, `ExportDialog`
-- **States:** `DRAFT`, `NEEDS_REVIEW`, `READY`, `PUBLISHED`
-- **Save states:** `saved`, `saving`, `dirty`, `error`
-
-#### Integrations (`/settings/integrations`)
-- **Purpose:** GitHub connections, repository scopes, writing block configuration
-- **Primary action:** Connect/disconnect GitHub installation
-- **Laws enforced:** 4 (one workspace, one source)
-- **Layout:** `IntegrationsWorkspace`, `IntegrationsNavigation`
-- **Components:** GitHub connection cards, repository list, monitoring status
-
-#### Settings (`/settings/general`, `/settings/account`)
-- **Purpose:** Workspace and account configuration
-- **Primary action:** Update settings
-- **Layout:** `WorkspaceGeneral`, `AccountSettings`
-- **Navigation:** `SidebarNavigation` in settings mode
-
-### Public / Customer Surfaces
-
-#### Public Changelog List (`/:workspaceSlug/changelog`)
-- **Purpose:** Customer-readable list of published changelog entries
-- **Primary action:** Navigate to entry
-- **Laws enforced:** 1 (citations visible), 6 (reading register), 7 (factual content)
-- **Layout:** `PublicChangelogLayout` → `PublicChangelogList`
-- **No editing, no operator controls**
-
-#### Public Changelog Entry (`/:workspaceSlug/changelog/:entrySlug`)
-- **Purpose:** Customer-readable individual changelog entry with citations
-- **Primary action:** Inspect citations
-- **Laws enforced:** 1 (citations inspectable), 6 (reading register), 7 (factual content)
-- **Layout:** `PublicChangelogLayout` → `PublicChangelogEntryView`
-- **Components:** `PublicCitationChip`, Markdown rendering with citation chips, sources section
-- **No editing, no operator controls**
-
----
-
-## Voice & Copy
-
-### Workspace (Operator Register)
-- **Audience:** Product team, release managers, operators
-- **Tone:** Direct, technical, action-oriented
-- **Density:** High information density, compact controls
-- **Examples:**
-  - "Save draft" / "Publish changelog"
-  - "Routine paused" / "Needs review"
-  - "Sources · 3" / "Statement 2 — 'excerpt'"
-
-### Public Changelog (Customer Register)
-- **Audience:** End users, customers reading updates
-- **Tone:** Clear, professional, customer-focused
-- **Density:** Readable prose, generous spacing
-- **Examples:**
-  - Entry titles: descriptive release names
-  - Body: Markdown paragraphs with inline citation chips `[1, 2]`
-  - Sources section: numbered list with provider labels
-
-### Landing (Marketing Register)
-- **Audience:** Prospective users evaluating Plot
-- **Tone:** Factual, clear, confident without superlatives
-- **Examples:**
-  - "Ship fast. Write less."
-  - "From shipped release to cited changelog you can publish."
-  - "Plot never auto-publishes — you approve before anything goes live."
-
-### Korean Language Support
-- `README.ko.md` provides Korean translations
-- UI components support Korean text (fonts: Instrument Sans, Instrument Serif, JetBrains Mono)
-- Product surfaces are English-first; localization is future work
-
-### Future Content Surfaces
-The 7 laws establish the trust foundation for content surfaces beyond changelog. When Plot ships docs impact suggestions, customer-update variants, voice and style rules, or new shipped-work sources, they will follow the same trust loop:
-
-- **Same facts, new audience/register** — operators review in workspace UI, customers see polished output in their context
-- **Still human-approved** — Law 2 applies: drafts may be automated, publish requires explicit confirmation
-- **Still cited** — Law 1 applies: every claim must be inspectable or marked as user-edited
-- **Exact boundaries** — Law 3 applies: source scope must be precise, not fuzzy
-
-These surfaces are **not live yet** and are labeled "Coming next" when referenced in current product or marketing (Law 5). The changelog wedge proves the model first.
-
----
-
-## Visual System
-
-### Color Palette (Light Mode)
-Plot uses a neutral, near-monochrome palette with minimal color accents.
-
-**Base Colors:**
-- `--background`: `oklch(0.985 0 0)` — off-white background
-- `--foreground`: `oklch(0.145 0 0)` — near-black text
-- `--card`: `oklch(1 0 0)` — white cards
-- `--muted`: `oklch(0.94 0 0)` — muted background
-- `--muted-foreground`: `oklch(0.45 0 0)` — muted text
-- `--border`: `oklch(0.88 0 0)` — subtle borders
-
-**Accents:**
-- `--destructive`: `oklch(0.577 0.245 27.325)` — red for errors/warnings
-- `--ring`: `oklch(0.145 0 0)` — focus rings (black)
-- Amber highlights for focus states and warnings
-
-**Sidebar:**
-- `--sidebar`: `oklch(0.985 0 0)` — matches background
-- `--sidebar-primary`: `oklch(0.205 0 0)` — dark active state
-- `--sidebar-accent`: `oklch(0.97 0 0)` — hover state
-
-**Dark Mode:** Defined in globals.css with same structure
-
-### Typography
-
-**Families:**
-- `--font-sans`: Instrument Sans (primary UI)
-- `--font-display`: Instrument Serif (headlines, titles)
-- `--font-mono`: JetBrains Mono (code, metadata, labels)
-
-**Scale:**
-- Display (landing): `text-6xl` (3.75rem), `text-8xl` (6rem), up to `text-[8.75rem]`
-- Headings: `text-3xl` to `text-5xl`
-- Body: `text-base` (1rem), `text-sm` (0.875rem), `text-xs` (0.75rem)
-- Mono labels: `text-[10px]`, `text-[11px]`
-
-**Tracking:**
-- Display: `tracking-tight` (0)
-- Headings: `tracking-tight` or `tracking-[-0.02em]`
-- Mono uppercase labels: `tracking-[0.08em]` or `tracking-[0.12em]`
-
-### Spacing & Layout
-
-**Radius:**
-- `--radius`: `0.25rem` (4px base)
-- Buttons: `rounded-lg` (4px)
-- Cards: `rounded-xl` (12px), `rounded-2xl` (16px)
-- Chips: `rounded-full`
-
-**Padding:**
-- Dense controls: `px-2.5 py-1.5`, `px-3 py-2`
-- Buttons: `px-3` (small), `px-8` (large landing CTAs)
-- Cards: `p-3`, `p-4`
-- Sections: `py-24 lg:py-32`
-
-**Shadows:**
-- Cards: `shadow-sm`, `shadow-[0_12px_32px_rgba(0,0,0,0.14)]`
-- Popovers: `shadow-[0_24px_80px_rgba(0,0,0,0.2)]`
-- Buttons: `shadow-[inset_0_1px_1px_rgba(255,255,255,0.25),...]`
-
-**Grid & Constraints:**
-- Max-width: `max-w-[1400px]` (landing sections)
-- Sidebar: `280px` expanded, `68px` collapsed
-- Content: `px-6 lg:px-12` horizontal padding
-- Grid: Landing features use `lg:grid-cols-2`, How It Works uses `lg:grid-cols-[0.88fr_1.12fr]`
-
-### Iconography
-
-**Library:** Hugeicons (free) + Lucide
-- `MessageMultiple01Icon` — Chat
-- `ZapIcon` — Routines
-- `Shapes01Icon` — Artifacts
-- `Settings02Icon` — Settings
-- `PlugSocketIcon` — Integrations
-- `GithubIcon` — GitHub provider
-- `Globe` — Publish action
-- `ExternalLink` — Citations, sources
-- `Save` — Save draft
-- `ShieldAlert` — Warnings
-- `Check` — Confirmation
-
-**Size convention:** `size-4` (16px), `size-3.5` (14px), `size-8` (32px for feature cards)
-
-### Logo & Brand
-
-**Logo file:** `/apps/web/public/plot-icon.svg`
-- Black abstract mark with organic curves
-- 520×520 SVG
-- Two main strokes forming continuous flow
-- Used in README, landing page, favicon
-
-**Favicon:** `plot-favicon.svg` (production), `plot-logo-favicon-non-prod.png` (dev)
-
-**OG image:** `og-image.png`
-
----
-
-## Component Rules
+Two functional accents break the monochrome:
+
+- **Citation Red (`#ef3f2c`)**: A bold, high-contrast red used exclusively for citation chips in published content. The color signals "this claim has an inspectable source." Background tint: `#fff4f1`.
+- **Focus Amber (`#f59e0b`)**: Amber rings and highlights mark focus states, warnings, and statements under review in the workspace. This warm accent stands apart from the cool red of citations.
+
+The destructive color (`oklch(0.577 0.245 27.325)`) is a muted earthy red, distinct from citation red, reserved for error states.
+
+All colors use OKLCH notation to preserve perceptual uniformity. The system avoids gradients, glassmorphism, or layered transparency — the paper metaphor is flat and direct.
+
+## Typography
+
+Typography follows a three-tier strategy:
+
+1. **Instrument Serif** — Display and headline levels (`display-lg` at 96px, `headline-lg` at 48px). Reserved for landing page headlines, public changelog entry titles, and any narrative framing that benefits from editorial weight. Tracking is negative (`-0.02em` to `-0.03em`) to increase density.
+
+2. **Instrument Sans** — Body text at all scales (`body-lg` 18px, `body-md` 16px, `body-sm` 14px, `body-xs` 12px). Used for prose, descriptions, button labels, and all operator workspace UI. Line heights are generous (1.5 to 1.6) for long-form readability.
+
+3. **JetBrains Mono** — Metadata labels in three sizes (`label-md` 12px, `label-sm` 11px, `label-xs` 10px). Always uppercase with wide letter spacing (`0.08em` to `0.12em`). Used for timestamps, status badges, technical annotations, source counts, and any label that benefits from monospace precision.
+
+Headlines and display text are set in regular weight (400); the typeface's serifs and generous spacing provide sufficient contrast. Body text and labels use regular (400) and semibold (600) weights only — no extremes.
+
+## Layout
+
+Plot uses a **dense operator layout** for workspace surfaces and a **readable prose layout** for public changelog. Both share a common spacing scale but apply it differently:
+
+- **Workspace**: Compact controls (`dense: 8px`, `base: 16px`), minimal padding, tight card grids. Operators scan large lists of routines, artifacts, and sources; density improves efficiency.
+- **Public changelog**: Generous spacing (`comfortable: 24px`, `spacious: 32px`), large line heights, wide margins. Readers consume narrative prose and citation-linked claims.
+
+The spacing unit is `4px`. All spacing tokens are multiples of this unit to maintain vertical rhythm.
+
+**Grid backgrounds**: Landing page and some workspace sections use a faint 1px line grid (typically 28px or 32px squares) to reinforce the editorial/paper aesthetic. Opacity is low (`0.03` to `0.05`) so the grid never competes with content.
+
+**Max widths**: Landing sections constrain to `1400px`. Public changelog prose constrains to readable widths (approximately 65 characters per line). Workspace surfaces use fluid layouts with sidebar (280px expanded, 68px collapsed).
+
+**Sidebar density**: Collapsed sidebar shows only icons; expanded sidebar shows labels. Recent chat history and routine lists scroll within the sidebar chrome, using the dense spacing scale.
+
+## Elevation & Depth
+
+Plot avoids layered depth and glassmorphism. Elevation is minimal and functional:
+
+- **No shadows on most UI**: Buttons, inputs, and cards rely on border contrast and background fill, not drop shadows.
+- **Subtle card shadows**: Published changelog cards and elevated modals use soft shadows (`shadow-sm` or custom `0 12px 32px rgba(0,0,0,0.14)`) to separate content from the background without implying stacked glass layers.
+- **Focus rings**: All interactive elements use a 2px ring at focus (`focus-visible:ring-2`). Workspace primary actions use amber rings; public citation chips use red-tinted rings.
+- **Popovers and dialogs**: Float above the page with crisp borders and minimal shadows. No blur, no transparency layers.
+
+The editorial metaphor is **flat paper with ink**, not physical depth or translucent surfaces.
+
+## Shapes
+
+The design system uses **subtle rounding** on most interactive elements, never sharp corners or extreme pill shapes except for specific components:
+
+- **Buttons and inputs**: `rounded-lg` (0.25rem / 4px)
+- **Cards**: `rounded-xl` (0.375rem / 6px)
+- **Tags and status badges**: `rounded-full` (pill shape) for compact, scannable metadata
+- **Citation chips**: `rounded-full` to visually distinguish them from surrounding prose
+
+Borders are consistent (`border: oklch(0.88 0 0)`) and typically 1px. No gradient borders, no glow effects.
+
+The **Plot logo** is an abstract organic mark with continuous curves, rendered in solid black. It appears in the sidebar, landing navigation, and public changelog header — always flat, never animated or layered.
+
+## Components
+
+### Buttons
+
+**Primary button**: Black background (`{colors.foreground}`), white text, rounded (`{rounded.lg}`), 32px height. Used sparingly — one primary action per screen. Hover reduces opacity slightly.
+
+**Secondary button**: Light gray background (`rgba(0,0,0,0.04)`), black text. Used for alternate actions like "Cancel" or "Export."
+
+**Ghost button**: Transparent background, black text. Hover adds a subtle gray tint. Used for tertiary actions and icon-only controls.
+
+All buttons use `{typography.body-xs}` (12px Instrument Sans) for labels. Icon-only buttons are 32px square.
 
 ### Citation Chips
 
-**Workspace Citations (Artifact Editor):**
-- Component: `SourcesPopover`
-- Trigger: `<button>` with "Sources · {count}"
-- Style: `rounded-lg border border-black/10 bg-white px-3 text-sm font-semibold`
-- Popover: `Citation` component from `@astryxdesign/core`, numbered list
-- Behavior: Click to open popover, displays all unique sources with external links
+The **citation chip** is a signature component. In public changelog prose, it appears as `[1, 2]` inline with the text:
 
-**Public Citations:**
-- Component: `PublicCitationChip`
-- Display: Inline `[1, 2]` chips in red accent
-- Style: `rounded-full border border-[#ef3f2c]/25 bg-[#fff4f1] px-1.5 font-mono text-[11px] text-[#c73728]`
-- Behavior: Hover/focus to reveal sources popover with provider labels
-- Sources section: Numbered grid at bottom of entry
+- Background: `#fff4f1` (warm cream tint)
+- Text: `#ef3f2c` (citation red)
+- Font: JetBrains Mono, 11px semibold
+- Shape: `rounded-full`
+- Height: 24px
+- Padding: 0 6px
 
-### Review/Publish States
+On hover/focus, the background deepens to `#ffeae5` and a popover reveals the source titles, providers, and external links. Citation chips never appear in workspace UI — only in published customer-facing content.
 
-**Artifact States:**
-- `DRAFT` — Initial AI-generated state, may have uncited claims
-- `NEEDS_REVIEW` — Draft ready for human inspection
-- `READY` — Reviewed and approved, ready to publish
-- `PUBLISHED` — Live on public changelog
+### Inputs
 
-**Visual Indicators:**
-- Draft badge: `rounded-full bg-foreground/5 px-2 py-0.5 font-mono text-[8px] uppercase text-muted-foreground`
-- Save state label: `artifactSaveStateLabel()` — "Saved", "Saving…", "Unsaved changes", "Save needs attention"
-- Publish warnings: Amber alert dialog with `<ShieldAlert>` icon, statement focus links
+Text inputs and textareas use:
 
-**State Transitions:**
-- Draft → Publish (requires confirmation if unresolved statements exist)
-- Publish confirmation: `PublishConfirmation` dialog with warning list
-- Publish success: `PublishSuccessPanel` with public URL and actions
+- Background: `{colors.accent}` (light gray)
+- Text: `{colors.foreground}` (near-black)
+- Typography: `{typography.body-md}` (16px Instrument Sans)
+- Rounded: `{rounded.lg}`
+- Height: 40px (single-line inputs)
+- Padding: 0 12px
 
-### Release Range Display
+Focus state adds an amber ring (`focus-visible:ring-amber-400`). Inputs never have inner shadows or layered borders.
 
-**Components:** `RoutineReleaseActivity`
+### Cards
 
-**Range States:**
-- `NEEDS_RANGE` — First observed tag, no base commit yet
-- Exact range: Display base/head SHAs, tag names, release boundary
-- Monitoring status: `ACTIVE`, `DISABLED`, `QUEUED`, `ANALYZING`, `COMPLETED`, `FAILED`
+**Standard card**: White background (`#ffffff`), `rounded-xl`, 16px padding. Used for artifact previews, routine detail panels, settings sections.
 
-**Visual Treatment:**
-- Tag chip: `rounded-full border border-black/10 px-2 py-0.5 font-mono text-xs uppercase`
-- Status badges: Same chip style with state-specific text
-- Error states: Display error codes and last attempt timestamp
+**Dense card**: Light gray background (`{colors.secondary}`), `rounded-lg`, 12px padding. Used for compact lists and sidebar elements.
 
-### Empty/Error/Loading States
+No card uses drop shadows unless it floats as a modal or popover.
 
-**Empty States:**
-- Message: Descriptive text explaining what will appear here
-- Action: Primary CTA to create first item
-- Example (Artifacts): "No artifacts yet. Create your first artifact from Chat or Routines."
+### Tags and Status Badges
 
-**Loading States:**
-- Spinner: `<LoaderCircle className="animate-spin" />`
-- Text: "Loading…" with ellipsis
-- No skeleton content that implies structure before data arrives
+Small pill-shaped labels (`rounded-full`, 20px height) with monospace uppercase text:
 
-**Error States:**
-- Message: Clear error description, never generic "Something went wrong"
-- Retry action if applicable
-- No fake success states when errors occur
+- Background: `rgba(0,0,0,0.05)`
+- Text: `{colors.muted-foreground}`
+- Font: JetBrains Mono 10px semibold, uppercase, `0.12em` letter spacing
 
-**Never fake completeness:**
-- Do not show placeholder content
-- Do not hide controls that should be visible
-- Do not imply published state when still draft
+Used for release tag names, routine statuses, artifact states, and provider labels in citation sources.
 
----
+### Sidebar Navigation
 
-## Screen Inventory
+**Inactive nav items**: Transparent background, gray text (`rgba(0,0,0,0.65)`), 32px height, `rounded-lg`.
 
-### Landing (`/`)
-**Layout:** Single-page scroll with fixed navigation
-- **Navigation:** Logo, "Join waitlist" CTA (sticky)
-- **Hero:** Display headline, subheading, two CTAs ("Join waitlist", "See how it works"), background terminal visual
-- **Features:** 2×2 grid, four capability cards (blocks, signals, style, pack), card 04 labeled "Coming next"
-- **Style:** Brand promise visualization
-- **How It Works:** Three-step process (Connect → Release → Review+publish), sticky visual
-- **Security:** Trust signals
-- **CTA:** Final waitlist form
-- **Footer:** Legal links, branding
-- **Primary action:** Join waitlist
-- **Forbidden patterns:** Unlabeled future features, auto-publish claims, inflated metrics
+**Active nav item**: White background with subtle shadow (`rgba(255,255,255,0.75)`), near-black text (`#18181b`).
 
-### Sign-in (`/sign-in`)
-**Layout:** Centered card on animated dither background
-- **Card:** Sign-in form or OAuth flow
-- **Primary action:** Sign in
-- **Forbidden patterns:** Social proof without evidence, fake user counts
+**Hover state**: Light gray background (`rgba(0,0,0,0.04)`).
 
-### Onboarding (`/onboarding`)
-**Layout:** Step indicator + centered content
-- **Step 1:** GitHub connection card, "Connect GitHub" button
-- **Step 2:** Repository picker (search + list), "Create routine" form
-- **Step 3:** First run trigger, "Run routine" button, polling status
-- **Primary action:** Step-specific CTA
-- **Forbidden patterns:** Auto-creating routines without user confirmation, skipping step verification
+Icons are 14px to 16px, from Hugeicons (free) and Lucide. All navigation uses Instrument Sans 13px medium.
 
-### Home (`/home`)
-**Layout:** TBD (currently redirects to `/chat`)
-- **Future:** Activity feed, workspace stats, recent artifacts
-- **Primary action:** TBD
-- **Forbidden patterns:** Fake activity, auto-generated content without citations
+## Do's and Don'ts
 
-### Chat (`/chat`)
-**Layout:** `ProductShell` with sidebar + main content
-- **Sidebar:** Product navigation (Chat, Routines, Artifacts), recent chat history
-- **Empty state (`ChatHome`):** Welcome message, source references panel, "Start a new chat" composer
-- **Active state (`ChatActiveWorkspace`):** Thread messages, composer, artifact/agent inspector panel
-- **Components:** `ChatComposer` (textarea + send button), `ChatThread` (message list), `ChatSourceCitations` (inline citations with links)
-- **Primary action:** Send message
-- **Forbidden patterns:** AI responses without citations, auto-sending messages, hiding source links
+### Do
 
-### Routines (`/routines`)
-**Layout:** `ProductShell` with sidebar + main content
-- **List:** Routine cards with name, source, cadence, status, last run timestamp
-- **Create panel:** Name input, repository picker, instruction textarea, cadence picker, "Create routine" button
-- **Detail panel (expanded):** Routine config, `RoutineReleaseActivity` (release history, range status), manual run trigger
-- **Primary action:** Create routine
-- **Forbidden patterns:** Auto-enabling routines, unclear range boundaries, hiding release errors
+- **Use one solid primary action per screen.** A single black button makes the intended action obvious. Secondary actions can be ghost or outline buttons.
 
-### Artifacts (`/artifacts`)
-**Layout:** `ProductShell` with sidebar + main content or full-canvas editor
-- **List view:** Artifact cards with title, status, last updated timestamp
-- **Canvas view (`ArtifactCanvasWorkspace`):** Full-screen editor with chrome
-- **Editor chrome (`ArtifactEditorChrome`):** Save draft button, save state label, publish/export actions
-- **Editor:** `TiptapDraftEditor` (rich text) or `CitedDraftEditor` (with citation tracking)
-- **Panels:** `SourcesPopover`, `ArtifactHistoryPanel`, `PublishDialog`, `ExportDialog`
-- **Primary action:** Publish (when ready) or Save draft (when editing)
-- **Forbidden patterns:** Auto-publish, publish without confirmation, hiding uncited claims, unclear save state
+- **Reserve serif for headlines and published narrative.** Instrument Serif signals "this is the story" or "this is the published output." Use Instrument Sans for all operator UI.
 
-### Integrations (`/settings/integrations`)
-**Layout:** `ProductShell` in settings mode + main content
-- **Sidebar:** Settings navigation (Account, General, Integrations)
-- **Content:** GitHub connection cards, repository monitoring status, "Connect GitHub" CTA
-- **Primary action:** Connect/disconnect GitHub
-- **Forbidden patterns:** Auto-connecting repositories, unclear monitoring status, hidden access errors
+- **Keep monospace uppercase for metadata only.** JetBrains Mono with wide letter spacing (`0.08em` or more) is the visual signature of technical labels, timestamps, and status badges. Never use it for body prose.
 
-### Settings General/Account
-**Layout:** `ProductShell` in settings mode + form
-- **General:** Workspace name, slug, logo, member list
-- **Account:** User profile, email, authentication
-- **Primary action:** Save changes
-- **Forbidden patterns:** Auto-saving critical changes, unclear validation errors
+- **Mark citations with the red chip in public content.** The `[1, 2]` notation in citation red is the visual proof of "this claim has sources." Workspace UI shows sources differently (popovers, lists) but never with the red chip.
 
-### Public Changelog List (`/:workspaceSlug/changelog`)
-**Layout:** Standalone public layout (no sidebar, no workspace chrome)
-- **Header:** Workspace name, logo, "All updates" heading
-- **List:** Entry cards with title, tag name, published date, excerpt
-- **Card:** Link to full entry
-- **Primary action:** Navigate to entry
-- **Forbidden patterns:** Operator controls, edit actions, unpublished drafts, citation-free claims
+- **Use amber for workspace focus and warnings.** Amber rings and highlights are the operator's visual cue: "pay attention here." Keep amber out of published changelog.
 
-### Public Changelog Entry (`/:workspaceSlug/changelog/:entrySlug`)
-**Layout:** Standalone public layout
-- **Header:** Back link ("← All updates"), published date, tag chip, title
-- **Body:** Markdown prose with inline `PublicCitationChip` references
-- **Sources section:** Numbered grid of citation links (provider, label, URL)
-- **Primary action:** Inspect citations
-- **Forbidden patterns:** Operator controls, edit actions, uncited claims, broken source links
+- **Let paper texture emerge from grid backgrounds and flat cards.** The editorial aesthetic comes from subtle line grids (low opacity), flat white cards on off-white backgrounds, and minimal shadows — not from skeuomorphic paper textures or noise overlays.
 
----
+### Don't
 
-## Accessibility & Density
+- **Don't mix serif into operator chrome.** Workspace navigation, buttons, inputs, and control labels are always Instrument Sans. Serif is reserved for content headlines and published output.
 
-### Operator Tool (Workspace)
-- **Density:** High information density, compact controls
-- **Target:** Professional users spending extended time in the app
-- **Min heights:** Buttons `min-h-8` (32px), Inputs `min-h-10` (40px)
-- **Text size:** `text-xs` to `text-sm` for controls, `text-base` for content
-- **Keyboard nav:** Full keyboard support, focus rings on all interactive elements
-- **Screen reader:** ARIA labels, roles, live regions for status updates
+- **Don't use citation red for errors or warnings.** Citation red (`#ef3f2c`) means "inspectable source" in published content. Errors use the separate destructive color; workspace warnings use amber.
 
-### Public Reading (Changelog)
-- **Density:** Generous spacing, readable prose
-- **Target:** General audience scanning updates
-- **Text size:** `text-[17px]` body, `text-5xl` to `text-6xl` headings
-- **Line height:** `leading-8` for body content
-- **Contrast:** High contrast for readability (WCAG AA minimum)
-- **Focus indicators:** Clear focus rings on citation chips and links
+- **Don't fake completeness with skeleton loaders or empty states that look published.** If data isn't loaded, say "Loading…" with a spinner. If a list is empty, say "No items yet" with a clear action. Never show gray placeholder boxes that imply structure before data arrives.
 
-### Focus States
-- **Default:** `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-{color}`
-- **Amber accent:** `focus-visible:ring-amber-400` (workspace primary actions)
-- **Black accent:** `focus-visible:ring-black/15` (secondary workspace actions)
-- **Red accent:** `focus-visible:ring-[#ef3f2c]/30` (public citation chips)
+- **Don't add glassmorphism, gradients, or layered transparency.** Plot's aesthetic is **flat ink on paper**, not frosted glass or stacked translucent surfaces. Cards are opaque; shadows are minimal; no blur effects.
 
-### Motion & Animation
-- **Respect prefers-reduced-motion:** `@media (prefers-reduced-motion: no-preference)`
-- **Landing reveals:** `landing-reveal` animation (fade-in + translate-y)
-- **Loading spinners:** `animate-spin` on `<LoaderCircle>`
-- **Flow animations:** Animated dots on feature visuals (SVG `<animateMotion>`)
-- **Transitions:** `transition` utility for hover/focus states
+- **Don't create multiple primary CTAs on one screen.** If two actions compete for attention (e.g., "Save draft" and "Publish"), make one primary (black button) and one secondary (gray or ghost). Users scan for the single black pill.
 
----
+- **Don't use extreme border radius or sharp corners.** Buttons and cards use subtle rounding (`4px` to `6px`). Tags and citation chips are fully rounded (`rounded-full`). Never use `0px` (sharp) or `16px+` (overly soft) radius on standard UI.
 
-## How to Use This File
-
-### For Product Engineers
-- **Before implementing a feature:** Check which laws apply to your surface
-- **Component naming:** Use the exact component names listed here (greppable)
-- **State transitions:** Follow the state machine in "Review/Publish States"
-- **Copy & labels:** Match the voice register for your surface (operator vs customer vs marketing)
-
-### For QA
-- **Fail a deploy if:**
-  - Publish happens without explicit user confirmation (Law 2)
-  - Uncited claims appear in published changelog (Law 1)
-  - Range boundaries are fuzzy or missing (Law 3)
-  - Future features are presented as live (Law 5)
-  - Empty/error states fake completeness
-- **Verify:**
-  - All citation chips link to inspectable sources
-  - All primary actions are clearly labeled and singular per screen
-  - All states match the documented state machine
-
-### For Design/Product
-- **When adding a feature:**
-  - Identify which law(s) apply
-  - Determine the primary action for the screen
-  - Choose the voice register (operator/customer/marketing)
-  - Update DESIGN.md with new screen/component/state
-- **When changing UI:**
-  - PRs that change UI must update DESIGN.md
-  - Document new components, states, or patterns
-  - Ensure copy matches the voice register
-
-### For Marketing
-- **Copy must match product reality:**
-  - Use the same factual language as the product
-  - Do not claim unshipped features
-  - Label future work as "Coming next"
-  - Reference this file for accurate product descriptions
-
----
-
-## Related Documentation
-
-- [System Architecture Overview](docs/architecture/system-overview.md) — request boundaries, ownership model, persistence conventions
-- [GitHub Release Automation](docs/operations/github-release-automation.md) — webhook flow, range detection
-- [Private Repository Certification](docs/operations/private-repository-production-certification.md) — security and access controls
-- [README](README.md) — repository overview, development setup, verification commands
-- [README.ko.md](README.ko.md) — Korean translation of repository overview
-
----
-
-## Product Identity Summary
-
-**Plot is not a changelog app.** Changelog is wedge 1 of a shipping-to-customer-content system.
-
-**The gap Plot closes:** Agent-era shipping got faster. The content that reaches customers is still slow. Plot exists to close that gap.
-
-**The trust constitution:** The 7 laws are the foundation for all content surfaces — current and future. Human review, inspectable citations, exact boundaries, never auto-publish. These are not changelog constraints; they are Plot's contract with users.
-
-**When Plot expands** to docs impact, customer updates, voice/style rules, or new shipped-work sources, those surfaces will follow the same trust loop. They are part of the product path, not footnotes. They are labeled "Coming next" until they are proven and live.
-
----
-
-**This file is the source of truth for UI behavior, states, and patterns. When in doubt, refer here. When the product changes, update this file first.**
+- **Don't hide the source link in citations.** Every citation chip must open a popover or link to the external source. No decorative citation chips that lack the evidence backing.
