@@ -137,6 +137,18 @@ kotlin {
 	}
 }
 tasks.withType<Test> {
-	useJUnitPlatform()
+	useJUnitPlatform {
+		excludeTags("live-eval")
+	}
 	environment("SPRING_PROFILES_ACTIVE", "test")
+}
+
+tasks.register<Test>("liveEval") {
+	group = "verification"
+	description = "Runs live citation/generation quality eval tests (requires AI credentials and PLOT_EVAL_LIVE=true)"
+	useJUnitPlatform {
+		includeTags("live-eval")
+	}
+	environment("SPRING_PROFILES_ACTIVE", "test")
+	environment("PLOT_EVAL_LIVE", "true")
 }

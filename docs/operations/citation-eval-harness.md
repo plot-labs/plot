@@ -152,7 +152,7 @@ Or manually:
 
 ```bash
 cd apps/api
-PLOT_EVAL_LIVE=true ./gradlew test --tests "com.plot.api.ai.provider.ArtifactWorkflowCitationLiveEvalTest"
+./gradlew liveEval
 ```
 
 This runs `ArtifactWorkflowCitationLiveEvalTest` which:
@@ -163,9 +163,9 @@ This runs `ArtifactWorkflowCitationLiveEvalTest` which:
 
 **Prerequisites:**
 - AI credentials configured (same as used by the API)
-- `PLOT_EVAL_LIVE=true` environment variable
+- The `liveEval` Gradle task automatically sets `PLOT_EVAL_LIVE=true`
 
-**Not enabled in PR CI by default** (too slow and requires credentials).
+**Not enabled in default `test` task or PR CI** (tagged with `@Tag("live-eval")` and excluded from default test suite).
 
 ## What Pass/Fail Means
 

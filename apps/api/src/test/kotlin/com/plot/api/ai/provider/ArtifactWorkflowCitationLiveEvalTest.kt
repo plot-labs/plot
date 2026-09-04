@@ -1,5 +1,6 @@
 package com.plot.api.ai.provider
 
+import com.plot.api.TestcontainersConfiguration
 import com.plot.api.artifact.workflow.ModelOutputValidator
 import com.plot.api.artifact.workflow.model.EvidenceSnapshot
 import com.plot.api.artifact.workflow.model.ReviewVerdict
@@ -8,16 +9,19 @@ import com.plot.api.artifact.workflow.model.SentenceOrigin
 import com.plot.api.artifact.workflow.model.SourceProvider
 import java.time.Instant
 import java.util.UUID
-import kotlin.test.assertNotNull
-import org.junit.jupiter.api.Assumptions.assumeTrue
-import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.context.annotation.Import
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.ObjectMapper
 
 @SpringBootTest
+@Import(TestcontainersConfiguration::class)
+@Tag("live-eval")
+@EnabledIfEnvironmentVariable(named = "PLOT_EVAL_LIVE", matches = "true")
 class ArtifactWorkflowCitationLiveEvalTest {
 
 	@Autowired
@@ -27,12 +31,6 @@ class ArtifactWorkflowCitationLiveEvalTest {
 	private lateinit var mapper: ObjectMapper
 
 	private val validator = ModelOutputValidator()
-
-	@BeforeEach
-	fun checkLiveEvalEnabled() {
-		val liveEvalEnabled = System.getenv("PLOT_EVAL_LIVE")?.toBoolean() ?: false
-		assumeTrue(liveEvalEnabled, "Live eval is disabled. Set PLOT_EVAL_LIVE=true to run.")
-	}
 
 	@Test
 	fun `live eval scores model outputs against corpus expectations`() {

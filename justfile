@@ -30,9 +30,9 @@ test-api:
 eval-citation:
     cd apps/api && ./gradlew test --tests "com.plot.api.ai.provider.ArtifactWorkflowCitationEvalTest"
 
-# Run citation/generation quality live eval (requires AI credentials and PLOT_EVAL_LIVE=true)
+# Run citation/generation quality live eval (requires AI credentials)
 eval-citation-live:
-    cd apps/api && PLOT_EVAL_LIVE=true ./gradlew test --tests "com.plot.api.ai.provider.ArtifactWorkflowCitationLiveEvalTest"
+    cd apps/api && ./gradlew liveEval
 
 # Test the browser API client contract
 test-api-client:
