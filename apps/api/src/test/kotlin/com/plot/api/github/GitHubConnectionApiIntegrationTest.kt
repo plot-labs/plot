@@ -79,7 +79,7 @@ class GitHubConnectionApiIntegrationTest {
 	}
 
 	/** The dev user normally only exists after a real GitHub OAuth login; link it by hand. */
-	private fun seedLinkedGitHubAccount(scope: String = "read:org read:user repo") {
+	private fun seedLinkedGitHubAccount(scope: String = "read:user user:email read:org") {
 		jdbcTemplate.update(
 			"insert into auth_user (id, name, email, email_verified, created_at, updated_at) " +
 				"values ('auth-user-dev', 'Dev User', 'dev-github@example.com', true, now(), now()) " +
@@ -88,7 +88,7 @@ class GitHubConnectionApiIntegrationTest {
 		jdbcTemplate.update(
 			"insert into auth_account (id, account_id, provider_id, issuer, user_id, access_token, scope, created_at, updated_at) " +
 				"values ('acct-dev', '9001', 'github', 'local:oauth:github', 'auth-user-dev', 'gh-token', ?, now(), now()) " +
-				"on conflict (id, provider_id) do update set scope = excluded.scope, updated_at = excluded.updated_at",
+				"on conflict (id) do update set access_token = excluded.access_token, scope = excluded.scope, updated_at = excluded.updated_at",
 			scope,
 		)
 		jdbcTemplate.update("update users set auth_subject = 'auth-user-dev' where id = ?", devContext.devUserId)
