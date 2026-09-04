@@ -146,6 +146,8 @@ tasks.named<Test>("test") {
 tasks.register<Test>("liveEval") {
 	group = "verification"
 	description = "Runs live citation/generation quality eval tests (requires AI credentials and PLOT_EVAL_LIVE=true)"
+	testClassesDirs = sourceSets["test"].output.classesDirs
+	classpath = sourceSets["test"].runtimeClasspath
 	useJUnitPlatform {
 		includeTags("live-eval")
 	}
