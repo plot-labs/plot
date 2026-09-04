@@ -197,6 +197,14 @@ class GitHubConnectionService(
 		val personalInstall = installations.firstOrNull {
 			it.accountType.equals("USER", ignoreCase = true) && it.accountId == link.githubAccountId
 		}
+		val hasOrgInstalls = installations.any { it.accountType.equals("ORGANIZATION", ignoreCase = true) }
+		if (hasOrgInstalls && !hasReadOrgScope(link.scope)) {
+			throw ApiException(
+				HttpStatus.UNAUTHORIZED,
+				"GITHUB_REAUTH_REQUIRED",
+				"GitHub re-authentication is required to check organization membership; sign in with GitHub again",
+			)
+		}
 		val adminOrgs = installations.filter { it.accountType.equals("ORGANIZATION", ignoreCase = true) }
 			.filter { isOrganizationAdmin(link.accessToken, it.accountLogin) }
 		val eligibleInstallations = listOfNotNull(personalInstall) + adminOrgs
@@ -539,12 +547,28 @@ class GitHubConnectionService(
 	private fun isOrganizationAdmin(accessToken: String?, orgLogin: String): Boolean {
 		val token = accessToken?.takeIf { it.isNotBlank() } ?: return false
 		val identity = githubClient.resolveAuthenticatedUser(token)
-		return githubClient.organizationMembershipRole(token, orgLogin, identity.login) == "admin"
+		return try {
+			githubClient.organizationMembershipRole(token, orgLogin, identity.login) == "admin"
+		} catch (exception: ApiException) {
+			if (exception.error == "GITHUB_ACCESS_DENIED") {
+				throw ApiException(
+					HttpStatus.UNAUTHORIZED,
+					"GITHUB_REAUTH_REQUIRED",
+					"GitHub re-authentication is required to check organization membership; sign in with GitHub again",
+				)
+			}
+			throw exception
+		}
+	}
+
+	private fun hasReadOrgScope(scope: String?): Boolean {
+		if (scope.isNullOrBlank()) return false
+		return scope.split(" ", ",").any { it.trim() == "read:org" }
 	}
 
 	private fun findLinkedGitHubAccount(userId: UUID): LinkedGitHubAccount? = sqlExecutor.query(
 		"""
-		select a.account_id, a.access_token
+		select a.account_id, a.access_token, a.scope
 		from users u
 		join auth_account a on a.user_id = u.auth_subject and a.provider_id = 'github'
 		where u.id = ? and u.auth_subject is not null
@@ -555,6 +579,7 @@ class GitHubConnectionService(
 			LinkedGitHubAccount(
 				githubAccountId = rs.getString(1)?.toLongOrNull() ?: 0L,
 				accessToken = rs.getString(2),
+				scope = rs.getString(3),
 			)
 		},
 		userId,
@@ -563,7 +588,7 @@ class GitHubConnectionService(
 	private fun installationNotOwned(message: String = "GitHub installation does not belong to the authenticated user") =
 		ApiException(HttpStatus.FORBIDDEN, "GITHUB_INSTALLATION_NOT_OWNED", message)
 
-	private data class LinkedGitHubAccount(val githubAccountId: Long, val accessToken: String?)
+	private data class LinkedGitHubAccount(val githubAccountId: Long, val accessToken: String?, val scope: String?)
 
 	private fun listScopesForConnection(connectionId: UUID): List<GitHubRepositoryResponse> {
 		return sqlExecutor.query(

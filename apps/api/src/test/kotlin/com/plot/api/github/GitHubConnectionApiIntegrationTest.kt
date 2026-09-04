@@ -79,16 +79,17 @@ class GitHubConnectionApiIntegrationTest {
 	}
 
 	/** The dev user normally only exists after a real GitHub OAuth login; link it by hand. */
-	private fun seedLinkedGitHubAccount() {
+	private fun seedLinkedGitHubAccount(scope: String = "read:org read:user repo") {
 		jdbcTemplate.update(
 			"insert into auth_user (id, name, email, email_verified, created_at, updated_at) " +
 				"values ('auth-user-dev', 'Dev User', 'dev-github@example.com', true, now(), now()) " +
 				"on conflict (id) do nothing",
 		)
 		jdbcTemplate.update(
-			"insert into auth_account (id, account_id, provider_id, issuer, user_id, access_token, created_at, updated_at) " +
-				"values ('acct-dev', '9001', 'github', 'local:oauth:github', 'auth-user-dev', 'gh-token', now(), now()) " +
-				"on conflict do nothing",
+			"insert into auth_account (id, account_id, provider_id, issuer, user_id, access_token, scope, created_at, updated_at) " +
+				"values ('acct-dev', '9001', 'github', 'local:oauth:github', 'auth-user-dev', 'gh-token', ?, now(), now()) " +
+				"on conflict (id, provider_id) do update set scope = excluded.scope, updated_at = excluded.updated_at",
+			scope,
 		)
 		jdbcTemplate.update("update users set auth_subject = 'auth-user-dev' where id = ?", devContext.devUserId)
 	}
@@ -302,6 +303,52 @@ class GitHubConnectionApiIntegrationTest {
 			callCount++
 			if (org == "acme-org") "admin" else null
 		}
+
+		mockMvc.post("/api/github/installations/sync")
+			.andExpect {
+				status { isOk() }
+				jsonPath("$.installationId") { value(102) }
+			}
+	}
+
+	@Test
+	fun syncRequiresReauthWhenReadOrgScopeIsMissing() {
+		seedLinkedGitHubAccount(scope = "read:user repo")
+		fakeClient.userInstallations = listOf(
+			GitHubUserInstallation(installationId = 101, appId = "1", accountId = 9001, accountLogin = "acme", accountType = "User"),
+			GitHubUserInstallation(installationId = 102, appId = "1", accountId = 555, accountLogin = "acme-org", accountType = "Organization"),
+		)
+
+		mockMvc.post("/api/github/installations/sync")
+			.andExpect {
+				status { isUnauthorized() }
+				jsonPath("$.error") { value("GITHUB_REAUTH_REQUIRED") }
+			}
+	}
+
+	@Test
+	fun syncRequiresReauthWhenOrganizationMembershipCheckIsAccessDenied() {
+		fakeClient.userInstallations = listOf(
+			GitHubUserInstallation(installationId = 102, appId = "1", accountId = 555, accountLogin = "acme-org", accountType = "Organization"),
+		)
+		fakeClient.membershipRoleProvider = { _, _ ->
+			throw com.plot.api.common.ApiException(org.springframework.http.HttpStatus.BAD_GATEWAY, "GITHUB_ACCESS_DENIED", "access denied")
+		}
+
+		mockMvc.post("/api/github/installations/sync")
+			.andExpect {
+				status { isUnauthorized() }
+				jsonPath("$.error") { value("GITHUB_REAUTH_REQUIRED") }
+			}
+	}
+
+	@Test
+	fun syncSucceedsWithReadOrgScopeForSingleAdminOrgInstallation() {
+		seedLinkedGitHubAccount(scope = "read:org read:user repo")
+		fakeClient.userInstallations = listOf(
+			GitHubUserInstallation(installationId = 102, appId = "1", accountId = 555, accountLogin = "acme-org", accountType = "Organization"),
+		)
+		fakeClient.membershipRole = "admin"
 
 		mockMvc.post("/api/github/installations/sync")
 			.andExpect {

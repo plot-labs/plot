@@ -597,6 +597,7 @@ function errorMessage(error: unknown) {
     if (error.code === "GITHUB_RATE_LIMITED") return "GitHub rate limit reached. Wait a moment, then retry.";
     if (error.code === "GITHUB_NOT_FOUND") return "The previous GitHub installation was replaced or removed. Reconnect GitHub to restore access.";
     if (error.code === "GITHUB_ACCESS_DENIED" || error.code === "CONNECTION_INACTIVE" || error.code === "REPOSITORY_INACTIVE") return "GitHub access was revoked. Reconnect GitHub, then retry.";
+    if (error.code === "GITHUB_REAUTH_REQUIRED") return "GitHub re-authentication is required. Sign in with GitHub again to grant organization access.";
     if (error.code === "GITHUB_INSTALLATION_AMBIGUOUS") return "Multiple GitHub App installations found. Visit GitHub settings to manage your installations, then reconnect the account you want to use.";
     if (error.code === "GITHUB_ACCOUNT_NOT_LINKED") return "No linked GitHub account found. Sign in with GitHub first, then retry.";
     if (error.code === "FORBIDDEN") return "Workspace owner must connect GitHub.";
@@ -615,6 +616,7 @@ function requiresReconnect(error: unknown) {
   return error instanceof PlotApiError && new Set([
     "GITHUB_NOT_FOUND",
     "GITHUB_ACCESS_DENIED",
+    "GITHUB_REAUTH_REQUIRED",
     "GITHUB_ACCOUNT_NOT_LINKED",
     "GITHUB_INSTALLATION_AMBIGUOUS",
     "CONNECTION_INACTIVE",
