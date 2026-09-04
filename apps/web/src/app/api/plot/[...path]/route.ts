@@ -172,6 +172,7 @@ function isAllowed(method: string, path: string[]): boolean {
   if (method === "GET" && route === "github/connections") return true;
 	if (method === "GET" && /^github\/connections\/[0-9a-fA-F-]+\/repositories$/.test(route)) return true;
   if (method === "POST" && route === "github/installations/requests") return true;
+  if (method === "POST" && route === "github/installations/sync") return true;
   if (method === "POST" && route === "github/installations/callback") return true;
   if (method === "GET" && route === "github/installations/callback") return true;
   if (method === "PUT" && /^github\/repositories\/[^/]+$/.test(route)) return true;

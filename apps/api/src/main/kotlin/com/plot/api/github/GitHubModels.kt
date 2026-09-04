@@ -72,6 +72,14 @@ data class GitHubUserIdentity(
 	val login: String,
 )
 
+data class GitHubUserInstallation(
+	val installationId: Long,
+	val appId: String,
+	val accountId: Long,
+	val accountLogin: String,
+	val accountType: String,
+)
+
 data class GitHubHttpResponse(
 	val status: Int,
 	val headers: Map<String, List<String>>,

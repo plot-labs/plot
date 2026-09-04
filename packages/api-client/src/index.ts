@@ -136,6 +136,12 @@ export interface GitHubInstallationRequest {
   expiresAt: string;
 }
 
+export interface GitHubInstallationCallback {
+  connectionId: string;
+  installationId: number;
+  repositories: GitHubRepository[];
+}
+
 export type GitHubRepositoryMonitoringStatus = "ACTIVE" | "DISABLED";
 export type GitHubRepositoryAnalysisStatus = "QUEUED" | "ANALYZING" | "COMPLETED" | "FAILED";
 export type GitHubReleaseConvention = "SEMVER_V" | "SEMVER" | "PREFIXED" | "MIXED" | "NO_TAGS";
@@ -397,6 +403,7 @@ export class PlotApiError extends Error {
 export interface PlotApiClient {
 
   createGitHubInstallationRequest(options?: RequestOptions): Promise<GitHubInstallationRequest>;
+  syncGitHubInstallation(options?: RequestOptions): Promise<GitHubInstallationCallback>;
   listGitHubConnections(options?: RequestOptions): Promise<GitHubConnection[]>;
   listGitHubRepositories(connectionId: string, options?: RequestOptions): Promise<GitHubRepository[]>;
   connectGitHubRepository(connectionId: string, externalRepositoryId: number, options?: RequestOptions): Promise<GitHubRepository>;
@@ -467,6 +474,10 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
 
   return {
     createGitHubInstallationRequest: (requestOptions) => request("/github/installations/requests", {
+      method: "POST",
+      signal: requestOptions?.signal,
+    }),
+    syncGitHubInstallation: (requestOptions) => request("/github/installations/sync", {
       method: "POST",
       signal: requestOptions?.signal,
     }),

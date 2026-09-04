@@ -129,6 +129,53 @@ class GitHubRestClient(
 		return GitHubUserIdentity(id, login)
 	}
 
+	override fun listUserInstallations(userAccessToken: String): List<GitHubUserInstallation> {
+		val installations = mutableListOf<GitHubUserInstallation>()
+		var next: URI? = uri("/user/installations?per_page=100&page=1")
+		var pages = 0
+		while (next != null) {
+			pages++
+			if (pages > properties.repositoryPageCap.coerceAtLeast(1)) {
+				throw ApiException(
+					HttpStatus.CONTENT_TOO_LARGE,
+					"GITHUB_INSTALLATIONS_TOO_LARGE",
+					"GitHub returned too many installations",
+				)
+			}
+			val response = request("GET", next, userAccessToken)
+			val root = parse(response)
+			val installationArray = root.path("installations")
+			if (!installationArray.isArray) invalidResponse("GitHub returned an invalid user installation response")
+			installationArray.forEach { node ->
+				val installationId = node.path("id").longValue()
+				val appId = node.path("app_id").takeIf { it.canConvertToLong() }?.longValue()?.toString()
+					?: node.path("app_id").stringValue()?.takeIf { it.isNotBlank() }
+				val account = node.path("account")
+				val accountId = account.path("id").longValue()
+				val accountLogin = account.path("login").stringValue()?.takeIf { it.isNotBlank() }
+				val accountType = account.path("type").stringValue()?.takeIf { it.isNotBlank() }
+				if (
+					installationId == 0L ||
+					appId == null ||
+					accountId == 0L ||
+					accountLogin == null ||
+					accountType == null
+				) {
+					invalidResponse("GitHub returned an invalid user installation")
+				}
+				installations += GitHubUserInstallation(
+					installationId = installationId,
+					appId = appId,
+					accountId = accountId,
+					accountLogin = accountLogin,
+					accountType = accountType,
+				)
+			}
+			next = nextUri(response)
+		}
+		return installations.distinctBy { it.installationId }
+	}
+
 	override fun organizationMembershipRole(userAccessToken: String, org: String, username: String): String? = try {
 		val response = request(
 			"GET",

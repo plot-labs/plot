@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   connectRepository: vi.fn(),
   importRepository: vi.fn(),
   createInstallationRequest: vi.fn(),
+  syncGitHubInstallation: vi.fn(),
   disconnectRepository: vi.fn(),
 }));
 
@@ -32,6 +33,7 @@ vi.mock("@/lib/api-client", async () => {
       connectGitHubRepository: mocks.connectRepository,
       importGitHubRepository: mocks.importRepository,
       createGitHubInstallationRequest: mocks.createInstallationRequest,
+      syncGitHubInstallation: mocks.syncGitHubInstallation,
       disconnectGitHubRepository: mocks.disconnectRepository,
     },
   };
@@ -72,6 +74,9 @@ describe("IntegrationsWorkspace", () => {
     mocks.connectRepository.mockReset().mockResolvedValue(repository);
     mocks.importRepository.mockReset().mockResolvedValue({ id: "import-1", sourceScopeId: "scope-1", status: "COMPLETED" });
     mocks.createInstallationRequest.mockReset();
+    mocks.syncGitHubInstallation.mockReset().mockRejectedValue(
+      new PlotApiError(404, "GITHUB_INSTALLATION_NOT_FOUND", "No Plot GitHub App installation was found for your account"),
+    );
     mocks.disconnectRepository.mockReset().mockResolvedValue(undefined);
   });
 
@@ -109,6 +114,25 @@ describe("IntegrationsWorkspace", () => {
     expect(screen.getByRole("img", { name: "Linear" })).toBeVisible();
     expect(screen.getByRole("img", { name: "Slack" })).toBeVisible();
     expect(screen.queryByRole("tablist", { name: "Integration categories" })).not.toBeInTheDocument();
+  });
+
+  it("syncs an existing GitHub App installation before redirecting to GitHub", async () => {
+    mocks.syncGitHubInstallation.mockResolvedValue({
+      connectionId: "connection-1",
+      installationId: 77,
+      repositories: [],
+    });
+    mocks.listConnections
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([connection]);
+
+    render(<IntegrationsWorkspace />);
+    fireEvent.click(await screen.findByRole("button", { name: "Connect GitHub" }));
+
+    await waitFor(() => expect(mocks.syncGitHubInstallation).toHaveBeenCalledTimes(1));
+    expect(mocks.createInstallationRequest).not.toHaveBeenCalled();
+    expect(await screen.findByText("Connected")).toBeVisible();
+    expect(await screen.findByText("GitHub App connected.")).toBeVisible();
   });
 
   it("starts GitHub App installation from the empty owner state", async () => {

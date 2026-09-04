@@ -93,7 +93,7 @@ class AuthOAuthService(
 		userId = user.id,
 		accessToken = accessToken,
 		refreshToken = existing?.refreshToken,
-		scope = "read:user user:email",
+		scope = "read:user user:email read:org",
 		createdAt = existing?.createdAt ?: now,
 		updatedAt = now,
 	)
