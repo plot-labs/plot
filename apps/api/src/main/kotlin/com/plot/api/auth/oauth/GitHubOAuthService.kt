@@ -28,7 +28,7 @@ class GitHubOAuthService(
 		.fromUriString("https://github.com/login/oauth/authorize")
 		.queryParam("client_id", authProperties.githubClientId)
 		.queryParam("redirect_uri", callbackUrl())
-		.queryParam("scope", "read:user user:email")
+		.queryParam("scope", "read:user user:email read:org")
 		.queryParam("state", state)
 		.build()
 		.toUriString()

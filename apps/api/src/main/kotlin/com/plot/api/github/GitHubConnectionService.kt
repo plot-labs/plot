@@ -194,12 +194,20 @@ class GitHubConnectionService(
 		installations: List<GitHubUserInstallation>,
 		link: LinkedGitHubAccount,
 	): Long {
-		installations.firstOrNull {
+		val personalInstall = installations.firstOrNull {
 			it.accountType.equals("USER", ignoreCase = true) && it.accountId == link.githubAccountId
-		}?.let { return it.installationId }
-		installations.filter { it.accountType.equals("ORGANIZATION", ignoreCase = true) }
-			.firstOrNull { isOrganizationAdmin(link.accessToken, it.accountLogin) }
-			?.let { return it.installationId }
+		}
+		val adminOrgs = installations.filter { it.accountType.equals("ORGANIZATION", ignoreCase = true) }
+			.filter { isOrganizationAdmin(link.accessToken, it.accountLogin) }
+		val eligibleInstallations = listOfNotNull(personalInstall) + adminOrgs
+		if (eligibleInstallations.size > 1) {
+			throw ApiException(
+				HttpStatus.CONFLICT,
+				"GITHUB_INSTALLATION_AMBIGUOUS",
+				"Multiple Plot GitHub App installations were found; reconnect from GitHub settings for the account you want to use",
+			)
+		}
+		if (eligibleInstallations.size == 1) return eligibleInstallations.first().installationId
 		if (installations.size == 1) return installations.first().installationId
 		throw ApiException(
 			HttpStatus.CONFLICT,
