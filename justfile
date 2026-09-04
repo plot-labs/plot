@@ -26,6 +26,14 @@ polar-listen:
 test-api:
     cd apps/api && ./gradlew test
 
+# Run citation/generation quality deterministic eval (fixture-based)
+eval-citation:
+    cd apps/api && ./gradlew test --tests "com.plot.api.ai.provider.ArtifactWorkflowCitationEvalTest"
+
+# Run citation/generation quality live eval (requires AI credentials)
+eval-citation-live:
+    cd apps/api && ./gradlew liveEval
+
 # Test the browser API client contract
 test-api-client:
     bun --filter @plot/api-client test

@@ -108,6 +108,120 @@
           "rewriteExpectedEvidenceIds": []
         }
       ]
+    },
+    {
+      "id": "not-required-pollution",
+      "tags": ["not-required-pollution", "editorial-claiming-evidence"],
+      "instruction": "Write a concise changelog.",
+      "evidence": [
+        {
+          "id": "10000000-0000-0000-0000-000000000006",
+          "label": "PR #203",
+          "title": "Workspace export",
+          "body": "Merged on August 5. Adds workspace export to CSV format. The export includes all writing blocks and their metadata."
+        }
+      ],
+      "sentences": [
+        {
+          "id": "20000000-0000-0000-0000-000000000006",
+          "body": "Workspace export to CSV format is now available.",
+          "expectedVerdict": "SUPPORTED",
+          "expectedEvidenceIds": ["10000000-0000-0000-0000-000000000006"],
+          "rewriteTarget": false,
+          "rewriteExpectedVerdict": null,
+          "rewriteExpectedEvidenceIds": []
+        },
+        {
+          "id": "20000000-0000-0000-0000-000000000007",
+          "body": "This makes data portability much easier.",
+          "expectedVerdict": "NOT_REQUIRED",
+          "expectedEvidenceIds": [],
+          "rewriteTarget": false,
+          "rewriteExpectedVerdict": null,
+          "rewriteExpectedEvidenceIds": []
+        }
+      ]
+    },
+    {
+      "id": "missing-citation-factual-claim",
+      "tags": ["missing-citation", "factual-unsupported"],
+      "instruction": "Write a changelog covering security and UX improvements.",
+      "evidence": [
+        {
+          "id": "10000000-0000-0000-0000-000000000007",
+          "label": "PR #215",
+          "title": "Button styling",
+          "body": "Updates primary button colors to match the new brand palette."
+        }
+      ],
+      "sentences": [
+        {
+          "id": "20000000-0000-0000-0000-000000000008",
+          "body": "Primary button colors now match the new brand palette, and workspace encryption keys are automatically rotated every 90 days.",
+          "expectedVerdict": "NEEDS_SUPPORT",
+          "expectedEvidenceIds": [],
+          "rewriteTarget": true,
+          "rewriteExpectedVerdict": "SUPPORTED",
+          "rewriteExpectedEvidenceIds": ["10000000-0000-0000-0000-000000000007"]
+        }
+      ]
+    },
+    {
+      "id": "wrong-evidence-subset",
+      "tags": ["wrong-subset", "multi-evidence-error"],
+      "instruction": "Document the release improvements.",
+      "evidence": [
+        {
+          "id": "10000000-0000-0000-0000-000000000008",
+          "label": "PR #220",
+          "title": "Export validation",
+          "body": "Adds validation for empty changelog exports. The validation checks for at least one sentence."
+        },
+        {
+          "id": "10000000-0000-0000-0000-000000000009",
+          "label": "PR #221",
+          "title": "Citation display",
+          "body": "Improves inline citation rendering with hover tooltips. Tooltips show the full evidence label and snippet."
+        }
+      ],
+      "sentences": [
+        {
+          "id": "20000000-0000-0000-0000-000000000009",
+          "body": "Empty changelog exports are now validated, and citation tooltips show evidence labels and snippets.",
+          "expectedVerdict": "SUPPORTED",
+          "expectedEvidenceIds": [
+            "10000000-0000-0000-0000-000000000008",
+            "10000000-0000-0000-0000-000000000009"
+          ],
+          "rewriteTarget": false,
+          "rewriteExpectedVerdict": null,
+          "rewriteExpectedEvidenceIds": []
+        }
+      ]
+    },
+    {
+      "id": "numeric-mismatch",
+      "tags": ["numeric-error", "date-mismatch"],
+      "instruction": "Write a changelog.",
+      "evidence": [
+        {
+          "id": "10000000-0000-0000-0000-000000000010",
+          "label": "PR #228",
+          "title": "Notification settings",
+          "body": "Released on September 1. Adds 5 new notification preference options for email alerts."
+        }
+      ],
+      "sentences": [
+        {
+          "id": "20000000-0000-0000-0000-000000000010",
+          "body": "On August 28, the release added 8 notification preference options for email alerts.",
+          "expectedVerdict": "NEEDS_SUPPORT",
+          "expectedEvidenceIds": [],
+          "rewriteTarget": true,
+          "rewriteExpectedVerdict": "SUPPORTED",
+          "rewriteExpectedEvidenceIds": ["10000000-0000-0000-0000-000000000010"]
+        }
+      ]
     }
   ]
 }
