@@ -31,6 +31,12 @@ class GitHubInstallationController(
 		.cacheControl(CacheControl.noStore())
 		.body(connectionService.createInstallationRequest())
 
+	@PostMapping("/installations/sync")
+	fun syncExistingInstallation(): ResponseEntity<GitHubCallbackResponse> = ResponseEntity
+		.ok()
+		.cacheControl(CacheControl.noStore())
+		.body(connectionService.syncExistingInstallation())
+
 	@PostMapping("/installations/callback")
 	fun completeInstallation(@Valid @RequestBody request: GitHubCallbackRequest): ResponseEntity<GitHubCallbackResponse> = ResponseEntity
 		.ok()

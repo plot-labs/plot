@@ -195,6 +195,24 @@ describe("Plot API client", () => {
 		expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
   });
 
+  it("syncs an existing GitHub App installation", async () => {
+    const fetcher = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({
+        connectionId: "connection-1",
+        installationId: 77,
+        repositories: [],
+      }));
+    const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
+
+    await client.syncGitHubInstallation();
+
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/plot/github/installations/sync",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
+  });
+
   it("uses the GitHub onboarding contracts with workspace scoping", async () => {
     const fetcher = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(Response.json({ installUrl: "https://github.test/install", expiresAt: "2026-07-01T00:00:00Z" }))

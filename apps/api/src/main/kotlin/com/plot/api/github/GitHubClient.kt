@@ -15,6 +15,10 @@ interface GitHubClient {
 	fun organizationMembershipRole(userAccessToken: String, org: String, username: String): String? =
 		throw UnsupportedOperationException("GitHub organization membership lookup is not implemented")
 
+	/** Lists GitHub App installations visible to the authenticated GitHub user. */
+	fun listUserInstallations(userAccessToken: String): List<GitHubUserInstallation> =
+		throw UnsupportedOperationException("GitHub user installation lookup is not implemented")
+
 	/** Verifies a grant with a repository-scoped installation token. */
 	fun verifyRepositoryAccess(
 		installationId: Long,

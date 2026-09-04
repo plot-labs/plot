@@ -79,16 +79,17 @@ class GitHubConnectionApiIntegrationTest {
 	}
 
 	/** The dev user normally only exists after a real GitHub OAuth login; link it by hand. */
-	private fun seedLinkedGitHubAccount() {
+	private fun seedLinkedGitHubAccount(scope: String = "read:user user:email read:org") {
 		jdbcTemplate.update(
 			"insert into auth_user (id, name, email, email_verified, created_at, updated_at) " +
 				"values ('auth-user-dev', 'Dev User', 'dev-github@example.com', true, now(), now()) " +
 				"on conflict (id) do nothing",
 		)
 		jdbcTemplate.update(
-			"insert into auth_account (id, account_id, provider_id, issuer, user_id, access_token, created_at, updated_at) " +
-				"values ('acct-dev', '9001', 'github', 'local:oauth:github', 'auth-user-dev', 'gh-token', now(), now()) " +
-				"on conflict do nothing",
+			"insert into auth_account (id, account_id, provider_id, issuer, user_id, access_token, scope, created_at, updated_at) " +
+				"values ('acct-dev', '9001', 'github', 'local:oauth:github', 'auth-user-dev', 'gh-token', ?, now(), now()) " +
+				"on conflict (id) do update set access_token = excluded.access_token, scope = excluded.scope, updated_at = excluded.updated_at",
+			scope,
 		)
 		jdbcTemplate.update("update users set auth_subject = 'auth-user-dev' where id = ?", devContext.devUserId)
 	}
@@ -123,6 +124,35 @@ class GitHubConnectionApiIntegrationTest {
 			devContext.devWorkspaceId,
 			scopeId,
 		))
+	}
+
+	@Test
+	fun syncExistingInstallationLinksAlreadyInstalledGitHubApp() {
+		mockMvc.post("/api/github/installations/sync")
+			.andExpect {
+				status { isOk() }
+				jsonPath("$.connectionId") { exists() }
+				jsonPath("$.installationId") { value(77) }
+				header { string("Cache-Control", "no-store") }
+			}
+
+		mockMvc.get("/api/github/connections")
+			.andExpect {
+				status { isOk() }
+				jsonPath("$.length()") { value(1) }
+				jsonPath("$[0].status") { value("ACTIVE") }
+			}
+	}
+
+	@Test
+	fun syncExistingInstallationReturnsNotFoundWhenGitHubHasNoPlotInstall() {
+		fakeClient.userInstallations = emptyList()
+
+		mockMvc.post("/api/github/installations/sync")
+			.andExpect {
+				status { isNotFound() }
+				jsonPath("$.error") { value("GITHUB_INSTALLATION_NOT_FOUND") }
+			}
 	}
 
 	@Test
@@ -217,6 +247,114 @@ class GitHubConnectionApiIntegrationTest {
 			contentType = MediaType.APPLICATION_JSON
 			content = "{\"state\":\"$adminStateValue\",\"installationId\":77}"
 		}.andExpect { status { isOk() } }
+	}
+
+	@Test
+	fun syncRejectsAmbiguousInstallationsWhenMultipleEligibleAccountsExist() {
+		fakeClient.userInstallations = listOf(
+			GitHubUserInstallation(installationId = 101, appId = "1", accountId = 9001, accountLogin = "acme", accountType = "User"),
+			GitHubUserInstallation(installationId = 102, appId = "1", accountId = 555, accountLogin = "acme-org", accountType = "Organization"),
+		)
+		fakeClient.membershipRole = "admin"
+
+		mockMvc.post("/api/github/installations/sync")
+			.andExpect {
+				status { isConflict() }
+				jsonPath("$.error") { value("GITHUB_INSTALLATION_AMBIGUOUS") }
+			}
+	}
+
+	@Test
+	fun syncSelectsSingleInstallationWhenOnlyOneExists() {
+		fakeClient.userInstallations = listOf(
+			GitHubUserInstallation(installationId = 88, appId = "1", accountId = 9001, accountLogin = "acme", accountType = "User"),
+		)
+
+		mockMvc.post("/api/github/installations/sync")
+			.andExpect {
+				status { isOk() }
+				jsonPath("$.installationId") { value(88) }
+			}
+	}
+
+	@Test
+	fun syncPrefersPersonalInstallationWhenBothPersonalAndAdminOrgExist() {
+		fakeClient.userInstallations = listOf(
+			GitHubUserInstallation(installationId = 101, appId = "1", accountId = 9001, accountLogin = "acme", accountType = "User"),
+			GitHubUserInstallation(installationId = 102, appId = "1", accountId = 555, accountLogin = "acme-org", accountType = "Organization"),
+		)
+		fakeClient.membershipRole = null
+
+		mockMvc.post("/api/github/installations/sync")
+			.andExpect {
+				status { isOk() }
+				jsonPath("$.installationId") { value(101) }
+			}
+	}
+
+	@Test
+	fun syncRejectsMultipleOrgInstallationsEvenIfOnlyOneIsAdmin() {
+		fakeClient.userInstallations = listOf(
+			GitHubUserInstallation(installationId = 102, appId = "1", accountId = 555, accountLogin = "acme-org", accountType = "Organization"),
+			GitHubUserInstallation(installationId = 103, appId = "1", accountId = 556, accountLogin = "other-org", accountType = "Organization"),
+		)
+		var callCount = 0
+		fakeClient.membershipRoleProvider = { org, _ ->
+			callCount++
+			if (org == "acme-org") "admin" else null
+		}
+
+		mockMvc.post("/api/github/installations/sync")
+			.andExpect {
+				status { isOk() }
+				jsonPath("$.installationId") { value(102) }
+			}
+	}
+
+	@Test
+	fun syncRequiresReauthWhenReadOrgScopeIsMissing() {
+		seedLinkedGitHubAccount(scope = "read:user repo")
+		fakeClient.userInstallations = listOf(
+			GitHubUserInstallation(installationId = 101, appId = "1", accountId = 9001, accountLogin = "acme", accountType = "User"),
+			GitHubUserInstallation(installationId = 102, appId = "1", accountId = 555, accountLogin = "acme-org", accountType = "Organization"),
+		)
+
+		mockMvc.post("/api/github/installations/sync")
+			.andExpect {
+				status { isUnauthorized() }
+				jsonPath("$.error") { value("GITHUB_REAUTH_REQUIRED") }
+			}
+	}
+
+	@Test
+	fun syncRequiresReauthWhenOrganizationMembershipCheckIsAccessDenied() {
+		fakeClient.userInstallations = listOf(
+			GitHubUserInstallation(installationId = 102, appId = "1", accountId = 555, accountLogin = "acme-org", accountType = "Organization"),
+		)
+		fakeClient.membershipRoleProvider = { _, _ ->
+			throw com.plot.api.common.ApiException(org.springframework.http.HttpStatus.BAD_GATEWAY, "GITHUB_ACCESS_DENIED", "access denied")
+		}
+
+		mockMvc.post("/api/github/installations/sync")
+			.andExpect {
+				status { isUnauthorized() }
+				jsonPath("$.error") { value("GITHUB_REAUTH_REQUIRED") }
+			}
+	}
+
+	@Test
+	fun syncSucceedsWithReadOrgScopeForSingleAdminOrgInstallation() {
+		seedLinkedGitHubAccount(scope = "read:org read:user repo")
+		fakeClient.userInstallations = listOf(
+			GitHubUserInstallation(installationId = 102, appId = "1", accountId = 555, accountLogin = "acme-org", accountType = "Organization"),
+		)
+		fakeClient.membershipRole = "admin"
+
+		mockMvc.post("/api/github/installations/sync")
+			.andExpect {
+				status { isOk() }
+				jsonPath("$.installationId") { value(102) }
+			}
 	}
 
 	@Test
@@ -642,6 +780,7 @@ class FakeGitHubClient : GitHubClient {
 	val tagListCalls = AtomicInteger()
 	var installationAccount = GitHubInstallationAccount(9001, "acme", "User")
 	var membershipRole: String? = "admin"
+	var membershipRoleProvider: ((String, String) -> String?)? = null
 	var linkedIdentity = GitHubUserIdentity(9001, "acme")
 	var releaseTags: List<String> = emptyList()
 	var repositoryTags: List<String> = emptyList()
@@ -668,6 +807,12 @@ class FakeGitHubClient : GitHubClient {
 		return repositories
 	}
 
+	var userInstallations: List<GitHubUserInstallation> = listOf(
+		GitHubUserInstallation(installationId = 77, appId = "1", accountId = 9001, accountLogin = "acme", accountType = "User"),
+	)
+
+	override fun listUserInstallations(userAccessToken: String): List<GitHubUserInstallation> = userInstallations
+
 	override fun getInstallation(installationId: Long): GitHubInstallation {
 		installationCalls.incrementAndGet()
 		return GitHubInstallation(installationId, installationAccount)
@@ -675,7 +820,10 @@ class FakeGitHubClient : GitHubClient {
 
 	override fun resolveAuthenticatedUser(userAccessToken: String): GitHubUserIdentity = linkedIdentity
 
-	override fun organizationMembershipRole(userAccessToken: String, org: String, username: String): String? = membershipRole
+	override fun organizationMembershipRole(userAccessToken: String, org: String, username: String): String? {
+		membershipRoleProvider?.let { return it(org, username) }
+		return membershipRole
+	}
 
 	override fun verifyRepositoryAccess(installationId: Long, repositoryId: Long, owner: String, repository: String): GitHubRepository {
 		providerCallObservedActiveTransaction.set(
@@ -776,6 +924,7 @@ class FakeGitHubClient : GitHubClient {
 		installationCalls.set(0)
 		installationAccount = GitHubInstallationAccount(9001, "acme", "User")
 		membershipRole = "admin"
+		membershipRoleProvider = null
 		linkedIdentity = GitHubUserIdentity(9001, "acme")
 		providerCallObservedActiveTransaction.set(false)
 		pullRequestCalls.set(0)
@@ -785,6 +934,9 @@ class FakeGitHubClient : GitHubClient {
 		repositoryTags = emptyList()
 		body = "Body"
 		updatedAt = Instant.parse("2026-01-02T00:00:00Z")
+		userInstallations = listOf(
+			GitHubUserInstallation(installationId = 77, appId = "1", accountId = 9001, accountLogin = "acme", accountType = "User"),
+		)
 		failImports = false
 		failureCode = null
 		repositoryFailureCode = null
