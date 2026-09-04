@@ -27,6 +27,7 @@ export function OnboardingFlow({ embedded = false, initialStep = 1, onComplete, 
   const [setupState, setSetupState] = useState<SetupState>("loading");
   const [busy, setBusy] = useState<"connect" | "routine" | "run" | "poll" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [needsReauth, setNeedsReauth] = useState(false);
 
   const activeConnections = useMemo(() => connections.filter((item) => item.status === "ACTIVE"), [connections]);
   const hasConnection = activeConnections.length > 0;
@@ -111,39 +112,61 @@ export function OnboardingFlow({ embedded = false, initialStep = 1, onComplete, 
     if (busy) return;
     setBusy("connect");
     setError(null);
+    setNeedsReauth(false);
+    
     try {
-      let synced = false;
-      try {
-        await plotApiClient.syncGitHubInstallation();
-        synced = true;
-      } catch (failure) {
-        if (!(failure instanceof PlotApiError && failure.code === "GITHUB_INSTALLATION_NOT_FOUND")) {
-          throw failure;
-        }
-      }
-      if (synced) {
-        const nextConnections = await plotApiClient.listGitHubConnections();
-        setConnections(nextConnections);
-        const active = nextConnections.filter((item) => item.status === "ACTIVE");
-        const availableByConnection = await Promise.all(active.map(async (connection) => {
-          const available = await plotApiClient.listGitHubRepositories(connection.id).catch(() => []);
-          const merged = new Map<number, GitHubRepository>();
-          [...connection.repositories, ...available].forEach((repository) => merged.set(repository.externalRepositoryId, repository));
-          return [...merged.values()].map((repository) => ({ connectionId: connection.id, repository }));
-        }));
-        const nextRepositories = availableByConnection.flat();
-        setRepositories(nextRepositories);
-        setSelectedKey(nextRepositories[0] ? repositoryKey(nextRepositories[0]) : "");
-        setStep(2);
-        setBusy(null);
-        return;
-      }
-      const request = await plotApiClient.createGitHubInstallationRequest();
-      window.location.assign(request.installUrl);
+      // First try to sync: check if GitHub App is already installed and link it
+      await plotApiClient.syncGitHubInstallation();
+      
+      // Sync succeeded - refresh connections, load repos, advance to step 2
+      const nextConnections = await plotApiClient.listGitHubConnections();
+      setConnections(nextConnections);
+      const active = nextConnections.filter((item) => item.status === "ACTIVE");
+      const availableByConnection = await Promise.all(active.map(async (connection) => {
+        const available = await plotApiClient.listGitHubRepositories(connection.id).catch(() => []);
+        const merged = new Map<number, GitHubRepository>();
+        [...connection.repositories, ...available].forEach((repository) => merged.set(repository.externalRepositoryId, repository));
+        return [...merged.values()].map((repository) => ({ connectionId: connection.id, repository }));
+      }));
+      const nextRepositories = availableByConnection.flat();
+      setRepositories(nextRepositories);
+      setSelectedKey(nextRepositories[0] ? repositoryKey(nextRepositories[0]) : "");
+      setStep(2);
+      setBusy(null);
     } catch (failure) {
       setBusy(null);
-      setError(failure instanceof Error ? failure.message : "GitHub connection could not start.");
+      
+      // Check if this is NOT_FOUND - proceed to install
+      if (failure instanceof PlotApiError && failure.code === "GITHUB_INSTALLATION_NOT_FOUND") {
+        try {
+          const request = await plotApiClient.createGitHubInstallationRequest();
+          window.location.assign(request.installUrl);
+          return;
+        } catch (installFailure) {
+          // Handle install request failure below
+          failure = installFailure;
+        }
+      }
+      
+      // Check if reauth is required
+      const requiresReauth = failure instanceof PlotApiError && new Set([
+        "GITHUB_ACCESS_DENIED",
+        "GITHUB_REAUTH_REQUIRED",
+        "GITHUB_ACCOUNT_NOT_LINKED",
+        "CONNECTION_INACTIVE",
+      ]).has(failure.code);
+      
+      if (requiresReauth) {
+        setNeedsReauth(true);
+        setError("GitHub access was revoked or expired. Sign in with GitHub again to reconnect.");
+      } else {
+        setError(failure instanceof Error ? failure.message : "GitHub connection could not start.");
+      }
     }
+  }
+
+  function reauthenticate() {
+    window.location.assign("/api/auth/sign-in/github?callbackURL=%2Fchat");
   }
 
   async function createFirstRoutine() {
@@ -193,12 +216,12 @@ export function OnboardingFlow({ embedded = false, initialStep = 1, onComplete, 
 
   return <div className={embedded ? "text-[#18181b] dark:text-white" : "min-h-full overflow-y-auto bg-[#f4f6f8] px-5 py-8 text-[#18181b] dark:bg-[#101112] dark:text-white sm:px-8 sm:py-10 lg:px-10"}><div className={embedded ? "mx-auto max-w-[600px]" : "mx-auto max-w-[600px] pb-16 pt-10 sm:pt-16"}>
     <div className="flex items-center gap-1.5" aria-label={`Step ${step} of 3`} role="progressbar">{[1, 2, 3].map((item) => <span key={item} className={`h-1.5 rounded-full transition-all ${item === step ? "w-7 bg-[#252a30] dark:bg-white" : item < step ? "w-2 bg-[#252a30]/60 dark:bg-white/60" : "w-2 bg-black/15 dark:bg-white/20"}`} />)}</div>
-    {step === 1 ? <ConnectStep connected={hasConnection} connectionCount={activeConnections.length} loading={setupState === "loading"} busy={busy === "connect"} error={error} onConnect={connectGitHub} onContinue={() => setStep(2)} /> : step === 2 ? <RoutineStep existingRoutine={routine} repositories={repositories} selectedKey={selectedKey} name={name} instruction={instruction} loading={setupState === "loading"} busy={busy === "routine"} error={error} onRepositoryChange={setSelectedKey} onNameChange={setName} onInstructionChange={setInstruction} onCreate={createFirstRoutine} onContinue={() => setStep(3)} onBack={() => setStep(1)} onSkip={onComplete} /> : <ResultStep routine={routine} running={busy === "run" || busy === "poll"} error={error} onRun={runFirstRoutine} onReview={onResultReview} onDismiss={onComplete} />}
+    {step === 1 ? <ConnectStep connected={hasConnection} connectionCount={activeConnections.length} loading={setupState === "loading"} busy={busy === "connect"} error={error} needsReauth={needsReauth} onConnect={connectGitHub} onReauthenticate={reauthenticate} onContinue={() => setStep(2)} /> : step === 2 ? <RoutineStep existingRoutine={routine} repositories={repositories} selectedKey={selectedKey} name={name} instruction={instruction} loading={setupState === "loading"} busy={busy === "routine"} error={error} onRepositoryChange={setSelectedKey} onNameChange={setName} onInstructionChange={setInstruction} onCreate={createFirstRoutine} onContinue={() => setStep(3)} onBack={() => setStep(1)} onSkip={onComplete} /> : <ResultStep routine={routine} running={busy === "run" || busy === "poll"} error={error} onRun={runFirstRoutine} onReview={onResultReview} onDismiss={onComplete} />}
   </div></div>;
 }
 
-function ConnectStep({ connected, connectionCount, loading, busy, error, onConnect, onContinue }: { connected: boolean; connectionCount: number; loading: boolean; busy: boolean; error: string | null; onConnect: () => void; onContinue: () => void }) {
-  return <section className="space-y-6"><header><h1 className="font-display text-[34px] font-normal leading-[1.08] tracking-[-0.03em] sm:text-[38px]">Install the Plot GitHub App</h1><p className="mt-3 text-[14px] leading-6 text-black/55 dark:text-white/52">Choose repository access on GitHub. Plot only requests the read permissions needed to create source-backed results.</p></header><div className={`rounded-[12px] border bg-white p-5 shadow-[0_1px_2px_rgb(15_23_42_/_0.025)] dark:bg-white/[0.045] ${connected ? "border-black/20 dark:border-white/20" : "border-black/[0.1] dark:border-white/12"}`}><div className="flex items-center justify-between gap-4"><div className="flex min-w-0 items-center gap-3"><div className="flex size-10 shrink-0 items-center justify-center rounded-[10px] bg-black/[0.05] dark:bg-white/[0.08]"><HugeiconsIcon icon={GithubIcon} size={21} strokeWidth={1.5} /></div><div className="min-w-0"><p className="text-[14px] font-semibold text-black/82 dark:text-white/88">GitHub App</p><p className="mt-1 text-[12px] text-black/45 dark:text-white/45">{loading ? "Checking your connections…" : connected ? `${connectionCount} GitHub account${connectionCount === 1 ? "" : "s"} connected.` : "Choose an account and repository access on GitHub."}</p></div></div>{connected ? <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-black/[0.06] px-2.5 py-1 text-xs font-medium text-black/65 dark:bg-white/[0.09] dark:text-white/70"><HugeiconsIcon icon={CheckmarkCircle02Icon} size={14} strokeWidth={1.7} />Connected</span> : <button type="button" onClick={onConnect} disabled={busy || loading} className="inline-flex h-9 shrink-0 items-center gap-2 rounded-full bg-[#252a30] px-3.5 text-[12px] font-medium text-white disabled:opacity-50 dark:bg-white dark:text-[#18191b]"><HugeiconsIcon icon={GithubIcon} size={15} strokeWidth={1.6} />{busy ? "Redirecting…" : "Install on GitHub"}</button>}</div></div><div><h2 className="text-[13px] font-semibold text-black/72 dark:text-white/75">Read-only permissions</h2><div className="mt-2 grid grid-cols-2 gap-x-5">{["Repository metadata", "Contents", "Pull requests", "Releases and tags"].map((permission) => <div key={permission} className="border-b border-black/[0.07] py-2.5 text-[12px] text-black/55 dark:border-white/[0.08] dark:text-white/52">{permission}</div>)}</div></div>{error && <p className="text-sm text-rose-700 dark:text-rose-300" role="alert">{error}</p>}<button type="button" onClick={onContinue} disabled={!connected || loading} className="inline-flex h-10 w-full items-center justify-center rounded-full bg-[#252a30] px-4 text-[13px] font-medium text-white disabled:opacity-40 dark:bg-white dark:text-[#18191b]">Continue</button></section>;
+function ConnectStep({ connected, connectionCount, loading, busy, error, needsReauth, onConnect, onReauthenticate, onContinue }: { connected: boolean; connectionCount: number; loading: boolean; busy: boolean; error: string | null; needsReauth: boolean; onConnect: () => void; onReauthenticate: () => void; onContinue: () => void }) {
+  return <section className="space-y-6"><header><h1 className="font-display text-[34px] font-normal leading-[1.08] tracking-[-0.03em] sm:text-[38px]">Install the Plot GitHub App</h1><p className="mt-3 text-[14px] leading-6 text-black/55 dark:text-white/52">Choose repository access on GitHub. Plot only requests the read permissions needed to create source-backed results.</p></header><div className={`rounded-[12px] border bg-white p-5 shadow-[0_1px_2px_rgb(15_23_42_/_0.025)] dark:bg-white/[0.045] ${connected ? "border-black/20 dark:border-white/20" : "border-black/[0.1] dark:border-white/12"}`}><div className="flex items-center justify-between gap-4"><div className="flex min-w-0 items-center gap-3"><div className="flex size-10 shrink-0 items-center justify-center rounded-[10px] bg-black/[0.05] dark:bg-white/[0.08]"><HugeiconsIcon icon={GithubIcon} size={21} strokeWidth={1.5} /></div><div className="min-w-0"><p className="text-[14px] font-semibold text-black/82 dark:text-white/88">GitHub App</p><p className="mt-1 text-[12px] text-black/45 dark:text-white/45">{loading ? "Checking your connections…" : connected ? `${connectionCount} GitHub account${connectionCount === 1 ? "" : "s"} connected.` : "Choose an account and repository access on GitHub."}</p></div></div>{connected ? <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-black/[0.06] px-2.5 py-1 text-xs font-medium text-black/65 dark:bg-white/[0.09] dark:text-white/70"><HugeiconsIcon icon={CheckmarkCircle02Icon} size={14} strokeWidth={1.7} />Connected</span> : <button type="button" onClick={onConnect} disabled={busy || loading} className="inline-flex h-9 shrink-0 items-center gap-2 rounded-full bg-[#252a30] px-3.5 text-[12px] font-medium text-white disabled:opacity-50 dark:bg-white dark:text-[#18191b]"><HugeiconsIcon icon={GithubIcon} size={15} strokeWidth={1.6} />{busy ? "Redirecting…" : "Install on GitHub"}</button>}</div></div><div><h2 className="text-[13px] font-semibold text-black/72 dark:text-white/75">Read-only permissions</h2><div className="mt-2 grid grid-cols-2 gap-x-5">{["Repository metadata", "Contents", "Pull requests", "Releases and tags"].map((permission) => <div key={permission} className="border-b border-black/[0.07] py-2.5 text-[12px] text-black/55 dark:border-white/[0.08] dark:text-white/52">{permission}</div>)}</div></div>{error && <div className="space-y-3"><p className="text-sm text-rose-700 dark:text-rose-300" role="alert">{error}</p>{needsReauth && <button type="button" onClick={onReauthenticate} disabled={busy} className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full border border-[#252a30] bg-transparent px-4 text-[13px] font-medium text-[#252a30] transition hover:bg-[#252a30] hover:text-white disabled:opacity-50 dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-[#18191b]"><HugeiconsIcon icon={GithubIcon} size={15} strokeWidth={1.6} />Sign in with GitHub</button>}</div>}<button type="button" onClick={onContinue} disabled={!connected || loading} className="inline-flex h-10 w-full items-center justify-center rounded-full bg-[#252a30] px-4 text-[13px] font-medium text-white disabled:opacity-40 dark:bg-white dark:text-[#18191b]">Continue</button></section>;
 }
 
 function RoutineStep({ existingRoutine, repositories, selectedKey, name, instruction, loading, busy, error, onRepositoryChange, onNameChange, onInstructionChange, onCreate, onContinue, onBack, onSkip }: { existingRoutine: Routine | null; repositories: RepositoryOption[]; selectedKey: string; name: string; instruction: string; loading: boolean; busy: boolean; error: string | null; onRepositoryChange: (value: string) => void; onNameChange: (value: string) => void; onInstructionChange: (value: string) => void; onCreate: () => void; onContinue: () => void; onBack: () => void; onSkip?: () => void }) {
