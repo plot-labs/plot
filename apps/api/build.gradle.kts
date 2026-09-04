@@ -136,7 +136,7 @@ kotlin {
 		freeCompilerArgs.add("-Xjsr305=strict")
 	}
 }
-tasks.withType<Test> {
+tasks.named<Test>("test") {
 	useJUnitPlatform {
 		excludeTags("live-eval")
 	}
