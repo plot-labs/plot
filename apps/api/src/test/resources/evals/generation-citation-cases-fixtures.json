@@ -1,0 +1,207 @@
+{
+  "version": 1,
+  "fixtures": [
+    {
+      "caseId": "supported-date-number-and-non-factual",
+      "reviewerOutput": {
+        "reviews": [
+          {
+            "sentenceId": "20000000-0000-0000-0000-000000000001",
+            "verdict": "SUPPORTED",
+            "evidenceIds": [
+              "10000000-0000-0000-0000-000000000001",
+              "10000000-0000-0000-0000-000000000002"
+            ],
+            "reason": null,
+            "modelSuppliedUrls": []
+          },
+          {
+            "sentenceId": "20000000-0000-0000-0000-000000000002",
+            "verdict": "NOT_REQUIRED",
+            "evidenceIds": [],
+            "reason": null,
+            "modelSuppliedUrls": []
+          }
+        ],
+        "documentConflicts": []
+      },
+      "rewriterOutput": null
+    },
+    {
+      "caseId": "unsupported-prompt-injection",
+      "reviewerOutput": {
+        "reviews": [
+          {
+            "sentenceId": "20000000-0000-0000-0000-000000000003",
+            "verdict": "NEEDS_SUPPORT",
+            "evidenceIds": [],
+            "reason": "The claim about automatic credential rotation is not supported by the available evidence.",
+            "modelSuppliedUrls": []
+          }
+        ],
+        "documentConflicts": []
+      },
+      "rewriterOutput": {
+        "rewrites": [
+          {
+            "sentenceId": "20000000-0000-0000-0000-000000000003",
+            "body": "The release adjusts button spacing.",
+            "omit": false
+          }
+        ]
+      },
+      "rewriteAfterReviewerOutput": {
+        "reviews": [
+          {
+            "sentenceId": "20000000-0000-0000-0000-000000000003",
+            "verdict": "SUPPORTED",
+            "evidenceIds": ["10000000-0000-0000-0000-000000000003"],
+            "reason": null,
+            "modelSuppliedUrls": []
+          }
+        ],
+        "documentConflicts": []
+      }
+    },
+    {
+      "caseId": "conflict-and-partial-rewrite",
+      "reviewerOutput": {
+        "reviews": [
+          {
+            "sentenceId": "20000000-0000-0000-0000-000000000004",
+            "verdict": "CONFLICT",
+            "evidenceIds": [
+              "10000000-0000-0000-0000-000000000004",
+              "10000000-0000-0000-0000-000000000005"
+            ],
+            "reason": "Evidence contradicts whether export confirmation is enabled for all workspaces or only internal ones.",
+            "modelSuppliedUrls": []
+          },
+          {
+            "sentenceId": "20000000-0000-0000-0000-000000000005",
+            "verdict": "SUPPORTED",
+            "evidenceIds": ["10000000-0000-0000-0000-000000000004"],
+            "reason": null,
+            "modelSuppliedUrls": []
+          }
+        ],
+        "documentConflicts": []
+      },
+      "rewriterOutput": null
+    },
+    {
+      "caseId": "not-required-pollution",
+      "reviewerOutput": {
+        "reviews": [
+          {
+            "sentenceId": "20000000-0000-0000-0000-000000000006",
+            "verdict": "SUPPORTED",
+            "evidenceIds": ["10000000-0000-0000-0000-000000000006"],
+            "reason": null,
+            "modelSuppliedUrls": []
+          },
+          {
+            "sentenceId": "20000000-0000-0000-0000-000000000007",
+            "verdict": "NOT_REQUIRED",
+            "evidenceIds": [],
+            "reason": null,
+            "modelSuppliedUrls": []
+          }
+        ],
+        "documentConflicts": []
+      },
+      "rewriterOutput": null
+    },
+    {
+      "caseId": "missing-citation-factual-claim",
+      "reviewerOutput": {
+        "reviews": [
+          {
+            "sentenceId": "20000000-0000-0000-0000-000000000008",
+            "verdict": "NEEDS_SUPPORT",
+            "evidenceIds": [],
+            "reason": "The claim about automatic workspace encryption key rotation is not supported by the available evidence.",
+            "modelSuppliedUrls": []
+          }
+        ],
+        "documentConflicts": []
+      },
+      "rewriterOutput": {
+        "rewrites": [
+          {
+            "sentenceId": "20000000-0000-0000-0000-000000000008",
+            "body": "Primary button colors now match the new brand palette.",
+            "omit": false
+          }
+        ]
+      },
+      "rewriteAfterReviewerOutput": {
+        "reviews": [
+          {
+            "sentenceId": "20000000-0000-0000-0000-000000000008",
+            "verdict": "SUPPORTED",
+            "evidenceIds": ["10000000-0000-0000-0000-000000000007"],
+            "reason": null,
+            "modelSuppliedUrls": []
+          }
+        ],
+        "documentConflicts": []
+      }
+    },
+    {
+      "caseId": "wrong-evidence-subset",
+      "reviewerOutput": {
+        "reviews": [
+          {
+            "sentenceId": "20000000-0000-0000-0000-000000000009",
+            "verdict": "SUPPORTED",
+            "evidenceIds": [
+              "10000000-0000-0000-0000-000000000008",
+              "10000000-0000-0000-0000-000000000009"
+            ],
+            "reason": null,
+            "modelSuppliedUrls": []
+          }
+        ],
+        "documentConflicts": []
+      },
+      "rewriterOutput": null
+    },
+    {
+      "caseId": "numeric-mismatch",
+      "reviewerOutput": {
+        "reviews": [
+          {
+            "sentenceId": "20000000-0000-0000-0000-000000000010",
+            "verdict": "NEEDS_SUPPORT",
+            "evidenceIds": [],
+            "reason": "The date (August 28) and number of options (8) do not match the evidence which states September 1 and 5 options.",
+            "modelSuppliedUrls": []
+          }
+        ],
+        "documentConflicts": []
+      },
+      "rewriterOutput": {
+        "rewrites": [
+          {
+            "sentenceId": "20000000-0000-0000-0000-000000000010",
+            "body": "On September 1, the release added 5 new notification preference options for email alerts.",
+            "omit": false
+          }
+        ]
+      },
+      "rewriteAfterReviewerOutput": {
+        "reviews": [
+          {
+            "sentenceId": "20000000-0000-0000-0000-000000000010",
+            "verdict": "SUPPORTED",
+            "evidenceIds": ["10000000-0000-0000-0000-000000000010"],
+            "reason": null,
+            "modelSuppliedUrls": []
+          }
+        ],
+        "documentConflicts": []
+      }
+    }
+  ]
+}

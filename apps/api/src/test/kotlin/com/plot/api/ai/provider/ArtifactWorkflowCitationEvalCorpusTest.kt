@@ -20,10 +20,15 @@ class ArtifactWorkflowCitationEvalCorpusTest {
 		}.toSet()
 
 		assertEquals(
-			setOf("supported", "unsupported", "non-factual", "multi-source", "conflict", "numeric", "date", "prompt-injection", "partial-rewrite"),
+			setOf(
+				"supported", "unsupported", "non-factual", "multi-source", "conflict", "numeric", "date",
+				"prompt-injection", "partial-rewrite", "not-required-pollution", "editorial-claiming-evidence",
+				"missing-citation", "factual-unsupported", "wrong-subset", "multi-evidence-error",
+				"numeric-error", "date-mismatch",
+			),
 			tags,
 		)
-		assertTrue(cases.size >= 3)
+		assertTrue(cases.size >= 7)
 		assertEquals(2, requireNotNull(root["version"]).intValue())
 		val evidenceIds = mutableSetOf<UUID>()
 		val sentenceIds = mutableSetOf<UUID>()
