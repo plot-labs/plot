@@ -161,9 +161,26 @@ This runs `ArtifactWorkflowCitationLiveEvalTest` which:
 - Prints a summary of passed/failed cases
 - Does not log prompt/completion bodies or evidence contents
 
-**Prerequisites:**
-- AI credentials configured (same as used by the API)
-- The `liveEval` Gradle task automatically sets `PLOT_EVAL_LIVE=true`
+**Prerequisites (required environment variables):**
+
+The `liveEval` task fails loudly if these are missing:
+
+```bash
+export PLOT_AI_MODEL="openai/gpt-4o-mini-2024-07-18"
+export PLOT_AI_ROUTING_PROVIDER="openai"
+export SPRING_AI_OPENAI_API_KEY="<your-api-key>"
+```
+
+Supported models (see `PlotAiProperties.SUPPORTED_MODELS`):
+- `openai/gpt-5.4-nano`
+- `openai/gpt-5.6-luna-pro`
+- `openai/gpt-4o-mini-2024-07-18`
+- Other supported models in `PlotAiProperties.kt`
+
+The `liveEval` task automatically:
+- Sets `PLOT_EVAL_LIVE=true`
+- Overrides `plot.ai.enabled=true` and `spring.ai.model.chat=chat` (test profile defaults disable AI)
+- Validates required environment variables before running
 
 **Not enabled in default `test` task or PR CI** (tagged with `@Tag("live-eval")` and excluded from default test suite).
 

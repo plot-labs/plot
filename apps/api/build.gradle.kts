@@ -151,6 +151,27 @@ tasks.register<Test>("liveEval") {
 	useJUnitPlatform {
 		includeTags("live-eval")
 	}
+	
+	doFirst {
+		val requiredEnvVars = listOf(
+			"PLOT_AI_MODEL",
+			"PLOT_AI_ROUTING_PROVIDER",
+			"SPRING_AI_OPENAI_API_KEY",
+		)
+		val missing = requiredEnvVars.filter { System.getenv(it).isNullOrBlank() }
+		if (missing.isNotEmpty()) {
+			throw GradleException(
+				"liveEval requires AI configuration environment variables: ${missing.joinToString(", ")}\n" +
+					"Example:\n" +
+					"  PLOT_AI_MODEL=openai/gpt-4o-mini-2024-07-18\n" +
+					"  PLOT_AI_ROUTING_PROVIDER=openai\n" +
+					"  SPRING_AI_OPENAI_API_KEY=<your-api-key>",
+			)
+		}
+	}
+	
 	environment("SPRING_PROFILES_ACTIVE", "test")
 	environment("PLOT_EVAL_LIVE", "true")
+	systemProperty("plot.ai.enabled", "true")
+	systemProperty("spring.ai.model.chat", "chat")
 }
