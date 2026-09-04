@@ -157,7 +157,7 @@ describe("IntegrationsWorkspace", () => {
     fireEvent.click(connect);
 
     await waitFor(() => expect(mocks.syncGitHubInstallation).toHaveBeenCalledTimes(1));
-    expect(await screen.findByRole("alert")).toHaveTextContent("GitHub denied access");
+    expect(await screen.findByRole("alert")).toHaveTextContent("GitHub access was revoked. Reconnect GitHub, then retry.");
     expect(await screen.findByRole("button", { name: "Sign in with GitHub" })).toBeVisible();
     expect(mocks.createInstallationRequest).not.toHaveBeenCalled();
   });
@@ -172,7 +172,7 @@ describe("IntegrationsWorkspace", () => {
     fireEvent.click(connect);
 
     await waitFor(() => expect(mocks.syncGitHubInstallation).toHaveBeenCalledTimes(1));
-    expect(await screen.findByRole("alert")).toHaveTextContent("GitHub re-authentication is required");
+    expect(await screen.findByRole("alert")).toHaveTextContent("GitHub re-authentication is required. Sign in with GitHub again to grant organization access.");
     expect(await screen.findByRole("button", { name: "Sign in with GitHub" })).toBeVisible();
     expect(mocks.createInstallationRequest).not.toHaveBeenCalled();
   });
@@ -187,7 +187,7 @@ describe("IntegrationsWorkspace", () => {
     fireEvent.click(connect);
 
     await waitFor(() => expect(mocks.syncGitHubInstallation).toHaveBeenCalledTimes(1));
-    expect(await screen.findByRole("alert")).toHaveTextContent("No linked GitHub account found");
+    expect(await screen.findByRole("alert")).toHaveTextContent("No linked GitHub account found. Sign in with GitHub first, then retry.");
     expect(await screen.findByRole("button", { name: "Sign in with GitHub" })).toBeVisible();
     expect(mocks.createInstallationRequest).not.toHaveBeenCalled();
   });
