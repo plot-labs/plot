@@ -773,8 +773,10 @@ class FakeGitHubClient : GitHubClient {
 
 	override fun resolveAuthenticatedUser(userAccessToken: String): GitHubUserIdentity = linkedIdentity
 
-	override fun organizationMembershipRole(userAccessToken: String, org: String, username: String): String? =
-		membershipRoleProvider?.invoke(org, username) ?: membershipRole
+	override fun organizationMembershipRole(userAccessToken: String, org: String, username: String): String? {
+		membershipRoleProvider?.let { return it(org, username) }
+		return membershipRole
+	}
 
 	override fun verifyRepositoryAccess(installationId: Long, repositoryId: Long, owner: String, repository: String): GitHubRepository {
 		providerCallObservedActiveTransaction.set(
