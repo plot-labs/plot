@@ -104,7 +104,10 @@ class GitHubWebhookService(
 				mark(delivery, GitHubWebhookDisposition.IGNORED)
 			webhook.eventType == "push" && webhook.tagName != null -> {
 				val queued = gitHubChangeRoutineService.accept(context, delivery, webhook)
-				if (queued > 0) scheduleRoutineDispatchAfterCommit()
+				webhook.afterSha?.let {
+					requestPersistence.observeTag(context.workspaceId, context.sourceScopeId, webhook.tagName, it)
+				}
+				if (queued > 0 && properties.releaseAutomationEnabled) scheduleReleaseDispatchAfterCommit()
 				if (gitHubChangeRoutineService.hasReleaseEventRoutines(context)) {
 					mark(delivery, if (queued > 0) GitHubWebhookDisposition.QUEUED else GitHubWebhookDisposition.OBSERVED)
 				} else {
@@ -121,7 +124,7 @@ class GitHubWebhookService(
 			// contributes an immutable observed head SHA to the release request.
 			webhook.eventType == "release" && webhook.eventAction == "published" && webhook.tagName != null -> {
 				val queued = gitHubChangeRoutineService.accept(context, delivery, webhook)
-				if (queued > 0) scheduleRoutineDispatchAfterCommit()
+				if (queued > 0 && properties.releaseAutomationEnabled) scheduleReleaseDispatchAfterCommit()
 				if (gitHubChangeRoutineService.hasReleaseEventRoutines(context)) {
 					mark(delivery, if (queued > 0) GitHubWebhookDisposition.QUEUED else GitHubWebhookDisposition.OBSERVED)
 				} else {

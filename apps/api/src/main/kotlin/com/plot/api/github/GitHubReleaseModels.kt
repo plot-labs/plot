@@ -48,6 +48,7 @@ data class GitHubReleaseDraftRequest(
 	val runAttempt: Int = 0,
 	val observedHeadSha: String? = null,
 	val agentRunId: UUID? = null,
+	val routineId: UUID? = null,
 )
 
 data class GitHubReleaseRetryResult(

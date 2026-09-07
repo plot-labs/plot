@@ -48,7 +48,8 @@ for attempt in {1..60}; do
 	sleep 1
 done
 
-temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/plot-jooq.XXXXXX")"
+temp_dir="${api_dir}/build/jooq-codegen-$$"
+mkdir -p "${temp_dir}"
 generated_dir="${temp_dir}/generated"
 second_generated_dir="${temp_dir}/generated-second"
 mkdir -p "${generated_dir}"

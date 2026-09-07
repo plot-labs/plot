@@ -45,10 +45,18 @@ export interface ContentSentence {
   citations: ContentCitation[];
 }
 
+export interface ArtifactPublication {
+  entryId: string;
+  entrySlug: string;
+  publicPath: string;
+  publishedAt: string;
+}
+
 export interface Artifact {
   id: string;
   status: string;
   title: string | null;
+  publication?: ArtifactPublication | null;
   variant: {
     id: string;
     status: string;
@@ -92,6 +100,33 @@ export interface PublishContentVariantResult {
   entrySlug: string;
   publicPath: string;
   publishedAt: string;
+}
+
+export interface UnpublishContentVariantResult {
+  entryId: string;
+  entrySlug: string;
+  publicPath: string;
+  publishedAt: string;
+  unpublishedAt: string;
+}
+
+export type ProductDeliveryEventKind =
+  | "CLIPBOARD_WRITE_SUCCEEDED"
+  | "CLIPBOARD_WRITE_FAILED"
+  | "DOWNLOAD_STARTED"
+  | "EXTERNAL_DELIVERY_CONFIRMED";
+
+export interface RecordProductDeliveryEventInput {
+  kind: ProductDeliveryEventKind;
+  exportId?: string;
+  entryId?: string;
+  clientEventId?: string;
+}
+
+export interface ProductDeliveryEventResult {
+  id: string;
+  kind: ProductDeliveryEventKind;
+  duplicate: boolean;
 }
 
 export interface PublicChangelogEntrySummary {
@@ -242,6 +277,11 @@ export interface GitHubReleaseActivity {
   updatedAt: string;
 }
 
+export interface GitHubReleaseRangeInput {
+  baseSha: string;
+  headSha: string;
+}
+
 interface WritingBlock {
   id: string;
   sourceKind: string;
@@ -261,6 +301,15 @@ interface WritingBlockPage {
   items: WritingBlock[];
 }
 
+export interface WorkspaceCapabilities {
+  generate: boolean;
+  edit: boolean;
+  publish: boolean;
+  export: boolean;
+  configure: boolean;
+  unpublish: boolean;
+}
+
 export interface WorkspaceSummary {
   id: string;
   name: string;
@@ -270,7 +319,8 @@ export interface WorkspaceSummary {
   publicCitationsEnabled: boolean;
   plan: string;
   entitlementStatus: string;
-  accessMode: "full" | "read_only";
+  accessMode: "full" | "complete_only" | "read_only";
+  capabilities: WorkspaceCapabilities;
   trialEndsAt: string;
   role: string | null;
   createdAt: string;
@@ -298,6 +348,7 @@ export interface RoutineExecutionSummary {
   errorCode: string | null;
   startedAt: string | null;
   finishedAt: string | null;
+  releaseRequestId: string | null;
 }
 
 export interface RoutineAgentStep {
@@ -413,7 +464,9 @@ export interface PlotApiClient {
   recheckGitHubRepositoryAccess(sourceScopeId: string, trigger: GitHubAccessCheckTrigger, options?: RequestOptions): Promise<GitHubAccessCheck>;
   importGitHubRepository(sourceScopeId: string, input: { from: string; to: string }, options?: RequestOptions): Promise<GitHubImport>;
   getGitHubReleaseActivity(sourceScopeId: string, options?: RequestOptions): Promise<GitHubReleaseActivity | null>;
+  getGitHubReleaseActivityById(sourceScopeId: string, requestId: string, options?: RequestOptions): Promise<GitHubReleaseActivity>;
   retryGitHubReleaseDraft(sourceScopeId: string, requestId: string, options?: RequestOptions): Promise<GitHubReleaseActivity>;
+  selectGitHubReleaseRange(sourceScopeId: string, requestId: string, range: GitHubReleaseRangeInput, options?: RequestOptions): Promise<GitHubReleaseActivity>;
   createWorkspace(input: { name: string }, options?: RequestOptions): Promise<WorkspaceSummary>;
   getWorkspace(id: string, options?: RequestOptions): Promise<WorkspaceSummary>;
   updateWorkspace(id: string, input: { name?: string; logoUrl?: string; publicCitationsEnabled?: boolean }, options?: RequestOptions): Promise<WorkspaceSummary>;
@@ -437,6 +490,8 @@ export interface PlotApiClient {
   editSentence(variantId: string, sentenceId: string, input: { expectedRevisionNumber: number; body: string }, options?: RequestOptions): Promise<Artifact>;
   exportArtifactVariant(variantId: string, input: { expectedRevisionNumber: number; includeSources: boolean; acknowledgeUnresolved: boolean; acknowledgedWarningKeys?: string[]; acknowledgedRevisionIds?: string[]; disposition: "COPY" | "DOWNLOAD" }, options?: RequestOptions): Promise<ContentExport>;
   publishArtifactVariant(variantId: string, input: { expectedRevisionNumber: number; acknowledgeUnresolved: boolean; acknowledgedWarningKeys?: string[]; acknowledgedRevisionIds?: string[] }, options?: RequestOptions): Promise<PublishContentVariantResult>;
+  unpublishArtifactVariant(variantId: string, options?: RequestOptions): Promise<UnpublishContentVariantResult>;
+  recordProductDeliveryEvent(variantId: string, input: RecordProductDeliveryEventInput, options?: RequestOptions): Promise<ProductDeliveryEventResult>;
   listArtifactHistory(variantId: string, options?: RequestOptions): Promise<ArtifactHistoryItem[]>;
   getArtifactHistoryAt(variantId: string, position: number, options?: RequestOptions): Promise<ArtifactHistoryDetail>;
 }
@@ -514,9 +569,24 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
       `/github/repositories/${encodeURIComponent(sourceScopeId)}/release-activity`,
       { signal: requestOptions?.signal },
     ),
+    getGitHubReleaseActivityById: (sourceScopeId, requestId, requestOptions) => request(
+      `/github/repositories/${encodeURIComponent(sourceScopeId)}/release-activity/${encodeURIComponent(requestId)}`,
+      { signal: requestOptions?.signal },
+    ),
     retryGitHubReleaseDraft: (sourceScopeId, requestId, requestOptions) => request(
       `/github/repositories/${encodeURIComponent(sourceScopeId)}/release-activity/${encodeURIComponent(requestId)}/retry`,
       { method: "POST", signal: requestOptions?.signal },
+    ),
+    selectGitHubReleaseRange: (sourceScopeId, requestId, range, requestOptions) => request(
+      `/github/repositories/${encodeURIComponent(sourceScopeId)}/release-activity/${encodeURIComponent(requestId)}/range`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          baseSha: range.baseSha.trim().toLowerCase(),
+          headSha: range.headSha.trim().toLowerCase(),
+        }),
+        signal: requestOptions?.signal,
+      },
     ),
     createWorkspace: (input, requestOptions) => request("/workspaces", {
       method: "POST",
@@ -619,6 +689,14 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
     ),
     publishArtifactVariant: (variantId, input, requestOptions) => request(
       `/artifact-variants/${encodeURIComponent(variantId)}/publish`,
+      { method: "POST", body: JSON.stringify(input), signal: requestOptions?.signal },
+    ),
+    unpublishArtifactVariant: (variantId, requestOptions) => request(
+      `/artifact-variants/${encodeURIComponent(variantId)}/unpublish`,
+      { method: "POST", signal: requestOptions?.signal },
+    ),
+    recordProductDeliveryEvent: (variantId, input, requestOptions) => request(
+      `/artifact-variants/${encodeURIComponent(variantId)}/delivery-events`,
       { method: "POST", body: JSON.stringify(input), signal: requestOptions?.signal },
     ),
     listArtifactHistory: (variantId, requestOptions) => request(

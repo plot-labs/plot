@@ -12,6 +12,7 @@ export type {
   GitHubImport,
   GitHubReleaseActivity,
   GitHubReleaseDraftStatus,
+  GitHubReleaseRangeInput,
   GitHubRepository,
   GitHubRepositoryMonitoring,
   PlotApiClient,
@@ -19,6 +20,7 @@ export type {
   RoutineAgentRunDetail,
   RoutineCadence,
   WorkSessionSummary,
+  WorkspaceCapabilities,
   WorkspaceSummary,
 } from "@plot/api-client";
 

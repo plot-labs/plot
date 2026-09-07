@@ -29,10 +29,7 @@ class GitHubReleaseActivityService(
 		guard.requireReadAccess()
 		// Retries re-drive release automation and external quota, so they stay
 		// an owner-level action like connections and monitoring.
-		val actor = actorResolver?.current()
-		if (actor != null && actorResolver.requireWorkspace().role != "OWNER") {
-			throw ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Workspace owner access is required")
-		}
+		requireOwner()
 		val workspaceId = devContext.devWorkspaceId
 		requireScope(sourceScopeId, workspaceId)
 		val activity = requestPersistence.findActivity(requestId, sourceScopeId, workspaceId)
@@ -44,6 +41,7 @@ class GitHubReleaseActivityService(
 				"Only failed release drafts can be retried",
 			)
 		}
+
 		try {
 			retryService.retry(requestId, workspaceId, activity.transitionVersion)
 		} catch (_: GitHubReleaseRetryRejectedException) {
@@ -51,6 +49,36 @@ class GitHubReleaseActivityService(
 		}
 		return requestPersistence.findActivity(requestId, sourceScopeId, workspaceId)?.toResponse()
 			?: throw notFound()
+	}
+
+	@Transactional(readOnly = true)
+	fun get(sourceScopeId: UUID, requestId: UUID): GitHubReleaseActivityResponse {
+		guard.requireReadAccess()
+		val workspaceId = devContext.devWorkspaceId
+		requireScope(sourceScopeId, workspaceId)
+		return requestPersistence.findActivity(requestId, sourceScopeId, workspaceId)?.toResponse() ?: throw notFound()
+	}
+
+	@Transactional
+	fun selectRange(sourceScopeId: UUID, requestId: UUID, range: GitHubReleaseRangeRequest): GitHubReleaseActivityResponse {
+		guard.requireReadAccess()
+		requireOwner()
+		val workspaceId = devContext.devWorkspaceId
+		requireScope(sourceScopeId, workspaceId)
+		val activity = requestPersistence.findActivity(requestId, sourceScopeId, workspaceId) ?: throw notFound()
+		try {
+			retryService.selectRange(requestId, workspaceId, activity.transitionVersion, range.baseSha, range.headSha)
+		} catch (_: GitHubReleaseRetryRejectedException) {
+			throw ApiException(HttpStatus.CONFLICT, "RELEASE_RANGE_NOT_SELECTABLE", "Choose a range only for an unresolved release with no bound evidence; its tag head cannot change")
+		}
+		return requestPersistence.findActivity(requestId, sourceScopeId, workspaceId)?.toResponse() ?: throw notFound()
+	}
+
+	private fun requireOwner() {
+		val actor = actorResolver?.current()
+		if (actor != null && actorResolver.requireWorkspace().role != "OWNER") {
+			throw ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Workspace owner access is required")
+		}
 	}
 
 	private fun requireScope(sourceScopeId: UUID, workspaceId: UUID) {

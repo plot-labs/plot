@@ -37,4 +37,15 @@ class GitHubReleaseRetryService(
 		})
 		return result
 	}
+
+	@Transactional
+	fun selectRange(
+		requestId: UUID, workspaceId: UUID, transitionVersion: Long, baseSha: String, headSha: String,
+	): GitHubReleaseRetryResult {
+		val result = leasePersistence.selectRange(requestId, workspaceId, transitionVersion, baseSha, headSha)
+		TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+			override fun afterCommit() = dispatcher.dispatch()
+		})
+		return result
+	}
 }

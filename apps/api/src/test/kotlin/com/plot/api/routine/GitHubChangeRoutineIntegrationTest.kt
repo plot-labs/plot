@@ -63,6 +63,9 @@ class GitHubChangeRoutineIntegrationTest {
 		jdbcTemplate.update("delete from work_sessions where workspace_id = ? and routine_execution_id is not null", workspaceId)
 		jdbcTemplate.update("delete from routine_execution_evidence where workspace_id = ?", workspaceId)
 		jdbcTemplate.update("delete from routine_executions where workspace_id = ?", workspaceId)
+		routineIds.forEach { routineId ->
+			jdbcTemplate.update("delete from github_release_draft_requests where routine_id = ?", routineId)
+		}
 		routineIds.forEach { routineId -> jdbcTemplate.update("delete from routines where id = ?", routineId) }
 		deliveries.forEach { externalDeliveryId ->
 			jdbcTemplate.update("delete from github_webhook_deliveries where external_delivery_id = ?", externalDeliveryId)
@@ -140,8 +143,8 @@ class GitHubChangeRoutineIntegrationTest {
 			payloadHash = "d".repeat(64),
 		))
 		assertEquals(1, countExecutions(releaseRoutineId))
-		drainOne()
-		assertEquals(RoutineExecutionStatus.DISPATCHED, executionStatus(executionId(releaseRoutineId, releaseDeliveryId)))
+		assertEquals(0, routineWorker.drain())
+		assertEquals(RoutineExecutionStatus.PROBING, executionStatus(executionId(releaseRoutineId, releaseDeliveryId)))
 
 		val tagRoutineId = insertRoutine(repository.scopeId, RoutineCadence.ON_GIT_TAG)
 		val tagDeliveryId = "tag-${UUID.randomUUID()}"
@@ -162,15 +165,22 @@ class GitHubChangeRoutineIntegrationTest {
 			payloadHash = "f".repeat(64),
 		))
 		assertEquals(1, countExecutions(tagRoutineId))
-		drainOne()
-		assertEquals(RoutineExecutionStatus.DISPATCHED, executionStatus(executionId(tagRoutineId, tagDeliveryId)))
+		assertEquals(0, routineWorker.drain())
+		assertEquals(RoutineExecutionStatus.PROBING, executionStatus(executionId(tagRoutineId, tagDeliveryId)))
+		assertEquals(0, count("agent_runs"))
+		assertEquals(0, count("routine_execution_evidence"))
+		assertEquals(2, jdbcTemplate.queryForObject(
+			"select count(*) from github_release_draft_requests where source_scope_id = ? and routine_id is not null",
+			Int::class.java, repository.scopeId,
+		))
 	}
 
 	@Test
-	fun `tag evidence keeps one event item within the central batch budget`() {
+	fun `tag payload is never imported or truncated into release evidence before exact resolution`() {
 		val repository = bindRepository()
 		val routineId = insertRoutine(repository.scopeId, RoutineCadence.ON_GIT_TAG)
 		val deliveryId = "tag-budget-${UUID.randomUUID()}"
+		deliveries += deliveryId
 		val commits = (1..25).map { index ->
 			val sha = index.toString(16).padStart(40, '0')
 			GitHubWebhookCommit(
@@ -198,10 +208,10 @@ class GitHubChangeRoutineIntegrationTest {
 			payloadHash = "1".repeat(64),
 		))
 
-		assertEquals(20, evidenceCount(routineId, deliveryId))
-		drainOne()
-		assertEquals(20, seedCount(executionId(routineId, deliveryId)))
-		assertEquals(1, jdbcTemplate.queryForObject(
+		assertEquals(0, evidenceCount(routineId, deliveryId))
+		assertEquals(0, routineWorker.drain())
+		assertEquals(0, seedCount(executionId(routineId, deliveryId)))
+		assertEquals(0, jdbcTemplate.queryForObject(
 			"select count(*) from routine_execution_evidence evidence join writing_blocks block on block.id = evidence.writing_block_id where evidence.execution_id = ? and block.source_kind = 'tag'",
 			Int::class.java,
 			executionId(routineId, deliveryId),
@@ -363,6 +373,28 @@ class GitHubChangeRoutineIntegrationTest {
 			UUID::class.java,
 			routineId,
 		))
+	}
+
+	@Test
+	fun `legacy unbound release executions cannot fall back to repository activity`() {
+		val repository = bindRepository()
+		val routineId = insertRoutine(repository.scopeId, RoutineCadence.ON_GITHUB_RELEASE)
+		insertBlock(repository, "legacy", "Unrelated activity")
+		val routine = assertNotNull(routinePersistence.find(devContext.devWorkspaceId, routineId))
+		val execution = agentPersistence.createExecution(RoutineExecutionRequest(
+			workspaceId = routine.workspaceId,
+			routineId = routine.id,
+			createdByUserId = routine.createdByUserId,
+			triggerSourceScopeId = routine.sourceScopeId,
+			triggerKind = RoutineExecutionTriggerKind.MANUAL,
+			triggerKey = "legacy-release-manual",
+			requestFingerprint = "legacy-release-manual",
+		))
+		drainOne()
+		val failed = assertNotNull(agentPersistence.findExecution(routine.workspaceId, execution.id))
+		assertEquals(RoutineExecutionStatus.FAILED, failed.status)
+		assertEquals("GITHUB_RELEASE_RANGE_REQUIRED", failed.errorCode)
+		assertEquals(0, count("agent_runs"))
 	}
 
 	private fun pushWebhook(

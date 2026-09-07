@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional
 class GitHubReleaseLeasePersistence(
 	private val sqlExecutor: JooqSqlExecutor,
 	dslContext: DSLContext,
+	private val routineProjection: GitHubReleaseRoutineProjection,
 	private val clock: Clock = Clock.systemUTC(),
 ) : GitHubReleaseLeaseStore {
 	private val dsl: DSLContext = dslContext.configuration()
@@ -53,6 +54,7 @@ class GitHubReleaseLeasePersistence(
 			    from github_release_draft_requests predecessor
 			    where predecessor.workspace_id = candidate.workspace_id
 			      and predecessor.source_scope_id = candidate.source_scope_id
+			      and predecessor.routine_id is not distinct from candidate.routine_id
 			      and (predecessor.created_at, predecessor.id) < (candidate.created_at, candidate.id)
 			      and predecessor.status not in ('READY', 'NO_ACTIVITY', 'NEEDS_RANGE', 'FAILED')
 			  )
@@ -106,6 +108,7 @@ class GitHubReleaseLeasePersistence(
 			)
 			.execute() == 1
 
+	@Transactional
 	override fun finish(requestId: UUID, transitionVersion: Long, status: GitHubReleaseDraftStatus, errorCode: String?) {
 		require(status in terminalStatuses) { "Release request finish status must be terminal" }
 		val now = clock.instant()
@@ -128,6 +131,7 @@ class GitHubReleaseLeasePersistence(
 			)
 			.execute()
 		requireExactlyOne(updated, "Release request transition was lost")
+		routineProjection.finish(requestId, status, errorCode)
 	}
 
 
@@ -136,8 +140,16 @@ class GitHubReleaseLeasePersistence(
 		val retry = sqlExecutor.query(
 			"""
 			select status, generation_attempt
-			from github_release_draft_requests
+			from github_release_draft_requests request
 			where id = ? and workspace_id = ? and transition_version = ? and status = 'FAILED'
+			  and exists (
+			    select 1 from source_scopes scope where scope.workspace_id = request.workspace_id
+			      and scope.id = request.source_scope_id and scope.status = 'ACTIVE'
+			  )
+			  and (routine_id is null or exists (
+			    select 1 from routines routine where routine.workspace_id = request.workspace_id
+			      and routine.id = request.routine_id and routine.enabled = true
+			  ))
 			for update
 			""".trimIndent(),
 			{ rs, _ -> ReleaseRetryRow(GitHubReleaseDraftStatus.valueOf(requireNotNull(rs.getString("status"))), rs.getInt("generation_attempt")) },
@@ -204,9 +216,44 @@ class GitHubReleaseLeasePersistence(
 		requireExactlyOne(updated, "Release request transition was lost")
 	}
 
+	@Transactional
+	override fun selectRange(
+		requestId: UUID, workspaceId: UUID, transitionVersion: Long, baseSha: String, headSha: String,
+	): GitHubReleaseRetryResult {
+		require(baseSha.matches(Regex("[0-9a-f]{40}")) && headSha.matches(Regex("[0-9a-f]{40}"))) {
+			"Release boundaries must be full commit SHAs"
+		}
+		return sqlExecutor.query(
+			"""
+			update github_release_draft_requests request
+			set base_sha = ?, head_sha = ?, observed_head_sha = coalesce(observed_head_sha, ?),
+			    boundary_reason = 'EXPLICIT_RANGE', status = 'QUEUED',
+			    generation_attempt = generation_attempt + 1, attempt_count = 0, error_code = null,
+			    next_attempt_at = now(), finished_at = null, claimed_by = null, claimed_at = null,
+			    heartbeat_at = null, transition_version = transition_version + 1, updated_at = now()
+			where id = ? and workspace_id = ? and transition_version = ?
+			  and status in ('NEEDS_RANGE', 'FAILED') and observation_id is null and agent_run_id is null
+			  and (head_sha is null or head_sha = ?)
+			  and (observed_head_sha is null or observed_head_sha = ?)
+			  and exists (
+			    select 1 from source_scopes scope where scope.workspace_id = request.workspace_id
+			      and scope.id = request.source_scope_id and scope.status = 'ACTIVE'
+			  )
+			  and (routine_id is null or exists (
+			    select 1 from routines routine where routine.workspace_id = request.workspace_id
+			      and routine.id = request.routine_id and routine.enabled = true
+			  ))
+			returning generation_attempt
+			""".trimIndent(),
+			{ row, _ -> GitHubReleaseRetryResult(requestId, null, row.getInt("generation_attempt")) },
+			baseSha, headSha, headSha, requestId, workspaceId, transitionVersion, headSha, headSha,
+		).firstOrNull() ?: throw GitHubReleaseRetryRejectedException()
+	}
+
+	@Transactional
 	override fun fenceSourceScope(workspaceId: UUID, sourceScopeId: UUID, now: Instant, errorCode: String): Int {
 		require(errorCode.isNotBlank()) { "Release fence error code is required" }
-		return dsl.update(GITHUB_RELEASE_DRAFT_REQUESTS)
+		val updated = dsl.update(GITHUB_RELEASE_DRAFT_REQUESTS)
 			.set(GITHUB_RELEASE_DRAFT_REQUESTS.STATUS, GitHubReleaseDraftStatus.FAILED.name)
 			.set(GITHUB_RELEASE_DRAFT_REQUESTS.ERROR_CODE, errorCode)
 			.set(GITHUB_RELEASE_DRAFT_REQUESTS.NEXT_ATTEMPT_AT, null as OffsetDateTime?)
@@ -229,6 +276,12 @@ class GitHubReleaseLeasePersistence(
 				),
 			)
 			.execute()
+		sqlExecutor.query(
+			"select id from github_release_draft_requests where workspace_id = ? and source_scope_id = ? and status = 'FAILED'",
+			{ row, _ -> requireNotNull(row.getObject("id", UUID::class.java)) },
+			workspaceId, sourceScopeId,
+		).forEach { routineProjection.finish(it, GitHubReleaseDraftStatus.FAILED, errorCode) }
+		return updated
 	}
 
 	@Transactional
@@ -236,7 +289,7 @@ class GitHubReleaseLeasePersistence(
 		val staleBefore = now.minus(leaseTimeout)
 		val candidates = sqlExecutor.query(
 			"""
-			select id, transition_version, generation_run_id
+			select id, transition_version, generation_run_id, agent_run_id
 			from github_release_draft_requests
 			where claimed_by is not null and (heartbeat_at is null or heartbeat_at < ?)
 			  and status in ('QUEUED', 'RESOLVING', 'GENERATING')
@@ -249,10 +302,11 @@ class GitHubReleaseLeasePersistence(
 				requestId = requireNotNull(row.getObject("id", UUID::class.java)),
 				transitionVersion = row.getLong("transition_version"),
 				artifactWorkflowRunId = row.getObject("generation_run_id", UUID::class.java),
+				agentRunId = row.getObject("agent_run_id", UUID::class.java),
 			)
 		}
 		return candidates.sumOf { candidate ->
-			val recoveredStatus = if (candidate.artifactWorkflowRunId == null) {
+			val recoveredStatus = if (candidate.artifactWorkflowRunId == null && candidate.agentRunId == null) {
 				GitHubReleaseDraftStatus.QUEUED.name
 			} else {
 				GitHubReleaseDraftStatus.GENERATING.name
@@ -266,7 +320,7 @@ class GitHubReleaseLeasePersistence(
 				.set(GITHUB_RELEASE_DRAFT_REQUESTS.CLAIMED_BY, null as String?)
 				.set(GITHUB_RELEASE_DRAFT_REQUESTS.CLAIMED_AT, null as OffsetDateTime?)
 				.set(GITHUB_RELEASE_DRAFT_REQUESTS.HEARTBEAT_AT, null as OffsetDateTime?)
-			if (candidate.artifactWorkflowRunId == null) {
+			if (candidate.artifactWorkflowRunId == null && candidate.agentRunId == null) {
 				update.set(GITHUB_RELEASE_DRAFT_REQUESTS.NEXT_ATTEMPT_AT, now.toOffsetDateTime())
 			}
 			val updated = update
@@ -340,6 +394,7 @@ private data class StaleReleaseClaim(
 	val requestId: UUID,
 	val transitionVersion: Long,
 	val artifactWorkflowRunId: UUID?,
+	val agentRunId: UUID?,
 )
 
 private data class ReleaseRetryRow(

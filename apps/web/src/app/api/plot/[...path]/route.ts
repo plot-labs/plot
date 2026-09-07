@@ -182,7 +182,9 @@ function isAllowed(method: string, path: string[]): boolean {
   if (method === "POST" && /^github\/repositories\/[^/]+\/imports$/.test(route)) return true;
   if (method === "POST" && /^github\/repositories\/[^/]+\/access-check$/.test(route)) return true;
   if (method === "GET" && /^github\/repositories\/[^/]+\/release-activity$/.test(route)) return true;
+  if (method === "GET" && /^github\/repositories\/[^/]+\/release-activity\/[^/]+$/.test(route)) return true;
   if (method === "POST" && /^github\/repositories\/[^/]+\/release-activity\/[^/]+\/retry$/.test(route)) return true;
+  if (method === "POST" && /^github\/repositories\/[^/]+\/release-activity\/[^/]+\/range$/.test(route)) return true;
   if (method === "GET" && /^github\/imports\/[^/]+$/.test(route)) return true;
   if (method === "GET" && route === "blocks") return true;
   if (method === "GET" && route === "routines") return true;
@@ -205,7 +207,9 @@ function isAllowed(method: string, path: string[]): boolean {
   if (method === "PUT" && /^artifact-variants\/[^/]+$/.test(route)) return true;
   if (method === "PATCH" && /^artifact-variants\/[^/]+\/sentences\/[^/]+$/.test(route)) return true;
   if (method === "POST" && /^artifact-variants\/[^/]+\/exports$/.test(route)) return true;
-  return method === "POST" && /^artifact-variants\/[^/]+\/publish$/.test(route);
+  if (method === "POST" && /^artifact-variants\/[^/]+\/publish$/.test(route)) return true;
+  if (method === "POST" && /^artifact-variants\/[^/]+\/unpublish$/.test(route)) return true;
+  return method === "POST" && /^artifact-variants\/[^/]+\/delivery-events$/.test(route);
 }
 
 type AuthResult = { ok: true; jwt: string } | { ok: false; response: Response };

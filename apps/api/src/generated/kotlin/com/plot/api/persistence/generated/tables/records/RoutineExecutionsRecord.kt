@@ -128,6 +128,10 @@ open class RoutineExecutionsRecord() : UpdatableRecordImpl<RoutineExecutionsReco
         set(value): Unit = set(26, value)
         get(): OffsetDateTime? = get(26) as OffsetDateTime?
 
+    open var releaseRequestId: UUID?
+        set(value): Unit = set(27, value)
+        get(): UUID? = get(27) as UUID?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -137,7 +141,7 @@ open class RoutineExecutionsRecord() : UpdatableRecordImpl<RoutineExecutionsReco
     /**
      * Create a detached, initialised RoutineExecutionsRecord
      */
-    constructor(id: UUID? = null, workspaceId: UUID? = null, routineId: UUID? = null, createdByUserId: UUID? = null, triggerSourceScopeId: UUID? = null, triggerKind: String? = null, triggerKey: String? = null, requestFingerprint: String? = null, triggerDeliveryId: UUID? = null, scheduledFor: OffsetDateTime? = null, refreshFrom: OffsetDateTime? = null, refreshTo: OffsetDateTime? = null, refreshContinuation: JSONB? = null, refreshCompletedAt: OffsetDateTime? = null, activityCursorBefore: Long? = null, activityCursorAfter: Long? = null, status: String? = null, attemptCount: Int? = null, transitionVersion: Long? = null, claimedBy: String? = null, claimedAt: OffsetDateTime? = null, nextAttemptAt: OffsetDateTime? = null, errorCode: String? = null, startedAt: OffsetDateTime? = null, finishedAt: OffsetDateTime? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null): this() {
+    constructor(id: UUID? = null, workspaceId: UUID? = null, routineId: UUID? = null, createdByUserId: UUID? = null, triggerSourceScopeId: UUID? = null, triggerKind: String? = null, triggerKey: String? = null, requestFingerprint: String? = null, triggerDeliveryId: UUID? = null, scheduledFor: OffsetDateTime? = null, refreshFrom: OffsetDateTime? = null, refreshTo: OffsetDateTime? = null, refreshContinuation: JSONB? = null, refreshCompletedAt: OffsetDateTime? = null, activityCursorBefore: Long? = null, activityCursorAfter: Long? = null, status: String? = null, attemptCount: Int? = null, transitionVersion: Long? = null, claimedBy: String? = null, claimedAt: OffsetDateTime? = null, nextAttemptAt: OffsetDateTime? = null, errorCode: String? = null, startedAt: OffsetDateTime? = null, finishedAt: OffsetDateTime? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, releaseRequestId: UUID? = null): this() {
         this.id = id
         this.workspaceId = workspaceId
         this.routineId = routineId
@@ -165,6 +169,7 @@ open class RoutineExecutionsRecord() : UpdatableRecordImpl<RoutineExecutionsReco
         this.finishedAt = finishedAt
         this.createdAt = createdAt
         this.updatedAt = updatedAt
+        this.releaseRequestId = releaseRequestId
         resetChangedOnNotNull()
     }
 }

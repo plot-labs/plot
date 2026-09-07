@@ -13,7 +13,7 @@ internal val agentStepMapper = { rs: SqlRow, _: Int -> rs.toAgentStep() }
 
 internal val selectExecutionSql = """
 		select e.id, e.workspace_id, e.routine_id, e.created_by_user_id, e.trigger_source_scope_id,
-		       e.trigger_kind, e.trigger_key, e.request_fingerprint, e.trigger_delivery_id,
+		       e.trigger_kind, e.trigger_key, e.request_fingerprint, e.trigger_delivery_id, e.release_request_id,
 		       e.scheduled_for, e.refresh_from, e.refresh_to, e.refresh_continuation::text,
 		       e.refresh_completed_at, e.activity_cursor_before, e.activity_cursor_after,
 		       e.status, e.attempt_count, e.transition_version, e.claimed_by, e.claimed_at,
@@ -42,6 +42,7 @@ internal fun SqlRow.toRoutineExecution() = RoutineExecutionRecord(
 		triggerKey = requireNotNull(getString("trigger_key")),
 		requestFingerprint = requireNotNull(getString("request_fingerprint")),
 		triggerDeliveryId = getObject("trigger_delivery_id", UUID::class.java),
+		releaseRequestId = getObject("release_request_id", UUID::class.java),
 		scheduledFor = getTimestamp("scheduled_for")?.toInstant(),
 		refreshFrom = getTimestamp("refresh_from")?.toInstant(),
 		refreshTo = getTimestamp("refresh_to")?.toInstant(),
