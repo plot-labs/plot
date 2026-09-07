@@ -10,6 +10,7 @@ type FormState = "idle" | "loading" | "success" | "error";
 export function WaitlistForm() {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("");
+  const [company, setCompany] = useState("");
   const [painChannel, setPainChannel] = useState("");
   const [state, setState] = useState<FormState>("idle");
   const [message, setMessage] = useState("");
@@ -28,6 +29,7 @@ export function WaitlistForm() {
         body: JSON.stringify({
           email,
           role: role || undefined,
+          company: company || undefined,
           painChannel: painChannel || undefined,
           website: String(formData.get("website") ?? ""),
         }),
@@ -49,6 +51,7 @@ export function WaitlistForm() {
       );
       setEmail("");
       setRole("");
+      setCompany("");
       setPainChannel("");
     } catch {
       setState("error");
@@ -104,6 +107,23 @@ export function WaitlistForm() {
             </option>
           ))}
         </select>
+      </div>
+
+      <div>
+        <label className="sr-only" htmlFor="waitlist-company">
+          Company
+        </label>
+        <input
+          autoComplete="organization"
+          className="h-14 w-full rounded-full border border-foreground/15 bg-background px-5 text-base text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-foreground/40"
+          id="waitlist-company"
+          maxLength={200}
+          name="company"
+          onChange={(event) => setCompany(event.target.value)}
+          placeholder="Company (optional)"
+          type="text"
+          value={company}
+        />
       </div>
 
       <div>

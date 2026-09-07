@@ -57,12 +57,22 @@ export function ExportDialog({ pack, client, presentation = "buttons" }: { pack:
         disposition,
       });
       if (disposition === "COPY") {
-        await navigator.clipboard.writeText(result.text);
+        try {
+          await navigator.clipboard.writeText(result.text);
+          await reportDelivery(result.exportId, "CLIPBOARD_WRITE_SUCCEEDED");
+          setConfirmation(null);
+          setMessage("Artifact copied.");
+        } catch (error) {
+          await reportDelivery(result.exportId, "CLIPBOARD_WRITE_FAILED");
+          setConfirmation(null);
+          setMessage(error instanceof Error ? error.message : "Clipboard write failed.");
+        }
       } else {
         downloadText(result.text, result.filename, result.mediaType);
+        await reportDelivery(result.exportId, "DOWNLOAD_STARTED");
+        setConfirmation(null);
+        setMessage("Download started.");
       }
-      setConfirmation(null);
-      setMessage(disposition === "COPY" ? "Artifact copied." : "Artifact downloaded.");
     } catch (error) {
       if (error instanceof PlotApiError && error.code === "EXPORT_CONFIRMATION_REQUIRED") {
         const warnings = Array.isArray(error.details?.warnings)
@@ -75,6 +85,22 @@ export function ExportDialog({ pack, client, presentation = "buttons" }: { pack:
       }
     } finally {
       setPending(null);
+    }
+  }
+
+  async function reportDelivery(
+    exportId: string,
+    kind: "CLIPBOARD_WRITE_SUCCEEDED" | "CLIPBOARD_WRITE_FAILED" | "DOWNLOAD_STARTED",
+  ) {
+    if (typeof client.recordProductDeliveryEvent !== "function") return;
+    try {
+      await client.recordProductDeliveryEvent(pack.variant.id, {
+        kind,
+        exportId,
+        clientEventId: crypto.randomUUID(),
+      });
+    } catch {
+      // Delivery reporting must not block copy/download UX.
     }
   }
 
@@ -161,6 +187,11 @@ export function ExportDialog({ pack, client, presentation = "buttons" }: { pack:
           </span>
           Sources in Markdown
         </button>
+        {includeSources ? (
+          <p className="px-2.5 pb-1 text-[11px] leading-4 text-black/50 dark:text-white/50">
+            Markdown Sources can include private repository labels and URLs. Hosted publish only shows public citations.
+          </p>
+        ) : null}
         <button type="button" role="menuitem" disabled={Boolean(pending)} onClick={() => void requestExport("COPY", false)} className="flex h-8 w-full items-center gap-2 rounded-[4px] px-2.5 text-left transition hover:bg-black/[0.04] focus-visible:bg-black/[0.04] focus-visible:outline-none disabled:opacity-40 dark:hover:bg-white/10 dark:focus-visible:bg-white/10">
           <Copy aria-hidden="true" className="size-4" /> Copy Markdown
         </button>
@@ -184,6 +215,11 @@ export function ExportDialog({ pack, client, presentation = "buttons" }: { pack:
         />
         Include Sources in Markdown
       </label>
+      {includeSources ? (
+        <p className="max-w-[24rem] text-right text-[11px] leading-4 text-black/50 dark:text-white/50">
+          Markdown Sources can include private repository labels and URLs. Hosted publish only shows public citations, and Plot does not strip secrets from the body.
+        </p>
+      ) : null}
       <div className="flex items-center gap-1.5">
         <button
           type="button"
