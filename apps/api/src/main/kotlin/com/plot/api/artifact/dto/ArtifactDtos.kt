@@ -46,6 +46,7 @@ data class ArtifactSummaryResponse(
 	val id: UUID,
 	val status: String,
 	val title: String?,
+	val contentType: String,
 	val updatedAt: Instant,
 )
 
@@ -68,6 +69,7 @@ data class ArtifactResponse(
 	val id: UUID,
 	val status: String,
 	val title: String?,
+	val contentType: String,
 	val variant: ContentVariantResponse,
 	val publication: ArtifactPublicationResponse? = null,
 )

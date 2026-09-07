@@ -3,13 +3,15 @@ package com.plot.api.ai.provider
 import com.openai.errors.OpenAIRetryableException
 import com.openai.errors.OpenAIServiceException
 import com.plot.api.ai.prompt.ChangelogPrompt
-import com.plot.api.ai.prompt.ChangelogPromptFactory
 import com.plot.api.config.PlotAiProperties
+import com.plot.api.content.ContentTypeRegistry
+import com.plot.api.content.FrozenPromptVersionLookup
 import com.plot.api.artifact.workflow.model.ReviewerOutput
 import com.plot.api.artifact.workflow.model.TargetedRewriteOutput
 import com.plot.api.artifact.workflow.model.WriterOutput
 import java.time.Duration
 import java.time.Instant
+import java.util.UUID
 import org.springframework.ai.chat.client.ChatClient
 import org.springframework.ai.chat.prompt.ChatOptions
 import org.springframework.ai.openai.OpenAiChatOptions
@@ -58,25 +60,38 @@ class MalformedModelOutputException(message: String, cause: Throwable? = null) :
 class SpringAiOpenAiArtifactWorkflowGateway(
 	private val transport: StructuredChatTransport,
 	private val properties: PlotAiProperties,
-	private val promptFactory: ChangelogPromptFactory,
+	private val contentTypeRegistry: ContentTypeRegistry,
+	private val frozenPromptVersionLookup: FrozenPromptVersionLookup,
 ) : ArtifactWorkflowModelGateway {
-	override fun write(request: WriterModelRequest): ModelCallResult<WriterOutput> = invoke(
-		role = ModelRole.WRITER,
-		prompt = promptFactory.writer(request.instruction, request.evidence),
-		responseType = WriterOutput::class.java,
-	)
+	override fun write(request: WriterModelRequest): ModelCallResult<WriterOutput> {
+		val promptFactory = promptFactoryFor(request.artifactWorkflowRunId)
+		return invoke(
+			role = ModelRole.WRITER,
+			prompt = promptFactory.writer(request.instruction, request.evidence),
+			responseType = WriterOutput::class.java,
+		)
+	}
 
-	override fun review(request: ReviewerModelRequest): ModelCallResult<ReviewerOutput> = invoke(
-		role = ModelRole.REVIEWER,
-		prompt = promptFactory.reviewer(request),
-		responseType = ReviewerOutput::class.java,
-	)
+	override fun review(request: ReviewerModelRequest): ModelCallResult<ReviewerOutput> {
+		val promptFactory = promptFactoryFor(request.artifactWorkflowRunId)
+		return invoke(
+			role = ModelRole.REVIEWER,
+			prompt = promptFactory.reviewer(request),
+			responseType = ReviewerOutput::class.java,
+		)
+	}
 
-	override fun rewrite(request: RewriteModelRequest): ModelCallResult<TargetedRewriteOutput> = invoke(
-		role = ModelRole.REWRITER,
-		prompt = promptFactory.rewriter(request),
-		responseType = TargetedRewriteOutput::class.java,
-	)
+	override fun rewrite(request: RewriteModelRequest): ModelCallResult<TargetedRewriteOutput> {
+		val promptFactory = promptFactoryFor(request.artifactWorkflowRunId)
+		return invoke(
+			role = ModelRole.REWRITER,
+			prompt = promptFactory.rewriter(request),
+			responseType = TargetedRewriteOutput::class.java,
+		)
+	}
+
+	private fun promptFactoryFor(artifactWorkflowRunId: UUID) =
+		contentTypeRegistry.promptFactoryFor(frozenPromptVersionLookup.promptVersionFor(artifactWorkflowRunId))
 
 	private fun <T : Any> invoke(role: ModelRole, prompt: ChangelogPrompt, responseType: Class<T>): ModelCallResult<T> {
 		val startedAt = Instant.now()
@@ -203,7 +218,8 @@ class ArtifactWorkflowModelGatewayConfiguration {
 	fun artifactWorkflowModelGateway(
 		builderProvider: ObjectProvider<ChatClient.Builder>,
 		properties: PlotAiProperties,
-		promptFactory: ChangelogPromptFactory,
+		contentTypeRegistry: ContentTypeRegistry,
+		frozenPromptVersionLookup: FrozenPromptVersionLookup,
 		environment: Environment,
 	): ArtifactWorkflowModelGateway {
 		// Do not resolve ChatClient.Builder when artifact workflows are disabled: with
@@ -211,7 +227,12 @@ class ArtifactWorkflowModelGatewayConfiguration {
 		if (properties.configured) validateRuntimeOpenRouterConfiguration(properties, environment)
 		val builder = if (properties.configured) builderProvider.ifAvailable else null
 		return if (properties.configured && builder != null) {
-			SpringAiOpenAiArtifactWorkflowGateway(SpringAiStructuredChatTransport(builder, properties), properties, promptFactory)
+			SpringAiOpenAiArtifactWorkflowGateway(
+				SpringAiStructuredChatTransport(builder, properties),
+				properties,
+				contentTypeRegistry,
+				frozenPromptVersionLookup,
+			)
 		} else {
 			DisabledArtifactWorkflowModelGateway()
 		}

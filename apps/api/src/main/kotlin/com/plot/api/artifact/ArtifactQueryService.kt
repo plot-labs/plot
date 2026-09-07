@@ -51,15 +51,23 @@ class ArtifactQueryService(
 		) ?: 0L
 		val items = sqlExecutor.query(
 			"""
-			select id, status, title, updated_at from content_packs
-			where workspace_id = ? order by updated_at desc, id desc limit ? offset ?
+			select cp.id, cp.status, cp.title, coalesce(ar.content_type, 'CHANGELOG'), cp.updated_at
+			from content_packs cp
+			left join generation_runs gr
+			  on gr.workspace_id = cp.workspace_id and gr.id = cp.generation_run_id
+			left join agent_runs ar
+			  on ar.workspace_id = gr.workspace_id and ar.id = gr.agent_run_id
+			where cp.workspace_id = ?
+			order by cp.updated_at desc, cp.id desc
+			limit ? offset ?
 			""".trimIndent(),
 			{ rs, _ ->
 				ArtifactSummaryResponse(
 					id = requireNotNull(rs.getObject(1, UUID::class.java)),
 					status = requireNotNull(rs.getString(2)),
 					title = rs.getString(3),
-					updatedAt = requireNotNull(rs.getTimestamp(4)).toInstant(),
+					contentType = requireNotNull(rs.getString(4)),
+					updatedAt = requireNotNull(rs.getTimestamp(5)).toInstant(),
 				)
 			},
 			devContext.devWorkspaceId, size, page * size,
@@ -132,8 +140,13 @@ class ArtifactQueryService(
 	private fun loadPackForRevision(predicate: String, id: UUID, revisionId: UUID?): ArtifactResponse {
 		val header = sqlExecutor.query(
 			"""
-			select cp.id, cp.status, cp.title, cv.id, cv.status
-			from content_packs cp join content_variants cv on cv.workspace_id = cp.workspace_id and cv.content_pack_id = cp.id
+			select cp.id, cp.status, cp.title, cv.id, cv.status, coalesce(ar.content_type, 'CHANGELOG')
+			from content_packs cp
+			join content_variants cv on cv.workspace_id = cp.workspace_id and cv.content_pack_id = cp.id
+			left join generation_runs gr
+			  on gr.workspace_id = cp.workspace_id and gr.id = cp.generation_run_id
+			left join agent_runs ar
+			  on ar.workspace_id = gr.workspace_id and ar.id = gr.agent_run_id
 			where cp.workspace_id = ? and $predicate and cv.variant_index = 0
 			""".trimIndent(),
 			{ rs, _ -> listOf(
@@ -142,6 +155,7 @@ class ArtifactQueryService(
 				rs.getString(3),
 				requireNotNull(rs.getObject(4, UUID::class.java)),
 				requireNotNull(rs.getString(5)),
+				requireNotNull(rs.getString(6)),
 			) },
 			devContext.devWorkspaceId, id,
 		).firstOrNull() ?: notFound()
@@ -166,6 +180,7 @@ class ArtifactQueryService(
 			header[0] as UUID,
 			header[1] as String,
 			header[2] as String?,
+			header[5] as String,
 			ContentVariantResponse(
 				variantId,
 				header[4] as String,

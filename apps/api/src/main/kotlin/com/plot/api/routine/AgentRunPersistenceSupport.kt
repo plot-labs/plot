@@ -1,5 +1,6 @@
 package com.plot.api.routine
 
+import com.plot.api.content.ContentType
 import com.plot.api.persistence.SqlRow
 import java.time.Instant
 import java.util.UUID
@@ -25,6 +26,7 @@ internal val selectAgentRunSql = """
 		select a.id, a.workspace_id, a.routine_execution_id, a.work_session_id, a.routine_id, a.origin,
 		       a.idempotency_key, a.request_fingerprint, a.created_by_user_id,
 		       a.instruction_snapshot, a.prompt_version, a.tool_policy_version, a.budget_snapshot::text,
+		       a.content_type,
 		       a.status, a.current_step, a.attempt_count, a.max_attempts,
 		       a.model_call_count, a.tool_call_count, a.next_attempt_at,
 		       a.failure_code, a.claimed_by, a.claimed_at, a.transition_version, a.started_at,
@@ -77,6 +79,7 @@ internal fun SqlRow.toAgentRun() = AgentRunRecord(
 		promptVersion = requireNotNull(getString("prompt_version")),
 		toolPolicyVersion = requireNotNull(getString("tool_policy_version")),
 		budgetSnapshotJson = requireNotNull(getString("budget_snapshot")),
+		contentType = ContentType.parse(getString("content_type")),
 		status = AgentRunStatus.valueOf(requireNotNull(getString("status"))),
 		currentStep = getInt("current_step"),
 		attemptCount = getInt("attempt_count"),

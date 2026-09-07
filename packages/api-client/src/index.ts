@@ -52,10 +52,13 @@ export interface ArtifactPublication {
   publishedAt: string;
 }
 
+export type ContentType = "CHANGELOG" | "LAUNCH_ANNOUNCEMENT";
+
 export interface Artifact {
   id: string;
   status: string;
   title: string | null;
+  contentType: ContentType;
   publication?: ArtifactPublication | null;
   variant: {
     id: string;
@@ -72,6 +75,7 @@ export interface ArtifactSummary {
   id: string;
   status: string;
   title: string | null;
+  contentType: ContentType;
   updatedAt: string;
 }
 export interface ArtifactPage { items: ArtifactSummary[]; page: number; size: number; totalItems: number; totalPages: number }
@@ -367,6 +371,7 @@ export interface RoutineAgentRunDetail {
   routineExecutionId: string;
   routineId: string;
   chatId: string | null;
+  contentType: ContentType;
   status: RoutineAgentRunStatus;
   failureCode: string | null;
   artifactId: string | null;
@@ -379,6 +384,7 @@ export interface ChatAgentRun {
   id: string;
   chatId: string;
   instruction: string;
+  contentType: ContentType;
   status: RoutineAgentRunStatus;
   failureCode: string | null;
   artifactId: string | null;
@@ -386,6 +392,7 @@ export interface ChatAgentRun {
     id: string;
     status: string;
     title: string | null;
+    contentType: ContentType;
     updatedAt: string;
   } | null;
   createdAt: string;
@@ -396,6 +403,7 @@ export interface CreateChatAgentRunInput {
   instruction: string;
   workSessionId?: string;
   writingBlockIds?: string[];
+  contentType?: ContentType;
 }
 
 export interface Routine {

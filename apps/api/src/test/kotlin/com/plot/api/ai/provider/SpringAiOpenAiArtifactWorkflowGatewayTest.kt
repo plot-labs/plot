@@ -2,6 +2,9 @@ package com.plot.api.ai.provider
 
 import com.plot.api.ai.prompt.ChangelogPromptFactory
 import com.plot.api.config.PlotAiProperties
+import com.plot.api.content.ContentTypeRegistry
+import com.plot.api.content.FrozenPromptVersionLookup
+import com.plot.api.content.LaunchAnnouncementPromptFactory
 import com.plot.api.artifact.workflow.model.EvidenceSnapshot
 import com.plot.api.artifact.workflow.model.ReviewVerdict
 import com.plot.api.artifact.workflow.model.SentenceArtifact
@@ -35,6 +38,13 @@ class SpringAiOpenAiArtifactWorkflowGatewayTest {
 		routingProvider = "openai",
 	)
 	private val promptFactory = ChangelogPromptFactory(mapper)
+	private val contentTypeRegistry = ContentTypeRegistry(
+		promptFactory,
+		LaunchAnnouncementPromptFactory(mapper, promptFactory),
+	)
+	private val frozenPromptVersionLookup = FrozenPromptVersionLookup {
+		ContentTypeRegistry.CHANGELOG_PROMPT_VERSION
+	}
 
 	@Test
 	fun `disabled gateway fails calls with a safe machine-readable code`() {
@@ -257,7 +267,8 @@ class SpringAiOpenAiArtifactWorkflowGatewayTest {
 	private fun gateway(transport: StructuredChatTransport) = SpringAiOpenAiArtifactWorkflowGateway(
 		transport = transport,
 		properties = properties,
-		promptFactory = promptFactory,
+		contentTypeRegistry = contentTypeRegistry,
+		frozenPromptVersionLookup = frozenPromptVersionLookup,
 	)
 
 	private fun evidence(body: String = "Snapshot body") = EvidenceSnapshot(
@@ -321,6 +332,23 @@ class SpringAiOpenAiArtifactWorkflowGatewayTest {
 
 		@Bean
 		fun changelogPromptFactory(objectMapper: ObjectMapper) = ChangelogPromptFactory(objectMapper)
+
+		@Bean
+		fun launchAnnouncementPromptFactory(
+			objectMapper: ObjectMapper,
+			changelogPromptFactory: ChangelogPromptFactory,
+		) = LaunchAnnouncementPromptFactory(objectMapper, changelogPromptFactory)
+
+		@Bean
+		fun contentTypeRegistry(
+			changelogPromptFactory: ChangelogPromptFactory,
+			launchAnnouncementPromptFactory: LaunchAnnouncementPromptFactory,
+		) = ContentTypeRegistry(changelogPromptFactory, launchAnnouncementPromptFactory)
+
+		@Bean
+		fun frozenPromptVersionLookup() = FrozenPromptVersionLookup {
+			ContentTypeRegistry.CHANGELOG_PROMPT_VERSION
+		}
 	}
 
 }

@@ -36,6 +36,7 @@ class ArtifactPublishService(
 		acknowledgedWarningKeys: List<String>,
 		legacyAcknowledgedRevisionIds: List<UUID>,
 	): PublishContentVariantResponse = transactionExecutor.execute {
+		requireChangelogContentType(variantId)
 		when (val gate = deliveryGate.prepare(
 			variantId,
 			expectedRevisionNumber,
@@ -214,6 +215,31 @@ class ArtifactPublishService(
 		val actor = actorResolver?.current()
 		if (actor != null && actorResolver.requireWorkspace().role != "OWNER") {
 			throw ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Workspace owner access is required")
+		}
+	}
+
+	private fun requireChangelogContentType(variantId: UUID) {
+		val contentType = sqlExecutor.query(
+			"""
+			select coalesce(ar.content_type, 'CHANGELOG')
+			from content_variants cv
+			join content_packs cp on cp.workspace_id = cv.workspace_id and cp.id = cv.content_pack_id
+			left join generation_runs gr
+			  on gr.workspace_id = cp.workspace_id and gr.id = cp.generation_run_id
+			left join agent_runs ar
+			  on ar.workspace_id = gr.workspace_id and ar.id = gr.agent_run_id
+			where cv.workspace_id = ? and cv.id = ?
+			""".trimIndent(),
+			{ rs, _ -> requireNotNull(rs.getString(1)) },
+			devContext.devWorkspaceId,
+			variantId,
+		).firstOrNull() ?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Content pack not found")
+		if (contentType != "CHANGELOG") {
+			throw ApiException(
+				HttpStatus.CONFLICT,
+				"PUBLISH_CONTENT_TYPE_NOT_SUPPORTED",
+				"Hosted publish is only available for changelog artifacts",
+			)
 		}
 	}
 

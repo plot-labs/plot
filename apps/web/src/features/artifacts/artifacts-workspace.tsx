@@ -101,13 +101,12 @@ function ArtifactsWorkspaceContent() {
                     <span className="min-w-0 truncate text-[15px] font-semibold tracking-[-0.01em] text-black/82 dark:text-white/86">
                       {artifact.title ?? "Generated artifact"}
                     </span>
-                    <time
-                      dateTime={artifact.updatedAt}
-                      title={formatAbsoluteTime(artifact.updatedAt)}
-                      className="shrink-0 text-xs text-black/42 dark:text-white/42"
-                    >
-                      {updatedLabel}
-                    </time>
+                    <span className="flex shrink-0 items-center gap-3 text-xs text-black/42 dark:text-white/42">
+                      <span>{contentTypeLabel(artifact.contentType)}</span>
+                      <time dateTime={artifact.updatedAt} title={formatAbsoluteTime(artifact.updatedAt)}>
+                        {updatedLabel}
+                      </time>
+                    </span>
                   </button>
                 );
               })}
@@ -156,6 +155,10 @@ function formatRelativeUpdatedAt(value: string, now = Date.now()) {
 function formatAbsoluteTime(value: string) {
   const timestamp = Date.parse(value);
   return Number.isFinite(timestamp) ? absoluteTimeFormatter.format(timestamp) : "Update time unavailable";
+}
+
+function contentTypeLabel(contentType: ArtifactSummary["contentType"]) {
+  return contentType === "LAUNCH_ANNOUNCEMENT" ? "Launch announcement" : "Changelog";
 }
 
 function GeneratedArtifactDetail({ artifact }: { artifact: Artifact }) {

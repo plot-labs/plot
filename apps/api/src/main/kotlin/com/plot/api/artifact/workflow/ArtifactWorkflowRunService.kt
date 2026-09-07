@@ -129,6 +129,7 @@ class ArtifactWorkflowRunService(
 			append(agentRun.id).append('\n')
 			append(agentRun.instructionSnapshot.trim()).append('\n')
 			append(agentRun.promptVersion).append('\n')
+			append(agentRun.contentType.name).append('\n')
 			inputs.forEach { input ->
 				append(input.orderIndex).append('|')
 				append(input.sourceScopeId).append('|')

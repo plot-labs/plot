@@ -28,6 +28,7 @@ const pack: Artifact = {
   id: "pack-1",
   status: "NEEDS_REVIEW",
   title: "July changelog",
+  contentType: "CHANGELOG",
   variant: {
     id: "variant-1",
     status: "NEEDS_REVIEW",
@@ -84,6 +85,18 @@ describe("PublishDialog", () => {
     expect(screen.getByText(/Hosted publish shows the changelog body and public citations only/i)).toBeInTheDocument();
     expect(screen.getByText("acme/app#42")).toBeInTheDocument();
     expect(screen.getByText(/does not remove secrets/i)).toBeInTheDocument();
+  });
+
+  it("hides hosted publish for non-changelog content types", () => {
+    render(
+      <PublishDialog
+        pack={{ ...pack, contentType: "LAUNCH_ANNOUNCEMENT" }}
+        client={{} as PlotApiClient}
+        presentation="inline"
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: /publish/i })).not.toBeInTheDocument();
   });
 
   it("publishes the current revision and shows the public URL", async () => {
