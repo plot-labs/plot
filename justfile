@@ -12,7 +12,7 @@ install:
 
 # Start the Spring Boot API
 dev-api:
-    cd apps/api && set -a && source .env.local && set +a && ./gradlew bootRun
+    bash apps/api/scripts/run-with-env.sh ./gradlew bootRun
 
 # Start the Next.js app
 dev-web:
