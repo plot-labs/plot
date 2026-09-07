@@ -50,6 +50,7 @@ data class RoutineExecutionRequest(
 	val refreshContinuationJson: String? = null,
 	val activityCursorBefore: Long? = null,
 	val id: UUID? = null,
+	val releaseRequestId: UUID? = null,
 )
 
 data class RoutineExecutionEvidenceRecord(
@@ -88,6 +89,7 @@ data class RoutineExecutionRecord(
 	val finishedAt: Instant?,
 	val createdAt: Instant,
 	val updatedAt: Instant,
+	val releaseRequestId: UUID? = null,
 )
 
 data class RoutineContextSourceRecord(
@@ -275,6 +277,7 @@ data class RoutineExecutionSummaryRecord(
 	val artifactId: UUID?,
 	val startedAt: Instant?,
 	val finishedAt: Instant?,
+	val releaseRequestId: UUID? = null,
 )
 
 class RoutineExecutionIdempotencyConflictException : IllegalStateException(

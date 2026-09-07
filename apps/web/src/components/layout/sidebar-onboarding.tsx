@@ -25,7 +25,7 @@ export function SidebarOnboarding({ workspaceId }: { workspaceId: string | null 
       setStatus({
         connected: connections.some((connection) => connection.status === "ACTIVE"),
         routine: releaseRoutines.length > 0,
-        firstRun: releaseRoutines.some((routine) => routine.latestExecution?.status === "NO_ACTIVITY" || Boolean(routine.latestExecution?.artifactId) || routine.latestExecution?.agentRunStatus === "SUCCEEDED"),
+        firstRun: releaseRoutines.some((routine) => Boolean(routine.latestExecution?.artifactId) || routine.latestExecution?.agentRunStatus === "SUCCEEDED"),
       });
     }).catch(() => {
       if (!controller.signal.aborted) setStatus({ connected: false, routine: false, firstRun: false });
@@ -44,7 +44,7 @@ export function SidebarOnboarding({ workspaceId }: { workspaceId: string | null 
   const steps = [
     ["Install GitHub App", status.connected],
     ["Create first Routine", status.routine],
-    ["Run first Routine", status.firstRun],
+    ["Get the first draft", status.firstRun],
   ] as const;
   const completed = steps.filter(([, done]) => done).length;
   const initialStep: 1 | 2 | 3 = !status.connected ? 1 : !status.routine ? 2 : 3;

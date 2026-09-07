@@ -5,8 +5,10 @@ import type { GitHubReleaseActivity } from "@/lib/api-client";
 import {
   formatReleaseActivityDetail,
   formatReleaseActivityLabel,
+  isFullCommitSha,
   isReleaseActivityInFlight,
   isReleaseCadence,
+  normalizeCommitSha,
 } from "./release-activity-utils";
 
 function activity(overrides: Partial<GitHubReleaseActivity> = {}): GitHubReleaseActivity {
@@ -54,11 +56,19 @@ describe("release-activity-utils", () => {
   it("formats detail copy for needs-range and failed statuses", () => {
     expect(formatReleaseActivityDetail(activity({ status: "READY" }))).toBeNull();
     expect(formatReleaseActivityDetail(activity({ status: "NEEDS_RANGE" }))).toBe(
-      "Plot recorded this tag as the starting boundary. The next release will generate a draft.",
+      "Choose the previous commit SHA. Plot keeps this tag head and drafts from that range.",
     );
     expect(formatReleaseActivityDetail(activity({ status: "FAILED", errorCode: "AGENT_RUN_FAILED" }))).toBe(
       "agent run failed",
     );
     expect(formatReleaseActivityDetail(activity({ status: "FAILED", errorCode: null }))).toBeNull();
+  });
+
+  it("accepts only lowercase 40-character commit SHAs", () => {
+    expect(normalizeCommitSha(` ${"A".repeat(40)} `)).toBe("a".repeat(40));
+    expect(isFullCommitSha("a".repeat(40))).toBe(true);
+    expect(isFullCommitSha("A".repeat(40))).toBe(true);
+    expect(isFullCommitSha("main")).toBe(false);
+    expect(isFullCommitSha("a".repeat(39))).toBe(false);
   });
 });

@@ -5,6 +5,7 @@ package com.plot.api.persistence.generated.tables
 
 
 import com.plot.api.persistence.generated.Public
+import com.plot.api.persistence.generated.indexes.ROUTINE_EXECUTIONS_RELEASE_REQUEST_IDX
 import com.plot.api.persistence.generated.indexes.ROUTINE_EXECUTIONS_ROUTINE_CREATED_IDX
 import com.plot.api.persistence.generated.indexes.ROUTINE_EXECUTIONS_RUNNABLE_IDX
 import com.plot.api.persistence.generated.keys.AGENT_RUNS__AGENT_RUNS_WORKSPACE_ID_ROUTINE_EXECUTION_ID_FKEY
@@ -18,9 +19,11 @@ import com.plot.api.persistence.generated.keys.ROUTINE_EXECUTIONS__ROUTINE_EXECU
 import com.plot.api.persistence.generated.keys.ROUTINE_EXECUTIONS__ROUTINE_EXECUTIONS_WORKSPACE_ID_ROUTINE_ID_FKEY
 import com.plot.api.persistence.generated.keys.ROUTINE_EXECUTIONS__ROUTINE_EXECUTIONS_WORKSPACE_ID_ROUTINE_ID_TRIGGER_SOURCE__FKEY
 import com.plot.api.persistence.generated.keys.ROUTINE_EXECUTIONS__ROUTINE_EXECUTIONS_WORKSPACE_ID_TRIGGER_SOURCE_SCOPE_ID_FKEY
+import com.plot.api.persistence.generated.keys.ROUTINE_EXECUTIONS__ROUTINE_EXECUTION_RELEASE_OWNER_FK
 import com.plot.api.persistence.generated.keys.ROUTINE_EXECUTION_EVIDENCE__ROUTINE_EXECUTION_EVIDENCE_WORKSPACE_ID_EXECUTION_ID_FKEY
 import com.plot.api.persistence.generated.keys.WORK_SESSIONS__WORK_SESSIONS_ROUTINE_EXECUTION_FK
 import com.plot.api.persistence.generated.tables.AgentRuns.AgentRunsPath
+import com.plot.api.persistence.generated.tables.GithubReleaseDraftRequests.GithubReleaseDraftRequestsPath
 import com.plot.api.persistence.generated.tables.GithubWebhookDeliveries.GithubWebhookDeliveriesPath
 import com.plot.api.persistence.generated.tables.RoutineExecutionEvidence.RoutineExecutionEvidencePath
 import com.plot.api.persistence.generated.tables.Routines.RoutinesPath
@@ -234,6 +237,11 @@ open class RoutineExecutions(
      */
     val UPDATED_AT: TableField<RoutineExecutionsRecord, OffsetDateTime?> = createField(DSL.name("updated_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false), this, "")
 
+    /**
+     * The column <code>public.routine_executions.release_request_id</code>.
+     */
+    val RELEASE_REQUEST_ID: TableField<RoutineExecutionsRecord, UUID?> = createField(DSL.name("release_request_id"), SQLDataType.UUID, this, "")
+
     private constructor(alias: Name, aliased: Table<RoutineExecutionsRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<RoutineExecutionsRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<RoutineExecutionsRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)
@@ -266,10 +274,26 @@ open class RoutineExecutions(
         override fun `as`(alias: Table<*>): RoutineExecutionsPath = RoutineExecutionsPath(alias.qualifiedName, this)
     }
     override fun getSchema(): Schema? = if (aliased()) null else Public.PUBLIC
-    override fun getIndexes(): List<Index> = listOf(ROUTINE_EXECUTIONS_ROUTINE_CREATED_IDX, ROUTINE_EXECUTIONS_RUNNABLE_IDX)
+    override fun getIndexes(): List<Index> = listOf(ROUTINE_EXECUTIONS_RELEASE_REQUEST_IDX, ROUTINE_EXECUTIONS_ROUTINE_CREATED_IDX, ROUTINE_EXECUTIONS_RUNNABLE_IDX)
     override fun getPrimaryKey(): UniqueKey<RoutineExecutionsRecord> = ROUTINE_EXECUTIONS_PKEY
     override fun getUniqueKeys(): List<UniqueKey<RoutineExecutionsRecord>> = listOf(ROUTINE_EXECUTIONS_WORKSPACE_ID_ID_KEY, ROUTINE_EXECUTIONS_WORKSPACE_ID_ID_ROUTINE_ID_KEY, ROUTINE_EXECUTIONS_WORKSPACE_ID_ROUTINE_ID_TRIGGER_KEY_KEY)
-    override fun getReferences(): List<ForeignKey<RoutineExecutionsRecord, *>> = listOf(ROUTINE_EXECUTIONS__ROUTINE_EXECUTIONS_CREATED_BY_USER_ID_FKEY, ROUTINE_EXECUTIONS__ROUTINE_EXECUTIONS_TRIGGER_DELIVERY_ID_FKEY, ROUTINE_EXECUTIONS__ROUTINE_EXECUTIONS_WORKSPACE_ID_ROUTINE_ID_FKEY, ROUTINE_EXECUTIONS__ROUTINE_EXECUTIONS_WORKSPACE_ID_ROUTINE_ID_TRIGGER_SOURCE__FKEY, ROUTINE_EXECUTIONS__ROUTINE_EXECUTIONS_WORKSPACE_ID_TRIGGER_SOURCE_SCOPE_ID_FKEY)
+    override fun getReferences(): List<ForeignKey<RoutineExecutionsRecord, *>> = listOf(ROUTINE_EXECUTIONS__ROUTINE_EXECUTION_RELEASE_OWNER_FK, ROUTINE_EXECUTIONS__ROUTINE_EXECUTIONS_CREATED_BY_USER_ID_FKEY, ROUTINE_EXECUTIONS__ROUTINE_EXECUTIONS_TRIGGER_DELIVERY_ID_FKEY, ROUTINE_EXECUTIONS__ROUTINE_EXECUTIONS_WORKSPACE_ID_ROUTINE_ID_FKEY, ROUTINE_EXECUTIONS__ROUTINE_EXECUTIONS_WORKSPACE_ID_ROUTINE_ID_TRIGGER_SOURCE__FKEY, ROUTINE_EXECUTIONS__ROUTINE_EXECUTIONS_WORKSPACE_ID_TRIGGER_SOURCE_SCOPE_ID_FKEY)
+
+    private lateinit var _githubReleaseDraftRequests: GithubReleaseDraftRequestsPath
+
+    /**
+     * Get the implicit join path to the
+     * <code>public.github_release_draft_requests</code> table.
+     */
+    fun githubReleaseDraftRequests(): GithubReleaseDraftRequestsPath {
+        if (!this::_githubReleaseDraftRequests.isInitialized)
+            _githubReleaseDraftRequests = GithubReleaseDraftRequestsPath(this, ROUTINE_EXECUTIONS__ROUTINE_EXECUTION_RELEASE_OWNER_FK, null)
+
+        return _githubReleaseDraftRequests;
+    }
+
+    val githubReleaseDraftRequests: GithubReleaseDraftRequestsPath
+        get(): GithubReleaseDraftRequestsPath = githubReleaseDraftRequests()
 
     private lateinit var _users: UsersPath
 
@@ -419,6 +443,7 @@ open class RoutineExecutions(
     val workSessions: WorkSessionsPath
         get(): WorkSessionsPath = workSessions()
     override fun getChecks(): List<Check<RoutineExecutionsRecord>> = listOf(
+        Internal.createCheck(this, DSL.name("routine_execution_release_trigger_check"), "(((release_request_id IS NULL) OR ((trigger_kind)::text = 'GITHUB'::text)))", true),
         Internal.createCheck(this, DSL.name("routine_executions_attempt_count_check"), "((attempt_count >= 0))", true),
         Internal.createCheck(this, DSL.name("routine_executions_check"), "(((((trigger_kind)::text = 'GITHUB'::text) AND (trigger_delivery_id IS NOT NULL)) OR (((trigger_kind)::text = ANY ((ARRAY['SCHEDULED'::character varying, 'MANUAL'::character varying])::text[])) AND (trigger_delivery_id IS NULL))))", true),
         Internal.createCheck(this, DSL.name("routine_executions_check1"), "((((claimed_by IS NULL) AND (claimed_at IS NULL)) OR ((claimed_by IS NOT NULL) AND (claimed_at IS NOT NULL))))", true),

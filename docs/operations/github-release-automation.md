@@ -1,9 +1,10 @@
 # GitHub release automation
 
 This runbook operates Plot's opt-in GitHub release-to-changelog loop. The
-automation watches an already connected repository, records ordinary pushes
-without generating content, and starts a changelog only when GitHub supplies a
-trustworthy release boundary.
+automation watches an already connected repository and starts a release
+changelog only after resolving a trustworthy boundary. Explicit
+`ON_GITHUB_CHANGE` Routines remain separate activity summaries; a branch push
+is not a customer release.
 
 Plot prepares a review draft. It never publishes a changelog, creates a GitHub
 release, or writes to the repository.
@@ -105,6 +106,11 @@ connected scope, but no release worker in that deployment will claim, recover,
 reconcile, or generate any draft. Re-enabling can drain all accumulated runnable
 requests, not just the repository being investigated.
 
+Release/tag Routines use this same release worker flag and resolver/collector,
+not the generic Routine activity worker. Agent execution also requires
+`plot.routine-agent.workers-enabled=true`. Deploy V36 and the regenerated jOOQ
+baseline together before enabling workers.
+
 ## Enablement procedure
 
 1. Use an isolated staging database or a dedicated staging deployment with no
@@ -128,22 +134,35 @@ requests, not just the repository being investigated.
    exact earlier-head to later-head range, one generation run, one content pack,
    and a `READY` activity visible in the review UI.
 9. Redeliver the tag push and the matching `release.published` event. Counts
-   must remain one request, one generation attempt, and one content pack for the
-   workspace, repository scope, and tag.
+   must remain one request per intended job: either default automation or each
+   separately configured matching Routine, never both. A Routine's successful
+   attempt owns one AgentRun and that AgentRun owns at most one ArtifactRun.
 10. Turn the global flag off after the staging exercise. A production rollout
     requires an explicit review of every active connection and every queued
     request in the production database.
 
 ## Event semantics
 
-| GitHub event | Plot behavior |
-| --- | --- |
-| Default-branch push | Store as `OBSERVED`; never starts generation. |
-| Non-default-branch push | Store as `IGNORED`. |
-| Deleted or forced push | Store as `IGNORED`. |
-| Tag push | Enqueue one release request per workspace, repository scope, and tag. |
-| `release.published` | Enqueue the same logical request as its tag push. |
-| Other release actions | Store as `IGNORED`. |
+- Default-branch pushes are observational unless an enabled `ON_GITHUB_CHANGE`
+  Routine explicitly requests an activity summary. They never enqueue release
+  drafts. Non-default, deleted, and forced pushes are ignored.
+- With release/tag Routines configured, a tag push triggers only enabled
+  `ON_GIT_TAG` Routines. `release.published` triggers only enabled
+  `ON_GITHUB_RELEASE` Routines. Each intended job is unique by workspace,
+  repository scope, real tag, and Routine ID, not webhook delivery ID.
+- Separate Routines intentionally retain separate executions, instructions,
+  configured context sources, and retry history. Another Routine for the same
+  tag is never treated as a previous release boundary.
+- Without release/tag Routines, tag push and publication converge on the
+  existing default request. Disabling a Routine does not turn default
+  generation back on. Adding a Routine between deliveries does not duplicate
+  an already admitted default job.
+- Generic **Run now** is not a release range selector: release/tag Routines
+  reject it with `GITHUB_RELEASE_RANGE_REQUIRED`. Use the release activity
+  recovery actions below. Old unverified release Routine executions cannot
+  become activity batches or admit new model decisions after this cutover.
+- Other release actions are ignored. Tag push SHAs are immutable observations;
+  `release.target_commitish` is not accepted as an immutable head.
 
 A merge or branch push is not proof that a change is available to customers.
 Plot only generates from a later release boundary and always uses resolved
@@ -182,15 +201,42 @@ original workspace; a citation can display `Source access lost` while retaining
 its saved label, URL, and excerpt.
 
 The first release for a scope has no trusted predecessor. `NEEDS_RANGE` is an
-intentional terminal state, not a worker failure. The recorded tag head becomes
-a candidate boundary for a later release. Do not hand-edit base/head SHA values
-in production. If an exact historical range must be prepared before a second
-release exists, leave the global automation flag disabled in that deployment
-and use the manual bounded import/generation path; a supported manual
-release-range API does not yet exist.
+intentional terminal state, not a generated draft. The recorded tag head becomes
+a candidate boundary for a later release. The associated Routine execution
+records `FAILED/GITHUB_RELEASE_RANGE_REQUIRED` without inventing another
+execution-status enum. Its `latestExecution.releaseRequestId` identifies the
+release activity; use the request-specific GET rather than another Routine's
+latest repository activity.
+
+Workspace owners can recover an unresolved first release:
+
+1. Read `GET /api/github/repositories/{sourceScopeId}/release-activity/{requestId}`.
+2. Send `POST /api/github/repositories/{sourceScopeId}/release-activity/{requestId}/range`
+   with JSON `baseSha` and `headSha`, each a full lowercase 40-character commit
+   SHA. Keep the recorded head; a moved head is rejected.
+3. The API responds `202` with `QUEUED`, not a completed draft. The existing
+   worker verifies the live tag and exact ancestry before collecting evidence.
+   A diverged/behind selection fails with `GITHUB_RELEASE_RANGE_INVALID`.
+
+Range selection is accepted only for `NEEDS_RANGE` or a failed request with no
+bound observation/AgentRun. Once evidence is bound, it cannot be replaced by
+another range. Use the existing `/retry` endpoint for transient failures after
+source access and Routine enablement are restored. Each admitted retry gets
+its own execution and AgentRun, reuses the bound observation, and rechecks the
+tag, source rights, and Routine enablement. Never hand-edit base/head values.
 
 An exact range with no usable commit or pull-request evidence becomes
 `NO_ACTIVITY` and must not invoke the model.
+
+Release evidence is all-or-nothing: Routine admission rejects an oversized
+complete range with `GITHUB_RELEASE_EVIDENCE_TOO_LARGE`, rather than truncating
+it into an unrelated activity batch. Routine limits include the central
+20-block batch ceiling, configured character budget, and per-Agent-input
+limit. Choose a smaller explicit range while evidence is unbound, or review
+the configured limits. Compare pagination limits still fail explicitly;
+bounded changed-file summaries carry their existing truncation metadata.
+Artifact handoff always retains the complete verified release seed set;
+model-selected context/tool results cannot replace or expand that set.
 
 ## Operational queries
 

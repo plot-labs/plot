@@ -51,6 +51,7 @@ data class RoutineExecutionSummaryResponse(
 	val errorCode: String?,
 	val startedAt: Instant?,
 	val finishedAt: Instant?,
+	val releaseRequestId: UUID? = null,
 )
 
 data class AgentRunDetailResponse(
@@ -100,6 +101,7 @@ fun RoutineRecord.toResponse(
 
 fun RoutineExecutionSummaryRecord.toResponse() = RoutineExecutionSummaryResponse(
 	id = executionId,
+	releaseRequestId = releaseRequestId,
 	status = executionStatus.name,
 	chatId = workSessionId,
 	agentRunId = agentRunId,

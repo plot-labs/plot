@@ -12,7 +12,9 @@ const mocks = vi.hoisted(() => ({
   runRoutineNow: vi.fn(),
   getRoutineAgentRun: vi.fn(),
   getGitHubReleaseActivity: vi.fn(),
+  getGitHubReleaseActivityById: vi.fn(),
   retryGitHubReleaseDraft: vi.fn(),
+  selectGitHubReleaseRange: vi.fn(),
 }));
 
 vi.mock("@/lib/api-client", async () => {
@@ -28,7 +30,9 @@ vi.mock("@/lib/api-client", async () => {
       runRoutineNow: mocks.runRoutineNow,
       getRoutineAgentRun: mocks.getRoutineAgentRun,
       getGitHubReleaseActivity: mocks.getGitHubReleaseActivity,
+      getGitHubReleaseActivityById: mocks.getGitHubReleaseActivityById,
       retryGitHubReleaseDraft: mocks.retryGitHubReleaseDraft,
+      selectGitHubReleaseRange: mocks.selectGitHubReleaseRange,
     },
   };
 });
@@ -62,7 +66,9 @@ describe("RoutinesWorkspace", () => {
     mocks.runRoutineNow.mockReset();
     mocks.getRoutineAgentRun.mockReset();
     mocks.getGitHubReleaseActivity.mockReset().mockResolvedValue(null);
+    mocks.getGitHubReleaseActivityById.mockReset();
     mocks.retryGitHubReleaseDraft.mockReset();
+    mocks.selectGitHubReleaseRange.mockReset();
     Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
       configurable: true,
       value: vi.fn(),
@@ -414,6 +420,7 @@ describe("RoutinesWorkspace", () => {
       .toHaveAttribute("href", "/artifacts?artifact=artifact-release");
     expect(screen.queryByRole("status", { name: "Latest release for Weekly update" })).not.toBeInTheDocument();
     expect(mocks.getGitHubReleaseActivity).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByRole("button", { name: "Run" })).toHaveLength(1);
   });
 });
 
@@ -449,6 +456,7 @@ function execution(overrides: Partial<NonNullable<Routine["latestExecution"]>> =
     errorCode: null,
     startedAt: "2026-08-10T00:00:00Z",
     finishedAt: null,
+    releaseRequestId: null,
     ...overrides,
   };
 }

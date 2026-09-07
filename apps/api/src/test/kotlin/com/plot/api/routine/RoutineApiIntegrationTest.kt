@@ -534,6 +534,16 @@ class RoutineApiIntegrationTest {
 			status { isCreated() }
 			jsonPath("$.cadence") { value("ON_GITHUB_RELEASE") }
 		}
+		val routineId = jdbcTemplate.queryForObject(
+			"select id from routines where workspace_id = ? and source_scope_id = ? and cadence = 'ON_GITHUB_RELEASE'",
+			UUID::class.java, devContext.devWorkspaceId, sourceScopeId,
+		)!!
+		mockMvc.post("/api/routines/$routineId/run") {
+			headers { add("Idempotency-Key", "no-unbounded-release") }
+		}.andExpect {
+			status { isConflict() }
+			jsonPath("$.error") { value("GITHUB_RELEASE_RANGE_REQUIRED") }
+		}
 
 		assertEquals(
 			0,

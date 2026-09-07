@@ -7,6 +7,8 @@ import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
 
 interface GitHubReleaseAgentAdmission {
+	fun prepare(request: GitHubReleaseDraftRequest) {}
+
 	fun bindAndAdmit(
 		request: GitHubReleaseDraftRequest,
 		transitionVersion: Long,
@@ -21,7 +23,12 @@ interface GitHubReleaseAgentAdmission {
 class DefaultGitHubReleaseAgentAdmission(
 	private val requestPersistence: GitHubReleaseRequestStore,
 	private val chatAgentAdmissionService: ChatAgentAdmissionService,
+	private val routineService: GitHubReleaseRoutineService,
 ) : GitHubReleaseAgentAdmission {
+	override fun prepare(request: GitHubReleaseDraftRequest) {
+		if (request.routineId != null) routineService.prepare(request)
+	}
+
 	@Transactional
 	override fun bindAndAdmit(
 		request: GitHubReleaseDraftRequest,
@@ -35,7 +42,7 @@ class DefaultGitHubReleaseAgentAdmission(
 			requestPersistence.bindEvidence(request.id, transitionVersion, evidence)
 			transitionVersion + 1
 		} else transitionVersion
-		val agentRun = chatAgentAdmissionService.admitAutomated(
+		val agentRun = if (request.routineId != null) routineService.admit(request, evidence) else chatAgentAdmissionService.admitAutomated(
 			principal = principal,
 			instruction = instruction,
 			writingBlockIds = evidence.writingBlockIds,

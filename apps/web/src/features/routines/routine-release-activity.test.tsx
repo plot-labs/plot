@@ -5,7 +5,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   getGitHubReleaseActivity: vi.fn(),
+  getGitHubReleaseActivityById: vi.fn(),
   retryGitHubReleaseDraft: vi.fn(),
+  selectGitHubReleaseRange: vi.fn(),
 }));
 
 vi.mock("@/lib/api-client", async () => {
@@ -14,7 +16,9 @@ vi.mock("@/lib/api-client", async () => {
     ...actual,
     plotApiClient: {
       getGitHubReleaseActivity: mocks.getGitHubReleaseActivity,
+      getGitHubReleaseActivityById: mocks.getGitHubReleaseActivityById,
       retryGitHubReleaseDraft: mocks.retryGitHubReleaseDraft,
+      selectGitHubReleaseRange: mocks.selectGitHubReleaseRange,
     },
   };
 });
@@ -25,7 +29,9 @@ import { RoutineReleaseActivity } from "./routine-release-activity";
 describe("RoutineReleaseActivity", () => {
   beforeEach(() => {
     mocks.getGitHubReleaseActivity.mockReset();
+    mocks.getGitHubReleaseActivityById.mockReset();
     mocks.retryGitHubReleaseDraft.mockReset();
+    mocks.selectGitHubReleaseRange.mockReset();
   });
 
   it("renders nothing when release activity returns 204", async () => {
@@ -63,6 +69,36 @@ describe("RoutineReleaseActivity", () => {
 
     expect(await screen.findByRole("status")).toHaveTextContent("Latest release: Preparing draft for v2.4.0…");
     expect(screen.queryByRole("button", { name: "Retry release draft for Release routine" })).not.toBeInTheDocument();
+  });
+
+  it("loads a specific request id and posts a pinned-head range", async () => {
+    const head = "a".repeat(40);
+    const base = "b".repeat(40);
+    mocks.getGitHubReleaseActivityById.mockResolvedValue(activity({
+      status: "NEEDS_RANGE",
+      artifactId: null,
+      baseSha: null,
+      headSha: head,
+    }));
+    mocks.selectGitHubReleaseRange.mockResolvedValue(activity({ status: "QUEUED", artifactId: null, baseSha: base, headSha: head }));
+    render(<RoutineReleaseActivity sourceScopeId="source-1" routineName="Release routine" releaseRequestId="request-1" />);
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Latest release: First release for v2.4.0");
+    expect(mocks.getGitHubReleaseActivityById).toHaveBeenCalledWith("source-1", "request-1", expect.anything());
+    expect(mocks.getGitHubReleaseActivity).not.toHaveBeenCalled();
+    expect(screen.getByText(`Tag head ${head}`)).toBeVisible();
+
+    const baseInput = screen.getByRole("textbox", { name: "Previous commit SHA for Release routine" });
+    fireEvent.change(baseInput, { target: { value: base } });
+    fireEvent.click(screen.getByRole("button", { name: "Generate draft from range for Release routine" }));
+
+    await waitFor(() => expect(mocks.selectGitHubReleaseRange).toHaveBeenCalledWith(
+      "source-1",
+      "request-1",
+      { baseSha: base, headSha: head },
+      expect.anything(),
+    ));
+    expect(await screen.findByRole("status")).toHaveTextContent("Latest release: Preparing draft for v2.4.0…");
   });
 });
 

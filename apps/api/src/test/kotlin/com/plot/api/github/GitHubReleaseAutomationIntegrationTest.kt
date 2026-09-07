@@ -34,6 +34,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.test.assertFailsWith
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -76,6 +77,7 @@ class GitHubReleaseAutomationIntegrationTest {
 	@Autowired private lateinit var artifactWorkflowPersistence: ArtifactWorkflowExecutionPersistence
 	@Autowired private lateinit var artifactWorkflowQueryPersistence: ArtifactWorkflowQueryPersistence
 	@Autowired private lateinit var releasePersistence: GitHubReleaseRequestStore
+	@Autowired private lateinit var releaseLeases: GitHubReleaseLeaseStore
 	@Autowired private lateinit var artifactWorkflowService: ArtifactWorkflowService
 	@Autowired private lateinit var github: ScriptedGitHubClient
 	@Autowired private lateinit var model: ScriptedArtifactWorkflowModelGateway
@@ -142,6 +144,239 @@ class GitHubReleaseAutomationIntegrationTest {
 			devContext.devWorkspaceId,
 		)
 	}
+
+	@Test
+	fun `release Routine blocks first range then recovers with exact seeds and keeps its configuration`() {
+		val fixture = bindRepository()
+		val routineId = insertReleaseRoutine(fixture)
+		val context = bindRepository()
+		jdbcTemplate.update(
+			"insert into routine_context_sources(id, workspace_id, routine_id, source_scope_id, order_index, created_at) values (?, ?, ?, ?, 0, now())",
+			UUID.randomUUID(), devContext.devWorkspaceId, routineId, context.scopeId,
+		)
+		val base = "a".repeat(40)
+		val head = "b".repeat(40)
+		github.tag(fixture, "v1", head)
+		github.compare(fixture, base, head, exactComparison(fixture, head).let { comparison ->
+			comparison.copy(aheadBy = 2, commits = comparison.commits + comparison.commits.single().copy(
+				sha = "c".repeat(40), message = "Second verified change\n\nAlso inside the range.",
+			))
+		})
+
+		webhookService.accept(tag(fixture, "tag-${UUID.randomUUID()}", "v1", head))
+		assertEquals(0, requestCount(fixture, "v1"), "A release Routine must not run on a tag push")
+		webhookService.accept(releasePublished(fixture, "published-${UUID.randomUUID()}", "v1"))
+		assertEquals(1, releaseWorker.drain())
+		val unresolved = release("v1", fixture)
+		assertEquals(routineId, unresolved.routineId)
+		assertEquals(GitHubReleaseDraftStatus.NEEDS_RANGE, unresolved.status)
+		assertEquals("GITHUB_RELEASE_RANGE_REQUIRED", jdbcTemplate.queryForObject(
+			"select error_code from routine_executions where release_request_id = ?", String::class.java, unresolved.id,
+		))
+		assertEquals(0, boundEvidence(unresolved.id))
+		assertEquals(0, model.totalCalls)
+
+		jdbcTemplate.update("update routines set activity_cursor_sequence = 999999 where id = ?", routineId)
+		activityService.selectRange(fixture.scopeId, unresolved.id, GitHubReleaseRangeRequest(base, head))
+		assertEquals(1, releaseWorker.drain())
+		val generating = release("v1", fixture)
+		assertEquals(GitHubReleaseDraftStatus.GENERATING, generating.status)
+		assertEquals(base, generating.baseSha)
+		assertEquals(head, generating.headSha)
+		assertEquals("EXPLICIT_RANGE", generating.boundaryReason)
+		val agentId = assertNotNull(generating.agentRunId)
+		assertEquals(routineId, jdbcTemplate.queryForObject("select routine_id from agent_runs where id = ?", UUID::class.java, agentId))
+		assertTrue(jdbcTemplate.queryForObject(
+			"select instruction_snapshot from agent_runs where id = ?", String::class.java, agentId,
+		)!!.startsWith("Write release notes for customers"))
+		assertEquals(listOf("TRIGGER", "CONTEXT"), jdbcTemplate.queryForList(
+			"select source_role from agent_run_sources where agent_run_id = ? order by order_index", String::class.java, agentId,
+		))
+		assertEquals(listOf("Ship verified change", "Second verified change"), jdbcTemplate.queryForList(
+			"select snapshot_title from agent_run_inputs where agent_run_id = ? order by order_index", String::class.java, agentId,
+		))
+		assertEquals(releaseEvidence(generating.id).map { it.writingBlockId }, jdbcTemplate.queryForList(
+			"select writing_block_id from agent_run_inputs where agent_run_id = ? order by order_index", UUID::class.java, agentId,
+		))
+		assertEquals(2, count("select count(*) from routine_executions where release_request_id = ?", generating.id))
+		webhookService.accept(releasePublished(fixture, "redelivery-${UUID.randomUUID()}", "v1"))
+		webhookService.accept(tag(fixture, "retag-${UUID.randomUUID()}", "v1", head))
+		assertEquals(1, requestCount(fixture, "v1"))
+		assertEquals(1, count("select count(*) from agent_runs where routine_id = ?", routineId))
+		assertEquals(0, releaseWorker.drain())
+		agentModel.scriptedDecision = { request ->
+			AgentDecision(action = AgentDecisionAction.CREATE_ARTIFACT, selectedInputIds = listOf(request.inputs.first().id))
+		}
+		assertEquals(1, agentWorker.drain())
+		assertEquals(2, artifactWorkflowWorker.drain())
+		releaseWorker.reconcile()
+		val ready = release("v1", fixture)
+		assertEquals(GitHubReleaseDraftStatus.READY, ready.status)
+		assertEquals(releaseEvidence(ready.id).map { it.writingBlockId }, generationInputs(assertNotNull(ready.artifactWorkflowRunId)).map { it.writingBlockId })
+		assertEquals(999999L, jdbcTemplate.queryForObject(
+			"select activity_cursor_sequence from routines where id = ?", Long::class.java, routineId,
+		))
+		assertOwnershipAuditClear()
+	}
+
+	@Test
+	fun `intentional tag and release Routines have independent canonical jobs but no default draft`() {
+		val fixture = bindRepository()
+		val tagRoutine = insertReleaseRoutine(fixture, "ON_GIT_TAG")
+		val releaseRoutine = insertReleaseRoutine(fixture)
+		val secondReleaseRoutine = insertReleaseRoutine(fixture)
+		val head = "c".repeat(40)
+		github.tag(fixture, "v1", head)
+		webhookService.accept(tag(fixture, "tag-${UUID.randomUUID()}", "v1", head))
+		assertEquals(1, requestCount(fixture, "v1"))
+		assertEquals(0, count("select count(*) from routine_executions where routine_id = ?", releaseRoutine))
+		webhookService.accept(releasePublished(fixture, "release-${UUID.randomUUID()}", "v1"))
+		repeat(3) { assertEquals(1, releaseWorker.drain()) }
+		webhookService.accept(releasePublished(fixture, "release-again-${UUID.randomUUID()}", "v1"))
+		webhookService.accept(tag(fixture, "tag-again-${UUID.randomUUID()}", "v1", head))
+		assertEquals(3, requestCount(fixture, "v1"))
+		listOf(tagRoutine, releaseRoutine, secondReleaseRoutine).forEach {
+			assertEquals(1, count("select count(*) from routine_executions where routine_id = ?", it))
+		}
+		assertEquals(3, count(
+			"select count(*) from github_release_draft_requests where source_scope_id = ? and status = 'NEEDS_RANGE'", fixture.scopeId,
+		))
+		assertTrue(github.comparisons.isEmpty(), "The same tag in another Routine is not a previous boundary")
+		assertEquals(0, model.totalCalls)
+	}
+
+	@Test
+	fun `release Routine disable and revoked source prevent new admission and fallback drafts`() {
+		val fixture = bindRepository()
+		val routine = insertReleaseRoutine(fixture)
+		val head = "d".repeat(40)
+		github.tag(fixture, "v1", head)
+		webhookService.accept(releasePublished(fixture, "queued-${UUID.randomUUID()}", "v1"))
+		jdbcTemplate.update("update routines set enabled = false where id = ?", routine)
+		assertEquals(1, releaseWorker.drain())
+		val disabled = release("v1", fixture)
+		assertEquals("ROUTINE_DISABLED", disabled.errorCode)
+		webhookService.accept(releasePublished(fixture, "disabled-${UUID.randomUUID()}", "v2"))
+		assertEquals(0, requestCount(fixture, "v2"))
+		assertEquals(0, model.totalCalls)
+
+		jdbcTemplate.update("update routines set enabled = true where id = ?", routine)
+		webhookService.accept(releasePublished(fixture, "revoked-${UUID.randomUUID()}", "v3"))
+		jdbcTemplate.update("update source_scopes set status = 'ERROR' where id = ?", fixture.scopeId)
+		releaseLeases.fenceSourceScope(devContext.devWorkspaceId, fixture.scopeId, Instant.now())
+		assertEquals(0, releaseWorker.drain())
+		assertEquals(0, count("select count(*) from agent_runs where routine_id = ?", routine))
+		assertFailsWith<ApiException> { activityService.retry(fixture.scopeId, disabled.id) }
+		val revoked = release("v3", fixture)
+		assertEquals("SOURCE_ACCESS_LOST", revoked.errorCode)
+		jdbcTemplate.update("update source_scopes set status = 'ACTIVE' where id = ?", fixture.scopeId)
+		github.tag(fixture, "v3", head)
+		activityService.retry(fixture.scopeId, revoked.id)
+		assertEquals(1, releaseWorker.drain())
+		assertEquals(GitHubReleaseDraftStatus.NEEDS_RANGE, release("v3", fixture).status)
+	}
+
+	@Test
+	fun `release Routine no activity and evidence limits never admit a partial draft`() {
+		val fixture = bindRepository()
+		val routine = insertReleaseRoutine(fixture)
+		val base = "1".repeat(40)
+		val head = "2".repeat(40)
+		github.tag(fixture, "empty", head)
+		github.compare(fixture, base, head, GitHubCompareResult("identical", 0, emptyList(), emptyList(), false))
+		webhookService.accept(releasePublished(fixture, "empty-${UUID.randomUUID()}", "empty"))
+		assertEquals(1, releaseWorker.drain())
+		activityService.selectRange(fixture.scopeId, release("empty", fixture).id, GitHubReleaseRangeRequest(base, head))
+		assertEquals(1, releaseWorker.drain())
+		assertEquals(GitHubReleaseDraftStatus.NO_ACTIVITY, release("empty", fixture).status)
+		assertEquals("NO_ACTIVITY", jdbcTemplate.queryForObject(
+			"select last_run_status from routines where id = ?", String::class.java, routine,
+		))
+
+		val largeHead = "3".repeat(40)
+		github.tag(fixture, "large", largeHead)
+		github.compare(fixture, head, largeHead, exactComparison(fixture, largeHead).copy(
+			aheadBy = 21,
+			commits = (1..21).map { index ->
+				exactComparison(fixture, index.toString(16).padStart(40, '0')).commits.single()
+			},
+		))
+		webhookService.accept(releasePublished(fixture, "large-${UUID.randomUUID()}", "large"))
+		assertEquals(1, releaseWorker.drain())
+		assertEquals("GITHUB_RELEASE_EVIDENCE_TOO_LARGE", release("large", fixture).errorCode)
+		assertEquals(0, count("select count(*) from agent_runs where routine_id = ?", routine))
+		assertEquals(0, model.totalCalls)
+	}
+
+	@Test
+	fun `release Routine retry keeps its pinned observation and detects a moved tag`() {
+		val fixture = bindRepository()
+		val routine = insertReleaseRoutine(fixture)
+		val base = "4".repeat(40)
+		val head = "5".repeat(40)
+		github.tag(fixture, "v1", head)
+		github.compare(fixture, base, head, exactComparison(fixture, head))
+		webhookService.accept(releasePublished(fixture, "retry-${UUID.randomUUID()}", "v1"))
+		assertEquals(1, releaseWorker.drain())
+		activityService.selectRange(fixture.scopeId, release("v1", fixture).id, GitHubReleaseRangeRequest(base, head))
+		assertEquals(1, releaseWorker.drain())
+		val first = release("v1", fixture)
+		jdbcTemplate.update("update routines set enabled = false where id = ?", routine)
+		assertEquals(1, agentWorker.drain())
+		assertEquals("ROUTINE_DISABLED", jdbcTemplate.queryForObject(
+			"select failure_code from agent_runs where id = ?", String::class.java, first.agentRunId,
+		))
+		assertEquals(0, model.totalCalls)
+		jdbcTemplate.update("update routines set enabled = true where id = ?", routine)
+		releaseWorker.reconcile()
+		activityService.retry(fixture.scopeId, first.id)
+		assertEquals(1, releaseWorker.drain())
+		val retried = release("v1", fixture)
+		assertEquals(first.observationId, retried.observationId)
+		assertTrue(first.agentRunId != retried.agentRunId)
+		assertEquals(2, count("select count(*) from agent_runs where routine_id = ?", routine))
+		assertEquals(listOf("$base...$head"), github.comparisons)
+		jdbcTemplate.update("update agent_runs set status = 'FAILED', failure_code = 'TEST_FAILURE' where id = ?", retried.agentRunId)
+		releaseWorker.reconcile()
+		github.tag(fixture, "v1", "6".repeat(40))
+		activityService.retry(fixture.scopeId, first.id)
+		assertEquals(1, releaseWorker.drain())
+		assertEquals("GITHUB_TAG_MOVED", release("v1", fixture).errorCode)
+		assertEquals(2, count("select count(*) from agent_runs where routine_id = ?", routine))
+	}
+
+	@Test
+	fun `adding a Routine between tag and publication does not duplicate an existing default job`() {
+		val fixture = bindRepository()
+		val head = "7".repeat(40)
+		webhookService.accept(tag(fixture, "before-config-${UUID.randomUUID()}", "v1", head))
+		val routine = insertReleaseRoutine(fixture)
+		webhookService.accept(releasePublished(fixture, "after-config-${UUID.randomUUID()}", "v1"))
+		assertEquals(1, requestCount(fixture, "v1"))
+		assertNull(release("v1", fixture).routineId)
+		assertEquals(0, count("select count(*) from routine_executions where routine_id = ?", routine))
+	}
+
+	private fun insertReleaseRoutine(fixture: RepositoryFixture, cadence: String = "ON_GITHUB_RELEASE"): UUID =
+		UUID.randomUUID().also { id ->
+			jdbcTemplate.update(
+				"""
+				insert into routines(id, workspace_id, created_by_user_id, source_scope_id, name, instruction,
+				  cadence, enabled, next_run_at, created_at, updated_at)
+				values (?, ?, ?, ?, 'Release notes', 'Write release notes for customers', ?, true, now(), now(), now())
+				""".trimIndent(),
+				id, devContext.devWorkspaceId, devContext.devUserId, fixture.scopeId, cadence,
+			)
+		}
+
+	private fun exactComparison(fixture: RepositoryFixture, head: String) = GitHubCompareResult(
+		"ahead", 1,
+		listOf(GitHubCommit(
+			head, "Ship verified change\n\nOnly this exact range is input.", "plot", Instant.now(),
+			"https://github.com/${fixture.owner}/${fixture.repository}/commit/$head",
+		)),
+		emptyList(), false,
+	)
 
 	@Test
 	fun `pushes stay observational and the second exact release produces one review ready pack`() {

@@ -31,6 +31,7 @@
         ],
         "accessMode": [
           "full",
+          "complete_only",
           "read_only"
         ]
       }
@@ -67,6 +68,7 @@
         ],
         "accessMode": [
           "full",
+          "complete_only",
           "read_only"
         ]
       }
@@ -125,6 +127,75 @@
         "repositoryStatus": [
           "ACTIVE",
           "DISABLED"
+        ]
+      }
+    },
+    {
+      "id": "github.release-activity.get-by-id",
+      "surface": "github",
+      "clientMethod": "getGitHubReleaseActivityById",
+      "args": [
+        "018fd000-0000-7000-8000-000000000020",
+        "018fd000-0000-7000-8000-000000000061"
+      ],
+      "method": "GET",
+      "routeTemplate": "/github/repositories/{sourceScopeId}/release-activity/{requestId}",
+      "route": "/github/repositories/018fd000-0000-7000-8000-000000000020/release-activity/018fd000-0000-7000-8000-000000000061",
+      "successStatus": 200,
+      "authContext": "workspace-member",
+      "requiredHeaders": [
+        "accept",
+        "x-plot-workspace-id"
+      ],
+      "requestFixture": null,
+      "successFixture": "fixtures/github-release-activity.json",
+      "errorFixture": null,
+      "enumDomains": {
+        "status": [
+          "QUEUED",
+          "RESOLVING",
+          "GENERATING",
+          "READY",
+          "NO_ACTIVITY",
+          "NEEDS_RANGE",
+          "FAILED"
+        ]
+      }
+    },
+    {
+      "id": "github.release-activity.select-range",
+      "surface": "github",
+      "clientMethod": "selectGitHubReleaseRange",
+      "args": [
+        "018fd000-0000-7000-8000-000000000020",
+        "018fd000-0000-7000-8000-000000000061",
+        {
+          "baseSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "method": "POST",
+      "routeTemplate": "/github/repositories/{sourceScopeId}/release-activity/{requestId}/range",
+      "route": "/github/repositories/018fd000-0000-7000-8000-000000000020/release-activity/018fd000-0000-7000-8000-000000000061/range",
+      "successStatus": 202,
+      "authContext": "workspace-owner",
+      "requiredHeaders": [
+        "accept",
+        "content-type",
+        "x-plot-workspace-id"
+      ],
+      "requestFixture": "fixtures/github-release-range-request.json",
+      "successFixture": "fixtures/github-release-activity-queued.json",
+      "errorFixture": null,
+      "enumDomains": {
+        "status": [
+          "QUEUED",
+          "RESOLVING",
+          "GENERATING",
+          "READY",
+          "NO_ACTIVITY",
+          "NEEDS_RANGE",
+          "FAILED"
         ]
       }
     },
@@ -459,6 +530,61 @@
       "successFixture": "fixtures/artifact-publish-response.json",
       "errorFixture": null,
       "enumDomains": {}
+    },
+    {
+      "id": "artifact.unpublish",
+      "surface": "artifact",
+      "clientMethod": "unpublishArtifactVariant",
+      "args": [
+        "018fd000-0000-7000-8000-000000000060"
+      ],
+      "method": "POST",
+      "routeTemplate": "/artifact-variants/{variantId}/unpublish",
+      "route": "/artifact-variants/018fd000-0000-7000-8000-000000000060/unpublish",
+      "successStatus": 200,
+      "authContext": "workspace-member",
+      "requiredHeaders": [
+        "accept",
+        "x-plot-workspace-id"
+      ],
+      "requestFixture": null,
+      "successFixture": "fixtures/artifact-unpublish-response.json",
+      "errorFixture": null,
+      "enumDomains": {}
+    },
+    {
+      "id": "artifact.delivery-event",
+      "surface": "artifact",
+      "clientMethod": "recordProductDeliveryEvent",
+      "args": [
+        "018fd000-0000-7000-8000-000000000060",
+        {
+          "kind": "CLIPBOARD_WRITE_SUCCEEDED",
+          "exportId": "018fd000-0000-7000-8000-000000000080",
+          "clientEventId": "018fd000-0000-7000-8000-000000000081"
+        }
+      ],
+      "method": "POST",
+      "routeTemplate": "/artifact-variants/{variantId}/delivery-events",
+      "route": "/artifact-variants/018fd000-0000-7000-8000-000000000060/delivery-events",
+      "successStatus": 200,
+      "authContext": "workspace-member",
+      "requiredHeaders": [
+        "accept",
+        "content-type",
+        "x-plot-workspace-id"
+      ],
+      "requestFixture": "fixtures/artifact-delivery-event-request.json",
+      "successFixture": "fixtures/artifact-delivery-event-response.json",
+      "errorFixture": null,
+      "enumDomains": {
+        "kind": [
+          "CLIPBOARD_WRITE_SUCCEEDED",
+          "CLIPBOARD_WRITE_FAILED",
+          "DOWNLOAD_STARTED",
+          "EXTERNAL_DELIVERY_CONFIRMED"
+        ]
+      }
     },
     {
       "id": "changelog.public.list",
