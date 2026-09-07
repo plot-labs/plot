@@ -258,6 +258,35 @@ class SpringAiOpenAiArtifactWorkflowGatewayTest {
 	}
 
 	@Test
+	fun `launch prompt version routes writer and reviewer through launch-announcement-v3 factory`() {
+		val launchLookup = FrozenPromptVersionLookup { ContentTypeRegistry.LAUNCH_PROMPT_VERSION }
+		val launchGateway = SpringAiOpenAiArtifactWorkflowGateway(
+			transport = FixtureTransport(),
+			properties = properties,
+			contentTypeRegistry = contentTypeRegistry,
+			frozenPromptVersionLookup = launchLookup,
+			frozenContentContextLookup = frozenContentContextLookup,
+		)
+		val launchFactory = contentTypeRegistry.promptFactoryFor(ContentTypeRegistry.LAUNCH_PROMPT_VERSION)
+		val writerPrompt = launchFactory.writer("Ship the beta", listOf(evidence()), null)
+		assertTrue(writerPrompt.system.contains("Write no more than four sentences"))
+		assertTrue(writerPrompt.system.contains("Call-to-action copy must be plain prose only"))
+		assertTrue(writerPrompt.system.contains("Never invent or paste URLs"))
+		assertTrue(writerPrompt.user.contains("<requested_launch_announcement_instruction>"))
+		assertFalse(writerPrompt.system.contains("Write no more than six sentences"))
+
+		val reviewPrompt = launchFactory.reviewer(
+			ReviewerModelRequest(UUID.randomUUID(), listOf(sentence()), listOf(evidence())),
+		)
+		assertTrue(reviewPrompt.system.contains("verify every launch-announcement sentence"))
+		assertTrue(reviewPrompt.system.contains("exaggerated impact or unconfirmed public availability"))
+		assertFalse(reviewPrompt.system.contains("A sentence that neutrally describes a material disagreement is CONFLICT, not SUPPORTED."))
+
+		val result = launchGateway.write(WriterModelRequest(UUID.randomUUID(), "Ship the beta", listOf(evidence())))
+		assertEquals("Shipped citations.", result.value.sentences.single().body)
+	}
+
+	@Test
 	fun `production transport builds distinct writer and reviewer clients with native schemas`() {
 		val builder = ChatClient.builder { throw UnsupportedOperationException("model call is not expected") }
 		val transport = SpringAiStructuredChatTransport(builder, properties)

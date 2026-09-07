@@ -270,6 +270,59 @@ class ContentProfileApiIntegrationTest {
 	}
 
 	@Test
+	fun `launch admission freezes launch-announcement-v3 on the artifact workflow`() {
+		mockMvc.put("/api/content-profile") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"productSummary":"Plot","primaryAudience":"founders","tone":"direct"}"""
+		}.andExpect { status { isOk() } }
+
+		val sourceScopeId = insertSourceScope()
+		val blockId = insertWritingBlock(sourceScopeId)
+		val admitted = mockMvc.post("/api/agent-runs") {
+			header("Idempotency-Key", "launch-e2e-1")
+			contentType = MediaType.APPLICATION_JSON
+			content = """
+				{"instruction":"Announce the waitlist","writingBlockIds":["$blockId"],
+				 "contentType":"LAUNCH_ANNOUNCEMENT",
+				 "brief":{"purpose":"Open waitlist","audience":"early customers",
+				  "confirmedFacts":[{"body":"Waitlist opens Monday","kind":"AVAILABILITY"}]}}
+			""".trimIndent()
+		}.andExpect {
+			status { isAccepted() }
+			jsonPath("$.contentType") { value("LAUNCH_ANNOUNCEMENT") }
+		}.andReturn().response.contentAsString
+		val runId = UUID.fromString(objectMapper.readTree(admitted).path("id").asText())
+		val agentRun = requireNotNull(agentRunQuery.findAgentRun(devContext.devWorkspaceId, runId))
+		assertEquals(com.plot.api.content.ContentType.LAUNCH_ANNOUNCEMENT, agentRun.contentType)
+		val inputs = agentRunQuery.listAgentRunInputs(agentRun.workspaceId, agentRun.id)
+		val state = artifactWorkflowRunService.createForAgent(
+			WorkspacePrincipal(devContext.devWorkspaceId, devContext.devUserId),
+			agentRun,
+			inputs,
+			"artifact-launch-${runId}",
+		)
+		val promptVersion = jdbcTemplate.queryForObject(
+			"select prompt_version from generation_runs where id = ?",
+			String::class.java,
+			state.runId,
+		)
+		assertEquals(com.plot.api.content.ContentTypeRegistry.LAUNCH_PROMPT_VERSION, promptVersion)
+		assertEquals("launch-announcement-v3", promptVersion)
+	}
+
+	@Test
+	fun `launch admission without sources is rejected like changelog`() {
+		mockMvc.post("/api/agent-runs") {
+			header("Idempotency-Key", "launch-no-source")
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"instruction":"Announce","contentType":"LAUNCH_ANNOUNCEMENT"}"""
+		}.andExpect {
+			status { isConflict() }
+			jsonPath("$.error") { value("SOURCE_NOT_READY") }
+		}
+	}
+
+	@Test
 	fun `idempotency rejects brief or profile mismatch`() {
 		val sourceScopeId = insertSourceScope()
 		val blockId = insertWritingBlock(sourceScopeId)
