@@ -16,6 +16,9 @@ export function ExportDialog({ pack, client, presentation = "buttons" }: { pack:
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const dropdownTriggerRef = useRef<HTMLButtonElement>(null);
+  const contentNoun = pack.contentType === "LAUNCH_ANNOUNCEMENT" ? "launch announcement" : "changelog";
+  const copyLabel = `Copy ${contentNoun}`;
+  const downloadLabel = `Download ${contentNoun}`;
 
   useEffect(() => {
     if (!dropdownOpen) return;
@@ -112,8 +115,8 @@ export function ExportDialog({ pack, client, presentation = "buttons" }: { pack:
             type="button"
             disabled={Boolean(pending)}
             onClick={() => void requestExport("COPY", false)}
-            title="Copy artifact"
-            aria-label="Copy artifact"
+            title={copyLabel}
+            aria-label={copyLabel}
             className="inline-flex h-full items-center gap-1.5 rounded-l-[7px] pl-2.5 pr-2 text-xs font-medium text-black/70 transition hover:bg-black/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 disabled:pointer-events-none disabled:opacity-40 dark:text-white/70 dark:hover:bg-white/[0.08] dark:focus-visible:ring-white/25"
           >
             <Copy aria-hidden="true" className="size-3.5 text-black/60 dark:text-white/60" />
@@ -225,8 +228,8 @@ export function ExportDialog({ pack, client, presentation = "buttons" }: { pack:
           type="button"
           disabled={Boolean(pending)}
           onClick={() => void requestExport("COPY", false)}
-          title="Copy changelog"
-          aria-label="Copy changelog"
+          title={copyLabel}
+          aria-label={copyLabel}
           className="inline-flex size-10 items-center justify-center rounded-lg text-black/45 transition hover:bg-black/5 hover:text-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:pointer-events-none disabled:opacity-40 dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white/75 dark:focus-visible:ring-offset-[#18181b]"
         >
           <Copy aria-hidden="true" className="size-4" />
@@ -235,8 +238,8 @@ export function ExportDialog({ pack, client, presentation = "buttons" }: { pack:
           type="button"
           disabled={Boolean(pending)}
           onClick={() => void requestExport("DOWNLOAD", false)}
-          title="Download changelog"
-          aria-label="Download changelog"
+          title={downloadLabel}
+          aria-label={downloadLabel}
           className="inline-flex size-10 items-center justify-center rounded-lg text-black/45 transition hover:bg-black/5 hover:text-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:pointer-events-none disabled:opacity-40 dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white/75 dark:focus-visible:ring-offset-[#18181b]"
         >
           <Download aria-hidden="true" className="size-4" />

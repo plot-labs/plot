@@ -80,7 +80,7 @@ describe("ExportDialog", () => {
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
 
     render(<ExportDialog pack={pack} client={{ exportArtifactVariant, recordProductDeliveryEvent } as unknown as PlotApiClient} presentation="copy" />);
-    fireEvent.click(screen.getByRole("button", { name: "Copy artifact" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy changelog" }));
 
     await waitFor(() => expect(writeText).toHaveBeenCalledWith("Ready."));
     await waitFor(() => expect(recordProductDeliveryEvent).toHaveBeenCalledWith(
@@ -97,7 +97,7 @@ describe("ExportDialog", () => {
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
 
     render(<ExportDialog pack={pack} client={{ exportArtifactVariant, recordProductDeliveryEvent } as unknown as PlotApiClient} presentation="copy" />);
-    fireEvent.click(screen.getByRole("button", { name: "Copy artifact" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy changelog" }));
 
     await waitFor(() => expect(recordProductDeliveryEvent).toHaveBeenCalledWith(
       "variant-1",
@@ -113,10 +113,21 @@ describe("ExportDialog", () => {
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
 
     render(<ExportDialog pack={pack} client={{ exportArtifactVariant } as unknown as PlotApiClient} presentation="copy" />);
-    fireEvent.click(screen.getByRole("button", { name: "Copy artifact" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy changelog" }));
 
     await waitFor(() => expect(writeText).toHaveBeenCalledWith("Ready."));
     expect(exportArtifactVariant).toHaveBeenCalledWith("variant-1", expect.objectContaining({ disposition: "COPY" }));
+  });
+
+  it("labels launch announcement copy and download actions", () => {
+    render(
+      <ExportDialog
+        pack={{ ...pack, contentType: "LAUNCH_ANNOUNCEMENT", title: "Waitlist" }}
+        client={{} as PlotApiClient}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Copy launch announcement" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Download launch announcement" })).toBeInTheDocument();
   });
 
   it("offers a dropdown menu with Download .md option in copy presentation mode", async () => {

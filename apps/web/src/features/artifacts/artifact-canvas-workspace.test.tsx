@@ -87,7 +87,7 @@ describe("ArtifactCanvasWorkspace", () => {
     render(<ArtifactCanvasWorkspace artifact={artifact} client={client()} onSaveArtifact={vi.fn()} />);
 
     expect(screen.getByRole("button", { name: "Save draft" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Copy artifact" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Copy changelog" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Publish changelog" })).toBeVisible();
   });
 
