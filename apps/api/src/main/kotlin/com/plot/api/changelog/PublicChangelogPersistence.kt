@@ -16,7 +16,7 @@ class PublicChangelogPersistence(
 		"""
 		select id, entry_slug, title, tag_name, published_at
 		from published_changelog_entries
-		where workspace_id = ?
+		where workspace_id = ? and unpublished_at is null
 		order by published_at desc, id desc
 		""".trimIndent(),
 		{ rs, _ ->
@@ -35,7 +35,7 @@ class PublicChangelogPersistence(
 		"""
 		select id, entry_slug, title, tag_name, body_markdown, published_at
 		from published_changelog_entries
-		where workspace_id = ? and entry_slug = ?
+		where workspace_id = ? and entry_slug = ? and unpublished_at is null
 		""".trimIndent(),
 		{ rs, _ ->
 			PublicChangelogEntryDetailResponse(

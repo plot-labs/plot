@@ -63,6 +63,12 @@ class ArtifactPublishIntegrationTest {
 	@BeforeEach
 	@AfterEach
 	fun restoreWritableWorkspace() {
+		jdbcTemplate.execute("alter table product_delivery_events disable trigger product_delivery_events_append_only")
+		jdbcTemplate.update(
+			"delete from product_delivery_events where workspace_id = ?",
+			devContext.devWorkspaceId,
+		)
+		jdbcTemplate.execute("alter table product_delivery_events enable trigger product_delivery_events_append_only")
 		jdbcTemplate.update(
 			"delete from published_changelog_entry_citations where workspace_id = ?",
 			devContext.devWorkspaceId,
@@ -138,6 +144,258 @@ class ArtifactPublishIntegrationTest {
 		)
 		assertTrue(snapshotAfterEdit.contains("User revised sentence."))
 		assertFalse(snapshotAfterEdit.contains("Changed after publish."))
+	}
+
+	@Test
+	fun `unpublish keeps the internal snapshot and stops public list body and citations`() {
+		val fixture = readyPack()
+		val published = mockMvc.post("/api/artifact-variants/${fixture.variantId}/publish") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"expectedRevisionNumber":1,"acknowledgeUnresolved":false}"""
+		}.andExpect { status { isOk() } }.andReturn().response.contentAsString
+		val publishedTree = objectMapper.readTree(published)
+		val entrySlug = publishedTree.path("entrySlug").stringValue()
+
+		mockMvc.get("/api/artifacts/${fixture.packId}").andExpect {
+			status { isOk() }
+			jsonPath("$.publication.entrySlug") { value(entrySlug) }
+			jsonPath("$.publication.publicPath") { value("/dev-workspace/changelog/$entrySlug") }
+		}
+
+		mockMvc.post("/api/artifact-variants/${fixture.variantId}/unpublish").andExpect {
+			status { isOk() }
+			jsonPath("$.entrySlug") { value(entrySlug) }
+			jsonPath("$.unpublishedAt") { exists() }
+		}
+
+		mockMvc.get("/api/public/changelog/dev-workspace").andExpect {
+			status { isOk() }
+			jsonPath("$.entries.length()") { value(0) }
+		}
+		mockMvc.get("/api/public/changelog/dev-workspace/$entrySlug").andExpect {
+			status { isNotFound() }
+			jsonPath("$.error") { value("NOT_FOUND") }
+		}
+		mockMvc.get("/api/artifacts/${fixture.packId}").andExpect {
+			status { isOk() }
+			jsonPath("$.publication") { value(null as Any?) }
+		}
+
+		assertEquals(1, jdbcTemplate.queryForObject(
+			"select count(*) from published_changelog_entries where workspace_id = ? and unpublished_at is not null",
+			Int::class.java,
+			devContext.devWorkspaceId,
+		))
+		assertEquals(2, jdbcTemplate.queryForObject(
+			"""
+			select count(*) from published_changelog_entry_sentences s
+			join published_changelog_entries e on e.id = s.published_changelog_entry_id
+			where e.workspace_id = ? and e.unpublished_at is not null
+			""".trimIndent(),
+			Int::class.java,
+			devContext.devWorkspaceId,
+		))
+
+		mockMvc.post("/api/artifact-variants/${fixture.variantId}/unpublish").andExpect {
+			status { isConflict() }
+			jsonPath("$.error") { value("ENTRY_NOT_LIVE") }
+		}
+	}
+
+	@Test
+	fun `publish records a published delivery event and browser delivery events stay separate`() {
+		val fixture = readyPack()
+		val published = mockMvc.post("/api/artifact-variants/${fixture.variantId}/publish") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"expectedRevisionNumber":1,"acknowledgeUnresolved":false}"""
+		}.andExpect { status { isOk() } }.andReturn().response.contentAsString
+		val entryId = objectMapper.readTree(published).path("entryId").textValue()
+
+		assertEquals(1, jdbcTemplate.queryForObject(
+			"""
+			select count(*) from product_delivery_events
+			where workspace_id = ? and kind = 'PUBLISHED' and published_changelog_entry_id = ?::uuid
+			""".trimIndent(),
+			Int::class.java,
+			devContext.devWorkspaceId,
+			entryId,
+		))
+
+		val export = mockMvc.post("/api/artifact-variants/${fixture.variantId}/exports") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"expectedRevisionNumber":1,"includeSources":false,"acknowledgeUnresolved":false,"disposition":"COPY"}"""
+		}.andExpect { status { isOk() } }.andReturn().response.contentAsString
+		val exportId = objectMapper.readTree(export).path("exportId").textValue()
+
+		mockMvc.post("/api/artifact-variants/${fixture.variantId}/delivery-events") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"kind":"CLIPBOARD_WRITE_SUCCEEDED","exportId":"$exportId","clientEventId":"${UUID.randomUUID()}"}"""
+		}.andExpect {
+			status { isOk() }
+			jsonPath("$.kind") { value("CLIPBOARD_WRITE_SUCCEEDED") }
+			jsonPath("$.duplicate") { value(false) }
+		}
+
+		mockMvc.post("/api/artifact-variants/${fixture.variantId}/delivery-events") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"kind":"CLIPBOARD_WRITE_SUCCEEDED","exportId":"$exportId","clientEventId":"${UUID.randomUUID()}"}"""
+		}.andExpect {
+			status { isOk() }
+			jsonPath("$.duplicate") { value(true) }
+		}
+
+		mockMvc.post("/api/artifact-variants/${fixture.variantId}/delivery-events") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"kind":"EXTERNAL_DELIVERY_CONFIRMED","entryId":"$entryId","clientEventId":"${UUID.randomUUID()}"}"""
+		}.andExpect {
+			status { isOk() }
+			jsonPath("$.kind") { value("EXTERNAL_DELIVERY_CONFIRMED") }
+		}
+
+		assertEquals(1, jdbcTemplate.queryForObject(
+			"""
+			select count(*) from product_delivery_events
+			where workspace_id = ? and kind = 'CLIPBOARD_WRITE_SUCCEEDED' and generation_export_event_id = ?::uuid
+			""".trimIndent(),
+			Int::class.java,
+			devContext.devWorkspaceId,
+			exportId,
+		))
+	}
+
+	@Test
+	fun `expired trial can still unpublish a live changelog`() {
+		val fixture = readyPack()
+		mockMvc.post("/api/artifact-variants/${fixture.variantId}/publish") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"expectedRevisionNumber":1,"acknowledgeUnresolved":false}"""
+		}.andExpect { status { isOk() } }
+
+		jdbcTemplate.update(
+			"""
+			update workspaces
+			set plan = 'trial',
+			    entitlement_status = 'expired',
+			    access_mode = 'read_only',
+			    trial_ends_at = now() - interval '1 day'
+			where id = ?
+			""".trimIndent(),
+			devContext.devWorkspaceId,
+		)
+
+		mockMvc.post("/api/artifact-variants/${fixture.variantId}/unpublish").andExpect {
+			status { isOk() }
+			jsonPath("$.unpublishedAt") { exists() }
+		}
+		mockMvc.get("/api/public/changelog/dev-workspace").andExpect {
+			status { isOk() }
+			jsonPath("$.entries.length()") { value(0) }
+		}
+	}
+
+	@Test
+	fun `trial pack limit still allows edit and first publish`() {
+		val fixture = readyPack()
+		val extraRunIds = mutableListOf<UUID>()
+		val extraPackIds = mutableListOf<UUID>()
+		try {
+			jdbcTemplate.update(
+				"""
+				update workspaces
+				set plan = 'trial',
+				    entitlement_status = 'trialing',
+				    access_mode = 'full',
+				    trial_ends_at = now() + interval '30 days'
+				where id = ?
+				""".trimIndent(),
+				devContext.devWorkspaceId,
+			)
+			repeat(2) {
+				val runId = UUID.randomUUID()
+				extraRunIds += runId
+				jdbcTemplate.update(
+					"""
+					insert into generation_runs (
+					  id, workspace_id, created_by_user_id, idempotency_key, request_fingerprint,
+					  status, workflow_version, prompt_version, output_schema_version, budget_version,
+					  provider, model_name, budget_snapshot, finished_at, created_at, updated_at
+					) values (?, ?, ?, ?, ?, 'READY', 'test-v1', 'test-v1', 'test-v1', 'test-v1',
+					  'TEST', 'test', '{}'::jsonb, now(), now(), now())
+					""".trimIndent(),
+					runId,
+					devContext.devWorkspaceId,
+					devContext.devUserId,
+					"trial-$runId",
+					"fingerprint-$runId",
+				)
+				val packId = UUID.randomUUID()
+				extraPackIds += packId
+				jdbcTemplate.update(
+					"""
+					insert into content_packs (
+					  id, workspace_id, generation_run_id, title, status, created_at, updated_at
+					) values (?, ?, ?, 'Trial pack', 'READY', now(), now())
+					""".trimIndent(),
+					packId,
+					devContext.devWorkspaceId,
+					runId,
+				)
+			}
+
+			mockMvc.patch("/api/artifact-variants/${fixture.variantId}/sentences/${fixture.firstSentenceId}") {
+				contentType = MediaType.APPLICATION_JSON
+				content = """{"expectedRevisionNumber":1,"body":"Trial completion edit."}"""
+			}.andExpect { status { isOk() } }
+			mockMvc.post("/api/artifact-variants/${fixture.variantId}/publish") {
+				contentType = MediaType.APPLICATION_JSON
+				content = objectMapper.writeValueAsString(mapOf(
+					"expectedRevisionNumber" to 2,
+					"acknowledgeUnresolved" to true,
+					"acknowledgedRevisionIds" to jdbcTemplate.queryForList(
+						"select id from content_variant_sentence_revisions where sentence_id = ? and is_current",
+						UUID::class.java,
+						fixture.firstSentenceId,
+					),
+				))
+			}.andExpect { status { isOk() } }
+			mockMvc.patch("/api/workspaces/${devContext.devWorkspaceId}") {
+				contentType = MediaType.APPLICATION_JSON
+				content = """{"name":"Blocked"}"""
+			}.andExpect {
+				status { isForbidden() }
+				jsonPath("$.error") { value("WORKSPACE_READ_ONLY") }
+			}
+		} finally {
+			extraPackIds.forEach { jdbcTemplate.update("delete from content_packs where id = ?", it) }
+			extraRunIds.forEach { jdbcTemplate.update("delete from generation_runs where id = ?", it) }
+		}
+	}
+
+	@Test
+	fun `elapsed trial cannot publish existing draft`() {
+		val fixture = readyPack()
+		jdbcTemplate.update(
+			"""
+			update workspaces
+			set plan = 'trial',
+			    entitlement_status = 'trialing',
+			    access_mode = 'full',
+			    trial_ends_at = now() - interval '1 second'
+			where id = ?
+			""".trimIndent(),
+			devContext.devWorkspaceId,
+		)
+		mockMvc.post("/api/artifact-variants/${fixture.variantId}/publish") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"expectedRevisionNumber":1,"acknowledgeUnresolved":false}"""
+		}.andExpect {
+			status { isForbidden() }
+			jsonPath("$.error") { value("WORKSPACE_READ_ONLY") }
+		}
+		mockMvc.post("/api/artifact-variants/${fixture.variantId}/exports") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"expectedRevisionNumber":1,"includeSources":false,"acknowledgeUnresolved":false,"disposition":"COPY"}"""
+		}.andExpect { status { isOk() } }
 	}
 
 	@Test

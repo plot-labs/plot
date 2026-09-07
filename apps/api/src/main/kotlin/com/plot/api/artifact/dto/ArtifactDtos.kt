@@ -57,11 +57,19 @@ data class ArtifactPageResponse(
 	val totalPages: Int,
 )
 
+data class ArtifactPublicationResponse(
+	val entryId: UUID,
+	val entrySlug: String,
+	val publicPath: String,
+	val publishedAt: Instant,
+)
+
 data class ArtifactResponse(
 	val id: UUID,
 	val status: String,
 	val title: String?,
 	val variant: ContentVariantResponse,
+	val publication: ArtifactPublicationResponse? = null,
 )
 
 data class ContentVariantResponse(
@@ -144,4 +152,32 @@ data class PublishContentVariantResponse(
 	val entrySlug: String,
 	val publicPath: String,
 	val publishedAt: Instant,
+)
+
+data class UnpublishContentVariantResponse(
+	val entryId: UUID,
+	val entrySlug: String,
+	val publicPath: String,
+	val publishedAt: Instant,
+	val unpublishedAt: Instant,
+)
+
+enum class ProductDeliveryEventKind {
+	CLIPBOARD_WRITE_SUCCEEDED,
+	CLIPBOARD_WRITE_FAILED,
+	DOWNLOAD_STARTED,
+	EXTERNAL_DELIVERY_CONFIRMED,
+}
+
+data class RecordProductDeliveryEventRequest(
+	@field:NotNull val kind: ProductDeliveryEventKind?,
+	val exportId: UUID? = null,
+	val entryId: UUID? = null,
+	val clientEventId: UUID? = null,
+)
+
+data class ProductDeliveryEventResponse(
+	val id: UUID,
+	val kind: ProductDeliveryEventKind,
+	val duplicate: Boolean = false,
 )
