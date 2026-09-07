@@ -135,6 +135,42 @@ class ArtifactMarkdownExportServiceTest {
 		assertFalse(result.markdown.contains("## Sources\n\n- [Hostile"))
 	}
 
+	@Test
+	fun appendsConfirmedFactsWithoutGithubLinks() {
+		val confirmed = EvidenceSnapshot(
+			id = UUID.fromString("00000000-0000-0000-0000-000000000024"),
+			artifactWorkflowRunId = runId,
+			writingBlockId = null,
+			orderIndex = 1,
+			sourceProvider = SourceProvider.USER_CONFIRMED,
+			sourceKind = "AVAILABILITY",
+			sourceLabel = "Confirmed availability",
+			snapshotTitle = null,
+			snapshotBody = "Generally available.",
+			snapshotExcerpt = "Generally available.",
+			originalUrl = null,
+			sourceCreatedAt = null,
+			sourceUpdatedAt = null,
+			contentHash = "hash-confirmed",
+			capturedAt = Instant.parse("2026-07-14T00:00:00Z"),
+		)
+		val result = ArtifactMarkdownExportService().render(
+			sentences = listOf(sentence(0, "Search shipped.", github.id, confirmed.id)),
+			evidence = listOf(github, confirmed),
+			acknowledgeUnresolved = false,
+			includeSources = true,
+			sources = listOf(
+				ExportSource(github.id, "GITHUB", github.sourceLabel, github.originalUrl),
+				ExportSource(confirmed.id, "USER_CONFIRMED", confirmed.sourceLabel, null),
+			),
+		)
+
+		assertTrue(result.markdown.contains("## Sources\n\n- [GitHub PR #42](https://github.com/acme/app/pull/42)"))
+		assertTrue(result.markdown.contains("## Confirmed in Plot\n\n- Confirmed availability\n"))
+		assertFalse(result.markdown.contains("](null)"))
+		assertFalse(result.markdown.contains("Generally available."))
+	}
+
 	private fun sentence(orderIndex: Int, body: String, vararg evidenceIds: UUID): ExportSentence {
 		val sentenceId = UUID.randomUUID()
 		val revisionId = UUID.randomUUID()

@@ -162,7 +162,11 @@ class ArtifactPublishService(
 				)
 
 				gate.publicCitations[sentence.id].orEmpty()
-					.filter { it.sourceVisibility.equals("PUBLIC", ignoreCase = true) }
+					.filter {
+						it.sourceVisibility.equals("PUBLIC", ignoreCase = true) &&
+							it.provider.equals("GITHUB", ignoreCase = true) &&
+							!it.originalUrl.isNullOrBlank()
+					}
 					.forEachIndexed { citationOrder, citation ->
 						sqlExecutor.update(
 							"""

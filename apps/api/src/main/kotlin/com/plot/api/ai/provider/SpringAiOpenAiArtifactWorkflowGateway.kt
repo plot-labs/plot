@@ -5,6 +5,7 @@ import com.openai.errors.OpenAIServiceException
 import com.plot.api.ai.prompt.ChangelogPrompt
 import com.plot.api.config.PlotAiProperties
 import com.plot.api.content.ContentTypeRegistry
+import com.plot.api.content.FrozenContentContextLookup
 import com.plot.api.content.FrozenPromptVersionLookup
 import com.plot.api.artifact.workflow.model.ReviewerOutput
 import com.plot.api.artifact.workflow.model.TargetedRewriteOutput
@@ -62,12 +63,17 @@ class SpringAiOpenAiArtifactWorkflowGateway(
 	private val properties: PlotAiProperties,
 	private val contentTypeRegistry: ContentTypeRegistry,
 	private val frozenPromptVersionLookup: FrozenPromptVersionLookup,
+	private val frozenContentContextLookup: FrozenContentContextLookup,
 ) : ArtifactWorkflowModelGateway {
 	override fun write(request: WriterModelRequest): ModelCallResult<WriterOutput> {
 		val promptFactory = promptFactoryFor(request.artifactWorkflowRunId)
 		return invoke(
 			role = ModelRole.WRITER,
-			prompt = promptFactory.writer(request.instruction, request.evidence),
+			prompt = promptFactory.writer(
+				request.instruction,
+				request.evidence,
+				frozenContentContextLookup.forRun(request.artifactWorkflowRunId),
+			),
 			responseType = WriterOutput::class.java,
 		)
 	}
@@ -220,6 +226,7 @@ class ArtifactWorkflowModelGatewayConfiguration {
 		properties: PlotAiProperties,
 		contentTypeRegistry: ContentTypeRegistry,
 		frozenPromptVersionLookup: FrozenPromptVersionLookup,
+		frozenContentContextLookup: FrozenContentContextLookup,
 		environment: Environment,
 	): ArtifactWorkflowModelGateway {
 		// Do not resolve ChatClient.Builder when artifact workflows are disabled: with
@@ -232,6 +239,7 @@ class ArtifactWorkflowModelGatewayConfiguration {
 				properties,
 				contentTypeRegistry,
 				frozenPromptVersionLookup,
+				frozenContentContextLookup,
 			)
 		} else {
 			DisabledArtifactWorkflowModelGateway()

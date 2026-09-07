@@ -3,10 +3,13 @@ package com.plot.api.routine
 import com.plot.api.common.ApiException
 import com.plot.api.common.UuidGenerator
 import com.plot.api.common.WorkspacePrincipal
+import com.plot.api.content.ContentBrief
 import com.plot.api.content.ContentType
+import com.plot.api.contentprofile.ContentProfileService
 import com.plot.api.dev.DevContext
 import com.plot.api.routine.dto.ChatAgentRunResponse
 import com.plot.api.routine.dto.ChatAgentArtifactSummaryResponse
+import com.plot.api.routine.dto.ContentBriefRequest
 import com.plot.api.routine.dto.CreateChatAgentRunRequest
 import com.plot.api.routine.dto.toChatResponse
 import com.plot.api.source.SourceManagedAccessGuard
@@ -35,6 +38,7 @@ class ChatAgentAdmissionService(
 	private val objectMapper: ObjectMapper,
 	private val sourceManagedAccessGuard: SourceManagedAccessGuard,
 	private val agentRunDispatcher: AgentRunDispatcher,
+	private val contentProfileService: ContentProfileService,
 ) {
 	fun admit(request: CreateChatAgentRunRequest, idempotencyKey: String): ChatAgentRunResponse {
 		sourceManagedAccessGuard.requireReadable()
@@ -44,6 +48,8 @@ class ChatAgentAdmissionService(
 			workSessionId = request.workSessionId,
 			writingBlockIds = request.writingBlockIds,
 			contentType = request.contentType,
+			contentProfileRevisionId = request.contentProfileRevisionId,
+			brief = request.brief,
 			idempotencyKey = idempotencyKey,
 			chatTitle = null,
 		)
@@ -62,6 +68,8 @@ class ChatAgentAdmissionService(
 		workSessionId = null,
 		writingBlockIds = writingBlockIds,
 		contentType = ContentType.CHANGELOG,
+		contentProfileRevisionId = null,
+		brief = null,
 		idempotencyKey = idempotencyKey,
 		chatTitle = chatTitle,
 	)
@@ -72,6 +80,8 @@ class ChatAgentAdmissionService(
 		workSessionId: UUID?,
 		writingBlockIds: List<UUID>,
 		contentType: ContentType,
+		contentProfileRevisionId: UUID?,
+		brief: ContentBriefRequest?,
 		idempotencyKey: String,
 		chatTitle: String?,
 	): AgentRunRecord {
@@ -85,13 +95,21 @@ class ChatAgentAdmissionService(
 		if (writingBlockIds.distinct().size != writingBlockIds.size) {
 			throw ApiException(HttpStatus.BAD_REQUEST, "DUPLICATE_SOURCE_ITEMS", "Writing Block IDs must be unique")
 		}
+		val frozenProfileRevisionId = contentProfileRevisionId?.let {
+			contentProfileService.requireRevisionInWorkspace(workspaceId, it).id
+		} ?: contentProfileService.currentRevisionId(workspaceId)
+		val domainBrief = brief?.toDomain()
+		val briefJson = domainBrief?.takeUnless { it.isBlank() }?.let(objectMapper::writeValueAsString)
 		val fingerprint = fingerprint(
 			CreateChatAgentRunRequest(
 				instruction = normalizedInstruction,
 				workSessionId = workSessionId,
 				writingBlockIds = writingBlockIds,
 				contentType = contentType,
+				contentProfileRevisionId = frozenProfileRevisionId,
+				brief = brief,
 			),
+			domainBrief,
 		)
 		return transactionExecutor.execute {
 			// A transaction-scoped advisory lock prevents two identical requests from
@@ -123,8 +141,10 @@ class ChatAgentAdmissionService(
 				  id, workspace_id, routine_execution_id, routine_id, work_session_id, created_by_user_id,
 				  origin, idempotency_key, request_fingerprint,
 				  instruction_snapshot, prompt_version, tool_policy_version, budget_snapshot, content_type,
+				  content_profile_revision_id, content_brief_snapshot,
 				  status, max_attempts, created_at, updated_at
 				) values (?, ?, null, null, ?, ?, 'CHAT', ?, ?, ?, 'chat-agent-v1', 'read-only-v1', ?::jsonb, ?,
+				  ?, ?::jsonb,
 				  'QUEUED', ?, ?, ?)
 				on conflict (workspace_id, idempotency_key) where origin = 'CHAT' do nothing
 				""".trimIndent(),
@@ -137,6 +157,8 @@ class ChatAgentAdmissionService(
 				normalizedInstruction,
 				budgetSnapshot(),
 				contentType.name,
+				frozenProfileRevisionId,
+				briefJson,
 				properties.maxAttempts,
 				Timestamp.from(now),
 				Timestamp.from(now),
@@ -220,9 +242,13 @@ class ChatAgentAdmissionService(
 	}
 
 	private fun AgentRunRecord.toChatResponseFor(persistence: AgentRunQueryPersistence): ChatAgentRunResponse {
-		return toChatResponse(artifact = persistence.findArtifactForAgentRun(workspaceId, id)?.let {
-			ChatAgentArtifactSummaryResponse(it.id, it.status, it.title, contentType, it.updatedAt)
-		})
+		val brief = contentBriefSnapshotJson?.let { objectMapper.readValue(it, ContentBrief::class.java) }
+		return toChatResponse(
+			artifact = persistence.findArtifactForAgentRun(workspaceId, id)?.let {
+				ChatAgentArtifactSummaryResponse(it.id, it.status, it.title, contentType, it.updatedAt)
+			},
+			brief = brief,
+		)
 	}
 
 	private fun resolveChat(workSessionId: UUID?, workspaceId: UUID, userId: UUID, title: String): UUID {
@@ -355,10 +381,12 @@ class ChatAgentAdmissionService(
 		),
 	)
 
-	private fun fingerprint(request: CreateChatAgentRunRequest): String {
+	private fun fingerprint(request: CreateChatAgentRunRequest, brief: ContentBrief?): String {
 		val canonical = buildString {
 			append(request.workSessionId ?: "new").append('|')
 			append(request.contentType.name).append('|')
+			append(request.contentProfileRevisionId ?: "none").append('|')
+			append(brief?.canonicalFingerprint().orEmpty()).append('|')
 			append(request.instruction).append('|')
 			request.writingBlockIds.forEach { append(it).append(',') }
 		}

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRef, useState } from "react";
 
 import type { SourceReference } from "@plot/api-client";
+import { ChatBriefPanel, emptyChatBriefDraft, toContentBrief } from "@/features/chat/chat-brief-panel";
 import { ChatComposer } from "@/features/chat/chat-composer";
 import {
   isNonRetryableRequestError,
@@ -26,6 +27,7 @@ type ChatHomeProps = {
 export function ChatHome({ references, referencesLoading, referencesError }: ChatHomeProps) {
   const [startError, setStartError] = useState("");
   const [starting, setStarting] = useState(false);
+  const [briefDraft, setBriefDraft] = useState(emptyChatBriefDraft);
   const pendingRequestRef = useRef<PendingAgentRequest | null>(null);
   const entitlement = useWorkspaceEntitlement();
   const canGenerate = entitlement?.capabilities.generate ?? true;
@@ -46,6 +48,7 @@ export function ChatHome({ references, referencesLoading, referencesError }: Cha
       const run = await plotApiClient.createChatAgentRun({
         instruction: message,
         writingBlockIds: selected.map((reference) => reference.id),
+        brief: toContentBrief(briefDraft),
       }, idempotencyKey);
       pendingRequestRef.current = null;
       window.location.assign(`/chat?chat=${encodeURIComponent(run.chatId)}&agent=${encodeURIComponent(run.id)}`);
@@ -71,6 +74,7 @@ export function ChatHome({ references, referencesLoading, referencesError }: Cha
           busy={starting || referencesLoading}
           canGenerate={canGenerate}
         />
+        <ChatBriefPanel value={briefDraft} onChange={setBriefDraft} />
         {referencesLoading ? <p className="mt-3 text-center text-xs text-black/45 dark:text-white/45">Loading sources…</p> : null}
         {!referencesLoading && !referencesError && references.length === 0 ? <SourceEmptyState /> : null}
         {referencesError ? <ErrorNotice message={referencesError} /> : null}

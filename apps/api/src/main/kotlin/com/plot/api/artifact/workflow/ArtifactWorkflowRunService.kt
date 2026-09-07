@@ -3,12 +3,14 @@ package com.plot.api.artifact.workflow
 import com.plot.api.common.UuidGenerator
 import com.plot.api.common.WorkspacePrincipal
 import com.plot.api.config.PlotAiProperties
+import com.plot.api.content.ContentBrief
 import com.plot.api.artifact.workflow.model.EvidenceSnapshot
 import com.plot.api.artifact.workflow.model.SourceProvider
 import com.plot.api.routine.AgentBudgetSnapshot
 import com.plot.api.routine.AgentRunInputRecord
 import com.plot.api.routine.AgentRunRecord
 import java.security.MessageDigest
+import java.time.Instant
 import java.util.HexFormat
 import java.util.UUID
 import org.springframework.stereotype.Service
@@ -62,7 +64,7 @@ class ArtifactWorkflowRunService(
 
 		val runId = uuidGenerator.next()
 		val artifactRunId = uuidGenerator.next()
-		val evidence = ordered.mapIndexed { index, input ->
+		val githubEvidence = ordered.mapIndexed { index, input ->
 			EvidenceSnapshot(
 				id = uuidGenerator.next(),
 				artifactWorkflowRunId = runId,
@@ -84,6 +86,7 @@ class ArtifactWorkflowRunService(
 				agentRunInputId = input.id,
 			)
 		}
+		val evidence = githubEvidence + confirmedFactEvidence(runId, agentRun, githubEvidence.size)
 		val initialState = workflowService.start(runId, evidence, agentRun.instructionSnapshot).copy(
 			agentRunId = agentRun.id,
 		)
@@ -155,6 +158,62 @@ class ArtifactWorkflowRunService(
 			.also { require(it > 0) }
 	} catch (_: RuntimeException) {
 		throw IllegalArgumentException("Agent budget snapshot is invalid")
+	}
+
+	private fun confirmedFactEvidence(
+		runId: UUID,
+		agentRun: AgentRunRecord,
+		startOrderIndex: Int,
+	): List<EvidenceSnapshot> {
+		val brief = parseContentBrief(agentRun.contentBriefSnapshotJson) ?: return emptyList()
+		val capturedAt = Instant.now()
+		var orderIndex = startOrderIndex
+		return brief.confirmedFacts.mapNotNull { fact ->
+			val body = fact.body.trim()
+			if (body.isEmpty()) return@mapNotNull null
+			val kind = fact.kind.trim().ifBlank { "AVAILABILITY" }
+			EvidenceSnapshot(
+				id = uuidGenerator.next(),
+				artifactWorkflowRunId = runId,
+				writingBlockId = null,
+				orderIndex = orderIndex++,
+				sourceProvider = SourceProvider.USER_CONFIRMED,
+				sourceKind = kind,
+				sourceLabel = confirmedSourceLabel(kind),
+				snapshotTitle = null,
+				snapshotBody = body,
+				snapshotExcerpt = body,
+				originalUrl = null,
+				sourceCreatedAt = null,
+				sourceUpdatedAt = null,
+				contentHash = sha256("USER_CONFIRMED|$kind|$body"),
+				capturedAt = capturedAt,
+				sourceScopeId = null,
+				agentRunId = agentRun.id,
+				agentRunInputId = null,
+			)
+		}
+	}
+
+	private fun parseContentBrief(json: String?): ContentBrief? {
+		if (json.isNullOrBlank()) return null
+		return try {
+			objectMapper.readValue(json, ContentBrief::class.java)
+		} catch (_: RuntimeException) {
+			throw IllegalArgumentException("Agent content brief snapshot is invalid")
+		}
+	}
+
+	private fun confirmedSourceLabel(kind: String): String {
+		val humanized = kind.lowercase().replace('_', ' ').replace(WHITESPACE, " ").trim().ifBlank { "fact" }
+		return "Confirmed $humanized"
+	}
+
+	private fun sha256(value: String): String =
+		HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.toByteArray(Charsets.UTF_8)))
+
+	private companion object {
+		val WHITESPACE = Regex("\\s+")
 	}
 }
 

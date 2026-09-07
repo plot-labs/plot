@@ -36,17 +36,30 @@ class ArtifactMarkdownExportService {
 			append(renderedSentences.values.joinToString("\n\n"))
 			if (includeSources) {
 				val publicSources = sources
-					.distinctBy { it.originalUrl }
+					.distinctBy { it.originalUrl ?: it.evidenceId }
 					.mapNotNull { source ->
 						val approvedUrl = approvedSourceUrl(source.provider, source.originalUrl) ?: return@mapNotNull null
 						val label = neutralizeUntrustedText(source.sourceLabel.replace(NEWLINE, " ")).trim()
 						if (label.isBlank() || evidenceById[source.evidenceId] == null) return@mapNotNull null
 						"- [$label]($approvedUrl)"
 					}
+				val confirmedSources = sources
+					.filter { it.provider.equals("USER_CONFIRMED", ignoreCase = true) }
+					.distinctBy { it.evidenceId }
+					.mapNotNull { source ->
+						val label = neutralizeUntrustedText(source.sourceLabel.replace(NEWLINE, " ")).trim()
+						if (label.isBlank() || evidenceById[source.evidenceId] == null) return@mapNotNull null
+						"- $label"
+					}
 				if (publicSources.isNotEmpty()) {
 					if (isNotEmpty()) append("\n\n")
 					append("## Sources\n\n")
 					append(publicSources.joinToString("\n"))
+				}
+				if (confirmedSources.isNotEmpty()) {
+					if (isNotEmpty()) append("\n\n")
+					append("## Confirmed in Plot\n\n")
+					append(confirmedSources.joinToString("\n"))
 				}
 			}
 			if (isNotEmpty()) append('\n')
@@ -69,7 +82,8 @@ class ArtifactMarkdownExportService {
 		.replace("]", "\\]")
 		.replace(ACTIVE_SCHEME) { match -> "${match.groupValues[1]}&#58;" }
 
-	private fun approvedSourceUrl(provider: String, value: String): String? {
+	private fun approvedSourceUrl(provider: String, value: String?): String? {
+		if (value.isNullOrBlank()) return null
 		return try {
 			val uri = URI(value)
 			val host = uri.host?.lowercase() ?: return null

@@ -258,7 +258,7 @@ function ArtifactDrawer({ open, title, subtitle, triggerRef, onClose, children }
 }
 
 function ArtifactSources({ sources }: { sources: Artifact["variant"]["sources"] }) {
-  const uniqueSources = sources.filter((source, index, all) => all.findIndex((candidate) => candidate.originalUrl === source.originalUrl) === index);
+  const uniqueSources = sources.filter((source, index, all) => all.findIndex((candidate) => candidate.evidenceId === source.evidenceId) === index);
   if (!uniqueSources.length) {
     return <p className="rounded-[8px] border border-dashed border-black/10 px-3.5 py-4 text-sm leading-6 text-black/52 dark:border-white/12 dark:text-white/55">No current sources are available for this artifact.</p>;
   }
@@ -267,15 +267,18 @@ function ArtifactSources({ sources }: { sources: Artifact["variant"]["sources"] 
     <ol className="space-y-2.5" aria-label="Current sources">
       {uniqueSources.map((source, index) => (
         <li key={source.evidenceId} className="rounded-[8px] border border-black/10 px-3.5 py-3 dark:border-white/10">
-          <Citation source={{ title: source.sourceLabel, url: source.originalUrl }} number={index + 1} variant="label" className="max-w-full text-[15px] font-semibold" />
-          <p className="mt-1 truncate text-xs text-black/45 dark:text-white/45">{sourceHostname(source.originalUrl)}</p>
+          <Citation source={{ title: source.sourceLabel, url: source.originalUrl ?? undefined }} number={index + 1} variant="label" className="max-w-full text-[15px] font-semibold" />
+          <p className="mt-1 truncate text-xs text-black/45 dark:text-white/45">
+            {source.provider === "USER_CONFIRMED" ? "Confirmed in Plot" : sourceHostname(source.originalUrl)}
+          </p>
         </li>
       ))}
     </ol>
   );
 }
 
-function sourceHostname(value: string) {
+function sourceHostname(value: string | null) {
+  if (!value) return "";
   try {
     return new URL(value).hostname;
   } catch {

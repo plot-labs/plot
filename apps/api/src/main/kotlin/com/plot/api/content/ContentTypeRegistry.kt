@@ -16,7 +16,7 @@ data class ContentWriterSpec(
 )
 
 interface ContentPromptFactory {
-	fun writer(instruction: String?, evidence: List<EvidenceSnapshot>): ChangelogPrompt
+	fun writer(instruction: String?, evidence: List<EvidenceSnapshot>, style: FrozenContentContext?): ChangelogPrompt
 	fun reviewer(request: ReviewerModelRequest): ChangelogPrompt
 	fun rewriter(request: RewriteModelRequest): ChangelogPrompt
 }
@@ -57,9 +57,9 @@ class ContentTypeRegistry(
 		}
 
 	companion object {
-		const val CHANGELOG_PROMPT_VERSION = "changelog-v8"
+		const val CHANGELOG_PROMPT_VERSION = "changelog-v9"
 		const val CHANGELOG_SCHEMA_VERSION = "artifact-workflow-v5"
-		const val LAUNCH_PROMPT_VERSION = "launch-announcement-v1"
+		const val LAUNCH_PROMPT_VERSION = "launch-announcement-v2"
 		const val LAUNCH_SCHEMA_VERSION = "launch-workflow-v1"
 		const val BUDGET_VERSION = "budget-v1"
 	}
@@ -67,7 +67,8 @@ class ContentTypeRegistry(
 
 private fun ChangelogPromptFactory.asContentPromptFactory(): ContentPromptFactory =
 	object : ContentPromptFactory {
-		override fun writer(instruction: String?, evidence: List<EvidenceSnapshot>) = this@asContentPromptFactory.writer(instruction, evidence)
+		override fun writer(instruction: String?, evidence: List<EvidenceSnapshot>, style: FrozenContentContext?) =
+			this@asContentPromptFactory.writer(instruction, evidence, style)
 		override fun reviewer(request: ReviewerModelRequest) = this@asContentPromptFactory.reviewer(request)
 		override fun rewriter(request: RewriteModelRequest) = this@asContentPromptFactory.rewriter(request)
 	}

@@ -587,6 +587,68 @@ class ArtifactPublishIntegrationTest {
 		)
 		return PublishFixture(runId, row["pack_id"] as UUID, row["variant_id"] as UUID, sentenceIds.first(), sentenceIds[1])
 	}
+
+	@Test
+	fun `publish excludes USER_CONFIRMED citations from hosted snapshot`() {
+		val fixture = readyPackWithUserConfirmedCitation()
+		mockMvc.get("/api/artifacts/${fixture.packId}").andExpect {
+			status { isOk() }
+			jsonPath("$.variant.sentences[1].citations[0].provider") { value("USER_CONFIRMED") }
+			jsonPath("$.variant.sentences[1].citations[0].originalUrl") { value(null) }
+		}
+		publish(fixture.variantId, 1)
+		val confirmedPublished = jdbcTemplate.queryForObject(
+			"""
+			select count(*)
+			from published_changelog_entry_citations c
+			join published_changelog_entry_sentences s on s.id = c.published_changelog_entry_sentence_id
+			join published_changelog_entries e on e.id = s.published_changelog_entry_id
+			where e.content_variant_id = ? and upper(c.provider) = 'USER_CONFIRMED'
+			""".trimIndent(),
+			Int::class.java,
+			fixture.variantId,
+		)
+		assertEquals(0, confirmedPublished)
+	}
+
+	private fun readyPackWithUserConfirmedCitation(): PublishFixture {
+		val runId = UUID.randomUUID()
+		val blockId = UUID.randomUUID()
+		jdbcTemplate.update(
+			"""
+			insert into writing_blocks (id, workspace_id, source_origin, source_kind, title, body, url,
+			 content_hash, ingested_at, status, created_by_user_id, created_at, updated_at)
+			values (?, ?, 'github', 'pull_request', 'PR', 'evidence', ?,
+			 'block-hash', now(), 'ACTIVE', ?, now(), now())
+			""".trimIndent(), blockId, devContext.devWorkspaceId, "https://github.test/acme/repo/pull/1", devContext.devUserId,
+		)
+		val githubEvidence = EvidenceSnapshot(
+			UUID.randomUUID(), runId, blockId, 0, SourceProvider.GITHUB, "pull_request", "PR 1", "PR 1",
+			"Evidence body", "PRIVATE SNAPSHOT EXCERPT", "https://github.test/acme/repo/pull/1", null, null, "hash", Instant.now(),
+		)
+		val confirmedEvidence = EvidenceSnapshot(
+			UUID.randomUUID(), runId, null, 1, SourceProvider.USER_CONFIRMED, "AVAILABILITY", "Confirmed availability",
+			null, "Public beta starts Monday", "Public beta starts Monday", null, null, null, "confirmed-hash", Instant.now(),
+		)
+		val state = workflow.start(runId, listOf(githubEvidence, confirmedEvidence), null)
+		admissionPersistence.createRun(ArtifactWorkflowRunReservation(
+			devContext.devWorkspaceId, devContext.devUserId, null, "pack-${UUID.randomUUID()}", "fingerprint-${UUID.randomUUID()}",
+			state, "OPENAI", "scripted", "{\"maxModelCalls\":12,\"maxTotalTokens\":1000,\"maxRunDurationMillis\":60000}",
+		))
+		val gateway = PublishMixedCitationGateway(githubEvidence.id, confirmedEvidence.id)
+		ArtifactWorkflowRunWorker(executionPersistence, queryPersistence, workflow, gateway, workerId = "publish-user-confirmed").drain()
+		val row = jdbcTemplate.queryForMap(
+			"""
+			select cp.id pack_id, cv.id variant_id from content_packs cp join content_variants cv on cv.content_pack_id=cp.id
+			where cp.generation_run_id = ?
+			""".trimIndent(), runId,
+		)
+		val sentenceIds = jdbcTemplate.query(
+			"select id from content_variant_sentences where generation_run_id = ? order by order_index",
+			{ rs, _ -> rs.getObject(1, UUID::class.java) }, runId,
+		)
+		return PublishFixture(runId, row["pack_id"] as UUID, row["variant_id"] as UUID, sentenceIds.first(), sentenceIds[1])
+	}
 }
 
 private data class PublishFixture(val runId: UUID, val packId: UUID, val variantId: UUID, val firstSentenceId: UUID, val secondSentenceId: UUID)
@@ -599,6 +661,26 @@ private class PublishPackGateway(private val evidenceId: UUID) : ArtifactWorkflo
 		return result(ReviewerOutput(listOf(
 			SentenceReview(sentenceIds[0], ReviewVerdict.SUPPORTED, listOf(evidenceId)),
 			SentenceReview(sentenceIds[1], ReviewVerdict.NOT_REQUIRED),
+		)))
+	}
+	override fun rewrite(request: RewriteModelRequest): ModelCallResult<TargetedRewriteOutput> = error("Unexpected rewrite")
+	private fun <T : Any> result(value: T) = ModelCallResult(value, ModelCallMetadata(null, "scripted", "stop", 1, 1, 2, Duration.ofMillis(1), emptyMap()))
+}
+
+private class PublishMixedCitationGateway(
+	private val githubEvidenceId: UUID,
+	private val confirmedEvidenceId: UUID,
+) : ArtifactWorkflowModelGateway {
+	private lateinit var sentenceIds: List<UUID>
+	override fun write(request: WriterModelRequest) = result(WriterOutput(listOf(
+		WriterSentence("Supported sentence."),
+		WriterSentence("Confirmed availability sentence."),
+	)))
+	override fun review(request: ReviewerModelRequest): ModelCallResult<ReviewerOutput> {
+		sentenceIds = request.sentences.map { it.id }
+		return result(ReviewerOutput(listOf(
+			SentenceReview(sentenceIds[0], ReviewVerdict.SUPPORTED, listOf(githubEvidenceId)),
+			SentenceReview(sentenceIds[1], ReviewVerdict.SUPPORTED, listOf(confirmedEvidenceId)),
 		)))
 	}
 	override fun rewrite(request: RewriteModelRequest): ModelCallResult<TargetedRewriteOutput> = error("Unexpected rewrite")

@@ -252,6 +252,14 @@ function getSourceProviderIcon(source?: CitationSourceItem): ReactNode {
   const url = (source?.url || "").toLowerCase();
   const provider = (source?.provider || "").toLowerCase();
 
+  if (provider === "user_confirmed") {
+    return (
+      <svg role="img" aria-label="Confirmed in Plot" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-3">
+        <path d="M20 6 9 17l-5-5" />
+      </svg>
+    );
+  }
+
   if (url.includes("github.com") || provider === "github") {
     return (
       <svg role="img" aria-label="GitHub" viewBox="0 0 24 24" className="size-3 fill-current">
@@ -309,8 +317,10 @@ function getSourceProviderIcon(source?: CitationSourceItem): ReactNode {
 }
 
 function resolveProviderName(source?: CitationSourceItem): string {
+  const provider = (source?.provider || "").toLowerCase();
+  if (provider === "user_confirmed") return "Confirmed";
   const url = (source?.url || "").toLowerCase();
-  if (url.includes("github.com")) return "GitHub";
+  if (url.includes("github.com") || provider === "github") return "GitHub";
   if (url.includes("linear.app")) return "Linear";
   if (url.includes("notion.so")) return "Notion";
   if (url.includes("slack.com")) return "Slack";

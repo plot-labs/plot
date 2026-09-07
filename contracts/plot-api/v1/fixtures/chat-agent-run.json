@@ -3,6 +3,8 @@
   "chatId": "018fd000-0000-7000-8000-000000000051",
   "instruction": "Explore the connected source",
   "contentType": "CHANGELOG",
+  "contentProfileRevisionId": null,
+  "brief": null,
   "status": "SUCCEEDED",
   "failureCode": null,
   "artifactId": "018fd000-0000-7000-8000-000000000060",

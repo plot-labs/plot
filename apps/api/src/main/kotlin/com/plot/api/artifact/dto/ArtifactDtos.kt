@@ -111,14 +111,14 @@ data class ContentCitationResponse(
 	val evidenceId: UUID,
 	val provider: String,
 	val sourceLabel: String,
-	val originalUrl: String,
+	val originalUrl: String?,
 )
 
 data class ContentSourceResponse(
 	val evidenceId: UUID,
 	val provider: String,
 	val sourceLabel: String,
-	val originalUrl: String,
+	val originalUrl: String?,
 	val statementIds: List<UUID>,
 )
 

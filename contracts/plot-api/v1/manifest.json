@@ -74,6 +74,54 @@
       }
     },
     {
+      "id": "content-profile.get",
+      "surface": "content-profile",
+      "clientMethod": "getContentProfile",
+      "args": [],
+      "method": "GET",
+      "routeTemplate": "/content-profile",
+      "route": "/content-profile",
+      "successStatus": 200,
+      "authContext": "workspace-member",
+      "requiredHeaders": [
+        "accept",
+        "x-plot-workspace-id"
+      ],
+      "requestFixture": null,
+      "successFixture": "fixtures/content-profile.json",
+      "errorFixture": null,
+      "enumDomains": {}
+    },
+    {
+      "id": "content-profile.update",
+      "surface": "content-profile",
+      "clientMethod": "updateContentProfile",
+      "args": [
+        {
+          "productSummary": "Plot turns release evidence into customer-ready changelogs.",
+          "primaryAudience": "B2B SaaS product managers",
+          "customerTerms": "workspace, artifact, source",
+          "tone": "Clear and direct",
+          "defaultLocale": "en",
+          "bannedPhrases": ["synergy"]
+        }
+      ],
+      "method": "PUT",
+      "routeTemplate": "/content-profile",
+      "route": "/content-profile",
+      "successStatus": 200,
+      "authContext": "workspace-member",
+      "requiredHeaders": [
+        "accept",
+        "content-type",
+        "x-plot-workspace-id"
+      ],
+      "requestFixture": "fixtures/content-profile-update-request.json",
+      "successFixture": "fixtures/content-profile.json",
+      "errorFixture": null,
+      "enumDomains": {}
+    },
+    {
       "id": "github.connections.list",
       "surface": "github",
       "clientMethod": "listGitHubConnections",
@@ -281,7 +329,20 @@
           "instruction": "Explore the connected source",
           "writingBlockIds": [
             "018fd000-0000-7000-8000-000000000040"
-          ]
+          ],
+          "brief": {
+            "purpose": "Tell customers what shipped",
+            "audience": "Product managers",
+            "availability": "Generally available",
+            "pricing": null,
+            "userAction": "Upgrade in settings",
+            "confirmedFacts": [
+              {
+                "body": "The feature is generally available.",
+                "kind": "AVAILABILITY"
+              }
+            ]
+          }
         },
         "chat-contract-1"
       ],
@@ -376,6 +437,10 @@
         "contentType": [
           "CHANGELOG",
           "LAUNCH_ANNOUNCEMENT"
+        ],
+        "provider": [
+          "GITHUB",
+          "USER_CONFIRMED"
         ]
       }
     },
@@ -443,6 +508,10 @@
           "GENERATED",
           "REWRITTEN",
           "USER_MODIFIED"
+        ],
+        "provider": [
+          "GITHUB",
+          "USER_CONFIRMED"
         ]
       }
     },

@@ -3,6 +3,7 @@ package com.plot.api.routine
 import com.plot.api.TestcontainersConfiguration
 import com.plot.api.common.UuidGenerator
 import com.plot.api.artifact.run.ArtifactRunPersistence
+import com.plot.api.contentprofile.ContentProfilePersistence
 import com.plot.api.persistence.JooqSqlExecutor
 import com.plot.api.persistence.JooqTransactionExecutor
 import java.sql.Connection
@@ -26,6 +27,7 @@ import org.springframework.context.annotation.Import
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.datasource.AbstractDataSource
+import tools.jackson.databind.ObjectMapper
 
 @SpringBootTest
 @Import(TestcontainersConfiguration::class)
@@ -63,6 +65,12 @@ class RoutineAgentMigrationIntegrationTest {
 				schemaTransactionExecutor,
 				uuidGenerator,
 				queryPersistence,
+				ContentProfilePersistence(
+					schemaSqlExecutor,
+					schemaTransactionExecutor,
+					uuidGenerator,
+					ObjectMapper(),
+				),
 			),
 			queryPersistence = queryPersistence,
 			executionPersistence = AgentRunExecutionPersistence(
