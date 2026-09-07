@@ -4,6 +4,7 @@ import com.plot.api.common.UuidGenerator
 import com.plot.api.artifact.dto.ContentCitationResponse
 import com.plot.api.artifact.dto.ContentExportResponse
 import com.plot.api.artifact.dto.ArtifactPageResponse
+import com.plot.api.artifact.dto.ArtifactPublicationResponse
 import com.plot.api.artifact.dto.ArtifactResponse
 import com.plot.api.artifact.dto.ArtifactSummaryResponse
 import com.plot.api.artifact.dto.ContentSentenceResponse
@@ -174,8 +175,29 @@ class ArtifactQueryService(
 				sentences,
 				publicSources(citations),
 			),
+			loadLivePublication(variantId),
 		)
 	}
+
+	private fun loadLivePublication(variantId: UUID): ArtifactPublicationResponse? = sqlExecutor.query(
+		"""
+		select pce.id, pce.entry_slug, pce.published_at, w.slug
+		from published_changelog_entries pce
+		join workspaces w on w.id = pce.workspace_id
+		where pce.workspace_id = ? and pce.content_variant_id = ? and pce.unpublished_at is null
+		""".trimIndent(),
+		{ rs, _ ->
+			val entrySlug = requireNotNull(rs.getString(2))
+			ArtifactPublicationResponse(
+				entryId = requireNotNull(rs.getObject(1, UUID::class.java)),
+				entrySlug = entrySlug,
+				publicPath = "/${requireNotNull(rs.getString(4))}/changelog/$entrySlug",
+				publishedAt = requireNotNull(rs.getTimestamp(3)).toInstant(),
+			)
+		},
+		devContext.devWorkspaceId,
+		variantId,
+	).firstOrNull()
 	private fun loadSentences(
 		variantId: UUID,
 		revisionId: UUID,

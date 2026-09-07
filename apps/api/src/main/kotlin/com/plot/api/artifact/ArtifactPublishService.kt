@@ -1,6 +1,8 @@
 package com.plot.api.artifact
 
 import com.plot.api.artifact.dto.PublishContentVariantResponse
+import com.plot.api.artifact.dto.UnpublishContentVariantResponse
+import com.plot.api.auth.RequestActorResolver
 import com.plot.api.common.ApiException
 import com.plot.api.common.UuidGenerator
 import com.plot.api.dev.DevContext
@@ -23,6 +25,8 @@ class ArtifactPublishService(
 	private val uuidGenerator: UuidGenerator,
 	private val deliveryGate: ArtifactDeliveryGate,
 	private val workspaceRepository: WorkspaceRepository,
+	private val deliveryEventService: ProductDeliveryEventService,
+	private val actorResolver: RequestActorResolver? = null,
 	private val clock: Clock = Clock.systemUTC(),
 ) {
 	fun publish(
@@ -43,6 +47,42 @@ class ArtifactPublishService(
 			is DeliveryGateOutcome.ConfirmationRequired -> throw PublishConfirmationRequiredException(gate.warnings)
 			is DeliveryGateOutcome.Ready -> insertPublishedEntry(variantId, gate)
 		}
+	}
+
+	fun unpublish(variantId: UUID): UnpublishContentVariantResponse = transactionExecutor.execute {
+		requireOwner()
+		val unpublishedAt = clock.instant()
+		val updated = sqlExecutor.update(
+			"""
+			update published_changelog_entries
+			set unpublished_at = ?, unpublished_by_user_id = ?
+			where workspace_id = ? and content_variant_id = ? and unpublished_at is null
+			""".trimIndent(),
+			Timestamp.from(unpublishedAt),
+			devContext.devUserId,
+			devContext.devWorkspaceId,
+			variantId,
+		)
+		if (updated == 0) {
+			val existing = sqlExecutor.queryForObject(
+				"""
+				select count(*) from published_changelog_entries
+				where workspace_id = ? and content_variant_id = ?
+				""".trimIndent(),
+				Int::class.java,
+				devContext.devWorkspaceId,
+				variantId,
+			) ?: 0
+			if (existing > 0) {
+				throw ApiException(
+					HttpStatus.CONFLICT,
+					"ENTRY_NOT_LIVE",
+					"This changelog entry is not publicly live",
+				)
+			}
+			throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Published changelog entry not found")
+		}
+		loadUnpublishedEntry(variantId, unpublishedAt)
 	}
 
 	private fun insertPublishedEntry(variantId: UUID, gate: DeliveryGateOutcome.Ready): PublishContentVariantResponse {
@@ -91,6 +131,7 @@ class ArtifactPublishService(
 			)
 		}
 		insertCitationSnapshot(entryId, gate)
+		deliveryEventService.recordPublished(entryId, variantId, gate.revision.id)
 		return PublishContentVariantResponse(
 			entryId = entryId,
 			entrySlug = entrySlug,
@@ -139,6 +180,41 @@ class ArtifactPublishService(
 						)
 					}
 			}
+	}
+
+	private fun loadUnpublishedEntry(variantId: UUID, unpublishedAt: java.time.Instant): UnpublishContentVariantResponse {
+		val workspace = workspaceRepository.findById(devContext.devWorkspaceId).orElseThrow {
+			ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Workspace not found")
+		}
+		val row = sqlExecutor.query(
+			"""
+			select id, entry_slug, published_at
+			from published_changelog_entries
+			where workspace_id = ? and content_variant_id = ? and unpublished_at is not null
+			order by unpublished_at desc, id desc
+			limit 1
+			""".trimIndent(),
+			{ rs, _ ->
+				val entrySlug = requireNotNull(rs.getString(2))
+				UnpublishContentVariantResponse(
+					entryId = requireNotNull(rs.getObject(1, UUID::class.java)),
+					entrySlug = entrySlug,
+					publicPath = "/${workspace.slug}/changelog/$entrySlug",
+					publishedAt = requireNotNull(rs.getTimestamp(3)).toInstant(),
+					unpublishedAt = unpublishedAt,
+				)
+			},
+			devContext.devWorkspaceId,
+			variantId,
+		).firstOrNull() ?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Published changelog entry not found")
+		return row
+	}
+
+	private fun requireOwner() {
+		val actor = actorResolver?.current()
+		if (actor != null && actorResolver.requireWorkspace().role != "OWNER") {
+			throw ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Workspace owner access is required")
+		}
 	}
 
 	private fun loadPublishMetadata(variantId: UUID): PublishMetadata {
