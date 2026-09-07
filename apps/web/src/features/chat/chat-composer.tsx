@@ -20,6 +20,7 @@ type ChatComposerProps = {
   placeholder?: string;
   references?: { id: string; label: string; available: boolean; groupId?: string; url?: string }[];
   busy?: boolean;
+  canGenerate?: boolean;
 };
 
 export function ChatComposer({
@@ -29,6 +30,7 @@ export function ChatComposer({
   placeholder = "Ask Plot to create another source-backed artifact...",
   references = [],
   busy = false,
+  canGenerate = true,
 }: ChatComposerProps) {
   const submittingRef = useRef(false);
   const [centerPrompt, setCenterPrompt] = useState("");
@@ -47,7 +49,7 @@ export function ChatComposer({
   }
 
   if (variant === "center") {
-    const isSendDisabled = busy || !hasConnectedSource || !centerPrompt.trim();
+    const isSendDisabled = busy || !canGenerate || !hasConnectedSource || !centerPrompt.trim();
 
     function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
       if (event.key === "Enter" && !event.shiftKey) {
@@ -129,7 +131,7 @@ export function ChatComposer({
       <AstryxChatComposer
         onSubmit={submit}
         placeholder={placeholder}
-        isDisabled={busy || !hasConnectedSource}
+        isDisabled={busy || !canGenerate || !hasConnectedSource}
         density="balanced"
         elevation="none"
         drawer={references.length ? <ComposerSources references={references} /> : undefined}

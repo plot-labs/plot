@@ -178,7 +178,7 @@ class ArtifactWorkflowAdmissionPersistence(
 			workspaceId,
 		).singleOrNull()
 			?: throw ApiException(HttpStatus.FORBIDDEN, "ACCESS_DENIED", "Access denied")
-		if (entitlement.third != "full") {
+		if (entitlement.third == "read_only") {
 			throw ApiException(
 				HttpStatus.FORBIDDEN,
 				"WORKSPACE_READ_ONLY",

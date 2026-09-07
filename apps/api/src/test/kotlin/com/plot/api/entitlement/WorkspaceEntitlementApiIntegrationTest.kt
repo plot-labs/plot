@@ -64,6 +64,12 @@ class WorkspaceEntitlementApiIntegrationTest {
 			jsonPath("$.plan") { value("founding") }
 			jsonPath("$.entitlementStatus") { value("revoked") }
 			jsonPath("$.accessMode") { value("read_only") }
+			jsonPath("$.capabilities.generate") { value(false) }
+			jsonPath("$.capabilities.edit") { value(false) }
+			jsonPath("$.capabilities.publish") { value(false) }
+			jsonPath("$.capabilities.export") { value(true) }
+			jsonPath("$.capabilities.configure") { value(false) }
+			jsonPath("$.capabilities.unpublish") { value(true) }
 		}
 		mockMvc.patch("/api/sessions/${UUID.randomUUID()}") {
 			contentType = MediaType.APPLICATION_JSON
@@ -89,6 +95,11 @@ class WorkspaceEntitlementApiIntegrationTest {
 			status { isOk() }
 			jsonPath("$.entitlementStatus") { value("expired") }
 			jsonPath("$.accessMode") { value("read_only") }
+			jsonPath("$.capabilities.generate") { value(false) }
+			jsonPath("$.capabilities.edit") { value(false) }
+			jsonPath("$.capabilities.publish") { value(false) }
+			jsonPath("$.capabilities.export") { value(true) }
+			jsonPath("$.capabilities.unpublish") { value(true) }
 		}
 		val projectedOnly = jdbcTemplate.queryForMap(
 			"select entitlement_status, access_mode from workspaces where id = ?",
@@ -113,7 +124,7 @@ class WorkspaceEntitlementApiIntegrationTest {
 	}
 
 	@Test
-	fun thirdSuccessfulPackEndsTrialAndFailuresDoNotCount() {
+	fun thirdSuccessfulPackBlocksGenerationButAllowsExistingDraftCompletion() {
 		val runIds = mutableListOf<UUID>()
 		val packIds = mutableListOf<UUID>()
 		try {
@@ -136,6 +147,18 @@ class WorkspaceEntitlementApiIntegrationTest {
 			}
 			repeat(2) { runIds += insertArtifactWorkflowRun("FAILED") }
 
+			mockMvc.get("/api/workspaces/${devContext.devWorkspaceId}").andExpect {
+				status { isOk() }
+				jsonPath("$.plan") { value("trial") }
+				jsonPath("$.entitlementStatus") { value("trialing") }
+				jsonPath("$.accessMode") { value("complete_only") }
+				jsonPath("$.capabilities.generate") { value(false) }
+				jsonPath("$.capabilities.edit") { value(true) }
+				jsonPath("$.capabilities.publish") { value(true) }
+				jsonPath("$.capabilities.export") { value(true) }
+				jsonPath("$.capabilities.configure") { value(false) }
+				jsonPath("$.capabilities.unpublish") { value(true) }
+			}
 			mockMvc.patch("/api/sessions/${UUID.randomUUID()}") {
 				contentType = MediaType.APPLICATION_JSON
 				content = """{"title":"Blocked"}"""
@@ -143,6 +166,13 @@ class WorkspaceEntitlementApiIntegrationTest {
 				status { isForbidden() }
 				jsonPath("$.error") { value("WORKSPACE_READ_ONLY") }
 			}
+
+			val persisted = jdbcTemplate.queryForMap(
+				"select entitlement_status, access_mode from workspaces where id = ?",
+				devContext.devWorkspaceId,
+			)
+			assertEquals("trialing", persisted["entitlement_status"])
+			assertEquals("full", persisted["access_mode"])
 		} finally {
 			packIds.forEach { jdbcTemplate.update("delete from content_packs where id = ?", it) }
 			runIds.forEach { jdbcTemplate.update("delete from generation_runs where id = ?", it) }

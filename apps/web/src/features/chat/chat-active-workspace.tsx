@@ -21,6 +21,7 @@ import { chatHref, toComposerReferences } from "@/features/chat/chat-workspace-u
 import { useChatAgentActivity } from "@/features/chat/use-chat-agent-activity";
 import { useChatArtifactDocument } from "@/features/chat/use-chat-artifact-document";
 import { plotApiClient } from "@/lib/api-client";
+import { useWorkspaceEntitlement } from "@/lib/use-workspace-entitlement";
 
 type ChatActiveWorkspaceProps = {
   activeChat: ChatSummary;
@@ -42,6 +43,9 @@ const toolbarBottomFade: CSSProperties = {
 
 export function ChatActiveWorkspace({ activeChat, references, sourceError, requestedAgentId, requestedArtifactId }: ChatActiveWorkspaceProps) {
   const router = useRouter();
+  const entitlement = useWorkspaceEntitlement();
+  const canGenerate = entitlement?.capabilities.generate ?? true;
+  const canEdit = entitlement?.capabilities.edit ?? true;
   const [mobilePanel, setMobilePanel] = useState<"assistant" | "history" | null>(null);
   const [artifactPanelOpen, setArtifactPanelOpen] = useState(false);
   const [artifactHistoryOpen, setArtifactHistoryOpen] = useState(false);
@@ -251,6 +255,7 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
           }}
           references={toComposerReferences(references)}
           busy={document.artifactLoading || agent.agentBusy || agent.activitiesLoading}
+          canGenerate={canGenerate}
         />
       </div>
       {artifactPanelOpen && document.currentArtifact ? (
@@ -295,7 +300,7 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
                   {artifactSaveStateLabel(document.saveState, Boolean(document.historicalArtifact))}
                 </ArtifactEditorStatus>
               </span>
-              {!document.historicalArtifact ? (
+              {!document.historicalArtifact && canEdit ? (
                 <ArtifactSaveDraftButton
                   saving={document.saveState === "saving"}
                   onClick={() => setArtifactSaveRequestToken((value) => value + 1)}
@@ -334,6 +339,7 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
                 initialDraft={document.historicalArtifact ? undefined : document.drafts[document.currentArtifact.id]}
                 saveState={document.saveState}
                 saveRequestToken={artifactSaveRequestToken}
+                editorLocked={!canEdit}
                 onSaveStateChange={document.onSaveStateChange}
                 onDraftChange={document.onDraftChange}
                 onSaveArtifact={document.onSaveArtifact}

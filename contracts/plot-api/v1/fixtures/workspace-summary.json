@@ -8,6 +8,14 @@
   "plan": "founding",
   "entitlementStatus": "active",
   "accessMode": "full",
+  "capabilities": {
+    "generate": true,
+    "edit": true,
+    "publish": true,
+    "export": true,
+    "configure": true,
+    "unpublish": true
+  },
   "trialEndsAt": "2026-09-01T00:00:00Z",
   "role": "OWNER",
   "createdAt": "2026-08-01T00:00:00Z",

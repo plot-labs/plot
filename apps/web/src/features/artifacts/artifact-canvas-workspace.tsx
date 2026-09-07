@@ -12,6 +12,7 @@ import { ArtifactHistoryPanel } from "@/features/citations/artifact-history-pane
 import { ExportDialog } from "@/features/citations/export-dialog";
 import { PublishDialog } from "@/features/citations/publish-dialog";
 import type { SaveArtifactInput } from "@/features/citations/cited-draft-editor";
+import { useWorkspaceEntitlement } from "@/lib/use-workspace-entitlement";
 
 type ArtifactCanvasWorkspaceProps = {
   artifact: Artifact;
@@ -32,9 +33,13 @@ export function ArtifactCanvasWorkspace({ artifact, client, onSaveArtifact }: Ar
   const [drawer, setDrawer] = useState<Drawer>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
   const overflowTriggerRef = useRef<HTMLButtonElement>(null);
+  const entitlement = useWorkspaceEntitlement();
   const shownArtifact = historical?.artifact ?? currentArtifact;
   const artifactTitle = shownArtifact.title ?? "Untitled artifact";
-  const readOnly = Boolean(historical);
+  const canEdit = entitlement?.capabilities.edit ?? true;
+  const canPublish = entitlement?.capabilities.publish ?? true;
+  const canUnpublish = entitlement?.capabilities.unpublish ?? true;
+  const readOnly = Boolean(historical) || !canEdit;
   const closeDrawer = useCallback(() => setDrawer(null), []);
 
   useEffect(() => {
@@ -88,14 +93,18 @@ export function ArtifactCanvasWorkspace({ artifact, client, onSaveArtifact }: Ar
           <span className="mr-1 hidden sm:inline">
             <ArtifactEditorStatus>{saveStateLabel(saveState, readOnly)}</ArtifactEditorStatus>
           </span>
-          {!readOnly ? (
+          {!historical ? (
             <>
-              <ArtifactSaveDraftButton
-                saving={saveState === "saving"}
-                onClick={() => setSaveRequestToken((value) => value + 1)}
-              />
+              {canEdit ? (
+                <ArtifactSaveDraftButton
+                  saving={saveState === "saving"}
+                  onClick={() => setSaveRequestToken((value) => value + 1)}
+                />
+              ) : null}
               <ExportDialog pack={shownArtifact} client={client} presentation="copy" />
-              <PublishDialog pack={shownArtifact} client={client} />
+              {canPublish || (shownArtifact.publication && canUnpublish) ? (
+                <PublishDialog pack={shownArtifact} client={client} onPackChange={setCurrentArtifact} />
+              ) : null}
             </>
           ) : null}
           <button
@@ -125,6 +134,7 @@ export function ArtifactCanvasWorkspace({ artifact, client, onSaveArtifact }: Ar
           historical={historical}
           client={client}
           presentation="canvas"
+          editorLocked={!canEdit}
           saveRequestToken={saveRequestToken}
           saveState={saveState}
           initialDraft={historical ? undefined : drafts[currentArtifact.id]}

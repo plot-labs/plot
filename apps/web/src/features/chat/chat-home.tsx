@@ -15,6 +15,7 @@ import {
   type PendingAgentRequest,
 } from "@/features/chat/chat-workspace-utils";
 import { plotApiClient } from "@/lib/api-client";
+import { trialEndsLabel, useWorkspaceEntitlement } from "@/lib/use-workspace-entitlement";
 
 type ChatHomeProps = {
   references: SourceReference[];
@@ -26,6 +27,9 @@ export function ChatHome({ references, referencesLoading, referencesError }: Cha
   const [startError, setStartError] = useState("");
   const [starting, setStarting] = useState(false);
   const pendingRequestRef = useRef<PendingAgentRequest | null>(null);
+  const entitlement = useWorkspaceEntitlement();
+  const canGenerate = entitlement?.capabilities.generate ?? true;
+  const trialUntil = trialEndsLabel(entitlement?.trialEndsAt ?? null);
 
   async function submitHomeRequest(message: string, referenceIds: string[]) {
     const selected = selectReferences(references, referenceIds);
@@ -65,11 +69,19 @@ export function ChatHome({ references, referencesLoading, referencesError }: Cha
           onSubmit={(message, ids) => void submitHomeRequest(message, ids)}
           references={toComposerReferences(references)}
           busy={starting || referencesLoading}
+          canGenerate={canGenerate}
         />
         {referencesLoading ? <p className="mt-3 text-center text-xs text-black/45 dark:text-white/45">Loading sources…</p> : null}
         {!referencesLoading && !referencesError && references.length === 0 ? <SourceEmptyState /> : null}
         {referencesError ? <ErrorNotice message={referencesError} /> : null}
         {startError ? <ErrorNotice message={startError} /> : null}
+        {!canGenerate ? (
+          <p className="mt-3 text-center text-xs text-black/50 dark:text-white/50">
+            {entitlement?.accessMode === "complete_only"
+              ? `New drafts are paused after three trial results${trialUntil ? ` until ${trialUntil}` : ""}. Open an existing artifact to edit, export, or publish.`
+              : "This workspace cannot start new drafts. You can still export existing artifacts."}
+          </p>
+        ) : null}
       </div>
     </div>
   );
