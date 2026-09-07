@@ -17,6 +17,7 @@ fun Workspace.toResponse(
 		plan = plan,
 		entitlementStatus = entitlement.status,
 		accessMode = entitlement.accessMode,
+		capabilities = entitlement.capabilities,
 		trialEndsAt = trialEndsAt,
 		role = role,
 		createdAt = createdAt,

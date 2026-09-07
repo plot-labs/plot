@@ -42,6 +42,12 @@ class WorkspaceApiIntegrationTest {
 				jsonPath("$.plan") { value("founding") }
 				jsonPath("$.entitlementStatus") { value("active") }
 				jsonPath("$.accessMode") { value("full") }
+				jsonPath("$.capabilities.generate") { value(true) }
+				jsonPath("$.capabilities.edit") { value(true) }
+				jsonPath("$.capabilities.publish") { value(true) }
+				jsonPath("$.capabilities.export") { value(true) }
+				jsonPath("$.capabilities.configure") { value(true) }
+				jsonPath("$.capabilities.unpublish") { value(true) }
 				jsonPath("$.role") { value("OWNER") }
 				jsonPath("$.publicCitationsEnabled") { value(true) }
 			}

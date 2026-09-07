@@ -10,6 +10,7 @@ import { useState } from "react";
 
 import { ProfileMenu } from "@/components/layout/profile-menu";
 import { SidebarNavigation } from "@/components/layout/sidebar-navigation";
+import { SidebarEntitlementNotice } from "@/components/layout/sidebar-entitlement-notice";
 import { SidebarOnboarding } from "@/components/layout/sidebar-onboarding";
 import { useRecentChats } from "@/components/layout/use-recent-chats";
 import { useSidebarWorkspace } from "@/components/layout/use-sidebar-workspace";
@@ -112,6 +113,7 @@ export function ProductSidebar({ collapsed = false, theme, onThemeChange, onTogg
         />
 
         {!settingsMode && !collapsed && <SidebarOnboarding workspaceId={workspace.currentWorkspaceId} />}
+        {!settingsMode ? <SidebarEntitlementNotice collapsed={collapsed} /> : null}
 
         <ProfileMenu
           collapsed={collapsed}
