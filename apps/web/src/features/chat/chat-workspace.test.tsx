@@ -97,11 +97,32 @@ describe("ChatWorkspace", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Start request" }));
 
     await waitFor(() => expect(mocks.createChatAgentRun).toHaveBeenCalledWith({
-      writingBlockIds: ["block-1"], instruction: "Write release notes", brief: undefined,
+      writingBlockIds: ["block-1"], instruction: "Write release notes", contentType: "CHANGELOG", brief: undefined,
     }, expect.any(String)));
     expect(mocks.createChatAgentRun).toHaveBeenCalledTimes(1);
     expect(mocks.locationAssign).toHaveBeenCalledWith("/chat?chat=chat-new&agent=agent-new");
     expect(window.sessionStorage.length).toBe(0);
+  });
+
+  it("admits a launch announcement request with contentType and brief fields", async () => {
+    mocks.createChatAgentRun.mockResolvedValue(agentRun({
+      id: "agent-launch",
+      chatId: "chat-launch",
+      contentType: "LAUNCH_ANNOUNCEMENT",
+    }));
+    render(<ChatWorkspace />);
+    await waitFor(() => expect(screen.queryByText("Loading sources…")).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Launch announcement" }));
+    fireEvent.change(await screen.findByLabelText("Purpose (recommended)"), { target: { value: "Open the waitlist" } });
+    fireEvent.change(screen.getByLabelText("Audience (recommended)"), { target: { value: "Founders" } });
+    fireEvent.click(await screen.findByRole("button", { name: "Start request" }));
+
+    await waitFor(() => expect(mocks.createChatAgentRun).toHaveBeenCalledWith({
+      writingBlockIds: ["block-1"],
+      instruction: "Write release notes",
+      contentType: "LAUNCH_ANNOUNCEMENT",
+      brief: expect.objectContaining({ purpose: "Open the waitlist", audience: "Founders" }),
+    }, expect.any(String)));
   });
 
   it("reuses the pending idempotency key after an admission response is lost", async () => {
