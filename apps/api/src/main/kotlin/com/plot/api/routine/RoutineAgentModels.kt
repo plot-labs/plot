@@ -142,6 +142,8 @@ data class AgentRunDispatchRequest(
 	val idempotencyKey: String? = null,
 	val requestFingerprint: String? = null,
 	val contentType: ContentType = ContentType.CHANGELOG,
+	val contentProfileRevisionId: UUID? = null,
+	val contentBriefSnapshotJson: String? = null,
 )
 
 data class AgentBudgetSnapshot(
@@ -168,6 +170,8 @@ data class AgentRunRecord(
 	val toolPolicyVersion: String,
 	val budgetSnapshotJson: String,
 	val contentType: ContentType = ContentType.CHANGELOG,
+	val contentProfileRevisionId: UUID? = null,
+	val contentBriefSnapshotJson: String? = null,
 	val status: AgentRunStatus,
 	val currentStep: Int,
 	val attemptCount: Int,

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import type { ChatAgentRun, SourceReference } from "@plot/api-client";
+import type { ChatAgentRun, ContentBrief, SourceReference } from "@plot/api-client";
 import { isTerminalChatAgentStatus, pollChatAgentRun } from "@/lib/chat-agent-polling";
 import { plotApiClient } from "@/lib/api-client";
 
@@ -22,6 +22,7 @@ type UseChatAgentActivityProps = {
   requestedArtifactId: string | null;
   references: SourceReference[];
   sourceError: string;
+  brief?: ContentBrief;
   onAgentArtifact: (run: ChatAgentRun) => void;
   onAdmitted: (run: ChatAgentRun) => void;
 };
@@ -32,6 +33,7 @@ export function useChatAgentActivity({
   requestedArtifactId,
   references,
   sourceError,
+  brief,
   onAgentArtifact,
   onAdmitted,
 }: UseChatAgentActivityProps) {
@@ -147,6 +149,7 @@ export function useChatAgentActivity({
         instruction: message,
         writingBlockIds: selected.map((reference) => reference.id),
         workSessionId: chatId,
+        brief,
       }, idempotencyKey, { signal: controller.signal });
       if (agentAbortRef.current !== controller || controller.signal.aborted) return;
       admitted = true;

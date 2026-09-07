@@ -278,8 +278,8 @@ function convertToTiptapDoc(
     if (matchedSentence && matchedSentence.citations && matchedSentence.citations.length > 0) {
       const citationSources: CitationSourceItem[] = matchedSentence.citations.map((c) => ({
         title: c.sourceLabel || "Source",
-        url: c.originalUrl || "#",
-        provider: c.provider || "GitHub",
+        url: c.provider === "USER_CONFIRMED" ? "" : (c.originalUrl || ""),
+        provider: c.provider || "GITHUB",
       }));
 
       paragraphContent.push({

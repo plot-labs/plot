@@ -11,6 +11,8 @@ const queued: ChatAgentRun = {
   chatId: "chat-1",
   status: "QUEUED",
   contentType: "CHANGELOG",
+  contentProfileRevisionId: null,
+  brief: null,
   failureCode: null,
   artifactId: null,
   instruction: "Read the connected sources",

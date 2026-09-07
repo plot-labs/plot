@@ -12,7 +12,7 @@ import type { WorkSessionSummary as ChatSummary } from "@plot/api-client";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { UserRound } from "lucide-react";
+import { UserRound, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const productNavItems = [
@@ -30,6 +30,7 @@ const workspaceSettingsNavGroups = [
     label: "Workspace",
     items: [
       { href: "/settings/general", label: "General", icon: SettingsIcon },
+      { href: "/settings/content", label: "Content", icon: ContentIcon },
       { href: "/settings/integrations", label: "Integrations", icon: IntegrationsIcon },
     ],
   },
@@ -173,4 +174,8 @@ function RoutinesIcon() {
 
 function IntegrationsIcon() {
   return <HugeiconsIcon icon={PlugSocketIcon} size={16} color="currentColor" strokeWidth={1.5} aria-hidden="true" className="shrink-0" />;
+}
+
+function ContentIcon() {
+  return <FileText className="size-4 shrink-0" />;
 }

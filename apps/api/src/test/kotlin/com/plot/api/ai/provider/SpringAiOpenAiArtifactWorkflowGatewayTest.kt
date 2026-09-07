@@ -3,6 +3,8 @@ package com.plot.api.ai.provider
 import com.plot.api.ai.prompt.ChangelogPromptFactory
 import com.plot.api.config.PlotAiProperties
 import com.plot.api.content.ContentTypeRegistry
+import com.plot.api.content.FrozenContentContext
+import com.plot.api.content.FrozenContentContextLookup
 import com.plot.api.content.FrozenPromptVersionLookup
 import com.plot.api.content.LaunchAnnouncementPromptFactory
 import com.plot.api.artifact.workflow.model.EvidenceSnapshot
@@ -44,6 +46,9 @@ class SpringAiOpenAiArtifactWorkflowGatewayTest {
 	)
 	private val frozenPromptVersionLookup = FrozenPromptVersionLookup {
 		ContentTypeRegistry.CHANGELOG_PROMPT_VERSION
+	}
+	private val frozenContentContextLookup = FrozenContentContextLookup {
+		FrozenContentContext(null, null)
 	}
 
 	@Test
@@ -211,6 +216,7 @@ class SpringAiOpenAiArtifactWorkflowGatewayTest {
 		assertTrue(prompt.system.contains("Cover every distinct user-visible change at least once"))
 		assertTrue(prompt.system.contains("Omit internal-only work"))
 		assertTrue(prompt.system.contains("plain product language"))
+		assertTrue(prompt.system.contains("Product profile and content brief constrain voice and framing only"))
 		assertTrue(prompt.user.contains("<requested_changelog_instruction>"))
 		assertTrue(prompt.user.contains("Use concise bullet-style sentences"))
 		assertTrue(prompt.user.contains("<untrusted_evidence_json>"))
@@ -233,6 +239,7 @@ class SpringAiOpenAiArtifactWorkflowGatewayTest {
 		assertTrue(reviewPrompt.system.contains("Partial support never makes the whole sentence SUPPORTED"))
 		assertTrue(reviewPrompt.system.contains("Subjective or editorial language about tone or experience"))
 		assertTrue(reviewPrompt.system.contains("A disagreement about rollout scope does not automatically conflict"))
+		assertTrue(reviewPrompt.system.contains("USER_CONFIRMED evidence IDs may be cited for confirmed facts"))
 
 		val rewritePrompt = promptFactory.rewriter(
 			RewriteModelRequest(
@@ -269,6 +276,7 @@ class SpringAiOpenAiArtifactWorkflowGatewayTest {
 		properties = properties,
 		contentTypeRegistry = contentTypeRegistry,
 		frozenPromptVersionLookup = frozenPromptVersionLookup,
+		frozenContentContextLookup = frozenContentContextLookup,
 	)
 
 	private fun evidence(body: String = "Snapshot body") = EvidenceSnapshot(
@@ -348,6 +356,11 @@ class SpringAiOpenAiArtifactWorkflowGatewayTest {
 		@Bean
 		fun frozenPromptVersionLookup() = FrozenPromptVersionLookup {
 			ContentTypeRegistry.CHANGELOG_PROMPT_VERSION
+		}
+
+		@Bean
+		fun frozenContentContextLookup() = FrozenContentContextLookup {
+			FrozenContentContext(null, null)
 		}
 	}
 

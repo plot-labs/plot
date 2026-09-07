@@ -59,7 +59,9 @@ const artifact = {
 
 function agentRun(overrides: Record<string, unknown> = {}) {
   return {
-    id: "agent-1", chatId: "chat-1", instruction: "Release notes", contentType: "CHANGELOG", status: "QUEUED", failureCode: null,
+    id: "agent-1", chatId: "chat-1", instruction: "Release notes", contentType: "CHANGELOG",
+    contentProfileRevisionId: null, brief: null,
+    status: "QUEUED", failureCode: null,
     artifactId: null, artifact: null, createdAt: "2026-07-01T00:01:00Z", updatedAt: "2026-07-01T00:01:00Z", ...overrides,
   };
 }
@@ -95,7 +97,7 @@ describe("ChatWorkspace", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Start request" }));
 
     await waitFor(() => expect(mocks.createChatAgentRun).toHaveBeenCalledWith({
-      writingBlockIds: ["block-1"], instruction: "Write release notes",
+      writingBlockIds: ["block-1"], instruction: "Write release notes", brief: undefined,
     }, expect.any(String)));
     expect(mocks.createChatAgentRun).toHaveBeenCalledTimes(1);
     expect(mocks.locationAssign).toHaveBeenCalledWith("/chat?chat=chat-new&agent=agent-new");

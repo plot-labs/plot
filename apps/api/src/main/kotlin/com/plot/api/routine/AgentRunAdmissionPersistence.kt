@@ -1,6 +1,7 @@
 package com.plot.api.routine
 
 import com.plot.api.common.UuidGenerator
+import com.plot.api.contentprofile.ContentProfilePersistence
 import com.plot.api.persistence.JooqSqlExecutor
 import com.plot.api.persistence.JooqTransactionExecutor
 import java.sql.Timestamp
@@ -15,6 +16,7 @@ class AgentRunAdmissionPersistence(
 	private val transactionExecutor: JooqTransactionExecutor,
 	private val uuidGenerator: UuidGenerator,
 	private val queryPersistence: AgentRunQueryPersistence,
+	private val contentProfilePersistence: ContentProfilePersistence,
 	private val clock: Clock? = null,
 ) {
 	private fun currentInstant(): Instant = clock?.instant() ?: Instant.now()
@@ -88,14 +90,17 @@ class AgentRunAdmissionPersistence(
 		)
 
 		val agentRunId = uuidGenerator.next()
+		val profileRevisionId = request.contentProfileRevisionId
+			?: contentProfilePersistence.findCurrentRevision(workspaceId)?.id
 		sqlExecutor.update(
 			"""
 			insert into agent_runs (
 			  id, workspace_id, routine_execution_id, routine_id, work_session_id, created_by_user_id,
 			  origin, idempotency_key, request_fingerprint,
 			  instruction_snapshot, prompt_version, tool_policy_version, budget_snapshot, content_type,
+			  content_profile_revision_id, content_brief_snapshot,
 			  status, current_step, attempt_count, max_attempts, created_at, updated_at
-			) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, 'QUEUED', 0, 0, ?, ?, ?)
+			) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?::jsonb, 'QUEUED', 0, 0, ?, ?, ?)
 			""".trimIndent(),
 			agentRunId,
 			workspaceId,
@@ -111,6 +116,8 @@ class AgentRunAdmissionPersistence(
 			request.toolPolicyVersion.trim(),
 			request.budgetSnapshotJson,
 			request.contentType.name,
+			profileRevisionId,
+			request.contentBriefSnapshotJson,
 			request.maxAttempts,
 			Timestamp.from(now),
 			Timestamp.from(now),

@@ -1,4 +1,4 @@
-export type SourceProvider = "GITHUB";
+export type SourceProvider = "GITHUB" | "USER_CONFIRMED";
 export type SentenceOrigin = "GENERATED" | "REWRITTEN" | "USER_MODIFIED";
 
 export interface SourceReference {
@@ -18,14 +18,14 @@ export interface ContentCitation {
   evidenceId: string;
   provider: SourceProvider;
   sourceLabel: string;
-  originalUrl: string;
+  originalUrl: string | null;
 }
 
 export interface ContentSource {
   evidenceId: string;
   provider: SourceProvider;
   sourceLabel: string;
-  originalUrl: string;
+  originalUrl: string | null;
   statementIds: string[];
 }
 
@@ -385,6 +385,8 @@ export interface ChatAgentRun {
   chatId: string;
   instruction: string;
   contentType: ContentType;
+  contentProfileRevisionId: string | null;
+  brief: ContentBrief | null;
   status: RoutineAgentRunStatus;
   failureCode: string | null;
   artifactId: string | null;
@@ -399,11 +401,48 @@ export interface ChatAgentRun {
   updatedAt: string;
 }
 
+export interface ConfirmedFactInput {
+  body: string;
+  kind?: string;
+}
+
+export interface ContentBrief {
+  purpose?: string | null;
+  audience?: string | null;
+  availability?: string | null;
+  pricing?: string | null;
+  userAction?: string | null;
+  confirmedFacts?: ConfirmedFactInput[];
+}
+
 export interface CreateChatAgentRunInput {
   instruction: string;
   workSessionId?: string;
   writingBlockIds?: string[];
   contentType?: ContentType;
+  contentProfileRevisionId?: string;
+  brief?: ContentBrief;
+}
+
+export interface ContentProfile {
+  revisionId: string | null;
+  revisionNumber: number | null;
+  productSummary: string;
+  primaryAudience: string;
+  customerTerms: string;
+  tone: string;
+  defaultLocale: string;
+  bannedPhrases: string[];
+  updatedAt: string | null;
+}
+
+export interface UpdateContentProfileInput {
+  productSummary?: string;
+  primaryAudience?: string;
+  customerTerms?: string;
+  tone?: string;
+  defaultLocale?: string;
+  bannedPhrases?: string[];
 }
 
 export interface Routine {
@@ -478,6 +517,8 @@ export interface PlotApiClient {
   createWorkspace(input: { name: string }, options?: RequestOptions): Promise<WorkspaceSummary>;
   getWorkspace(id: string, options?: RequestOptions): Promise<WorkspaceSummary>;
   updateWorkspace(id: string, input: { name?: string; logoUrl?: string; publicCitationsEnabled?: boolean }, options?: RequestOptions): Promise<WorkspaceSummary>;
+  getContentProfile(options?: RequestOptions): Promise<ContentProfile>;
+  updateContentProfile(input: UpdateContentProfileInput, options?: RequestOptions): Promise<ContentProfile>;
   listRoutines(options?: RequestOptions): Promise<Routine[]>;
   getRoutine(id: string, options?: RequestOptions): Promise<Routine>;
   createRoutine(input: { name: string; sourceScopeId: string; contextSourceScopeIds?: string[]; instruction: string; cadence: RoutineCadence }, options?: RequestOptions): Promise<Routine>;
@@ -604,6 +645,12 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
     getWorkspace: (id, requestOptions) => request(`/workspaces/${encodeURIComponent(id)}`, { signal: requestOptions?.signal }),
     updateWorkspace: (id, input, requestOptions) => request(`/workspaces/${encodeURIComponent(id)}`, {
       method: "PATCH",
+      body: JSON.stringify(input),
+      signal: requestOptions?.signal,
+    }),
+    getContentProfile: (requestOptions) => request("/content-profile", { signal: requestOptions?.signal }),
+    updateContentProfile: (input, requestOptions) => request("/content-profile", {
+      method: "PUT",
       body: JSON.stringify(input),
       signal: requestOptions?.signal,
     }),

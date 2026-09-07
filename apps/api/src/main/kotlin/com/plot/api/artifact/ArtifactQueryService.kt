@@ -275,26 +275,41 @@ class ArtifactQueryService(
 		order by rs.sentence_id, c.citation_order
 		""".trimIndent(),
 		{ rs, _ ->
-			val originalUrl = safeHttpUrl(rs.getString(5))
-			val accessible = rs.getBoolean(6) && originalUrl != null && approvedPublicUrl(requireNotNull(rs.getString(3)), originalUrl)
-			if (!accessible) {
+			val provider = requireNotNull(rs.getString(3))
+			val sourceLabel = requireNotNull(rs.getString(4)).trim()
+			if (sourceLabel.isBlank()) {
 				null
+			} else if (provider.equals("USER_CONFIRMED", ignoreCase = true)) {
+				PublicCitation(
+					requireNotNull(rs.getObject(1, UUID::class.java)),
+					requireNotNull(rs.getObject(2, UUID::class.java)),
+					provider,
+					sourceLabel,
+					null,
+					rs.getString(7),
+				)
 			} else {
+				val originalUrl = safeHttpUrl(rs.getString(5))
+				val accessible = rs.getBoolean(6) && originalUrl != null && approvedPublicUrl(provider, originalUrl)
+				if (!accessible) {
+					null
+				} else {
 					PublicCitation(
 						requireNotNull(rs.getObject(1, UUID::class.java)),
 						requireNotNull(rs.getObject(2, UUID::class.java)),
-						requireNotNull(rs.getString(3)),
-						requireNotNull(rs.getString(4)).trim(),
-					originalUrl,
-					rs.getString(7),
-				)
+						provider,
+						sourceLabel,
+						originalUrl,
+						rs.getString(7),
+					)
+				}
 			}
 		},
 		devContext.devWorkspaceId, revisionId, variantId,
 	).filterNotNull().filter { it.sourceLabel.isNotBlank() }.groupBy { it.sentenceId }
 	private fun publicSources(citations: Map<UUID, List<PublicCitation>>): List<ContentSourceResponse> = citations.values
 		.flatten()
-		.groupBy { it.originalUrl }
+		.groupBy { it.evidenceId }
 		.values
 		.map { rows ->
 			val first = rows.first()
@@ -353,9 +368,21 @@ class ArtifactQueryService(
 		from generation_inputs where workspace_id = ? and generation_run_id = ? order by order_index
 		""".trimIndent(),
 			{ rs, _ -> EvidenceSnapshot(
-				requireNotNull(rs.getObject(1, UUID::class.java)), runId, requireNotNull(rs.getObject(2, UUID::class.java)), rs.getInt(3), SourceProvider.valueOf(requireNotNull(rs.getString(4))),
-				requireNotNull(rs.getString(5)), requireNotNull(rs.getString(6)), rs.getString(7), requireNotNull(rs.getString(8)), rs.getString(9), requireNotNull(rs.getString(10)),
-				rs.getTimestamp(11)?.toInstant(), rs.getTimestamp(12)?.toInstant(), requireNotNull(rs.getString(13)), requireNotNull(rs.getTimestamp(14)).toInstant(),
+				requireNotNull(rs.getObject(1, UUID::class.java)),
+				runId,
+				rs.getObject(2, UUID::class.java),
+				rs.getInt(3),
+				SourceProvider.valueOf(requireNotNull(rs.getString(4))),
+				requireNotNull(rs.getString(5)),
+				requireNotNull(rs.getString(6)),
+				rs.getString(7),
+				requireNotNull(rs.getString(8)),
+				rs.getString(9),
+				rs.getString(10),
+				rs.getTimestamp(11)?.toInstant(),
+				rs.getTimestamp(12)?.toInstant(),
+				requireNotNull(rs.getString(13)),
+				requireNotNull(rs.getTimestamp(14)).toInstant(),
 		) },
 		devContext.devWorkspaceId, runId,
 	)
@@ -408,7 +435,7 @@ internal data class PublicCitation(
     val evidenceId: UUID,
     val provider: String,
     val sourceLabel: String,
-    val originalUrl: String,
+    val originalUrl: String?,
     val sourceVisibility: String?,
 ) {
     val response: ContentCitationResponse

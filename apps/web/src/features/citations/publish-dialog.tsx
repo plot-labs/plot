@@ -271,6 +271,7 @@ function publicCitationPreview(pack: Artifact): Array<{ sourceLabel: string; ori
   const citations: Array<{ sourceLabel: string; originalUrl: string }> = [];
   for (const sentence of pack.variant.sentences) {
     for (const citation of sentence.citations) {
+      if (citation.provider !== "GITHUB" || !citation.originalUrl) continue;
       const key = `${citation.sourceLabel}\0${citation.originalUrl}`;
       if (seen.has(key)) continue;
       seen.add(key);

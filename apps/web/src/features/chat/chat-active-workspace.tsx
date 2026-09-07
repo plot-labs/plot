@@ -15,6 +15,7 @@ import { ArtifactDocumentSurface } from "@/features/artifacts/artifact-document-
 import { ArtifactEditorStatus, ArtifactSaveDraftButton, artifactSaveStateLabel } from "@/features/artifacts/artifact-editor-chrome";
 import { ArtifactHistoryPanel } from "@/features/citations/artifact-history-panel";
 import { ExportDialog } from "@/features/citations/export-dialog";
+import { ChatBriefPanel, emptyChatBriefDraft, toContentBrief } from "@/features/chat/chat-brief-panel";
 import { ChatComposer } from "@/features/chat/chat-composer";
 import { AgentActivityDetail, ChatActivityPanel, EmptyArtifactState, ErrorNotice } from "@/features/chat/chat-activity";
 import { chatHref, toComposerReferences } from "@/features/chat/chat-workspace-utils";
@@ -22,7 +23,6 @@ import { useChatAgentActivity } from "@/features/chat/use-chat-agent-activity";
 import { useChatArtifactDocument } from "@/features/chat/use-chat-artifact-document";
 import { plotApiClient } from "@/lib/api-client";
 import { useWorkspaceEntitlement } from "@/lib/use-workspace-entitlement";
-
 type ChatActiveWorkspaceProps = {
   activeChat: ChatSummary;
   references: SourceReference[];
@@ -50,6 +50,8 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
   const [artifactPanelOpen, setArtifactPanelOpen] = useState(false);
   const [artifactHistoryOpen, setArtifactHistoryOpen] = useState(false);
   const [artifactSaveRequestToken, setArtifactSaveRequestToken] = useState(0);
+  const [briefDraft, setBriefDraft] = useState(emptyChatBriefDraft);
+  const brief = useMemo(() => toContentBrief(briefDraft), [briefDraft]);
   const artifactPanel = useResizable({ defaultSize: 720, minSizePx: 420, maxSizePx: 1200 });
   const resizeArtifactPanel = artifactPanel.resize;
   const mobileAssistantTriggerRef = useRef<HTMLButtonElement>(null);
@@ -73,6 +75,7 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
     requestedArtifactId,
     references,
     sourceError,
+    brief,
     onAgentArtifact,
     onAdmitted,
   });
@@ -257,6 +260,9 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
           busy={document.artifactLoading || agent.agentBusy || agent.activitiesLoading}
           canGenerate={canGenerate}
         />
+        <div className="mx-auto w-full max-w-[720px] px-4 pb-3 sm:px-6">
+          <ChatBriefPanel value={briefDraft} onChange={setBriefDraft} />
+        </div>
       </div>
       {artifactPanelOpen && document.currentArtifact ? (
         <ResizeHandle

@@ -3,12 +3,12 @@ package com.plot.api.artifact.workflow.model
 import java.time.Instant
 import java.util.UUID
 
-enum class SourceProvider { GITHUB }
+enum class SourceProvider { GITHUB, USER_CONFIRMED }
 
 data class EvidenceSnapshot(
 	val id: UUID,
 	val artifactWorkflowRunId: UUID,
-	val writingBlockId: UUID,
+	val writingBlockId: UUID?,
 	val orderIndex: Int,
 	val sourceProvider: SourceProvider,
 	val sourceKind: String,
@@ -16,7 +16,7 @@ data class EvidenceSnapshot(
 	val snapshotTitle: String?,
 	val snapshotBody: String,
 	val snapshotExcerpt: String?,
-	val originalUrl: String,
+	val originalUrl: String?,
 	val sourceCreatedAt: Instant?,
 	val sourceUpdatedAt: Instant?,
 	val contentHash: String,
@@ -119,5 +119,5 @@ data class ExportSource(
 	val evidenceId: UUID,
 	val provider: String,
 	val sourceLabel: String,
-	val originalUrl: String,
+	val originalUrl: String?,
 )
