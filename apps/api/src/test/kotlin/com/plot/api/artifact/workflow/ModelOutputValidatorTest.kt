@@ -44,6 +44,28 @@ class ModelOutputValidatorTest {
 	}
 
 	@Test
+	fun rejectsLaunchWriterOutputAboveFourSentences() {
+		val validator = ModelOutputValidator()
+		val five = (1..5).map { WriterSentence("Sentence $it.") }
+		assertFailsWith<InvalidModelOutputException> {
+			validator.assignSentenceIds(
+				runId,
+				WriterOutput(five),
+				setOf(github.id),
+				maxSentences = 4,
+			) { UUID.randomUUID() }
+		}
+		val four = (1..4).map { WriterSentence("Sentence $it.") }
+		val accepted = validator.assignSentenceIds(
+			runId,
+			WriterOutput(four),
+			setOf(github.id),
+			maxSentences = 4,
+		) { UUID.randomUUID() }
+		assertEquals(4, accepted.size)
+	}
+
+	@Test
 	fun rejectsProviderAuthoredCitationMarkupFromWriterAndRewriterBodies() {
 		val validator = ModelOutputValidator()
 		val pollutedBodies = listOf(

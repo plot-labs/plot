@@ -44,24 +44,31 @@ class ContentTypeRegistry(
 	}
 
 	fun specForPromptVersion(promptVersion: String): ContentWriterSpec =
-		when (promptVersion) {
-			CHANGELOG_PROMPT_VERSION -> specFor(ContentType.CHANGELOG)
-			LAUNCH_PROMPT_VERSION -> specFor(ContentType.LAUNCH_ANNOUNCEMENT)
+		when {
+			promptVersion == CHANGELOG_PROMPT_VERSION -> specFor(ContentType.CHANGELOG)
+			isLaunchPromptVersion(promptVersion) -> specFor(ContentType.LAUNCH_ANNOUNCEMENT)
 			else -> specFor(ContentType.CHANGELOG)
 		}
 
 	fun promptFactoryFor(promptVersion: String): ContentPromptFactory =
-		when (promptVersion) {
-			LAUNCH_PROMPT_VERSION -> launchAnnouncementPromptFactory
+		when {
+			isLaunchPromptVersion(promptVersion) -> launchAnnouncementPromptFactory
 			else -> changelogPromptFactory.asContentPromptFactory()
 		}
 
 	companion object {
 		const val CHANGELOG_PROMPT_VERSION = "changelog-v9"
 		const val CHANGELOG_SCHEMA_VERSION = "artifact-workflow-v5"
-		const val LAUNCH_PROMPT_VERSION = "launch-announcement-v2"
+		const val LAUNCH_PROMPT_VERSION = "launch-announcement-v3"
 		const val LAUNCH_SCHEMA_VERSION = "launch-workflow-v1"
 		const val BUDGET_VERSION = "budget-v1"
+		const val LAUNCH_MAX_WRITER_SENTENCES = 4
+
+		fun isLaunchPromptVersion(promptVersion: String): Boolean =
+			promptVersion.startsWith("launch-announcement-")
+
+		fun maxWriterSentences(promptVersion: String): Int? =
+			if (isLaunchPromptVersion(promptVersion)) LAUNCH_MAX_WRITER_SENTENCES else null
 	}
 }
 
