@@ -597,7 +597,21 @@ class RoutineApiIntegrationTest {
 			jsonPath("$.error") { value("IDEMPOTENCY_KEY_REUSED") }
 		}
 
+		mockMvc.post("/api/agent-runs") {
+			header("Idempotency-Key", "chat-request-1")
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"instruction":"Draft an update","writingBlockIds":["$blockId"],"contentType":"LAUNCH_ANNOUNCEMENT"}"""
+		}.andExpect {
+			status { isConflict() }
+			jsonPath("$.error") { value("IDEMPOTENCY_KEY_REUSED") }
+		}
+
 		val chatId = UUID.fromString(firstJson.get("chatId").asText())
+		mockMvc.get("/api/agent-runs/$firstRunId").andExpect {
+			status { isOk() }
+			jsonPath("$.contentType") { value("CHANGELOG") }
+		}
+
 		mockMvc.post("/api/agent-runs") {
 			header("Idempotency-Key", "chat-request-2")
 			contentType = MediaType.APPLICATION_JSON

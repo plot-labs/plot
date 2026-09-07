@@ -28,7 +28,7 @@ export function PublishDialog({
   onPackChange?: (pack: Artifact) => void;
 }) {
   const entitlement = useWorkspaceEntitlement();
-  const canPublish = entitlement?.capabilities.publish ?? true;
+  const canPublish = (entitlement?.capabilities.publish ?? true) && pack.contentType === "CHANGELOG";
   const canUnpublish = entitlement?.capabilities.unpublish ?? true;
   const [pending, setPending] = useState(false);
   const [confirmation, setConfirmation] = useState<{ warnings: PublishWarning[] } | null>(null);

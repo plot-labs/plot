@@ -93,9 +93,9 @@ class AgentRunAdmissionPersistence(
 			insert into agent_runs (
 			  id, workspace_id, routine_execution_id, routine_id, work_session_id, created_by_user_id,
 			  origin, idempotency_key, request_fingerprint,
-			  instruction_snapshot, prompt_version, tool_policy_version, budget_snapshot,
+			  instruction_snapshot, prompt_version, tool_policy_version, budget_snapshot, content_type,
 			  status, current_step, attempt_count, max_attempts, created_at, updated_at
-			) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, 'QUEUED', 0, 0, ?, ?, ?)
+			) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, 'QUEUED', 0, 0, ?, ?, ?)
 			""".trimIndent(),
 			agentRunId,
 			workspaceId,
@@ -110,6 +110,7 @@ class AgentRunAdmissionPersistence(
 			request.promptVersion.trim(),
 			request.toolPolicyVersion.trim(),
 			request.budgetSnapshotJson,
+			request.contentType.name,
 			request.maxAttempts,
 			Timestamp.from(now),
 			Timestamp.from(now),

@@ -10,6 +10,7 @@ const artifact: Artifact = {
   id: "artifact-1",
   status: "READY",
   title: "OpenRouter summary provider",
+  contentType: "CHANGELOG",
   variant: {
     id: "variant-1",
     status: "READY",

@@ -1,5 +1,6 @@
 package com.plot.api.routine.dto
 
+import com.plot.api.content.ContentType
 import com.plot.api.routine.AgentRunRecord
 import com.plot.api.routine.AgentRunStatus
 import jakarta.validation.constraints.NotBlank
@@ -11,12 +12,14 @@ data class CreateChatAgentRunRequest(
 	@field:NotBlank @field:Size(max = 2_000) val instruction: String,
 	val workSessionId: UUID? = null,
 	@field:Size(max = 20) val writingBlockIds: List<UUID> = emptyList(),
+	val contentType: ContentType = ContentType.CHANGELOG,
 )
 
 data class ChatAgentRunResponse(
 	val id: UUID,
 	val chatId: UUID,
 	val instruction: String,
+	val contentType: ContentType,
 	val status: AgentRunStatus,
 	val failureCode: String?,
 	val artifactId: UUID?,
@@ -29,6 +32,7 @@ data class ChatAgentArtifactSummaryResponse(
 	val id: UUID,
 	val status: String,
 	val title: String?,
+	val contentType: ContentType,
 	val updatedAt: Instant,
 )
 
@@ -36,6 +40,7 @@ fun AgentRunRecord.toChatResponse(artifact: ChatAgentArtifactSummaryResponse? = 
 	id = id,
 	chatId = requireNotNull(workSessionId) { "Chat Agent run is missing its Chat" },
 	instruction = instructionSnapshot,
+	contentType = contentType,
 	status = status,
 	failureCode = failureCode,
 	artifactId = artifact?.id,

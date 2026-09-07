@@ -3,6 +3,7 @@ package com.plot.api.routine
 import com.plot.api.common.ApiException
 import com.plot.api.common.UuidGenerator
 import com.plot.api.common.WorkspacePrincipal
+import com.plot.api.content.ContentType
 import com.plot.api.dev.DevContext
 import com.plot.api.routine.dto.ChatAgentRunResponse
 import com.plot.api.routine.dto.ChatAgentArtifactSummaryResponse
@@ -42,6 +43,7 @@ class ChatAgentAdmissionService(
 			instruction = request.instruction,
 			workSessionId = request.workSessionId,
 			writingBlockIds = request.writingBlockIds,
+			contentType = request.contentType,
 			idempotencyKey = idempotencyKey,
 			chatTitle = null,
 		)
@@ -59,6 +61,7 @@ class ChatAgentAdmissionService(
 		instruction = instruction,
 		workSessionId = null,
 		writingBlockIds = writingBlockIds,
+		contentType = ContentType.CHANGELOG,
 		idempotencyKey = idempotencyKey,
 		chatTitle = chatTitle,
 	)
@@ -68,6 +71,7 @@ class ChatAgentAdmissionService(
 		instruction: String,
 		workSessionId: UUID?,
 		writingBlockIds: List<UUID>,
+		contentType: ContentType,
 		idempotencyKey: String,
 		chatTitle: String?,
 	): AgentRunRecord {
@@ -86,6 +90,7 @@ class ChatAgentAdmissionService(
 				instruction = normalizedInstruction,
 				workSessionId = workSessionId,
 				writingBlockIds = writingBlockIds,
+				contentType = contentType,
 			),
 		)
 		return transactionExecutor.execute {
@@ -117,9 +122,9 @@ class ChatAgentAdmissionService(
 				insert into agent_runs (
 				  id, workspace_id, routine_execution_id, routine_id, work_session_id, created_by_user_id,
 				  origin, idempotency_key, request_fingerprint,
-				  instruction_snapshot, prompt_version, tool_policy_version, budget_snapshot,
+				  instruction_snapshot, prompt_version, tool_policy_version, budget_snapshot, content_type,
 				  status, max_attempts, created_at, updated_at
-				) values (?, ?, null, null, ?, ?, 'CHAT', ?, ?, ?, 'chat-agent-v1', 'read-only-v1', ?::jsonb,
+				) values (?, ?, null, null, ?, ?, 'CHAT', ?, ?, ?, 'chat-agent-v1', 'read-only-v1', ?::jsonb, ?,
 				  'QUEUED', ?, ?, ?)
 				on conflict (workspace_id, idempotency_key) where origin = 'CHAT' do nothing
 				""".trimIndent(),
@@ -131,6 +136,7 @@ class ChatAgentAdmissionService(
 				fingerprint,
 				normalizedInstruction,
 				budgetSnapshot(),
+				contentType.name,
 				properties.maxAttempts,
 				Timestamp.from(now),
 				Timestamp.from(now),
@@ -215,7 +221,7 @@ class ChatAgentAdmissionService(
 
 	private fun AgentRunRecord.toChatResponseFor(persistence: AgentRunQueryPersistence): ChatAgentRunResponse {
 		return toChatResponse(artifact = persistence.findArtifactForAgentRun(workspaceId, id)?.let {
-			ChatAgentArtifactSummaryResponse(it.id, it.status, it.title, it.updatedAt)
+			ChatAgentArtifactSummaryResponse(it.id, it.status, it.title, contentType, it.updatedAt)
 		})
 	}
 
@@ -352,6 +358,7 @@ class ChatAgentAdmissionService(
 	private fun fingerprint(request: CreateChatAgentRunRequest): String {
 		val canonical = buildString {
 			append(request.workSessionId ?: "new").append('|')
+			append(request.contentType.name).append('|')
 			append(request.instruction).append('|')
 			request.writingBlockIds.forEach { append(it).append(',') }
 		}

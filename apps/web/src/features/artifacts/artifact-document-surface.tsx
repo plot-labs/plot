@@ -73,7 +73,11 @@ export function ArtifactDocumentSurface({
         <div className="min-w-0">
           <div className="text-xs font-semibold uppercase tracking-[0.08em] text-black/42 dark:text-white/45">Artifact</div>
           <h2 className="mt-1 truncate text-xl font-semibold text-black/88 dark:text-white/90">{shownPack.title || "Generated artifact"}</h2>
-          <p className="mt-1 text-sm text-black/52 dark:text-white/55">{historical ? `${historical.cause} · historical preview` : shownPack.status}</p>
+          <p className="mt-1 text-sm text-black/52 dark:text-white/55">
+            {historical ? `${historical.cause} · historical preview` : shownPack.status}
+            {" · "}
+            {shownPack.contentType === "LAUNCH_ANNOUNCEMENT" ? "Launch announcement" : "Changelog"}
+          </p>
         </div>
         <div className="flex min-w-0 flex-col items-end gap-2">
           {saveState ? <ArtifactEditorStatus>{saveStateLabel(saveState, readOnly)}</ArtifactEditorStatus> : null}

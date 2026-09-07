@@ -305,6 +305,10 @@
           "RUNNING",
           "SUCCEEDED",
           "FAILED"
+        ],
+        "contentType": [
+          "CHANGELOG",
+          "LAUNCH_ANNOUNCEMENT"
         ]
       }
     },
@@ -333,6 +337,10 @@
           "RUNNING",
           "SUCCEEDED",
           "FAILED"
+        ],
+        "contentType": [
+          "CHANGELOG",
+          "LAUNCH_ANNOUNCEMENT"
         ]
       }
     },
@@ -364,6 +372,10 @@
         "disposition": [
           "COPY",
           "DOWNLOAD"
+        ],
+        "contentType": [
+          "CHANGELOG",
+          "LAUNCH_ANNOUNCEMENT"
         ]
       }
     },

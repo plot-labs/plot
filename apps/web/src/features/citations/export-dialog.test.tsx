@@ -11,6 +11,7 @@ const pack: Artifact = {
   id: "pack-1",
   status: "NEEDS_REVIEW",
   title: "July changelog",
+  contentType: "CHANGELOG",
   variant: {
     id: "variant-1",
     status: "NEEDS_REVIEW",
