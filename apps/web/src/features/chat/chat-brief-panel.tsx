@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
-import type { ContentBrief, ConfirmedFactInput } from "@plot/api-client";
+import type { ContentBrief, ConfirmedFactInput, ContentType } from "@plot/api-client";
 
 export type ChatBriefDraft = {
+  purpose: string;
+  audience: string;
   availability: string;
   pricing: string;
   userAction: string;
@@ -12,6 +14,8 @@ export type ChatBriefDraft = {
 };
 
 export const emptyChatBriefDraft = (): ChatBriefDraft => ({
+  purpose: "",
+  audience: "",
   availability: "",
   pricing: "",
   userAction: "",
@@ -25,12 +29,16 @@ export function toContentBrief(draft: ChatBriefDraft): ContentBrief | undefined 
     confirmedFacts.push({ body: factBody, kind: "AVAILABILITY" });
   }
   const brief: ContentBrief = {
+    purpose: draft.purpose.trim() || null,
+    audience: draft.audience.trim() || null,
     availability: draft.availability.trim() || null,
     pricing: draft.pricing.trim() || null,
     userAction: draft.userAction.trim() || null,
     confirmedFacts,
   };
   if (
+    !brief.purpose &&
+    !brief.audience &&
     !brief.availability &&
     !brief.pricing &&
     !brief.userAction &&
@@ -44,10 +52,16 @@ export function toContentBrief(draft: ChatBriefDraft): ContentBrief | undefined 
 type ChatBriefPanelProps = {
   value: ChatBriefDraft;
   onChange: (next: ChatBriefDraft) => void;
+  contentType?: ContentType;
 };
 
-export function ChatBriefPanel({ value, onChange }: ChatBriefPanelProps) {
-  const [open, setOpen] = useState(false);
+export function ChatBriefPanel({ value, onChange, contentType = "CHANGELOG" }: ChatBriefPanelProps) {
+  const isLaunch = contentType === "LAUNCH_ANNOUNCEMENT";
+  const [open, setOpen] = useState(isLaunch);
+
+  useEffect(() => {
+    if (isLaunch) setOpen(true);
+  }, [isLaunch]);
 
   return (
     <div className="mt-3 rounded-xl border border-black/[0.08] bg-black/[0.02] px-3 py-2.5 dark:border-white/10 dark:bg-white/[0.03]">
@@ -57,11 +71,23 @@ export function ChatBriefPanel({ value, onChange }: ChatBriefPanelProps) {
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
       >
-        <span>Public conditions & brief</span>
+        <span>{isLaunch ? "Audience, purpose & public conditions" : "Public conditions & brief"}</span>
         <span className="text-black/40 dark:text-white/40">{open ? "Hide" : "Add"}</span>
       </button>
       {open ? (
         <div className="mt-3 grid gap-2.5">
+          <BriefField
+            label={isLaunch ? "Purpose (recommended)" : "Purpose"}
+            value={value.purpose}
+            onChange={(purpose) => onChange({ ...value, purpose })}
+            placeholder="e.g. Announce public beta"
+          />
+          <BriefField
+            label={isLaunch ? "Audience (recommended)" : "Audience"}
+            value={value.audience}
+            onChange={(audience) => onChange({ ...value, audience })}
+            placeholder="e.g. Founders evaluating Plot"
+          />
           <BriefField
             label="Availability / public conditions"
             value={value.availability}
