@@ -18,9 +18,13 @@ class ModelOutputValidator {
 		runId: UUID,
 		output: WriterOutput,
 		availableEvidenceIds: Set<UUID>,
+		maxSentences: Int? = null,
 		idGenerator: () -> UUID,
 	): List<SentenceArtifact> {
 		if (output.sentences.isEmpty()) invalid("Writer output must contain at least one sentence")
+		if (maxSentences != null && output.sentences.size > maxSentences) {
+			invalid("Writer output must contain at most $maxSentences sentences")
+		}
 		if (output.sentences.count { it.intent == SentenceIntent.UNRESOLVED_CONFLICT } > 1) {
 			invalid("Writer output must represent a material disagreement as exactly one unresolved conflict sentence")
 		}

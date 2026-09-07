@@ -145,7 +145,7 @@ internal fun StringBuilder.appendEvidence(evidence: List<EvidenceSnapshot>, obje
 	appendLine("</untrusted_evidence_json>")
 }
 
-private fun StringBuilder.appendSentences(sentences: List<SentenceArtifact>, objectMapper: ObjectMapper) {
+internal fun StringBuilder.appendSentences(sentences: List<SentenceArtifact>, objectMapper: ObjectMapper) {
 	val projection = sentences.sortedBy { it.orderIndex }.map {
 		mapOf(
 			"sentenceId" to it.id,
