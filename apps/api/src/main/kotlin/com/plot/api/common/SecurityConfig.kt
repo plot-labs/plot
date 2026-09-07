@@ -41,6 +41,7 @@ class SecurityConfig(
 				.authorizeHttpRequests { requests ->
 					requests.requestMatchers("/actuator/health", "/api/polar/webhook").permitAll()
 						.requestMatchers(HttpMethod.GET, "/api/public/**").permitAll()
+						.requestMatchers(HttpMethod.POST, "/api/public/waitlist").permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/github/webhook").permitAll()
 						.requestMatchers("/api/auth/sign-in/**", "/api/auth/callback/**").permitAll()
 						.requestMatchers(HttpMethod.GET, "/api/auth/jwks").permitAll()
