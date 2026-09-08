@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Copy, ExternalLink, Globe, ShieldAlert, Undo2, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { PlotApiError, type Artifact, type ArtifactPublication, type PlotApiClient } from "@plot/api-client";
 import { publicChangelogEntryUrl } from "@/lib/public-changelog-url";
@@ -40,9 +40,11 @@ export function PublishDialog({
   const [copyState, setCopyState] = useState<"idle" | "copied">("idle");
   const [externalConfirmed, setExternalConfirmed] = useState(false);
 
-  useEffect(() => {
+  const [previousPublication, setPreviousPublication] = useState(pack.publication);
+  if (previousPublication !== pack.publication) {
+    setPreviousPublication(pack.publication);
     setLivePublication(pack.publication ?? null);
-  }, [pack.publication]);
+  }
 
   async function requestPublish(acknowledgeUnresolved: boolean, acknowledgedWarningKeys: string[] = []) {
     if (pending) return;

@@ -13,7 +13,12 @@ type CreateRelatedContentDialogProps = {
   onClose: () => void;
 };
 
-export function CreateRelatedContentDialog({
+export function CreateRelatedContentDialog(props: CreateRelatedContentDialogProps) {
+  if (!props.open) return null;
+  return <CreateRelatedContentDialogContent key={`${props.pack.id}:${props.pack.contentType}`} {...props} />;
+}
+
+function CreateRelatedContentDialogContent({
   pack,
   client,
   open,
@@ -27,14 +32,6 @@ export function CreateRelatedContentDialog({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    setTargetType(pack.contentType === "CHANGELOG" ? "LAUNCH_ANNOUNCEMENT" : "CHANGELOG");
-    setInstruction("");
-    setError(null);
-    setPending(false);
-  }, [open, pack.contentType]);
 
   useEffect(() => {
     if (!open) return;
