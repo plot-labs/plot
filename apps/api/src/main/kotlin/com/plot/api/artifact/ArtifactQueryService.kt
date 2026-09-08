@@ -4,6 +4,7 @@ import com.plot.api.common.UuidGenerator
 import com.plot.api.artifact.dto.ContentCitationResponse
 import com.plot.api.artifact.dto.ContentExportResponse
 import com.plot.api.artifact.dto.ArtifactPageResponse
+import com.plot.api.artifact.dto.ArtifactPublicationResponse
 import com.plot.api.artifact.dto.ArtifactResponse
 import com.plot.api.artifact.dto.ArtifactSummaryResponse
 import com.plot.api.artifact.dto.ContentSentenceResponse
@@ -31,6 +32,8 @@ import java.util.UUID
 import org.springframework.http.HttpStatus
 import com.plot.api.persistence.JooqSqlExecutor
 import com.plot.api.persistence.JooqTransactionExecutor
+import com.plot.api.content.ContentSourceSnapshotService
+import com.plot.api.content.ContentBrief
 import com.plot.api.persistence.SqlRow
 import org.springframework.stereotype.Service
 import tools.jackson.databind.JsonNode
@@ -41,6 +44,7 @@ class ArtifactQueryService(
     private val devContext: DevContext,
     private val materializer: ArtifactRevisionMaterializer,
     private val objectMapper: ObjectMapper,
+    private val contentSourceSnapshotService: ContentSourceSnapshotService,
 ) {
 	fun list(page: Int, size: Int): ArtifactPageResponse {
 		require(page >= 0) { "Page must not be negative" }
@@ -50,15 +54,23 @@ class ArtifactQueryService(
 		) ?: 0L
 		val items = sqlExecutor.query(
 			"""
-			select id, status, title, updated_at from content_packs
-			where workspace_id = ? order by updated_at desc, id desc limit ? offset ?
+			select cp.id, cp.status, cp.title, coalesce(ar.content_type, 'CHANGELOG'), cp.updated_at
+			from content_packs cp
+			left join generation_runs gr
+			  on gr.workspace_id = cp.workspace_id and gr.id = cp.generation_run_id
+			left join agent_runs ar
+			  on ar.workspace_id = gr.workspace_id and ar.id = gr.agent_run_id
+			where cp.workspace_id = ?
+			order by cp.updated_at desc, cp.id desc
+			limit ? offset ?
 			""".trimIndent(),
 			{ rs, _ ->
 				ArtifactSummaryResponse(
 					id = requireNotNull(rs.getObject(1, UUID::class.java)),
 					status = requireNotNull(rs.getString(2)),
 					title = rs.getString(3),
-					updatedAt = requireNotNull(rs.getTimestamp(4)).toInstant(),
+					contentType = requireNotNull(rs.getString(4)),
+					updatedAt = requireNotNull(rs.getTimestamp(5)).toInstant(),
 				)
 			},
 			devContext.devWorkspaceId, size, page * size,
@@ -131,8 +143,13 @@ class ArtifactQueryService(
 	private fun loadPackForRevision(predicate: String, id: UUID, revisionId: UUID?): ArtifactResponse {
 		val header = sqlExecutor.query(
 			"""
-			select cp.id, cp.status, cp.title, cv.id, cv.status
-			from content_packs cp join content_variants cv on cv.workspace_id = cp.workspace_id and cv.content_pack_id = cp.id
+			select cp.id, cp.status, cp.title, cv.id, cv.status, coalesce(ar.content_type, 'CHANGELOG')
+			from content_packs cp
+			join content_variants cv on cv.workspace_id = cp.workspace_id and cv.content_pack_id = cp.id
+			left join generation_runs gr
+			  on gr.workspace_id = cp.workspace_id and gr.id = cp.generation_run_id
+			left join agent_runs ar
+			  on ar.workspace_id = gr.workspace_id and ar.id = gr.agent_run_id
 			where cp.workspace_id = ? and $predicate and cv.variant_index = 0
 			""".trimIndent(),
 			{ rs, _ -> listOf(
@@ -141,6 +158,7 @@ class ArtifactQueryService(
 				rs.getString(3),
 				requireNotNull(rs.getObject(4, UUID::class.java)),
 				requireNotNull(rs.getString(5)),
+				requireNotNull(rs.getString(6)),
 			) },
 			devContext.devWorkspaceId, id,
 		).firstOrNull() ?: notFound()
@@ -161,21 +179,47 @@ class ArtifactQueryService(
 		} ?: materializer.currentArtifactRevision(variantId)
 		val citations = loadPublicCitations(variantId, revision.id, includeHistoricalLifecycle = revisionId != null)
 		val sentences = loadSentences(variantId, revision.id, citations)
+		val relatedArtifacts = contentSourceSnapshotService.findRelatedArtifacts(devContext.devWorkspaceId, header[0] as UUID)
 		return ArtifactResponse(
 			header[0] as UUID,
 			header[1] as String,
 			header[2] as String?,
-			ContentVariantResponse(
-				variantId,
-				header[4] as String,
-				revision.id,
-				revision.revisionNumber,
-				revision.lexicalContent,
-				sentences,
-				publicSources(citations),
-			),
+			header[5] as String,
+				ContentVariantResponse(
+					variantId,
+					header[4] as String,
+					revision.id,
+					revision.revisionNumber,
+					revision.lexicalContent,
+					sentences,
+					publicSources(citations),
+					documentVersion(revision.lexicalContent),
+					confirmedDestinations(variantId),
+				),
+			loadLivePublication(variantId),
+			relatedArtifacts,
 		)
 	}
+
+	private fun loadLivePublication(variantId: UUID): ArtifactPublicationResponse? = sqlExecutor.query(
+		"""
+		select pce.id, pce.entry_slug, pce.published_at, w.slug
+		from published_changelog_entries pce
+		join workspaces w on w.id = pce.workspace_id
+		where pce.workspace_id = ? and pce.content_variant_id = ? and pce.unpublished_at is null
+		""".trimIndent(),
+		{ rs, _ ->
+			val entrySlug = requireNotNull(rs.getString(2))
+			ArtifactPublicationResponse(
+				entryId = requireNotNull(rs.getObject(1, UUID::class.java)),
+				entrySlug = entrySlug,
+				publicPath = "/${requireNotNull(rs.getString(4))}/changelog/$entrySlug",
+				publishedAt = requireNotNull(rs.getTimestamp(3)).toInstant(),
+			)
+		},
+		devContext.devWorkspaceId,
+		variantId,
+	).firstOrNull()
 	private fun loadSentences(
 		variantId: UUID,
 		revisionId: UUID,
@@ -209,7 +253,7 @@ class ArtifactQueryService(
 		includeHistoricalLifecycle: Boolean = false,
 	): Map<UUID, List<PublicCitation>> = sqlExecutor.query(
 		"""
-		select rs.sentence_id, c.generation_input_id, i.source_provider, i.source_label, i.original_url,
+			select rs.sentence_id, c.generation_input_id, i.source_provider, i.source_label, i.original_url,
 		       case
 		         when coalesce(i.source_scope_id, gr.source_scope_id) is null then true
 		         when sc.status = 'ACTIVE' and exists (
@@ -225,7 +269,8 @@ class ArtifactQueryService(
 		         ) then true
 		         else false
 		       end as source_access
-		       , sc.metadata ->> 'visibility' as source_visibility
+		       , sc.metadata ->> 'visibility' as source_visibility,
+		       c.status
 		from content_variant_revision_sentences rs
 		join sentence_citations c
 		  on c.workspace_id = rs.workspace_id and c.sentence_id = rs.sentence_id
@@ -238,32 +283,68 @@ class ArtifactQueryService(
 		order by rs.sentence_id, c.citation_order
 		""".trimIndent(),
 		{ rs, _ ->
-			val originalUrl = safeHttpUrl(rs.getString(5))
-			val accessible = rs.getBoolean(6) && originalUrl != null && approvedPublicUrl(requireNotNull(rs.getString(3)), originalUrl)
-			if (!accessible) {
+			val provider = requireNotNull(rs.getString(3))
+			val sourceLabel = requireNotNull(rs.getString(4)).trim()
+			if (sourceLabel.isBlank()) {
 				null
+			} else if (provider.equals("USER_CONFIRMED", ignoreCase = true)) {
+				PublicCitation(
+					requireNotNull(rs.getObject(1, UUID::class.java)),
+					requireNotNull(rs.getObject(2, UUID::class.java)),
+					provider,
+					sourceLabel,
+						 null,
+						rs.getString(7),
+						requireNotNull(rs.getString(8)),
+				)
 			} else {
+				val originalUrl = safeHttpUrl(rs.getString(5))
+				val accessible = rs.getBoolean(6) && originalUrl != null && approvedPublicUrl(provider, originalUrl)
+				if (!accessible) {
+					null
+				} else {
 					PublicCitation(
 						requireNotNull(rs.getObject(1, UUID::class.java)),
 						requireNotNull(rs.getObject(2, UUID::class.java)),
-						requireNotNull(rs.getString(3)),
-						requireNotNull(rs.getString(4)).trim(),
-					originalUrl,
-					rs.getString(7),
-				)
+						provider,
+						sourceLabel,
+						 originalUrl,
+						rs.getString(7),
+						requireNotNull(rs.getString(8)),
+					)
+				}
 			}
 		},
 		devContext.devWorkspaceId, revisionId, variantId,
 	).filterNotNull().filter { it.sourceLabel.isNotBlank() }.groupBy { it.sentenceId }
 	private fun publicSources(citations: Map<UUID, List<PublicCitation>>): List<ContentSourceResponse> = citations.values
 		.flatten()
-		.groupBy { it.originalUrl }
+		.groupBy { it.evidenceId }
 		.values
 		.map { rows ->
 			val first = rows.first()
 			ContentSourceResponse(first.evidenceId, first.provider, first.sourceLabel, first.originalUrl, rows.map { it.sentenceId }.distinct())
 		}
 		.sortedWith(compareBy(ContentSourceResponse::sourceLabel, ContentSourceResponse::evidenceId))
+	private fun confirmedDestinations(variantId: UUID): List<com.plot.api.artifact.dto.ContentBriefDestinationResponse> {
+		val snapshot = sqlExecutor.query(
+			"""
+			select ar.content_brief_snapshot::text
+			from content_variants cv
+			join generation_runs gr on gr.workspace_id = cv.workspace_id and gr.id = cv.generation_run_id
+			join agent_runs ar on ar.workspace_id = gr.workspace_id and ar.id = gr.agent_run_id
+			where cv.workspace_id = ? and cv.id = ?
+			""".trimIndent(),
+			{ rs, _ -> rs.getString(1) },
+			devContext.devWorkspaceId,
+			variantId,
+		).firstOrNull()?.takeIf { it.isNotBlank() } ?: return emptyList()
+		return runCatching {
+			objectMapper.readValue(snapshot, ContentBrief::class.java).destinations.map { destination ->
+				com.plot.api.artifact.dto.ContentBriefDestinationResponse(destination.id, destination.label, destination.url)
+			}
+		}.getOrDefault(emptyList())
+	}
 	internal fun loadExportSentences(
 		variantId: UUID,
 		revisionId: UUID,
@@ -316,12 +397,29 @@ class ArtifactQueryService(
 		from generation_inputs where workspace_id = ? and generation_run_id = ? order by order_index
 		""".trimIndent(),
 			{ rs, _ -> EvidenceSnapshot(
-				requireNotNull(rs.getObject(1, UUID::class.java)), runId, requireNotNull(rs.getObject(2, UUID::class.java)), rs.getInt(3), SourceProvider.valueOf(requireNotNull(rs.getString(4))),
-				requireNotNull(rs.getString(5)), requireNotNull(rs.getString(6)), rs.getString(7), requireNotNull(rs.getString(8)), rs.getString(9), requireNotNull(rs.getString(10)),
-				rs.getTimestamp(11)?.toInstant(), rs.getTimestamp(12)?.toInstant(), requireNotNull(rs.getString(13)), requireNotNull(rs.getTimestamp(14)).toInstant(),
+				requireNotNull(rs.getObject(1, UUID::class.java)),
+				runId,
+				rs.getObject(2, UUID::class.java),
+				rs.getInt(3),
+				SourceProvider.valueOf(requireNotNull(rs.getString(4))),
+				requireNotNull(rs.getString(5)),
+				requireNotNull(rs.getString(6)),
+				rs.getString(7),
+				requireNotNull(rs.getString(8)),
+				rs.getString(9),
+				rs.getString(10),
+				rs.getTimestamp(11)?.toInstant(),
+				rs.getTimestamp(12)?.toInstant(),
+				requireNotNull(rs.getString(13)),
+				requireNotNull(rs.getTimestamp(14)).toInstant(),
 		) },
 		devContext.devWorkspaceId, runId,
 	)
+	private fun documentVersion(lexicalContent: JsonNode): Int = lexicalContent.get("documentVersion")
+		?.takeIf { it.isIntegralNumber && it.canConvertToInt() }
+		?.asInt()
+		?: 1
+
 	private fun historyCause(revisionNumber: Int, createdByUserId: UUID?): String {
 		if (revisionNumber == 1) return "Initial draft"
 		if (createdByUserId == devContext.devUserId) return "Edited by you"
@@ -371,9 +469,10 @@ internal data class PublicCitation(
     val evidenceId: UUID,
     val provider: String,
     val sourceLabel: String,
-    val originalUrl: String,
-    val sourceVisibility: String?,
+	val originalUrl: String?,
+	val sourceVisibility: String?,
+	val status: String,
 ) {
-    val response: ContentCitationResponse
-        get() = ContentCitationResponse(evidenceId, provider, sourceLabel, originalUrl)
+	val response: ContentCitationResponse
+		get() = ContentCitationResponse(evidenceId, provider, sourceLabel, originalUrl, status)
 }

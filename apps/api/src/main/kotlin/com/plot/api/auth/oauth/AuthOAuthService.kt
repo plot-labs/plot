@@ -44,7 +44,9 @@ class AuthOAuthService(
 				existingAccount != null -> authUserRepository.findById(existingAccount.userId)
 					?.let { updateUser(it, profile, email, now) }
 					?: throw IllegalStateException("Linked auth user is missing")
-				else -> createUser(profile, email, now)
+				else -> authUserRepository.findByEmailIgnoreCase(email)
+					?.let { updateUser(it, profile, email, now) }
+					?: createUser(profile, email, now)
 			}
 			authAccountRepository.save(buildAccount(existingAccount, profile, resolvedUser, accessToken, now))
 			resolvedUser

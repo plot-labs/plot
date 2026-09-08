@@ -63,6 +63,12 @@ class ArtifactPublishIntegrationTest {
 	@BeforeEach
 	@AfterEach
 	fun restoreWritableWorkspace() {
+		jdbcTemplate.execute("alter table product_delivery_events disable trigger product_delivery_events_append_only")
+		jdbcTemplate.update(
+			"delete from product_delivery_events where workspace_id = ?",
+			devContext.devWorkspaceId,
+		)
+		jdbcTemplate.execute("alter table product_delivery_events enable trigger product_delivery_events_append_only")
 		jdbcTemplate.update(
 			"delete from published_changelog_entry_citations where workspace_id = ?",
 			devContext.devWorkspaceId,
@@ -138,6 +144,258 @@ class ArtifactPublishIntegrationTest {
 		)
 		assertTrue(snapshotAfterEdit.contains("User revised sentence."))
 		assertFalse(snapshotAfterEdit.contains("Changed after publish."))
+	}
+
+	@Test
+	fun `unpublish keeps the internal snapshot and stops public list body and citations`() {
+		val fixture = readyPack()
+		val published = mockMvc.post("/api/artifact-variants/${fixture.variantId}/publish") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"expectedRevisionNumber":1,"acknowledgeUnresolved":false}"""
+		}.andExpect { status { isOk() } }.andReturn().response.contentAsString
+		val publishedTree = objectMapper.readTree(published)
+		val entrySlug = publishedTree.path("entrySlug").stringValue()
+
+		mockMvc.get("/api/artifacts/${fixture.packId}").andExpect {
+			status { isOk() }
+			jsonPath("$.publication.entrySlug") { value(entrySlug) }
+			jsonPath("$.publication.publicPath") { value("/dev-workspace/changelog/$entrySlug") }
+		}
+
+		mockMvc.post("/api/artifact-variants/${fixture.variantId}/unpublish").andExpect {
+			status { isOk() }
+			jsonPath("$.entrySlug") { value(entrySlug) }
+			jsonPath("$.unpublishedAt") { exists() }
+		}
+
+		mockMvc.get("/api/public/changelog/dev-workspace").andExpect {
+			status { isOk() }
+			jsonPath("$.entries.length()") { value(0) }
+		}
+		mockMvc.get("/api/public/changelog/dev-workspace/$entrySlug").andExpect {
+			status { isNotFound() }
+			jsonPath("$.error") { value("NOT_FOUND") }
+		}
+		mockMvc.get("/api/artifacts/${fixture.packId}").andExpect {
+			status { isOk() }
+			jsonPath("$.publication") { value(null as Any?) }
+		}
+
+		assertEquals(1, jdbcTemplate.queryForObject(
+			"select count(*) from published_changelog_entries where workspace_id = ? and unpublished_at is not null",
+			Int::class.java,
+			devContext.devWorkspaceId,
+		))
+		assertEquals(2, jdbcTemplate.queryForObject(
+			"""
+			select count(*) from published_changelog_entry_sentences s
+			join published_changelog_entries e on e.id = s.published_changelog_entry_id
+			where e.workspace_id = ? and e.unpublished_at is not null
+			""".trimIndent(),
+			Int::class.java,
+			devContext.devWorkspaceId,
+		))
+
+		mockMvc.post("/api/artifact-variants/${fixture.variantId}/unpublish").andExpect {
+			status { isConflict() }
+			jsonPath("$.error") { value("ENTRY_NOT_LIVE") }
+		}
+	}
+
+	@Test
+	fun `publish records a published delivery event and browser delivery events stay separate`() {
+		val fixture = readyPack()
+		val published = mockMvc.post("/api/artifact-variants/${fixture.variantId}/publish") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"expectedRevisionNumber":1,"acknowledgeUnresolved":false}"""
+		}.andExpect { status { isOk() } }.andReturn().response.contentAsString
+		val entryId = objectMapper.readTree(published).path("entryId").textValue()
+
+		assertEquals(1, jdbcTemplate.queryForObject(
+			"""
+			select count(*) from product_delivery_events
+			where workspace_id = ? and kind = 'PUBLISHED' and published_changelog_entry_id = ?::uuid
+			""".trimIndent(),
+			Int::class.java,
+			devContext.devWorkspaceId,
+			entryId,
+		))
+
+		val export = mockMvc.post("/api/artifact-variants/${fixture.variantId}/exports") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"expectedRevisionNumber":1,"includeSources":false,"acknowledgeUnresolved":false,"disposition":"COPY"}"""
+		}.andExpect { status { isOk() } }.andReturn().response.contentAsString
+		val exportId = objectMapper.readTree(export).path("exportId").textValue()
+
+		mockMvc.post("/api/artifact-variants/${fixture.variantId}/delivery-events") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"kind":"CLIPBOARD_WRITE_SUCCEEDED","exportId":"$exportId","clientEventId":"${UUID.randomUUID()}"}"""
+		}.andExpect {
+			status { isOk() }
+			jsonPath("$.kind") { value("CLIPBOARD_WRITE_SUCCEEDED") }
+			jsonPath("$.duplicate") { value(false) }
+		}
+
+		mockMvc.post("/api/artifact-variants/${fixture.variantId}/delivery-events") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"kind":"CLIPBOARD_WRITE_SUCCEEDED","exportId":"$exportId","clientEventId":"${UUID.randomUUID()}"}"""
+		}.andExpect {
+			status { isOk() }
+			jsonPath("$.duplicate") { value(true) }
+		}
+
+		mockMvc.post("/api/artifact-variants/${fixture.variantId}/delivery-events") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"kind":"EXTERNAL_DELIVERY_CONFIRMED","entryId":"$entryId","clientEventId":"${UUID.randomUUID()}"}"""
+		}.andExpect {
+			status { isOk() }
+			jsonPath("$.kind") { value("EXTERNAL_DELIVERY_CONFIRMED") }
+		}
+
+		assertEquals(1, jdbcTemplate.queryForObject(
+			"""
+			select count(*) from product_delivery_events
+			where workspace_id = ? and kind = 'CLIPBOARD_WRITE_SUCCEEDED' and generation_export_event_id = ?::uuid
+			""".trimIndent(),
+			Int::class.java,
+			devContext.devWorkspaceId,
+			exportId,
+		))
+	}
+
+	@Test
+	fun `expired trial can still unpublish a live changelog`() {
+		val fixture = readyPack()
+		mockMvc.post("/api/artifact-variants/${fixture.variantId}/publish") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"expectedRevisionNumber":1,"acknowledgeUnresolved":false}"""
+		}.andExpect { status { isOk() } }
+
+		jdbcTemplate.update(
+			"""
+			update workspaces
+			set plan = 'trial',
+			    entitlement_status = 'expired',
+			    access_mode = 'read_only',
+			    trial_ends_at = now() - interval '1 day'
+			where id = ?
+			""".trimIndent(),
+			devContext.devWorkspaceId,
+		)
+
+		mockMvc.post("/api/artifact-variants/${fixture.variantId}/unpublish").andExpect {
+			status { isOk() }
+			jsonPath("$.unpublishedAt") { exists() }
+		}
+		mockMvc.get("/api/public/changelog/dev-workspace").andExpect {
+			status { isOk() }
+			jsonPath("$.entries.length()") { value(0) }
+		}
+	}
+
+	@Test
+	fun `trial pack limit still allows edit and first publish`() {
+		val fixture = readyPack()
+		val extraRunIds = mutableListOf<UUID>()
+		val extraPackIds = mutableListOf<UUID>()
+		try {
+			jdbcTemplate.update(
+				"""
+				update workspaces
+				set plan = 'trial',
+				    entitlement_status = 'trialing',
+				    access_mode = 'full',
+				    trial_ends_at = now() + interval '30 days'
+				where id = ?
+				""".trimIndent(),
+				devContext.devWorkspaceId,
+			)
+			repeat(2) {
+				val runId = UUID.randomUUID()
+				extraRunIds += runId
+				jdbcTemplate.update(
+					"""
+					insert into generation_runs (
+					  id, workspace_id, created_by_user_id, idempotency_key, request_fingerprint,
+					  status, workflow_version, prompt_version, output_schema_version, budget_version,
+					  provider, model_name, budget_snapshot, finished_at, created_at, updated_at
+					) values (?, ?, ?, ?, ?, 'READY', 'test-v1', 'test-v1', 'test-v1', 'test-v1',
+					  'TEST', 'test', '{}'::jsonb, now(), now(), now())
+					""".trimIndent(),
+					runId,
+					devContext.devWorkspaceId,
+					devContext.devUserId,
+					"trial-$runId",
+					"fingerprint-$runId",
+				)
+				val packId = UUID.randomUUID()
+				extraPackIds += packId
+				jdbcTemplate.update(
+					"""
+					insert into content_packs (
+					  id, workspace_id, generation_run_id, title, status, created_at, updated_at
+					) values (?, ?, ?, 'Trial pack', 'READY', now(), now())
+					""".trimIndent(),
+					packId,
+					devContext.devWorkspaceId,
+					runId,
+				)
+			}
+
+			mockMvc.patch("/api/artifact-variants/${fixture.variantId}/sentences/${fixture.firstSentenceId}") {
+				contentType = MediaType.APPLICATION_JSON
+				content = """{"expectedRevisionNumber":1,"body":"Trial completion edit."}"""
+			}.andExpect { status { isOk() } }
+			mockMvc.post("/api/artifact-variants/${fixture.variantId}/publish") {
+				contentType = MediaType.APPLICATION_JSON
+				content = objectMapper.writeValueAsString(mapOf(
+					"expectedRevisionNumber" to 2,
+					"acknowledgeUnresolved" to true,
+					"acknowledgedRevisionIds" to jdbcTemplate.queryForList(
+						"select id from content_variant_sentence_revisions where sentence_id = ? and is_current",
+						UUID::class.java,
+						fixture.firstSentenceId,
+					),
+				))
+			}.andExpect { status { isOk() } }
+			mockMvc.patch("/api/workspaces/${devContext.devWorkspaceId}") {
+				contentType = MediaType.APPLICATION_JSON
+				content = """{"name":"Blocked"}"""
+			}.andExpect {
+				status { isForbidden() }
+				jsonPath("$.error") { value("WORKSPACE_READ_ONLY") }
+			}
+		} finally {
+			extraPackIds.forEach { jdbcTemplate.update("delete from content_packs where id = ?", it) }
+			extraRunIds.forEach { jdbcTemplate.update("delete from generation_runs where id = ?", it) }
+		}
+	}
+
+	@Test
+	fun `elapsed trial cannot publish existing draft`() {
+		val fixture = readyPack()
+		jdbcTemplate.update(
+			"""
+			update workspaces
+			set plan = 'trial',
+			    entitlement_status = 'trialing',
+			    access_mode = 'full',
+			    trial_ends_at = now() - interval '1 second'
+			where id = ?
+			""".trimIndent(),
+			devContext.devWorkspaceId,
+		)
+		mockMvc.post("/api/artifact-variants/${fixture.variantId}/publish") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"expectedRevisionNumber":1,"acknowledgeUnresolved":false}"""
+		}.andExpect {
+			status { isForbidden() }
+			jsonPath("$.error") { value("WORKSPACE_READ_ONLY") }
+		}
+		mockMvc.post("/api/artifact-variants/${fixture.variantId}/exports") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"expectedRevisionNumber":1,"includeSources":false,"acknowledgeUnresolved":false,"disposition":"COPY"}"""
+		}.andExpect { status { isOk() } }
 	}
 
 	@Test
@@ -231,6 +489,63 @@ class ArtifactPublishIntegrationTest {
 		}
 	}
 
+	@Test
+	fun `hosted publish rejects non-changelog content types`() {
+		val fixture = readyPack()
+		val agentRunId = UUID.randomUUID()
+		val chatId = UUID.randomUUID()
+		jdbcTemplate.update(
+			"""
+			insert into work_sessions (
+			  id, workspace_id, title, status, created_by_user_id, last_activity_at, created_at, updated_at
+			) values (?, ?, 'Launch chat', 'OPEN', ?, now(), now(), now())
+			""".trimIndent(),
+			chatId,
+			devContext.devWorkspaceId,
+			devContext.devUserId,
+		)
+		jdbcTemplate.update(
+			"""
+			insert into agent_runs (
+			  id, workspace_id, work_session_id, created_by_user_id, origin, idempotency_key, request_fingerprint,
+			  instruction_snapshot, prompt_version, tool_policy_version, budget_snapshot, content_type,
+			  status, max_attempts, created_at, updated_at
+			) values (?, ?, ?, ?, 'CHAT', ?, ?, 'Launch announcement', 'chat-agent-v1', 'read-only-v1', '{}'::jsonb,
+			  'LAUNCH_ANNOUNCEMENT', 'SUCCEEDED', 3, now(), now())
+			""".trimIndent(),
+			agentRunId,
+			devContext.devWorkspaceId,
+			chatId,
+			devContext.devUserId,
+			"launch-${agentRunId}",
+			"launch-${agentRunId}",
+		)
+		jdbcTemplate.update(
+			"update generation_runs set agent_run_id = ? where id = ?",
+			agentRunId,
+			fixture.runId,
+		)
+
+		mockMvc.post("/api/artifact-variants/${fixture.variantId}/publish") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"expectedRevisionNumber":1,"acknowledgeUnresolved":false}"""
+		}.andExpect {
+			status { isConflict() }
+			jsonPath("$.error") { value("PUBLISH_CONTENT_TYPE_NOT_SUPPORTED") }
+		}
+
+		mockMvc.get("/api/artifacts/${fixture.packId}").andExpect {
+			status { isOk() }
+			jsonPath("$.contentType") { value("LAUNCH_ANNOUNCEMENT") }
+		}
+
+		val export = mockMvc.post("/api/artifact-variants/${fixture.variantId}/exports") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"expectedRevisionNumber":1,"includeSources":false,"acknowledgeUnresolved":false,"disposition":"COPY"}"""
+		}.andExpect { status { isOk() } }.andReturn().response.contentAsString
+		assertTrue(objectMapper.readTree(export).path("filename").textValue().startsWith("plot-launch-announcement-"))
+	}
+
 	private fun publish(variantId: UUID, expectedRevisionNumber: Int) {
 		mockMvc.post("/api/artifact-variants/$variantId/publish") {
 			contentType = MediaType.APPLICATION_JSON
@@ -272,6 +587,68 @@ class ArtifactPublishIntegrationTest {
 		)
 		return PublishFixture(runId, row["pack_id"] as UUID, row["variant_id"] as UUID, sentenceIds.first(), sentenceIds[1])
 	}
+
+	@Test
+	fun `publish excludes USER_CONFIRMED citations from hosted snapshot`() {
+		val fixture = readyPackWithUserConfirmedCitation()
+		mockMvc.get("/api/artifacts/${fixture.packId}").andExpect {
+			status { isOk() }
+			jsonPath("$.variant.sentences[1].citations[0].provider") { value("USER_CONFIRMED") }
+			jsonPath("$.variant.sentences[1].citations[0].originalUrl") { value(null) }
+		}
+		publish(fixture.variantId, 1)
+		val confirmedPublished = jdbcTemplate.queryForObject(
+			"""
+			select count(*)
+			from published_changelog_entry_citations c
+			join published_changelog_entry_sentences s on s.id = c.published_changelog_entry_sentence_id
+			join published_changelog_entries e on e.id = s.published_changelog_entry_id
+			where e.content_variant_id = ? and upper(c.provider) = 'USER_CONFIRMED'
+			""".trimIndent(),
+			Int::class.java,
+			fixture.variantId,
+		)
+		assertEquals(0, confirmedPublished)
+	}
+
+	private fun readyPackWithUserConfirmedCitation(): PublishFixture {
+		val runId = UUID.randomUUID()
+		val blockId = UUID.randomUUID()
+		jdbcTemplate.update(
+			"""
+			insert into writing_blocks (id, workspace_id, source_origin, source_kind, title, body, url,
+			 content_hash, ingested_at, status, created_by_user_id, created_at, updated_at)
+			values (?, ?, 'github', 'pull_request', 'PR', 'evidence', ?,
+			 'block-hash', now(), 'ACTIVE', ?, now(), now())
+			""".trimIndent(), blockId, devContext.devWorkspaceId, "https://github.test/acme/repo/pull/1", devContext.devUserId,
+		)
+		val githubEvidence = EvidenceSnapshot(
+			UUID.randomUUID(), runId, blockId, 0, SourceProvider.GITHUB, "pull_request", "PR 1", "PR 1",
+			"Evidence body", "PRIVATE SNAPSHOT EXCERPT", "https://github.test/acme/repo/pull/1", null, null, "hash", Instant.now(),
+		)
+		val confirmedEvidence = EvidenceSnapshot(
+			UUID.randomUUID(), runId, null, 1, SourceProvider.USER_CONFIRMED, "AVAILABILITY", "Confirmed availability",
+			null, "Public beta starts Monday", "Public beta starts Monday", null, null, null, "confirmed-hash", Instant.now(),
+		)
+		val state = workflow.start(runId, listOf(githubEvidence, confirmedEvidence), null)
+		admissionPersistence.createRun(ArtifactWorkflowRunReservation(
+			devContext.devWorkspaceId, devContext.devUserId, null, "pack-${UUID.randomUUID()}", "fingerprint-${UUID.randomUUID()}",
+			state, "OPENAI", "scripted", "{\"maxModelCalls\":12,\"maxTotalTokens\":1000,\"maxRunDurationMillis\":60000}",
+		))
+		val gateway = PublishMixedCitationGateway(githubEvidence.id, confirmedEvidence.id)
+		ArtifactWorkflowRunWorker(executionPersistence, queryPersistence, workflow, gateway, workerId = "publish-user-confirmed").drain()
+		val row = jdbcTemplate.queryForMap(
+			"""
+			select cp.id pack_id, cv.id variant_id from content_packs cp join content_variants cv on cv.content_pack_id=cp.id
+			where cp.generation_run_id = ?
+			""".trimIndent(), runId,
+		)
+		val sentenceIds = jdbcTemplate.query(
+			"select id from content_variant_sentences where generation_run_id = ? order by order_index",
+			{ rs, _ -> rs.getObject(1, UUID::class.java) }, runId,
+		)
+		return PublishFixture(runId, row["pack_id"] as UUID, row["variant_id"] as UUID, sentenceIds.first(), sentenceIds[1])
+	}
 }
 
 private data class PublishFixture(val runId: UUID, val packId: UUID, val variantId: UUID, val firstSentenceId: UUID, val secondSentenceId: UUID)
@@ -284,6 +661,26 @@ private class PublishPackGateway(private val evidenceId: UUID) : ArtifactWorkflo
 		return result(ReviewerOutput(listOf(
 			SentenceReview(sentenceIds[0], ReviewVerdict.SUPPORTED, listOf(evidenceId)),
 			SentenceReview(sentenceIds[1], ReviewVerdict.NOT_REQUIRED),
+		)))
+	}
+	override fun rewrite(request: RewriteModelRequest): ModelCallResult<TargetedRewriteOutput> = error("Unexpected rewrite")
+	private fun <T : Any> result(value: T) = ModelCallResult(value, ModelCallMetadata(null, "scripted", "stop", 1, 1, 2, Duration.ofMillis(1), emptyMap()))
+}
+
+private class PublishMixedCitationGateway(
+	private val githubEvidenceId: UUID,
+	private val confirmedEvidenceId: UUID,
+) : ArtifactWorkflowModelGateway {
+	private lateinit var sentenceIds: List<UUID>
+	override fun write(request: WriterModelRequest) = result(WriterOutput(listOf(
+		WriterSentence("Supported sentence."),
+		WriterSentence("Confirmed availability sentence."),
+	)))
+	override fun review(request: ReviewerModelRequest): ModelCallResult<ReviewerOutput> {
+		sentenceIds = request.sentences.map { it.id }
+		return result(ReviewerOutput(listOf(
+			SentenceReview(sentenceIds[0], ReviewVerdict.SUPPORTED, listOf(githubEvidenceId)),
+			SentenceReview(sentenceIds[1], ReviewVerdict.SUPPORTED, listOf(confirmedEvidenceId)),
 		)))
 	}
 	override fun rewrite(request: RewriteModelRequest): ModelCallResult<TargetedRewriteOutput> = error("Unexpected rewrite")

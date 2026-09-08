@@ -10,6 +10,9 @@ const queued: ChatAgentRun = {
   id: "agent-1",
   chatId: "chat-1",
   status: "QUEUED",
+  contentType: "CHANGELOG",
+  contentProfileRevisionId: null,
+  brief: null,
   failureCode: null,
   artifactId: null,
   instruction: "Read the connected sources",
@@ -24,7 +27,7 @@ describe("chat-agent-polling", () => {
       ...queued,
       status: "RUNNING" as const,
       artifactId: "artifact-1",
-      artifact: { id: "artifact-1", status: "READY", title: "Release", updatedAt: "2026-07-01T00:01:00Z" },
+      artifact: { id: "artifact-1", status: "READY", title: "Release", contentType: "CHANGELOG", updatedAt: "2026-07-01T00:01:00Z" },
     };
     const getChatAgentRun = vi.fn().mockResolvedValueOnce(handoff);
     const updates: string[] = [];

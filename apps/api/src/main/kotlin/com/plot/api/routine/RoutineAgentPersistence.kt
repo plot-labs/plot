@@ -37,8 +37,8 @@ class RoutineAgentPersistence(
 			  id, workspace_id, routine_id, created_by_user_id, trigger_source_scope_id,
 			  trigger_kind, trigger_key, request_fingerprint, trigger_delivery_id,
 			  scheduled_for, refresh_from, refresh_to, refresh_continuation,
-			  activity_cursor_before, status, created_at, updated_at
-			) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, 'PROBING', ?, ?)
+			  activity_cursor_before, release_request_id, status, created_at, updated_at
+			) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, 'PROBING', ?, ?)
 			on conflict (workspace_id, routine_id, trigger_key) do nothing
 			""".trimIndent(),
 			id,
@@ -55,6 +55,7 @@ class RoutineAgentPersistence(
 			request.refreshTo?.let(Timestamp::from),
 			request.refreshContinuationJson,
 			request.activityCursorBefore,
+			request.releaseRequestId,
 			Timestamp.from(now),
 			Timestamp.from(now),
 		)
@@ -85,7 +86,7 @@ class RoutineAgentPersistence(
 
 	fun findExecutionSummary(workspaceId: UUID, executionId: UUID): RoutineExecutionSummaryRecord? = sqlExecutor.query(
 		"""
-		select execution.id as execution_id, execution.status as execution_status,
+		select execution.id as execution_id, execution.status as execution_status, execution.release_request_id,
 		       execution.error_code as execution_error_code,
 		       agent.work_session_id, agent.id as agent_run_id, agent.status as agent_run_status,
 		       agent.failure_code as agent_failure_code,
@@ -113,6 +114,7 @@ class RoutineAgentPersistence(
 		{ rs, _ ->
 			RoutineExecutionSummaryRecord(
 				executionId = requireNotNull(rs.getObject("execution_id", UUID::class.java)),
+				releaseRequestId = rs.getObject("release_request_id", UUID::class.java),
 				executionStatus = RoutineExecutionStatus.valueOf(requireNotNull(rs.getString("execution_status"))),
 				executionErrorCode = rs.getString("execution_error_code"),
 				workSessionId = rs.getObject("work_session_id", UUID::class.java),
@@ -464,7 +466,7 @@ class RoutineAgentPersistence(
 		args: Array<Any>,
 	): RoutineExecutionRecord? = transactionExecutor.execute {
 			val candidate = sqlExecutor.query(
-				selectExecutionSql + "\nwhere e.status = 'PROBING' and $where order by e.created_at, e.id for update skip locked limit 1",
+				selectExecutionSql + "\nwhere e.status = 'PROBING' and e.release_request_id is null and $where order by e.created_at, e.id for update skip locked limit 1",
 				executionMapper,
 				*args,
 			).firstOrNull() ?: return@execute null
@@ -516,7 +518,7 @@ class RoutineAgentPersistence(
 
 	private val selectExecutionSql = """
 		select e.id, e.workspace_id, e.routine_id, e.created_by_user_id, e.trigger_source_scope_id,
-		       e.trigger_kind, e.trigger_key, e.request_fingerprint, e.trigger_delivery_id,
+		       e.trigger_kind, e.trigger_key, e.request_fingerprint, e.trigger_delivery_id, e.release_request_id,
 		       e.scheduled_for, e.refresh_from, e.refresh_to, e.refresh_continuation::text,
 		       e.refresh_completed_at, e.activity_cursor_before, e.activity_cursor_after,
 		       e.status, e.attempt_count, e.transition_version, e.claimed_by, e.claimed_at,
@@ -534,6 +536,7 @@ class RoutineAgentPersistence(
 		triggerKey = requireNotNull(getString("trigger_key")),
 		requestFingerprint = requireNotNull(getString("request_fingerprint")),
 		triggerDeliveryId = getObject("trigger_delivery_id", UUID::class.java),
+		releaseRequestId = getObject("release_request_id", UUID::class.java),
 		scheduledFor = getTimestamp("scheduled_for")?.toInstant(),
 		refreshFrom = getTimestamp("refresh_from")?.toInstant(),
 		refreshTo = getTimestamp("refresh_to")?.toInstant(),

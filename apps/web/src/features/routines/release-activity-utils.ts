@@ -20,10 +20,20 @@ export function formatReleaseActivityLabel(activity: GitHubReleaseActivity): str
 
 export function formatReleaseActivityDetail(activity: GitHubReleaseActivity): string | null {
   if (activity.status === "NEEDS_RANGE") {
-    return "Plot recorded this tag as the starting boundary. The next release will generate a draft.";
+    return "Choose the previous commit SHA. Plot keeps this tag head and drafts from that range.";
   }
   if (activity.status === "FAILED" && activity.errorCode) {
     return activity.errorCode.replaceAll("_", " ").toLowerCase();
   }
   return null;
+}
+
+const FULL_COMMIT_SHA = /^[0-9a-f]{40}$/;
+
+export function normalizeCommitSha(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+export function isFullCommitSha(value: string): boolean {
+  return FULL_COMMIT_SHA.test(normalizeCommitSha(value));
 }

@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional
 class GitHubReleaseRequestPersistence(
 	private val sqlExecutor: JooqSqlExecutor,
 	dslContext: DSLContext,
+	private val routineProjection: GitHubReleaseRoutineProjection,
 	private val clock: Clock = Clock.systemUTC(),
 ) : GitHubReleaseRequestStore {
 	private val dsl: DSLContext = dslContext.configuration()
@@ -99,6 +100,7 @@ class GitHubReleaseRequestPersistence(
 		select ${requestColumns}
 		from github_release_draft_requests
 		where workspace_id = ? and source_scope_id = ? and id <> ?
+		  and tag_name <> (select tag_name from github_release_draft_requests where id = ?)
 		  and head_sha is not null
 		  and (created_at, id) < (
 		    select created_at, id from github_release_draft_requests where id = ?
@@ -108,6 +110,7 @@ class GitHubReleaseRequestPersistence(
 		{ rs, _ -> rs.toReleaseDraftRequest() },
 		workspaceId,
 		sourceScopeId,
+		excludingRequestId,
 		excludingRequestId,
 		excludingRequestId,
 	)
@@ -172,33 +175,90 @@ class GitHubReleaseRequestPersistence(
 		workspaceId: UUID,
 		sourceScopeId: UUID,
 		tagName: String,
+		routineId: UUID? = null,
 	): GitHubReleaseDraftRequest? = sqlExecutor.query(
 		"""
 		select ${requestColumns} from github_release_draft_requests
-		where workspace_id = ? and source_scope_id = ? and tag_name = ?
+		where workspace_id = ? and source_scope_id = ? and tag_name = ? and routine_id is not distinct from ?
 		""".trimIndent(),
 		{ rs, _ -> rs.toReleaseDraftRequest() },
 		workspaceId,
 		sourceScopeId,
 		tagName,
+		routineId,
 	).firstOrNull()
 
+	@Transactional
 	override fun enqueueRelease(
 		workspaceId: UUID,
 		sourceScopeId: UUID,
 		deliveryId: UUID,
 		tagName: String,
 		observedHeadSha: String?,
+	): GitHubReleaseDraftRequest = enqueue(workspaceId, sourceScopeId, deliveryId, tagName, observedHeadSha, null)
+
+	@Transactional
+	override fun enqueueRoutineRelease(
+		workspaceId: UUID,
+		sourceScopeId: UUID,
+		deliveryId: UUID,
+		tagName: String,
+		observedHeadSha: String?,
+		routineId: UUID,
+	): GitHubReleaseDraftRequest = enqueue(workspaceId, sourceScopeId, deliveryId, tagName, observedHeadSha, routineId)
+
+	private fun enqueue(
+		workspaceId: UUID,
+		sourceScopeId: UUID,
+		deliveryId: UUID,
+		tagName: String,
+		observedHeadSha: String?,
+		routineId: UUID?,
 	): GitHubReleaseDraftRequest {
 		val id = UUID.randomUUID()
 		val now = clock.instant()
+		sqlExecutor.query(
+			"select pg_advisory_xact_lock(hashtextextended(?, 0))",
+			{ _, _ -> Unit },
+			"github-release:$workspaceId:$sourceScopeId:$tagName",
+		)
+		// The first event chooses default automation or configured Routines for this
+		// real tag. A configuration change between tag/release deliveries cannot add a fallback draft.
+		val oppositeJob = sqlExecutor.query(
+			"""
+			select $requestColumns from github_release_draft_requests
+			where workspace_id = ? and source_scope_id = ? and tag_name = ?
+			  and (routine_id is null) = ?
+			order by created_at, id limit 1
+			""".trimIndent(),
+			{ row, _ -> row.toReleaseDraftRequest() },
+			workspaceId, sourceScopeId, tagName, routineId != null,
+		).firstOrNull()
+		if (oppositeJob != null) return oppositeJob
+		val identity = if (routineId == null) {
+			"(workspace_id, source_scope_id, tag_name) where routine_id is null"
+		} else {
+			"(workspace_id, source_scope_id, tag_name, routine_id) where routine_id is not null"
+		}
+		val observed = observedHeadSha ?: sqlExecutor.query(
+			"""
+			select tag.after_sha from github_webhook_deliveries tag
+			join github_webhook_deliveries initial on initial.id = ?
+			  and initial.installation_id = tag.installation_id and initial.repository_id = tag.repository_id
+			where tag.event_type = 'push' and tag.tag_name = ? and tag.after_sha is not null
+			  and tag.ref_deleted is not true and tag.forced is not true
+			order by tag.received_at, tag.id limit 1
+			""".trimIndent(),
+			{ row, _ -> row.getString("after_sha") },
+			deliveryId, tagName,
+		).firstOrNull()
 		val upserted = sqlExecutor.query(
 			"""
 			insert into github_release_draft_requests
-			(id, workspace_id, source_scope_id, initial_delivery_id, tag_name, observed_head_sha,
+			(id, workspace_id, source_scope_id, initial_delivery_id, tag_name, observed_head_sha, routine_id,
 			 status, created_at, updated_at)
-			values (?, ?, ?, ?, ?, ?, 'QUEUED', ?, ?)
-			on conflict (workspace_id, source_scope_id, tag_name) do update
+			values (?, ?, ?, ?, ?, ?, ?, 'QUEUED', ?, ?)
+			on conflict $identity do update
 			set observed_head_sha = coalesce(
 					github_release_draft_requests.observed_head_sha,
 					excluded.observed_head_sha
@@ -210,16 +270,27 @@ class GitHubReleaseRequestPersistence(
 			returning ${requestColumns}
 			""".trimIndent(),
 			{ rs, _ -> rs.toReleaseDraftRequest() },
-			id, workspaceId, sourceScopeId, deliveryId, tagName, observedHeadSha,
+			id, workspaceId, sourceScopeId, deliveryId, tagName, observed, routineId,
 			Timestamp.from(now), Timestamp.from(now),
 		).firstOrNull()
 		if (upserted != null) return upserted
-		val existing = findRequest(workspaceId, sourceScopeId, tagName)
+		val existing = findRequest(workspaceId, sourceScopeId, tagName, routineId)
 			?: throw IllegalStateException("Release request was not found after a conflicted insert")
-		if (observedHeadSha != null && existing.observedHeadSha != null && existing.observedHeadSha != observedHeadSha) {
+		if (observed != null && existing.observedHeadSha != null && existing.observedHeadSha != observed) {
 			throw GitHubReleasePermanentException("GITHUB_TAG_MOVED")
 		}
 		return existing
+	}
+
+	override fun observeTag(workspaceId: UUID, sourceScopeId: UUID, tagName: String, headSha: String) {
+		sqlExecutor.update(
+			"""
+			update github_release_draft_requests
+			set observed_head_sha = coalesce(observed_head_sha, ?)
+			where workspace_id = ? and source_scope_id = ? and tag_name = ?
+			""".trimIndent(),
+			headSha, workspaceId, sourceScopeId, tagName,
+		)
 	}
 
 	override fun saveResolvedRange(requestId: UUID, transitionVersion: Long, baseSha: String, headSha: String, boundaryReason: String) {
@@ -244,6 +315,7 @@ class GitHubReleaseRequestPersistence(
 		requireExactlyOne(updated, "Release request transition was lost")
 	}
 
+	@Transactional
 	override fun saveHeadAndFinishNeedsRange(requestId: UUID, transitionVersion: Long, headSha: String) {
 		val now = clock.instant()
 		val updated = dsl.update(GITHUB_RELEASE_DRAFT_REQUESTS)
@@ -265,6 +337,7 @@ class GitHubReleaseRequestPersistence(
 			)
 			.execute()
 		requireExactlyOne(updated, "Release request transition was lost")
+		routineProjection.finish(requestId, GitHubReleaseDraftStatus.NEEDS_RANGE)
 	}
 
 	override fun linkAgentRun(requestId: UUID, transitionVersion: Long, observationId: UUID, agentRunId: UUID) {
@@ -375,7 +448,7 @@ class GitHubReleaseRequestPersistence(
 
 
 internal val requestColumns = """
-id, workspace_id, source_scope_id, initial_delivery_id, tag_name, observed_head_sha,
+id, workspace_id, source_scope_id, initial_delivery_id, tag_name, observed_head_sha, routine_id,
 base_sha, head_sha, boundary_reason,
 status, attempt_count, generation_attempt, transition_version, agent_run_id, generation_run_id, observation_id, error_code
 """.trimIndent()
@@ -403,6 +476,7 @@ internal fun SqlRow.toReleaseDraftRequest(): GitHubReleaseDraftRequest = GitHubR
 	errorCode = getString("error_code"),
 	runAttempt = getInt("generation_attempt"),
 	observedHeadSha = getString("observed_head_sha"),
+	routineId = getObject("routine_id", UUID::class.java),
 )
 
 internal fun SqlRow.toReleaseActivity(): GitHubReleaseActivityRecord = GitHubReleaseActivityRecord(

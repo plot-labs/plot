@@ -4,6 +4,7 @@ import com.plot.api.persistence.JooqSqlExecutor
 import com.plot.api.common.UuidGenerator
 import com.plot.api.routine.AgentRunInputRecord
 import com.plot.api.artifact.workflow.model.EvidenceSnapshot
+import com.plot.api.artifact.workflow.model.ArtifactLayoutNode
 import com.plot.api.artifact.workflow.model.ReviewVerdict
 import com.plot.api.artifact.workflow.model.SentenceArtifact
 import java.sql.Timestamp
@@ -129,7 +130,7 @@ class ArtifactWorkflowMaterializationPersistence(
 			) values (?, ?, ?, ?, 1, ?::jsonb, true, ?)
 			""".trimIndent(),
 			artifactRevisionId, workspaceId, state.runId, variantId,
-			lexicalContentFor(state.sentences).toString(), Timestamp.from(now),
+				lexicalContentFor(state).toString(), Timestamp.from(now),
 		)
 		state.sentences.sortedBy { it.orderIndex }.forEach { sentence ->
 			sqlExecutor.update(
@@ -145,7 +146,84 @@ class ArtifactWorkflowMaterializationPersistence(
 		}
 	}
 
-	private fun lexicalContentFor(sentences: List<SentenceArtifact>): tools.jackson.databind.JsonNode {
+	private fun lexicalContentFor(state: ArtifactWorkflowState): tools.jackson.databind.JsonNode {
+		if (state.documentVersion == 2) return lexicalContentV2(state)
+		return lexicalContentV1(state.sentences)
+	}
+
+	private fun lexicalContentV2(state: ArtifactWorkflowState): tools.jackson.databind.JsonNode {
+		val document = objectMapper.createObjectNode()
+		document.put("documentVersion", 2)
+		val root = document.putObject("root")
+		val children = root.putArray("children")
+		val sentences = state.sentences.associateBy { it.id }
+		val layout = state.layout.ifEmpty {
+			state.sentences.sortedBy { it.orderIndex }.map { sentence ->
+				ArtifactLayoutNode(type = "paragraph", statementId = sentence.id)
+			}
+		}
+		layout.forEachIndexed { index, node -> children.add(layoutNode(node, "layout.$index", sentences, state.runId)) }
+		root.putNull("direction")
+		root.put("format", "")
+		root.put("indent", 0)
+		root.put("type", "root")
+		root.put("version", 1)
+		return document
+	}
+
+	private fun layoutNode(
+		node: ArtifactLayoutNode,
+		path: String,
+		sentences: Map<UUID, SentenceArtifact>,
+		runId: UUID,
+	): tools.jackson.databind.node.ObjectNode {
+		val result = objectMapper.createObjectNode()
+		when (node.type) {
+			"list" -> {
+				result.put("nodeId", deterministicNodeId(runId, path))
+				result.put("listType", node.listType ?: "bullet")
+				result.put("start", node.start ?: 1)
+				result.put("type", "list")
+				result.put("version", 1)
+				val children = result.putArray("children")
+				node.children.forEachIndexed { index, child ->
+					children.add(layoutNode(child, "$path.$index", sentences, runId))
+				}
+			}
+			"heading", "paragraph", "listItem" -> {
+				val statement = node.statementId?.let(sentences::get)
+					?: throw IllegalStateException("$path references an unknown statement")
+				// A sentence revision is immutable and already unique within the
+				// materialized document, so it is a stable leaf identity across
+				// duplicate materialization attempts.
+				result.put("nodeId", statement.revisionId.toString())
+				result.put("statementId", statement.id.toString())
+				result.putNull("direction")
+				result.put("format", "")
+				result.put("indent", 0)
+				result.put("type", node.type)
+				result.put("version", 1)
+				if (node.type == "heading") result.put("tag", node.tag ?: "h2")
+				val paragraphChildren = result.putArray("children")
+				paragraphChildren.addObject().apply {
+					put("detail", 0)
+					put("format", 0)
+					put("mode", "normal")
+					put("style", "")
+					put("text", statement.body)
+					put("type", "text")
+					put("version", 1)
+				}
+			}
+			else -> throw IllegalStateException("$path has unsupported layout type '${node.type}'")
+		}
+		return result
+	}
+
+	private fun deterministicNodeId(runId: UUID, path: String): String =
+		UUID.nameUUIDFromBytes("$runId:$path".toByteArray(Charsets.UTF_8)).toString()
+
+	private fun lexicalContentV1(sentences: List<SentenceArtifact>): tools.jackson.databind.JsonNode {
 		val document = objectMapper.createObjectNode()
 		val root = document.putObject("root")
 		val children = root.putArray("children")

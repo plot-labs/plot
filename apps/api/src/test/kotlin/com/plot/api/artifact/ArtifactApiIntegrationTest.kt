@@ -362,6 +362,218 @@ class ArtifactApiIntegrationTest {
 	}
 
 	@Test
+	fun `whole artifact save rejects reuse of a removed statement identity`() {
+		val fixture = readyPack()
+		mockMvc.patch("/api/artifact-variants/${fixture.variantId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = objectMapper.writeValueAsString(mapOf(
+				"expectedRevisionNumber" to 1,
+				"lexicalContent" to lexicalContent("Stable sentence."),
+				"statements" to listOf(mapOf("id" to fixture.secondSentenceId, "orderIndex" to 0, "body" to "Stable sentence.")),
+			))
+		}.andExpect { status { isOk() } }
+
+		mockMvc.patch("/api/artifact-variants/${fixture.variantId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = objectMapper.writeValueAsString(mapOf(
+				"expectedRevisionNumber" to 2,
+				"lexicalContent" to lexicalContent("Reintroduced sentence.", "Stable sentence."),
+				"statements" to listOf(
+					mapOf("id" to fixture.firstSentenceId, "orderIndex" to 0, "body" to "Reintroduced sentence."),
+					mapOf("id" to fixture.secondSentenceId, "orderIndex" to 1, "body" to "Stable sentence."),
+				),
+			))
+		}.andExpect {
+			status { isBadRequest() }
+			jsonPath("$.error") { value("STATEMENT_ID_REUSE") }
+		}
+
+		assertEquals(2, jdbcTemplate.queryForObject(
+			"select revision_no from content_variant_revisions where content_variant_id = ? and is_current",
+			Int::class.java,
+			fixture.variantId,
+		))
+	}
+
+	@Test
+	fun `V2 save and sentence edit preserve structure through history and export`() {
+		val fixture = readyPack(documentVersion = 2)
+		mockMvc.get("/api/artifact-variants/${fixture.variantId}").andExpect {
+			status { isOk() }
+			jsonPath("$.variant.documentVersion") { value(2) }
+			jsonPath("$.variant.lexicalContent.documentVersion") { value(2) }
+		}
+		mockMvc.patch("/api/artifact-variants/${fixture.variantId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = objectMapper.writeValueAsString(mapOf(
+				"expectedRevisionNumber" to 1,
+				"lexicalContent" to lexicalContent("Supported sentence.", "Stable sentence."),
+				"statements" to listOf(
+					mapOf("id" to fixture.firstSentenceId, "orderIndex" to 0, "body" to "Supported sentence."),
+					mapOf("id" to fixture.secondSentenceId, "orderIndex" to 1, "body" to "Stable sentence."),
+				),
+			))
+		}.andExpect {
+			status { isConflict() }
+			jsonPath("$.error") { value("DOCUMENT_VERSION_CONFLICT") }
+		}
+
+		val headingNodeId = UUID.randomUUID()
+		val listNodeId = UUID.randomUUID()
+		val itemNodeId = UUID.randomUUID()
+		mockMvc.patch("/api/artifact-variants/${fixture.variantId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = objectMapper.writeValueAsString(mapOf(
+				"expectedRevisionNumber" to 1,
+				"lexicalContent" to lexicalContentV2(
+					mapOf("type" to "heading", "nodeId" to headingNodeId, "statementId" to fixture.firstSentenceId, "tag" to "h1", "body" to "Supported sentence."),
+					mapOf("type" to "list", "nodeId" to listNodeId, "listType" to "bullet", "start" to 1, "children" to listOf(
+						mapOf("type" to "listItem", "nodeId" to itemNodeId, "statementId" to fixture.secondSentenceId, "body" to "Stable sentence."),
+					)),
+				),
+				"statements" to listOf(
+					mapOf("id" to fixture.firstSentenceId, "orderIndex" to 0, "body" to "Supported sentence."),
+					mapOf("id" to fixture.secondSentenceId, "orderIndex" to 1, "body" to "Stable sentence."),
+				),
+			))
+		}.andExpect {
+			status { isOk() }
+			jsonPath("$.variant.revisionNumber") { value(2) }
+			jsonPath("$.variant.lexicalContent.root.children[0].type") { value("heading") }
+			jsonPath("$.variant.lexicalContent.root.children[0].tag") { value("h1") }
+			jsonPath("$.variant.lexicalContent.root.children[1].type") { value("list") }
+			jsonPath("$.variant.lexicalContent.root.children[1].children[0].type") { value("listItem") }
+			jsonPath("$.variant.sources.length()") { value(1) }
+		}
+
+		mockMvc.patch("/api/artifact-variants/${fixture.variantId}/sentences/${fixture.firstSentenceId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = "{\"expectedRevisionNumber\":1,\"body\":\"Updated heading.\"}"
+		}.andExpect {
+			status { isOk() }
+			jsonPath("$.variant.revisionNumber") { value(3) }
+			jsonPath("$.variant.lexicalContent.root.children[0].type") { value("heading") }
+			jsonPath("$.variant.lexicalContent.root.children[0].tag") { value("h1") }
+			jsonPath("$.variant.lexicalContent.root.children[0].children[0].text") { value("Updated heading.") }
+			jsonPath("$.variant.lexicalContent.root.children[1].type") { value("list") }
+		}
+
+		mockMvc.get("/api/artifact-variants/${fixture.variantId}/history/at/1").andExpect {
+			status { isOk() }
+			jsonPath("$.artifact.variant.documentVersion") { value(2) }
+			jsonPath("$.artifact.variant.lexicalContent.root.children[0].type") { value("heading") }
+			jsonPath("$.artifact.variant.lexicalContent.root.children[1].type") { value("list") }
+		}
+
+		val exported = export(fixture.variantId, "COPY", includeSources = false)
+		assertTrue(exported.startsWith("# Updated heading.\n\n- Stable sentence."))
+	}
+
+	@Test
+	fun `statement lineage carries citations as stale evidence across split and merge`() {
+		val fixture = readyPack(documentVersion = 2)
+		val splitId = UUID.randomUUID()
+		val splitNodeIds = listOf(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID())
+		val firstSplitBody = "Supported part."
+		val splitBody = "Supported part. (continued)"
+		mockMvc.patch("/api/artifact-variants/${fixture.variantId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = objectMapper.writeValueAsString(mapOf(
+				"expectedRevisionNumber" to 1,
+				"lexicalContent" to lexicalContentV2(
+					mapOf("type" to "paragraph", "nodeId" to splitNodeIds[0], "statementId" to fixture.firstSentenceId, "body" to firstSplitBody),
+					mapOf("type" to "paragraph", "nodeId" to splitNodeIds[1], "statementId" to splitId, "body" to splitBody),
+					mapOf("type" to "paragraph", "nodeId" to splitNodeIds[2], "statementId" to fixture.secondSentenceId, "body" to "Stable sentence."),
+				),
+				"statements" to listOf(
+					mapOf("id" to fixture.firstSentenceId, "orderIndex" to 0, "body" to firstSplitBody),
+					mapOf("id" to splitId, "orderIndex" to 1, "body" to splitBody, "lineage" to listOf(fixture.firstSentenceId)),
+					mapOf("id" to fixture.secondSentenceId, "orderIndex" to 2, "body" to "Stable sentence."),
+				),
+			))
+		}.andExpect {
+			status { isOk() }
+			jsonPath("$.variant.sentences.length()") { value(3) }
+			jsonPath("$.variant.sentences[0].citations.length()") { value(0) }
+			jsonPath("$.variant.sentences[1].citations.length()") { value(0) }
+		}
+		assertEquals(listOf("STALE", "LINEAGE_DERIVED"), jdbcTemplate.queryForObject(
+			"select status, stale_reason from sentence_citations where sentence_id = ?",
+			{ rs, _ -> listOf(rs.getString(1), rs.getString(2)) },
+			splitId,
+		))
+
+		val splitHistory = mockMvc.get("/api/artifact-variants/${fixture.variantId}/history/at/0").andExpect {
+			status { isOk() }
+			jsonPath("$.artifact.variant.sentences[1].citations[0].status") { value("STALE") }
+		}.andReturn().response.contentAsString
+		assertFalse(splitHistory.contains("LINEAGE_DERIVED"))
+
+		val mergeNodeIds = listOf(UUID.randomUUID(), UUID.randomUUID())
+		val mergedBody = "Supported sentence. (continued)"
+		mockMvc.patch("/api/artifact-variants/${fixture.variantId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = objectMapper.writeValueAsString(mapOf(
+				"expectedRevisionNumber" to 2,
+				"lexicalContent" to lexicalContentV2(
+					mapOf("type" to "paragraph", "nodeId" to mergeNodeIds[0], "statementId" to fixture.firstSentenceId, "body" to mergedBody),
+					mapOf("type" to "paragraph", "nodeId" to mergeNodeIds[1], "statementId" to fixture.secondSentenceId, "body" to "Stable sentence."),
+				),
+				"statements" to listOf(
+					mapOf("id" to fixture.firstSentenceId, "orderIndex" to 0, "body" to mergedBody, "lineage" to listOf(fixture.firstSentenceId, splitId)),
+					mapOf("id" to fixture.secondSentenceId, "orderIndex" to 1, "body" to "Stable sentence."),
+				),
+			))
+		}.andExpect {
+			status { isOk() }
+			jsonPath("$.variant.sentences.length()") { value(2) }
+			jsonPath("$.variant.sentences[0].citations.length()") { value(0) }
+		}
+		assertEquals("STALE", jdbcTemplate.queryForObject(
+			"select status from sentence_citations where sentence_id = ? and status = 'STALE' limit 1",
+			String::class.java,
+			splitId,
+		))
+	}
+
+	@Test
+	fun `statement lineage resolves through multiple unsaved split identities`() {
+		val fixture = readyPack(documentVersion = 2)
+		val firstSplitId = UUID.randomUUID()
+		val secondSplitId = UUID.randomUUID()
+		val nodeIds = List(4) { UUID.randomUUID() }
+		val statements = listOf(
+			mapOf("id" to fixture.firstSentenceId, "orderIndex" to 0, "body" to "First part."),
+			mapOf("id" to firstSplitId, "orderIndex" to 1, "body" to "Second part.", "lineage" to listOf(fixture.firstSentenceId)),
+			mapOf("id" to secondSplitId, "orderIndex" to 2, "body" to "Third part.", "lineage" to listOf(firstSplitId)),
+			mapOf("id" to fixture.secondSentenceId, "orderIndex" to 3, "body" to "Stable sentence."),
+		)
+		mockMvc.patch("/api/artifact-variants/${fixture.variantId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = objectMapper.writeValueAsString(mapOf(
+				"expectedRevisionNumber" to 1,
+				"lexicalContent" to lexicalContentV2(
+					mapOf("type" to "paragraph", "nodeId" to nodeIds[0], "statementId" to fixture.firstSentenceId, "body" to "First part."),
+					mapOf("type" to "paragraph", "nodeId" to nodeIds[1], "statementId" to firstSplitId, "body" to "Second part."),
+					mapOf("type" to "paragraph", "nodeId" to nodeIds[2], "statementId" to secondSplitId, "body" to "Third part."),
+					mapOf("type" to "paragraph", "nodeId" to nodeIds[3], "statementId" to fixture.secondSentenceId, "body" to "Stable sentence."),
+				),
+				"statements" to statements,
+			))
+		}.andExpect {
+			status { isOk() }
+			jsonPath("$.variant.sentences.length()") { value(4) }
+			jsonPath("$.variant.sources.length()") { value(0) }
+		}
+
+		assertEquals(3, jdbcTemplate.queryForObject(
+			"select count(*) from sentence_citations where content_variant_id = ? and status = 'STALE'",
+			Int::class.java,
+			fixture.variantId,
+		))
+	}
+
+	@Test
 	fun `whole artifact save rejects malformed or mismatched Lexical payloads and nested invalid statements`() {
 		val fixture = readyPack()
 		val malformed = objectMapper.writeValueAsString(mapOf(
@@ -672,6 +884,55 @@ class ArtifactApiIntegrationTest {
 		),
 	)
 
+	private fun lexicalContentV2(vararg blocks: Map<String, Any?>): Map<String, Any?> = mapOf<String, Any?>(
+		"documentVersion" to 2,
+		"root" to mapOf<String, Any?>(
+			"children" to blocks.map { block ->
+				when (block["type"]) {
+					"list" -> mapOf<String, Any?>(
+						"children" to (block["children"] as List<Map<String, Any?>>).map { item ->
+							mapOf<String, Any?>(
+								"children" to listOf(lexicalText(item["body"] as String)),
+								"nodeId" to item["nodeId"].toString(),
+								"statementId" to item["statementId"].toString(),
+								"type" to "listItem",
+								"version" to 1,
+							)
+						},
+						"nodeId" to block["nodeId"].toString(),
+						"listType" to block["listType"],
+						"start" to block["start"],
+						"type" to "list",
+						"version" to 1,
+					)
+						else -> buildMap<String, Any?> {
+						put("children", listOf(lexicalText(block["body"] as String)))
+						put("nodeId", block["nodeId"].toString())
+						put("statementId", block["statementId"].toString())
+						if (block["type"] == "heading") put("tag", block["tag"])
+						put("type", block["type"])
+						put("version", 1)
+					}
+				}
+			},
+			"direction" to null,
+			"format" to "",
+			"indent" to 0,
+			"type" to "root",
+			"version" to 1,
+		),
+	)
+
+	private fun lexicalText(body: String): Map<String, Any> = mapOf(
+		"detail" to 0,
+		"format" to 0,
+		"mode" to "normal",
+		"style" to "",
+		"text" to body,
+		"type" to "text",
+		"version" to 1,
+	)
+
 	private fun lexicalContentWithLinebreak(linebreakVersion: Int = 1, unknownField: Boolean = false): JsonNode {
 		val content = objectMapper.readTree(objectMapper.writeValueAsString(lexicalContent("First\nSecond")))
 		val children = content.get("root").get("children")[0].asObject().putArray("children")
@@ -701,7 +962,10 @@ class ArtifactApiIntegrationTest {
 		return content
 	}
 
-	private fun readyPack(sourceUrl: String = "https://github.test/acme/repo/pull/1"): Fixture {
+	private fun readyPack(
+		sourceUrl: String = "https://github.test/acme/repo/pull/1",
+		documentVersion: Int = 1,
+	): Fixture {
 		val runId = UUID.randomUUID()
 		val blockId = UUID.randomUUID()
 		jdbcTemplate.update(
@@ -716,7 +980,7 @@ class ArtifactApiIntegrationTest {
 			UUID.randomUUID(), runId, blockId, 0, SourceProvider.GITHUB, "pull_request", "PR 1", "PR 1",
 			"Evidence body", "PRIVATE SNAPSHOT EXCERPT", sourceUrl, null, null, "hash", Instant.now(),
 		)
-		val state = workflow.start(runId, listOf(evidence), null)
+		val state = workflow.start(runId, listOf(evidence), null, documentVersion = documentVersion)
 		admissionPersistence.createRun(ArtifactWorkflowRunReservation(
 			devContext.devWorkspaceId, devContext.devUserId, null, "pack-${UUID.randomUUID()}", "fingerprint-${UUID.randomUUID()}",
 			state, "OPENAI", "scripted", "{\"maxModelCalls\":12,\"maxTotalTokens\":1000,\"maxRunDurationMillis\":60000}",

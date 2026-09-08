@@ -207,6 +207,42 @@ class ArtifactRevisionMaterializer(
 		return root
 	}
 
+	/** Replaces one V2 statement leaf while retaining the surrounding layout. */
+	internal fun replaceStatementBody(document: JsonNode, statementId: UUID, body: String): JsonNode {
+		val copy = objectMapper.readTree(document.toString())
+		var replaced = false
+		fun visit(node: JsonNode) {
+			if (node.isArray) {
+				node.forEach(::visit)
+				return
+			}
+			if (!node.isObject) return
+			if (node.get("statementId")?.asText() == statementId.toString()) {
+				val target = node as tools.jackson.databind.node.ObjectNode
+				val children = target.putArray("children")
+				children.addObject().apply {
+					put("detail", 0)
+					put("format", 0)
+					put("mode", "normal")
+					put("style", "")
+					put("text", body)
+					put("type", "text")
+					put("version", 1)
+				}
+				if (target.get("type")?.asText() == "cta") target.put("destinationLabel", body)
+				replaced = true
+				return
+			}
+			node.properties().forEach { entry ->
+				val child = entry.value
+				if (child.isObject || child.isArray) visit(child)
+			}
+		}
+		visit(copy)
+		if (!replaced) throw ApiException(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "Sentence is not part of the document", statementId)
+		return copy
+	}
+
 
 
     private fun notFound(): Nothing = throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Content pack not found")

@@ -45,8 +45,8 @@ class RoutinePersistence(
 		cadence.name,
 	).map { it.toRoutine() }
 
-	fun hasEnabledReleaseEventRoutines(workspaceId: UUID, sourceScopeId: UUID): Boolean = fetchRows(
-		"select exists(select 1 from routines where workspace_id = ? and source_scope_id = ? and enabled = true and cadence in ('ON_GITHUB_RELEASE', 'ON_GIT_TAG'))",
+	fun hasReleaseEventRoutines(workspaceId: UUID, sourceScopeId: UUID): Boolean = fetchRows(
+		"select exists(select 1 from routines where workspace_id = ? and source_scope_id = ? and cadence in ('ON_GITHUB_RELEASE', 'ON_GIT_TAG'))",
 		workspaceId,
 		sourceScopeId,
 	).firstOrNull()?.get("exists", Boolean::class.java) == true

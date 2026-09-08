@@ -1,0 +1,12 @@
+{
+  "id": "018fd000-0000-7000-8000-000000000061",
+  "sourceScopeId": "018fd000-0000-7000-8000-000000000020",
+  "tagName": "v1.2.0",
+  "status": "QUEUED",
+  "baseSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "artifactId": null,
+  "errorCode": null,
+  "createdAt": "2026-07-30T00:00:00Z",
+  "updatedAt": "2026-07-30T00:01:00Z"
+}

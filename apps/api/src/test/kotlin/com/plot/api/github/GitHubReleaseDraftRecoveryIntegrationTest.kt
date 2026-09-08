@@ -49,7 +49,7 @@ class GitHubReleaseDraftRecoveryIntegrationTest {
 			update github_release_draft_requests
 			set status = 'FAILED', error_code = 'TEST_ISOLATION',
 			    claimed_by = null, claimed_at = null, heartbeat_at = null,
-			    finished_at = coalesce(finished_at, now()), updated_at = now()
+			    finished_at = coalesce(finished_at, greatest(now(), created_at)), updated_at = now()
 			where workspace_id = ? and status in ('QUEUED', 'RESOLVING', 'GENERATING')
 			""".trimIndent(),
 			devContext.devWorkspaceId,

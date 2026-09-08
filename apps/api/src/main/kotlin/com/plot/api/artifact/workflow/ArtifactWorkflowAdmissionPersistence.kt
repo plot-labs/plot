@@ -3,6 +3,8 @@ import com.plot.api.common.ApiException
 
 import com.plot.api.artifact.run.ArtifactRunPersistence
 import com.plot.api.common.UuidGenerator
+import com.plot.api.content.ContentType
+import com.plot.api.content.ContentTypeRegistry
 import com.plot.api.entitlement.TrialPolicy
 import com.plot.api.persistence.JooqSqlExecutor
 import com.plot.api.persistence.JooqTransactionExecutor
@@ -22,6 +24,7 @@ class ArtifactWorkflowAdmissionPersistence(
 	private val artifactRunPersistence: ArtifactRunPersistence,
 	private val queryPersistence: ArtifactWorkflowQueryPersistence,
 	private val materializationPersistence: ArtifactWorkflowMaterializationPersistence,
+	private val contentTypeRegistry: ContentTypeRegistry,
 	private val clock: Clock = Clock.systemUTC(),
 ) {
 	fun findIdempotentRun(
@@ -118,6 +121,8 @@ class ArtifactWorkflowAdmissionPersistence(
 		}
 		requireTrialArtifactWorkflowCapacity(reservation.workspaceId)
 		val now = clock.instant()
+		val contentType = resolveContentType(reservation.workspaceId, reservation.agentRunId)
+		val writerSpec = contentTypeRegistry.specFor(contentType)
 		reservation.artifactRunId?.let { artifactRunId ->
 			val agentRunId = requireNotNull(reservation.agentRunId) { "Artifact run requires an AgentRun" }
 			artifactRunPersistence.admit(
@@ -136,13 +141,14 @@ class ArtifactWorkflowAdmissionPersistence(
 			 id, workspace_id, work_session_id, agent_run_id, artifact_run_id, source_scope_id, created_by_user_id, idempotency_key, request_fingerprint,
 			 status, workflow_version, prompt_version, output_schema_version, budget_version, provider,
 			 model_name, budget_snapshot, user_instruction, created_at, updated_at
-			) values (?, ?, ?, ?, ?, ?, ?, ?, ?, 'QUEUED', 'fixed-v1', 'changelog-v8', 'artifact-workflow-v5',
-			 'budget-v1', ?, ?, ?::jsonb, ?, ?, ?)
+			) values (?, ?, ?, ?, ?, ?, ?, ?, ?, 'QUEUED', 'fixed-v1', ?, ?,
+			 ?, ?, ?, ?::jsonb, ?, ?, ?)
 			on conflict (workspace_id, created_by_user_id, idempotency_key) do nothing
 			""".trimIndent(),
 			reservation.state.runId, reservation.workspaceId, reservation.workSessionId, reservation.agentRunId, reservation.artifactRunId,
 			reservation.sourceScopeId,
 			reservation.createdByUserId, reservation.idempotencyKey, reservation.requestFingerprint,
+			writerSpec.promptVersion, writerSpec.outputSchemaVersion, writerSpec.budgetVersion,
 			reservation.provider, reservation.modelName, reservation.budgetJson, reservation.state.instruction,
 			Timestamp.from(now), Timestamp.from(now),
 		)
@@ -178,7 +184,7 @@ class ArtifactWorkflowAdmissionPersistence(
 			workspaceId,
 		).singleOrNull()
 			?: throw ApiException(HttpStatus.FORBIDDEN, "ACCESS_DENIED", "Access denied")
-		if (entitlement.third != "full") {
+		if (entitlement.third == "read_only") {
 			throw ApiException(
 				HttpStatus.FORBIDDEN,
 				"WORKSPACE_READ_ONLY",
@@ -215,5 +221,16 @@ class ArtifactWorkflowAdmissionPersistence(
 				"The trial already has three completed or in-progress artifact drafts. Wait for a failure to release capacity or subscribe.",
 			)
 		}
+	}
+
+	private fun resolveContentType(workspaceId: UUID, agentRunId: UUID?): ContentType {
+		if (agentRunId == null) return ContentType.CHANGELOG
+		val raw = sqlExecutor.query(
+			"select content_type from agent_runs where workspace_id = ? and id = ?",
+			{ rs, _ -> rs.getString(1) },
+			workspaceId,
+			agentRunId,
+		).firstOrNull()
+		return ContentType.parse(raw)
 	}
 }

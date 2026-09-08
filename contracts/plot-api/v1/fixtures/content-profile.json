@@ -1,0 +1,11 @@
+{
+  "revisionId": "018fd000-0000-7000-8000-000000000080",
+  "revisionNumber": 1,
+  "productSummary": "Plot turns release evidence into customer-ready changelogs.",
+  "primaryAudience": "B2B SaaS product managers",
+  "customerTerms": "workspace, artifact, source",
+  "tone": "Clear and direct",
+  "defaultLocale": "en",
+  "bannedPhrases": ["synergy"],
+  "updatedAt": "2026-09-07T00:00:00Z"
+}

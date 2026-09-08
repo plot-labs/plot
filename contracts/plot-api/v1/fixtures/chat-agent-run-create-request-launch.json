@@ -1,0 +1,18 @@
+{
+  "instruction": "Announce the waitlist opening",
+  "writingBlockIds": ["018fd000-0000-7000-8000-000000000040"],
+  "contentType": "LAUNCH_ANNOUNCEMENT",
+  "brief": {
+    "purpose": "Open early access",
+    "audience": "Founders evaluating Plot",
+    "availability": "Waitlist opens Monday",
+    "pricing": null,
+    "userAction": "Join the waitlist",
+    "confirmedFacts": [
+      {
+        "body": "The waitlist opens Monday.",
+        "kind": "AVAILABILITY"
+      }
+    ]
+  }
+}

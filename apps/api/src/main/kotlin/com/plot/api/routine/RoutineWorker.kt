@@ -155,6 +155,10 @@ class RoutineWorker(
 		if (execution.status != RoutineExecutionStatus.PROBING) return
 		val routine = persistence.find(execution.workspaceId, execution.routineId)
 			?: throw RoutineExecutionStateException("Routine was not found")
+		if (routine.cadence in setOf(RoutineCadence.ON_GIT_TAG, RoutineCadence.ON_GITHUB_RELEASE)) {
+			completeFailure(execution, claimedRoutine, routine, "GITHUB_RELEASE_RANGE_REQUIRED")
+			return
+		}
 		if (!routine.enabled && execution.triggerKind != RoutineExecutionTriggerKind.MANUAL) {
 			completeFailure(execution, claimedRoutine, routine, "ROUTINE_DISABLED")
 			return

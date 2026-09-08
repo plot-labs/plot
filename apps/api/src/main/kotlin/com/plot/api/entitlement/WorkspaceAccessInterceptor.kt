@@ -18,6 +18,14 @@ class WorkspaceAccessInterceptor(
 	): Boolean {
 		if (handler !is HandlerMethod) return true
 		if (request.method in SAFE_METHODS || handler.allowsReadOnly()) return true
+		if (handler.allowsSafety()) {
+			workspaceAccessService.requireActiveWorkspace()
+			return true
+		}
+		if (handler.allowsCompletion()) {
+			workspaceAccessService.requireCompletionAllowed()
+			return true
+		}
 		workspaceAccessService.requireWritable()
 		return true
 	}
@@ -25,6 +33,14 @@ class WorkspaceAccessInterceptor(
 	private fun HandlerMethod.allowsReadOnly(): Boolean =
 		hasMethodAnnotation(ReadOnlyAllowed::class.java) ||
 			beanType.isAnnotationPresent(ReadOnlyAllowed::class.java)
+
+	private fun HandlerMethod.allowsSafety(): Boolean =
+		hasMethodAnnotation(SafetyAllowed::class.java) ||
+			beanType.isAnnotationPresent(SafetyAllowed::class.java)
+
+	private fun HandlerMethod.allowsCompletion(): Boolean =
+		hasMethodAnnotation(CompletionAllowed::class.java) ||
+			beanType.isAnnotationPresent(CompletionAllowed::class.java)
 
 	private companion object {
 		val SAFE_METHODS = setOf(

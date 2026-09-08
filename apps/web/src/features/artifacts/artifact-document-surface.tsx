@@ -19,6 +19,7 @@ type ArtifactDocumentSurfaceProps = {
   onPackChange: (pack: Artifact) => void;
   presentation?: "panel" | "canvas" | "workspace";
   saveRequestToken?: number;
+  editorLocked?: boolean;
 };
 
 export function ArtifactDocumentSurface({
@@ -33,8 +34,9 @@ export function ArtifactDocumentSurface({
   onPackChange,
   presentation = "panel",
   saveRequestToken,
+  editorLocked = false,
 }: ArtifactDocumentSurfaceProps) {
-  const readOnly = Boolean(historical);
+  const readOnly = Boolean(historical) || editorLocked;
   const shownPack = historical?.artifact ?? pack;
 
   if (presentation === "canvas" || presentation === "workspace") {
@@ -71,15 +73,19 @@ export function ArtifactDocumentSurface({
         <div className="min-w-0">
           <div className="text-xs font-semibold uppercase tracking-[0.08em] text-black/42 dark:text-white/45">Artifact</div>
           <h2 className="mt-1 truncate text-xl font-semibold text-black/88 dark:text-white/90">{shownPack.title || "Generated artifact"}</h2>
-          <p className="mt-1 text-sm text-black/52 dark:text-white/55">{historical ? `${historical.cause} · historical preview` : shownPack.status}</p>
+          <p className="mt-1 text-sm text-black/52 dark:text-white/55">
+            {historical ? `${historical.cause} · historical preview` : shownPack.status}
+            {" · "}
+            {shownPack.contentType === "LAUNCH_ANNOUNCEMENT" ? "Launch announcement" : "Changelog"}
+          </p>
         </div>
         <div className="flex min-w-0 flex-col items-end gap-2">
           {saveState ? <ArtifactEditorStatus>{saveStateLabel(saveState, readOnly)}</ArtifactEditorStatus> : null}
-          {!readOnly ? (
+          {!historical ? (
             <div className="flex flex-col items-end gap-2">
               <div className="flex flex-wrap items-center justify-end gap-2">
                 <ExportDialog pack={shownPack} client={client} />
-                <PublishDialog pack={shownPack} client={client} presentation="inline" />
+                <PublishDialog pack={shownPack} client={client} presentation="inline" onPackChange={onPackChange} />
               </div>
             </div>
           ) : (

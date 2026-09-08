@@ -36,6 +36,12 @@ describe("ChatComposer", () => {
     expect(send).toBeDisabled();
   });
 
+  it("stays disabled when generation is not allowed", () => {
+    render(<ChatComposer variant="center" references={references} canGenerate={false} onSubmit={vi.fn()} />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Chat message" }), { target: { value: "Write release notes" } });
+    expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
+  });
+
   it("stays disabled without a selected source or while busy", () => {
     const { unmount } = render(<ChatComposer references={[]} onSubmit={vi.fn()} />);
     inputText(screen.getByRole("textbox"), "Write release notes");

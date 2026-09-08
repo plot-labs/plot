@@ -261,7 +261,8 @@ class DefaultGitHubReleaseEvidenceService(
 			}
 
 	private fun releaseObjectPrefix(request: GitHubReleaseDraftRequest, range: GitHubReleaseRange): String =
-		"release:${request.tagName}:${range.baseSha}...${range.headSha}"
+		"release:${request.tagName}:${range.baseSha}...${range.headSha}" +
+			(request.routineId?.let { ":request:${request.id}" } ?: "")
 
 	private fun commitBlock(
 		context: GitHubReleaseSourceContext,

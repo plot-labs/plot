@@ -3,12 +3,12 @@ package com.plot.api.artifact.workflow.model
 import java.time.Instant
 import java.util.UUID
 
-enum class SourceProvider { GITHUB }
+enum class SourceProvider { GITHUB, USER_CONFIRMED }
 
 data class EvidenceSnapshot(
 	val id: UUID,
 	val artifactWorkflowRunId: UUID,
-	val writingBlockId: UUID,
+	val writingBlockId: UUID?,
 	val orderIndex: Int,
 	val sourceProvider: SourceProvider,
 	val sourceKind: String,
@@ -16,7 +16,7 @@ data class EvidenceSnapshot(
 	val snapshotTitle: String?,
 	val snapshotBody: String,
 	val snapshotExcerpt: String?,
-	val originalUrl: String,
+	val originalUrl: String?,
 	val sourceCreatedAt: Instant?,
 	val sourceUpdatedAt: Instant?,
 	val contentHash: String,
@@ -26,7 +26,34 @@ data class EvidenceSnapshot(
 	val agentRunInputId: UUID? = null,
 )
 
-data class WriterOutput(val sentences: List<WriterSentence>)
+data class WriterOutput(
+	val sentences: List<WriterSentence>,
+	/** Optional writer-local layout. Empty means use the compatibility paragraph projection. */
+	val layout: List<WriterLayoutNode> = emptyList(),
+)
+
+/**
+ * Writer-owned layout references sentence positions in the same response. It
+ * never carries database IDs; those are assigned after the output is validated.
+ */
+data class WriterLayoutNode(
+	val type: String,
+	val statementIndex: Int? = null,
+	val tag: String? = null,
+	val listType: String? = null,
+	val start: Int? = null,
+	val children: List<WriterLayoutNode> = emptyList(),
+)
+
+/** Layout persisted in the durable workflow checkpoint after server IDs exist. */
+data class ArtifactLayoutNode(
+	val type: String,
+	val statementId: UUID? = null,
+	val tag: String? = null,
+	val listType: String? = null,
+	val start: Int? = null,
+	val children: List<ArtifactLayoutNode> = emptyList(),
+)
 
 enum class SentenceIntent { FACTUAL, EDITORIAL, UNRESOLVED_CONFLICT }
 
@@ -119,5 +146,5 @@ data class ExportSource(
 	val evidenceId: UUID,
 	val provider: String,
 	val sourceLabel: String,
-	val originalUrl: String,
+	val originalUrl: String?,
 )

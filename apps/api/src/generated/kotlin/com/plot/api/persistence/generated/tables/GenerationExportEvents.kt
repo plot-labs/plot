@@ -12,9 +12,11 @@ import com.plot.api.persistence.generated.keys.GENERATION_EXPORT_EVENTS__GENERAT
 import com.plot.api.persistence.generated.keys.GENERATION_EXPORT_EVENTS__GENERATION_EXPORT_EVENTS_CREATED_BY_USER_ID_FKEY
 import com.plot.api.persistence.generated.keys.GENERATION_EXPORT_EVENTS__GENERATION_EXPORT_EVENTS_WORKSPACE_ID_CONTENT_VARIANT_ID_G_FKEY
 import com.plot.api.persistence.generated.keys.GENERATION_EXPORT_EVENTS__GENERATION_EXPORT_EVENTS_WORKSPACE_ID_GENERATION_RUN_ID_FKEY
+import com.plot.api.persistence.generated.keys.PRODUCT_DELIVERY_EVENTS__PRODUCT_DELIVERY_EVENTS_EXPORT_FK
 import com.plot.api.persistence.generated.tables.ContentVariantRevisions.ContentVariantRevisionsPath
 import com.plot.api.persistence.generated.tables.ContentVariants.ContentVariantsPath
 import com.plot.api.persistence.generated.tables.GenerationRuns.GenerationRunsPath
+import com.plot.api.persistence.generated.tables.ProductDeliveryEvents.ProductDeliveryEventsPath
 import com.plot.api.persistence.generated.tables.Users.UsersPath
 import com.plot.api.persistence.generated.tables.records.GenerationExportEventsRecord
 
@@ -298,6 +300,22 @@ open class GenerationExportEvents(
 
     val generationRuns: GenerationRunsPath
         get(): GenerationRunsPath = generationRuns()
+
+    private lateinit var _productDeliveryEvents: ProductDeliveryEventsPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.product_delivery_events</code> table
+     */
+    fun productDeliveryEvents(): ProductDeliveryEventsPath {
+        if (!this::_productDeliveryEvents.isInitialized)
+            _productDeliveryEvents = ProductDeliveryEventsPath(this, null, PRODUCT_DELIVERY_EVENTS__PRODUCT_DELIVERY_EVENTS_EXPORT_FK.inverseKey)
+
+        return _productDeliveryEvents;
+    }
+
+    val productDeliveryEvents: ProductDeliveryEventsPath
+        get(): ProductDeliveryEventsPath = productDeliveryEvents()
     override fun getChecks(): List<Check<GenerationExportEventsRecord>> = listOf(
         Internal.createCheck(this, DSL.name("generation_export_events_check"), "((((status)::text <> 'SUCCEEDED'::text) OR (unresolved_count = 0) OR warning_acknowledged))", true),
         Internal.createCheck(this, DSL.name("generation_export_events_disposition_check"), "(((disposition)::text = ANY ((ARRAY['COPY'::character varying, 'DOWNLOAD'::character varying])::text[])))", true),

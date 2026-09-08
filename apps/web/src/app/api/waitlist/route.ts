@@ -1,5 +1,5 @@
-import { Resend } from "resend";
 import { NextResponse } from "next/server";
+import { Resend } from "resend";
 
 import { createFixedWindowLimiter } from "@/lib/rate-limit";
 import { parseWaitlistPayload, roleLabel } from "@/lib/waitlist";
@@ -17,14 +17,11 @@ function clientIp(request: Request): string {
   return forwarded?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown";
 }
 
-export async function POST(request: Request) {
-  if (!resend || !process.env.RESEND_API_KEY) {
-    return NextResponse.json(
-      { error: "Waitlist is not configured yet." },
-      { status: 503 },
-    );
-  }
+function plotApiBaseUrl(): string {
+  return (process.env.PLOT_API_BASE_URL ?? "http://127.0.0.1:8080").replace(/\/$/, "");
+}
 
+export async function POST(request: Request) {
   const ip = clientIp(request);
   if (perIpLimiter.check(ip)) {
     return NextResponse.json({ error: "Too many requests. Try again later." }, { status: 429 });
@@ -42,7 +39,7 @@ export async function POST(request: Request) {
 
   if (!payload) {
     return NextResponse.json(
-      { error: "Enter a valid email and choose the most painful update channel." },
+      { error: "Enter a valid email, company context if you have one, and the most painful update channel." },
       { status: 400 },
     );
   }
@@ -55,31 +52,52 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Too many requests. Try again later." }, { status: 429 });
   }
 
-  const role = roleLabel(payload.role);
-  const segmentId = process.env.RESEND_WAITLIST_SEGMENT_ID;
+  let resendContactId: string | undefined;
+  if (resend && process.env.RESEND_API_KEY) {
+    const role = roleLabel(payload.role);
+    const segmentId = process.env.RESEND_WAITLIST_SEGMENT_ID;
+    const { data, error } = await resend.contacts.create({
+      email: payload.email,
+      firstName: role,
+      unsubscribed: false,
+      ...(segmentId ? { segments: [{ id: segmentId }] } : {}),
+    });
 
-  const { data, error } = await resend.contacts.create({
-    email: payload.email,
-    firstName: role,
-    unsubscribed: false,
-    ...(segmentId ? { segments: [{ id: segmentId }] } : {}),
+    if (error) {
+      const message = error.message.toLowerCase();
+      if (!(message.includes("already") || message.includes("exists"))) {
+        return NextResponse.json({ error: "Could not join the waitlist." }, { status: 502 });
+      }
+    } else {
+      resendContactId = data?.id;
+    }
+  }
+
+  const persistResponse = await fetch(`${plotApiBaseUrl()}/api/public/waitlist`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      email: payload.email,
+      role: payload.role,
+      painChannel: payload.painChannel,
+      company: payload.company,
+      resendContactId,
+    }),
+    cache: "no-store",
   });
 
-  if (error) {
-    const message = error.message.toLowerCase();
-
-    if (message.includes("already") || message.includes("exists")) {
-      return NextResponse.json({ ok: true, duplicate: true });
-    }
-
+  if (!persistResponse.ok) {
     return NextResponse.json({ error: "Could not join the waitlist." }, { status: 502 });
   }
 
-  const fromEmail = process.env.RESEND_FROM_EMAIL;
+  const persisted = (await persistResponse.json()) as { id?: string; duplicate?: boolean };
 
-  if (fromEmail) {
+  if (resend && process.env.RESEND_FROM_EMAIL && !persisted.duplicate) {
     await resend.emails.send({
-      from: fromEmail,
+      from: process.env.RESEND_FROM_EMAIL,
       to: payload.email,
       subject: "You're on the Plot waitlist",
       text: [
@@ -92,5 +110,9 @@ export async function POST(request: Request) {
     });
   }
 
-  return NextResponse.json({ ok: true, id: data?.id });
+  return NextResponse.json({
+    ok: true,
+    id: persisted.id ?? resendContactId,
+    duplicate: Boolean(persisted.duplicate),
+  });
 }

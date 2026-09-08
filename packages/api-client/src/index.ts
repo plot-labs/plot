@@ -1,4 +1,4 @@
-export type SourceProvider = "GITHUB";
+export type SourceProvider = "GITHUB" | "USER_CONFIRMED";
 export type SentenceOrigin = "GENERATED" | "REWRITTEN" | "USER_MODIFIED";
 
 export interface SourceReference {
@@ -15,24 +15,26 @@ export interface SourceReference {
 }
 
 export interface ContentCitation {
-  evidenceId: string;
-  provider: SourceProvider;
-  sourceLabel: string;
-  originalUrl: string;
+	evidenceId: string;
+	provider: SourceProvider;
+	sourceLabel: string;
+	originalUrl: string | null;
+	status?: "ACTIVE" | "STALE" | "REMOVED" | string;
 }
 
 export interface ContentSource {
   evidenceId: string;
   provider: SourceProvider;
   sourceLabel: string;
-  originalUrl: string;
+  originalUrl: string | null;
   statementIds: string[];
 }
 
 export interface ContentStatementInput {
-  id: string | null;
-  orderIndex: number;
-  body: string;
+	id: string | null;
+	orderIndex: number;
+	body: string;
+	lineage?: string[];
 }
 
 export interface ContentSentence {
@@ -45,25 +47,55 @@ export interface ContentSentence {
   citations: ContentCitation[];
 }
 
+export interface ArtifactPublication {
+  entryId: string;
+  entrySlug: string;
+  publicPath: string;
+  publishedAt: string;
+}
+
+export type ContentType = "CHANGELOG" | "LAUNCH_ANNOUNCEMENT";
+
+export interface RelatedArtifactSummary {
+  id: string;
+  title: string | null;
+  contentType: ContentType;
+  status: string;
+  updatedAt: string;
+}
+
+export interface ReplicateArtifactInput {
+  contentType: ContentType;
+  instruction?: string;
+  contentProfileRevisionId?: string;
+  brief?: ContentBriefInput;
+}
+
 export interface Artifact {
   id: string;
   status: string;
   title: string | null;
-  variant: {
+  contentType: ContentType;
+  publication?: ArtifactPublication | null;
+  relatedArtifacts?: RelatedArtifactSummary[];
+	variant: {
     id: string;
     status: string;
     revisionId: string;
     revisionNumber: number;
     lexicalContent: Record<string, unknown>;
     sentences: ContentSentence[];
-    sources: ContentSource[];
-  };
+		sources: ContentSource[];
+		documentVersion?: 1 | 2;
+		destinations?: CtaDestinationInput[];
+	};
 }
 
 export interface ArtifactSummary {
   id: string;
   status: string;
   title: string | null;
+  contentType: ContentType;
   updatedAt: string;
 }
 export interface ArtifactPage { items: ArtifactSummary[]; page: number; size: number; totalItems: number; totalPages: number }
@@ -92,6 +124,33 @@ export interface PublishContentVariantResult {
   entrySlug: string;
   publicPath: string;
   publishedAt: string;
+}
+
+export interface UnpublishContentVariantResult {
+  entryId: string;
+  entrySlug: string;
+  publicPath: string;
+  publishedAt: string;
+  unpublishedAt: string;
+}
+
+export type ProductDeliveryEventKind =
+  | "CLIPBOARD_WRITE_SUCCEEDED"
+  | "CLIPBOARD_WRITE_FAILED"
+  | "DOWNLOAD_STARTED"
+  | "EXTERNAL_DELIVERY_CONFIRMED";
+
+export interface RecordProductDeliveryEventInput {
+  kind: ProductDeliveryEventKind;
+  exportId?: string;
+  entryId?: string;
+  clientEventId?: string;
+}
+
+export interface ProductDeliveryEventResult {
+  id: string;
+  kind: ProductDeliveryEventKind;
+  duplicate: boolean;
 }
 
 export interface PublicChangelogEntrySummary {
@@ -127,6 +186,7 @@ export interface PublicChangelogEntry extends PublicChangelogEntrySummary {
   workspaceName: string;
   logoUrl: string | null;
   sentences: PublicChangelogSentence[];
+	documentVersion?: 1 | 2;
 }
 
 export interface RequestOptions { signal?: AbortSignal }
@@ -242,6 +302,11 @@ export interface GitHubReleaseActivity {
   updatedAt: string;
 }
 
+export interface GitHubReleaseRangeInput {
+  baseSha: string;
+  headSha: string;
+}
+
 interface WritingBlock {
   id: string;
   sourceKind: string;
@@ -261,6 +326,15 @@ interface WritingBlockPage {
   items: WritingBlock[];
 }
 
+export interface WorkspaceCapabilities {
+  generate: boolean;
+  edit: boolean;
+  publish: boolean;
+  export: boolean;
+  configure: boolean;
+  unpublish: boolean;
+}
+
 export interface WorkspaceSummary {
   id: string;
   name: string;
@@ -270,7 +344,8 @@ export interface WorkspaceSummary {
   publicCitationsEnabled: boolean;
   plan: string;
   entitlementStatus: string;
-  accessMode: "full" | "read_only";
+  accessMode: "full" | "complete_only" | "read_only";
+  capabilities: WorkspaceCapabilities;
   trialEndsAt: string;
   role: string | null;
   createdAt: string;
@@ -298,6 +373,7 @@ export interface RoutineExecutionSummary {
   errorCode: string | null;
   startedAt: string | null;
   finishedAt: string | null;
+  releaseRequestId: string | null;
 }
 
 export interface RoutineAgentStep {
@@ -316,6 +392,7 @@ export interface RoutineAgentRunDetail {
   routineExecutionId: string;
   routineId: string;
   chatId: string | null;
+  contentType: ContentType;
   status: RoutineAgentRunStatus;
   failureCode: string | null;
   artifactId: string | null;
@@ -328,6 +405,9 @@ export interface ChatAgentRun {
   id: string;
   chatId: string;
   instruction: string;
+  contentType: ContentType;
+  contentProfileRevisionId: string | null;
+  brief: ContentBrief | null;
   status: RoutineAgentRunStatus;
   failureCode: string | null;
   artifactId: string | null;
@@ -335,16 +415,64 @@ export interface ChatAgentRun {
     id: string;
     status: string;
     title: string | null;
+    contentType: ContentType;
     updatedAt: string;
   } | null;
   createdAt: string;
   updatedAt: string;
 }
 
+export interface ConfirmedFactInput {
+  body: string;
+  kind?: string;
+}
+
+export interface ContentBrief {
+  purpose?: string | null;
+  audience?: string | null;
+  availability?: string | null;
+  pricing?: string | null;
+  userAction?: string | null;
+	confirmedFacts?: ConfirmedFactInput[];
+	destinations?: CtaDestinationInput[];
+}
+
+export type ContentBriefInput = ContentBrief;
+
+export interface CtaDestinationInput {
+	id: string;
+	label: string;
+	url: string;
+}
+
 export interface CreateChatAgentRunInput {
   instruction: string;
   workSessionId?: string;
   writingBlockIds?: string[];
+  contentType?: ContentType;
+  contentProfileRevisionId?: string;
+  brief?: ContentBrief;
+}
+
+export interface ContentProfile {
+  revisionId: string | null;
+  revisionNumber: number | null;
+  productSummary: string;
+  primaryAudience: string;
+  customerTerms: string;
+  tone: string;
+  defaultLocale: string;
+  bannedPhrases: string[];
+  updatedAt: string | null;
+}
+
+export interface UpdateContentProfileInput {
+  productSummary?: string;
+  primaryAudience?: string;
+  customerTerms?: string;
+  tone?: string;
+  defaultLocale?: string;
+  bannedPhrases?: string[];
 }
 
 export interface Routine {
@@ -413,10 +541,14 @@ export interface PlotApiClient {
   recheckGitHubRepositoryAccess(sourceScopeId: string, trigger: GitHubAccessCheckTrigger, options?: RequestOptions): Promise<GitHubAccessCheck>;
   importGitHubRepository(sourceScopeId: string, input: { from: string; to: string }, options?: RequestOptions): Promise<GitHubImport>;
   getGitHubReleaseActivity(sourceScopeId: string, options?: RequestOptions): Promise<GitHubReleaseActivity | null>;
+  getGitHubReleaseActivityById(sourceScopeId: string, requestId: string, options?: RequestOptions): Promise<GitHubReleaseActivity>;
   retryGitHubReleaseDraft(sourceScopeId: string, requestId: string, options?: RequestOptions): Promise<GitHubReleaseActivity>;
+  selectGitHubReleaseRange(sourceScopeId: string, requestId: string, range: GitHubReleaseRangeInput, options?: RequestOptions): Promise<GitHubReleaseActivity>;
   createWorkspace(input: { name: string }, options?: RequestOptions): Promise<WorkspaceSummary>;
   getWorkspace(id: string, options?: RequestOptions): Promise<WorkspaceSummary>;
   updateWorkspace(id: string, input: { name?: string; logoUrl?: string; publicCitationsEnabled?: boolean }, options?: RequestOptions): Promise<WorkspaceSummary>;
+  getContentProfile(options?: RequestOptions): Promise<ContentProfile>;
+  updateContentProfile(input: UpdateContentProfileInput, options?: RequestOptions): Promise<ContentProfile>;
   listRoutines(options?: RequestOptions): Promise<Routine[]>;
   getRoutine(id: string, options?: RequestOptions): Promise<Routine>;
   createRoutine(input: { name: string; sourceScopeId: string; contextSourceScopeIds?: string[]; instruction: string; cadence: RoutineCadence }, options?: RequestOptions): Promise<Routine>;
@@ -432,11 +564,14 @@ export interface PlotApiClient {
   listSourceReferences(options?: RequestOptions): Promise<SourceReference[]>;
   getArtifact(id: string, options?: RequestOptions): Promise<Artifact>;
   getArtifactVariant(id: string, options?: RequestOptions): Promise<Artifact>;
+  replicateArtifact(id: string, input: ReplicateArtifactInput, idempotencyKey: string, options?: RequestOptions): Promise<ChatAgentRun>;
   listArtifacts(page?: number, size?: number, options?: RequestOptions): Promise<ArtifactPage>;
   saveArtifactVariant(variantId: string, input: { expectedRevisionNumber: number; lexicalContent: Record<string, unknown>; statements: ContentStatementInput[] }, options?: RequestOptions): Promise<Artifact>;
   editSentence(variantId: string, sentenceId: string, input: { expectedRevisionNumber: number; body: string }, options?: RequestOptions): Promise<Artifact>;
   exportArtifactVariant(variantId: string, input: { expectedRevisionNumber: number; includeSources: boolean; acknowledgeUnresolved: boolean; acknowledgedWarningKeys?: string[]; acknowledgedRevisionIds?: string[]; disposition: "COPY" | "DOWNLOAD" }, options?: RequestOptions): Promise<ContentExport>;
   publishArtifactVariant(variantId: string, input: { expectedRevisionNumber: number; acknowledgeUnresolved: boolean; acknowledgedWarningKeys?: string[]; acknowledgedRevisionIds?: string[] }, options?: RequestOptions): Promise<PublishContentVariantResult>;
+  unpublishArtifactVariant(variantId: string, options?: RequestOptions): Promise<UnpublishContentVariantResult>;
+  recordProductDeliveryEvent(variantId: string, input: RecordProductDeliveryEventInput, options?: RequestOptions): Promise<ProductDeliveryEventResult>;
   listArtifactHistory(variantId: string, options?: RequestOptions): Promise<ArtifactHistoryItem[]>;
   getArtifactHistoryAt(variantId: string, position: number, options?: RequestOptions): Promise<ArtifactHistoryDetail>;
 }
@@ -514,9 +649,24 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
       `/github/repositories/${encodeURIComponent(sourceScopeId)}/release-activity`,
       { signal: requestOptions?.signal },
     ),
+    getGitHubReleaseActivityById: (sourceScopeId, requestId, requestOptions) => request(
+      `/github/repositories/${encodeURIComponent(sourceScopeId)}/release-activity/${encodeURIComponent(requestId)}`,
+      { signal: requestOptions?.signal },
+    ),
     retryGitHubReleaseDraft: (sourceScopeId, requestId, requestOptions) => request(
       `/github/repositories/${encodeURIComponent(sourceScopeId)}/release-activity/${encodeURIComponent(requestId)}/retry`,
       { method: "POST", signal: requestOptions?.signal },
+    ),
+    selectGitHubReleaseRange: (sourceScopeId, requestId, range, requestOptions) => request(
+      `/github/repositories/${encodeURIComponent(sourceScopeId)}/release-activity/${encodeURIComponent(requestId)}/range`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          baseSha: range.baseSha.trim().toLowerCase(),
+          headSha: range.headSha.trim().toLowerCase(),
+        }),
+        signal: requestOptions?.signal,
+      },
     ),
     createWorkspace: (input, requestOptions) => request("/workspaces", {
       method: "POST",
@@ -526,6 +676,12 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
     getWorkspace: (id, requestOptions) => request(`/workspaces/${encodeURIComponent(id)}`, { signal: requestOptions?.signal }),
     updateWorkspace: (id, input, requestOptions) => request(`/workspaces/${encodeURIComponent(id)}`, {
       method: "PATCH",
+      body: JSON.stringify(input),
+      signal: requestOptions?.signal,
+    }),
+    getContentProfile: (requestOptions) => request("/content-profile", { signal: requestOptions?.signal }),
+    updateContentProfile: (input, requestOptions) => request("/content-profile", {
+      method: "PUT",
       body: JSON.stringify(input),
       signal: requestOptions?.signal,
     }),
@@ -604,6 +760,15 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
     },
     getArtifact: (id, requestOptions) => request(`/artifacts/${encodeURIComponent(id)}`, { signal: requestOptions?.signal }),
     getArtifactVariant: (id, requestOptions) => request(`/artifact-variants/${encodeURIComponent(id)}`, { signal: requestOptions?.signal }),
+    replicateArtifact: (id, input, idempotencyKey, requestOptions) => request(
+      `/artifacts/${encodeURIComponent(id)}/replicate`,
+      {
+        method: "POST",
+        headers: { "Idempotency-Key": idempotencyKey },
+        body: JSON.stringify(input),
+        signal: requestOptions?.signal,
+      },
+    ),
     listArtifacts: (page = 0, size = 25, requestOptions) => request(`/artifacts?page=${page}&size=${size}`, { signal: requestOptions?.signal }),
     saveArtifactVariant: (variantId, input, requestOptions) => request(
       `/artifact-variants/${encodeURIComponent(variantId)}`,
@@ -619,6 +784,14 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
     ),
     publishArtifactVariant: (variantId, input, requestOptions) => request(
       `/artifact-variants/${encodeURIComponent(variantId)}/publish`,
+      { method: "POST", body: JSON.stringify(input), signal: requestOptions?.signal },
+    ),
+    unpublishArtifactVariant: (variantId, requestOptions) => request(
+      `/artifact-variants/${encodeURIComponent(variantId)}/unpublish`,
+      { method: "POST", signal: requestOptions?.signal },
+    ),
+    recordProductDeliveryEvent: (variantId, input, requestOptions) => request(
+      `/artifact-variants/${encodeURIComponent(variantId)}/delivery-events`,
       { method: "POST", body: JSON.stringify(input), signal: requestOptions?.signal },
     ),
     listArtifactHistory: (variantId, requestOptions) => request(

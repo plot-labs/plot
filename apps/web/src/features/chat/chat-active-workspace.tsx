@@ -10,18 +10,20 @@ import {
   ChatMessageList,
 } from "@astryxdesign/core/Chat";
 import { ResizeHandle, useResizable } from "@astryxdesign/core/Resizable";
-import type { ChatAgentRun, SourceReference, WorkSessionSummary as ChatSummary } from "@plot/api-client";
+import type { ChatAgentRun, ContentType, SourceReference, WorkSessionSummary as ChatSummary } from "@plot/api-client";
 import { ArtifactDocumentSurface } from "@/features/artifacts/artifact-document-surface";
 import { ArtifactEditorStatus, ArtifactSaveDraftButton, artifactSaveStateLabel } from "@/features/artifacts/artifact-editor-chrome";
 import { ArtifactHistoryPanel } from "@/features/citations/artifact-history-panel";
 import { ExportDialog } from "@/features/citations/export-dialog";
+import { ChatBriefPanel, emptyChatBriefDraft, toContentBrief } from "@/features/chat/chat-brief-panel";
+import { ChatContentTypeSelector } from "@/features/chat/chat-content-type-selector";
 import { ChatComposer } from "@/features/chat/chat-composer";
 import { AgentActivityDetail, ChatActivityPanel, EmptyArtifactState, ErrorNotice } from "@/features/chat/chat-activity";
 import { chatHref, toComposerReferences } from "@/features/chat/chat-workspace-utils";
 import { useChatAgentActivity } from "@/features/chat/use-chat-agent-activity";
 import { useChatArtifactDocument } from "@/features/chat/use-chat-artifact-document";
 import { plotApiClient } from "@/lib/api-client";
-
+import { useWorkspaceEntitlement } from "@/lib/use-workspace-entitlement";
 type ChatActiveWorkspaceProps = {
   activeChat: ChatSummary;
   references: SourceReference[];
@@ -42,10 +44,16 @@ const toolbarBottomFade: CSSProperties = {
 
 export function ChatActiveWorkspace({ activeChat, references, sourceError, requestedAgentId, requestedArtifactId }: ChatActiveWorkspaceProps) {
   const router = useRouter();
+  const entitlement = useWorkspaceEntitlement();
+  const canGenerate = entitlement?.capabilities.generate ?? true;
+  const canEdit = entitlement?.capabilities.edit ?? true;
   const [mobilePanel, setMobilePanel] = useState<"assistant" | "history" | null>(null);
   const [artifactPanelOpen, setArtifactPanelOpen] = useState(false);
   const [artifactHistoryOpen, setArtifactHistoryOpen] = useState(false);
   const [artifactSaveRequestToken, setArtifactSaveRequestToken] = useState(0);
+  const [contentType, setContentType] = useState<ContentType>("CHANGELOG");
+  const [briefDraft, setBriefDraft] = useState(emptyChatBriefDraft);
+  const brief = useMemo(() => toContentBrief(briefDraft), [briefDraft]);
   const artifactPanel = useResizable({ defaultSize: 720, minSizePx: 420, maxSizePx: 1200 });
   const resizeArtifactPanel = artifactPanel.resize;
   const mobileAssistantTriggerRef = useRef<HTMLButtonElement>(null);
@@ -69,6 +77,8 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
     requestedArtifactId,
     references,
     sourceError,
+    brief,
+    contentType,
     onAgentArtifact,
     onAdmitted,
   });
@@ -251,7 +261,18 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
           }}
           references={toComposerReferences(references)}
           busy={document.artifactLoading || agent.agentBusy || agent.activitiesLoading}
+          canGenerate={canGenerate}
         />
+        <div className="mx-auto w-full max-w-[720px] px-4 pb-3 sm:px-6">
+          <div className="mb-2">
+            <ChatContentTypeSelector
+              value={contentType}
+              onChange={setContentType}
+              disabled={document.artifactLoading || agent.agentBusy}
+            />
+          </div>
+          <ChatBriefPanel value={briefDraft} onChange={setBriefDraft} contentType={contentType} />
+        </div>
       </div>
       {artifactPanelOpen && document.currentArtifact ? (
         <ResizeHandle
@@ -295,7 +316,7 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
                   {artifactSaveStateLabel(document.saveState, Boolean(document.historicalArtifact))}
                 </ArtifactEditorStatus>
               </span>
-              {!document.historicalArtifact ? (
+              {!document.historicalArtifact && canEdit ? (
                 <ArtifactSaveDraftButton
                   saving={document.saveState === "saving"}
                   onClick={() => setArtifactSaveRequestToken((value) => value + 1)}
@@ -334,6 +355,7 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
                 initialDraft={document.historicalArtifact ? undefined : document.drafts[document.currentArtifact.id]}
                 saveState={document.saveState}
                 saveRequestToken={artifactSaveRequestToken}
+                editorLocked={!canEdit}
                 onSaveStateChange={document.onSaveStateChange}
                 onDraftChange={document.onDraftChange}
                 onSaveArtifact={document.onSaveArtifact}

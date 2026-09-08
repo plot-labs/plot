@@ -12,7 +12,7 @@ install:
 
 # Start the Spring Boot API
 dev-api:
-    cd apps/api && set -a && source .env.local && set +a && ./gradlew bootRun
+    bash apps/api/scripts/run-with-env.sh ./gradlew bootRun
 
 # Start the Next.js app
 dev-web:
@@ -25,6 +25,14 @@ polar-listen:
 # Test the Spring Boot API
 test-api:
     cd apps/api && ./gradlew test
+
+# Run citation/generation quality deterministic eval (fixture-based)
+eval-citation:
+    cd apps/api && ./gradlew test --tests "com.plot.api.ai.provider.ArtifactWorkflowCitationEvalTest"
+
+# Run citation/generation quality live eval (requires AI credentials)
+eval-citation-live:
+    cd apps/api && ./gradlew liveEval
 
 # Test the browser API client contract
 test-api-client:

@@ -62,7 +62,7 @@ data class ArtifactWorkflowEvidenceResponse(
 	val provider: SourceProvider,
 	val sourceKind: String,
 	val sourceLabel: String,
-	val originalUrl: String,
+	val originalUrl: String?,
 	val snapshotExcerpt: String?,
 	val contentHash: String,
 )
@@ -98,7 +98,7 @@ data class ArtifactWorkflowCitationResponse(
 	val evidenceId: UUID,
 	val provider: SourceProvider,
 	val sourceLabel: String,
-	val originalUrl: String,
+	val originalUrl: String?,
 	val snapshotExcerpt: String?,
 )
 

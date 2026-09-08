@@ -58,7 +58,7 @@ class ArtifactWorkflowRunRecoveryIntegrationTest {
 			update generation_runs
 			set status = 'FAILED', error_code = 'TEST_ISOLATION',
 			    claimed_by = null, claimed_at = null, heartbeat_at = null,
-			    finished_at = coalesce(finished_at, greatest(now(), created_at)), updated_at = now()
+			    finished_at = coalesce(finished_at, greatest(now(), coalesce(started_at, created_at))), updated_at = now()
 			where status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
 			""".trimIndent(),
 		)
@@ -149,7 +149,7 @@ class ArtifactWorkflowRunRecoveryIntegrationTest {
 		assertEquals(mapOf(
 			"provider" to "OPENAI",
 			"model_name" to "scripted",
-			"prompt_version" to "changelog-v8",
+			"prompt_version" to "changelog-v9",
 			"output_schema_version" to "artifact-workflow-v5",
 		), jdbcTemplate.queryForMap(
 			"select provider, model_name, prompt_version, output_schema_version from generation_runs where id = ?",

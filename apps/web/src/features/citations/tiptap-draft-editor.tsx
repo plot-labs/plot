@@ -1,6 +1,7 @@
 "use client";
 
-import { useEditor, EditorContent, type JSONContent } from "@tiptap/react";
+import { useEditor, EditorContent } from "@tiptap/react";
+import { Extension, Node as TiptapNode, mergeAttributes, type Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Markdown } from "tiptap-markdown";
@@ -9,11 +10,79 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   Artifact,
-  ContentSentence,
   ContentStatementInput,
 } from "@plot/api-client";
 import { SourcesPopover } from "./sources-popover";
-import { TiptapCitationExtension, type CitationSourceItem } from "./tiptap-citation-extension";
+import { TiptapCitationExtension } from "./tiptap-citation-extension";
+import {
+  convertArtifactDocumentToTiptap,
+  defaultStatementsFor as adapterDefaultStatementsFor,
+  extractArtifactStatements,
+  tiptapToArtifactDocument,
+} from "./artifact-document-adapter";
+
+const ArtifactIdentityExtension = Extension.create({
+  name: "artifactIdentity",
+
+  addGlobalAttributes() {
+    return [
+      {
+        types: ["paragraph", "heading", "bulletList", "orderedList", "listItem"],
+        attributes: {
+          nodeId: { default: null },
+          statementId: { default: null },
+          sourceStatementId: { default: null },
+          lineage: { default: [] },
+        },
+      },
+    ];
+  },
+});
+
+const TiptapCtaExtension = TiptapNode.create({
+  name: "cta",
+  group: "block",
+  content: "inline*",
+  defining: true,
+  atom: true,
+  isolating: true,
+
+  addAttributes() {
+    return {
+      nodeId: { default: null },
+      statementId: { default: null },
+      sourceStatementId: { default: null },
+      destinationId: { default: null },
+      destinationLabel: { default: null },
+      destinationUrl: { default: null },
+    };
+  },
+
+  parseHTML() {
+    return [{ tag: "a[data-cta-node]" }];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    const url = typeof HTMLAttributes.destinationUrl === "string" && isSafeCtaUrl(HTMLAttributes.destinationUrl)
+      ? HTMLAttributes.destinationUrl
+      : undefined;
+    return ["a", mergeAttributes(HTMLAttributes, {
+      "data-cta-node": "",
+      href: url,
+      rel: url ? "noreferrer" : undefined,
+      target: url ? "_blank" : undefined,
+    }), 0];
+  },
+});
+
+function isSafeCtaUrl(value: string): boolean {
+  try {
+    const url = new URL(value.trim());
+    return url.protocol === "https:" && Boolean(url.hostname) && !url.username && !url.password && (url.port === "" || url.port === "443");
+  } catch {
+    return false;
+  }
+}
 
 export type SaveArtifactInput = {
   expectedRevisionNumber: number;
@@ -63,7 +132,7 @@ function TiptapArtifactEditor({
   );
 
   const initialTiptapDoc = useMemo(
-    () => convertToTiptapDoc(initialContent, sentences),
+    () => convertArtifactDocumentToTiptap(initialContent, sentences),
     [initialContent, sentences],
   );
 
@@ -72,8 +141,9 @@ function TiptapArtifactEditor({
   const previousSaveRequestRef = useRef(saveRequestToken);
   const draftStateRef = useRef<Record<string, unknown>>(initialContent);
   const draftStatementsRef = useRef<ContentStatementInput[]>(
-    initialDraft?.statements ?? defaultStatementsFor(sentences),
+    initialDraft?.statements ?? adapterDefaultStatementsFor(sentences),
   );
+  const generatedIdsRef = useRef<Map<string, string>>(new Map());
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -83,6 +153,8 @@ function TiptapArtifactEditor({
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
       }),
+      ArtifactIdentityExtension,
+      TiptapCtaExtension,
       Placeholder.configure({
         placeholder: "Write the source-backed artifact…",
       }),
@@ -109,11 +181,9 @@ function TiptapArtifactEditor({
     },
     onUpdate: ({ editor: currentEditor }) => {
       const json = currentEditor.getJSON();
-      const lexicalJson = tiptapToLexicalJson(json);
+      const statements = extractArtifactStatements(json, sentences, generatedIdsRef.current);
+      const lexicalJson = tiptapToArtifactDocument(json, statements, generatedIdsRef.current);
       draftStateRef.current = lexicalJson;
-
-      // Extract statement inputs from block nodes
-      const statements = extractStatementsFromTiptap(json, sentences);
       draftStatementsRef.current = statements;
 
       if (!readOnly) {
@@ -184,6 +254,7 @@ function TiptapArtifactEditor({
       ) : null}
 
       <div className={documentPresentation ? "relative mt-[22px]" : "relative px-4 py-5 sm:px-6"}>
+        {!readOnly ? <DocumentFormattingToolbar editor={editor} destinations={pack.variant.destinations ?? []} /> : null}
         <EditorContent editor={editor} />
       </div>
 
@@ -223,191 +294,115 @@ function TiptapArtifactEditor({
   );
 }
 
-// Converts Lexical or Tiptap JSON to a Tiptap Document with Inline Citation Nodes
-function convertToTiptapDoc(
-  content: Record<string, unknown> | undefined,
-  sentences: ContentSentence[],
-): JSONContent {
-  if (!content) {
-    return {
-      type: "doc",
-      content: [{ type: "paragraph" }],
-    };
-  }
-
-  // If already in Tiptap format
-  if (content.type === "doc" && Array.isArray(content.content)) {
-    return content as JSONContent;
-  }
-
-  // Convert Lexical AST to Tiptap JSON
-  const root = (content.root as Record<string, unknown>) || content;
-  const children = Array.isArray(root.children) ? (root.children as Record<string, unknown>[]) : [];
-
-  if (!children.length) {
-    return {
-      type: "doc",
-      content: [{ type: "paragraph" }],
-    };
-  }
-
-  const tiptapContent: JSONContent[] = children.map((lexicalNode, blockIndex) => {
-    const nodeType = (lexicalNode.type as string) || "paragraph";
-    const lexicalChildren = Array.isArray(lexicalNode.children)
-      ? (lexicalNode.children as Record<string, unknown>[])
-      : [];
-
-    const paragraphContent: JSONContent[] = [];
-
-    // Extract text nodes
-    for (const child of lexicalChildren) {
-      if (child.type === "text" && typeof child.text === "string" && child.text) {
-        paragraphContent.push({
-          type: "text",
-          text: child.text,
-        });
-      } else if (child.type === "linebreak") {
-        paragraphContent.push({
-          type: "hardBreak",
-        });
-      }
-    }
-
-    // Attach inline citation if this sentence block has citations
-    const matchedSentence = sentences[blockIndex] || sentences.find((s) => s.orderIndex === blockIndex);
-    if (matchedSentence && matchedSentence.citations && matchedSentence.citations.length > 0) {
-      const citationSources: CitationSourceItem[] = matchedSentence.citations.map((c) => ({
-        title: c.sourceLabel || "Source",
-        url: c.originalUrl || "#",
-        provider: c.provider || "GitHub",
-      }));
-
-      paragraphContent.push({
-        type: "citation",
-        attrs: {
-          statementId: matchedSentence.id,
-          number: blockIndex + 1,
-          sources: citationSources,
-        },
-      });
-    }
-
-    if (nodeType === "heading") {
-      const tag = (lexicalNode.tag as string) || "h2";
-      const level = tag === "h1" ? 1 : tag === "h3" ? 3 : 2;
-      return {
-        type: "heading",
-        attrs: { level },
-        content: paragraphContent.length ? paragraphContent : undefined,
-      };
-    }
-
-    return {
-      type: "paragraph",
-      content: paragraphContent.length ? paragraphContent : undefined,
-    };
-  });
-
-  return {
-    type: "doc",
-    content: tiptapContent.length ? tiptapContent : [{ type: "paragraph" }],
-  };
+function DocumentFormattingToolbar({
+  editor,
+  destinations,
+}: {
+  editor: Editor | null;
+  destinations: Array<{ id: string; label: string; url: string }>;
+}) {
+  if (!editor) return null;
+  return (
+    <div
+      aria-label="Document formatting"
+      className="mb-3 flex flex-wrap items-center gap-1.5 border-b border-black/[0.07] pb-2.5 dark:border-white/10"
+    >
+      <ToolbarButton
+        label="Heading"
+        active={editor.isActive("heading")}
+        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+      />
+      <ToolbarButton
+        label="Bulleted list"
+        active={editor.isActive("bulletList")}
+        onClick={() => editor.chain().focus().toggleBulletList().run()}
+      />
+      <ToolbarButton
+        label="Numbered list"
+        active={editor.isActive("orderedList")}
+        onClick={() => editor.chain().focus().toggleOrderedList().run()}
+      />
+      <ToolbarButton
+        label="Move block up"
+        disabled={topLevelBlockIndex(editor) <= 0}
+        onClick={() => moveSelectedBlock(editor, -1)}
+      />
+      <ToolbarButton
+        label="Move block down"
+        disabled={topLevelBlockIndex(editor) >= editor.state.doc.childCount - 1}
+        onClick={() => moveSelectedBlock(editor, 1)}
+      />
+      {destinations.map((destination) => (
+        <ToolbarButton
+          key={destination.id}
+          label={`Insert CTA: ${destination.label}`}
+          onClick={() => insertCta(editor, destination)}
+        />
+      ))}
+    </div>
+  );
 }
 
-function extractStatementsFromTiptap(
-  doc: JSONContent,
-  originalSentences: ContentSentence[],
-): ContentStatementInput[] {
-  const content = doc.content || [];
-  const statements: ContentStatementInput[] = [];
-
-  content.forEach((block, index) => {
-    const text = extractTextFromBlock(block);
-    if (!text.trim()) return;
-
-    const matchedSentence = originalSentences[index];
-    statements.push({
-      id: matchedSentence?.id,
-      orderIndex: index,
-      body: text.trim(),
-    });
-  });
-
-  return statements.length
-    ? statements
-    : [{ id: null, orderIndex: 0, body: "Generated artifact" }];
+function ToolbarButton({
+  label,
+  active = false,
+  disabled = false,
+  onClick,
+}: {
+  label: string;
+  active?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      aria-pressed={active}
+      disabled={disabled}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={onClick}
+      className="min-h-8 rounded-md border border-black/10 px-2.5 text-xs font-medium text-black/65 transition hover:bg-black/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 aria-pressed:bg-black/[0.08] dark:border-white/12 dark:text-white/68 dark:hover:bg-white/[0.06] dark:aria-pressed:bg-white/[0.1]"
+    >
+      {label}
+    </button>
+  );
 }
 
-function extractTextFromBlock(node: JSONContent): string {
-  if (!node.content) return "";
-  return node.content
-    .map((child) => {
-      if (child.type === "text") return child.text || "";
-      if (child.type === "hardBreak") return "\n";
-      return "";
+function topLevelBlockIndex(editor: Editor): number {
+  return editor.state.selection.$from.index(0);
+}
+
+function moveSelectedBlock(editor: Editor, direction: -1 | 1): void {
+  const index = topLevelBlockIndex(editor);
+  const targetIndex = index + direction;
+  const nodes = editor.state.doc.content.content.slice();
+  if (index < 0 || targetIndex < 0 || targetIndex >= nodes.length) return;
+  [nodes[index], nodes[targetIndex]] = [nodes[targetIndex], nodes[index]];
+  const reordered = editor.state.schema.topNodeType.create(null, nodes);
+  editor
+    .chain()
+    .focus()
+    .command(({ tr }) => {
+      tr.replaceWith(0, editor.state.doc.content.size, reordered.content);
+      return true;
     })
-    .join("");
+    .run();
 }
 
-function defaultStatementsFor(sentences: ContentSentence[]): ContentStatementInput[] {
-  return sentences.map((sentence) => ({
-    id: sentence.id,
-    orderIndex: sentence.orderIndex,
-    body: sentence.body,
-  }));
-}
-
-function tiptapToLexicalJson(doc: JSONContent): Record<string, unknown> {
-  const content = doc.content || [];
-  return {
-    root: {
-      children: content.map((block) => {
-        const paragraphChildren: Record<string, unknown>[] = [];
-        if (block.content) {
-          for (const child of block.content) {
-            if (child.type === "text" && child.text) {
-              paragraphChildren.push({
-                detail: 0,
-                format: 0,
-                mode: "normal",
-                style: "",
-                text: child.text,
-                type: "text",
-                version: 1,
-              });
-            } else if (child.type === "hardBreak") {
-              paragraphChildren.push({
-                type: "linebreak",
-                version: 1,
-              });
-            }
-          }
-        }
-        if (!paragraphChildren.length) {
-          paragraphChildren.push({
-            detail: 0,
-            format: 0,
-            mode: "normal",
-            style: "",
-            text: "",
-            type: "text",
-            version: 1,
-          });
-        }
-        return {
-          children: paragraphChildren,
-          direction: null,
-          format: "",
-          indent: 0,
-          type: "paragraph",
-          version: 1,
-        };
-      }),
-      direction: null,
-      format: "",
-      indent: 0,
-      type: "root",
-      version: 1,
-    },
-  };
+function insertCta(editor: Editor, destination: { id: string; label: string; url: string }) {
+  if (!isSafeCtaUrl(destination.url)) return;
+  editor
+    .chain()
+    .focus()
+    .insertContent({
+      type: "cta",
+      attrs: {
+        destinationId: destination.id,
+        destinationLabel: destination.label,
+        destinationUrl: destination.url,
+      },
+      content: [{ type: "text", text: destination.label }],
+    })
+    .run();
 }

@@ -237,14 +237,15 @@ class GitHubConnectionService(
 			{ rs, _ ->
 				GitHubConnectionListRow(
 					requireNotNull(rs.getObject(1, UUID::class.java)),
-					requireNotNull(rs.getString(2)).toLong(),
+					requireNotNull(rs.getString(2)),
 					requireNotNull(rs.getString(3)),
 					rs.getString(4),
 				)
 			},
 			devContext.devWorkspaceId,
 		)
-		return connections.map { (id, installationId, status, statusReason) ->
+		return connections.mapNotNull { (id, installationKey, status, statusReason) ->
+			val installationId = parseGitHubInstallationId(installationKey) ?: return@mapNotNull null
 			GitHubConnectionResponse(id, installationId, status, listScopesForConnection(id), statusReason)
 		}
 	}
@@ -443,7 +444,12 @@ class GitHubConnectionService(
 					sourceNamespaceId = requireNotNull(rs.getObject(2, UUID::class.java)),
 					bindingId = requireNotNull(rs.getObject(3, UUID::class.java)),
 					connectionId = requireNotNull(rs.getObject(4, UUID::class.java)),
-					installationId = requireNotNull(rs.getString(5)).toLong(),
+					installationId = parseGitHubInstallationId(requireNotNull(rs.getString(5)))
+						?: throw ApiException(
+							HttpStatus.CONFLICT,
+							"CONNECTION_CORRUPT",
+							"GitHub connection installation id is invalid",
+						),
 					externalRepositoryId = rs.getString(6)?.toLongOrNull() ?: 0L,
 					externalKey = rs.getString(7).orEmpty(),
 					displayName = requireNotNull(rs.getString(8)),
@@ -483,9 +489,15 @@ class GitHubConnectionService(
 			where workspace_id = ? and id = ? and provider = 'GITHUB'
 			""".trimIndent(),
 			{ rs, _ ->
+				val installationId = parseGitHubInstallationId(requireNotNull(rs.getString(2)))
+					?: throw ApiException(
+						HttpStatus.CONFLICT,
+						"CONNECTION_CORRUPT",
+						"GitHub connection installation id is invalid",
+					)
 				GitHubConnectionRecord(
 					requireNotNull(rs.getObject(1, UUID::class.java)),
-					requireNotNull(rs.getString(2)).toLong(),
+					installationId,
 					requireNotNull(rs.getString(3)),
 				)
 			},
@@ -607,7 +619,12 @@ class GitHubConnectionService(
 				val externalKey = rs.getString(3).orEmpty()
 				GitHubRepositoryResponse(
 					id = requireNotNull(rs.getObject(1, UUID::class.java)),
-					externalRepositoryId = requireNotNull(rs.getString(2)).toLong(),
+					externalRepositoryId = requireNotNull(rs.getString(2)).toLongOrNull()
+						?: throw ApiException(
+							HttpStatus.CONFLICT,
+							"SCOPE_CORRUPT",
+							"GitHub repository scope id is invalid",
+						),
 					owner = externalKey.substringBefore('/'),
 					name = externalKey.substringAfter('/', requireNotNull(rs.getString(4))),
 					displayName = requireNotNull(rs.getString(4)),
@@ -626,6 +643,9 @@ class GitHubConnectionService(
 			connectionId,
 		)
 	}
+
+	private fun parseGitHubInstallationId(raw: String): Long? =
+		raw.trim().toLongOrNull()?.takeIf { it > 0L }
 
 	private fun bindRepositoryNamespace(connectionId: UUID, repository: GitHubRepository, now: Instant): UUID {
 		val namespaceKey = "repository:${repository.id}"
@@ -723,7 +743,7 @@ data class GitHubConnectionRecord(val id: UUID, val installationId: Long, val st
 
 private data class GitHubConnectionListRow(
 	val id: UUID,
-	val installationId: Long,
+	val installationKey: String,
 	val status: String,
 	val statusReason: String?,
 )

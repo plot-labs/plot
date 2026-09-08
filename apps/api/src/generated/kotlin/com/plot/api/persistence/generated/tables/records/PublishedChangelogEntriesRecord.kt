@@ -63,6 +63,14 @@ open class PublishedChangelogEntriesRecord() : UpdatableRecordImpl<PublishedChan
         set(value): Unit = set(10, value)
         get(): OffsetDateTime? = get(10) as OffsetDateTime?
 
+    open var unpublishedAt: OffsetDateTime?
+        set(value): Unit = set(11, value)
+        get(): OffsetDateTime? = get(11) as OffsetDateTime?
+
+    open var unpublishedByUserId: UUID?
+        set(value): Unit = set(12, value)
+        get(): UUID? = get(12) as UUID?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -72,7 +80,7 @@ open class PublishedChangelogEntriesRecord() : UpdatableRecordImpl<PublishedChan
     /**
      * Create a detached, initialised PublishedChangelogEntriesRecord
      */
-    constructor(id: UUID? = null, workspaceId: UUID? = null, contentVariantId: UUID? = null, artifactRevisionId: UUID? = null, artifactRevisionNumber: Int? = null, entrySlug: String? = null, title: String? = null, bodyMarkdown: String? = null, tagName: String? = null, publishedByUserId: UUID? = null, publishedAt: OffsetDateTime? = null): this() {
+    constructor(id: UUID? = null, workspaceId: UUID? = null, contentVariantId: UUID? = null, artifactRevisionId: UUID? = null, artifactRevisionNumber: Int? = null, entrySlug: String? = null, title: String? = null, bodyMarkdown: String? = null, tagName: String? = null, publishedByUserId: UUID? = null, publishedAt: OffsetDateTime? = null, unpublishedAt: OffsetDateTime? = null, unpublishedByUserId: UUID? = null): this() {
         this.id = id
         this.workspaceId = workspaceId
         this.contentVariantId = contentVariantId
@@ -84,6 +92,8 @@ open class PublishedChangelogEntriesRecord() : UpdatableRecordImpl<PublishedChan
         this.tagName = tagName
         this.publishedByUserId = publishedByUserId
         this.publishedAt = publishedAt
+        this.unpublishedAt = unpublishedAt
+        this.unpublishedByUserId = unpublishedByUserId
         resetChangedOnNotNull()
     }
 }

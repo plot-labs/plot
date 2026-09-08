@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "required": ["sentences"],
+  "required": ["sentences", "layout"],
   "properties": {
     "sentences": {
       "type": "array",
@@ -16,6 +16,30 @@
           "body": { "type": "string", "minLength": 1 },
           "intent": { "type": "string", "enum": ["FACTUAL", "EDITORIAL", "UNRESOLVED_CONFLICT"] },
           "conflictEvidenceIds": { "type": "array", "items": { "type": "string", "format": "uuid" } }
+        }
+      }
+    },
+    "layout": {
+      "type": "array",
+      "maxItems": 6,
+      "items": { "$ref": "#/$defs/layoutNode" }
+    }
+  },
+  "$defs": {
+    "layoutNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "statementIndex", "tag", "listType", "start", "children"],
+      "properties": {
+        "type": { "type": "string", "enum": ["heading", "paragraph", "list", "listItem"] },
+        "statementIndex": { "type": ["integer", "null"], "minimum": 0 },
+        "tag": { "type": ["string", "null"], "enum": ["h1", "h2", "h3", null] },
+        "listType": { "type": ["string", "null"], "enum": ["bullet", "ordered", null] },
+        "start": { "type": ["integer", "null"], "minimum": 1 },
+        "children": {
+          "type": "array",
+          "maxItems": 6,
+          "items": { "$ref": "#/$defs/layoutNode" }
         }
       }
     }

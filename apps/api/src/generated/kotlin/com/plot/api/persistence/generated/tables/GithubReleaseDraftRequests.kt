@@ -5,29 +5,35 @@ package com.plot.api.persistence.generated.tables
 
 
 import com.plot.api.persistence.generated.Public
+import com.plot.api.persistence.generated.indexes.GITHUB_RELEASE_DEFAULT_IDENTITY_IDX
 import com.plot.api.persistence.generated.indexes.GITHUB_RELEASE_DRAFT_AGENT_RUN_IDX
 import com.plot.api.persistence.generated.indexes.GITHUB_RELEASE_DRAFT_REQUESTS_RECONCILE_IDX
 import com.plot.api.persistence.generated.indexes.GITHUB_RELEASE_DRAFT_REQUESTS_RUNNABLE_IDX
 import com.plot.api.persistence.generated.indexes.GITHUB_RELEASE_DRAFT_REQUESTS_STALE_CLAIM_IDX
+import com.plot.api.persistence.generated.indexes.GITHUB_RELEASE_ROUTINE_IDENTITY_IDX
 import com.plot.api.persistence.generated.keys.CONTENT_PACKS__CONTENT_PACKS_WORKSPACE_ID_RELEASE_REQUEST_ID_FKEY
 import com.plot.api.persistence.generated.keys.GITHUB_RELEASE_DRAFT_EVIDENCE__GITHUB_RELEASE_DRAFT_EVIDENCE_WORKSPACE_ID_REQUEST_ID_FKEY
 import com.plot.api.persistence.generated.keys.GITHUB_RELEASE_DRAFT_REQUESTS_GENERATION_RUN_ID_KEY
 import com.plot.api.persistence.generated.keys.GITHUB_RELEASE_DRAFT_REQUESTS_PKEY
 import com.plot.api.persistence.generated.keys.GITHUB_RELEASE_DRAFT_REQUESTS_WORKSPACE_ID_ID_KEY
-import com.plot.api.persistence.generated.keys.GITHUB_RELEASE_DRAFT_REQUESTS_WORKSPACE_ID_SOURCE_SCOPE_ID__KEY
 import com.plot.api.persistence.generated.keys.GITHUB_RELEASE_DRAFT_REQUESTS__GITHUB_RELEASE_DRAFT_AGENT_RUN_FK
 import com.plot.api.persistence.generated.keys.GITHUB_RELEASE_DRAFT_REQUESTS__GITHUB_RELEASE_DRAFT_REQUESTS_INITIAL_DELIVERY_ID_FKEY
 import com.plot.api.persistence.generated.keys.GITHUB_RELEASE_DRAFT_REQUESTS__GITHUB_RELEASE_DRAFT_REQUESTS_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.GITHUB_RELEASE_DRAFT_REQUESTS__GITHUB_RELEASE_DRAFT_REQUESTS_WORKSPACE_ID_GENERATION_RUN__FKEY
 import com.plot.api.persistence.generated.keys.GITHUB_RELEASE_DRAFT_REQUESTS__GITHUB_RELEASE_DRAFT_REQUESTS_WORKSPACE_ID_OBSERVATION_ID__FKEY
 import com.plot.api.persistence.generated.keys.GITHUB_RELEASE_DRAFT_REQUESTS__GITHUB_RELEASE_DRAFT_REQUESTS_WORKSPACE_ID_SOURCE_SCOPE_ID_FKEY
+import com.plot.api.persistence.generated.keys.GITHUB_RELEASE_DRAFT_REQUESTS__GITHUB_RELEASE_ROUTINE_SOURCE_FK
 import com.plot.api.persistence.generated.keys.GITHUB_RELEASE_GENERATION_ATTEMPTS__GITHUB_RELEASE_GENERATION_ATTEMPTS_WORKSPACE_ID_REQUEST_ID_FKEY
+import com.plot.api.persistence.generated.keys.GITHUB_RELEASE_ROUTINE_IDENTITY_KEY
+import com.plot.api.persistence.generated.keys.ROUTINE_EXECUTIONS__ROUTINE_EXECUTION_RELEASE_OWNER_FK
 import com.plot.api.persistence.generated.tables.AgentRuns.AgentRunsPath
 import com.plot.api.persistence.generated.tables.ContentPacks.ContentPacksPath
 import com.plot.api.persistence.generated.tables.GenerationRuns.GenerationRunsPath
 import com.plot.api.persistence.generated.tables.GithubReleaseDraftEvidence.GithubReleaseDraftEvidencePath
 import com.plot.api.persistence.generated.tables.GithubReleaseGenerationAttempts.GithubReleaseGenerationAttemptsPath
 import com.plot.api.persistence.generated.tables.GithubWebhookDeliveries.GithubWebhookDeliveriesPath
+import com.plot.api.persistence.generated.tables.RoutineExecutions.RoutineExecutionsPath
+import com.plot.api.persistence.generated.tables.Routines.RoutinesPath
 import com.plot.api.persistence.generated.tables.SourceObservations.SourceObservationsPath
 import com.plot.api.persistence.generated.tables.SourceScopes.SourceScopesPath
 import com.plot.api.persistence.generated.tables.Workspaces.WorkspacesPath
@@ -235,6 +241,11 @@ open class GithubReleaseDraftRequests(
      */
     val AGENT_RUN_ID: TableField<GithubReleaseDraftRequestsRecord, UUID?> = createField(DSL.name("agent_run_id"), SQLDataType.UUID, this, "")
 
+    /**
+     * The column <code>public.github_release_draft_requests.routine_id</code>.
+     */
+    val ROUTINE_ID: TableField<GithubReleaseDraftRequestsRecord, UUID?> = createField(DSL.name("routine_id"), SQLDataType.UUID, this, "")
+
     private constructor(alias: Name, aliased: Table<GithubReleaseDraftRequestsRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<GithubReleaseDraftRequestsRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<GithubReleaseDraftRequestsRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)
@@ -270,10 +281,10 @@ open class GithubReleaseDraftRequests(
         override fun `as`(alias: Table<*>): GithubReleaseDraftRequestsPath = GithubReleaseDraftRequestsPath(alias.qualifiedName, this)
     }
     override fun getSchema(): Schema? = if (aliased()) null else Public.PUBLIC
-    override fun getIndexes(): List<Index> = listOf(GITHUB_RELEASE_DRAFT_AGENT_RUN_IDX, GITHUB_RELEASE_DRAFT_REQUESTS_RECONCILE_IDX, GITHUB_RELEASE_DRAFT_REQUESTS_RUNNABLE_IDX, GITHUB_RELEASE_DRAFT_REQUESTS_STALE_CLAIM_IDX)
+    override fun getIndexes(): List<Index> = listOf(GITHUB_RELEASE_DEFAULT_IDENTITY_IDX, GITHUB_RELEASE_DRAFT_AGENT_RUN_IDX, GITHUB_RELEASE_DRAFT_REQUESTS_RECONCILE_IDX, GITHUB_RELEASE_DRAFT_REQUESTS_RUNNABLE_IDX, GITHUB_RELEASE_DRAFT_REQUESTS_STALE_CLAIM_IDX, GITHUB_RELEASE_ROUTINE_IDENTITY_IDX)
     override fun getPrimaryKey(): UniqueKey<GithubReleaseDraftRequestsRecord> = GITHUB_RELEASE_DRAFT_REQUESTS_PKEY
-    override fun getUniqueKeys(): List<UniqueKey<GithubReleaseDraftRequestsRecord>> = listOf(GITHUB_RELEASE_DRAFT_REQUESTS_GENERATION_RUN_ID_KEY, GITHUB_RELEASE_DRAFT_REQUESTS_WORKSPACE_ID_ID_KEY, GITHUB_RELEASE_DRAFT_REQUESTS_WORKSPACE_ID_SOURCE_SCOPE_ID__KEY)
-    override fun getReferences(): List<ForeignKey<GithubReleaseDraftRequestsRecord, *>> = listOf(GITHUB_RELEASE_DRAFT_REQUESTS__GITHUB_RELEASE_DRAFT_AGENT_RUN_FK, GITHUB_RELEASE_DRAFT_REQUESTS__GITHUB_RELEASE_DRAFT_REQUESTS_INITIAL_DELIVERY_ID_FKEY, GITHUB_RELEASE_DRAFT_REQUESTS__GITHUB_RELEASE_DRAFT_REQUESTS_WORKSPACE_ID_FKEY, GITHUB_RELEASE_DRAFT_REQUESTS__GITHUB_RELEASE_DRAFT_REQUESTS_WORKSPACE_ID_GENERATION_RUN__FKEY, GITHUB_RELEASE_DRAFT_REQUESTS__GITHUB_RELEASE_DRAFT_REQUESTS_WORKSPACE_ID_OBSERVATION_ID__FKEY, GITHUB_RELEASE_DRAFT_REQUESTS__GITHUB_RELEASE_DRAFT_REQUESTS_WORKSPACE_ID_SOURCE_SCOPE_ID_FKEY)
+    override fun getUniqueKeys(): List<UniqueKey<GithubReleaseDraftRequestsRecord>> = listOf(GITHUB_RELEASE_DRAFT_REQUESTS_GENERATION_RUN_ID_KEY, GITHUB_RELEASE_DRAFT_REQUESTS_WORKSPACE_ID_ID_KEY, GITHUB_RELEASE_ROUTINE_IDENTITY_KEY)
+    override fun getReferences(): List<ForeignKey<GithubReleaseDraftRequestsRecord, *>> = listOf(GITHUB_RELEASE_DRAFT_REQUESTS__GITHUB_RELEASE_DRAFT_AGENT_RUN_FK, GITHUB_RELEASE_DRAFT_REQUESTS__GITHUB_RELEASE_DRAFT_REQUESTS_INITIAL_DELIVERY_ID_FKEY, GITHUB_RELEASE_DRAFT_REQUESTS__GITHUB_RELEASE_DRAFT_REQUESTS_WORKSPACE_ID_FKEY, GITHUB_RELEASE_DRAFT_REQUESTS__GITHUB_RELEASE_DRAFT_REQUESTS_WORKSPACE_ID_GENERATION_RUN__FKEY, GITHUB_RELEASE_DRAFT_REQUESTS__GITHUB_RELEASE_DRAFT_REQUESTS_WORKSPACE_ID_OBSERVATION_ID__FKEY, GITHUB_RELEASE_DRAFT_REQUESTS__GITHUB_RELEASE_DRAFT_REQUESTS_WORKSPACE_ID_SOURCE_SCOPE_ID_FKEY, GITHUB_RELEASE_DRAFT_REQUESTS__GITHUB_RELEASE_ROUTINE_SOURCE_FK)
 
     private lateinit var _agentRuns: AgentRunsPath
 
@@ -369,6 +380,21 @@ open class GithubReleaseDraftRequests(
     val sourceScopes: SourceScopesPath
         get(): SourceScopesPath = sourceScopes()
 
+    private lateinit var _routines: RoutinesPath
+
+    /**
+     * Get the implicit join path to the <code>public.routines</code> table.
+     */
+    fun routines(): RoutinesPath {
+        if (!this::_routines.isInitialized)
+            _routines = RoutinesPath(this, GITHUB_RELEASE_DRAFT_REQUESTS__GITHUB_RELEASE_ROUTINE_SOURCE_FK, null)
+
+        return _routines;
+    }
+
+    val routines: RoutinesPath
+        get(): RoutinesPath = routines()
+
     private lateinit var _contentPacks: ContentPacksPath
 
     /**
@@ -416,6 +442,22 @@ open class GithubReleaseDraftRequests(
 
     val githubReleaseGenerationAttempts: GithubReleaseGenerationAttemptsPath
         get(): GithubReleaseGenerationAttemptsPath = githubReleaseGenerationAttempts()
+
+    private lateinit var _routineExecutions: RoutineExecutionsPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.routine_executions</code> table
+     */
+    fun routineExecutions(): RoutineExecutionsPath {
+        if (!this::_routineExecutions.isInitialized)
+            _routineExecutions = RoutineExecutionsPath(this, null, ROUTINE_EXECUTIONS__ROUTINE_EXECUTION_RELEASE_OWNER_FK.inverseKey)
+
+        return _routineExecutions;
+    }
+
+    val routineExecutions: RoutineExecutionsPath
+        get(): RoutineExecutionsPath = routineExecutions()
     override fun getChecks(): List<Check<GithubReleaseDraftRequestsRecord>> = listOf(
         Internal.createCheck(this, DSL.name("github_release_draft_requests_attempt_count_check"), "((attempt_count >= 0))", true),
         Internal.createCheck(this, DSL.name("github_release_draft_requests_check"), "((((claimed_by IS NULL) AND (claimed_at IS NULL) AND (heartbeat_at IS NULL)) OR ((claimed_by IS NOT NULL) AND (claimed_at IS NOT NULL))))", true),

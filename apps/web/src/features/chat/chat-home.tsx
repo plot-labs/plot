@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useRef, useState } from "react";
 
-import type { SourceReference } from "@plot/api-client";
+import type { SourceReference, ContentType } from "@plot/api-client";
+import { ChatBriefPanel, emptyChatBriefDraft, toContentBrief } from "@/features/chat/chat-brief-panel";
+import { ChatContentTypeSelector } from "@/features/chat/chat-content-type-selector";
 import { ChatComposer } from "@/features/chat/chat-composer";
 import {
   isNonRetryableRequestError,
@@ -15,6 +17,7 @@ import {
   type PendingAgentRequest,
 } from "@/features/chat/chat-workspace-utils";
 import { plotApiClient } from "@/lib/api-client";
+import { trialEndsLabel, useWorkspaceEntitlement } from "@/lib/use-workspace-entitlement";
 
 type ChatHomeProps = {
   references: SourceReference[];
@@ -25,7 +28,12 @@ type ChatHomeProps = {
 export function ChatHome({ references, referencesLoading, referencesError }: ChatHomeProps) {
   const [startError, setStartError] = useState("");
   const [starting, setStarting] = useState(false);
+  const [contentType, setContentType] = useState<ContentType>("CHANGELOG");
+  const [briefDraft, setBriefDraft] = useState(emptyChatBriefDraft);
   const pendingRequestRef = useRef<PendingAgentRequest | null>(null);
+  const entitlement = useWorkspaceEntitlement();
+  const canGenerate = entitlement?.capabilities.generate ?? true;
+  const trialUntil = trialEndsLabel(entitlement?.trialEndsAt ?? null);
 
   async function submitHomeRequest(message: string, referenceIds: string[]) {
     const selected = selectReferences(references, referenceIds);
@@ -42,6 +50,8 @@ export function ChatHome({ references, referencesLoading, referencesError }: Cha
       const run = await plotApiClient.createChatAgentRun({
         instruction: message,
         writingBlockIds: selected.map((reference) => reference.id),
+        contentType,
+        brief: toContentBrief(briefDraft),
       }, idempotencyKey);
       pendingRequestRef.current = null;
       window.location.assign(`/chat?chat=${encodeURIComponent(run.chatId)}&agent=${encodeURIComponent(run.id)}`);
@@ -58,18 +68,30 @@ export function ChatHome({ references, referencesLoading, referencesError }: Cha
         <h1 className="mb-7 text-center text-[26px] font-semibold tracking-tight text-black/90 dark:text-white/92 sm:text-[28px]">
           What should Plot create?
         </h1>
+        <div className="mb-3 flex justify-center">
+          <ChatContentTypeSelector value={contentType} onChange={setContentType} disabled={starting} />
+        </div>
         <ChatComposer
           key={references.map((reference) => reference.id).join(":") || "no-references"}
           variant="center"
-          placeholder="Describe the update you need..."
+          placeholder={contentType === "LAUNCH_ANNOUNCEMENT" ? "Describe the launch you need..." : "Describe the update you need..."}
           onSubmit={(message, ids) => void submitHomeRequest(message, ids)}
           references={toComposerReferences(references)}
           busy={starting || referencesLoading}
+          canGenerate={canGenerate}
         />
+        <ChatBriefPanel value={briefDraft} onChange={setBriefDraft} contentType={contentType} />
         {referencesLoading ? <p className="mt-3 text-center text-xs text-black/45 dark:text-white/45">Loading sources…</p> : null}
         {!referencesLoading && !referencesError && references.length === 0 ? <SourceEmptyState /> : null}
         {referencesError ? <ErrorNotice message={referencesError} /> : null}
         {startError ? <ErrorNotice message={startError} /> : null}
+        {!canGenerate ? (
+          <p className="mt-3 text-center text-xs text-black/50 dark:text-white/50">
+            {entitlement?.accessMode === "complete_only"
+              ? `New drafts are paused after three trial results${trialUntil ? ` until ${trialUntil}` : ""}. Open an existing artifact to edit, export, or publish.`
+              : "This workspace cannot start new drafts. You can still export existing artifacts."}
+          </p>
+        ) : null}
       </div>
     </div>
   );

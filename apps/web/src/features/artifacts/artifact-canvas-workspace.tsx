@@ -2,16 +2,18 @@
 
 import Link from "next/link";
 import { Citation } from "@astryxdesign/core/Citation";
-import { Copy, Ellipsis, History, Library } from "lucide-react";
+import { Copy, Ellipsis, History, Library, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 
 import type { Artifact, ArtifactHistoryDetail, PlotApiClient } from "@plot/api-client";
 import { ArtifactDocumentSurface } from "@/features/artifacts/artifact-document-surface";
 import { ArtifactEditorStatus, ArtifactSaveDraftButton, artifactSaveStateLabel } from "@/features/artifacts/artifact-editor-chrome";
+import { CreateRelatedContentDialog } from "@/features/artifacts/create-related-content-dialog";
 import { ArtifactHistoryPanel } from "@/features/citations/artifact-history-panel";
 import { ExportDialog } from "@/features/citations/export-dialog";
 import { PublishDialog } from "@/features/citations/publish-dialog";
 import type { SaveArtifactInput } from "@/features/citations/cited-draft-editor";
+import { useWorkspaceEntitlement } from "@/lib/use-workspace-entitlement";
 
 type ArtifactCanvasWorkspaceProps = {
   artifact: Artifact;
@@ -30,11 +32,16 @@ export function ArtifactCanvasWorkspace({ artifact, client, onSaveArtifact }: Ar
   const [saveRequestToken, setSaveRequestToken] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [drawer, setDrawer] = useState<Drawer>(null);
+  const [replicateOpen, setReplicateOpen] = useState(false);
   const actionsRef = useRef<HTMLDivElement>(null);
   const overflowTriggerRef = useRef<HTMLButtonElement>(null);
+  const entitlement = useWorkspaceEntitlement();
   const shownArtifact = historical?.artifact ?? currentArtifact;
   const artifactTitle = shownArtifact.title ?? "Untitled artifact";
-  const readOnly = Boolean(historical);
+  const canEdit = entitlement?.capabilities.edit ?? true;
+  const canPublish = entitlement?.capabilities.publish ?? true;
+  const canUnpublish = entitlement?.capabilities.unpublish ?? true;
+  const readOnly = Boolean(historical) || !canEdit;
   const closeDrawer = useCallback(() => setDrawer(null), []);
 
   useEffect(() => {
@@ -88,14 +95,28 @@ export function ArtifactCanvasWorkspace({ artifact, client, onSaveArtifact }: Ar
           <span className="mr-1 hidden sm:inline">
             <ArtifactEditorStatus>{saveStateLabel(saveState, readOnly)}</ArtifactEditorStatus>
           </span>
-          {!readOnly ? (
+          {!historical ? (
             <>
-              <ArtifactSaveDraftButton
-                saving={saveState === "saving"}
-                onClick={() => setSaveRequestToken((value) => value + 1)}
-              />
+              {canEdit ? (
+                <ArtifactSaveDraftButton
+                  saving={saveState === "saving"}
+                  onClick={() => setSaveRequestToken((value) => value + 1)}
+                />
+              ) : null}
               <ExportDialog pack={shownArtifact} client={client} presentation="copy" />
-              <PublishDialog pack={shownArtifact} client={client} />
+              {canPublish || (shownArtifact.publication && canUnpublish) ? (
+                <PublishDialog pack={shownArtifact} client={client} onPackChange={setCurrentArtifact} />
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setReplicateOpen(true)}
+                aria-label="Create related content"
+                title="Create related content from this evidence"
+                className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-black/15 bg-white px-3 text-xs font-medium text-black/70 transition hover:bg-black/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15 dark:border-white/15 dark:bg-white/[0.04] dark:text-white/70 dark:hover:bg-white/[0.08] dark:focus-visible:ring-white/25"
+              >
+                <Sparkles aria-hidden="true" className="size-3.5 text-black/60 dark:text-white/60" />
+                <span className="hidden sm:inline">Create related</span>
+              </button>
             </>
           ) : null}
           <button
@@ -111,9 +132,12 @@ export function ArtifactCanvasWorkspace({ artifact, client, onSaveArtifact }: Ar
           </button>
 
           {menuOpen ? (
-            <div role="menu" aria-label="Artifact actions" className="absolute right-0 top-[54px] z-40 w-[196px] rounded-[8px] border border-black/10 bg-white p-2 text-[13px] text-[#18181b] shadow-[0_8px_20px_rgba(0,0,0,0.1)] dark:border-white/10 dark:bg-[#242529] dark:text-white">
+            <div role="menu" aria-label="Artifact actions" className="absolute right-0 top-[54px] z-40 w-[204px] rounded-[8px] border border-black/10 bg-white p-2 text-[13px] text-[#18181b] shadow-[0_8px_20px_rgba(0,0,0,0.1)] dark:border-white/10 dark:bg-[#242529] dark:text-white">
               <MenuButton icon={History} onClick={() => openDrawer("history")}>History</MenuButton>
               <MenuButton icon={Library} onClick={() => openDrawer("sources")}>Sources</MenuButton>
+              <MenuButton icon={Sparkles} onClick={() => { setMenuOpen(false); setReplicateOpen(true); }}>
+                Create related content
+              </MenuButton>
             </div>
           ) : null}
         </div>
@@ -125,6 +149,7 @@ export function ArtifactCanvasWorkspace({ artifact, client, onSaveArtifact }: Ar
           historical={historical}
           client={client}
           presentation="canvas"
+          editorLocked={!canEdit}
           saveRequestToken={saveRequestToken}
           saveState={saveState}
           initialDraft={historical ? undefined : drafts[currentArtifact.id]}
@@ -170,12 +195,24 @@ export function ArtifactCanvasWorkspace({ artifact, client, onSaveArtifact }: Ar
       <ArtifactDrawer
         open={drawer === "sources"}
         title="Sources"
-        subtitle="Attached sources"
+        subtitle="Attached sources and related content"
         triggerRef={overflowTriggerRef}
         onClose={closeDrawer}
       >
-        <ArtifactSources sources={shownArtifact.variant.sources} />
+        <ArtifactSources
+          sources={shownArtifact.variant.sources}
+          relatedArtifacts={shownArtifact.relatedArtifacts}
+        />
       </ArtifactDrawer>
+
+      {replicateOpen ? (
+        <CreateRelatedContentDialog
+          pack={shownArtifact}
+          client={client}
+          open={replicateOpen}
+          onClose={() => setReplicateOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -247,25 +284,77 @@ function ArtifactDrawer({ open, title, subtitle, triggerRef, onClose, children }
   );
 }
 
-function ArtifactSources({ sources }: { sources: Artifact["variant"]["sources"] }) {
-  const uniqueSources = sources.filter((source, index, all) => all.findIndex((candidate) => candidate.originalUrl === source.originalUrl) === index);
-  if (!uniqueSources.length) {
-    return <p className="rounded-[8px] border border-dashed border-black/10 px-3.5 py-4 text-sm leading-6 text-black/52 dark:border-white/12 dark:text-white/55">No current sources are available for this artifact.</p>;
-  }
+function ArtifactSources({
+  sources,
+  relatedArtifacts,
+}: {
+  sources: Artifact["variant"]["sources"];
+  relatedArtifacts?: Artifact["relatedArtifacts"];
+}) {
+  const uniqueSources = sources.filter((source, index, all) => all.findIndex((candidate) => candidate.evidenceId === source.evidenceId) === index);
 
   return (
-    <ol className="space-y-2.5" aria-label="Current sources">
-      {uniqueSources.map((source, index) => (
-        <li key={source.evidenceId} className="rounded-[8px] border border-black/10 px-3.5 py-3 dark:border-white/10">
-          <Citation source={{ title: source.sourceLabel, url: source.originalUrl }} number={index + 1} variant="label" className="max-w-full text-[15px] font-semibold" />
-          <p className="mt-1 truncate text-xs text-black/45 dark:text-white/45">{sourceHostname(source.originalUrl)}</p>
-        </li>
-      ))}
-    </ol>
+    <div className="space-y-6">
+      <div>
+        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
+          Attached sources ({uniqueSources.length})
+        </h3>
+        {!uniqueSources.length ? (
+          <p className="rounded-[8px] border border-dashed border-black/10 px-3.5 py-4 text-sm leading-6 text-black/52 dark:border-white/12 dark:text-white/55">
+            No current sources are available for this artifact.
+          </p>
+        ) : (
+          <ol className="space-y-2.5" aria-label="Current sources">
+            {uniqueSources.map((source, index) => (
+              <li key={source.evidenceId} className="rounded-[8px] border border-black/10 px-3.5 py-3 dark:border-white/10">
+                <Citation source={{ title: source.sourceLabel, url: source.originalUrl ?? undefined }} number={index + 1} variant="label" className="max-w-full text-[15px] font-semibold" />
+                <p className="mt-1 truncate text-xs text-black/45 dark:text-white/45">
+                  {source.provider === "USER_CONFIRMED" ? "Confirmed in Plot" : sourceHostname(source.originalUrl)}
+                </p>
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
+
+      {relatedArtifacts && relatedArtifacts.length > 0 ? (
+        <div>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
+            Related content ({relatedArtifacts.length})
+          </h3>
+          <p className="mb-2.5 text-xs text-black/50 dark:text-white/50">
+            Artifacts generated from the same verified source bundle.
+          </p>
+          <ul className="space-y-2" aria-label="Related artifacts">
+            {relatedArtifacts.map((related) => (
+              <li key={related.id}>
+                <Link
+                  href={`/artifacts/${related.id}`}
+                  className="flex items-center justify-between rounded-lg border border-black/10 p-2.5 transition hover:border-black/20 hover:bg-black/[0.02] dark:border-white/10 dark:hover:border-white/20 dark:hover:bg-white/[0.02]"
+                >
+                  <div className="min-w-0 flex-1 pr-2">
+                    <p className="truncate text-xs font-medium text-black/85 dark:text-white/85">
+                      {related.title || "Untitled artifact"}
+                    </p>
+                    <span className="mt-0.5 inline-block text-[10px] text-black/50 dark:text-white/50">
+                      {related.contentType === "LAUNCH_ANNOUNCEMENT" ? "Launch announcement" : "Changelog"}
+                    </span>
+                  </div>
+                  <span className="shrink-0 rounded bg-black/5 px-1.5 py-0.5 text-[10px] font-medium text-black/60 dark:bg-white/10 dark:text-white/60">
+                    {related.status}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
-function sourceHostname(value: string) {
+function sourceHostname(value: string | null) {
+  if (!value) return "";
   try {
     return new URL(value).hostname;
   } catch {

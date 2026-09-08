@@ -9,6 +9,7 @@ import { LoaderCircle, Play, Power, RefreshCw } from "lucide-react";
 import {
   getSelectedWorkspaceId,
   plotApiClient,
+  PlotApiError,
   type GitHubRepository,
   type Routine,
   type RoutineAgentRunDetail,
@@ -268,9 +269,13 @@ export function RoutinesWorkspace() {
       setAgentDetail(null);
       setAgentDetailLoadingId(null);
       setAgentDetailError(null);
-    } catch {
+    } catch (err) {
       if (requestIsCurrent(controller, workspaceRevision, workspaceId)) {
-        setError("Routine could not run. Try again after checking the connected source.");
+        setError(
+          err instanceof PlotApiError && err.code === "GITHUB_RELEASE_RANGE_REQUIRED"
+            ? "Release routines need a GitHub tag or published release. Choose a commit range on the release activity."
+            : "Routine could not run. Try again after checking the connected source.",
+        );
       }
     } finally {
       if (routineActionAbortRef.current === controller) {
@@ -427,7 +432,7 @@ export function RoutinesWorkspace() {
                             {chatId && <Link href={`/chat?chat=${encodeURIComponent(chatId)}${artifactId ? `&artifact=${encodeURIComponent(artifactId)}` : ""}`} aria-label={`Open Chat for ${routine.name}`} className="inline-flex h-7 items-center rounded-[7px] px-2 text-[11px] font-medium text-black/55 transition hover:bg-black/[0.04] hover:text-black/78 dark:text-white/58 dark:hover:bg-white/10 dark:hover:text-white/82">Chat</Link>}
                             {artifactId && <Link href={`/artifacts?artifact=${encodeURIComponent(artifactId)}`} aria-label={`Open artifact for ${routine.name}`} className="inline-flex h-7 items-center rounded-[7px] px-2 text-[11px] font-medium text-black/55 transition hover:bg-black/[0.04] hover:text-black/78 dark:text-white/58 dark:hover:bg-white/10 dark:hover:text-white/82">Artifact</Link>}
                             {agentRunId && <button type="button" onClick={() => { void toggleAgentDetail(routine); }} aria-expanded={expanded} aria-label={`View agent activity for ${routine.name}`} className="inline-flex h-7 items-center rounded-[7px] px-2 text-[11px] font-medium text-black/55 transition hover:bg-black/[0.04] hover:text-black/78 dark:text-white/58 dark:hover:bg-white/10 dark:hover:text-white/82">Activity</button>}
-                            <button type="button" onClick={() => { void runRoutine(routine); }} disabled={busyRoutineId !== null || isRoutineRunInProgress(routine)} className="inline-flex h-7 items-center gap-1.5 rounded-[7px] px-2 text-[11px] font-medium text-black/55 transition hover:bg-black/[0.04] hover:text-black/78 disabled:cursor-wait disabled:opacity-50 dark:text-white/58 dark:hover:bg-white/10 dark:hover:text-white/82"><Play className="size-3" /> Run</button>
+                            {!isReleaseCadence(routine.cadence) && <button type="button" onClick={() => { void runRoutine(routine); }} disabled={busyRoutineId !== null || isRoutineRunInProgress(routine)} className="inline-flex h-7 items-center gap-1.5 rounded-[7px] px-2 text-[11px] font-medium text-black/55 transition hover:bg-black/[0.04] hover:text-black/78 disabled:cursor-wait disabled:opacity-50 dark:text-white/58 dark:hover:bg-white/10 dark:hover:text-white/82"><Play className="size-3" /> Run</button>}
                             <button type="button" onClick={() => { void toggleRoutine(routine); }} disabled={busyRoutineId !== null} aria-label={routine.enabled ? `Pause ${routine.name}` : `Enable ${routine.name}`} title={routine.enabled ? "Pause routine" : "Enable routine"} className="inline-flex size-7 items-center justify-center rounded-[7px] text-black/42 transition hover:bg-black/[0.04] hover:text-black/72 disabled:cursor-wait disabled:opacity-50 dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white/75">{busy ? <LoaderCircle className="size-3.5 animate-spin" /> : <Power className="size-3.5" />}</button>
                           </div>
                         </div>
@@ -435,6 +440,7 @@ export function RoutinesWorkspace() {
                           <RoutineReleaseActivity
                             sourceScopeId={routine.sourceScopeId}
                             routineName={routine.name}
+                            releaseRequestId={routine.latestExecution?.releaseRequestId ?? null}
                           />
                         ) : null}
                         {expanded && <div className="mt-3 border-t border-black/[0.07] pt-3 dark:border-white/[0.08]">

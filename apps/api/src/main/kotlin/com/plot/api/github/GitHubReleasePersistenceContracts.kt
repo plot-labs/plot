@@ -31,6 +31,15 @@ interface GitHubReleaseRequestStore {
 		tagName: String,
 		observedHeadSha: String?,
 	): GitHubReleaseDraftRequest
+	fun enqueueRoutineRelease(
+		workspaceId: UUID,
+		sourceScopeId: UUID,
+		deliveryId: UUID,
+		tagName: String,
+		observedHeadSha: String?,
+		routineId: UUID,
+	): GitHubReleaseDraftRequest = error("Routine release admission is not supported")
+	fun observeTag(workspaceId: UUID, sourceScopeId: UUID, tagName: String, headSha: String) {}
 	fun saveResolvedRange(
 		requestId: UUID,
 		transitionVersion: Long,
@@ -54,6 +63,9 @@ interface GitHubReleaseLeaseStore {
 		errorCode: String? = null,
 	)
 	fun retry(requestId: UUID, workspaceId: UUID, transitionVersion: Long): GitHubReleaseRetryResult
+	fun selectRange(
+		requestId: UUID, workspaceId: UUID, transitionVersion: Long, baseSha: String, headSha: String,
+	): GitHubReleaseRetryResult = error("Explicit release ranges are not supported")
 	fun scheduleRetry(requestId: UUID, transitionVersion: Long, nextAttemptAt: Instant, errorCode: String)
 	fun fenceSourceScope(
 		workspaceId: UUID,

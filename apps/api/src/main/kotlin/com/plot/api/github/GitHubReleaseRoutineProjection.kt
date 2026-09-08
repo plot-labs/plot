@@ -1,0 +1,40 @@
+package com.plot.api.github
+
+import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.routine.RoutineAgentPersistence
+import com.plot.api.routine.RoutinePersistence
+import java.time.Instant
+import java.util.UUID
+import org.springframework.stereotype.Component
+
+@Component
+class GitHubReleaseRoutineProjection(
+	private val sql: JooqSqlExecutor,
+	private val executions: RoutineAgentPersistence,
+	private val routines: RoutinePersistence,
+) {
+	fun finish(requestId: UUID, status: GitHubReleaseDraftStatus, errorCode: String? = null) {
+		if (status == GitHubReleaseDraftStatus.READY) return
+		val pending = sql.query(
+			"select workspace_id, id from routine_executions where release_request_id = ? and status = 'PROBING'",
+			{ row, _ -> row.getObject("workspace_id", UUID::class.java)!! to row.getObject("id", UUID::class.java)!! },
+			requestId,
+		)
+		val now = Instant.now()
+		pending.forEach { (workspaceId, id) ->
+			val code = errorCode ?: if (status == GitHubReleaseDraftStatus.NEEDS_RANGE) "GITHUB_RELEASE_RANGE_REQUIRED" else "RELEASE_PROCESSING_FAILED"
+			val execution = if (status == GitHubReleaseDraftStatus.NO_ACTIVITY) {
+				executions.markNoActivity(workspaceId, id, now)
+			} else {
+				executions.failExecution(workspaceId, id, code, now)
+			}
+			val routine = routines.find(workspaceId, execution.routineId) ?: return@forEach
+			executions.projectRoutine(
+				workspaceId, routine.id, execution.id, now, routine.nextRunAt,
+				if (status == GitHubReleaseDraftStatus.NO_ACTIVITY) "NO_ACTIVITY" else "FAILED",
+				if (status == GitHubReleaseDraftStatus.NO_ACTIVITY) null else code,
+				execution.createdAt,
+			)
+		}
+	}
+}

@@ -20,6 +20,8 @@ sealed interface GitHubReleaseRangeResult {
 }
 
 interface GitHubReleaseRangeResolver {
+	fun verifyHead(context: GitHubReleaseSourceContext, request: GitHubReleaseDraftRequest) {}
+
 	fun resolve(
 		context: GitHubReleaseSourceContext,
 		request: GitHubReleaseDraftRequest,
@@ -32,19 +34,40 @@ class DefaultGitHubReleaseRangeResolver(
 	private val requestPersistence: GitHubReleaseRequestStore,
 	private val properties: GitHubProperties,
 ) : GitHubReleaseRangeResolver {
+	override fun verifyHead(context: GitHubReleaseSourceContext, request: GitHubReleaseDraftRequest) {
+		resolveHead(context, request)
+	}
+
+	private fun resolveHead(context: GitHubReleaseSourceContext, request: GitHubReleaseDraftRequest): String {
+		val headSha = client.resolveTagCommit(
+			context.installationId, context.repositoryId, context.owner, context.repository, request.tagName,
+		)
+		if ((request.observedHeadSha != null && request.observedHeadSha != headSha) ||
+			(request.headSha != null && request.headSha != headSha)) {
+			throw GitHubReleasePermanentException("GITHUB_TAG_MOVED")
+		}
+		return headSha
+	}
+
 	override fun resolve(
 		context: GitHubReleaseSourceContext,
 		request: GitHubReleaseDraftRequest,
 	): GitHubReleaseRangeResult {
-		val headSha = client.resolveTagCommit(
-			context.installationId,
-			context.repositoryId,
-			context.owner,
-			context.repository,
-			request.tagName,
-		)
-		if (request.observedHeadSha != null && request.observedHeadSha != headSha) {
-			throw GitHubReleasePermanentException("GITHUB_TAG_MOVED")
+		val headSha = resolveHead(context, request)
+		if (request.baseSha != null && request.headSha != null) {
+			val comparison = client.compareCommits(
+				context.installationId, context.repositoryId, context.owner, context.repository,
+				request.baseSha, headSha, properties.comparePageCap,
+			)
+			if (comparison.status == "identical") {
+				return GitHubReleaseRangeResult.NoActivity(request.baseSha, headSha, request.boundaryReason ?: "EXPLICIT_RANGE")
+			}
+			if (comparison.status != "ahead" || comparison.aheadBy <= 0) {
+				throw GitHubReleasePermanentException("GITHUB_RELEASE_RANGE_INVALID")
+			}
+			return GitHubReleaseRangeResult.Resolved(
+				GitHubReleaseRange(request.baseSha, headSha, request.boundaryReason ?: "EXPLICIT_RANGE", comparison),
+			)
 		}
 		val candidates = requestPersistence.findPreviousBoundaries(
 			context.workspaceId,

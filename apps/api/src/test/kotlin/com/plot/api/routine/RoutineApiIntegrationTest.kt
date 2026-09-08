@@ -534,6 +534,16 @@ class RoutineApiIntegrationTest {
 			status { isCreated() }
 			jsonPath("$.cadence") { value("ON_GITHUB_RELEASE") }
 		}
+		val routineId = jdbcTemplate.queryForObject(
+			"select id from routines where workspace_id = ? and source_scope_id = ? and cadence = 'ON_GITHUB_RELEASE'",
+			UUID::class.java, devContext.devWorkspaceId, sourceScopeId,
+		)!!
+		mockMvc.post("/api/routines/$routineId/run") {
+			headers { add("Idempotency-Key", "no-unbounded-release") }
+		}.andExpect {
+			status { isConflict() }
+			jsonPath("$.error") { value("GITHUB_RELEASE_RANGE_REQUIRED") }
+		}
 
 		assertEquals(
 			0,
@@ -587,7 +597,21 @@ class RoutineApiIntegrationTest {
 			jsonPath("$.error") { value("IDEMPOTENCY_KEY_REUSED") }
 		}
 
+		mockMvc.post("/api/agent-runs") {
+			header("Idempotency-Key", "chat-request-1")
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"instruction":"Draft an update","writingBlockIds":["$blockId"],"contentType":"LAUNCH_ANNOUNCEMENT"}"""
+		}.andExpect {
+			status { isConflict() }
+			jsonPath("$.error") { value("IDEMPOTENCY_KEY_REUSED") }
+		}
+
 		val chatId = UUID.fromString(firstJson.get("chatId").asText())
+		mockMvc.get("/api/agent-runs/$firstRunId").andExpect {
+			status { isOk() }
+			jsonPath("$.contentType") { value("CHANGELOG") }
+		}
+
 		mockMvc.post("/api/agent-runs") {
 			header("Idempotency-Key", "chat-request-2")
 			contentType = MediaType.APPLICATION_JSON

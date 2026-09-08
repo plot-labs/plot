@@ -132,6 +132,22 @@ open class AgentRunsRecord() : UpdatableRecordImpl<AgentRunsRecord>(AgentRuns.AG
         set(value): Unit = set(27, value)
         get(): String? = get(27) as String?
 
+    open var contentType: String?
+        set(value): Unit = set(28, value)
+        get(): String? = get(28) as String?
+
+    open var contentProfileRevisionId: UUID?
+        set(value): Unit = set(29, value)
+        get(): UUID? = get(29) as UUID?
+
+    open var contentBriefSnapshot: JSONB?
+        set(value): Unit = set(30, value)
+        get(): JSONB? = get(30) as JSONB?
+
+    open var sourceSnapshotId: UUID?
+        set(value): Unit = set(31, value)
+        get(): UUID? = get(31) as UUID?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -141,7 +157,7 @@ open class AgentRunsRecord() : UpdatableRecordImpl<AgentRunsRecord>(AgentRuns.AG
     /**
      * Create a detached, initialised AgentRunsRecord
      */
-    constructor(id: UUID? = null, workspaceId: UUID? = null, routineExecutionId: UUID? = null, routineId: UUID? = null, workSessionId: UUID? = null, createdByUserId: UUID? = null, instructionSnapshot: String? = null, promptVersion: String? = null, toolPolicyVersion: String? = null, budgetSnapshot: JSONB? = null, status: String? = null, currentStep: Int? = null, attemptCount: Int? = null, maxAttempts: Int? = null, nextAttemptAt: OffsetDateTime? = null, failureCode: String? = null, claimedBy: String? = null, claimedAt: OffsetDateTime? = null, transitionVersion: Long? = null, startedAt: OffsetDateTime? = null, finishedAt: OffsetDateTime? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, modelCallCount: Int? = null, toolCallCount: Int? = null, origin: String? = null, idempotencyKey: String? = null, requestFingerprint: String? = null): this() {
+    constructor(id: UUID? = null, workspaceId: UUID? = null, routineExecutionId: UUID? = null, routineId: UUID? = null, workSessionId: UUID? = null, createdByUserId: UUID? = null, instructionSnapshot: String? = null, promptVersion: String? = null, toolPolicyVersion: String? = null, budgetSnapshot: JSONB? = null, status: String? = null, currentStep: Int? = null, attemptCount: Int? = null, maxAttempts: Int? = null, nextAttemptAt: OffsetDateTime? = null, failureCode: String? = null, claimedBy: String? = null, claimedAt: OffsetDateTime? = null, transitionVersion: Long? = null, startedAt: OffsetDateTime? = null, finishedAt: OffsetDateTime? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, modelCallCount: Int? = null, toolCallCount: Int? = null, origin: String? = null, idempotencyKey: String? = null, requestFingerprint: String? = null, contentType: String? = null, contentProfileRevisionId: UUID? = null, contentBriefSnapshot: JSONB? = null, sourceSnapshotId: UUID? = null): this() {
         this.id = id
         this.workspaceId = workspaceId
         this.routineExecutionId = routineExecutionId
@@ -170,6 +186,10 @@ open class AgentRunsRecord() : UpdatableRecordImpl<AgentRunsRecord>(AgentRuns.AG
         this.origin = origin
         this.idempotencyKey = idempotencyKey
         this.requestFingerprint = requestFingerprint
+        this.contentType = contentType
+        this.contentProfileRevisionId = contentProfileRevisionId
+        this.contentBriefSnapshot = contentBriefSnapshot
+        this.sourceSnapshotId = sourceSnapshotId
         resetChangedOnNotNull()
     }
 }

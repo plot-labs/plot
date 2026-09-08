@@ -1,5 +1,6 @@
 package com.plot.api.auth
 
+import com.plot.api.entitlement.WorkspaceCapabilities
 import com.plot.api.entitlement.WorkspaceEntitlementReader
 import com.plot.api.workspace.UserRepository
 import com.plot.api.workspace.WorkspaceMemberRepository
@@ -21,6 +22,7 @@ data class CurrentAccountWorkspace(
 	val plan: String,
 	val entitlementStatus: String,
 	val accessMode: String,
+	val capabilities: WorkspaceCapabilities,
 	val trialEndsAt: java.time.Instant,
 )
 data class CurrentAccountResponse(
@@ -57,6 +59,7 @@ class CurrentAccountController(
 					workspace.plan,
 					entitlement.status,
 					entitlement.accessMode,
+					entitlement.capabilities,
 					workspace.trialEndsAt,
 				)
 			}

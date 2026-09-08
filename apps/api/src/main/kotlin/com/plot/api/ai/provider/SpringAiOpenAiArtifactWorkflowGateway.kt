@@ -3,13 +3,16 @@ package com.plot.api.ai.provider
 import com.openai.errors.OpenAIRetryableException
 import com.openai.errors.OpenAIServiceException
 import com.plot.api.ai.prompt.ChangelogPrompt
-import com.plot.api.ai.prompt.ChangelogPromptFactory
 import com.plot.api.config.PlotAiProperties
+import com.plot.api.content.ContentTypeRegistry
+import com.plot.api.content.FrozenContentContextLookup
+import com.plot.api.content.FrozenPromptVersionLookup
 import com.plot.api.artifact.workflow.model.ReviewerOutput
 import com.plot.api.artifact.workflow.model.TargetedRewriteOutput
 import com.plot.api.artifact.workflow.model.WriterOutput
 import java.time.Duration
 import java.time.Instant
+import java.util.UUID
 import org.springframework.ai.chat.client.ChatClient
 import org.springframework.ai.chat.prompt.ChatOptions
 import org.springframework.ai.openai.OpenAiChatOptions
@@ -19,7 +22,7 @@ import org.springframework.context.annotation.Configuration
 import org.springframework.core.env.Environment
 
 object ModelSchemas {
-	val WRITER = """{"${'$'}schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["sentences"],"properties":{"sentences":{"type":"array","minItems":1,"maxItems":6,"items":{"type":"object","additionalProperties":false,"required":["body","intent","conflictEvidenceIds"],"properties":{"body":{"type":"string","minLength":1},"intent":{"type":"string","enum":["FACTUAL","EDITORIAL","UNRESOLVED_CONFLICT"]},"conflictEvidenceIds":{"type":"array","items":{"type":"string","format":"uuid"}}}}}}}"""
+	val WRITER = """{"${'$'}schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["sentences","layout"],"properties":{"sentences":{"type":"array","minItems":1,"maxItems":6,"items":{"type":"object","additionalProperties":false,"required":["body","intent","conflictEvidenceIds"],"properties":{"body":{"type":"string","minLength":1},"intent":{"type":"string","enum":["FACTUAL","EDITORIAL","UNRESOLVED_CONFLICT"]},"conflictEvidenceIds":{"type":"array","items":{"type":"string","format":"uuid"}}}}},"layout":{"type":"array","maxItems":6,"items":{"${'$'}ref":"#/${'$'}defs/layoutNode"}}},"${'$'}defs":{"layoutNode":{"type":"object","additionalProperties":false,"required":["type","statementIndex","tag","listType","start","children"],"properties":{"type":{"type":"string","enum":["heading","paragraph","list","listItem"]},"statementIndex":{"type":["integer","null"],"minimum":0},"tag":{"type":["string","null"],"enum":["h1","h2","h3",null]},"listType":{"type":["string","null"],"enum":["bullet","ordered",null]},"start":{"type":["integer","null"],"minimum":1},"children":{"type":"array","maxItems":6,"items":{"${'$'}ref":"#/${'$'}defs/layoutNode"}}}}}}"""
 	val REVIEWER = """{"${'$'}schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["reviews","documentConflicts"],"properties":{"reviews":{"type":"array","minItems":1,"items":{"type":"object","additionalProperties":false,"required":["sentenceId","verdict","evidenceIds","reason","modelSuppliedUrls"],"properties":{"sentenceId":{"type":"string","format":"uuid"},"verdict":{"type":"string","enum":["SUPPORTED","NOT_REQUIRED","NEEDS_SUPPORT","CONFLICT"]},"evidenceIds":{"type":"array","items":{"type":"string","format":"uuid"}},"reason":{"type":["string","null"]},"modelSuppliedUrls":{"type":"array","items":{"type":"string"}}}}},"documentConflicts":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["sentenceIds","evidenceIds","reason"],"properties":{"sentenceIds":{"type":"array","items":{"type":"string","format":"uuid"}},"evidenceIds":{"type":"array","items":{"type":"string","format":"uuid"}},"reason":{"type":"string","minLength":1}}}}}}"""
 	val REWRITE = """{"${'$'}schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["rewrites"],"properties":{"rewrites":{"type":"array","minItems":1,"items":{"type":"object","additionalProperties":false,"required":["sentenceId","body","omit"],"properties":{"sentenceId":{"type":"string","format":"uuid"},"body":{"type":["string","null"]},"omit":{"type":"boolean"}}}}}}"""
 
@@ -58,25 +61,44 @@ class MalformedModelOutputException(message: String, cause: Throwable? = null) :
 class SpringAiOpenAiArtifactWorkflowGateway(
 	private val transport: StructuredChatTransport,
 	private val properties: PlotAiProperties,
-	private val promptFactory: ChangelogPromptFactory,
+	private val contentTypeRegistry: ContentTypeRegistry,
+	private val frozenPromptVersionLookup: FrozenPromptVersionLookup,
+	private val frozenContentContextLookup: FrozenContentContextLookup,
 ) : ArtifactWorkflowModelGateway {
-	override fun write(request: WriterModelRequest): ModelCallResult<WriterOutput> = invoke(
-		role = ModelRole.WRITER,
-		prompt = promptFactory.writer(request.instruction, request.evidence),
-		responseType = WriterOutput::class.java,
-	)
+	override fun write(request: WriterModelRequest): ModelCallResult<WriterOutput> {
+		val promptFactory = promptFactoryFor(request.artifactWorkflowRunId)
+		return invoke(
+			role = ModelRole.WRITER,
+			prompt = promptFactory.writer(
+				request.instruction,
+				request.evidence,
+				frozenContentContextLookup.forRun(request.artifactWorkflowRunId),
+				request.documentVersion,
+			),
+			responseType = WriterOutput::class.java,
+		)
+	}
 
-	override fun review(request: ReviewerModelRequest): ModelCallResult<ReviewerOutput> = invoke(
-		role = ModelRole.REVIEWER,
-		prompt = promptFactory.reviewer(request),
-		responseType = ReviewerOutput::class.java,
-	)
+	override fun review(request: ReviewerModelRequest): ModelCallResult<ReviewerOutput> {
+		val promptFactory = promptFactoryFor(request.artifactWorkflowRunId)
+		return invoke(
+			role = ModelRole.REVIEWER,
+			prompt = promptFactory.reviewer(request),
+			responseType = ReviewerOutput::class.java,
+		)
+	}
 
-	override fun rewrite(request: RewriteModelRequest): ModelCallResult<TargetedRewriteOutput> = invoke(
-		role = ModelRole.REWRITER,
-		prompt = promptFactory.rewriter(request),
-		responseType = TargetedRewriteOutput::class.java,
-	)
+	override fun rewrite(request: RewriteModelRequest): ModelCallResult<TargetedRewriteOutput> {
+		val promptFactory = promptFactoryFor(request.artifactWorkflowRunId)
+		return invoke(
+			role = ModelRole.REWRITER,
+			prompt = promptFactory.rewriter(request),
+			responseType = TargetedRewriteOutput::class.java,
+		)
+	}
+
+	private fun promptFactoryFor(artifactWorkflowRunId: UUID) =
+		contentTypeRegistry.promptFactoryFor(frozenPromptVersionLookup.promptVersionFor(artifactWorkflowRunId))
 
 	private fun <T : Any> invoke(role: ModelRole, prompt: ChangelogPrompt, responseType: Class<T>): ModelCallResult<T> {
 		val startedAt = Instant.now()
@@ -203,7 +225,9 @@ class ArtifactWorkflowModelGatewayConfiguration {
 	fun artifactWorkflowModelGateway(
 		builderProvider: ObjectProvider<ChatClient.Builder>,
 		properties: PlotAiProperties,
-		promptFactory: ChangelogPromptFactory,
+		contentTypeRegistry: ContentTypeRegistry,
+		frozenPromptVersionLookup: FrozenPromptVersionLookup,
+		frozenContentContextLookup: FrozenContentContextLookup,
 		environment: Environment,
 	): ArtifactWorkflowModelGateway {
 		// Do not resolve ChatClient.Builder when artifact workflows are disabled: with
@@ -211,7 +235,13 @@ class ArtifactWorkflowModelGatewayConfiguration {
 		if (properties.configured) validateRuntimeOpenRouterConfiguration(properties, environment)
 		val builder = if (properties.configured) builderProvider.ifAvailable else null
 		return if (properties.configured && builder != null) {
-			SpringAiOpenAiArtifactWorkflowGateway(SpringAiStructuredChatTransport(builder, properties), properties, promptFactory)
+			SpringAiOpenAiArtifactWorkflowGateway(
+				SpringAiStructuredChatTransport(builder, properties),
+				properties,
+				contentTypeRegistry,
+				frozenPromptVersionLookup,
+				frozenContentContextLookup,
+			)
 		} else {
 			DisabledArtifactWorkflowModelGateway()
 		}

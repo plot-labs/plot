@@ -18,6 +18,7 @@ data class WriterModelRequest(
 	val artifactWorkflowRunId: UUID,
 	val instruction: String?,
 	val evidence: List<EvidenceSnapshot>,
+	val documentVersion: Int = 1,
 )
 
 data class ReviewerModelRequest(
