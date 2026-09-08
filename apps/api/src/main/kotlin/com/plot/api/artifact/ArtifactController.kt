@@ -13,12 +13,19 @@ import com.plot.api.artifact.dto.PublishContentVariantResponse
 import com.plot.api.artifact.dto.RecordProductDeliveryEventRequest
 import com.plot.api.artifact.dto.SaveContentVariantRequest
 import com.plot.api.artifact.dto.UnpublishContentVariantResponse
+import com.plot.api.artifact.dto.ReplicateContentRequest
+import com.plot.api.common.WorkspacePrincipal
+import com.plot.api.dev.DevContext
 import com.plot.api.entitlement.CompletionAllowed
 import com.plot.api.entitlement.ReadOnlyAllowed
 import com.plot.api.entitlement.SafetyAllowed
+import com.plot.api.routine.ChatAgentAdmissionService
+import com.plot.api.routine.dto.ChatAgentRunResponse
 import jakarta.validation.Valid
+import java.net.URI
 import java.util.UUID
 import org.springframework.http.CacheControl
+import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
@@ -26,6 +33,7 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.bind.annotation.RequestParam
@@ -38,6 +46,8 @@ class ArtifactController(
 	private val exportService: ArtifactExportService,
 	private val publishService: ArtifactPublishService,
 	private val deliveryEventService: ProductDeliveryEventService,
+	private val chatAgentAdmissionService: ChatAgentAdmissionService,
+	private val devContext: DevContext,
 ) {
 	@GetMapping("/artifacts")
 	fun list(
@@ -49,6 +59,24 @@ class ArtifactController(
 	@GetMapping("/artifacts/{id}")
 	fun get(@PathVariable id: UUID): ResponseEntity<ArtifactResponse> = ResponseEntity.ok()
 		.cacheControl(CacheControl.noStore()).body(queryService.get(id))
+
+	@PostMapping("/artifacts/{id}/replicate")
+	fun replicate(
+		@PathVariable id: UUID,
+		@RequestHeader("Idempotency-Key") idempotencyKey: String,
+		@Valid @RequestBody request: ReplicateContentRequest,
+	): ResponseEntity<ChatAgentRunResponse> {
+		val response = chatAgentAdmissionService.admitReplication(
+			principal = WorkspacePrincipal(devContext.devWorkspaceId, devContext.devUserId),
+			artifactId = id,
+			request = request,
+			idempotencyKey = idempotencyKey,
+		)
+		return ResponseEntity.accepted()
+			.location(URI.create("/api/agent-runs/${response.id}"))
+			.cacheControl(CacheControl.noStore())
+			.body(response)
+	}
 
 	@GetMapping("/artifact-variants/{variantId}")
 	fun getVariant(@PathVariable variantId: UUID): ResponseEntity<ArtifactResponse> = ResponseEntity.ok()

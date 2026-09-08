@@ -52,12 +52,24 @@ const artifact: Artifact = {
   },
 };
 
+const pushMock = vi.fn();
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: pushMock }),
+}));
+
 function client() {
   return {
     listArtifactHistory: vi.fn().mockResolvedValue([{ position: 0, createdAt: "2026-08-07T05:32:00Z", cause: "Current draft" }]),
     getArtifactHistoryAt: vi.fn(),
     exportArtifactVariant: vi.fn(),
     publishArtifactVariant: vi.fn(),
+    replicateArtifact: vi.fn().mockResolvedValue({
+      id: "agent-run-new",
+      chatId: "chat-new",
+      status: "QUEUED",
+      contentType: "LAUNCH_ANNOUNCEMENT",
+    }),
   } as unknown as PlotApiClient;
 }
 
@@ -130,5 +142,61 @@ describe("ArtifactCanvasWorkspace", () => {
 
     await waitFor(() => expect(screen.queryByRole("button", { name: "Save draft" })).not.toBeInTheDocument());
     expect(screen.getByText("Saved snapshot")).toBeVisible();
+  });
+
+  it("opens CreateRelatedContentDialog and replicates artifact with new content type and instruction", async () => {
+    const testClient = client();
+    render(<ArtifactCanvasWorkspace artifact={artifact} client={testClient} onSaveArtifact={vi.fn()} />);
+
+    const createButton = screen.getByRole("button", { name: "Create related content" });
+    expect(createButton).toBeVisible();
+    fireEvent.click(createButton);
+
+    expect(await screen.findByRole("dialog", { name: "이 근거로 다른 콘텐츠 만들기" })).toBeVisible();
+    expect(screen.getByText("생성 크레딧 차감 안내")).toBeVisible();
+
+    const instructionInput = screen.getByLabelText("추가 지시사항 (선택사항)");
+    fireEvent.change(instructionInput, { target: { value: "Please highlight key benefits." } });
+
+    fireEvent.click(screen.getByRole("button", { name: "생성 시작" }));
+
+    await waitFor(() => expect(testClient.replicateArtifact).toHaveBeenCalledWith(
+      "artifact-1",
+      expect.objectContaining({
+        contentType: "LAUNCH_ANNOUNCEMENT",
+        instruction: "Please highlight key benefits.",
+      }),
+      expect.stringMatching(/^replicate-artifact-1-LAUNCH_ANNOUNCEMENT-/),
+    ));
+
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/chat?chat=chat-new&agent=agent-run-new"));
+  });
+
+  it("renders related artifacts in the Sources drawer", async () => {
+    const artifactWithRelated: Artifact = {
+      ...artifact,
+      relatedArtifacts: [
+        {
+          id: "related-artifact-99",
+          title: "Related Launch Announcement",
+          contentType: "LAUNCH_ANNOUNCEMENT",
+          status: "READY",
+          updatedAt: "2026-09-08T00:00:00Z",
+        },
+      ],
+    };
+
+    render(<ArtifactCanvasWorkspace artifact={artifactWithRelated} client={client()} onSaveArtifact={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Artifact actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Sources" }));
+
+    expect(await screen.findByRole("dialog", { name: "Sources" })).toBeVisible();
+    expect(screen.getByRole("list", { name: "Related artifacts" })).toBeVisible();
+    expect(screen.getByText("Related Launch Announcement")).toBeVisible();
+    expect(screen.getByRole("link", { name: /Related Launch Announcement/i })).toHaveAttribute(
+      "href",
+      "/artifacts/related-artifact-99",
+    );
   });
 });

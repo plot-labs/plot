@@ -32,6 +32,7 @@ import java.util.UUID
 import org.springframework.http.HttpStatus
 import com.plot.api.persistence.JooqSqlExecutor
 import com.plot.api.persistence.JooqTransactionExecutor
+import com.plot.api.content.ContentSourceSnapshotService
 import com.plot.api.persistence.SqlRow
 import org.springframework.stereotype.Service
 import tools.jackson.databind.JsonNode
@@ -42,6 +43,7 @@ class ArtifactQueryService(
     private val devContext: DevContext,
     private val materializer: ArtifactRevisionMaterializer,
     private val objectMapper: ObjectMapper,
+    private val contentSourceSnapshotService: ContentSourceSnapshotService,
 ) {
 	fun list(page: Int, size: Int): ArtifactPageResponse {
 		require(page >= 0) { "Page must not be negative" }
@@ -176,6 +178,7 @@ class ArtifactQueryService(
 		} ?: materializer.currentArtifactRevision(variantId)
 		val citations = loadPublicCitations(variantId, revision.id, includeHistoricalLifecycle = revisionId != null)
 		val sentences = loadSentences(variantId, revision.id, citations)
+		val relatedArtifacts = contentSourceSnapshotService.findRelatedArtifacts(devContext.devWorkspaceId, header[0] as UUID)
 		return ArtifactResponse(
 			header[0] as UUID,
 			header[1] as String,
@@ -191,6 +194,7 @@ class ArtifactQueryService(
 				publicSources(citations),
 			),
 			loadLivePublication(variantId),
+			relatedArtifacts,
 		)
 	}
 

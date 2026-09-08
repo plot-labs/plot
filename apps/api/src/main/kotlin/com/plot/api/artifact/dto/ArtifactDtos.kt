@@ -8,6 +8,8 @@ import jakarta.validation.Valid
 import tools.jackson.databind.JsonNode
 import java.util.UUID
 import java.time.Instant
+import com.plot.api.content.ContentType
+import com.plot.api.routine.dto.ContentBriefRequest
 
 data class ContentStatementInput(
 	val id: UUID?,
@@ -72,6 +74,22 @@ data class ArtifactResponse(
 	val contentType: String,
 	val variant: ContentVariantResponse,
 	val publication: ArtifactPublicationResponse? = null,
+	val relatedArtifacts: List<RelatedArtifactSummaryResponse> = emptyList(),
+)
+
+data class RelatedArtifactSummaryResponse(
+	val id: UUID,
+	val title: String?,
+	val contentType: String,
+	val status: String,
+	val updatedAt: Instant,
+)
+
+data class ReplicateContentRequest(
+	val contentType: ContentType = ContentType.LAUNCH_ANNOUNCEMENT,
+	@field:Size(max = 2_000) val instruction: String? = null,
+	val contentProfileRevisionId: UUID? = null,
+	@field:Valid val brief: ContentBriefRequest? = null,
 )
 
 data class ContentVariantResponse(

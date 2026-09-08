@@ -5,19 +5,23 @@ package com.plot.api.persistence.generated.tables
 
 
 import com.plot.api.persistence.generated.Public
-import com.plot.api.persistence.generated.indexes.PUBLISHED_CHANGELOG_ONE_PER_TAG_IDX
-import com.plot.api.persistence.generated.indexes.PUBLISHED_CHANGELOG_ONE_PER_VARIANT_IDX
+import com.plot.api.persistence.generated.indexes.PUBLISHED_CHANGELOG_LIVE_ENTRY_SLUG_IDX
+import com.plot.api.persistence.generated.indexes.PUBLISHED_CHANGELOG_LIVE_ONE_PER_TAG_IDX
+import com.plot.api.persistence.generated.indexes.PUBLISHED_CHANGELOG_LIVE_ONE_PER_VARIANT_IDX
+import com.plot.api.persistence.generated.indexes.PUBLISHED_CHANGELOG_LIVE_WORKSPACE_PUBLISHED_AT_IDX
 import com.plot.api.persistence.generated.indexes.PUBLISHED_CHANGELOG_WORKSPACE_PUBLISHED_AT_IDX
+import com.plot.api.persistence.generated.keys.PRODUCT_DELIVERY_EVENTS__PRODUCT_DELIVERY_EVENTS_PUBLISHED_FK
 import com.plot.api.persistence.generated.keys.PUBLISHED_CHANGELOG_ENTRIES_PKEY
-import com.plot.api.persistence.generated.keys.PUBLISHED_CHANGELOG_ENTRIES_WORKSPACE_ID_ENTRY_SLUG_KEY
 import com.plot.api.persistence.generated.keys.PUBLISHED_CHANGELOG_ENTRIES_WORKSPACE_ID_ID_KEY
 import com.plot.api.persistence.generated.keys.PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_ARTIFACT_REVISION_FK
 import com.plot.api.persistence.generated.keys.PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_CONTENT_VARIANT_FK
 import com.plot.api.persistence.generated.keys.PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_PUBLISHED_BY_USER_ID_FKEY
+import com.plot.api.persistence.generated.keys.PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_UNPUBLISHED_BY_USER_ID_FKEY
 import com.plot.api.persistence.generated.keys.PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.PUBLISHED_CHANGELOG_ENTRY_SENTENCES__PUBLISHED_CHANGELOG_ENTRY_SEN_WORKSPACE_ID_PUBLISHED_CHANG_FKEY
 import com.plot.api.persistence.generated.tables.ContentVariantRevisions.ContentVariantRevisionsPath
 import com.plot.api.persistence.generated.tables.ContentVariants.ContentVariantsPath
+import com.plot.api.persistence.generated.tables.ProductDeliveryEvents.ProductDeliveryEventsPath
 import com.plot.api.persistence.generated.tables.PublishedChangelogEntrySentences.PublishedChangelogEntrySentencesPath
 import com.plot.api.persistence.generated.tables.Users.UsersPath
 import com.plot.api.persistence.generated.tables.Workspaces.WorkspacesPath
@@ -150,6 +154,18 @@ open class PublishedChangelogEntries(
      */
     val PUBLISHED_AT: TableField<PublishedChangelogEntriesRecord, OffsetDateTime?> = createField(DSL.name("published_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false), this, "")
 
+    /**
+     * The column
+     * <code>public.published_changelog_entries.unpublished_at</code>.
+     */
+    val UNPUBLISHED_AT: TableField<PublishedChangelogEntriesRecord, OffsetDateTime?> = createField(DSL.name("unpublished_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "")
+
+    /**
+     * The column
+     * <code>public.published_changelog_entries.unpublished_by_user_id</code>.
+     */
+    val UNPUBLISHED_BY_USER_ID: TableField<PublishedChangelogEntriesRecord, UUID?> = createField(DSL.name("unpublished_by_user_id"), SQLDataType.UUID, this, "")
+
     private constructor(alias: Name, aliased: Table<PublishedChangelogEntriesRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<PublishedChangelogEntriesRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<PublishedChangelogEntriesRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)
@@ -184,10 +200,10 @@ open class PublishedChangelogEntries(
         override fun `as`(alias: Table<*>): PublishedChangelogEntriesPath = PublishedChangelogEntriesPath(alias.qualifiedName, this)
     }
     override fun getSchema(): Schema? = if (aliased()) null else Public.PUBLIC
-    override fun getIndexes(): List<Index> = listOf(PUBLISHED_CHANGELOG_ONE_PER_TAG_IDX, PUBLISHED_CHANGELOG_ONE_PER_VARIANT_IDX, PUBLISHED_CHANGELOG_WORKSPACE_PUBLISHED_AT_IDX)
+    override fun getIndexes(): List<Index> = listOf(PUBLISHED_CHANGELOG_LIVE_ENTRY_SLUG_IDX, PUBLISHED_CHANGELOG_LIVE_ONE_PER_TAG_IDX, PUBLISHED_CHANGELOG_LIVE_ONE_PER_VARIANT_IDX, PUBLISHED_CHANGELOG_LIVE_WORKSPACE_PUBLISHED_AT_IDX, PUBLISHED_CHANGELOG_WORKSPACE_PUBLISHED_AT_IDX)
     override fun getPrimaryKey(): UniqueKey<PublishedChangelogEntriesRecord> = PUBLISHED_CHANGELOG_ENTRIES_PKEY
-    override fun getUniqueKeys(): List<UniqueKey<PublishedChangelogEntriesRecord>> = listOf(PUBLISHED_CHANGELOG_ENTRIES_WORKSPACE_ID_ENTRY_SLUG_KEY, PUBLISHED_CHANGELOG_ENTRIES_WORKSPACE_ID_ID_KEY)
-    override fun getReferences(): List<ForeignKey<PublishedChangelogEntriesRecord, *>> = listOf(PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_ARTIFACT_REVISION_FK, PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_CONTENT_VARIANT_FK, PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_PUBLISHED_BY_USER_ID_FKEY, PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_WORKSPACE_ID_FKEY)
+    override fun getUniqueKeys(): List<UniqueKey<PublishedChangelogEntriesRecord>> = listOf(PUBLISHED_CHANGELOG_ENTRIES_WORKSPACE_ID_ID_KEY)
+    override fun getReferences(): List<ForeignKey<PublishedChangelogEntriesRecord, *>> = listOf(PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_ARTIFACT_REVISION_FK, PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_CONTENT_VARIANT_FK, PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_PUBLISHED_BY_USER_ID_FKEY, PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_UNPUBLISHED_BY_USER_ID_FKEY, PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_WORKSPACE_ID_FKEY)
 
     private lateinit var _contentVariantRevisions: ContentVariantRevisionsPath
 
@@ -221,20 +237,39 @@ open class PublishedChangelogEntries(
     val contentVariants: ContentVariantsPath
         get(): ContentVariantsPath = contentVariants()
 
-    private lateinit var _users: UsersPath
+    private lateinit var _publishedChangelogEntriesPublishedByUserIdFkey: UsersPath
 
     /**
-     * Get the implicit join path to the <code>public.users</code> table.
+     * Get the implicit join path to the <code>public.users</code> table, via
+     * the <code>published_changelog_entries_published_by_user_id_fkey</code>
+     * key.
      */
-    fun users(): UsersPath {
-        if (!this::_users.isInitialized)
-            _users = UsersPath(this, PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_PUBLISHED_BY_USER_ID_FKEY, null)
+    fun publishedChangelogEntriesPublishedByUserIdFkey(): UsersPath {
+        if (!this::_publishedChangelogEntriesPublishedByUserIdFkey.isInitialized)
+            _publishedChangelogEntriesPublishedByUserIdFkey = UsersPath(this, PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_PUBLISHED_BY_USER_ID_FKEY, null)
 
-        return _users;
+        return _publishedChangelogEntriesPublishedByUserIdFkey;
     }
 
-    val users: UsersPath
-        get(): UsersPath = users()
+    val publishedChangelogEntriesPublishedByUserIdFkey: UsersPath
+        get(): UsersPath = publishedChangelogEntriesPublishedByUserIdFkey()
+
+    private lateinit var _publishedChangelogEntriesUnpublishedByUserIdFkey: UsersPath
+
+    /**
+     * Get the implicit join path to the <code>public.users</code> table, via
+     * the <code>published_changelog_entries_unpublished_by_user_id_fkey</code>
+     * key.
+     */
+    fun publishedChangelogEntriesUnpublishedByUserIdFkey(): UsersPath {
+        if (!this::_publishedChangelogEntriesUnpublishedByUserIdFkey.isInitialized)
+            _publishedChangelogEntriesUnpublishedByUserIdFkey = UsersPath(this, PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_UNPUBLISHED_BY_USER_ID_FKEY, null)
+
+        return _publishedChangelogEntriesUnpublishedByUserIdFkey;
+    }
+
+    val publishedChangelogEntriesUnpublishedByUserIdFkey: UsersPath
+        get(): UsersPath = publishedChangelogEntriesUnpublishedByUserIdFkey()
 
     private lateinit var _workspaces: WorkspacesPath
 
@@ -250,6 +285,22 @@ open class PublishedChangelogEntries(
 
     val workspaces: WorkspacesPath
         get(): WorkspacesPath = workspaces()
+
+    private lateinit var _productDeliveryEvents: ProductDeliveryEventsPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.product_delivery_events</code> table
+     */
+    fun productDeliveryEvents(): ProductDeliveryEventsPath {
+        if (!this::_productDeliveryEvents.isInitialized)
+            _productDeliveryEvents = ProductDeliveryEventsPath(this, null, PRODUCT_DELIVERY_EVENTS__PRODUCT_DELIVERY_EVENTS_PUBLISHED_FK.inverseKey)
+
+        return _productDeliveryEvents;
+    }
+
+    val productDeliveryEvents: ProductDeliveryEventsPath
+        get(): ProductDeliveryEventsPath = productDeliveryEvents()
 
     private lateinit var _publishedChangelogEntrySentences: PublishedChangelogEntrySentencesPath
 

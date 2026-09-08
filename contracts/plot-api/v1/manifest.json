@@ -499,6 +499,57 @@
       }
     },
     {
+      "id": "artifact.replicate",
+      "surface": "artifact",
+      "clientMethod": "replicateArtifact",
+      "args": [
+        "018fd000-0000-7000-8000-000000000070",
+        {
+          "contentType": "LAUNCH_ANNOUNCEMENT",
+          "instruction": "Announce the release as a launch post",
+          "brief": {
+            "purpose": "Announce the launch to founders",
+            "audience": "Founders evaluating Plot",
+            "availability": "Live today",
+            "pricing": null,
+            "userAction": "Try it now",
+            "confirmedFacts": [
+              {
+                "body": "Live today.",
+                "kind": "AVAILABILITY"
+              }
+            ]
+          }
+        },
+        "chat-request-replicate-1"
+      ],
+      "method": "POST",
+      "routeTemplate": "/artifacts/{id}/replicate",
+      "route": "/artifacts/018fd000-0000-7000-8000-000000000070/replicate",
+      "successStatus": 202,
+      "authContext": "workspace-member",
+      "requiredHeaders": [
+        "accept",
+        "idempotency-key",
+        "x-plot-workspace-id"
+      ],
+      "requestFixture": "fixtures/artifact-replicate-request.json",
+      "successFixture": "fixtures/chat-agent-run.json",
+      "errorFixture": null,
+      "enumDomains": {
+        "status": [
+          "QUEUED",
+          "RUNNING",
+          "SUCCEEDED",
+          "FAILED"
+        ],
+        "contentType": [
+          "CHANGELOG",
+          "LAUNCH_ANNOUNCEMENT"
+        ]
+      }
+    },
+    {
       "id": "artifact.save",
       "surface": "artifact",
       "clientMethod": "saveArtifactVariant",

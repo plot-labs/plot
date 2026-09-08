@@ -17,6 +17,7 @@ import com.plot.api.persistence.generated.tables.AuthVerification
 import com.plot.api.persistence.generated.tables.ConnectionNamespaceBindings
 import com.plot.api.persistence.generated.tables.Connections
 import com.plot.api.persistence.generated.tables.ContentPacks
+import com.plot.api.persistence.generated.tables.ContentSourceSnapshots
 import com.plot.api.persistence.generated.tables.ContentVariantRevisionSentences
 import com.plot.api.persistence.generated.tables.ContentVariantRevisions
 import com.plot.api.persistence.generated.tables.ContentVariantSentenceRevisions
@@ -36,6 +37,7 @@ import com.plot.api.persistence.generated.tables.GithubRepositoryMonitoring
 import com.plot.api.persistence.generated.tables.GithubWebhookDeliveries
 import com.plot.api.persistence.generated.tables.ModelInvocations
 import com.plot.api.persistence.generated.tables.PolarWebhookEvents
+import com.plot.api.persistence.generated.tables.ProductDeliveryEvents
 import com.plot.api.persistence.generated.tables.PublishedChangelogEntries
 import com.plot.api.persistence.generated.tables.PublishedChangelogEntryCitations
 import com.plot.api.persistence.generated.tables.PublishedChangelogEntrySentences
@@ -50,7 +52,10 @@ import com.plot.api.persistence.generated.tables.SourceNamespaces
 import com.plot.api.persistence.generated.tables.SourceObservations
 import com.plot.api.persistence.generated.tables.SourceScopes
 import com.plot.api.persistence.generated.tables.Users
+import com.plot.api.persistence.generated.tables.WaitlistSignups
 import com.plot.api.persistence.generated.tables.WorkSessions
+import com.plot.api.persistence.generated.tables.WorkspaceContentProfileRevisions
+import com.plot.api.persistence.generated.tables.WorkspaceContentProfiles
 import com.plot.api.persistence.generated.tables.WorkspaceMembers
 import com.plot.api.persistence.generated.tables.Workspaces
 import com.plot.api.persistence.generated.tables.WritingBlockScopes
@@ -122,6 +127,11 @@ val CONNECTIONS: Connections = Connections.CONNECTIONS
  * The table <code>public.content_packs</code>.
  */
 val CONTENT_PACKS: ContentPacks = ContentPacks.CONTENT_PACKS
+
+/**
+ * The table <code>public.content_source_snapshots</code>.
+ */
+val CONTENT_SOURCE_SNAPSHOTS: ContentSourceSnapshots = ContentSourceSnapshots.CONTENT_SOURCE_SNAPSHOTS
 
 /**
  * The table <code>public.content_variant_revision_sentences</code>.
@@ -219,6 +229,11 @@ val MODEL_INVOCATIONS: ModelInvocations = ModelInvocations.MODEL_INVOCATIONS
 val POLAR_WEBHOOK_EVENTS: PolarWebhookEvents = PolarWebhookEvents.POLAR_WEBHOOK_EVENTS
 
 /**
+ * The table <code>public.product_delivery_events</code>.
+ */
+val PRODUCT_DELIVERY_EVENTS: ProductDeliveryEvents = ProductDeliveryEvents.PRODUCT_DELIVERY_EVENTS
+
+/**
  * The table <code>public.published_changelog_entries</code>.
  */
 val PUBLISHED_CHANGELOG_ENTRIES: PublishedChangelogEntries = PublishedChangelogEntries.PUBLISHED_CHANGELOG_ENTRIES
@@ -289,9 +304,24 @@ val SOURCE_SCOPES: SourceScopes = SourceScopes.SOURCE_SCOPES
 val USERS: Users = Users.USERS
 
 /**
+ * The table <code>public.waitlist_signups</code>.
+ */
+val WAITLIST_SIGNUPS: WaitlistSignups = WaitlistSignups.WAITLIST_SIGNUPS
+
+/**
  * The table <code>public.work_sessions</code>.
  */
 val WORK_SESSIONS: WorkSessions = WorkSessions.WORK_SESSIONS
+
+/**
+ * The table <code>public.workspace_content_profile_revisions</code>.
+ */
+val WORKSPACE_CONTENT_PROFILE_REVISIONS: WorkspaceContentProfileRevisions = WorkspaceContentProfileRevisions.WORKSPACE_CONTENT_PROFILE_REVISIONS
+
+/**
+ * The table <code>public.workspace_content_profiles</code>.
+ */
+val WORKSPACE_CONTENT_PROFILES: WorkspaceContentProfiles = WorkspaceContentProfiles.WORKSPACE_CONTENT_PROFILES
 
 /**
  * The table <code>public.workspace_members</code>.
