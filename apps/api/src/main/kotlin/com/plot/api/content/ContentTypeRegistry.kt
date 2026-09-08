@@ -16,7 +16,12 @@ data class ContentWriterSpec(
 )
 
 interface ContentPromptFactory {
-	fun writer(instruction: String?, evidence: List<EvidenceSnapshot>, style: FrozenContentContext?): ChangelogPrompt
+	fun writer(
+		instruction: String?,
+		evidence: List<EvidenceSnapshot>,
+		style: FrozenContentContext?,
+		documentVersion: Int = 1,
+	): ChangelogPrompt
 	fun reviewer(request: ReviewerModelRequest): ChangelogPrompt
 	fun rewriter(request: RewriteModelRequest): ChangelogPrompt
 }
@@ -74,8 +79,12 @@ class ContentTypeRegistry(
 
 private fun ChangelogPromptFactory.asContentPromptFactory(): ContentPromptFactory =
 	object : ContentPromptFactory {
-		override fun writer(instruction: String?, evidence: List<EvidenceSnapshot>, style: FrozenContentContext?) =
-			this@asContentPromptFactory.writer(instruction, evidence, style)
+		override fun writer(
+			instruction: String?,
+			evidence: List<EvidenceSnapshot>,
+			style: FrozenContentContext?,
+			documentVersion: Int,
+		) = this@asContentPromptFactory.writer(instruction, evidence, style, documentVersion)
 		override fun reviewer(request: ReviewerModelRequest) = this@asContentPromptFactory.reviewer(request)
 		override fun rewriter(request: RewriteModelRequest) = this@asContentPromptFactory.rewriter(request)
 	}

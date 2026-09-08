@@ -345,7 +345,7 @@ class SpringAiOpenAiArtifactWorkflowGatewayTest {
 			requests += request
 			if (failures.isNotEmpty()) throw failures.removeFirst()
 			val json = when (request.role) {
-				ModelRole.WRITER -> """{"sentences":[{"body":"Shipped citations.","intent":"FACTUAL","conflictEvidenceIds":[]}]}"""
+				ModelRole.WRITER -> """{"sentences":[{"body":"Shipped citations.","intent":"FACTUAL","conflictEvidenceIds":[]}],"layout":[]}"""
 				ModelRole.REVIEWER -> """{"reviews":[{"sentenceId":"00000000-0000-0000-0000-000000000040","verdict":"SUPPORTED","evidenceIds":["00000000-0000-0000-0000-000000000010"],"reason":null,"modelSuppliedUrls":[]}],"documentConflicts":[]}"""
 				ModelRole.REWRITER -> """{"rewrites":[{"sentenceId":"00000000-0000-0000-0000-000000000040","body":"Shipped inline citations.","omit":false}]}"""
 			}

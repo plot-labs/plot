@@ -19,6 +19,7 @@ class ChangelogPromptFactory(private val objectMapper: ObjectMapper) {
 		instruction: String?,
 		evidence: List<EvidenceSnapshot>,
 		style: FrozenContentContext? = null,
+		documentVersion: Int = 1,
 	): ChangelogPrompt = ChangelogPrompt(
 		system = """
 			You write concise product changelogs from the supplied evidence only.
@@ -43,7 +44,7 @@ class ChangelogPromptFactory(private val objectMapper: ObjectMapper) {
 			Use FACTUAL for every other sentence.
 			Sentence bodies are prose only. Never put URLs, Markdown links, citation markers, evidence IDs, or source labels in sentence bodies.
 			Inline citations are attached by the application after independent review from structured evidence IDs.
-			Do not use outside knowledge. Return only the requested structured output.
+			Do not use outside knowledge. Return only the requested structured output. For document version 2, always include the layout field; use heading or list nodes when they improve readability, and use an empty layout when a plain paragraph projection is sufficient. Layout statementIndex values refer to the ordered sentences array, and every sentence must appear exactly once. Use only heading h1-h3, paragraph, and one-level list/listItem nodes.
 		""".trimIndent(),
 		user = buildString {
 			appendLine("Write an ordered changelog as sentence objects.")
@@ -51,6 +52,10 @@ class ChangelogPromptFactory(private val objectMapper: ObjectMapper) {
 				appendLine("<requested_changelog_instruction>")
 				appendLine(instruction.escapeTaggedData())
 				appendLine("</requested_changelog_instruction>")
+			}
+			appendLine("documentVersion=$documentVersion")
+			if (documentVersion == 2) {
+				appendLine("V2 layout is required; use [] when a plain paragraph projection is sufficient. Otherwise use only supported heading, paragraph, and one-level list/listItem nodes with exact sentence indexes.")
 			}
 			appendFrozenStyle(style, objectMapper)
 			appendEvidence(evidence, objectMapper)
@@ -173,7 +178,8 @@ private fun ContentBrief.hasVoiceFields(): Boolean =
 		!audience.isNullOrBlank() ||
 		!availability.isNullOrBlank() ||
 		!pricing.isNullOrBlank() ||
-		!userAction.isNullOrBlank()
+		!userAction.isNullOrBlank() ||
+		destinations.isNotEmpty()
 
 private fun ContentBrief.promptProjection() = mapOf(
 	"purpose" to purpose,
@@ -181,6 +187,9 @@ private fun ContentBrief.promptProjection() = mapOf(
 	"availability" to availability,
 	"pricing" to pricing,
 	"userAction" to userAction,
+	"destinations" to destinations.map { destination ->
+		mapOf("id" to destination.id, "label" to destination.label, "url" to destination.url)
+	},
 )
 
 internal fun String.escapeTaggedData(): String = replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")

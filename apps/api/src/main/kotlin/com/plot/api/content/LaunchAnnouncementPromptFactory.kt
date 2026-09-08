@@ -26,6 +26,7 @@ class LaunchAnnouncementPromptFactory(
 		instruction: String?,
 		evidence: List<EvidenceSnapshot>,
 		style: FrozenContentContext?,
+		documentVersion: Int,
 	): ChangelogPrompt = ChangelogPrompt(
 		system = """
 			You write a short product launch announcement from the supplied evidence only.
@@ -44,7 +45,7 @@ class LaunchAnnouncementPromptFactory(
 			For UNRESOLVED_CONFLICT, return every materially conflicting evidence ID in conflictEvidenceIds; it must contain at least two IDs.
 			For FACTUAL and EDITORIAL, conflictEvidenceIds must be empty.
 			Sentence bodies are prose only. Never put URLs, Markdown links, citation markers, evidence IDs, or source labels in sentence bodies.
-			Do not use outside knowledge. Return only the requested structured output.
+			Do not use outside knowledge. Return only the requested structured output. For document version 2, always include the layout field. It may use heading h1-h3, paragraph, and one-level list/listItem nodes; each layout leaf must reference one ordered sentence by statementIndex exactly once. Leave layout empty when plain paragraphs are sufficient.
 		""".trimIndent(),
 		user = buildString {
 			appendLine("Write an ordered launch announcement as sentence objects.")
@@ -53,6 +54,7 @@ class LaunchAnnouncementPromptFactory(
 				appendLine(instruction.escapeTaggedData())
 				appendLine("</requested_launch_announcement_instruction>")
 			}
+			appendLine("documentVersion=$documentVersion")
 			appendFrozenStyle(style, objectMapper)
 			appendEvidence(evidence, objectMapper)
 		},
