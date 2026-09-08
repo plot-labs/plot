@@ -1,44 +1,26 @@
-"use client";
-
-import { AnimatedPlotSignal } from "./animated-plot-signal";
 import { WaitlistForm } from "./waitlist-form";
 
 export function CtaSection() {
   return (
-    <section
-      className="relative py-24 lg:py-32 overflow-hidden"
-      id="waitlist"
-    >
-      <div className="max-w-[1400px] mx-auto px-6 lg:px-12">
-        <div className="landing-reveal relative border border-foreground">
-          <div className="absolute inset-0 bg-[radial-gradient(600px_circle_at_50%_50%,rgba(0,0,0,0.15),transparent_40%)] opacity-10 pointer-events-none" />
-          
-          <div className="relative z-10 px-8 lg:px-16 py-16 lg:py-24">
-            <div className="flex flex-col lg:flex-row items-center justify-between gap-12">
-              {/* Left content */}
-              <div className="flex-1">
-	                <h2 className="text-4xl lg:text-7xl font-display tracking-tight mb-8 leading-[0.95]">
-	                  Ship fast.
-	                  <br />
-	                  Write less.
-	                </h2>
-
-	                <p className="mb-10 max-w-xl text-xl leading-relaxed text-muted-foreground">
-                  Connect one GitHub repository. When a published release arrives,
-                  Plot prepares a source-cited changelog you can review, publish
-                  to your public changelog page, or export as Markdown.
-                </p>
-
-                <WaitlistForm />
-              </div>
-
-              {/* Right animation */}
-              <div className="hidden lg:flex items-center justify-center w-[500px] h-[500px] -mr-16">
-                <AnimatedPlotSignal />
-              </div>
-            </div>
-          </div>
-
+    <section id="waitlist" className="scroll-mt-24 py-20 lg:py-28">
+      <div className="mx-auto grid max-w-[1200px] items-start gap-12 px-6 lg:grid-cols-[1fr_1.15fr] lg:gap-24 lg:px-12">
+        <div>
+          <p className="mb-5 font-mono text-xs uppercase tracking-wider text-muted-foreground">
+            Get early access
+          </p>
+          <h2 className="font-display text-5xl leading-[1.02] tracking-tight lg:text-7xl">
+            Ship fast.<br />Write less.
+          </h2>
+          <p className="mt-6 max-w-sm text-lg leading-8 text-muted-foreground">
+            Bring your next release to Plot. Turn what shipped into a changelog
+            you can review, refine, and publish.
+          </p>
+          <p className="mt-8 text-sm text-muted-foreground">
+            Join the waitlist. We’ll be in touch when early access opens.
+          </p>
+        </div>
+        <div className="min-w-0 border-t border-foreground/15 pt-6 lg:pt-8">
+          <WaitlistForm />
         </div>
       </div>
     </section>

@@ -1,22 +1,12 @@
 // @vitest-environment jsdom
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-
-vi.mock("@/components/landing/hero-terminal", () => ({
-  HeroTerminal: () => <div data-testid="hero-terminal" />,
-}));
-vi.mock("@/components/landing/animated-plot-signal", () => ({
-  AnimatedPlotSignal: () => <div data-testid="plot-signal" />,
-}));
-vi.mock("@/components/landing/animated-wave", () => ({
-  AnimatedWave: () => <div data-testid="animated-wave" />,
-}));
 
 import Home from "./page";
 
 describe("public landing page", () => {
-  it("describes the cited publish wedge and labels future scope", () => {
+  it("shows the product workspace and preserves the publish and waitlist paths", () => {
     render(<Home />);
 
     expect(
@@ -28,9 +18,10 @@ describe("public landing page", () => {
     expect(screen.getByText(/published release range/i)).toBeVisible();
     expect(screen.getAllByText(/publish/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/public changelog/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Coming next").length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/docs impact suggestions/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("link", { name: "Coming next" })[0]).toHaveAttribute("href", "#style");
+    expect(screen.getByLabelText("Example workspace sidebar")).toBeVisible();
+    expect(screen.getByLabelText("Example changelog document")).toBeVisible();
+    expect(screen.getByRole("button", { name: /Sources · 2/ })).toBeVisible();
+    expect(screen.queryByText("Coming next")).not.toBeInTheDocument();
 
     expect(screen.queryByText(/outside Plot/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/publish outside/i)).not.toBeInTheDocument();
@@ -43,5 +34,21 @@ describe("public landing page", () => {
     expect(screen.getAllByRole("link", { name: "Join waitlist" }).length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: "Privacy" })).toHaveAttribute("href", "/privacy");
     expect(screen.getByRole("link", { name: "Terms" })).toHaveAttribute("href", "/terms");
+  });
+
+  it("keeps the landing preview interactive without requesting private data", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    render(<Home />);
+    expect(await screen.findByRole("textbox", { name: "Draft content" })).toHaveAttribute("contenteditable", "true");
+    expect(screen.getByRole("button", { name: "Heading" })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Sources · 2" }));
+    expect(screen.getByRole("dialog", { name: "Sources" })).toBeVisible();
+    expect(screen.getAllByText(/#142 · Search projects by name/).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: "Close sources" }));
+    expect(screen.queryByRole("dialog", { name: "Sources" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+    await waitFor(() => expect(screen.getByText("Saved")).toBeVisible());
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
   });
 });

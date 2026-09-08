@@ -1,89 +1,21 @@
-"use client";
-
-import { ArrowRight } from "lucide-react";
-import { HeroTerminal } from "./hero-terminal";
+import { ArrowDown, ArrowRight } from "lucide-react";
+import { ProductPreview } from "./product-preview";
 
 export function HeroSection() {
   return (
-    <section className="relative flex min-h-screen flex-col justify-center overflow-hidden">
-      <div className="pointer-events-none absolute right-16 top-[45%] hidden h-[440px] w-[530px] -translate-y-1/2 opacity-65 lg:block xl:right-20 xl:h-[500px] xl:w-[600px]">
-        <HeroTerminal />
-      </div>
-
-      <div className="pointer-events-none absolute inset-0 overflow-hidden opacity-30">
-        {[...Array(8)].map((_, i) => (
-          <div
-            className="absolute h-px bg-foreground/10"
-            key={`h-${i}`}
-            style={{
-              left: 0,
-              right: 0,
-              top: `${12.5 * (i + 1)}%`,
-            }}
-          />
-        ))}
-        {[...Array(12)].map((_, i) => (
-          <div
-            className="absolute w-px bg-foreground/10"
-            key={`v-${i}`}
-            style={{
-              bottom: 0,
-              left: `${8.33 * (i + 1)}%`,
-              top: 0,
-            }}
-          />
-        ))}
-      </div>
-
-      <div className="relative z-10 mx-auto w-full max-w-[1400px] px-6 py-32 lg:px-12 lg:py-40">
-        <div className="hero-copy-lock max-w-[920px] text-left">
-        <div className="mb-8">
-          <span className="inline-flex items-center gap-3 font-mono text-sm text-muted-foreground">
-            <span className="h-px w-8 bg-foreground/30" />
-            Shipped work. Customer-ready changelog.
-          </span>
-        </div>
-
-        <div className="mb-12">
-          <h1 className="text-6xl font-display leading-[0.9] tracking-tight md:text-8xl lg:text-[8rem] xl:text-[8.75rem]">
-            <span className="block">From shipped</span>
-            <span className="block">release to cited</span>
-            <span className="block">
-              <span className="relative inline-block align-baseline">
-                <span className="inline-flex whitespace-nowrap">changelog</span>
-                <span className="absolute -bottom-2 left-0 right-0 h-3 bg-foreground/10" />
-              </span>{" "}
-              you can publish.
-            </span>
-          </h1>
-        </div>
-
-        <div className="max-w-xl">
-          <p className="max-w-xl text-xl leading-relaxed text-muted-foreground lg:text-2xl">
-            Connect one GitHub repository and let Plot resolve each published
-            release range into a source-cited changelog you can review, publish
-            to your public changelog page, or export as Markdown.
-          </p>
-
-          <div className="mt-9 flex flex-col items-start gap-4 sm:flex-row">
-            <a
-              className="group inline-flex h-14 items-center justify-center gap-2 rounded-full bg-foreground px-8 text-base font-medium text-background transition-colors hover:bg-foreground/90"
-              href="#waitlist"
-            >
-              Join waitlist
-              <ArrowRight className="ml-2 size-4 transition-transform group-hover:translate-x-1" />
-            </a>
-            <a
-              className="inline-flex h-14 items-center justify-center rounded-full border border-foreground/20 bg-background px-8 text-base font-medium transition-colors hover:bg-foreground/5"
-              href="#how-it-works"
-            >
-              See how it works
-            </a>
+    <section className="border-b border-foreground/10 pt-32 pb-16 lg:pt-40 lg:pb-24">
+      <div className="mx-auto max-w-[1400px] px-6 lg:px-12">
+        <div className="mx-auto mb-14 max-w-3xl text-center lg:mb-16">
+          <p className="mb-6 font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground">From shipped work to published words</p>
+          <h1 className="font-display text-5xl leading-[1.02] tracking-tight sm:text-7xl lg:text-[88px]">Shipped work.<br />A story you can publish.</h1>
+          <p className="mx-auto mt-6 max-w-xl text-base leading-7 text-muted-foreground sm:text-lg">Turn your GitHub releases into clear, source-cited changelogs. Work with Plot in chat. Review and refine the draft right beside it.</p>
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-5">
+            <a href="#waitlist" className="inline-flex min-h-12 items-center gap-3 rounded-lg bg-foreground px-6 text-sm font-medium text-background hover:bg-foreground/85 focus-visible:outline-2 focus-visible:outline-offset-4">Join waitlist <ArrowRight aria-hidden="true" className="size-4" /></a>
+            <a href="#product-preview" className="inline-flex min-h-12 items-center gap-2 text-sm underline-offset-4 hover:underline">Explore the workspace <ArrowDown aria-hidden="true" className="size-4" /></a>
           </div>
         </div>
-        </div>
+        <ProductPreview />
       </div>
-
     </section>
   );
 }

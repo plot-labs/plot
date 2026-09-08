@@ -2,13 +2,11 @@
 
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
-import { AnimatedWave } from "./animated-wave";
 
 const footerLinks = {
   Explore: [
-    { name: "Product", href: "#features" },
+    { name: "Product", href: "#product-preview" },
     { name: "How it works", href: "#how-it-works" },
-    { name: "Security", href: "#security" },
     { name: "Waitlist", href: "#waitlist", badge: "Open" },
   ],
   Legal: [
@@ -25,10 +23,6 @@ const socialLinks = [
 export function FooterSection() {
   return (
     <footer className="relative border-t border-foreground/10">
-      {/* Animated wave background */}
-      <div className="absolute inset-0 h-64 opacity-20 pointer-events-none overflow-hidden">
-        <AnimatedWave />
-      </div>
       
       <div className="relative z-10 max-w-[1400px] mx-auto px-6 lg:px-12">
         {/* Main Footer */}

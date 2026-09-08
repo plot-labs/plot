@@ -81,7 +81,7 @@ export function WaitlistForm() {
         </label>
         <input
           autoComplete="email"
-          className="h-14 flex-1 rounded-full border border-foreground/15 bg-background px-5 text-base text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-foreground/40"
+          className="h-14 min-w-0 flex-1 rounded-lg border border-foreground/15 bg-background px-5 text-base text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-foreground/40"
           id="waitlist-email"
           name="email"
           onChange={(event) => setEmail(event.target.value)}
@@ -95,7 +95,7 @@ export function WaitlistForm() {
           Role
         </label>
         <select
-          className="h-14 rounded-full border border-foreground/15 bg-background px-5 text-base text-foreground outline-none transition-colors focus:border-foreground/40 sm:min-w-[180px]"
+          className="h-14 rounded-lg border border-foreground/15 bg-background px-5 text-base text-foreground outline-none transition-colors focus:border-foreground/40 sm:min-w-[180px]"
           id="waitlist-role"
           name="role"
           onChange={(event) => setRole(event.target.value)}
@@ -115,7 +115,7 @@ export function WaitlistForm() {
         </label>
         <input
           autoComplete="organization"
-          className="h-14 w-full rounded-full border border-foreground/15 bg-background px-5 text-base text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-foreground/40"
+          className="h-14 w-full rounded-lg border border-foreground/15 bg-background px-5 text-base text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-foreground/40"
           id="waitlist-company"
           maxLength={200}
           name="company"
@@ -134,7 +134,7 @@ export function WaitlistForm() {
           Which post-shipping update is most painful?
         </label>
         <select
-          className="h-14 w-full rounded-full border border-foreground/15 bg-background px-5 text-base text-foreground outline-none transition-colors focus:border-foreground/40"
+          className="h-14 w-full rounded-lg border border-foreground/15 bg-background px-5 text-base text-foreground outline-none transition-colors focus:border-foreground/40"
           id="waitlist-pain-channel"
           name="painChannel"
           onChange={(event) => setPainChannel(event.target.value)}
@@ -172,7 +172,7 @@ export function WaitlistForm() {
         </button>
 
         <a
-          className="inline-flex h-14 items-center justify-center rounded-full border border-foreground/20 bg-background px-8 text-base font-medium transition-colors hover:bg-foreground/5"
+          className="inline-flex h-14 items-center justify-center rounded-lg border border-foreground/20 bg-background px-8 text-base font-medium transition-colors hover:bg-foreground/5"
           href="mailto:hello@useplot.xyz"
         >
           Talk to us
