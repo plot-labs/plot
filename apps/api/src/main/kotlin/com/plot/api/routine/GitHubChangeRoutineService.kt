@@ -4,6 +4,8 @@ import com.plot.api.common.UuidGenerator
 import com.plot.api.common.WorkspacePrincipal
 import com.plot.api.github.GitHubProperties
 import com.plot.api.github.GitHubReleaseSourceContext
+import com.plot.api.github.GitHubReleaseRequestStore
+import com.plot.api.github.GitHubReleaseRoutineService
 import com.plot.api.github.GitHubWebhookCommit
 import com.plot.api.github.GitHubWebhookDelivery
 import com.plot.api.github.ParsedGitHubWebhook
@@ -26,6 +28,8 @@ class GitHubChangeRoutineService(
 	private val properties: GitHubProperties,
 	private val evidenceBudget: RoutineEvidenceBudget,
 	private val transactionExecutor: JooqTransactionExecutor,
+	private val releaseRequests: GitHubReleaseRequestStore,
+	private val releaseRoutines: GitHubReleaseRoutineService,
 ) {
 
 	fun accept(
@@ -36,12 +40,26 @@ class GitHubChangeRoutineService(
 		val cadence = webhook.routineCadence() ?: return 0
 		val routines = persistence.listEnabledGitHubEventRoutines(context.workspaceId, context.sourceScopeId, cadence)
 		if (routines.isEmpty()) return 0
+		if (cadence != RoutineCadence.ON_GITHUB_CHANGE) {
+			return routines.count { routine ->
+				transactionExecutor.executeRequiresNew {
+					val request = releaseRequests.enqueueRoutineRelease(
+						context.workspaceId, context.sourceScopeId, delivery.id,
+						requireNotNull(webhook.tagName),
+						webhook.afterSha.takeIf { webhook.eventType == "push" },
+						routine.id,
+					)
+					if (request.routineId != null) releaseRoutines.ensureExecution(request)
+					request.routineId != null
+				}
+			}
+		}
 
 		val prepared = transactionExecutor.executeRequiresNew {
 			val now = delivery.receivedAt
 			val observationId = createObservation(context, delivery.externalDeliveryId, webhook.eventType, now)
 			val importer = WorkspacePrincipal(context.workspaceId, context.createdByUserId)
-			val blocks = boundedEvidenceBlocks(context, delivery.externalDeliveryId, webhook, observationId, now)
+			val blocks = boundedEvidenceBlocks(context, webhook, observationId, now)
 			if (blocks.isEmpty()) return@executeRequiresNew PreparedEvidence(emptyList(), emptyList())
 			evidenceBudget.requireWithinBudget(
 				blocks.size,
@@ -102,11 +120,10 @@ class GitHubChangeRoutineService(
 	)
 
 	fun hasReleaseEventRoutines(context: GitHubReleaseSourceContext): Boolean =
-		persistence.hasEnabledReleaseEventRoutines(context.workspaceId, context.sourceScopeId)
+		persistence.hasReleaseEventRoutines(context.workspaceId, context.sourceScopeId)
 
 	private fun boundedEvidenceBlocks(
 		context: GitHubReleaseSourceContext,
-		externalDeliveryId: String,
 		webhook: ParsedGitHubWebhook,
 		observationId: UUID,
 		now: Instant,
@@ -134,7 +151,6 @@ class GitHubChangeRoutineService(
 			remainingCharacters -= characters
 		}
 
-		webhook.toEventWritingBlock(context, externalDeliveryId, observationId, now)?.let(::add)
 		webhook.commits.distinctBy { it.sha }.forEach { commit ->
 			if (blocks.size == blockLimit || remainingCharacters == 0) return@forEach
 			add(commit.toWritingBlock(context, observationId, now))
@@ -199,39 +215,6 @@ class GitHubChangeRoutineService(
 		eventType == "push" -> RoutineCadence.ON_GITHUB_CHANGE
 		eventType == "release" && eventAction == "published" -> RoutineCadence.ON_GITHUB_RELEASE
 		else -> null
-	}
-
-	private fun ParsedGitHubWebhook.toEventWritingBlock(
-		context: GitHubReleaseSourceContext,
-		externalDeliveryId: String,
-		observationId: UUID,
-		now: Instant,
-	): ImportedWritingBlock? {
-		val tag = tagName ?: return null
-		val isRelease = eventType == "release"
-		val kind = if (isRelease) "release" else "tag"
-		val eventUrl = if (isRelease) {
-			"${properties.webBaseUrl.trimEnd('/')}/${context.owner}/${context.repository}/releases/tag/$tag"
-		} else {
-			"${properties.webBaseUrl.trimEnd('/')}/${context.owner}/${context.repository}/tree/$tag"
-		}
-		return ImportedWritingBlock(
-			sourceNamespaceId = context.sourceNamespaceId,
-			sourceScopeId = context.sourceScopeId,
-			observationId = observationId,
-			externalObjectKey = "$kind:$tag:$externalDeliveryId",
-			sourceOrigin = "integration",
-			sourceKind = kind,
-			title = if (isRelease) "Release $tag published" else "Tag $tag pushed",
-			body = null,
-			url = eventUrl,
-			canonicalUrl = eventUrl,
-			author = null,
-			platform = "github",
-			metadata = mapOf("tag" to tag, "sha" to afterSha),
-			sourceCreatedAt = now,
-			sourceUpdatedAt = now,
-		)
 	}
 
 	private fun GitHubWebhookCommit.toWritingBlock(

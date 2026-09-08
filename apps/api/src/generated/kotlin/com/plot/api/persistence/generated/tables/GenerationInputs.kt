@@ -108,7 +108,7 @@ open class GenerationInputs(
     /**
      * The column <code>public.generation_inputs.writing_block_id</code>.
      */
-    val WRITING_BLOCK_ID: TableField<GenerationInputsRecord, UUID?> = createField(DSL.name("writing_block_id"), SQLDataType.UUID.nullable(false), this, "")
+    val WRITING_BLOCK_ID: TableField<GenerationInputsRecord, UUID?> = createField(DSL.name("writing_block_id"), SQLDataType.UUID, this, "")
 
     /**
      * The column <code>public.generation_inputs.order_index</code>.
@@ -148,7 +148,7 @@ open class GenerationInputs(
     /**
      * The column <code>public.generation_inputs.original_url</code>.
      */
-    val ORIGINAL_URL: TableField<GenerationInputsRecord, String?> = createField(DSL.name("original_url"), SQLDataType.CLOB.nullable(false), this, "")
+    val ORIGINAL_URL: TableField<GenerationInputsRecord, String?> = createField(DSL.name("original_url"), SQLDataType.CLOB, this, "")
 
     /**
      * The column <code>public.generation_inputs.source_created_at</code>.
@@ -303,14 +303,14 @@ open class GenerationInputs(
     val sentenceCitations: SentenceCitationsPath
         get(): SentenceCitationsPath = sentenceCitations()
     override fun getChecks(): List<Check<GenerationInputsRecord>> = listOf(
-        Internal.createCheck(this, DSL.name("generation_inputs_agent_provenance_check"), "((((agent_run_id IS NULL) AND (agent_run_input_id IS NULL)) OR ((agent_run_id IS NOT NULL) AND (agent_run_input_id IS NOT NULL) AND (source_scope_id IS NOT NULL))))", true),
+        Internal.createCheck(this, DSL.name("generation_inputs_agent_provenance_check"), "(((((source_provider)::text = 'USER_CONFIRMED'::text) AND (agent_run_input_id IS NULL) AND (source_scope_id IS NULL)) OR (((source_provider)::text <> 'USER_CONFIRMED'::text) AND (((agent_run_id IS NULL) AND (agent_run_input_id IS NULL)) OR ((agent_run_id IS NOT NULL) AND (agent_run_input_id IS NOT NULL) AND (source_scope_id IS NOT NULL))))))", true),
         Internal.createCheck(this, DSL.name("generation_inputs_content_hash_check"), "((length(TRIM(BOTH FROM content_hash)) > 0))", true),
         Internal.createCheck(this, DSL.name("generation_inputs_order_index_check"), "((order_index >= 0))", true),
-        Internal.createCheck(this, DSL.name("generation_inputs_original_url_check"), "((length(TRIM(BOTH FROM original_url)) > 0))", true),
         Internal.createCheck(this, DSL.name("generation_inputs_snapshot_body_check"), "((length(TRIM(BOTH FROM snapshot_body)) > 0))", true),
         Internal.createCheck(this, DSL.name("generation_inputs_source_kind_check"), "((length(TRIM(BOTH FROM source_kind)) > 0))", true),
         Internal.createCheck(this, DSL.name("generation_inputs_source_label_check"), "((length(TRIM(BOTH FROM source_label)) > 0))", true),
-        Internal.createCheck(this, DSL.name("generation_inputs_source_provider_check"), "(((source_provider)::text = ANY ((ARRAY['GITHUB'::character varying, 'SLACK'::character varying, 'LINEAR'::character varying])::text[])))", true)
+        Internal.createCheck(this, DSL.name("generation_inputs_source_provider_check"), "(((source_provider)::text = ANY ((ARRAY['GITHUB'::character varying, 'SLACK'::character varying, 'LINEAR'::character varying, 'USER_CONFIRMED'::character varying])::text[])))", true),
+        Internal.createCheck(this, DSL.name("generation_inputs_url_and_block_by_provider_check"), "(((((source_provider)::text = 'USER_CONFIRMED'::text) AND (writing_block_id IS NULL) AND (original_url IS NULL) AND (source_scope_id IS NULL) AND (agent_run_input_id IS NULL)) OR (((source_provider)::text <> 'USER_CONFIRMED'::text) AND (writing_block_id IS NOT NULL) AND (original_url IS NOT NULL) AND (length(TRIM(BOTH FROM original_url)) > 0))))", true)
     )
     override fun `as`(alias: String): GenerationInputs = GenerationInputs(DSL.name(alias), this)
     override fun `as`(alias: Name): GenerationInputs = GenerationInputs(alias, this)

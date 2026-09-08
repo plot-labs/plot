@@ -4,6 +4,8 @@ import com.plot.api.ai.provider.ArtifactWorkflowModelGateway
 import com.plot.api.artifact.run.ArtifactRunPersistence
 import com.plot.api.common.UuidGenerator
 import com.plot.api.config.PlotAiProperties
+import com.plot.api.content.ContentTypeRegistry
+import com.plot.api.content.FrozenPromptVersionLookup
 import com.plot.api.entitlement.WorkspaceAccessService
 import com.plot.api.persistence.JooqSqlExecutor
 import com.plot.api.persistence.JooqTransactionExecutor
@@ -35,7 +37,12 @@ class ArtifactWorkflowConfiguration {
 	fun artifactWorkflowService(
 		validator: ModelOutputValidator,
 		uuidGenerator: UuidGenerator,
-	): ArtifactWorkflowService = ArtifactWorkflowService(validator, uuidGenerator::next)
+		frozenPromptVersionLookup: FrozenPromptVersionLookup,
+	): ArtifactWorkflowService = ArtifactWorkflowService(
+		validator = validator,
+		idGenerator = uuidGenerator::next,
+		frozenPromptVersionLookup = frozenPromptVersionLookup,
+	)
 
 	@Bean
 	fun artifactWorkflowQueryPersistence(
@@ -66,6 +73,7 @@ class ArtifactWorkflowConfiguration {
 		artifactRunPersistence: ArtifactRunPersistence,
 		queryPersistence: ArtifactWorkflowQueryPersistence,
 		materializationPersistence: ArtifactWorkflowMaterializationPersistence,
+		contentTypeRegistry: ContentTypeRegistry,
 	): ArtifactWorkflowAdmissionPersistence = ArtifactWorkflowAdmissionPersistence(
 		sqlExecutor = sqlExecutor,
 		objectMapper = objectMapper,
@@ -74,6 +82,7 @@ class ArtifactWorkflowConfiguration {
 		artifactRunPersistence = artifactRunPersistence,
 		queryPersistence = queryPersistence,
 		materializationPersistence = materializationPersistence,
+		contentTypeRegistry = contentTypeRegistry,
 	)
 
 	@Bean

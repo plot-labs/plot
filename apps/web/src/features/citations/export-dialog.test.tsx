@@ -11,6 +11,7 @@ const pack: Artifact = {
   id: "pack-1",
   status: "NEEDS_REVIEW",
   title: "July changelog",
+  contentType: "CHANGELOG",
   variant: {
     id: "variant-1",
     status: "NEEDS_REVIEW",
@@ -47,12 +48,14 @@ function lexicalContent(...bodies: string[]) {
 describe("ExportDialog", () => {
   it("uses the same revision-bound endpoint for download and can explicitly include sources", async () => {
     const exportArtifactVariant = vi.fn().mockResolvedValue({ exportId: "export-2", disposition: "DOWNLOAD", filename: "changelog.md", mediaType: "text/markdown", text: "Ready.", unresolvedCount: 0, warningAcknowledged: false, includeSources: true });
+    const recordProductDeliveryEvent = vi.fn().mockResolvedValue({ id: "delivery-1", kind: "DOWNLOAD_STARTED", duplicate: false });
     const createObjectURL = vi.fn().mockReturnValue("blob:export");
     const revokeObjectURL = vi.fn();
     Object.defineProperties(URL, { createObjectURL: { configurable: true, value: createObjectURL }, revokeObjectURL: { configurable: true, value: revokeObjectURL } });
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
-    render(<ExportDialog pack={pack} client={{ exportArtifactVariant } as unknown as PlotApiClient} />);
+    render(<ExportDialog pack={pack} client={{ exportArtifactVariant, recordProductDeliveryEvent } as unknown as PlotApiClient} />);
     fireEvent.click(screen.getByRole("checkbox", { name: /include sources/i }));
+    expect(screen.getByText(/Markdown Sources can include private repository labels/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /download changelog/i }));
     await waitFor(() => expect(click).toHaveBeenCalled());
     expect(exportArtifactVariant).toHaveBeenCalledWith("variant-1", {
@@ -62,7 +65,46 @@ describe("ExportDialog", () => {
       acknowledgedWarningKeys: [],
       disposition: "DOWNLOAD",
     });
+    await waitFor(() => expect(recordProductDeliveryEvent).toHaveBeenCalledWith(
+      "variant-1",
+      expect.objectContaining({ kind: "DOWNLOAD_STARTED", exportId: "export-2" }),
+    ));
+    expect(await screen.findByText("Download started.")).toBeInTheDocument();
     click.mockRestore();
+  });
+
+  it("records clipboard success only after writeText resolves", async () => {
+    const exportArtifactVariant = vi.fn().mockResolvedValue({ exportId: "export-copy", disposition: "COPY", filename: "changelog.md", mediaType: "text/markdown", text: "Ready.", unresolvedCount: 0, warningAcknowledged: false, includeSources: false });
+    const recordProductDeliveryEvent = vi.fn().mockResolvedValue({ id: "delivery-2", kind: "CLIPBOARD_WRITE_SUCCEEDED", duplicate: false });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+
+    render(<ExportDialog pack={pack} client={{ exportArtifactVariant, recordProductDeliveryEvent } as unknown as PlotApiClient} presentation="copy" />);
+    fireEvent.click(screen.getByRole("button", { name: "Copy changelog" }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("Ready."));
+    await waitFor(() => expect(recordProductDeliveryEvent).toHaveBeenCalledWith(
+      "variant-1",
+      expect.objectContaining({ kind: "CLIPBOARD_WRITE_SUCCEEDED", exportId: "export-copy" }),
+    ));
+    expect(await screen.findByText("Artifact copied.")).toBeInTheDocument();
+  });
+
+  it("does not count clipboard failure as a copy success", async () => {
+    const exportArtifactVariant = vi.fn().mockResolvedValue({ exportId: "export-fail", disposition: "COPY", filename: "changelog.md", mediaType: "text/markdown", text: "Ready.", unresolvedCount: 0, warningAcknowledged: false, includeSources: false });
+    const recordProductDeliveryEvent = vi.fn().mockResolvedValue({ id: "delivery-3", kind: "CLIPBOARD_WRITE_FAILED", duplicate: false });
+    const writeText = vi.fn().mockRejectedValue(new Error("Clipboard blocked"));
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+
+    render(<ExportDialog pack={pack} client={{ exportArtifactVariant, recordProductDeliveryEvent } as unknown as PlotApiClient} presentation="copy" />);
+    fireEvent.click(screen.getByRole("button", { name: "Copy changelog" }));
+
+    await waitFor(() => expect(recordProductDeliveryEvent).toHaveBeenCalledWith(
+      "variant-1",
+      expect.objectContaining({ kind: "CLIPBOARD_WRITE_FAILED", exportId: "export-fail" }),
+    ));
+    expect(screen.queryByText("Artifact copied.")).not.toBeInTheDocument();
+    expect(await screen.findByText("Clipboard blocked")).toBeInTheDocument();
   });
 
   it("offers a direct toolbar copy action", async () => {
@@ -71,10 +113,21 @@ describe("ExportDialog", () => {
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
 
     render(<ExportDialog pack={pack} client={{ exportArtifactVariant } as unknown as PlotApiClient} presentation="copy" />);
-    fireEvent.click(screen.getByRole("button", { name: "Copy artifact" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy changelog" }));
 
     await waitFor(() => expect(writeText).toHaveBeenCalledWith("Ready."));
     expect(exportArtifactVariant).toHaveBeenCalledWith("variant-1", expect.objectContaining({ disposition: "COPY" }));
+  });
+
+  it("labels launch announcement copy and download actions", () => {
+    render(
+      <ExportDialog
+        pack={{ ...pack, contentType: "LAUNCH_ANNOUNCEMENT", title: "Waitlist" }}
+        client={{} as PlotApiClient}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Copy launch announcement" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Download launch announcement" })).toBeInTheDocument();
   });
 
   it("offers a dropdown menu with Download .md option in copy presentation mode", async () => {

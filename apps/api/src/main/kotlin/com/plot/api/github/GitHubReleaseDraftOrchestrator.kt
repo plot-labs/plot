@@ -45,6 +45,7 @@ class GitHubReleaseDraftOrchestrator(
 		}
 		try {
 			lease.checkpoint()
+			agentAdmission.prepare(request)
 			val context = resolveContext(request)
 			val principal = WorkspacePrincipal(context.workspaceId, context.createdByUserId)
 			lease.checkpoint()
@@ -53,6 +54,7 @@ class GitHubReleaseDraftOrchestrator(
 					?: throw GitHubReleasePermanentException("GITHUB_RELEASE_EVIDENCE_UNAVAILABLE")
 			}
 			if (previouslyBound != null) {
+				rangeResolver.verifyHead(context, request)
 				require(previouslyBound.observationId == request.observationId) {
 					"Bound release evidence observation does not match its request"
 				}

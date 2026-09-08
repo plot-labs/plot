@@ -117,8 +117,10 @@ class GitHubRepositoryMonitoringPersistence(
 			GitHubRepositoryMonitoringWorkItem(
 				monitoring = monitoring,
 				connectionId = requireNotNull(row.get("connection_id", UUID::class.java)),
-				installationId = row.get("installation_key", String::class.java).toLong(),
-				repositoryId = row.get("repository_key", String::class.java).toLong(),
+				installationId = row.get("installation_key", String::class.java).toLongOrNull()
+					?: return null,
+				repositoryId = row.get("repository_key", String::class.java).toLongOrNull()
+					?: return null,
 				owner = externalKey.substringBefore('/'),
 				repository = externalKey.substringAfter('/', ""),
 			)

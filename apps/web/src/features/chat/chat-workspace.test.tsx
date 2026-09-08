@@ -51,15 +51,17 @@ import { ChatWorkspace } from "./chat-workspace";
 
 const chat = { id: "chat-1", title: "Release", status: "OPEN", lastActivityAt: "2026-07-01T00:00:00Z", createdAt: "2026-07-01T00:00:00Z", updatedAt: "2026-07-01T00:00:00Z" };
 const reference = { id: "block-1", sourceScopeId: "scope-1", provider: "GITHUB", sourceKind: "PULL_REQUEST", sourceLabel: "PR #1", repositoryLabel: "acme/plot", title: "Ship", body: "Evidence", originalUrl: "https://github.test/1", sourceCreatedAt: null };
-const artifactSummary = { id: "artifact-1", status: "READY", title: "Release", updatedAt: "2026-07-01T00:02:00Z" };
+const artifactSummary = { id: "artifact-1", status: "READY", title: "Release", contentType: "CHANGELOG", updatedAt: "2026-07-01T00:02:00Z" };
 const artifact = {
-  id: "artifact-1", status: "READY", title: "Release",
+  id: "artifact-1", status: "READY", title: "Release", contentType: "CHANGELOG",
   variant: { id: "variant-1", status: "READY", revisionId: "artifact-revision-1", revisionNumber: 1, lexicalContent: { root: { children: [], type: "root", version: 1 } }, sentences: [], sources: [] },
 };
 
 function agentRun(overrides: Record<string, unknown> = {}) {
   return {
-    id: "agent-1", chatId: "chat-1", instruction: "Release notes", status: "QUEUED", failureCode: null,
+    id: "agent-1", chatId: "chat-1", instruction: "Release notes", contentType: "CHANGELOG",
+    contentProfileRevisionId: null, brief: null,
+    status: "QUEUED", failureCode: null,
     artifactId: null, artifact: null, createdAt: "2026-07-01T00:01:00Z", updatedAt: "2026-07-01T00:01:00Z", ...overrides,
   };
 }
@@ -95,11 +97,32 @@ describe("ChatWorkspace", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Start request" }));
 
     await waitFor(() => expect(mocks.createChatAgentRun).toHaveBeenCalledWith({
-      writingBlockIds: ["block-1"], instruction: "Write release notes",
+      writingBlockIds: ["block-1"], instruction: "Write release notes", contentType: "CHANGELOG", brief: undefined,
     }, expect.any(String)));
     expect(mocks.createChatAgentRun).toHaveBeenCalledTimes(1);
     expect(mocks.locationAssign).toHaveBeenCalledWith("/chat?chat=chat-new&agent=agent-new");
     expect(window.sessionStorage.length).toBe(0);
+  });
+
+  it("admits a launch announcement request with contentType and brief fields", async () => {
+    mocks.createChatAgentRun.mockResolvedValue(agentRun({
+      id: "agent-launch",
+      chatId: "chat-launch",
+      contentType: "LAUNCH_ANNOUNCEMENT",
+    }));
+    render(<ChatWorkspace />);
+    await waitFor(() => expect(screen.queryByText("Loading sources…")).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Launch announcement" }));
+    fireEvent.change(await screen.findByLabelText("Purpose (recommended)"), { target: { value: "Open the waitlist" } });
+    fireEvent.change(screen.getByLabelText("Audience (recommended)"), { target: { value: "Founders" } });
+    fireEvent.click(await screen.findByRole("button", { name: "Start request" }));
+
+    await waitFor(() => expect(mocks.createChatAgentRun).toHaveBeenCalledWith({
+      writingBlockIds: ["block-1"],
+      instruction: "Write release notes",
+      contentType: "LAUNCH_ANNOUNCEMENT",
+      brief: expect.objectContaining({ purpose: "Open the waitlist", audience: "Founders" }),
+    }, expect.any(String)));
   });
 
   it("reuses the pending idempotency key after an admission response is lost", async () => {

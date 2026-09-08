@@ -12,7 +12,11 @@ type SourcesPopoverProps = {
 
 export function SourcesPopover({ sources }: SourcesPopoverProps) {
   const uniqueSources = sources.filter((source, index, all) =>
-    all.findIndex((candidate) => candidate.originalUrl === source.originalUrl) === index,
+    all.findIndex((candidate) =>
+      candidate.originalUrl
+        ? candidate.originalUrl === source.originalUrl
+        : candidate.evidenceId === source.evidenceId,
+    ) === index,
   );
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -131,11 +135,17 @@ export function SourcesPopover({ sources }: SourcesPopoverProps) {
               {uniqueSources.map((source, index) => (
                 <li key={source.evidenceId} className="rounded-xl border border-black/[0.08] px-3 py-2.5 dark:border-white/10">
                   <Citation
-                    source={{ title: source.sourceLabel, url: source.originalUrl }}
+                    source={{
+                      title: source.sourceLabel,
+                      url: source.originalUrl ?? undefined,
+                    }}
                     number={index + 1}
                     variant="label"
                     className="max-w-full"
                   />
+                  {source.provider === "USER_CONFIRMED" ? (
+                    <p className="mt-1 text-[11px] text-black/45 dark:text-white/45">Confirmed in Plot</p>
+                  ) : null}
                 </li>
               ))}
             </ol>

@@ -249,6 +249,8 @@ describe("Plot same-origin proxy", () => {
     ["PATCH", ["artifact-variants", "variant-1", "sentences", "sentence-1"]],
     ["POST", ["artifact-variants", "variant-1", "exports"]],
     ["POST", ["artifact-variants", "variant-1", "publish"]],
+    ["POST", ["artifact-variants", "variant-1", "unpublish"]],
+    ["POST", ["artifact-variants", "variant-1", "delivery-events"]],
   ])("allows the explicit artifact route %s %o", async (method, path) => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ ok: true }));
     const request = new Request(`http://web.test/api/plot/${path.join("/")}`, {
@@ -268,9 +270,19 @@ describe("Plot same-origin proxy", () => {
       "http://127.0.0.1:8080/api/github/repositories/scope-1/release-activity",
     ],
     [
+      "GET",
+      ["github", "repositories", "scope-1", "release-activity", "request-1"],
+      "http://127.0.0.1:8080/api/github/repositories/scope-1/release-activity/request-1",
+    ],
+    [
       "POST",
       ["github", "repositories", "scope-1", "release-activity", "request-1", "retry"],
       "http://127.0.0.1:8080/api/github/repositories/scope-1/release-activity/request-1/retry",
+    ],
+    [
+      "POST",
+      ["github", "repositories", "scope-1", "release-activity", "request-1", "range"],
+      "http://127.0.0.1:8080/api/github/repositories/scope-1/release-activity/request-1/range",
     ],
   ])("allows only the explicit release activity %s route", async (method, path, expectedUrl) => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ status: "QUEUED" }));

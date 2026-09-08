@@ -84,7 +84,11 @@ export function WorkspaceGeneral() {
   const dirty = name.trim() !== savedName
     || logoUrl !== savedLogoUrl
     || publicCitationsEnabled !== savedPublicCitationsEnabled;
-  const canEdit = workspace?.role === "OWNER";
+  const canConfigure = workspace?.capabilities?.configure !== false;
+  const canEdit = workspace?.role === "OWNER" && canConfigure;
+  const trialUntil = workspace?.trialEndsAt
+    ? new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(workspace.trialEndsAt))
+    : null;
 
   const onLogoSelected = (file: File | undefined) => {
     if (!file) return;
@@ -162,6 +166,34 @@ export function WorkspaceGeneral() {
             Manage your workspace identity and profile.
           </p>
         </header>
+
+        {workspace && !isLoading && workspace.plan ? (
+          <section className="mt-8 overflow-hidden rounded-[14px] border border-black/[0.09] bg-white shadow-[0_1px_2px_rgb(15_23_42_/_0.025)] dark:border-white/10 dark:bg-white/[0.045]" aria-labelledby="workspace-plan-heading">
+            <div className="border-b border-black/[0.07] px-5 py-5 dark:border-white/[0.08] sm:px-6">
+              <h2 id="workspace-plan-heading" className="text-[15px] font-semibold text-black/82 dark:text-white/86">Plan and access</h2>
+              <p className="mt-1 text-[13px] leading-5 text-black/48 dark:text-white/48">
+                Limits and remaining trial time come from the live workspace entitlement.
+              </p>
+            </div>
+            <div className="space-y-3 px-5 py-5 text-[13px] leading-5 text-black/62 dark:text-white/62 sm:px-6">
+              <p>
+                Plan: <span className="font-medium text-black/78 dark:text-white/80">{workspace.plan}</span>
+                {" · "}
+                Status: <span className="font-medium text-black/78 dark:text-white/80">{workspace.entitlementStatus}</span>
+              </p>
+              {trialUntil ? <p>Trial ends {trialUntil}.</p> : null}
+              {workspace.accessMode === "complete_only" ? (
+                <p>New drafts are paused after three trial results. Existing drafts can still be edited, exported, and published until the trial ends. Founding access is provisioned after Polar checkout.</p>
+              ) : null}
+              {workspace.accessMode === "read_only" ? (
+                <p>This workspace is read-only. You can still export drafts and unpublish live changelog entries. Founding access is provisioned after Polar checkout.</p>
+              ) : null}
+              {workspace.accessMode === "full" && workspace.plan === "trial" ? (
+                <p>Trial includes three drafts. After that you can finish existing drafts until the trial date, then export and unpublish only unless founding access is restored.</p>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
 
         <section className="mt-8 overflow-hidden rounded-[14px] border border-black/[0.09] bg-white shadow-[0_1px_2px_rgb(15_23_42_/_0.025)] dark:border-white/10 dark:bg-white/[0.045]" aria-labelledby="workspace-profile-heading">
           <div className="border-b border-black/[0.07] px-5 py-5 dark:border-white/[0.08] sm:px-6">

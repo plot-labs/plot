@@ -84,7 +84,7 @@ class AgentRunWorkerIntegrationTest {
 			"""
 			update agent_runs
 			set status = 'FAILED', failure_code = 'TEST_ISOLATION', claimed_by = null, claimed_at = null,
-			    next_attempt_at = null, finished_at = coalesce(finished_at, now()), updated_at = now()
+			    next_attempt_at = null, finished_at = coalesce(finished_at, greatest(now(), coalesce(started_at, created_at))), updated_at = now()
 			where status in ('QUEUED', 'RUNNING')
 			""".trimIndent(),
 		)
@@ -92,7 +92,7 @@ class AgentRunWorkerIntegrationTest {
 			"""
 			update generation_runs
 			set status = 'FAILED', error_code = 'TEST_ISOLATION', claimed_by = null, claimed_at = null,
-			    heartbeat_at = null, next_attempt_at = null, finished_at = coalesce(finished_at, now()), updated_at = now()
+			    heartbeat_at = null, next_attempt_at = null, finished_at = coalesce(finished_at, greatest(now(), coalesce(started_at, created_at))), updated_at = now()
 			where status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
 			""".trimIndent(),
 		)

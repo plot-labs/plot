@@ -64,7 +64,7 @@ class ArtifactWorkflowPhysicalAttemptIntegrationTest {
 			update generation_runs
 			set status = 'FAILED', error_code = 'TEST_ISOLATION',
 			    claimed_by = null, claimed_at = null, heartbeat_at = null,
-			    finished_at = coalesce(finished_at, greatest(now(), created_at)), updated_at = now()
+			    finished_at = coalesce(finished_at, greatest(now(), coalesce(started_at, created_at))), updated_at = now()
 			where status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
 			""".trimIndent(),
 		)

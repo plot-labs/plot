@@ -65,6 +65,12 @@ class PublicChangelogApiIntegrationTest {
 			"delete from published_changelog_entry_sentences where workspace_id = ?",
 			devContext.devWorkspaceId,
 		)
+		jdbcTemplate.execute("alter table product_delivery_events disable trigger product_delivery_events_append_only")
+		jdbcTemplate.update(
+			"delete from product_delivery_events where workspace_id = ?",
+			devContext.devWorkspaceId,
+		)
+		jdbcTemplate.execute("alter table product_delivery_events enable trigger product_delivery_events_append_only")
 		jdbcTemplate.update("delete from published_changelog_entries where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update(
 			"update workspaces set public_citations_enabled = true where id = ?",

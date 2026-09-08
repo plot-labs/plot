@@ -145,6 +145,30 @@ class GitHubConnectionApiIntegrationTest {
 	}
 
 	@Test
+	fun listConnectionsSkipsCorruptNonNumericInstallationKeys() {
+		jdbcTemplate.update(
+			"""
+			insert into connections (
+			  id, workspace_id, provider, connection_kind, external_connection_key,
+			  status, created_by_user_id, created_at, updated_at
+			) values (?, ?, 'GITHUB', 'GITHUB_APP_INSTALLATION', 'verify-install-1', 'ACTIVE', ?, now(), now())
+			""".trimIndent(),
+			java.util.UUID.fromString("018fd000-0000-7000-8000-000000000010"),
+			devContext.devWorkspaceId,
+			devContext.devUserId,
+		)
+		mockMvc.post("/api/github/installations/sync")
+			.andExpect { status { isOk() } }
+
+		mockMvc.get("/api/github/connections")
+			.andExpect {
+				status { isOk() }
+				jsonPath("$.length()") { value(1) }
+				jsonPath("$[0].installationId") { value(77) }
+			}
+	}
+
+	@Test
 	fun syncExistingInstallationReturnsNotFoundWhenGitHubHasNoPlotInstall() {
 		fakeClient.userInstallations = emptyList()
 

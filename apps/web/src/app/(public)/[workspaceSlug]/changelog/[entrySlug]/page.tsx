@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
+
 import { PublicChangelogEntryView } from "@/features/changelog/public-changelog-entry";
 import { PublicChangelogLayout } from "@/features/changelog/public-changelog-layout";
 import { fetchPublicChangelogEntry } from "@/lib/public-changelog";

@@ -142,6 +142,51 @@ class GitHubReleaseActivityApiIntegrationTest {
 			.andExpect { status { isNotFound() } }
 	}
 
+	@Test
+	fun explicitRangeRecoveryRequiresFullShasAndPreservesThePinnedHead() {
+		val scope = insertScope(devContext.devWorkspaceId)
+		val head = "a".repeat(40)
+		val base = "b".repeat(40)
+		val requestId = insertRequest(devContext.devWorkspaceId, scope, "NEEDS_RANGE", headSha = head)
+		val endpoint = "/api/github/repositories/$scope/release-activity/$requestId/range"
+		mockMvc.get("/api/github/repositories/$scope/release-activity/$requestId").andExpect {
+			status { isOk() }
+			jsonPath("$.status") { value("NEEDS_RANGE") }
+			jsonPath("$.headSha") { value(head) }
+		}
+		mockMvc.post(endpoint) {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"baseSha":"main","headSha":"$head"}"""
+		}.andExpect { status { isBadRequest() } }
+		mockMvc.post(endpoint) {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"baseSha":"$base","headSha":"${"c".repeat(40)}"}"""
+		}.andExpect {
+			status { isConflict() }
+			jsonPath("$.error") { value("RELEASE_RANGE_NOT_SELECTABLE") }
+		}
+		mockMvc.post(endpoint) {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"baseSha":"$base","headSha":"$head"}"""
+		}.andExpect {
+			status { isAccepted() }
+			jsonPath("$.status") { value("QUEUED") }
+			jsonPath("$.baseSha") { value(base) }
+			jsonPath("$.headSha") { value(head) }
+		}
+		mockMvc.post(endpoint) {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"baseSha":"$base","headSha":"$head"}"""
+		}.andExpect { status { isConflict() } }
+		val otherScope = insertScope(devContext.devWorkspaceId)
+		mockMvc.get("/api/github/repositories/$otherScope/release-activity/$requestId")
+			.andExpect { status { isNotFound() } }
+		mockMvc.post("/api/github/repositories/$otherScope/release-activity/$requestId/range") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"baseSha":"$base","headSha":"$head"}"""
+		}.andExpect { status { isNotFound() } }
+	}
+
 	private fun insertWorkspace(slug: String): UUID {
 		val id = UUID.randomUUID()
 		jdbcTemplate.update(

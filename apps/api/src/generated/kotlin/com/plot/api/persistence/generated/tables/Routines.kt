@@ -9,6 +9,7 @@ import com.plot.api.persistence.generated.indexes.ROUTINES_DUE_IDX
 import com.plot.api.persistence.generated.indexes.ROUTINES_STALE_CLAIM_IDX
 import com.plot.api.persistence.generated.indexes.ROUTINES_WORKSPACE_IDX
 import com.plot.api.persistence.generated.keys.AGENT_RUN_INPUTS__AGENT_RUN_INPUTS_WORKSPACE_ID_ROUTINE_ID_FKEY
+import com.plot.api.persistence.generated.keys.GITHUB_RELEASE_DRAFT_REQUESTS__GITHUB_RELEASE_ROUTINE_SOURCE_FK
 import com.plot.api.persistence.generated.keys.ROUTINES_EXECUTION_SOURCE_KEY
 import com.plot.api.persistence.generated.keys.ROUTINES_PKEY
 import com.plot.api.persistence.generated.keys.ROUTINES_WORKSPACE_ID_ID_KEY
@@ -21,6 +22,7 @@ import com.plot.api.persistence.generated.keys.ROUTINE_EXECUTIONS__ROUTINE_EXECU
 import com.plot.api.persistence.generated.keys.ROUTINE_EXECUTIONS__ROUTINE_EXECUTIONS_WORKSPACE_ID_ROUTINE_ID_TRIGGER_SOURCE__FKEY
 import com.plot.api.persistence.generated.tables.AgentRunInputs.AgentRunInputsPath
 import com.plot.api.persistence.generated.tables.GenerationRuns.GenerationRunsPath
+import com.plot.api.persistence.generated.tables.GithubReleaseDraftRequests.GithubReleaseDraftRequestsPath
 import com.plot.api.persistence.generated.tables.RoutineContextSources.RoutineContextSourcesPath
 import com.plot.api.persistence.generated.tables.RoutineExecutions.RoutineExecutionsPath
 import com.plot.api.persistence.generated.tables.SourceScopes.SourceScopesPath
@@ -315,6 +317,22 @@ open class Routines(
 
     val agentRunInputs: AgentRunInputsPath
         get(): AgentRunInputsPath = agentRunInputs()
+
+    private lateinit var _githubReleaseDraftRequests: GithubReleaseDraftRequestsPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.github_release_draft_requests</code> table
+     */
+    fun githubReleaseDraftRequests(): GithubReleaseDraftRequestsPath {
+        if (!this::_githubReleaseDraftRequests.isInitialized)
+            _githubReleaseDraftRequests = GithubReleaseDraftRequestsPath(this, null, GITHUB_RELEASE_DRAFT_REQUESTS__GITHUB_RELEASE_ROUTINE_SOURCE_FK.inverseKey)
+
+        return _githubReleaseDraftRequests;
+    }
+
+    val githubReleaseDraftRequests: GithubReleaseDraftRequestsPath
+        get(): GithubReleaseDraftRequestsPath = githubReleaseDraftRequests()
 
     private lateinit var _routineContextSources: RoutineContextSourcesPath
 

@@ -1,5 +1,6 @@
 package com.plot.api.workspace.dto
 
+import com.plot.api.entitlement.WorkspaceCapabilities
 import java.time.Instant
 import java.util.UUID
 
@@ -13,6 +14,7 @@ data class WorkspaceResponse(
 	val plan: String,
 	val entitlementStatus: String,
 	val accessMode: String,
+	val capabilities: WorkspaceCapabilities,
 	val trialEndsAt: Instant,
 	val role: String? = null,
 	val createdAt: Instant,

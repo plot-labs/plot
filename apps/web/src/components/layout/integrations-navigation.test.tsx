@@ -119,13 +119,13 @@ describe("Settings navigation", () => {
     expect(screen.getByRole("progressbar", { name: "Step 2 of 3" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Your first Routine" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Close onboarding" }));
-    fireEvent.click(screen.getByRole("button", { name: "Run first Routine" }));
+    fireEvent.click(screen.getByRole("button", { name: "Get the first draft" }));
     expect(screen.getByRole("dialog", { name: "Set up Plot" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("link", { name: "View Routines" }));
     expect(screen.queryByRole("dialog", { name: "Set up Plot" })).not.toBeInTheDocument();
   });
 
-  it("runs the first Routine from onboarding", async () => {
+  it("imports history without a generic run from onboarding", async () => {
     sidebarMocks.pathname = "/artifacts";
     const routine = {
       id: "routine-1",
@@ -142,20 +142,17 @@ describe("Settings navigation", () => {
       sourceScopeId: "wrong-repository",
       cadence: "ON_GITHUB_CHANGE",
     }, routine]);
-    sidebarMocks.runRoutineNow.mockResolvedValue({
-      ...routine,
-      latestExecution: { artifactId: "artifact-1", status: "DISPATCHED", agentRunStatus: "SUCCEEDED", chatId: "chat-1" },
-    });
     render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Run first Routine" }));
-    const run = screen.getByRole("button", { name: "Run Routine" });
+    fireEvent.click(await screen.findByRole("button", { name: "Get the first draft" }));
+    const run = screen.getByRole("button", { name: "Import history" });
     await waitFor(() => expect(run).toBeEnabled());
     fireEvent.click(run);
 
     await waitFor(() => expect(sidebarMocks.importGitHubRepository).toHaveBeenCalledWith("repository-1", expect.any(Object)));
-    expect(sidebarMocks.runRoutineNow).toHaveBeenCalledWith("routine-1", expect.any(String));
-    expect(await screen.findByRole("link", { name: "Review result" })).toBeInTheDocument();
+    expect(sidebarMocks.runRoutineNow).not.toHaveBeenCalled();
+    expect(await screen.findByRole("heading", { name: "Your Routine is ready" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View Routines" })).toBeInTheDocument();
   });
 
   it("announces the workspace selected after account loading", async () => {

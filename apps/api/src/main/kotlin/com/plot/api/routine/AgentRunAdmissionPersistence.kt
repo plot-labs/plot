@@ -1,6 +1,7 @@
 package com.plot.api.routine
 
 import com.plot.api.common.UuidGenerator
+import com.plot.api.contentprofile.ContentProfilePersistence
 import com.plot.api.persistence.JooqSqlExecutor
 import com.plot.api.persistence.JooqTransactionExecutor
 import java.sql.Timestamp
@@ -15,11 +16,12 @@ class AgentRunAdmissionPersistence(
 	private val transactionExecutor: JooqTransactionExecutor,
 	private val uuidGenerator: UuidGenerator,
 	private val queryPersistence: AgentRunQueryPersistence,
+	private val contentProfilePersistence: ContentProfilePersistence,
 	private val clock: Clock? = null,
 ) {
 	private fun currentInstant(): Instant = clock?.instant() ?: Instant.now()
 
-	private data class RoutineCursor(val value: Long?)
+	private data class RoutineCursor(val value: Long?, val enabled: Boolean, val releaseCadence: Boolean)
 	private data class LockedSource(val id: UUID, val status: String, val statusChangedAt: Instant)
 
 	fun dispatch(
@@ -41,9 +43,16 @@ class AgentRunAdmissionPersistence(
 		val ownershipArgs: Array<Any> = workerId?.let { arrayOf<Any>(it) } ?: emptyArray()
 		val currentRoutineCursor = findRoutineCursorForUpdate(workspaceId, execution.routineId)
 			?: throw RoutineExecutionStateException("Routine was not found")
-		if (currentRoutineCursor.value != execution.activityCursorBefore) {
+		if (!currentRoutineCursor.enabled && execution.triggerKind != RoutineExecutionTriggerKind.MANUAL) {
+			throw RoutineExecutionStateException("Routine is disabled")
+		}
+		if (currentRoutineCursor.releaseCadence && execution.releaseRequestId == null) {
+			throw RoutineExecutionStateException("Release Routine requires a verified release request")
+		}
+		if (execution.releaseRequestId == null && currentRoutineCursor.value != execution.activityCursorBefore) {
 			throw RoutineExecutionStateException("Routine activity cursor is stale")
 		}
+		if (execution.releaseRequestId != null) validateReleaseEvidence(execution, request)
 		val lockedSources = lockSourceScopes(
 			workspaceId,
 			request.sourceScopes.map { it.sourceScopeId },
@@ -81,14 +90,17 @@ class AgentRunAdmissionPersistence(
 		)
 
 		val agentRunId = uuidGenerator.next()
+		val profileRevisionId = request.contentProfileRevisionId
+			?: contentProfilePersistence.findCurrentRevision(workspaceId)?.id
 		sqlExecutor.update(
 			"""
 			insert into agent_runs (
 			  id, workspace_id, routine_execution_id, routine_id, work_session_id, created_by_user_id,
 			  origin, idempotency_key, request_fingerprint,
-			  instruction_snapshot, prompt_version, tool_policy_version, budget_snapshot,
+			  instruction_snapshot, prompt_version, tool_policy_version, budget_snapshot, content_type,
+			  content_profile_revision_id, content_brief_snapshot,
 			  status, current_step, attempt_count, max_attempts, created_at, updated_at
-			) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, 'QUEUED', 0, 0, ?, ?, ?)
+			) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?::jsonb, 'QUEUED', 0, 0, ?, ?, ?)
 			""".trimIndent(),
 			agentRunId,
 			workspaceId,
@@ -103,6 +115,9 @@ class AgentRunAdmissionPersistence(
 			request.promptVersion.trim(),
 			request.toolPolicyVersion.trim(),
 			request.budgetSnapshotJson,
+			request.contentType.name,
+			profileRevisionId,
+			request.contentBriefSnapshotJson,
 			request.maxAttempts,
 			Timestamp.from(now),
 			Timestamp.from(now),
@@ -278,8 +293,11 @@ class AgentRunAdmissionPersistence(
 		id,
 	).firstOrNull()
 	private fun findRoutineCursorForUpdate(workspaceId: UUID, routineId: UUID): RoutineCursor? = sqlExecutor.query(
-		"select activity_cursor_sequence from routines where workspace_id = ? and id = ? for update",
-		{ rs, _ -> RoutineCursor(rs.getObject(1, Long::class.javaObjectType)) },
+		"select activity_cursor_sequence, enabled, cadence from routines where workspace_id = ? and id = ? for update",
+		{ rs, _ -> RoutineCursor(
+			rs.getObject(1, Long::class.javaObjectType), rs.getBoolean("enabled"),
+			rs.getString("cadence") in setOf("ON_GIT_TAG", "ON_GITHUB_RELEASE"),
+		) },
 		workspaceId,
 		routineId,
 	).firstOrNull()
@@ -336,16 +354,49 @@ class AgentRunAdmissionPersistence(
 		require(request.inputs.all { it.activitySequence != null }) {
 			"Seed inputs require activity sequences"
 		}
-		val activityCursorBefore = execution.activityCursorBefore ?: 0L
+		// An exact release is a separate range job, not a repository activity batch.
+		// Its complete bound evidence was verified above; it must not drop old inputs.
+		val activityCursorBefore = if (execution.releaseRequestId != null) 0L else execution.activityCursorBefore ?: 0L
 		require(request.activityCursorAfter > activityCursorBefore) {
 			"Activity cursor must advance beyond the previous cursor"
 		}
+
 		require(request.inputs.all {
 			val activitySequence = it.activitySequence!!
 			activitySequence > activityCursorBefore && activitySequence <= request.activityCursorAfter
 		}) {
 			"Activity cursor must cover every seed input"
 		}
+	}
+
+	private fun validateReleaseEvidence(execution: RoutineExecutionRecord, request: AgentRunDispatchRequest) {
+		val bound = sqlExecutor.query(
+				"""
+				select block.id, block.activity_sequence, block.content_hash
+				from github_release_draft_requests release
+				join github_release_draft_evidence evidence
+				  on evidence.workspace_id = release.workspace_id and evidence.request_id = release.id
+				  and evidence.observation_id = release.observation_id
+				join writing_blocks block
+				  on block.workspace_id = evidence.workspace_id and block.id = evidence.writing_block_id
+				where release.workspace_id = ? and release.id = ? and release.routine_id = ?
+				  and release.status in ('RESOLVING', 'GENERATING') and release.claimed_by is not null
+				  and release.base_sha is not null and release.head_sha is not null
+				  and ? = 'github-release:' || release.id || ':attempt:' || release.generation_attempt
+				  and block.status = 'ACTIVE'
+				  and block.metadata->>'baseSha' = release.base_sha
+				  and block.metadata->>'headSha' = release.head_sha
+				order by evidence.order_index
+				for share of block
+				""".trimIndent(),
+				{ row, _ ->
+					Triple(row.getObject("id", UUID::class.java), row.getLong("activity_sequence"), row.getString("content_hash"))
+				},
+				execution.workspaceId, execution.releaseRequestId, execution.routineId, execution.triggerKey,
+			)
+		require(bound.isNotEmpty() && bound == request.inputs.map {
+			Triple(it.writingBlockId, it.activitySequence, it.contentHash)
+		}) { "Release inputs must match the complete verified range evidence" }
 	}
 	private fun lockSourceScopes(workspaceId: UUID, sourceScopeIds: List<UUID>): Map<UUID, LockedSource> {
 		require(sourceScopeIds.isNotEmpty()) { "Agent source scopes are required" }

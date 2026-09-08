@@ -3,6 +3,7 @@ package com.plot.api.github
 import com.plot.api.common.ApiException
 import jakarta.validation.Valid
 import jakarta.validation.constraints.Min
+import jakarta.validation.constraints.Pattern
 import java.time.Instant
 import java.util.UUID
 import org.springframework.http.CacheControl
@@ -139,7 +140,27 @@ class GitHubInstallationController(
 		.ok()
 		.cacheControl(CacheControl.noStore())
 		.body(releaseActivityService.retry(sourceScopeId, requestId))
+
+	@GetMapping("/repositories/{sourceScopeId}/release-activity/{requestId}")
+	fun getReleaseActivityById(
+		@PathVariable sourceScopeId: UUID,
+		@PathVariable requestId: UUID,
+	): ResponseEntity<GitHubReleaseActivityResponse> = ResponseEntity.ok().cacheControl(CacheControl.noStore())
+		.body(releaseActivityService.get(sourceScopeId, requestId))
+
+	@PostMapping("/repositories/{sourceScopeId}/release-activity/{requestId}/range")
+	fun selectReleaseRange(
+		@PathVariable sourceScopeId: UUID,
+		@PathVariable requestId: UUID,
+		@Valid @RequestBody range: GitHubReleaseRangeRequest,
+	): ResponseEntity<GitHubReleaseActivityResponse> = ResponseEntity.accepted().cacheControl(CacheControl.noStore())
+		.body(releaseActivityService.selectRange(sourceScopeId, requestId, range))
 }
+
+data class GitHubReleaseRangeRequest(
+	@field:Pattern(regexp = "[0-9a-f]{40}") val baseSha: String,
+	@field:Pattern(regexp = "[0-9a-f]{40}") val headSha: String,
+)
 
 data class GitHubReleaseActivityResponse(
 	val id: UUID,

@@ -16,6 +16,14 @@ function workspaceSummary(overrides: Partial<WorkspaceSummary> = {}): WorkspaceS
     plan: "founding",
     entitlementStatus: "active",
     accessMode: "full",
+    capabilities: {
+      generate: true,
+      edit: true,
+      publish: true,
+      export: true,
+      configure: true,
+      unpublish: true,
+    },
     trialEndsAt: "2026-09-01T00:00:00Z",
     role: "OWNER",
     createdAt: "2026-08-01T00:00:00Z",
@@ -114,7 +122,7 @@ describe("Plot API client", () => {
       .mockResolvedValueOnce(Response.json(routine))
       .mockResolvedValueOnce(Response.json(routine))
       .mockResolvedValueOnce(Response.json({ ...routine, enabled: false }))
-      .mockResolvedValueOnce(Response.json({ ...routine, latestExecution: { id: "execution-1", status: "DISPATCHED", chatId: "chat-1", agentRunId: "agent-run-1", agentRunStatus: "QUEUED", artifactId: null, errorCode: null, startedAt: null, finishedAt: null } }))
+      .mockResolvedValueOnce(Response.json({ ...routine, latestExecution: { id: "execution-1", status: "DISPATCHED", chatId: "chat-1", agentRunId: "agent-run-1", agentRunStatus: "QUEUED", artifactId: null, errorCode: null, startedAt: null, finishedAt: null, releaseRequestId: null } }))
       .mockResolvedValueOnce(Response.json(agentRun));
     const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
 
@@ -294,6 +302,44 @@ describe("Plot API client", () => {
     expect(new Headers(fetcher.mock.calls[1]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
   });
 
+  it("loads a release request by id and posts an explicit range", async () => {
+    const activity = {
+      id: "request-1",
+      sourceScopeId: "scope-1",
+      tagName: "v1.2.0",
+      status: "NEEDS_RANGE",
+      baseSha: null,
+      headSha: "a".repeat(40),
+      artifactId: null,
+      errorCode: null,
+      createdAt: "2026-07-30T00:00:00Z",
+      updatedAt: "2026-07-30T00:01:00Z",
+    };
+    const range = { baseSha: "B".repeat(40), headSha: "A".repeat(40) };
+    const fetcher = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(activity))
+      .mockResolvedValueOnce(Response.json({ ...activity, status: "QUEUED", baseSha: "b".repeat(40) }, { status: 202 }));
+    const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
+
+    await expect(client.getGitHubReleaseActivityById("scope-1", "request-1")).resolves.toMatchObject({
+      id: "request-1",
+      status: "NEEDS_RANGE",
+    });
+    await expect(client.selectGitHubReleaseRange("scope-1", "request-1", range)).resolves.toMatchObject({
+      status: "QUEUED",
+      baseSha: "b".repeat(40),
+    });
+
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+      "/api/plot/github/repositories/scope-1/release-activity/request-1",
+      "/api/plot/github/repositories/scope-1/release-activity/request-1/range",
+    ]);
+    expect(fetcher.mock.calls[1]?.[1]).toMatchObject({
+      method: "POST",
+      body: JSON.stringify({ baseSha: "b".repeat(40), headSha: "a".repeat(40) }),
+    });
+  });
+
   it("hydrates source references from connected source scopes", async () => {
     const fetcher = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(Response.json([{ id: "connection-1", installationId: 1, status: "ACTIVE", repositories: [
@@ -440,6 +486,39 @@ describe("Plot API client", () => {
       "/api/plot/artifact-variants/variant/sentences/sentence",
       "/api/plot/artifact-variants/variant/exports",
     ]);
+  });
+
+  it("replicates an artifact to another content type", async () => {
+    const fetcher = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({
+        id: "agent-run-replicated",
+        chatId: "chat-replicated",
+        instruction: "Write a concise launch announcement",
+        contentType: "LAUNCH_ANNOUNCEMENT",
+        status: "QUEUED",
+        createdAt: "2026-09-08T00:00:00Z",
+        updatedAt: "2026-09-08T00:00:00Z",
+      }));
+    const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
+
+    const run = await client.replicateArtifact(
+      "artifact-1",
+      { contentType: "LAUNCH_ANNOUNCEMENT", instruction: "Write a concise launch announcement" },
+      "idemp-rep-1",
+    );
+
+    expect(run.id).toBe("agent-run-replicated");
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/plot/artifacts/artifact-1/replicate",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          "Idempotency-Key": "idemp-rep-1",
+          "X-Plot-Workspace-Id": "workspace-1",
+        }),
+        body: JSON.stringify({ contentType: "LAUNCH_ANNOUNCEMENT", instruction: "Write a concise launch announcement" }),
+      }),
+    );
   });
 
   it("resolves the workspace ID for each request", async () => {

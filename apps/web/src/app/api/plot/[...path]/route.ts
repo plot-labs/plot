@@ -169,6 +169,8 @@ function isAllowed(method: string, path: string[]): boolean {
 	if (method === "POST" && route === "workspaces") return true;
   if (method === "GET" && /^workspaces\/[0-9a-fA-F-]+$/.test(route)) return true;
   if (method === "PATCH" && /^workspaces\/[0-9a-fA-F-]+$/.test(route)) return true;
+  if (method === "GET" && route === "content-profile") return true;
+  if (method === "PUT" && route === "content-profile") return true;
   if (method === "GET" && route === "github/connections") return true;
 	if (method === "GET" && /^github\/connections\/[0-9a-fA-F-]+\/repositories$/.test(route)) return true;
   if (method === "POST" && route === "github/installations/requests") return true;
@@ -182,7 +184,9 @@ function isAllowed(method: string, path: string[]): boolean {
   if (method === "POST" && /^github\/repositories\/[^/]+\/imports$/.test(route)) return true;
   if (method === "POST" && /^github\/repositories\/[^/]+\/access-check$/.test(route)) return true;
   if (method === "GET" && /^github\/repositories\/[^/]+\/release-activity$/.test(route)) return true;
+  if (method === "GET" && /^github\/repositories\/[^/]+\/release-activity\/[^/]+$/.test(route)) return true;
   if (method === "POST" && /^github\/repositories\/[^/]+\/release-activity\/[^/]+\/retry$/.test(route)) return true;
+  if (method === "POST" && /^github\/repositories\/[^/]+\/release-activity\/[^/]+\/range$/.test(route)) return true;
   if (method === "GET" && /^github\/imports\/[^/]+$/.test(route)) return true;
   if (method === "GET" && route === "blocks") return true;
   if (method === "GET" && route === "routines") return true;
@@ -199,13 +203,16 @@ function isAllowed(method: string, path: string[]): boolean {
   if (method === "PATCH" && /^sessions\/[^/]+$/.test(route)) return true;
   if (method === "GET" && route === "artifacts") return true;
   if (method === "GET" && /^artifacts\/[^/]+$/.test(route)) return true;
+  if (method === "POST" && /^artifacts\/[^/]+\/replicate$/.test(route)) return true;
   if (method === "GET" && /^artifact-variants\/[^/]+$/.test(route)) return true;
   if (method === "GET" && /^artifact-variants\/[^/]+\/history(?:\/[^/]+|\/at\/[^/]+)?$/.test(route)) return true;
   if (method === "PATCH" && /^artifact-variants\/[^/]+$/.test(route)) return true;
   if (method === "PUT" && /^artifact-variants\/[^/]+$/.test(route)) return true;
   if (method === "PATCH" && /^artifact-variants\/[^/]+\/sentences\/[^/]+$/.test(route)) return true;
   if (method === "POST" && /^artifact-variants\/[^/]+\/exports$/.test(route)) return true;
-  return method === "POST" && /^artifact-variants\/[^/]+\/publish$/.test(route);
+  if (method === "POST" && /^artifact-variants\/[^/]+\/publish$/.test(route)) return true;
+  if (method === "POST" && /^artifact-variants\/[^/]+\/unpublish$/.test(route)) return true;
+  return method === "POST" && /^artifact-variants\/[^/]+\/delivery-events$/.test(route);
 }
 
 type AuthResult = { ok: true; jwt: string } | { ok: false; response: Response };

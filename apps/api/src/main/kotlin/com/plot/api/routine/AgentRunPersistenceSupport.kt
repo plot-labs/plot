@@ -1,5 +1,6 @@
 package com.plot.api.routine
 
+import com.plot.api.content.ContentType
 import com.plot.api.persistence.SqlRow
 import java.time.Instant
 import java.util.UUID
@@ -13,7 +14,7 @@ internal val agentStepMapper = { rs: SqlRow, _: Int -> rs.toAgentStep() }
 
 internal val selectExecutionSql = """
 		select e.id, e.workspace_id, e.routine_id, e.created_by_user_id, e.trigger_source_scope_id,
-		       e.trigger_kind, e.trigger_key, e.request_fingerprint, e.trigger_delivery_id,
+		       e.trigger_kind, e.trigger_key, e.request_fingerprint, e.trigger_delivery_id, e.release_request_id,
 		       e.scheduled_for, e.refresh_from, e.refresh_to, e.refresh_continuation::text,
 		       e.refresh_completed_at, e.activity_cursor_before, e.activity_cursor_after,
 		       e.status, e.attempt_count, e.transition_version, e.claimed_by, e.claimed_at,
@@ -25,10 +26,11 @@ internal val selectAgentRunSql = """
 		select a.id, a.workspace_id, a.routine_execution_id, a.work_session_id, a.routine_id, a.origin,
 		       a.idempotency_key, a.request_fingerprint, a.created_by_user_id,
 		       a.instruction_snapshot, a.prompt_version, a.tool_policy_version, a.budget_snapshot::text,
+		       a.content_type, a.content_profile_revision_id, a.content_brief_snapshot::text,
 		       a.status, a.current_step, a.attempt_count, a.max_attempts,
 		       a.model_call_count, a.tool_call_count, a.next_attempt_at,
 		       a.failure_code, a.claimed_by, a.claimed_at, a.transition_version, a.started_at,
-		       a.finished_at, a.created_at, a.updated_at
+		       a.finished_at, a.created_at, a.updated_at, a.source_snapshot_id
 		from agent_runs a
 	""".trimIndent()
 
@@ -42,6 +44,7 @@ internal fun SqlRow.toRoutineExecution() = RoutineExecutionRecord(
 		triggerKey = requireNotNull(getString("trigger_key")),
 		requestFingerprint = requireNotNull(getString("request_fingerprint")),
 		triggerDeliveryId = getObject("trigger_delivery_id", UUID::class.java),
+		releaseRequestId = getObject("release_request_id", UUID::class.java),
 		scheduledFor = getTimestamp("scheduled_for")?.toInstant(),
 		refreshFrom = getTimestamp("refresh_from")?.toInstant(),
 		refreshTo = getTimestamp("refresh_to")?.toInstant(),
@@ -76,6 +79,10 @@ internal fun SqlRow.toAgentRun() = AgentRunRecord(
 		promptVersion = requireNotNull(getString("prompt_version")),
 		toolPolicyVersion = requireNotNull(getString("tool_policy_version")),
 		budgetSnapshotJson = requireNotNull(getString("budget_snapshot")),
+		contentType = ContentType.parse(getString("content_type")),
+		contentProfileRevisionId = getObject("content_profile_revision_id", UUID::class.java),
+		contentBriefSnapshotJson = getString("content_brief_snapshot"),
+		sourceSnapshotId = getObject("source_snapshot_id", UUID::class.java),
 		status = AgentRunStatus.valueOf(requireNotNull(getString("status"))),
 		currentStep = getInt("current_step"),
 		attemptCount = getInt("attempt_count"),

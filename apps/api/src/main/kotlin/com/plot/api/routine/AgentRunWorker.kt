@@ -128,6 +128,9 @@ class AgentRunWorker(
 	private fun processClaim(claim: ClaimedAgentRun) {
 		val run = queryPersistence.findAgentRun(claim.workspaceId, claim.agentRunId)
 			?: throw AgentRunClaimLostException()
+		queryPersistence.releaseRoutineGateFailure(run.workspaceId, run.id)?.let {
+			throw AgentToolAccessException(it)
+		}
 		val budget = frozenBudget(run)
 		if (run.startedAt != null && Duration.between(run.startedAt, clock.instant()) > Duration.ofMillis(budget.maxRunDurationMillis)) {
 			throw AgentRunBudgetExceededException("AGENT_DURATION_LIMIT")
@@ -276,7 +279,10 @@ class AgentRunWorker(
 
 			AgentDecisionAction.CREATE_ARTIFACT -> {
 				val allInputs = queryPersistence.listAgentRunInputs(run.workspaceId, run.id).associateBy { it.id }
-				val selected = arguments.selectedInputIds.map { id ->
+				val selected = if (queryPersistence.isReleaseRun(run.workspaceId, run.id)) {
+					// Model-selected tool results cannot replace or expand a canonical release range.
+					allInputs.values.filter { it.inputKind == AgentRunInputKind.SEED }.sortedBy { it.orderIndex }
+				} else arguments.selectedInputIds.map { id ->
 					allInputs[id] ?: throw IllegalArgumentException("Selected Agent input is unavailable")
 				}
 				val evidenceCharacters = selected.sumOf { it.snapshotTitle.orEmpty().length + it.snapshotBody.length }

@@ -51,6 +51,7 @@ data class RoutineExecutionSummaryResponse(
 	val errorCode: String?,
 	val startedAt: Instant?,
 	val finishedAt: Instant?,
+	val releaseRequestId: UUID? = null,
 )
 
 data class AgentRunDetailResponse(
@@ -58,6 +59,7 @@ data class AgentRunDetailResponse(
 	val routineExecutionId: UUID,
 	val routineId: UUID,
 	val chatId: UUID?,
+	val contentType: String,
 	val status: String,
 	val failureCode: String?,
 	val artifactId: UUID?,
@@ -100,6 +102,7 @@ fun RoutineRecord.toResponse(
 
 fun RoutineExecutionSummaryRecord.toResponse() = RoutineExecutionSummaryResponse(
 	id = executionId,
+	releaseRequestId = releaseRequestId,
 	status = executionStatus.name,
 	chatId = workSessionId,
 	agentRunId = agentRunId,
@@ -122,6 +125,7 @@ fun AgentRunRecord.toDetailResponse(
 		routineExecutionId = executionId,
 		routineId = routineId,
 		chatId = workSessionId,
+		contentType = contentType.name,
 		status = status.name,
 		failureCode = failureCode,
 		artifactId = artifactWorkflowRunId?.let(artifactIds::get),

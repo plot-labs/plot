@@ -80,6 +80,12 @@ class RoutineService(
 	@Transactional
 	fun queueNow(id: UUID, idempotencyKey: String): RoutineQueueResult {
 		val routine = persistence.findForUpdate(devContext.devWorkspaceId, id) ?: throw notFound()
+		if (routine.cadence in setOf(RoutineCadence.ON_GIT_TAG, RoutineCadence.ON_GITHUB_RELEASE)) {
+			throw ApiException(
+				HttpStatus.CONFLICT, "GITHUB_RELEASE_RANGE_REQUIRED",
+				"Release Routines require a tag or published release; choose a range or retry from its release activity",
+			)
+		}
 		val key = idempotencyKey.trim()
 		if (key.isBlank() || key.length > 200) {
 			throw ApiException(HttpStatus.BAD_REQUEST, "IDEMPOTENCY_KEY_REQUIRED", "Idempotency-Key is required")

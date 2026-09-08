@@ -1,5 +1,6 @@
 package com.plot.api.routine
 
+import com.plot.api.content.ContentType
 import java.time.Instant
 import java.util.UUID
 
@@ -50,6 +51,7 @@ data class RoutineExecutionRequest(
 	val refreshContinuationJson: String? = null,
 	val activityCursorBefore: Long? = null,
 	val id: UUID? = null,
+	val releaseRequestId: UUID? = null,
 )
 
 data class RoutineExecutionEvidenceRecord(
@@ -88,6 +90,7 @@ data class RoutineExecutionRecord(
 	val finishedAt: Instant?,
 	val createdAt: Instant,
 	val updatedAt: Instant,
+	val releaseRequestId: UUID? = null,
 )
 
 data class RoutineContextSourceRecord(
@@ -138,6 +141,10 @@ data class AgentRunDispatchRequest(
 	val origin: AgentRunOrigin = AgentRunOrigin.ROUTINE,
 	val idempotencyKey: String? = null,
 	val requestFingerprint: String? = null,
+	val contentType: ContentType = ContentType.CHANGELOG,
+	val contentProfileRevisionId: UUID? = null,
+	val contentBriefSnapshotJson: String? = null,
+	val sourceSnapshotId: UUID? = null,
 )
 
 data class AgentBudgetSnapshot(
@@ -163,6 +170,10 @@ data class AgentRunRecord(
 	val promptVersion: String,
 	val toolPolicyVersion: String,
 	val budgetSnapshotJson: String,
+	val contentType: ContentType = ContentType.CHANGELOG,
+	val contentProfileRevisionId: UUID? = null,
+	val contentBriefSnapshotJson: String? = null,
+	val sourceSnapshotId: UUID? = null,
 	val status: AgentRunStatus,
 	val currentStep: Int,
 	val attemptCount: Int,
@@ -275,6 +286,7 @@ data class RoutineExecutionSummaryRecord(
 	val artifactId: UUID?,
 	val startedAt: Instant?,
 	val finishedAt: Instant?,
+	val releaseRequestId: UUID? = null,
 )
 
 class RoutineExecutionIdempotencyConflictException : IllegalStateException(

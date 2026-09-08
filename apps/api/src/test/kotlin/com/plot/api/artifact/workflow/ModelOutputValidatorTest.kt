@@ -12,6 +12,7 @@ import com.plot.api.artifact.workflow.model.SourceProvider
 import com.plot.api.artifact.workflow.model.TargetedRewrite
 import com.plot.api.artifact.workflow.model.TargetedRewriteOutput
 import com.plot.api.artifact.workflow.model.WriterOutput
+import com.plot.api.artifact.workflow.model.WriterLayoutNode
 import com.plot.api.artifact.workflow.model.WriterSentence
 import java.time.Instant
 import java.util.UUID
@@ -41,6 +42,87 @@ class ModelOutputValidatorTest {
 		assertEquals(listOf(sentenceOne.id, sentenceTwo.id), result.map { it.id })
 		assertEquals(listOf(0, 1), result.map { it.orderIndex })
 		assertEquals(listOf("Shipped search.", "Thanks for reading."), result.map { it.body })
+	}
+
+	@Test
+	fun assignsWriterLayoutIndexesToServerStatementIds() {
+		val output = WriterOutput(
+			sentences = listOf(WriterSentence("Release notes."), WriterSentence("Search is faster.")),
+			layout = listOf(
+				WriterLayoutNode(type = "heading", statementIndex = 0, tag = "h1"),
+				WriterLayoutNode(
+					type = "list",
+					listType = "bullet",
+					children = listOf(WriterLayoutNode(type = "listItem", statementIndex = 1)),
+				),
+			),
+		)
+		val ids = ArrayDeque(listOf(
+			UUID.fromString("00000000-0000-0000-0000-000000000031"),
+			UUID.fromString("00000000-0000-0000-0000-000000000032"),
+			UUID.fromString("00000000-0000-0000-0000-000000000033"),
+			UUID.fromString("00000000-0000-0000-0000-000000000034"),
+		))
+		val sentences = ModelOutputValidator().assignSentenceIds(runId, output, emptySet()) { ids.removeFirst() }
+
+		val layout = ModelOutputValidator().assignLayout(output.layout, output.sentences, sentences)
+
+		assertEquals("heading", layout[0].type)
+		assertEquals(sentences[0].id, layout[0].statementId)
+		assertEquals("list", layout[1].type)
+		assertEquals(sentences[1].id, layout[1].children.single().statementId)
+	}
+
+	@Test
+	fun rejectsWriterLayoutsWithMissingDuplicateOrNestedStatementReferences() {
+		val validator = ModelOutputValidator()
+		val writerSentences = listOf(WriterSentence("One."), WriterSentence("Two."))
+		val sentences = listOf(sentenceOne, sentenceTwo)
+		val invalidLayouts = listOf(
+			listOf(WriterLayoutNode(type = "paragraph", statementIndex = 0)),
+			listOf(WriterLayoutNode(type = "paragraph", statementIndex = 0), WriterLayoutNode(type = "paragraph", statementIndex = 0)),
+			listOf(
+				WriterLayoutNode(
+					type = "list",
+					listType = "bullet",
+					children = listOf(
+						WriterLayoutNode(
+							type = "listItem",
+							children = listOf(WriterLayoutNode(type = "list", listType = "bullet", children = listOf(WriterLayoutNode(type = "listItem", statementIndex = 1)))),
+							statementIndex = 0,
+						),
+					),
+				),
+			),
+		)
+
+		invalidLayouts.forEach { layout ->
+			assertFailsWith<InvalidModelOutputException> {
+				validator.assignLayout(layout, writerSentences, sentences)
+			}
+		}
+	}
+
+	@Test
+	fun rejectsLaunchWriterOutputAboveFourSentences() {
+		val validator = ModelOutputValidator()
+		val five = (1..5).map { WriterSentence("Sentence $it.") }
+		assertFailsWith<InvalidModelOutputException> {
+			validator.assignSentenceIds(
+				runId,
+				WriterOutput(five),
+				setOf(github.id),
+				maxSentences = 4,
+			) { UUID.randomUUID() }
+		}
+		val four = (1..4).map { WriterSentence("Sentence $it.") }
+		val accepted = validator.assignSentenceIds(
+			runId,
+			WriterOutput(four),
+			setOf(github.id),
+			maxSentences = 4,
+		) { UUID.randomUUID() }
+		assertEquals(4, accepted.size)
 	}
 
 	@Test
