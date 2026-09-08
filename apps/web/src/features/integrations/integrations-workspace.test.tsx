@@ -142,8 +142,54 @@ describe("IntegrationsWorkspace", () => {
     const connect = await screen.findByRole("button", { name: "Connect GitHub" });
     fireEvent.click(connect);
 
+    await waitFor(() => expect(mocks.syncGitHubInstallation).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(mocks.createInstallationRequest).toHaveBeenCalledTimes(1));
     expect(connect).toBeDisabled();
+  });
+
+  it("shows sign-in button when sync returns ACCESS_DENIED", async () => {
+    mocks.syncGitHubInstallation.mockRejectedValue(
+      new PlotApiError(403, "GITHUB_ACCESS_DENIED", "GitHub denied access (request A6F0:1234)")
+    );
+
+    render(<IntegrationsWorkspace />);
+    const connect = await screen.findByRole("button", { name: "Connect GitHub" });
+    fireEvent.click(connect);
+
+    await waitFor(() => expect(mocks.syncGitHubInstallation).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole("alert")).toHaveTextContent("GitHub access was revoked. Reconnect GitHub, then retry.");
+    expect(await screen.findByRole("button", { name: "Sign in with GitHub" })).toBeVisible();
+    expect(mocks.createInstallationRequest).not.toHaveBeenCalled();
+  });
+
+  it("shows sign-in button when sync returns GITHUB_REAUTH_REQUIRED", async () => {
+    mocks.syncGitHubInstallation.mockRejectedValue(
+      new PlotApiError(401, "GITHUB_REAUTH_REQUIRED", "GitHub re-authentication is required (request B7G1:5678)")
+    );
+
+    render(<IntegrationsWorkspace />);
+    const connect = await screen.findByRole("button", { name: "Connect GitHub" });
+    fireEvent.click(connect);
+
+    await waitFor(() => expect(mocks.syncGitHubInstallation).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole("alert")).toHaveTextContent("GitHub re-authentication is required. Sign in with GitHub again to grant organization access.");
+    expect(await screen.findByRole("button", { name: "Sign in with GitHub" })).toBeVisible();
+    expect(mocks.createInstallationRequest).not.toHaveBeenCalled();
+  });
+
+  it("shows sign-in button when sync returns GITHUB_ACCOUNT_NOT_LINKED", async () => {
+    mocks.syncGitHubInstallation.mockRejectedValue(
+      new PlotApiError(404, "GITHUB_ACCOUNT_NOT_LINKED", "No linked GitHub account found")
+    );
+
+    render(<IntegrationsWorkspace />);
+    const connect = await screen.findByRole("button", { name: "Connect GitHub" });
+    fireEvent.click(connect);
+
+    await waitFor(() => expect(mocks.syncGitHubInstallation).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole("alert")).toHaveTextContent("No linked GitHub account found. Sign in with GitHub first, then retry.");
+    expect(await screen.findByRole("button", { name: "Sign in with GitHub" })).toBeVisible();
+    expect(mocks.createInstallationRequest).not.toHaveBeenCalled();
   });
 
   it("reloads the connection state when the selected workspace changes", async () => {
