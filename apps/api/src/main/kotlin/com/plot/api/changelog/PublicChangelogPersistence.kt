@@ -15,7 +15,7 @@ class PublicChangelogPersistence(
 	fun listEntries(workspaceId: UUID): List<PublicChangelogEntrySummaryResponse> = sqlExecutor.query(
 		"""
 		select id, entry_slug, title, tag_name, published_at
-		from published_changelog_entries
+		from published_changelog_entries pce
 		where workspace_id = ? and unpublished_at is null
 		order by published_at desc, id desc
 		""".trimIndent(),
@@ -33,9 +33,12 @@ class PublicChangelogPersistence(
 
 	fun findEntry(workspaceId: UUID, entrySlug: String): PublicChangelogEntryDetailResponse? = sqlExecutor.query(
 		"""
-		select id, entry_slug, title, tag_name, body_markdown, published_at
-		from published_changelog_entries
-		where workspace_id = ? and entry_slug = ? and unpublished_at is null
+		select pce.id, pce.entry_slug, pce.title, pce.tag_name, pce.body_markdown, pce.published_at,
+		       coalesce((cvr.lexical_content ->> 'documentVersion')::integer, 1) as document_version
+		from published_changelog_entries pce
+		join content_variant_revisions cvr
+		  on cvr.workspace_id = pce.workspace_id and cvr.id = pce.artifact_revision_id
+		where pce.workspace_id = ? and pce.entry_slug = ? and pce.unpublished_at is null
 		""".trimIndent(),
 		{ rs, _ ->
 			PublicChangelogEntryDetailResponse(
@@ -45,6 +48,7 @@ class PublicChangelogPersistence(
 				tagName = rs.getString(4),
 				bodyMarkdown = requireNotNull(rs.getString(5)),
 				publishedAt = requireNotNull(rs.getTimestamp(6)).toInstant(),
+				documentVersion = rs.getInt(7),
 				workspaceSlug = "",
 				workspaceName = "",
 				logoUrl = null,

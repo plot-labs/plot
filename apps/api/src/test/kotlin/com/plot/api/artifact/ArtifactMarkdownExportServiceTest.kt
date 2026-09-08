@@ -14,8 +14,10 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import tools.jackson.databind.ObjectMapper
 
 class ArtifactMarkdownExportServiceTest {
+	private val mapper = ObjectMapper()
 	private val runId = UUID.fromString("00000000-0000-0000-0000-000000000001")
 	private val github = evidence("00000000-0000-0000-0000-000000000021", "GitHub PR #42", "https://github.com/acme/app/pull/42", "private github excerpt")
 	private val issue = evidence(
@@ -136,6 +138,31 @@ class ArtifactMarkdownExportServiceTest {
 	}
 
 	@Test
+	fun neutralizesMarkdownBlockSyntaxInUntrustedBodies() {
+		val body = """
+			# injected heading
+			- injected list item
+			1. injected ordered item
+			> injected quote
+			```injected code```
+			| injected | table |
+			    injected indented code
+		""".trimIndent()
+
+		val result = ArtifactMarkdownExportService().render(
+			listOf(sentence(0, body, github.id)),
+			listOf(github),
+			acknowledgeUnresolved = false,
+			includeSources = false,
+		)
+
+		assertFalse(Regex("(?m)^ {0,3}(#{1,6}\\s|>\\s?|[-+*]\\s|\\d+[.)]\\s|```|~~~)").containsMatchIn(result.markdown))
+		assertFalse(Regex("(?m)^ {4}\\S").containsMatchIn(result.markdown))
+		assertFalse(result.markdown.contains("| injected |"))
+		assertTrue(result.markdown.contains("\\# injected heading"))
+	}
+
+	@Test
 	fun appendsConfirmedFactsWithoutGithubLinks() {
 		val confirmed = EvidenceSnapshot(
 			id = UUID.fromString("00000000-0000-0000-0000-000000000024"),
@@ -169,6 +196,36 @@ class ArtifactMarkdownExportServiceTest {
 		assertTrue(result.markdown.contains("## Confirmed in Plot\n\n- Confirmed availability\n"))
 		assertFalse(result.markdown.contains("](null)"))
 		assertFalse(result.markdown.contains("Generally available."))
+	}
+
+	@Test
+	fun rendersV2LayoutAndKeepsCtaIndependentFromSourceSection() {
+		val heading = sentence(0, "Release notes", github.id)
+		val item = sentence(1, "Search is faster.", github.id)
+		val cta = sentence(2, "Join the beta", github.id)
+		val document = mapper.readTree(
+			"""
+			{"documentVersion":2,"root":{"type":"root","version":1,"children":[
+			{"type":"heading","nodeId":"00000000-0000-0000-0000-000000000101","statementId":"${heading.id}","tag":"h1","children":[]},
+			{"type":"list","nodeId":"00000000-0000-0000-0000-000000000102","listType":"bullet","start":1,"children":[{"type":"listItem","nodeId":"00000000-0000-0000-0000-000000000103","statementId":"${item.id}","children":[]}]},
+			{"type":"cta","nodeId":"00000000-0000-0000-0000-000000000104","statementId":"${cta.id}","destinationId":"00000000-0000-0000-0000-000000000105","destinationLabel":"Join the beta","destinationUrl":"https://plot.test/beta","children":[]}
+			]}}
+			""".trimIndent(),
+		)
+
+		val result = ArtifactMarkdownExportService().renderDocument(
+			document = document,
+			sentences = listOf(heading, item, cta),
+			evidence = listOf(github),
+			acknowledgeUnresolved = false,
+			includeSources = true,
+			sources = listOf(ExportSource(github.id, "GITHUB", github.sourceLabel, github.originalUrl)),
+		)
+
+		assertEquals(
+			"# Release notes\n\n- Search is faster.\n\n[Join the beta](https://plot.test/beta)\n\n## Sources\n\n- [GitHub PR #42](https://github.com/acme/app/pull/42)\n",
+			result.markdown,
+		)
 	}
 
 	private fun sentence(orderIndex: Int, body: String, vararg evidenceIds: UUID): ExportSentence {
