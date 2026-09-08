@@ -5,6 +5,7 @@ import com.plot.api.ai.provider.ReviewerModelRequest
 import com.plot.api.ai.provider.RewriteModelRequest
 import com.plot.api.ai.provider.WriterModelRequest
 import com.plot.api.artifact.workflow.model.EvidenceSnapshot
+import com.plot.api.artifact.workflow.model.ArtifactLayoutNode
 import com.plot.api.artifact.workflow.model.ReviewVerdict
 import com.plot.api.artifact.workflow.model.SentenceArtifact
 import com.plot.api.artifact.workflow.model.ValidatedSentenceReview
@@ -43,6 +44,8 @@ data class ArtifactWorkflowState(
 	val failureCode: String? = null,
 	val workSessionId: UUID? = null,
 	val agentRunId: UUID? = null,
+	val documentVersion: Int = 1,
+	val layout: List<ArtifactLayoutNode> = emptyList(),
 )
 
 class ArtifactWorkflowService(
@@ -55,10 +58,22 @@ class ArtifactWorkflowService(
 		require(maxSemanticRewrites > 0)
 	}
 
-	fun start(runId: UUID, evidence: List<EvidenceSnapshot>, instruction: String?): ArtifactWorkflowState {
+	fun start(
+		runId: UUID,
+		evidence: List<EvidenceSnapshot>,
+		instruction: String?,
+		documentVersion: Int = 1,
+	): ArtifactWorkflowState {
 		require(evidence.isNotEmpty()) { "ArtifactWorkflow requires evidence" }
 		require(evidence.all { it.artifactWorkflowRunId == runId }) { "Evidence belongs to another run" }
-		return ArtifactWorkflowState(runId, evidence.sortedBy { it.orderIndex }, instruction?.trim(), ArtifactWorkflowRunStatus.QUEUED)
+		require(documentVersion in SUPPORTED_DOCUMENT_VERSIONS) { "Unsupported artifact document version" }
+		return ArtifactWorkflowState(
+			runId,
+			evidence.sortedBy { it.orderIndex },
+			instruction?.trim(),
+			ArtifactWorkflowRunStatus.QUEUED,
+			documentVersion = documentVersion,
+		)
 	}
 
 	/** Advances exactly one durable model-call checkpoint. External model calls are at-least-once across a crash window. */
@@ -75,7 +90,14 @@ class ArtifactWorkflowService(
 	)
 
 	private fun write(state: ArtifactWorkflowState, gateway: ArtifactWorkflowModelGateway): ArtifactWorkflowState {
-		val output = gateway.write(WriterModelRequest(state.runId, state.instruction, state.evidence)).value
+		val output = gateway.write(
+			WriterModelRequest(
+				artifactWorkflowRunId = state.runId,
+				instruction = state.instruction,
+				evidence = state.evidence,
+				documentVersion = state.documentVersion,
+			),
+		).value
 		val promptVersion = frozenPromptVersionLookup?.promptVersionFor(state.runId)
 			?: ContentTypeRegistry.CHANGELOG_PROMPT_VERSION
 		val sentences = validator.assignSentenceIds(
@@ -85,9 +107,11 @@ class ArtifactWorkflowService(
 			maxSentences = ContentTypeRegistry.maxWriterSentences(promptVersion),
 			idGenerator = idGenerator,
 		)
+		val layout = validator.assignLayout(output.layout, output.sentences, sentences)
 		return state.copy(
 			status = ArtifactWorkflowRunStatus.REVIEWING,
 			sentences = sentences,
+			layout = layout,
 			artifacts = state.artifacts + WorkflowArtifact(
 				WorkflowArtifactKind.WRITER_OUTPUT,
 				state.artifacts.size,
@@ -110,6 +134,7 @@ class ArtifactWorkflowService(
 		val conflicts = reviews.filter { it.verdict == ReviewVerdict.CONFLICT }
 		val conflictSentenceIds = conflicts.map { it.sentenceId }.toSet()
 		val reviewedSentences = state.sentences.filterNot { it.id in conflictSentenceIds }
+		val reviewedLayout = validator.retainLayout(state.layout, reviewedSentences.map { it.id }.toSet())
 		val reviewedReviews = reviews.filterNot { it.sentenceId in conflictSentenceIds }
 		val reviewedArtifacts = if (conflicts.isEmpty()) {
 			artifacts
@@ -131,6 +156,7 @@ class ArtifactWorkflowService(
 		return state.copy(
 			status = status,
 			sentences = reviewedSentences,
+			layout = reviewedLayout,
 			reviews = reviewedReviews,
 			artifacts = reviewedArtifacts,
 			rewriteTargetSentenceIds = targets,
@@ -153,9 +179,11 @@ class ArtifactWorkflowService(
 			output,
 			idGenerator,
 		)
+		val layout = validator.retainLayout(state.layout, sentences.map { it.id }.toSet())
 		return state.copy(
 			status = ArtifactWorkflowRunStatus.REVIEWING,
 			sentences = sentences,
+			layout = layout,
 			semanticRewriteAttempt = state.semanticRewriteAttempt + 1,
 			artifacts = state.artifacts + WorkflowArtifact(
 				WorkflowArtifactKind.REWRITER_OUTPUT,
@@ -163,6 +191,10 @@ class ArtifactWorkflowService(
 				sentences = sentences,
 			),
 		)
+	}
+
+	private companion object {
+		val SUPPORTED_DOCUMENT_VERSIONS = setOf(1, 2)
 	}
 
 }

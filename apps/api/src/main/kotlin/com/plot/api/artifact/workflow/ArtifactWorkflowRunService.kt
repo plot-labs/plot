@@ -87,7 +87,12 @@ class ArtifactWorkflowRunService(
 			)
 		}
 		val evidence = githubEvidence + confirmedFactEvidence(runId, agentRun, githubEvidence.size)
-		val initialState = workflowService.start(runId, evidence, agentRun.instructionSnapshot).copy(
+		val initialState = workflowService.start(
+			runId = runId,
+			evidence = evidence,
+			instruction = agentRun.instructionSnapshot,
+			documentVersion = 2,
+		).copy(
 			agentRunId = agentRun.id,
 		)
 		val state = persistence.createRun(

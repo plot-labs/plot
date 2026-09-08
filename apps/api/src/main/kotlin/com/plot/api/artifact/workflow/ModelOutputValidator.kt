@@ -1,6 +1,7 @@
 package com.plot.api.artifact.workflow
 
 import com.plot.api.artifact.workflow.model.EvidenceSnapshot
+import com.plot.api.artifact.workflow.model.ArtifactLayoutNode
 import com.plot.api.artifact.workflow.model.ReviewVerdict
 import com.plot.api.artifact.workflow.model.ReviewerOutput
 import com.plot.api.artifact.workflow.model.SentenceArtifact
@@ -9,6 +10,7 @@ import com.plot.api.artifact.workflow.model.SentenceOrigin
 import com.plot.api.artifact.workflow.model.TargetedRewriteOutput
 import com.plot.api.artifact.workflow.model.ValidatedSentenceReview
 import com.plot.api.artifact.workflow.model.WriterOutput
+import com.plot.api.artifact.workflow.model.WriterLayoutNode
 import java.util.UUID
 
 class InvalidModelOutputException(message: String) : IllegalArgumentException(message)
@@ -43,6 +45,96 @@ class ModelOutputValidator {
 				conflictEvidenceIds = sentence.conflictEvidenceIds.toList(),
 			)
 		}
+	}
+
+	/**
+	 * Converts writer-local sentence indexes into server-owned statement IDs.
+	 * An empty layout is deliberately accepted for old writer schemas; the
+	 * materializer then emits one V2 paragraph per sentence.
+	 */
+	fun assignLayout(
+		layout: List<WriterLayoutNode>,
+		writerSentences: List<com.plot.api.artifact.workflow.model.WriterSentence>,
+		sentences: List<SentenceArtifact>,
+	): List<ArtifactLayoutNode> {
+		if (layout.isEmpty()) return emptyList()
+		if (writerSentences.size != sentences.size) invalid("Writer layout sentence mapping is out of date")
+		val consumed = linkedSetOf<Int>()
+		val normalized = layout.mapIndexed { index, node ->
+			normalizeLayoutNode(node, "Writer layout block $index", sentences, consumed, inList = false)
+		}
+		if (consumed != sentences.indices.toSet()) {
+			invalid("Writer layout must reference every sentence exactly once")
+		}
+		return normalized
+	}
+
+	/** Removes layout leaves for conflicts/omissions without leaving empty lists. */
+	fun retainLayout(layout: List<ArtifactLayoutNode>, statementIds: Set<UUID>): List<ArtifactLayoutNode> =
+		layout.mapNotNull { retainLayoutNode(it, statementIds) }
+
+	private fun normalizeLayoutNode(
+		node: WriterLayoutNode,
+		path: String,
+		sentences: List<SentenceArtifact>,
+		consumed: MutableSet<Int>,
+		inList: Boolean,
+	): ArtifactLayoutNode {
+		val type = node.type.trim()
+		return when (type) {
+			"heading" -> {
+				if (inList) invalid("$path cannot contain a heading")
+				val tag = node.tag?.trim()?.takeIf { it in HEADING_TAGS }
+					?: invalid("$path heading tag must be h1, h2, or h3")
+				leafLayout(node, path, type, tag, sentences, consumed)
+			}
+			"paragraph" -> {
+				if (inList) invalid("$path cannot contain a paragraph")
+				leafLayout(node, path, type, null, sentences, consumed)
+			}
+			"list" -> {
+				if (inList) invalid("$path cannot contain a nested list")
+				val listType = node.listType?.trim()?.takeIf { it in LIST_TYPES }
+					?: invalid("$path list type must be bullet or ordered")
+				val start = node.start ?: 1
+				if (start < 1) invalid("$path list start must be positive")
+				if (node.children.isEmpty()) invalid("$path must contain at least one list item")
+				val children = node.children.mapIndexed { index, child ->
+					if (child.type.trim() != "listItem") invalid("$path item $index must be a list item")
+					normalizeLayoutNode(child, "$path item $index", sentences, consumed, inList = true)
+				}
+				ArtifactLayoutNode(type, listType = listType, start = start, children = children)
+			}
+			"listItem" -> {
+				if (!inList) invalid("$path list items must be inside a list")
+				if (node.children.isNotEmpty()) invalid("$path must not contain child layout nodes")
+				leafLayout(node, path, type, null, sentences, consumed)
+			}
+			else -> invalid("$path has unsupported type '$type'")
+		}
+	}
+
+	private fun leafLayout(
+		node: WriterLayoutNode,
+		path: String,
+		type: String,
+		tag: String?,
+		sentences: List<SentenceArtifact>,
+		consumed: MutableSet<Int>,
+	): ArtifactLayoutNode {
+		if (node.children.isNotEmpty()) invalid("$path must not contain child layout nodes")
+		val index = node.statementIndex ?: invalid("$path statementIndex is required")
+		if (index !in sentences.indices) invalid("$path statementIndex is unknown")
+		if (!consumed.add(index)) invalid("$path references a sentence more than once")
+		return ArtifactLayoutNode(type = type, statementId = sentences[index].id, tag = tag)
+	}
+
+	private fun retainLayoutNode(node: ArtifactLayoutNode, statementIds: Set<UUID>): ArtifactLayoutNode? {
+		if (node.type == "list") {
+			val children = node.children.mapNotNull { retainLayoutNode(it, statementIds) }
+			return if (children.isEmpty()) null else node.copy(children = children)
+		}
+		return if (node.statementId == null || node.statementId in statementIds) node else null
 	}
 
 	fun validateReview(
@@ -191,6 +283,8 @@ class ModelOutputValidator {
 	private fun invalid(message: String): Nothing = throw InvalidModelOutputException(message)
 
 	private companion object {
+		val HEADING_TAGS = setOf("h1", "h2", "h3")
+		val LIST_TYPES = setOf("bullet", "ordered")
 		val providerAuthoredCitationPattern = Regex(
 			"""(?i)\bhttps?://|\[[^\]]*]\s*\([^)]*\)|\((?:PR|GitHub|Slack|Linear|source)\s*:""",
 		)
