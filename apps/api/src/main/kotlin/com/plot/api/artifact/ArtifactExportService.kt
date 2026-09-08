@@ -74,9 +74,10 @@ class ArtifactExportService(
 					val inputHash = sha256(
 						listOf(
 							gate.revision.id,
-							gate.revision.revisionNumber,
-							MARKDOWN_RENDERER_VERSION,
-							includeSources,
+						gate.revision.revisionNumber,
+						MARKDOWN_RENDERER_VERSION,
+						gate.revision.lexicalContent.toString(),
+						includeSources,
 							gate.rendered.warningAcknowledged,
 							gate.warningKeys.sorted(),
 							sourceInputs,

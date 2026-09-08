@@ -16,6 +16,7 @@ import com.plot.api.artifact.dto.ContentVariantHistoryDetailResponse
 import com.plot.api.artifact.dto.ExportDisposition
 import com.plot.api.artifact.dto.ExportWarningResponse
 import com.plot.api.dev.DevContext
+import com.plot.api.content.ContentBriefDestination
 import com.plot.api.artifact.workflow.model.CitationStatus
 import com.plot.api.artifact.workflow.model.EvidenceSnapshot
 import com.plot.api.artifact.workflow.model.ExportSentence
@@ -45,6 +46,7 @@ class ArtifactLexicalDocumentValidator(
     private val uuidGenerator: UuidGenerator,
     private val objectMapper: ObjectMapper,
     private val devContext: DevContext,
+    private val documentValidator: ArtifactDocumentValidator = ArtifactDocumentValidator(objectMapper),
 ) {
 	internal fun normalizeStatements(statements: List<ContentStatementInput>): List<NormalizedStatement> = statements.mapIndexed { index, input ->
 		val id = input.id ?: uuidGenerator.next()
@@ -52,7 +54,9 @@ class ArtifactLexicalDocumentValidator(
 		if (order < 0) throw badRequest("Statement order must not be negative")
 		val body = input.body?.trim()?.takeIf { it.isNotBlank() }
 			?: throw badRequest("Statement body is required")
-		NormalizedStatement(id, order, body)
+		val lineage = input.lineage.distinct()
+		if (lineage.size > 20) throw badRequest("Statement lineage is too long")
+		NormalizedStatement(id, order, body, lineage)
 	}.also { rows ->
 		if (rows.map { it.id }.distinct().size != rows.size) {
 			throw badRequest("Statement IDs must be unique")
@@ -81,8 +85,65 @@ class ArtifactLexicalDocumentValidator(
 		}
 	}
 
-	internal fun validateAndSanitizeLexicalContent(lexicalContent: JsonNode, statements: List<NormalizedStatement>): JsonNode {
+	internal fun normalizeStatementLineage(
+		statements: List<NormalizedStatement>,
+		currentSentenceIds: Set<UUID>,
+	): List<NormalizedStatement> {
+		val byId = statements.associateBy { it.id }
+		val memo = mutableMapOf<UUID, List<UUID>>()
+
+		fun rootsFor(id: UUID, visiting: MutableSet<UUID>): List<UUID> {
+			if (id in currentSentenceIds) return listOf(id)
+			memo[id]?.let { return it }
+			val statement = byId[id] ?: throw ApiException(
+				HttpStatus.BAD_REQUEST,
+				"BAD_REQUEST",
+				"Statement lineage is not part of this artifact",
+				id,
+			)
+			if (!visiting.add(id)) {
+				throw ApiException(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "Statement lineage contains a cycle", id)
+			}
+			val roots = statement.lineage
+				.asSequence()
+				.filter { it != id }
+				.flatMap { rootsFor(it, visiting).asSequence() }
+				.distinct()
+				.toList()
+			visiting.remove(id)
+			memo[id] = roots
+			return roots
+		}
+
+		return statements.map { statement ->
+			statement.copy(
+				lineage = statement.lineage
+					.asSequence()
+					.flatMap { rootsFor(it, linkedSetOf()).asSequence() }
+					.distinct()
+					.toList(),
+			)
+		}
+	}
+
+	internal fun validateAndSanitizeLexicalContent(
+		lexicalContent: JsonNode,
+		statements: List<NormalizedStatement>,
+		allowedDestinations: Map<UUID, ContentBriefDestination> = emptyMap(),
+	): JsonNode {
 		if (!lexicalContent.isObject) throw badRequest("Lexical content must be a JSON object")
+		val documentVersion = try {
+			documentValidator.documentVersion(lexicalContent)
+		} catch (error: ArtifactDocumentValidationException) {
+			throw badRequest(error.message ?: "Unsupported document version")
+		}
+		if (documentVersion == 2) {
+			return try {
+				documentValidator.validateAndSanitize(lexicalContent, statements, allowedDestinations)
+			} catch (error: ArtifactDocumentValidationException) {
+				throw badRequest(error.message ?: "Invalid V2 document")
+			}
+		}
 		assertAllowedFields(lexicalContent, setOf("root"), "Lexical content")
 		val root = lexicalContent.get("root")
 			?: throw badRequest("Lexical content must contain a root node")
@@ -269,4 +330,9 @@ class ArtifactLexicalDocumentValidator(
     }
 }
 
-internal data class NormalizedStatement(val id: UUID, val orderIndex: Int, val body: String)
+internal data class NormalizedStatement(
+	val id: UUID,
+	val orderIndex: Int,
+	val body: String,
+	val lineage: List<UUID> = emptyList(),
+)

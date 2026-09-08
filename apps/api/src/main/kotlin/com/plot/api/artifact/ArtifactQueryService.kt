@@ -33,6 +33,7 @@ import org.springframework.http.HttpStatus
 import com.plot.api.persistence.JooqSqlExecutor
 import com.plot.api.persistence.JooqTransactionExecutor
 import com.plot.api.content.ContentSourceSnapshotService
+import com.plot.api.content.ContentBrief
 import com.plot.api.persistence.SqlRow
 import org.springframework.stereotype.Service
 import tools.jackson.databind.JsonNode
@@ -184,15 +185,17 @@ class ArtifactQueryService(
 			header[1] as String,
 			header[2] as String?,
 			header[5] as String,
-			ContentVariantResponse(
-				variantId,
-				header[4] as String,
-				revision.id,
-				revision.revisionNumber,
-				revision.lexicalContent,
-				sentences,
-				publicSources(citations),
-			),
+				ContentVariantResponse(
+					variantId,
+					header[4] as String,
+					revision.id,
+					revision.revisionNumber,
+					revision.lexicalContent,
+					sentences,
+					publicSources(citations),
+					documentVersion(revision.lexicalContent),
+					confirmedDestinations(variantId),
+				),
 			loadLivePublication(variantId),
 			relatedArtifacts,
 		)
@@ -250,7 +253,7 @@ class ArtifactQueryService(
 		includeHistoricalLifecycle: Boolean = false,
 	): Map<UUID, List<PublicCitation>> = sqlExecutor.query(
 		"""
-		select rs.sentence_id, c.generation_input_id, i.source_provider, i.source_label, i.original_url,
+			select rs.sentence_id, c.generation_input_id, i.source_provider, i.source_label, i.original_url,
 		       case
 		         when coalesce(i.source_scope_id, gr.source_scope_id) is null then true
 		         when sc.status = 'ACTIVE' and exists (
@@ -266,7 +269,8 @@ class ArtifactQueryService(
 		         ) then true
 		         else false
 		       end as source_access
-		       , sc.metadata ->> 'visibility' as source_visibility
+		       , sc.metadata ->> 'visibility' as source_visibility,
+		       c.status
 		from content_variant_revision_sentences rs
 		join sentence_citations c
 		  on c.workspace_id = rs.workspace_id and c.sentence_id = rs.sentence_id
@@ -289,8 +293,9 @@ class ArtifactQueryService(
 					requireNotNull(rs.getObject(2, UUID::class.java)),
 					provider,
 					sourceLabel,
-					null,
-					rs.getString(7),
+						 null,
+						rs.getString(7),
+						requireNotNull(rs.getString(8)),
 				)
 			} else {
 				val originalUrl = safeHttpUrl(rs.getString(5))
@@ -303,8 +308,9 @@ class ArtifactQueryService(
 						requireNotNull(rs.getObject(2, UUID::class.java)),
 						provider,
 						sourceLabel,
-						originalUrl,
+						 originalUrl,
 						rs.getString(7),
+						requireNotNull(rs.getString(8)),
 					)
 				}
 			}
@@ -320,6 +326,25 @@ class ArtifactQueryService(
 			ContentSourceResponse(first.evidenceId, first.provider, first.sourceLabel, first.originalUrl, rows.map { it.sentenceId }.distinct())
 		}
 		.sortedWith(compareBy(ContentSourceResponse::sourceLabel, ContentSourceResponse::evidenceId))
+	private fun confirmedDestinations(variantId: UUID): List<com.plot.api.artifact.dto.ContentBriefDestinationResponse> {
+		val snapshot = sqlExecutor.query(
+			"""
+			select ar.content_brief_snapshot::text
+			from content_variants cv
+			join generation_runs gr on gr.workspace_id = cv.workspace_id and gr.id = cv.generation_run_id
+			join agent_runs ar on ar.workspace_id = gr.workspace_id and ar.id = gr.agent_run_id
+			where cv.workspace_id = ? and cv.id = ?
+			""".trimIndent(),
+			{ rs, _ -> rs.getString(1) },
+			devContext.devWorkspaceId,
+			variantId,
+		).firstOrNull()?.takeIf { it.isNotBlank() } ?: return emptyList()
+		return runCatching {
+			objectMapper.readValue(snapshot, ContentBrief::class.java).destinations.map { destination ->
+				com.plot.api.artifact.dto.ContentBriefDestinationResponse(destination.id, destination.label, destination.url)
+			}
+		}.getOrDefault(emptyList())
+	}
 	internal fun loadExportSentences(
 		variantId: UUID,
 		revisionId: UUID,
@@ -390,6 +415,11 @@ class ArtifactQueryService(
 		) },
 		devContext.devWorkspaceId, runId,
 	)
+	private fun documentVersion(lexicalContent: JsonNode): Int = lexicalContent.get("documentVersion")
+		?.takeIf { it.isIntegralNumber && it.canConvertToInt() }
+		?.asInt()
+		?: 1
+
 	private fun historyCause(revisionNumber: Int, createdByUserId: UUID?): String {
 		if (revisionNumber == 1) return "Initial draft"
 		if (createdByUserId == devContext.devUserId) return "Edited by you"
@@ -439,9 +469,10 @@ internal data class PublicCitation(
     val evidenceId: UUID,
     val provider: String,
     val sourceLabel: String,
-    val originalUrl: String?,
-    val sourceVisibility: String?,
+	val originalUrl: String?,
+	val sourceVisibility: String?,
+	val status: String,
 ) {
-    val response: ContentCitationResponse
-        get() = ContentCitationResponse(evidenceId, provider, sourceLabel, originalUrl)
+	val response: ContentCitationResponse
+		get() = ContentCitationResponse(evidenceId, provider, sourceLabel, originalUrl, status)
 }

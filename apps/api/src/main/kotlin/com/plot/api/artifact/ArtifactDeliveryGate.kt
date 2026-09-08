@@ -62,9 +62,10 @@ class ArtifactDeliveryGate(
 		val sources = publicCitations.values.flatten()
 			.distinctBy { it.evidenceId }
 			.map { ExportSource(it.evidenceId, it.provider, it.sourceLabel, it.originalUrl) }
-		val rendered = markdownExportService.render(
-			exportSentences,
-			evidence,
+		val rendered = markdownExportService.renderDocument(
+			document = revision.lexicalContent,
+			sentences = exportSentences,
+			evidence = evidence,
 			acknowledgeUnresolved = acknowledge && unresolved.isNotEmpty(),
 			includeSources = includeSources,
 			sources = sources,

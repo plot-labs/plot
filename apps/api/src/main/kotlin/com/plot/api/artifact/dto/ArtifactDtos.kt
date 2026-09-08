@@ -15,6 +15,7 @@ data class ContentStatementInput(
 	val id: UUID?,
 	@field:NotNull @field:Min(0) val orderIndex: Int?,
 	@field:NotBlank @field:Size(max = 10_000) val body: String?,
+	@field:Size(max = 20) val lineage: List<UUID> = emptyList(),
 )
 
 data class SaveContentVariantRequest(
@@ -100,6 +101,14 @@ data class ContentVariantResponse(
 	val lexicalContent: JsonNode,
 	val sentences: List<ContentSentenceResponse>,
 	val sources: List<ContentSourceResponse>,
+	val documentVersion: Int = 1,
+	val destinations: List<ContentBriefDestinationResponse> = emptyList(),
+)
+
+data class ContentBriefDestinationResponse(
+	val id: UUID,
+	val label: String,
+	val url: String,
 )
 
 data class ContentVariantHistoryItemResponse(
@@ -130,6 +139,7 @@ data class ContentCitationResponse(
 	val provider: String,
 	val sourceLabel: String,
 	val originalUrl: String?,
+	val status: String = "ACTIVE",
 )
 
 data class ContentSourceResponse(

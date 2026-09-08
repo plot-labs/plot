@@ -34,6 +34,7 @@ data class PublicChangelogEntryDetailResponse(
 	val workspaceName: String,
 	val logoUrl: String?,
 	val sentences: List<PublicChangelogSentenceResponse>,
+	val documentVersion: Int = 1,
 )
 
 data class PublicChangelogResponse(

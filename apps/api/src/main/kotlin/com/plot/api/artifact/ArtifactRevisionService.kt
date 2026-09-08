@@ -24,6 +24,7 @@ import com.plot.api.artifact.workflow.model.ExportSentenceStatus
 import com.plot.api.artifact.workflow.model.SentenceCitation
 import com.plot.api.artifact.workflow.model.SourceProvider
 import com.plot.api.artifact.workflow.model.ExportSource
+import com.plot.api.content.ContentBrief
 import java.net.URI
 import java.security.MessageDigest
 import java.sql.Timestamp
@@ -48,8 +49,9 @@ class ArtifactRevisionService(
     private val uuidGenerator: UuidGenerator,
     private val query: ArtifactQueryService,
     private val materializer: ArtifactRevisionMaterializer,
-    private val validator: ArtifactLexicalDocumentValidator,
-    private val clock: Clock = Clock.systemUTC(),
+	private val validator: ArtifactLexicalDocumentValidator,
+	private val objectMapper: ObjectMapper,
+	private val clock: Clock = Clock.systemUTC(),
 ) {
 	fun saveVariant(
 		variantId: UUID,
@@ -88,9 +90,14 @@ class ArtifactRevisionService(
 				ContentStatementInput(statement.id, statement.orderIndex, if (statement.id == sentenceId) replacement else statement.body)
 			}
 			// This compatibility operation still goes through the whole-artifact
-			// contract. Rebuild the canonical Lexical projection so it cannot leave
-			// the stored document JSON out of sync with the edited sentence rows.
-			saveVariantInTransaction(variantId, current.revisionNumber, materializer.lexicalContentForStatements(statements), statements)
+			// contract. V2 edits patch the addressed leaf so heading/list/CTA layout
+			// survives; legacy V1 documents keep their canonical projection.
+			val lexicalContent = if (current.lexicalContent.get("documentVersion")?.asInt() == 2) {
+				materializer.replaceStatementBody(current.lexicalContent, sentenceId, replacement)
+			} else {
+				materializer.lexicalContentForStatements(statements)
+			}
+			saveVariantInTransaction(variantId, current.revisionNumber, lexicalContent, statements)
 		}
 
 	private fun saveVariantInTransaction(
@@ -99,17 +106,37 @@ class ArtifactRevisionService(
 		lexicalContent: JsonNode,
 		statements: List<ContentStatementInput>,
 	): ArtifactResponse {
-		val normalized = validator.normalizeStatements(statements)
-		val sanitizedLexicalContent = validator.validateAndSanitizeLexicalContent(lexicalContent, normalized)
+		var normalized = validator.normalizeStatements(statements)
+			val sanitizedLexicalContent = validator.validateAndSanitizeLexicalContent(
+				lexicalContent,
+				normalized,
+				confirmedCtaDestinations(variantId),
+			)
 		lockVariant(variantId)
 		val currentRevision = materializer.currentArtifactRevisionForUpdate(variantId)
 		if (currentRevision.revisionNumber != expectedRevisionNumber) throw staleArtifactRevision(variantId)
 		val now = clock.instant()
 		val previousStatements = materializer.loadCurrentStatements(currentRevision.id, variantId)
+		val currentDocumentVersion = currentRevision.lexicalContent.get("documentVersion")
+			?.takeIf { it.isIntegralNumber && it.canConvertToInt() }
+			?.asInt()
+			?: 1
+		val incomingDocumentVersion = sanitizedLexicalContent.get("documentVersion")
+			?.takeIf { it.isIntegralNumber && it.canConvertToInt() }
+			?.asInt()
+			?: 1
+		if (currentDocumentVersion == 2 && incomingDocumentVersion != 2) {
+			throw ApiException(
+				HttpStatus.CONFLICT,
+				"DOCUMENT_VERSION_CONFLICT",
+				"V2 artifacts require a V2 save payload",
+				variantId,
+			)
+		}
 		val previousById = previousStatements.associateBy { it.id }
-			val allSentenceIds = sqlExecutor.query(
-				"select id from content_variant_sentences where workspace_id = ? and content_variant_id = ?",
-				{ rs, _ -> requireNotNull(rs.getObject(1, UUID::class.java)) },
+		val allSentenceIds = sqlExecutor.query(
+			"select id from content_variant_sentences where workspace_id = ? and content_variant_id = ?",
+			{ rs, _ -> requireNotNull(rs.getObject(1, UUID::class.java)) },
 			devContext.devWorkspaceId, variantId,
 		).toSet()
 		val currentRevisionBySentence = sqlExecutor.query(
@@ -118,12 +145,24 @@ class ArtifactRevisionService(
 			devContext.devWorkspaceId, variantId,
 		).toMap()
 		validator.validateStatementOwnership(normalized, allSentenceIds)
+		normalized
+			.filter { it.id in allSentenceIds && it.id !in previousById }
+			.forEach { statement ->
+				throw ApiException(
+					HttpStatus.BAD_REQUEST,
+					"STATEMENT_ID_REUSE",
+					"A removed statement identity cannot be reused",
+					statement.id,
+				)
+			}
+		normalized = validator.normalizeStatementLineage(normalized, previousById.keys)
+		val priorCitations = loadLineageCitations(variantId)
 		val previousContent = previousStatements
 			.sortedBy { it.orderIndex }
-			.map { listOf(it.id, it.orderIndex, it.body) }
+			.map { listOf(it.id, it.orderIndex, it.body, emptyList<UUID>()) }
 		val nextContent = normalized
 			.sortedBy { it.orderIndex }
-			.map { listOf(it.id, it.orderIndex, it.body) }
+			.map { statement -> listOf(statement.id, statement.orderIndex, statement.body, statement.lineage.filter { it != statement.id }) }
 		if (sanitizedLexicalContent == currentRevision.lexicalContent && previousContent == nextContent) {
 			return query.getVariant(variantId)
 		}
@@ -136,7 +175,19 @@ class ArtifactRevisionService(
 				insertNewSentence(variantId, statement.id, now)
 				val revisionId = insertSentenceRevision(variantId, statement.id, 1, statement.body, now)
 				nextRevisionBySentence[statement.id] = revisionId
-			} else if ((previous?.body ?: existingRevision?.body) != statement.body) {
+				copyLineageCitations(
+					variantId = variantId,
+					generationRunId = currentRevision.artifactWorkflowRunId,
+					statementId = statement.id,
+					sentenceRevisionId = revisionId,
+					lineage = statement.lineage,
+					priorCitations = priorCitations,
+					now = now,
+				)
+			} else if (
+				(previous?.body ?: existingRevision?.body) != statement.body ||
+				(statement.lineage.isNotEmpty() && statement.lineage.any { it != statement.id })
+			) {
 				val previousRevisionId = previous?.revisionId ?: existingRevision!!.revisionId
 				val previousRevisionNumber = previous?.revisionNumber ?: existingRevision!!.revisionNumber
 				sqlExecutor.update(
@@ -145,6 +196,15 @@ class ArtifactRevisionService(
 				)
 				val revisionId = insertSentenceRevision(variantId, statement.id, previousRevisionNumber + 1, statement.body, now)
 				nextRevisionBySentence[statement.id] = revisionId
+				copyLineageCitations(
+					variantId = variantId,
+					generationRunId = currentRevision.artifactWorkflowRunId,
+					statementId = statement.id,
+					sentenceRevisionId = revisionId,
+					lineage = statement.lineage,
+					priorCitations = priorCitations,
+					now = now,
+				)
 				sqlExecutor.update(
 					"update sentence_citations set status = 'STALE', stale_reason = 'STATEMENT_CHANGED', updated_at = ? where workspace_id = ? and sentence_id = ? and status = 'ACTIVE'",
 					Timestamp.from(now), devContext.devWorkspaceId, statement.id,
@@ -207,6 +267,69 @@ class ArtifactRevisionService(
 		return query.getVariant(variantId)
 	}
 
+	private fun loadLineageCitations(variantId: UUID): List<LineageCitationRow> = sqlExecutor.query(
+		"""
+		select sentence_id, generation_input_id, status
+		from sentence_citations
+		where workspace_id = ? and content_variant_id = ?
+		order by sentence_id, citation_order
+		""".trimIndent(),
+		{ rs, _ ->
+			LineageCitationRow(
+				sentenceId = requireNotNull(rs.getObject(1, UUID::class.java)),
+				evidenceId = requireNotNull(rs.getObject(2, UUID::class.java)),
+				status = requireNotNull(rs.getString(3)),
+			)
+		},
+		devContext.devWorkspaceId,
+		variantId,
+	)
+
+	private fun copyLineageCitations(
+		variantId: UUID,
+		generationRunId: UUID,
+		statementId: UUID,
+		sentenceRevisionId: UUID,
+		lineage: List<UUID>,
+		priorCitations: List<LineageCitationRow>,
+		now: java.time.Instant,
+	) {
+		if (lineage.isEmpty()) return
+		priorCitations
+			.filter { it.sentenceId in lineage && it.status != "REMOVED" }
+			.distinctBy { it.evidenceId }
+			.forEachIndexed { index, citation ->
+				sqlExecutor.update(
+					"""
+					insert into sentence_citations (
+					 id, workspace_id, generation_run_id, content_variant_id, sentence_id,
+					 sentence_revision_id, generation_input_id, citation_order, status, stale_reason, created_at, updated_at
+					) values (?, ?, ?, ?, ?, ?, ?, ?, 'STALE', 'LINEAGE_DERIVED', ?, ?)
+					""".trimIndent(),
+					uuidGenerator.next(), devContext.devWorkspaceId, generationRunId, variantId, statementId,
+					sentenceRevisionId, citation.evidenceId, index, Timestamp.from(now), Timestamp.from(now),
+				)
+			}
+	}
+
+	private fun confirmedCtaDestinations(variantId: UUID): Map<UUID, com.plot.api.content.ContentBriefDestination> {
+		val snapshot = sqlExecutor.query(
+			"""
+			select ar.content_brief_snapshot::text
+			from content_variants cv
+			join generation_runs gr on gr.workspace_id = cv.workspace_id and gr.id = cv.generation_run_id
+			join agent_runs ar on ar.workspace_id = gr.workspace_id and ar.id = gr.agent_run_id
+			where cv.workspace_id = ? and cv.id = ?
+			""".trimIndent(),
+			{ rs, _ -> rs.getString(1) },
+			devContext.devWorkspaceId,
+			variantId,
+		).firstOrNull()?.takeIf { it.isNotBlank() } ?: return emptyMap()
+		return runCatching {
+			objectMapper.readValue(snapshot, ContentBrief::class.java).destinations.associateBy { it.id }
+		}.getOrDefault(emptyMap())
+	}
+
 	private fun insertNewSentence(variantId: UUID, sentenceId: UUID, now: java.time.Instant) {
 		val artifactWorkflowRunId = sqlExecutor.queryForObject(
 			"select generation_run_id from content_variants where workspace_id = ? and id = ?",
@@ -263,3 +386,9 @@ class ArtifactRevisionService(
 
     private fun notFound(): Nothing = throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Content pack not found")
 }
+
+private data class LineageCitationRow(
+	val sentenceId: UUID,
+	val evidenceId: UUID,
+	val status: String,
+)
