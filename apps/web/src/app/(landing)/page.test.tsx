@@ -12,10 +12,12 @@ describe("public landing page", () => {
     expect(
       screen.getByRole("heading", {
         level: 1,
-        name: /you can publish/i,
+        name: /what actually shipped/i,
       }),
     ).toBeVisible();
-    expect(screen.getByText(/published release range/i)).toBeVisible();
+    expect(screen.getAllByText(/published GitHub release/i).length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: /every claim keeps/i })).toBeVisible();
+    expect(screen.getByText(/pull request #142/i)).toBeVisible();
     expect(screen.getAllByText(/publish/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/public changelog/i).length).toBeGreaterThan(0);
     expect(screen.getByLabelText("Example workspace sidebar")).toBeVisible();

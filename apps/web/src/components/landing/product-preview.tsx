@@ -30,7 +30,7 @@ import Image from "next/image";
 import { useId, useState, type CSSProperties } from "react";
 
 const initialDraft = [
-  "Your next project is easier to find. This release brings search and pinned favorites to your workspace.",
+  "Find projects faster. This release brings search and pinned favorites to your workspace.",
   "Search your project list by name to get to the right project without scrolling.",
   "Pin the projects you return to most. They stay at the top of your list, ready when you are.",
 ].join("\n\n");
@@ -93,14 +93,14 @@ export function ProductPreview() {
                     <ChatMessageList density="compact" gap={4} style={{ flex: "none" }}>
                       <ChatMessage sender="user">
                         <ChatMessageBubble className="max-w-[min(680px,92%)]">
-                          <p>Write a changelog for v2.4. Focus on what changed for our customers.</p>
+                          <p>Write a changelog for the published v2.4 release. Include only changes supported by the sources.</p>
                         </ChatMessageBubble>
                       </ChatMessage>
 
                       <ChatMessage sender="assistant">
                         <ChatMessageBubble variant="ghost" className="w-full min-w-0 max-w-full">
                           <p className="text-sm leading-6 text-black/65">
-                            The source review is complete. The artifact is ready below.
+                            I prepared a draft from the published release. Every customer-facing claim keeps its source.
                           </p>
                           <div className="mt-4 flex items-center gap-2 border-b border-black/[0.07] pb-3 text-xs text-black/55">
                             <Check aria-hidden="true" className="size-3.5 text-emerald-700" />
@@ -126,7 +126,7 @@ export function ProductPreview() {
                             className="mt-4 flex w-full items-center justify-between gap-4 rounded-xl border border-black/[0.08] bg-white/70 px-4 py-3 text-left transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
                           >
                             <span className="min-w-0 truncate text-sm font-medium text-black/82">
-                              Less searching. More finding.
+                              Find projects faster.
                             </span>
                             <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-black/[0.035] px-3 py-1.5 text-xs font-medium text-black/50">
                               <Eye aria-hidden="true" className="size-3.5" />
@@ -176,7 +176,7 @@ export function ProductPreview() {
 
                 <div className="shrink-0 bg-[#fbfbf8] px-6 pb-3 pt-1">
                   <div className="text-[16px] font-medium leading-[22px] text-black/72">
-                    Less searching. More finding.
+                    Find projects faster.
                   </div>
                   <p className="mt-1 text-xs text-black/50">Example draft · Edits stay in this preview</p>
                 </div>

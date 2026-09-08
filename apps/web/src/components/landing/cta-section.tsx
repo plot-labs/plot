@@ -9,11 +9,11 @@ export function CtaSection() {
             Get early access
           </p>
           <h2 className="font-display text-5xl leading-[1.02] tracking-tight lg:text-7xl">
-            Ship fast.<br />Write less.
+            Make the next release <br />easy to trust.
           </h2>
           <p className="mt-6 max-w-sm text-lg leading-8 text-muted-foreground">
-            Bring your next release to Plot. Turn what shipped into a changelog
-            you can review, refine, and publish.
+            Bring your next published release to Plot. Review every claim with
+            its sources, refine the wording, and publish when it is right.
           </p>
           <p className="mt-8 text-sm text-muted-foreground">
             Join the waitlist. We’ll be in touch when early access opens.

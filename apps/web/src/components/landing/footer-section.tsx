@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 
@@ -31,12 +32,21 @@ export function FooterSection() {
             {/* Brand Column */}
             <div className="col-span-2">
               <Link href="/" className="inline-flex items-center gap-2 mb-6">
+                <Image
+                  src="/plot-icon.svg"
+                  alt=""
+                  aria-hidden="true"
+                  width={24}
+                  height={24}
+                  className="size-6"
+                />
                 <span className="text-2xl font-display">Plot</span>
               </Link>
 
               <p className="text-muted-foreground leading-relaxed mb-8 max-w-xs">
-                Plot turns a shipped GitHub release into a source-cited changelog
-                your team can review, publish, and share.
+                Plot turns a published GitHub release into a customer-ready
+                changelog. Every claim stays tied to its source for review and
+                approval.
               </p>
 
               {/* Social Links */}
