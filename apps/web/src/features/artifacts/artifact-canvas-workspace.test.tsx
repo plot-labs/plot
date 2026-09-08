@@ -152,13 +152,14 @@ describe("ArtifactCanvasWorkspace", () => {
     expect(createButton).toBeVisible();
     fireEvent.click(createButton);
 
-    expect(await screen.findByRole("dialog", { name: "이 근거로 다른 콘텐츠 만들기" })).toBeVisible();
-    expect(screen.getByText("생성 크레딧 차감 안내")).toBeVisible();
+    expect(await screen.findByRole("dialog", { name: "Create related content" })).toBeVisible();
+    expect(screen.getByText(/Consumes 1 generation credit/i)).toBeVisible();
 
-    const instructionInput = screen.getByLabelText("추가 지시사항 (선택사항)");
+    const instructionInput = screen.getByLabelText("Additional instructions (optional)");
     fireEvent.change(instructionInput, { target: { value: "Please highlight key benefits." } });
 
-    fireEvent.click(screen.getByRole("button", { name: "생성 시작" }));
+    expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Generate content" }));
 
     await waitFor(() => expect(testClient.replicateArtifact).toHaveBeenCalledWith(
       "artifact-1",
