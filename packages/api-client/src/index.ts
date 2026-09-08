@@ -15,10 +15,11 @@ export interface SourceReference {
 }
 
 export interface ContentCitation {
-  evidenceId: string;
-  provider: SourceProvider;
-  sourceLabel: string;
-  originalUrl: string | null;
+	evidenceId: string;
+	provider: SourceProvider;
+	sourceLabel: string;
+	originalUrl: string | null;
+	status?: "ACTIVE" | "STALE" | "REMOVED" | string;
 }
 
 export interface ContentSource {
@@ -30,9 +31,10 @@ export interface ContentSource {
 }
 
 export interface ContentStatementInput {
-  id: string | null;
-  orderIndex: number;
-  body: string;
+	id: string | null;
+	orderIndex: number;
+	body: string;
+	lineage?: string[];
 }
 
 export interface ContentSentence {
@@ -76,15 +78,17 @@ export interface Artifact {
   contentType: ContentType;
   publication?: ArtifactPublication | null;
   relatedArtifacts?: RelatedArtifactSummary[];
-  variant: {
+	variant: {
     id: string;
     status: string;
     revisionId: string;
     revisionNumber: number;
     lexicalContent: Record<string, unknown>;
     sentences: ContentSentence[];
-    sources: ContentSource[];
-  };
+		sources: ContentSource[];
+		documentVersion?: 1 | 2;
+		destinations?: CtaDestinationInput[];
+	};
 }
 
 export interface ArtifactSummary {
@@ -182,6 +186,7 @@ export interface PublicChangelogEntry extends PublicChangelogEntrySummary {
   workspaceName: string;
   logoUrl: string | null;
   sentences: PublicChangelogSentence[];
+	documentVersion?: 1 | 2;
 }
 
 export interface RequestOptions { signal?: AbortSignal }
@@ -428,7 +433,16 @@ export interface ContentBrief {
   availability?: string | null;
   pricing?: string | null;
   userAction?: string | null;
-  confirmedFacts?: ConfirmedFactInput[];
+	confirmedFacts?: ConfirmedFactInput[];
+	destinations?: CtaDestinationInput[];
+}
+
+export type ContentBriefInput = ContentBrief;
+
+export interface CtaDestinationInput {
+	id: string;
+	label: string;
+	url: string;
 }
 
 export interface CreateChatAgentRunInput {

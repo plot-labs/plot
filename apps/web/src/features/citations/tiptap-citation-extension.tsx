@@ -13,6 +13,7 @@ export type CitationSourceItem = {
   url: string;
   provider?: string;
   excerpt?: string;
+  status?: "ACTIVE" | "STALE" | "REMOVED" | string;
 };
 
 export const TiptapCitationExtension = TiptapNode.create({
@@ -218,6 +219,15 @@ export function TiptapCitationNodeView({ node }: NodeViewProps) {
               {currentSource.title}
             </h3>
 
+            {citationStatusMessage(currentSource.status) ? (
+              <p
+                role="note"
+                className="mt-2 rounded-xl border border-amber-500/20 bg-amber-500/[0.08] p-2.5 text-xs leading-relaxed text-amber-900 dark:border-amber-300/20 dark:bg-amber-300/[0.08] dark:text-amber-100"
+              >
+                {citationStatusMessage(currentSource.status)}
+              </p>
+            ) : null}
+
             {currentSource.excerpt ? (
               <div className="mt-2.5 rounded-xl border border-black/[0.06] bg-black/[0.02] p-2.5 text-xs leading-relaxed text-black/60 dark:border-white/[0.06] dark:bg-white/[0.03] dark:text-white/60">
                 {currentSource.excerpt}
@@ -246,6 +256,12 @@ export function TiptapCitationNodeView({ node }: NodeViewProps) {
       ) : null}
     </NodeViewWrapper>
   );
+}
+
+function citationStatusMessage(status?: CitationSourceItem["status"]): string | null {
+  if (status === "STALE") return "This source was attached before the statement changed and needs review again.";
+  if (status === "REMOVED") return "This source was removed from the current statement. It remains visible here for history.";
+  return null;
 }
 
 function getSourceProviderIcon(source?: CitationSourceItem): ReactNode {
