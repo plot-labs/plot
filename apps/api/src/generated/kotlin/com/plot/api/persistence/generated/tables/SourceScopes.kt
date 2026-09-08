@@ -7,6 +7,7 @@ package com.plot.api.persistence.generated.tables
 import com.plot.api.persistence.generated.Public
 import com.plot.api.persistence.generated.indexes.SOURCE_SCOPES_WORKSPACE_STATUS_IDX
 import com.plot.api.persistence.generated.keys.AGENT_RUN_SOURCES__AGENT_RUN_SOURCES_WORKSPACE_ID_SOURCE_SCOPE_ID_FKEY
+import com.plot.api.persistence.generated.keys.CONTENT_SOURCE_SNAPSHOTS__CONTENT_SOURCE_SNAPSHOTS_WORKSPACE_ID_SOURCE_SCOPE_ID_FKEY
 import com.plot.api.persistence.generated.keys.GENERATION_INPUTS__GENERATION_INPUTS_SOURCE_SCOPE_FK
 import com.plot.api.persistence.generated.keys.GENERATION_RUNS__GENERATION_RUNS_WORKSPACE_ID_SOURCE_SCOPE_ID_FKEY
 import com.plot.api.persistence.generated.keys.GITHUB_RELEASE_DRAFT_REQUESTS__GITHUB_RELEASE_DRAFT_REQUESTS_WORKSPACE_ID_SOURCE_SCOPE_ID_FKEY
@@ -25,6 +26,7 @@ import com.plot.api.persistence.generated.keys.SOURCE_SCOPES__SOURCE_SCOPES_WORK
 import com.plot.api.persistence.generated.keys.SOURCE_SCOPES__SOURCE_SCOPES_WORKSPACE_ID_SOURCE_NAMESPACE_ID_PROVIDER_FKEY
 import com.plot.api.persistence.generated.keys.WRITING_BLOCK_SCOPES__WRITING_BLOCK_SCOPES_WORKSPACE_ID_SOURCE_NAMESPACE_ID_SOUR_FKEY
 import com.plot.api.persistence.generated.tables.AgentRunSources.AgentRunSourcesPath
+import com.plot.api.persistence.generated.tables.ContentSourceSnapshots.ContentSourceSnapshotsPath
 import com.plot.api.persistence.generated.tables.GenerationInputs.GenerationInputsPath
 import com.plot.api.persistence.generated.tables.GenerationRuns.GenerationRunsPath
 import com.plot.api.persistence.generated.tables.GithubReleaseDraftRequests.GithubReleaseDraftRequestsPath
@@ -272,6 +274,22 @@ open class SourceScopes(
 
     val agentRunSources: AgentRunSourcesPath
         get(): AgentRunSourcesPath = agentRunSources()
+
+    private lateinit var _contentSourceSnapshots: ContentSourceSnapshotsPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.content_source_snapshots</code> table
+     */
+    fun contentSourceSnapshots(): ContentSourceSnapshotsPath {
+        if (!this::_contentSourceSnapshots.isInitialized)
+            _contentSourceSnapshots = ContentSourceSnapshotsPath(this, null, CONTENT_SOURCE_SNAPSHOTS__CONTENT_SOURCE_SNAPSHOTS_WORKSPACE_ID_SOURCE_SCOPE_ID_FKEY.inverseKey)
+
+        return _contentSourceSnapshots;
+    }
+
+    val contentSourceSnapshots: ContentSourceSnapshotsPath
+        get(): ContentSourceSnapshotsPath = contentSourceSnapshots()
 
     private lateinit var _generationInputs: GenerationInputsPath
 

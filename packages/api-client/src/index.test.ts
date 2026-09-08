@@ -488,6 +488,39 @@ describe("Plot API client", () => {
     ]);
   });
 
+  it("replicates an artifact to another content type", async () => {
+    const fetcher = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({
+        id: "agent-run-replicated",
+        chatId: "chat-replicated",
+        instruction: "Write a concise launch announcement",
+        contentType: "LAUNCH_ANNOUNCEMENT",
+        status: "QUEUED",
+        createdAt: "2026-09-08T00:00:00Z",
+        updatedAt: "2026-09-08T00:00:00Z",
+      }));
+    const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
+
+    const run = await client.replicateArtifact(
+      "artifact-1",
+      { contentType: "LAUNCH_ANNOUNCEMENT", instruction: "Write a concise launch announcement" },
+      "idemp-rep-1",
+    );
+
+    expect(run.id).toBe("agent-run-replicated");
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/plot/artifacts/artifact-1/replicate",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          "Idempotency-Key": "idemp-rep-1",
+          "X-Plot-Workspace-Id": "workspace-1",
+        }),
+        body: JSON.stringify({ contentType: "LAUNCH_ANNOUNCEMENT", instruction: "Write a concise launch announcement" }),
+      }),
+    );
+  });
+
   it("resolves the workspace ID for each request", async () => {
     const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => Response.json({}));
     let workspaceId = "stale-workspace";

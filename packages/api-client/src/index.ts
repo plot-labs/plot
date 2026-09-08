@@ -54,12 +54,28 @@ export interface ArtifactPublication {
 
 export type ContentType = "CHANGELOG" | "LAUNCH_ANNOUNCEMENT";
 
+export interface RelatedArtifactSummary {
+  id: string;
+  title: string | null;
+  contentType: ContentType;
+  status: string;
+  updatedAt: string;
+}
+
+export interface ReplicateArtifactInput {
+  contentType: ContentType;
+  instruction?: string;
+  contentProfileRevisionId?: string;
+  brief?: ContentBriefInput;
+}
+
 export interface Artifact {
   id: string;
   status: string;
   title: string | null;
   contentType: ContentType;
   publication?: ArtifactPublication | null;
+  relatedArtifacts?: RelatedArtifactSummary[];
   variant: {
     id: string;
     status: string;
@@ -534,6 +550,7 @@ export interface PlotApiClient {
   listSourceReferences(options?: RequestOptions): Promise<SourceReference[]>;
   getArtifact(id: string, options?: RequestOptions): Promise<Artifact>;
   getArtifactVariant(id: string, options?: RequestOptions): Promise<Artifact>;
+  replicateArtifact(id: string, input: ReplicateArtifactInput, idempotencyKey: string, options?: RequestOptions): Promise<ChatAgentRun>;
   listArtifacts(page?: number, size?: number, options?: RequestOptions): Promise<ArtifactPage>;
   saveArtifactVariant(variantId: string, input: { expectedRevisionNumber: number; lexicalContent: Record<string, unknown>; statements: ContentStatementInput[] }, options?: RequestOptions): Promise<Artifact>;
   editSentence(variantId: string, sentenceId: string, input: { expectedRevisionNumber: number; body: string }, options?: RequestOptions): Promise<Artifact>;
@@ -729,6 +746,15 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
     },
     getArtifact: (id, requestOptions) => request(`/artifacts/${encodeURIComponent(id)}`, { signal: requestOptions?.signal }),
     getArtifactVariant: (id, requestOptions) => request(`/artifact-variants/${encodeURIComponent(id)}`, { signal: requestOptions?.signal }),
+    replicateArtifact: (id, input, idempotencyKey, requestOptions) => request(
+      `/artifacts/${encodeURIComponent(id)}/replicate`,
+      {
+        method: "POST",
+        headers: { "Idempotency-Key": idempotencyKey },
+        body: JSON.stringify(input),
+        signal: requestOptions?.signal,
+      },
+    ),
     listArtifacts: (page = 0, size = 25, requestOptions) => request(`/artifacts?page=${page}&size=${size}`, { signal: requestOptions?.signal }),
     saveArtifactVariant: (variantId, input, requestOptions) => request(
       `/artifact-variants/${encodeURIComponent(variantId)}`,

@@ -15,12 +15,15 @@ import com.plot.api.persistence.generated.keys.GENERATION_EXPORT_EVENTS__GENERAT
 import com.plot.api.persistence.generated.keys.GENERATION_RUNS__GENERATION_RUNS_CREATED_BY_USER_ID_FKEY
 import com.plot.api.persistence.generated.keys.GITHUB_INSTALLATION_STATES__GITHUB_INSTALLATION_STATES_USER_ID_FKEY
 import com.plot.api.persistence.generated.keys.POLAR_WEBHOOK_EVENTS__POLAR_WEBHOOK_EVENTS_MATCHED_USER_ID_FKEY
+import com.plot.api.persistence.generated.keys.PRODUCT_DELIVERY_EVENTS__PRODUCT_DELIVERY_EVENTS_CREATED_BY_USER_ID_FKEY
 import com.plot.api.persistence.generated.keys.PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_PUBLISHED_BY_USER_ID_FKEY
+import com.plot.api.persistence.generated.keys.PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_UNPUBLISHED_BY_USER_ID_FKEY
 import com.plot.api.persistence.generated.keys.ROUTINES__ROUTINES_CREATED_BY_USER_ID_FKEY
 import com.plot.api.persistence.generated.keys.ROUTINE_EXECUTIONS__ROUTINE_EXECUTIONS_CREATED_BY_USER_ID_FKEY
 import com.plot.api.persistence.generated.keys.USERS_EMAIL_KEY
 import com.plot.api.persistence.generated.keys.USERS_PKEY
 import com.plot.api.persistence.generated.keys.WORKSPACES__WORKSPACES_CREATED_BY_USER_ID_FKEY
+import com.plot.api.persistence.generated.keys.WORKSPACE_CONTENT_PROFILE_REVISIONS__WORKSPACE_CONTENT_PROFILE_REVISIONS_CREATED_BY_USER_ID_FKEY
 import com.plot.api.persistence.generated.keys.WORKSPACE_MEMBERS__WORKSPACE_MEMBERS_USER_ID_FKEY
 import com.plot.api.persistence.generated.keys.WORK_SESSIONS__WORK_SESSIONS_CREATED_BY_USER_ID_FKEY
 import com.plot.api.persistence.generated.keys.WRITING_BLOCKS__WRITING_BLOCKS_CREATED_BY_USER_ID_FKEY
@@ -33,10 +36,12 @@ import com.plot.api.persistence.generated.tables.GenerationExportEvents.Generati
 import com.plot.api.persistence.generated.tables.GenerationRuns.GenerationRunsPath
 import com.plot.api.persistence.generated.tables.GithubInstallationStates.GithubInstallationStatesPath
 import com.plot.api.persistence.generated.tables.PolarWebhookEvents.PolarWebhookEventsPath
+import com.plot.api.persistence.generated.tables.ProductDeliveryEvents.ProductDeliveryEventsPath
 import com.plot.api.persistence.generated.tables.PublishedChangelogEntries.PublishedChangelogEntriesPath
 import com.plot.api.persistence.generated.tables.RoutineExecutions.RoutineExecutionsPath
 import com.plot.api.persistence.generated.tables.Routines.RoutinesPath
 import com.plot.api.persistence.generated.tables.WorkSessions.WorkSessionsPath
+import com.plot.api.persistence.generated.tables.WorkspaceContentProfileRevisions.WorkspaceContentProfileRevisionsPath
 import com.plot.api.persistence.generated.tables.WorkspaceMembers.WorkspaceMembersPath
 import com.plot.api.persistence.generated.tables.Workspaces.WorkspacesPath
 import com.plot.api.persistence.generated.tables.WritingBlocks.WritingBlocksPath
@@ -329,21 +334,55 @@ open class Users(
     val polarWebhookEvents: PolarWebhookEventsPath
         get(): PolarWebhookEventsPath = polarWebhookEvents()
 
-    private lateinit var _publishedChangelogEntries: PublishedChangelogEntriesPath
+    private lateinit var _productDeliveryEvents: ProductDeliveryEventsPath
 
     /**
      * Get the implicit to-many join path to the
-     * <code>public.published_changelog_entries</code> table
+     * <code>public.product_delivery_events</code> table
      */
-    fun publishedChangelogEntries(): PublishedChangelogEntriesPath {
-        if (!this::_publishedChangelogEntries.isInitialized)
-            _publishedChangelogEntries = PublishedChangelogEntriesPath(this, null, PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_PUBLISHED_BY_USER_ID_FKEY.inverseKey)
+    fun productDeliveryEvents(): ProductDeliveryEventsPath {
+        if (!this::_productDeliveryEvents.isInitialized)
+            _productDeliveryEvents = ProductDeliveryEventsPath(this, null, PRODUCT_DELIVERY_EVENTS__PRODUCT_DELIVERY_EVENTS_CREATED_BY_USER_ID_FKEY.inverseKey)
 
-        return _publishedChangelogEntries;
+        return _productDeliveryEvents;
     }
 
-    val publishedChangelogEntries: PublishedChangelogEntriesPath
-        get(): PublishedChangelogEntriesPath = publishedChangelogEntries()
+    val productDeliveryEvents: ProductDeliveryEventsPath
+        get(): ProductDeliveryEventsPath = productDeliveryEvents()
+
+    private lateinit var _publishedChangelogEntriesPublishedByUserIdFkey: PublishedChangelogEntriesPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.published_changelog_entries</code> table, via the
+     * <code>published_changelog_entries_published_by_user_id_fkey</code> key
+     */
+    fun publishedChangelogEntriesPublishedByUserIdFkey(): PublishedChangelogEntriesPath {
+        if (!this::_publishedChangelogEntriesPublishedByUserIdFkey.isInitialized)
+            _publishedChangelogEntriesPublishedByUserIdFkey = PublishedChangelogEntriesPath(this, null, PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_PUBLISHED_BY_USER_ID_FKEY.inverseKey)
+
+        return _publishedChangelogEntriesPublishedByUserIdFkey;
+    }
+
+    val publishedChangelogEntriesPublishedByUserIdFkey: PublishedChangelogEntriesPath
+        get(): PublishedChangelogEntriesPath = publishedChangelogEntriesPublishedByUserIdFkey()
+
+    private lateinit var _publishedChangelogEntriesUnpublishedByUserIdFkey: PublishedChangelogEntriesPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.published_changelog_entries</code> table, via the
+     * <code>published_changelog_entries_unpublished_by_user_id_fkey</code> key
+     */
+    fun publishedChangelogEntriesUnpublishedByUserIdFkey(): PublishedChangelogEntriesPath {
+        if (!this::_publishedChangelogEntriesUnpublishedByUserIdFkey.isInitialized)
+            _publishedChangelogEntriesUnpublishedByUserIdFkey = PublishedChangelogEntriesPath(this, null, PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_UNPUBLISHED_BY_USER_ID_FKEY.inverseKey)
+
+        return _publishedChangelogEntriesUnpublishedByUserIdFkey;
+    }
+
+    val publishedChangelogEntriesUnpublishedByUserIdFkey: PublishedChangelogEntriesPath
+        get(): PublishedChangelogEntriesPath = publishedChangelogEntriesUnpublishedByUserIdFkey()
 
     private lateinit var _routineExecutions: RoutineExecutionsPath
 
@@ -392,6 +431,22 @@ open class Users(
 
     val workSessions: WorkSessionsPath
         get(): WorkSessionsPath = workSessions()
+
+    private lateinit var _workspaceContentProfileRevisions: WorkspaceContentProfileRevisionsPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.workspace_content_profile_revisions</code> table
+     */
+    fun workspaceContentProfileRevisions(): WorkspaceContentProfileRevisionsPath {
+        if (!this::_workspaceContentProfileRevisions.isInitialized)
+            _workspaceContentProfileRevisions = WorkspaceContentProfileRevisionsPath(this, null, WORKSPACE_CONTENT_PROFILE_REVISIONS__WORKSPACE_CONTENT_PROFILE_REVISIONS_CREATED_BY_USER_ID_FKEY.inverseKey)
+
+        return _workspaceContentProfileRevisions;
+    }
+
+    val workspaceContentProfileRevisions: WorkspaceContentProfileRevisionsPath
+        get(): WorkspaceContentProfileRevisionsPath = workspaceContentProfileRevisions()
 
     private lateinit var _workspaceMembers: WorkspaceMembersPath
 

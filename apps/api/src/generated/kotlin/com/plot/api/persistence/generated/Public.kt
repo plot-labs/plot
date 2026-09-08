@@ -18,6 +18,7 @@ import com.plot.api.persistence.generated.tables.AuthVerification
 import com.plot.api.persistence.generated.tables.ConnectionNamespaceBindings
 import com.plot.api.persistence.generated.tables.Connections
 import com.plot.api.persistence.generated.tables.ContentPacks
+import com.plot.api.persistence.generated.tables.ContentSourceSnapshots
 import com.plot.api.persistence.generated.tables.ContentVariantRevisionSentences
 import com.plot.api.persistence.generated.tables.ContentVariantRevisions
 import com.plot.api.persistence.generated.tables.ContentVariantSentenceRevisions
@@ -37,6 +38,7 @@ import com.plot.api.persistence.generated.tables.GithubRepositoryMonitoring
 import com.plot.api.persistence.generated.tables.GithubWebhookDeliveries
 import com.plot.api.persistence.generated.tables.ModelInvocations
 import com.plot.api.persistence.generated.tables.PolarWebhookEvents
+import com.plot.api.persistence.generated.tables.ProductDeliveryEvents
 import com.plot.api.persistence.generated.tables.PublishedChangelogEntries
 import com.plot.api.persistence.generated.tables.PublishedChangelogEntryCitations
 import com.plot.api.persistence.generated.tables.PublishedChangelogEntrySentences
@@ -51,7 +53,10 @@ import com.plot.api.persistence.generated.tables.SourceNamespaces
 import com.plot.api.persistence.generated.tables.SourceObservations
 import com.plot.api.persistence.generated.tables.SourceScopes
 import com.plot.api.persistence.generated.tables.Users
+import com.plot.api.persistence.generated.tables.WaitlistSignups
 import com.plot.api.persistence.generated.tables.WorkSessions
+import com.plot.api.persistence.generated.tables.WorkspaceContentProfileRevisions
+import com.plot.api.persistence.generated.tables.WorkspaceContentProfiles
 import com.plot.api.persistence.generated.tables.WorkspaceMembers
 import com.plot.api.persistence.generated.tables.Workspaces
 import com.plot.api.persistence.generated.tables.WritingBlockScopes
@@ -142,6 +147,11 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
      * The table <code>public.content_packs</code>.
      */
     val CONTENT_PACKS: ContentPacks get() = ContentPacks.CONTENT_PACKS
+
+    /**
+     * The table <code>public.content_source_snapshots</code>.
+     */
+    val CONTENT_SOURCE_SNAPSHOTS: ContentSourceSnapshots get() = ContentSourceSnapshots.CONTENT_SOURCE_SNAPSHOTS
 
     /**
      * The table <code>public.content_variant_revision_sentences</code>.
@@ -239,6 +249,11 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
     val POLAR_WEBHOOK_EVENTS: PolarWebhookEvents get() = PolarWebhookEvents.POLAR_WEBHOOK_EVENTS
 
     /**
+     * The table <code>public.product_delivery_events</code>.
+     */
+    val PRODUCT_DELIVERY_EVENTS: ProductDeliveryEvents get() = ProductDeliveryEvents.PRODUCT_DELIVERY_EVENTS
+
+    /**
      * The table <code>public.published_changelog_entries</code>.
      */
     val PUBLISHED_CHANGELOG_ENTRIES: PublishedChangelogEntries get() = PublishedChangelogEntries.PUBLISHED_CHANGELOG_ENTRIES
@@ -309,9 +324,24 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
     val USERS: Users get() = Users.USERS
 
     /**
+     * The table <code>public.waitlist_signups</code>.
+     */
+    val WAITLIST_SIGNUPS: WaitlistSignups get() = WaitlistSignups.WAITLIST_SIGNUPS
+
+    /**
      * The table <code>public.work_sessions</code>.
      */
     val WORK_SESSIONS: WorkSessions get() = WorkSessions.WORK_SESSIONS
+
+    /**
+     * The table <code>public.workspace_content_profile_revisions</code>.
+     */
+    val WORKSPACE_CONTENT_PROFILE_REVISIONS: WorkspaceContentProfileRevisions get() = WorkspaceContentProfileRevisions.WORKSPACE_CONTENT_PROFILE_REVISIONS
+
+    /**
+     * The table <code>public.workspace_content_profiles</code>.
+     */
+    val WORKSPACE_CONTENT_PROFILES: WorkspaceContentProfiles get() = WorkspaceContentProfiles.WORKSPACE_CONTENT_PROFILES
 
     /**
      * The table <code>public.workspace_members</code>.
@@ -353,6 +383,7 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
         ConnectionNamespaceBindings.CONNECTION_NAMESPACE_BINDINGS,
         Connections.CONNECTIONS,
         ContentPacks.CONTENT_PACKS,
+        ContentSourceSnapshots.CONTENT_SOURCE_SNAPSHOTS,
         ContentVariantRevisionSentences.CONTENT_VARIANT_REVISION_SENTENCES,
         ContentVariantRevisions.CONTENT_VARIANT_REVISIONS,
         ContentVariantSentenceRevisions.CONTENT_VARIANT_SENTENCE_REVISIONS,
@@ -372,6 +403,7 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
         GithubWebhookDeliveries.GITHUB_WEBHOOK_DELIVERIES,
         ModelInvocations.MODEL_INVOCATIONS,
         PolarWebhookEvents.POLAR_WEBHOOK_EVENTS,
+        ProductDeliveryEvents.PRODUCT_DELIVERY_EVENTS,
         PublishedChangelogEntries.PUBLISHED_CHANGELOG_ENTRIES,
         PublishedChangelogEntryCitations.PUBLISHED_CHANGELOG_ENTRY_CITATIONS,
         PublishedChangelogEntrySentences.PUBLISHED_CHANGELOG_ENTRY_SENTENCES,
@@ -386,7 +418,10 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
         SourceObservations.SOURCE_OBSERVATIONS,
         SourceScopes.SOURCE_SCOPES,
         Users.USERS,
+        WaitlistSignups.WAITLIST_SIGNUPS,
         WorkSessions.WORK_SESSIONS,
+        WorkspaceContentProfileRevisions.WORKSPACE_CONTENT_PROFILE_REVISIONS,
+        WorkspaceContentProfiles.WORKSPACE_CONTENT_PROFILES,
         WorkspaceMembers.WORKSPACE_MEMBERS,
         Workspaces.WORKSPACES,
         WritingBlockScopes.WRITING_BLOCK_SCOPES,

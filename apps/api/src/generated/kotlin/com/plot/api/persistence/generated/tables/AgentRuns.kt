@@ -7,12 +7,15 @@ package com.plot.api.persistence.generated.tables
 import com.plot.api.persistence.generated.Public
 import com.plot.api.persistence.generated.indexes.AGENT_RUNS_CHAT_REQUEST_KEY_IDX
 import com.plot.api.persistence.generated.indexes.AGENT_RUNS_RUNNABLE_IDX
+import com.plot.api.persistence.generated.indexes.AGENT_RUNS_SOURCE_SNAPSHOT_IDX
 import com.plot.api.persistence.generated.indexes.AGENT_RUNS_WORKSPACE_CREATED_IDX
 import com.plot.api.persistence.generated.keys.AGENT_RUNS_PKEY
 import com.plot.api.persistence.generated.keys.AGENT_RUNS_WORKSPACE_ID_ID_KEY
 import com.plot.api.persistence.generated.keys.AGENT_RUNS_WORKSPACE_ID_ID_ROUTINE_ID_KEY
 import com.plot.api.persistence.generated.keys.AGENT_RUNS_WORKSPACE_ID_ROUTINE_EXECUTION_ID_KEY
+import com.plot.api.persistence.generated.keys.AGENT_RUNS__AGENT_RUNS_CONTENT_PROFILE_REVISION_FK
 import com.plot.api.persistence.generated.keys.AGENT_RUNS__AGENT_RUNS_CREATED_BY_USER_ID_FKEY
+import com.plot.api.persistence.generated.keys.AGENT_RUNS__AGENT_RUNS_SOURCE_SNAPSHOT_FK
 import com.plot.api.persistence.generated.keys.AGENT_RUNS__AGENT_RUNS_WORKSPACE_ID_ROUTINE_EXECUTION_ID_FKEY
 import com.plot.api.persistence.generated.keys.AGENT_RUNS__AGENT_RUNS_WORKSPACE_ID_ROUTINE_EXECUTION_ID_ROUTINE_ID_FKEY
 import com.plot.api.persistence.generated.keys.AGENT_RUNS__AGENT_RUNS_WORKSPACE_ID_WORK_SESSION_ID_FKEY
@@ -27,11 +30,13 @@ import com.plot.api.persistence.generated.tables.AgentRunInputs.AgentRunInputsPa
 import com.plot.api.persistence.generated.tables.AgentRunSources.AgentRunSourcesPath
 import com.plot.api.persistence.generated.tables.AgentSteps.AgentStepsPath
 import com.plot.api.persistence.generated.tables.ArtifactRuns.ArtifactRunsPath
+import com.plot.api.persistence.generated.tables.ContentSourceSnapshots.ContentSourceSnapshotsPath
 import com.plot.api.persistence.generated.tables.GenerationRuns.GenerationRunsPath
 import com.plot.api.persistence.generated.tables.GithubReleaseDraftRequests.GithubReleaseDraftRequestsPath
 import com.plot.api.persistence.generated.tables.RoutineExecutions.RoutineExecutionsPath
 import com.plot.api.persistence.generated.tables.Users.UsersPath
 import com.plot.api.persistence.generated.tables.WorkSessions.WorkSessionsPath
+import com.plot.api.persistence.generated.tables.WorkspaceContentProfileRevisions.WorkspaceContentProfileRevisionsPath
 import com.plot.api.persistence.generated.tables.records.AgentRunsRecord
 
 import java.time.OffsetDateTime
@@ -243,6 +248,26 @@ open class AgentRuns(
      */
     val REQUEST_FINGERPRINT: TableField<AgentRunsRecord, String?> = createField(DSL.name("request_fingerprint"), SQLDataType.CLOB.nullable(false), this, "")
 
+    /**
+     * The column <code>public.agent_runs.content_type</code>.
+     */
+    val CONTENT_TYPE: TableField<AgentRunsRecord, String?> = createField(DSL.name("content_type"), SQLDataType.VARCHAR.nullable(false).defaultValue(DSL.field(DSL.raw("'CHANGELOG'::character varying"), SQLDataType.VARCHAR)), this, "")
+
+    /**
+     * The column <code>public.agent_runs.content_profile_revision_id</code>.
+     */
+    val CONTENT_PROFILE_REVISION_ID: TableField<AgentRunsRecord, UUID?> = createField(DSL.name("content_profile_revision_id"), SQLDataType.UUID, this, "")
+
+    /**
+     * The column <code>public.agent_runs.content_brief_snapshot</code>.
+     */
+    val CONTENT_BRIEF_SNAPSHOT: TableField<AgentRunsRecord, JSONB?> = createField(DSL.name("content_brief_snapshot"), SQLDataType.JSONB, this, "")
+
+    /**
+     * The column <code>public.agent_runs.source_snapshot_id</code>.
+     */
+    val SOURCE_SNAPSHOT_ID: TableField<AgentRunsRecord, UUID?> = createField(DSL.name("source_snapshot_id"), SQLDataType.UUID, this, "")
+
     private constructor(alias: Name, aliased: Table<AgentRunsRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<AgentRunsRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<AgentRunsRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)
@@ -275,10 +300,26 @@ open class AgentRuns(
         override fun `as`(alias: Table<*>): AgentRunsPath = AgentRunsPath(alias.qualifiedName, this)
     }
     override fun getSchema(): Schema? = if (aliased()) null else Public.PUBLIC
-    override fun getIndexes(): List<Index> = listOf(AGENT_RUNS_CHAT_REQUEST_KEY_IDX, AGENT_RUNS_RUNNABLE_IDX, AGENT_RUNS_WORKSPACE_CREATED_IDX)
+    override fun getIndexes(): List<Index> = listOf(AGENT_RUNS_CHAT_REQUEST_KEY_IDX, AGENT_RUNS_RUNNABLE_IDX, AGENT_RUNS_SOURCE_SNAPSHOT_IDX, AGENT_RUNS_WORKSPACE_CREATED_IDX)
     override fun getPrimaryKey(): UniqueKey<AgentRunsRecord> = AGENT_RUNS_PKEY
     override fun getUniqueKeys(): List<UniqueKey<AgentRunsRecord>> = listOf(AGENT_RUNS_WORKSPACE_ID_ID_KEY, AGENT_RUNS_WORKSPACE_ID_ID_ROUTINE_ID_KEY, AGENT_RUNS_WORKSPACE_ID_ROUTINE_EXECUTION_ID_KEY)
-    override fun getReferences(): List<ForeignKey<AgentRunsRecord, *>> = listOf(AGENT_RUNS__AGENT_RUNS_CREATED_BY_USER_ID_FKEY, AGENT_RUNS__AGENT_RUNS_WORK_SESSION_ROUTINE_EXECUTION_FK, AGENT_RUNS__AGENT_RUNS_WORKSPACE_ID_ROUTINE_EXECUTION_ID_FKEY, AGENT_RUNS__AGENT_RUNS_WORKSPACE_ID_ROUTINE_EXECUTION_ID_ROUTINE_ID_FKEY, AGENT_RUNS__AGENT_RUNS_WORKSPACE_ID_WORK_SESSION_ID_FKEY)
+    override fun getReferences(): List<ForeignKey<AgentRunsRecord, *>> = listOf(AGENT_RUNS__AGENT_RUNS_CONTENT_PROFILE_REVISION_FK, AGENT_RUNS__AGENT_RUNS_CREATED_BY_USER_ID_FKEY, AGENT_RUNS__AGENT_RUNS_SOURCE_SNAPSHOT_FK, AGENT_RUNS__AGENT_RUNS_WORK_SESSION_ROUTINE_EXECUTION_FK, AGENT_RUNS__AGENT_RUNS_WORKSPACE_ID_ROUTINE_EXECUTION_ID_FKEY, AGENT_RUNS__AGENT_RUNS_WORKSPACE_ID_ROUTINE_EXECUTION_ID_ROUTINE_ID_FKEY, AGENT_RUNS__AGENT_RUNS_WORKSPACE_ID_WORK_SESSION_ID_FKEY)
+
+    private lateinit var _workspaceContentProfileRevisions: WorkspaceContentProfileRevisionsPath
+
+    /**
+     * Get the implicit join path to the
+     * <code>public.workspace_content_profile_revisions</code> table.
+     */
+    fun workspaceContentProfileRevisions(): WorkspaceContentProfileRevisionsPath {
+        if (!this::_workspaceContentProfileRevisions.isInitialized)
+            _workspaceContentProfileRevisions = WorkspaceContentProfileRevisionsPath(this, AGENT_RUNS__AGENT_RUNS_CONTENT_PROFILE_REVISION_FK, null)
+
+        return _workspaceContentProfileRevisions;
+    }
+
+    val workspaceContentProfileRevisions: WorkspaceContentProfileRevisionsPath
+        get(): WorkspaceContentProfileRevisionsPath = workspaceContentProfileRevisions()
 
     private lateinit var _users: UsersPath
 
@@ -294,6 +335,22 @@ open class AgentRuns(
 
     val users: UsersPath
         get(): UsersPath = users()
+
+    private lateinit var _contentSourceSnapshots: ContentSourceSnapshotsPath
+
+    /**
+     * Get the implicit join path to the
+     * <code>public.content_source_snapshots</code> table.
+     */
+    fun contentSourceSnapshots(): ContentSourceSnapshotsPath {
+        if (!this::_contentSourceSnapshots.isInitialized)
+            _contentSourceSnapshots = ContentSourceSnapshotsPath(this, AGENT_RUNS__AGENT_RUNS_SOURCE_SNAPSHOT_FK, null)
+
+        return _contentSourceSnapshots;
+    }
+
+    val contentSourceSnapshots: ContentSourceSnapshotsPath
+        get(): ContentSourceSnapshotsPath = contentSourceSnapshots()
 
     private lateinit var _agentRunsWorkSessionRoutineExecutionFk: WorkSessionsPath
 
@@ -465,6 +522,7 @@ open class AgentRuns(
         Internal.createCheck(this, DSL.name("agent_runs_check1"), "(((model_call_count >= 0) AND (tool_call_count >= 0)))", true),
         Internal.createCheck(this, DSL.name("agent_runs_check2"), "((((claimed_by IS NULL) AND (claimed_at IS NULL)) OR ((claimed_by IS NOT NULL) AND (claimed_at IS NOT NULL))))", true),
         Internal.createCheck(this, DSL.name("agent_runs_check3"), "(((finished_at IS NULL) OR (finished_at >= COALESCE(started_at, created_at))))", true),
+        Internal.createCheck(this, DSL.name("agent_runs_content_type_check"), "(((content_type)::text = ANY ((ARRAY['CHANGELOG'::character varying, 'LAUNCH_ANNOUNCEMENT'::character varying])::text[])))", true),
         Internal.createCheck(this, DSL.name("agent_runs_current_step_check"), "((current_step >= 0))", true),
         Internal.createCheck(this, DSL.name("agent_runs_instruction_snapshot_check"), "((length(TRIM(BOTH FROM instruction_snapshot)) > 0))", true),
         Internal.createCheck(this, DSL.name("agent_runs_origin_check"), "(((((origin)::text = 'ROUTINE'::text) AND (routine_execution_id IS NOT NULL) AND (routine_id IS NOT NULL)) OR (((origin)::text = 'CHAT'::text) AND (routine_execution_id IS NULL) AND (routine_id IS NULL))))", true),

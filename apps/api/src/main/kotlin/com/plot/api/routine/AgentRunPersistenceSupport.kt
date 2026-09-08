@@ -30,7 +30,7 @@ internal val selectAgentRunSql = """
 		       a.status, a.current_step, a.attempt_count, a.max_attempts,
 		       a.model_call_count, a.tool_call_count, a.next_attempt_at,
 		       a.failure_code, a.claimed_by, a.claimed_at, a.transition_version, a.started_at,
-		       a.finished_at, a.created_at, a.updated_at
+		       a.finished_at, a.created_at, a.updated_at, a.source_snapshot_id
 		from agent_runs a
 	""".trimIndent()
 
@@ -82,6 +82,7 @@ internal fun SqlRow.toAgentRun() = AgentRunRecord(
 		contentType = ContentType.parse(getString("content_type")),
 		contentProfileRevisionId = getObject("content_profile_revision_id", UUID::class.java),
 		contentBriefSnapshotJson = getString("content_brief_snapshot"),
+		sourceSnapshotId = getObject("source_snapshot_id", UUID::class.java),
 		status = AgentRunStatus.valueOf(requireNotNull(getString("status"))),
 		currentStep = getInt("current_step"),
 		attemptCount = getInt("attempt_count"),

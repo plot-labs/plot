@@ -8,11 +8,13 @@ import com.plot.api.persistence.generated.Public
 import com.plot.api.persistence.generated.indexes.WORKSPACES_POLAR_SUBSCRIPTION_UK
 import com.plot.api.persistence.generated.keys.CONNECTIONS__CONNECTIONS_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.CONNECTION_NAMESPACE_BINDINGS__CONNECTION_NAMESPACE_BINDINGS_WORKSPACE_ID_FKEY
+import com.plot.api.persistence.generated.keys.CONTENT_SOURCE_SNAPSHOTS__CONTENT_SOURCE_SNAPSHOTS_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.GENERATION_RUNS__GENERATION_RUNS_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.GITHUB_INSTALLATION_STATES__GITHUB_INSTALLATION_STATES_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.GITHUB_RELEASE_DRAFT_REQUESTS__GITHUB_RELEASE_DRAFT_REQUESTS_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.GITHUB_REPOSITORY_ACCESS_CHECKS__GITHUB_REPOSITORY_ACCESS_CHECKS_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.POLAR_WEBHOOK_EVENTS__POLAR_WEBHOOK_EVENTS_MATCHED_WORKSPACE_ID_FKEY
+import com.plot.api.persistence.generated.keys.PRODUCT_DELIVERY_EVENTS__PRODUCT_DELIVERY_EVENTS_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.ROUTINES__ROUTINES_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.SOURCE_IMPORTS__SOURCE_IMPORTS_WORKSPACE_ID_FKEY
@@ -22,17 +24,21 @@ import com.plot.api.persistence.generated.keys.SOURCE_SCOPES__SOURCE_SCOPES_WORK
 import com.plot.api.persistence.generated.keys.WORKSPACES_PKEY
 import com.plot.api.persistence.generated.keys.WORKSPACES_SLUG_KEY
 import com.plot.api.persistence.generated.keys.WORKSPACES__WORKSPACES_CREATED_BY_USER_ID_FKEY
+import com.plot.api.persistence.generated.keys.WORKSPACE_CONTENT_PROFILES__WORKSPACE_CONTENT_PROFILES_WORKSPACE_ID_FKEY
+import com.plot.api.persistence.generated.keys.WORKSPACE_CONTENT_PROFILE_REVISIONS__WORKSPACE_CONTENT_PROFILE_REVISIONS_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.WORKSPACE_MEMBERS__WORKSPACE_MEMBERS_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.WORK_SESSIONS__WORK_SESSIONS_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.WRITING_BLOCKS__WRITING_BLOCKS_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.WRITING_BLOCK_SCOPES__WRITING_BLOCK_SCOPES_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.tables.ConnectionNamespaceBindings.ConnectionNamespaceBindingsPath
 import com.plot.api.persistence.generated.tables.Connections.ConnectionsPath
+import com.plot.api.persistence.generated.tables.ContentSourceSnapshots.ContentSourceSnapshotsPath
 import com.plot.api.persistence.generated.tables.GenerationRuns.GenerationRunsPath
 import com.plot.api.persistence.generated.tables.GithubInstallationStates.GithubInstallationStatesPath
 import com.plot.api.persistence.generated.tables.GithubReleaseDraftRequests.GithubReleaseDraftRequestsPath
 import com.plot.api.persistence.generated.tables.GithubRepositoryAccessChecks.GithubRepositoryAccessChecksPath
 import com.plot.api.persistence.generated.tables.PolarWebhookEvents.PolarWebhookEventsPath
+import com.plot.api.persistence.generated.tables.ProductDeliveryEvents.ProductDeliveryEventsPath
 import com.plot.api.persistence.generated.tables.PublishedChangelogEntries.PublishedChangelogEntriesPath
 import com.plot.api.persistence.generated.tables.Routines.RoutinesPath
 import com.plot.api.persistence.generated.tables.SourceImports.SourceImportsPath
@@ -41,6 +47,8 @@ import com.plot.api.persistence.generated.tables.SourceObservations.SourceObserv
 import com.plot.api.persistence.generated.tables.SourceScopes.SourceScopesPath
 import com.plot.api.persistence.generated.tables.Users.UsersPath
 import com.plot.api.persistence.generated.tables.WorkSessions.WorkSessionsPath
+import com.plot.api.persistence.generated.tables.WorkspaceContentProfileRevisions.WorkspaceContentProfileRevisionsPath
+import com.plot.api.persistence.generated.tables.WorkspaceContentProfiles.WorkspaceContentProfilesPath
 import com.plot.api.persistence.generated.tables.WorkspaceMembers.WorkspaceMembersPath
 import com.plot.api.persistence.generated.tables.WritingBlockScopes.WritingBlockScopesPath
 import com.plot.api.persistence.generated.tables.WritingBlocks.WritingBlocksPath
@@ -283,6 +291,22 @@ open class Workspaces(
     val connections: ConnectionsPath
         get(): ConnectionsPath = connections()
 
+    private lateinit var _contentSourceSnapshots: ContentSourceSnapshotsPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.content_source_snapshots</code> table
+     */
+    fun contentSourceSnapshots(): ContentSourceSnapshotsPath {
+        if (!this::_contentSourceSnapshots.isInitialized)
+            _contentSourceSnapshots = ContentSourceSnapshotsPath(this, null, CONTENT_SOURCE_SNAPSHOTS__CONTENT_SOURCE_SNAPSHOTS_WORKSPACE_ID_FKEY.inverseKey)
+
+        return _contentSourceSnapshots;
+    }
+
+    val contentSourceSnapshots: ContentSourceSnapshotsPath
+        get(): ContentSourceSnapshotsPath = contentSourceSnapshots()
+
     private lateinit var _generationRuns: GenerationRunsPath
 
     /**
@@ -362,6 +386,22 @@ open class Workspaces(
 
     val polarWebhookEvents: PolarWebhookEventsPath
         get(): PolarWebhookEventsPath = polarWebhookEvents()
+
+    private lateinit var _productDeliveryEvents: ProductDeliveryEventsPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.product_delivery_events</code> table
+     */
+    fun productDeliveryEvents(): ProductDeliveryEventsPath {
+        if (!this::_productDeliveryEvents.isInitialized)
+            _productDeliveryEvents = ProductDeliveryEventsPath(this, null, PRODUCT_DELIVERY_EVENTS__PRODUCT_DELIVERY_EVENTS_WORKSPACE_ID_FKEY.inverseKey)
+
+        return _productDeliveryEvents;
+    }
+
+    val productDeliveryEvents: ProductDeliveryEventsPath
+        get(): ProductDeliveryEventsPath = productDeliveryEvents()
 
     private lateinit var _publishedChangelogEntries: PublishedChangelogEntriesPath
 
@@ -474,6 +514,38 @@ open class Workspaces(
 
     val workSessions: WorkSessionsPath
         get(): WorkSessionsPath = workSessions()
+
+    private lateinit var _workspaceContentProfileRevisions: WorkspaceContentProfileRevisionsPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.workspace_content_profile_revisions</code> table
+     */
+    fun workspaceContentProfileRevisions(): WorkspaceContentProfileRevisionsPath {
+        if (!this::_workspaceContentProfileRevisions.isInitialized)
+            _workspaceContentProfileRevisions = WorkspaceContentProfileRevisionsPath(this, null, WORKSPACE_CONTENT_PROFILE_REVISIONS__WORKSPACE_CONTENT_PROFILE_REVISIONS_WORKSPACE_ID_FKEY.inverseKey)
+
+        return _workspaceContentProfileRevisions;
+    }
+
+    val workspaceContentProfileRevisions: WorkspaceContentProfileRevisionsPath
+        get(): WorkspaceContentProfileRevisionsPath = workspaceContentProfileRevisions()
+
+    private lateinit var _workspaceContentProfiles: WorkspaceContentProfilesPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.workspace_content_profiles</code> table
+     */
+    fun workspaceContentProfiles(): WorkspaceContentProfilesPath {
+        if (!this::_workspaceContentProfiles.isInitialized)
+            _workspaceContentProfiles = WorkspaceContentProfilesPath(this, null, WORKSPACE_CONTENT_PROFILES__WORKSPACE_CONTENT_PROFILES_WORKSPACE_ID_FKEY.inverseKey)
+
+        return _workspaceContentProfiles;
+    }
+
+    val workspaceContentProfiles: WorkspaceContentProfilesPath
+        get(): WorkspaceContentProfilesPath = workspaceContentProfiles()
 
     private lateinit var _workspaceMembers: WorkspaceMembersPath
 

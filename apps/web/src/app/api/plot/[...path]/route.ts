@@ -203,6 +203,7 @@ function isAllowed(method: string, path: string[]): boolean {
   if (method === "PATCH" && /^sessions\/[^/]+$/.test(route)) return true;
   if (method === "GET" && route === "artifacts") return true;
   if (method === "GET" && /^artifacts\/[^/]+$/.test(route)) return true;
+  if (method === "POST" && /^artifacts\/[^/]+\/replicate$/.test(route)) return true;
   if (method === "GET" && /^artifact-variants\/[^/]+$/.test(route)) return true;
   if (method === "GET" && /^artifact-variants\/[^/]+\/history(?:\/[^/]+|\/at\/[^/]+)?$/.test(route)) return true;
   if (method === "PATCH" && /^artifact-variants\/[^/]+$/.test(route)) return true;
