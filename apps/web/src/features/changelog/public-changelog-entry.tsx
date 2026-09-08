@@ -87,6 +87,7 @@ function uniquePublicSources(entry: PublicChangelogEntry) {
 
 export function PublicChangelogEntryView({ workspaceSlug, entry }: PublicChangelogEntryViewProps) {
   const hasSentenceSnapshot = entry.sentences.length > 0;
+  const hasStructuredDocument = entry.documentVersion === 2;
   const { sources, numbersByUrl } = uniquePublicSources(entry);
 
   return (
@@ -113,7 +114,9 @@ export function PublicChangelogEntryView({ workspaceSlug, entry }: PublicChangel
       </header>
 
       <div className="prose-changelog py-10 text-[17px] leading-8 text-black/75">
-        {hasSentenceSnapshot ? (
+        {hasStructuredDocument ? (
+          <MarkdownBody markdown={entry.bodyMarkdown} />
+        ) : hasSentenceSnapshot ? (
           entry.sentences.map((sentence) => {
             const references = sentence.citations
               .map((citation) => ({

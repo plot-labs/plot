@@ -59,15 +59,32 @@ describe("PublicChangelogEntryView", () => {
     expect(screen.getByRole("dialog", { name: "Citation sources" })).toHaveTextContent("PR #42");
   });
 
-  it("uses the legacy body when no sentence snapshot exists", () => {
+	it("uses the legacy body when no sentence snapshot exists", () => {
     render(<PublicChangelogEntryView workspaceSlug="acme" entry={entry({ sentences: [] })} />);
 
     expect(screen.getByText("Legacy body.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Show citation/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Sources" })).not.toBeInTheDocument();
-  });
+	});
 
-  it("does not render unsafe citation links", () => {
+	it("renders the structured V2 body instead of flattening it to sentence snapshots", () => {
+		render(
+			<PublicChangelogEntryView
+				workspaceSlug="acme"
+				entry={entry({
+					documentVersion: 2,
+					bodyMarkdown: "# Release notes\n\n- Search is faster.\n\n[Join the beta](https://plot.test/join)",
+				})}
+			/>,
+		);
+
+		expect(screen.getByRole("heading", { name: "Release notes" })).toBeInTheDocument();
+		expect(screen.getByText("Search is faster.")).toBeInTheDocument();
+		expect(screen.getByRole("link", { name: "Join the beta" })).toHaveAttribute("href", "https://plot.test/join");
+		expect(screen.queryByText("Supported sentence.")).not.toBeInTheDocument();
+	});
+
+	it("does not render unsafe citation links", () => {
     render(
       <PublicChangelogEntryView
         workspaceSlug="acme"
