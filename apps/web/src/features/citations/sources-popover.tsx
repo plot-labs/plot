@@ -12,7 +12,11 @@ type SourcesPopoverProps = {
 
 export function SourcesPopover({ sources }: SourcesPopoverProps) {
   const uniqueSources = sources.filter((source, index, all) =>
-    all.findIndex((candidate) => candidate.evidenceId === source.evidenceId) === index,
+    all.findIndex((candidate) =>
+      candidate.originalUrl
+        ? candidate.originalUrl === source.originalUrl
+        : candidate.evidenceId === source.evidenceId,
+    ) === index,
   );
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
