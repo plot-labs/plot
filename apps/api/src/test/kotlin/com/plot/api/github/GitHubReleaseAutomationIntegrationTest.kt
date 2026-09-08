@@ -109,7 +109,7 @@ class GitHubReleaseAutomationIntegrationTest {
 			update github_release_draft_requests
 			set status = 'FAILED', error_code = 'TEST_ISOLATION',
 			    claimed_by = null, claimed_at = null, heartbeat_at = null,
-			    finished_at = coalesce(finished_at, now()), updated_at = now()
+			    finished_at = coalesce(finished_at, greatest(now(), created_at)), updated_at = now()
 			where status in ('QUEUED', 'RESOLVING', 'GENERATING')
 			""".trimIndent(),
 		)
@@ -118,7 +118,7 @@ class GitHubReleaseAutomationIntegrationTest {
 			update generation_runs
 			set status = 'FAILED', error_code = 'TEST_ISOLATION',
 			    claimed_by = null, claimed_at = null, heartbeat_at = null,
-			    finished_at = coalesce(finished_at, now()), updated_at = now()
+			    finished_at = coalesce(finished_at, greatest(now(), created_at)), updated_at = now()
 			where status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
 			""".trimIndent(),
 		)
@@ -127,7 +127,7 @@ class GitHubReleaseAutomationIntegrationTest {
 			update agent_runs
 			set status = 'FAILED', failure_code = 'TEST_ISOLATION',
 			    claimed_by = null, claimed_at = null,
-			    finished_at = coalesce(finished_at, now()), updated_at = now()
+			    finished_at = coalesce(finished_at, greatest(now(), created_at)), updated_at = now()
 			where status in ('QUEUED', 'RUNNING')
 			""".trimIndent(),
 		)
