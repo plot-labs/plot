@@ -111,10 +111,10 @@ export function ArtifactCanvasWorkspace({ artifact, client, onSaveArtifact }: Ar
                 type="button"
                 onClick={() => setReplicateOpen(true)}
                 aria-label="Create related content"
-                title="이 근거로 다른 콘텐츠 만들기"
+                title="Create related content from this evidence"
                 className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-black/15 bg-white px-3 text-xs font-medium text-black/70 transition hover:bg-black/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15 dark:border-white/15 dark:bg-white/[0.04] dark:text-white/70 dark:hover:bg-white/[0.08] dark:focus-visible:ring-white/25"
               >
-                <Sparkles aria-hidden="true" className="size-3.5 text-amber-500 dark:text-amber-400" />
+                <Sparkles aria-hidden="true" className="size-3.5 text-black/60 dark:text-white/60" />
                 <span className="hidden sm:inline">Create related</span>
               </button>
             </>
