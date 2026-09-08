@@ -186,25 +186,41 @@ export function IntegrationsWorkspace() {
     setAction("install");
     setMessage(null);
     setMessageRequestId(null);
+    setConnectionNeedsReconnect(false);
+    
     try {
-      try {
-        await plotApiClient.syncGitHubInstallation();
-        setReloadNonce((value) => value + 1);
-        setMessage("GitHub App connected.");
-        return;
-      } catch (error) {
-        if (!(error instanceof PlotApiError && error.code === "GITHUB_INSTALLATION_NOT_FOUND")) {
-          throw error;
+      // First try to sync: check if GitHub App is already installed and link it
+      await plotApiClient.syncGitHubInstallation();
+      
+      // Sync succeeded - refresh state
+      setReloadNonce((value) => value + 1);
+      setMessage("GitHub App connected.");
+      return;
+    } catch (error) {
+      // Check if this is NOT_FOUND - proceed to install
+      if (error instanceof PlotApiError && error.code === "GITHUB_INSTALLATION_NOT_FOUND") {
+        try {
+          const request = await plotApiClient.createGitHubInstallationRequest();
+          window.location.assign(request.installUrl);
+          return;
+        } catch (installError) {
+          // Handle install request failure below
+          error = installError;
         }
       }
-      const request = await plotApiClient.createGitHubInstallationRequest();
-      window.location.assign(request.installUrl);
-    } catch (error) {
+      
+      // Check if reauth is required
+      setConnectionNeedsReconnect(requiresReconnect(error));
       setMessage(errorMessage(error));
+      setMessageRequestId(providerRequestId(error));
     } finally {
       actionRef.current = null;
       setAction(null);
     }
+  };
+
+  const reauthenticateGitHub = () => {
+    window.location.assign("/api/auth/sign-in/github?callbackURL=%2Fsettings%2Fintegrations");
   };
 
   const enableRepository = async () => {
@@ -407,12 +423,27 @@ export function IntegrationsWorkspace() {
                 {isLoading && <Loading />}
                 {!isLoading && isOwner === false && <NonOwnerState connected={connectionBadgeStatus === "connected" && !connectionNeedsReconnect} />}
                 {!isLoading && message && (
-                  <StatusMessage
-                    message={message}
-                    requestId={messageRequestId}
-                    onRetry={refresh}
-                    onDismiss={() => setMessage(null)}
-                  />
+                  <>
+                    <StatusMessage
+                      message={message}
+                      requestId={messageRequestId}
+                      onRetry={refresh}
+                      onDismiss={() => setMessage(null)}
+                    />
+                    {connectionNeedsReconnect && (
+                      <div className="mt-3 border-t border-black/[0.07] pt-3 dark:border-white/[0.08]">
+                        <button
+                          type="button"
+                          onClick={reauthenticateGitHub}
+                          disabled={action !== null}
+                          className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[8px] bg-[#252a30] px-3 text-[12px] font-medium text-white transition hover:bg-[#171a1e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 disabled:cursor-wait disabled:opacity-45 dark:bg-white dark:text-[#18191b] dark:hover:bg-white/90"
+                        >
+                          <HugeiconsIcon icon={Link01Icon} size={14} color="currentColor" strokeWidth={1.5} aria-hidden="true" />
+                          Sign in with GitHub
+                        </button>
+                      </div>
+                    )}
+                  </>
                 )}
               </article>
             </div>
