@@ -27,8 +27,27 @@ open class RecoveryCoordinatorPersistence(
 			      and (candidate.claimed_by is null or candidate.heartbeat_at is null or candidate.heartbeat_at < ?))
 			    or
 			    (candidate.status = 'GENERATING'
-			      and candidate.claimed_by is not null
-			      and (candidate.heartbeat_at is null or candidate.heartbeat_at < ?))
+			      and (
+			        (candidate.claimed_by is not null and (candidate.heartbeat_at is null or candidate.heartbeat_at < ?))
+			        or
+			        (candidate.claimed_by is null and (
+			          candidate.agent_run_id is null
+			          or exists (
+			            select 1 from agent_runs agent
+			            where agent.workspace_id = candidate.workspace_id
+			              and agent.id = candidate.agent_run_id
+			              and agent.status = 'FAILED'
+			          )
+			          or exists (
+			            select 1 from generation_runs workflow
+			            join artifact_runs artifact
+			              on artifact.workspace_id = workflow.workspace_id and artifact.id = workflow.artifact_run_id
+			            where workflow.workspace_id = candidate.workspace_id
+			              and workflow.agent_run_id = candidate.agent_run_id
+			              and artifact.status in ('READY', 'NEEDS_REVIEW', 'FAILED')
+			          )
+			        ))
+			      ))
 			  )
 			  and exists (
 			    select 1 from source_scopes scope
@@ -67,7 +86,8 @@ open class RecoveryCoordinatorPersistence(
 			from (
 			  select candidate.created_at
 			  from routine_executions candidate
-			  where candidate.status in ('QUEUED', 'PROBING')
+			  where candidate.status = 'PROBING'
+			    and candidate.release_request_id is null
 			    and (candidate.next_attempt_at is null or candidate.next_attempt_at <= ?)
 			    and (candidate.claimed_by is null or candidate.claimed_at is null or candidate.claimed_at < ?)
 			  order by candidate.created_at, candidate.id
@@ -94,9 +114,13 @@ open class RecoveryCoordinatorPersistence(
 			  from agent_runs candidate
 			  where (
 			    (candidate.status in ('QUEUED', 'RUNNING')
-			      and candidate.attempt_count < candidate.max_attempts
-			      and (candidate.next_attempt_at is null or candidate.next_attempt_at <= ?)
-			      and (candidate.claimed_by is null or candidate.claimed_at is null or candidate.claimed_at < ?))
+			      and (
+			        (candidate.attempt_count < candidate.max_attempts
+			          and (candidate.next_attempt_at is null or candidate.next_attempt_at <= ?)
+			          and (candidate.claimed_by is null or candidate.claimed_at is null or candidate.claimed_at < ?))
+			        or
+			        (candidate.status = 'RUNNING' and candidate.claimed_by is not null and candidate.claimed_at < ?)
+			      ))
 			    or
 			    (candidate.status = 'RUNNING' and candidate.claimed_by is null
 			      and exists (
@@ -120,6 +144,7 @@ open class RecoveryCoordinatorPersistence(
 			},
 			Timestamp.from(now),
 			Timestamp.from(staleBefore),
+			Timestamp.from(staleBefore),
 			batchSize,
 		).firstOrNull() ?: QueueRunnableStats(0, null)
 
@@ -133,6 +158,16 @@ open class RecoveryCoordinatorPersistence(
 			  where candidate.status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
 			    and (candidate.next_attempt_at is null or candidate.next_attempt_at <= ?)
 			    and (candidate.claimed_by is null or candidate.heartbeat_at is null or candidate.heartbeat_at < ?)
+			    and (
+			      candidate.source_scope_id is null
+			      or exists (
+			        select 1
+			        from source_scopes scope
+			        where scope.workspace_id = candidate.workspace_id
+			          and scope.id = candidate.source_scope_id
+			          and scope.status = 'ACTIVE'
+			      )
+			    )
 			  order by candidate.created_at, candidate.id
 			  limit ?
 			) sub

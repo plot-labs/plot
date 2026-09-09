@@ -53,6 +53,8 @@ class RecoveryCoordinator @org.springframework.beans.factory.annotation.Autowire
 	private val log = LoggerFactory.getLogger(RecoveryCoordinator::class.java)
 	private var scheduler: ScheduledExecutorService? = null
 	private var running: Boolean = false
+	private val runnableCountGauges = java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicInteger>()
+	private val oldestAgeGauges = java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicLong>()
 
 	constructor(
 		properties: RecoveryProperties,
@@ -104,6 +106,7 @@ class RecoveryCoordinator @org.springframework.beans.factory.annotation.Autowire
 	override fun stop() {
 		running = false
 		scheduler?.shutdownNow()
+		scheduler = null
 	}
 
 	override fun isRunning(): Boolean = running
@@ -195,11 +198,20 @@ class RecoveryCoordinator @org.springframework.beans.factory.annotation.Autowire
 			)
 		}
 
-		meterRegistry.gauge("plot.recovery.runnable.count", listOf(Tag.of("queue", queueName)), stats.runnableCount)
-		stats.oldestCreatedAt?.let { oldest ->
-			val ageSeconds = Duration.between(oldest, now).seconds.coerceAtLeast(0)
-			meterRegistry.gauge("plot.recovery.oldest.age.seconds", listOf(Tag.of("queue", queueName)), ageSeconds)
-		}
+		runnableCountGauges.computeIfAbsent(queueName) {
+			val holder = java.util.concurrent.atomic.AtomicInteger(0)
+			meterRegistry.gauge("plot.recovery.runnable.count", listOf(Tag.of("queue", queueName)), holder) { it.get().toDouble() }
+			holder
+		}.set(stats.runnableCount)
+
+		val ageSeconds = stats.oldestCreatedAt?.let { oldest ->
+			Duration.between(oldest, now).seconds.coerceAtLeast(0)
+		} ?: 0L
+		oldestAgeGauges.computeIfAbsent(queueName) {
+			val holder = java.util.concurrent.atomic.AtomicLong(0)
+			meterRegistry.gauge("plot.recovery.oldest.age.seconds", listOf(Tag.of("queue", queueName)), holder) { it.get().toDouble() }
+			holder
+		}.set(ageSeconds)
 
 		var dispatched = false
 		if (stats.runnableCount > 0 && !properties.observeOnly) {

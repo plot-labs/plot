@@ -52,7 +52,26 @@ class RecoveryCoordinatorIntegrationTest {
 	@BeforeEach
 	fun setup() {
 		devBootstrapService.bootstrap()
+		jdbcTemplate.update("delete from github_release_generation_attempts")
+		jdbcTemplate.update("delete from github_release_draft_evidence")
+		jdbcTemplate.update("delete from content_packs where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from agent_steps where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from github_release_draft_requests where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from generation_runs where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from artifact_runs where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from agent_runs where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from work_sessions where workspace_id = ? and routine_execution_id is null", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from work_sessions where workspace_id = ? and routine_execution_id is not null", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from routine_executions where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from routine_context_sources where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from routines where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from writing_block_scopes where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from source_imports where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from source_observations where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from writing_blocks where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from github_repository_access_checks where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from github_repository_monitoring where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from content_source_snapshots where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from github_webhook_deliveries")
 		jdbcTemplate.update("delete from source_scopes where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from connection_namespace_bindings where workspace_id = ?", devContext.devWorkspaceId)
@@ -84,6 +103,55 @@ class RecoveryCoordinatorIntegrationTest {
 		assertNotNull(claimed)
 		assertEquals(requestId, claimed.id)
 		assertEquals(GitHubReleaseDraftStatus.RESOLVING, claimed.status)
+	}
+
+	@Test
+	fun `R-002 - tick discovers release draft in GENERATING when agent run failed`() {
+		val deliveryId = insertDelivery()
+		val requestId = UUID.randomUUID()
+		val agentRunId = UUID.randomUUID()
+		val sessionId = UUID.randomUUID()
+
+		jdbcTemplate.update(
+			"""
+			insert into work_sessions (id, workspace_id, title, status, created_by_user_id, last_activity_at, created_at, updated_at)
+			values (?, ?, 'Test session', 'OPEN', ?, now(), now(), now())
+			""".trimIndent(),
+			sessionId, devContext.devWorkspaceId, devContext.devUserId,
+		)
+		jdbcTemplate.update(
+			"""
+			insert into agent_runs (
+				id, workspace_id, work_session_id, routine_execution_id, created_by_user_id,
+				instruction_snapshot, prompt_version, tool_policy_version, budget_snapshot, status,
+				attempt_count, max_attempts, next_attempt_at, failure_code, origin,
+				idempotency_key, request_fingerprint, created_at, updated_at
+			) values (?, ?, ?, null, ?, 'instructions', 'v1', 'v1', '{}'::jsonb, 'FAILED', 1, 3, null, 'AGENT_ERROR', 'CHAT', ?, ?, now(), now())
+			""".trimIndent(),
+			agentRunId, devContext.devWorkspaceId, sessionId, devContext.devUserId, "idem-$agentRunId", "fp-$agentRunId",
+		)
+
+		jdbcTemplate.update(
+			"""
+			insert into github_release_draft_requests (
+				id, workspace_id, source_scope_id, initial_delivery_id, tag_name, status,
+				agent_run_id, transition_version, attempt_count, created_at, updated_at
+			) values (?, ?, ?, ?, ?, 'GENERATING', ?, 2, 1, now(), now())
+			""".trimIndent(),
+			requestId, devContext.devWorkspaceId, sourceScopeId, deliveryId, "v1.2.3", agentRunId,
+		)
+
+		val dispatches = AtomicInteger()
+		val coordinator = createCoordinator(
+			properties = RecoveryProperties(enabled = true),
+			onReleaseDispatch = { dispatches.incrementAndGet() },
+		)
+
+		val summary = coordinator.tick()
+
+		assertEquals(1, summary.queues["release"]?.runnableCount)
+		assertTrue(summary.queues["release"]?.dispatched == true)
+		assertEquals(1, dispatches.get())
 	}
 
 	@Test
