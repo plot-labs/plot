@@ -9,7 +9,7 @@ enum class RoutineExecutionTriggerKind {
 }
 
 enum class RoutineExecutionStatus {
-	PROBING, NO_ACTIVITY, DISPATCHED, FAILED,
+	PROBING, NO_ACTIVITY, DISPATCHED, DEFERRED, FAILED,
 }
 
 enum class AgentRunStatus {

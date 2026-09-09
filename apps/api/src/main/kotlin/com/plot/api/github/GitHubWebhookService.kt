@@ -32,6 +32,7 @@ class GitHubWebhookService(
 	private val lifecycleService: GitHubSourceAccessLifecycleService,
 	private val observationRegistry: ObservationRegistry,
 	private val transactionService: GitHubWebhookTransactionService,
+	private val autonomy: com.plot.api.autonomy.github.GitHubAutonomyBridge? = null,
 ) {
 	fun accept(webhook: ParsedGitHubWebhook): GitHubWebhookDelivery {
 		val observation = Observation.start("plot.github.webhook", observationRegistry)
@@ -98,6 +99,9 @@ class GitHubWebhookService(
 			webhook.repositoryId?.let { repositoryId -> scopeResolver.resolve(installationId, repositoryId) }
 		}
 		if (context == null) return mark(delivery, GitHubWebhookDisposition.IGNORED)
+		autonomy?.observe(context, delivery, webhook)
+        if (autonomy?.isActive(context.workspaceId) == true && webhook.eventType == "release" &&
+            webhook.eventAction == "published" && properties.releaseAutomationEnabled) scheduleReleaseDispatchAfterCommit()
 
 		return when {
 			webhook.eventType == "push" && (webhook.refDeleted == true || webhook.forced == true) ->
@@ -115,7 +119,8 @@ class GitHubWebhookService(
 				}
 			}
 			webhook.eventType == "push" && webhook.ref == "refs/heads/${context.defaultBranch}" -> {
-				val queued = gitHubChangeRoutineService.accept(context, delivery, webhook)
+				val queued = if (autonomy?.isActive(context.workspaceId) == true) 0
+					else gitHubChangeRoutineService.accept(context, delivery, webhook)
 				if (queued > 0) scheduleRoutineDispatchAfterCommit()
 				mark(delivery, if (queued > 0) GitHubWebhookDisposition.QUEUED else GitHubWebhookDisposition.OBSERVED)
 			}

@@ -216,6 +216,7 @@ class RoutineService(
 	private fun RoutineExecutionRecord.publicRoutineStatus(): String = when (status) {
 		RoutineExecutionStatus.DISPATCHED -> "QUEUED"
 		RoutineExecutionStatus.NO_ACTIVITY -> "NO_ACTIVITY"
+		RoutineExecutionStatus.DEFERRED -> "DEFERRED"
 		RoutineExecutionStatus.FAILED -> "FAILED"
 		RoutineExecutionStatus.PROBING -> "QUEUED"
 	}

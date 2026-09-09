@@ -41,7 +41,10 @@ class GitHubReleaseDraftWorker(
 			observation.openScope().use {
 				leaseFactory.open(request, workerId).use { handle ->
 					val status = orchestrator.process(request, handle.lease)
-					outcome = if (status == GitHubReleaseDraftStatus.NO_ACTIVITY) "NO_ACTIVITY" else "SUCCEEDED"
+					outcome = when (status) {
+						GitHubReleaseDraftStatus.NO_ACTIVITY, GitHubReleaseDraftStatus.DEFERRED -> status.name
+						else -> "SUCCEEDED"
+					}
 				}
 			}
 		} catch (exception: GitHubReleaseDraftProcessingException) {
@@ -107,12 +110,16 @@ class GitHubReleaseDraftWorker(
 	}
 
 	private fun isRetryable(exception: RuntimeException): Boolean = when (exception) {
+		is com.plot.api.autonomy.assessment.AssessmentException -> exception.recoverable
+		is com.plot.api.autonomy.opportunity.OpportunityException -> exception.recoverable
 		is ApiException -> exception.error in RETRYABLE_API_ERRORS
 		is TransientDataAccessException, is TaskRejectedException -> true
 		else -> false
 	}
 
 	private fun safeErrorCode(exception: RuntimeException): String = when (exception) {
+		is com.plot.api.autonomy.assessment.AssessmentException -> exception.code
+		is com.plot.api.autonomy.opportunity.OpportunityException -> exception.code
 		is ApiException -> exception.error.takeIf(::isSafeErrorCode) ?: "RELEASE_PROCESSING_FAILED"
 		is GitHubReleasePermanentException -> exception.safeErrorCode
 		is TransientDataAccessException -> "RELEASE_STORAGE_TRANSIENT"

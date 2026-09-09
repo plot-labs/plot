@@ -5,6 +5,8 @@ import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
 import com.plot.api.TestcontainersConfiguration
 import com.plot.api.common.ApiException
+import com.plot.api.autonomy.github.AutonomyMode
+import com.plot.api.autonomy.github.AutonomyProperties
 import com.plot.api.dev.DevBootstrapService
 import com.plot.api.dev.DevContext
 import com.plot.api.entitlement.WorkspaceAccessService
@@ -83,6 +85,7 @@ class RoutineBackgroundAccessIntegrationTest {
 	@Autowired private lateinit var routineRunDispatcher: RoutineRunDispatcher
 
 	private val fixtures = mutableListOf<RefreshFixture>()
+	private val deliveryIds = mutableListOf<UUID>()
 
 	@BeforeEach
 	fun setUp() {
@@ -95,6 +98,8 @@ class RoutineBackgroundAccessIntegrationTest {
 	fun cleanUp() {
 		fixtures.reversed().forEach(::deleteFixture)
 		fixtures.clear()
+		deliveryIds.forEach { jdbcTemplate.update("delete from github_webhook_deliveries where id = ?", it) }
+		deliveryIds.clear()
 		githubClient.reset()
 		setWorkspaceAccess("active", "full")
 	}
@@ -211,7 +216,97 @@ class RoutineBackgroundAccessIntegrationTest {
 		assertEquals(1, count("agent_runs", "routine_id", fixture.routineId))
 	}
 
-	private fun newWorker(workerId: String) = RoutineWorker(
+	@Test
+	fun `active autonomy defers scheduled routines without refreshing or consuming cursor`() {
+		val fixture = insertFixture(Instant.now().minusSeconds(2))
+		jdbcTemplate.update("update routines set activity_cursor_sequence = 4242 where id = ?", fixture.routineId)
+		val before = assertNotNull(routinePersistence.find(devContext.devWorkspaceId, fixture.routineId))
+		val activeWorker = newWorker("autonomy-scheduled", AutonomyProperties(mode = AutonomyMode.ACTIVE))
+
+		assertTrue(activeWorker.claimScheduledDue())
+
+		val execution = execution(fixture.routineId)
+		val after = assertNotNull(routinePersistence.find(devContext.devWorkspaceId, fixture.routineId))
+		assertEquals(RoutineExecutionStatus.DEFERRED, execution.status, "Execution error: ${execution.errorCode}")
+		assertEquals(RoutineExecutionTriggerKind.SCHEDULED, execution.triggerKind)
+		assertNull(execution.refreshCompletedAt)
+		assertEquals(before.activityCursorSequence, execution.activityCursorBefore)
+		assertNull(execution.activityCursorAfter)
+		assertEquals(before.activityCursorSequence, after.activityCursorSequence)
+		assertEquals(before.cadence.nextAfter(before.nextRunAt), after.nextRunAt)
+		assertNull(after.claimedBy)
+		assertEquals(0, githubClient.calls)
+		assertEquals(0, count("agent_runs", "routine_id", fixture.routineId))
+		assertEquals(0, generationCountForRoutine(fixture.routineId))
+		assertEquals(0, activeWorker.drain())
+		assertFalse(activeWorker.claimScheduledDue())
+	}
+
+	@Test
+	fun `active autonomy defers prequeued GitHub execution while preserving schedule and cursor`() {
+		val fixture = insertFixture(Instant.now().plusSeconds(3600))
+		jdbcTemplate.update("update routines set activity_cursor_sequence = 4242 where id = ?", fixture.routineId)
+		val before = assertNotNull(routinePersistence.find(devContext.devWorkspaceId, fixture.routineId))
+		val deliveryId = UUID.randomUUID().also(deliveryIds::add)
+		jdbcTemplate.update(
+			"""insert into github_webhook_deliveries(id,external_delivery_id,event_type,payload_hash,disposition,received_at)
+			values (?,?,'pull_request',?,'OBSERVED',now())""",
+			deliveryId, deliveryId.toString(), "a".repeat(64),
+		)
+		val queued = agentPersistence.createExecution(RoutineExecutionRequest(
+			workspaceId = devContext.devWorkspaceId,
+			routineId = fixture.routineId,
+			createdByUserId = devContext.devUserId,
+			triggerSourceScopeId = fixture.scopeId,
+			triggerKind = RoutineExecutionTriggerKind.GITHUB,
+			triggerKey = "autonomy:$deliveryId",
+			requestFingerprint = "autonomy:$deliveryId",
+			triggerDeliveryId = deliveryId,
+			activityCursorBefore = before.activityCursorSequence,
+		))
+		val activeWorker = newWorker("autonomy-github", AutonomyProperties(mode = AutonomyMode.ACTIVE))
+
+		assertEquals(1, activeWorker.drain())
+
+		val execution = assertNotNull(agentPersistence.findExecution(devContext.devWorkspaceId, queued.id))
+		val after = assertNotNull(routinePersistence.find(devContext.devWorkspaceId, fixture.routineId))
+		assertEquals(RoutineExecutionStatus.DEFERRED, execution.status, "Execution error: ${execution.errorCode}")
+		assertNull(execution.refreshCompletedAt)
+		assertNull(execution.activityCursorAfter)
+		assertEquals(before.activityCursorSequence, after.activityCursorSequence)
+		assertEquals(before.nextRunAt, after.nextRunAt)
+		assertNull(execution.claimedBy)
+		assertEquals(0, githubClient.calls)
+		assertEquals(0, count("agent_runs", "routine_id", fixture.routineId))
+		assertEquals(0, generationCountForRoutine(fixture.routineId))
+		assertEquals(0, activeWorker.drain())
+	}
+
+	@Test
+	fun `active autonomy still evaluates explicitly manual routine execution`() {
+		val fixture = insertFixture(Instant.now().plusSeconds(3600))
+		val before = assertNotNull(routinePersistence.find(devContext.devWorkspaceId, fixture.routineId))
+		val manual = agentPersistence.createExecution(RoutineExecutionRequest(
+			workspaceId = devContext.devWorkspaceId,
+			routineId = fixture.routineId,
+			createdByUserId = devContext.devUserId,
+			triggerSourceScopeId = fixture.scopeId,
+			triggerKind = RoutineExecutionTriggerKind.MANUAL,
+			triggerKey = "manual-autonomy:${fixture.routineId}",
+			requestFingerprint = "manual-autonomy:${fixture.routineId}",
+			activityCursorBefore = before.activityCursorSequence,
+		))
+		val activeWorker = newWorker("autonomy-manual", AutonomyProperties(mode = AutonomyMode.ACTIVE))
+
+		activeWorker.runNow(devContext.devWorkspaceId, fixture.routineId, manual.id)
+
+		val execution = assertNotNull(agentPersistence.findExecution(devContext.devWorkspaceId, manual.id))
+		assertEquals(RoutineExecutionStatus.NO_ACTIVITY, execution.status)
+		assertNull(execution.errorCode)
+		assertEquals(before.nextRunAt, routinePersistence.find(devContext.devWorkspaceId, fixture.routineId)?.nextRunAt)
+	}
+
+	private fun newWorker(workerId: String, autonomy: AutonomyProperties = AutonomyProperties()) = RoutineWorker(
 		routinePersistence,
 		agentPersistence,
 		agentRunAdmissionPersistence,
@@ -226,6 +321,7 @@ class RoutineBackgroundAccessIntegrationTest {
 		routineRunDispatcher,
 		workerId = workerId,
 		claimTimeout = agentProperties.claimTimeout,
+		autonomy = autonomy,
 	)
 
 	private fun insertFixture(dueAt: Instant): RefreshFixture {

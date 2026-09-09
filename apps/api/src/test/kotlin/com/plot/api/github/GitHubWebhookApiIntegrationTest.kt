@@ -541,6 +541,16 @@ class GitHubWebhookApiIntegrationTest {
 		))
 	}
 
+    @Test
+    fun retainsWithdrawnReleaseIdentityWithoutQueuingDraft() {
+        val deliveryId = "delivery-${UUID.randomUUID()}"
+        val body = """{"action":"unpublished","release":{"tag_name":"v9.9.9"}}"""
+        postWebhook(deliveryId,"release",body).andExpect { status { isAccepted() } }
+        assertEquals("v9.9.9",jdbcTemplate.queryForObject(
+            "select tag_name from github_webhook_deliveries where external_delivery_id=?",String::class.java,deliveryId))
+        assertEquals("IGNORED",latestDisposition())
+    }
+
 	@Test
 	fun rejectsADeclaredOversizedWebhookBody() {
 		val response = MockHttpServletResponse()

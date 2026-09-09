@@ -56,7 +56,7 @@ class GitHubReleaseLeasePersistence(
 			      and predecessor.source_scope_id = candidate.source_scope_id
 			      and predecessor.routine_id is not distinct from candidate.routine_id
 			      and (predecessor.created_at, predecessor.id) < (candidate.created_at, candidate.id)
-			      and predecessor.status not in ('READY', 'NO_ACTIVITY', 'NEEDS_RANGE', 'FAILED')
+			      and predecessor.status not in ('READY', 'NO_ACTIVITY', 'NEEDS_RANGE', 'DEFERRED', 'FAILED')
 			  )
 			order by candidate.created_at, candidate.id
 			for update skip locked
@@ -386,6 +386,7 @@ class GitHubReleaseLeasePersistence(
 private val terminalStatuses = setOf(
 	GitHubReleaseDraftStatus.READY,
 	GitHubReleaseDraftStatus.NO_ACTIVITY,
+	GitHubReleaseDraftStatus.DEFERRED,
 	GitHubReleaseDraftStatus.NEEDS_RANGE,
 	GitHubReleaseDraftStatus.FAILED,
 )

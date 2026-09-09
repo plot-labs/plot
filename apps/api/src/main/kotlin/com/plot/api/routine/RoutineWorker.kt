@@ -36,6 +36,7 @@ class RoutineWorker(
 	private val clock: Clock? = null,
 	private val workerId: String = "routine-${UUID.randomUUID()}",
 	private val claimTimeout: Duration = Duration.ofMinutes(2),
+    private val autonomy: com.plot.api.autonomy.github.AutonomyProperties = com.plot.api.autonomy.github.AutonomyProperties(),
 ) {
 	fun recover(): Int {
 		if (!agentProperties.workersEnabled) return 0
@@ -99,6 +100,16 @@ class RoutineWorker(
 			workspaceAccessService.requireWritable(execution.workspaceId)
 			val routine = persistence.find(execution.workspaceId, execution.routineId)
 				?: throw RoutineExecutionStateException("Routine was not found")
+            if (execution.triggerKind != RoutineExecutionTriggerKind.MANUAL &&
+                autonomy.modeFor(execution.workspaceId) == com.plot.api.autonomy.github.AutonomyMode.ACTIVE) {
+                transactionExecutor.executeWithoutResult {
+                    persistence.lockWorkspaceActivity(execution.workspaceId)
+                    val now=currentInstant()
+                    agentPersistence.deferForAutonomy(execution.workspaceId,execution.id,workerId,now)
+                    finishProjection(execution,claimedRoutine,now,"DEFERRED",nextRunAtFor(execution,routine,now))
+                }
+                return
+            }
 			val readyExecution = refreshIfRequired(execution, routine) ?: run {
 				releaseRoutineClaimIfHeld(claimedRoutine)
 				return

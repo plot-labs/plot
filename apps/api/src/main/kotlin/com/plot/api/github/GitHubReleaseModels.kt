@@ -6,7 +6,7 @@ import java.util.UUID
 enum class GitHubWebhookDisposition { RECEIVED, OBSERVED, QUEUED, IGNORED, FAILED }
 
 enum class GitHubReleaseDraftStatus {
-	QUEUED, RESOLVING, GENERATING, READY, NO_ACTIVITY, NEEDS_RANGE, FAILED
+	QUEUED, RESOLVING, GENERATING, READY, NO_ACTIVITY, NEEDS_RANGE, DEFERRED, FAILED
 }
 
 data class GitHubWebhookDelivery(

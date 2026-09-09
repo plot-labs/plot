@@ -37,6 +37,7 @@ class GitHubReleaseDraftOrchestrator(
 	private val evidenceService: GitHubReleaseEvidenceService,
 	private val agentAdmission: GitHubReleaseAgentAdmission,
 	private val executionProbe: GitHubReleaseExecutionProbe,
+	private val preparationGate: GitHubReleasePreparationGate? = null,
 ) {
 	fun process(request: GitHubReleaseDraftRequest, lease: GitHubReleaseLease): GitHubReleaseDraftStatus {
 		require(lease.workerId.isNotBlank()) { "Release worker ID is required" }
@@ -58,6 +59,7 @@ class GitHubReleaseDraftOrchestrator(
 				require(previouslyBound.observationId == request.observationId) {
 					"Bound release evidence observation does not match its request"
 				}
+				if (deferIfNeeded(request, context, previouslyBound, lease)) return GitHubReleaseDraftStatus.DEFERRED
 				startAndLinkAgent(request, context, principal, previouslyBound, lease)
 				return GitHubReleaseDraftStatus.GENERATING
 			}
@@ -104,6 +106,8 @@ class GitHubReleaseDraftOrchestrator(
 						return GitHubReleaseDraftStatus.NO_ACTIVITY
 					}
 					lease.checkpoint()
+					val resolvedRequest = request.copy(baseSha = range.baseSha, headSha = range.headSha)
+					if (deferIfNeeded(resolvedRequest, context, evidence, lease)) return GitHubReleaseDraftStatus.DEFERRED
 					lease.transition { transitionVersion ->
 						agentAdmission.bindAndAdmit(
 							request = request,
@@ -185,6 +189,19 @@ class GitHubReleaseDraftOrchestrator(
 		)
 		lease.advanceTransition()
 	}
+
+    private fun deferIfNeeded(
+        request: GitHubReleaseDraftRequest, context: GitHubReleaseSourceContext,
+        evidence: GitHubReleaseEvidence, lease: GitHubReleaseLease,
+    ): Boolean {
+        if (preparationGate?.shouldPrepare(request.copy(transitionVersion = lease.transitionVersion), context, evidence) != false) return false
+        lease.checkpoint()
+        if (request.observationId == null) lease.transition { version ->
+            requestPersistence.bindEvidence(request.id, version, evidence)
+        }
+        leasePersistence.finish(request.id, lease.transitionVersion, GitHubReleaseDraftStatus.DEFERRED)
+        return true
+    }
 
 	private fun instruction(request: GitHubReleaseDraftRequest): String =
 		"Create a changelog for GitHub release ${request.tagName}."

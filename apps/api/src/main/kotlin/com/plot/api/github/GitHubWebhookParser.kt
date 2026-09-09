@@ -58,7 +58,7 @@ class GitHubWebhookParser(private val objectMapper: ObjectMapper) {
 			beforeSha = root.text("before"),
 			afterSha = root.text("after"),
 			tagName = when {
-				eventType == "release" && root.text("action") == "published" && root.path("release").isObject ->
+				eventType == "release" && root.text("action") in setOf("published", "deleted", "unpublished") && root.path("release").isObject ->
 					root.path("release").text("tag_name")
 				eventType == "push" && ref?.startsWith(TAG_REF_PREFIX) == true -> ref.removePrefix(TAG_REF_PREFIX)
 				else -> null

@@ -25,6 +25,39 @@ import org.springframework.http.HttpStatus
 
 class GitHubReleaseDraftOrchestratorTest {
 	@Test
+	fun customerValueGateDefersWithoutCreatingAnAgentAndPreservesEvidence() {
+		val fixture = fixture(resolvedRange(), gate = object : GitHubReleasePreparationGate {
+			override fun shouldPrepare(request: GitHubReleaseDraftRequest, context: GitHubReleaseSourceContext, evidence: GitHubReleaseEvidence): Boolean {
+				assertEquals("base", request.baseSha)
+				assertEquals("head", request.headSha)
+				return false
+			}
+		})
+		val outcome = fixture.orchestrator.process(fixture.request, fixture.lease)
+		assertEquals(GitHubReleaseDraftStatus.DEFERRED, outcome)
+		assertEquals(0, fixture.generation.created.size)
+		assertEquals(EVIDENCE_ID, fixture.persistence.boundEvidence.single().evidence.observationId)
+		assertEquals(GitHubReleaseDraftStatus.DEFERRED, fixture.persistence.finished.single().status)
+	}
+
+	@Test
+	fun previouslyBoundEvidenceAlsoPassesCustomerValueGate() {
+		var calls = 0
+		val gate = object : GitHubReleasePreparationGate {
+			override fun shouldPrepare(request: GitHubReleaseDraftRequest, context: GitHubReleaseSourceContext, evidence: GitHubReleaseEvidence): Boolean {
+				calls++
+				return false
+			}
+		}
+		val fixture = fixture(resolvedRange(), gate = gate)
+		fixture.persistence.bindEvidence(fixture.request.id, 1, GitHubReleaseEvidence(EVIDENCE_ID, listOf(WRITING_BLOCK_ID)))
+		val request = fixture.request.copy(observationId = EVIDENCE_ID, baseSha = "base", headSha = "head")
+		assertEquals(GitHubReleaseDraftStatus.DEFERRED, fixture.orchestrator.process(request, fixture.lease))
+		assertEquals(1, calls)
+		assertEquals(0, fixture.generation.created.size)
+	}
+
+	@Test
 	fun firstTagEndsNeedsRangeWithoutStartingArtifactWorkflow() {
 		val fixture = fixture(GitHubReleaseRangeResult.NeedsRange("first-head"))
 
@@ -413,6 +446,7 @@ class GitHubReleaseDraftOrchestratorTest {
 		evidence: GitHubReleaseEvidence = GitHubReleaseEvidence(EVIDENCE_ID, listOf(WRITING_BLOCK_ID)),
 		properties: GitHubProperties = GitHubProperties(releaseAutomationEnabled = true),
 		observationRegistry: TestObservationRegistry = TestObservationRegistry.create(),
+		gate: GitHubReleasePreparationGate? = null,
 	): Fixture {
 		val persistence = FakeReleasePersistence()
 		val context = context()
@@ -434,6 +468,7 @@ class GitHubReleaseDraftOrchestratorTest {
 			evidenceService,
 			admission,
 			executionProbe,
+			gate,
 		)
 		val worker = GitHubReleaseDraftWorker(
 			persistence,

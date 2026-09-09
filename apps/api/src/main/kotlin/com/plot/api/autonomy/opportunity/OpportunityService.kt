@@ -131,10 +131,6 @@ class OpportunityService(
         if (item.dismissed || item.disposition != AssessmentDisposition.ELIGIBLE) throw OpportunityException("OPPORTUNITY_NOT_ELIGIBLE")
         goal(workspaceId,item,Instant.now())
     }
-    fun ensureGoal(workspaceId: UUID, opportunityId: UUID, expectedVersion: Long): GoalRecord? {
-        prepare(workspaceId,opportunityId,expectedVersion)
-        return goalByOpportunity(workspaceId,opportunityId)
-    }
     fun linkAgent(workspaceId: UUID,goalId: UUID,agentRunId: UUID) = transaction {
         val item = sql.queryForObject("""select o.id from autonomy_opportunities o join autonomy_goals g
             on g.workspace_id=o.workspace_id and g.opportunity_id=o.id where g.workspace_id=? and g.id=?""",
@@ -149,14 +145,6 @@ class OpportunityService(
             agentRunId,workspaceId,goalId,agentRunId,current.fingerprint) != 1) throw OpportunityException("GOAL_ALREADY_LINKED")
         true
     }
-
-    /** Agent success alone is insufficient: a generated artifact run must also be reviewable. */
-    fun reconcile(workspaceId: UUID): Int = sql.update("""update autonomy_goals g set
-        state=case when a.status='FAILED' then 'FAILED' else 'SUCCEEDED' end,updated_at=now()
-        from agent_runs a where g.workspace_id=? and a.workspace_id=g.workspace_id and a.id=g.agent_run_id
-        and g.state='RUNNING' and (a.status='FAILED' or (a.status='SUCCEEDED' and exists (
-        select 1 from artifact_runs r where r.workspace_id=a.workspace_id and r.agent_run_id=a.id
-        and r.status in ('READY','NEEDS_REVIEW'))))""",workspaceId)
 
     private fun apply(workspace: UUID,item: OpportunityRecord,title: String,input: AssessmentInput,result: AssessmentResult,now: Instant,createGoal: Boolean) {
         sql.update("""update autonomy_opportunities set title=?,fingerprint=?,disposition=?,reason=?,input_snapshot=?::jsonb,
@@ -227,12 +215,13 @@ class OpportunityService(
         requireNotNull(row.getString("subject_key")),requireNotNull(row.getString("title")),AssessmentDisposition.valueOf(requireNotNull(row.getString("disposition"))),
         requireNotNull(row.getString("reason")),row.getString("fingerprint"),row.getBoolean("dismissed"),row.getLong("version"),
         mapper.readValue(requireNotNull(row.getString("evidence_ids")),Array<String>::class.java).toList(),mapper.readValue(requireNotNull(row.getString("missing_facts")),Array<String>::class.java).toList(),
-        row.getString("last_error_code"),row.getObject("goal_id",UUID::class.java),row.getString("goal_state"),row.getObject("agent_run_id",UUID::class.java),requireNotNull(row.getTimestamp("updated_at")).toInstant())
+        row.getString("last_error_code"),row.getObject("goal_id",UUID::class.java),row.getString("goal_state"),row.getObject("agent_run_id",UUID::class.java),requireNotNull(row.getTimestamp("updated_at")).toInstant(),row.getObject("chat_id",UUID::class.java))
     private data class Claim(val item: OpportunityRecord,val run: Boolean)
     private companion object {
-        const val SELECT="""select o.*,g.id as goal_id,g.state as goal_state,g.agent_run_id from autonomy_opportunities o
+        const val SELECT="""select o.*,g.id as goal_id,g.state as goal_state,g.agent_run_id,a.work_session_id as chat_id from autonomy_opportunities o
             left join lateral (select * from autonomy_goals candidate where candidate.workspace_id=o.workspace_id and candidate.opportunity_id=o.id
-            order by (candidate.state in ('QUEUED','RUNNING')) desc,(candidate.fingerprint=o.fingerprint) desc,candidate.created_at desc,candidate.id desc limit 1) g on true"""
+            order by (candidate.state in ('QUEUED','RUNNING')) desc,(candidate.fingerprint=o.fingerprint) desc,candidate.created_at desc,candidate.id desc limit 1) g on true
+            left join agent_runs a on a.workspace_id=o.workspace_id and a.id=g.agent_run_id"""
         fun stamp(time: Instant)=Timestamp.from(time)
     }
 }

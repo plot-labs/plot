@@ -346,6 +346,14 @@ class RoutineAgentPersistence(
 		routineId,
 	)
 
+    fun deferForAutonomy(workspaceId: UUID, executionId: UUID, workerId: String, now: Instant) {
+        val updated=sqlExecutor.update("""update routine_executions set status='DEFERRED',
+            claimed_by=null,claimed_at=null,finished_at=?,transition_version=transition_version+1,updated_at=?
+            where workspace_id=? and id=? and status='PROBING' and claimed_by=?""",
+            Timestamp.from(now),Timestamp.from(now),workspaceId,executionId,workerId)
+        if(updated != 1) throw RoutineClaimLostException()
+    }
+
 	fun markNoActivity(
 		workspaceId: UUID,
 		executionId: UUID,
@@ -417,7 +425,7 @@ class RoutineAgentPersistence(
 		errorCode: String? = null,
 		projectionAt: Instant = now,
 	) {
-		require(status in setOf("QUEUED", "NO_ACTIVITY", "FAILED")) { "Invalid Routine projection status" }
+		require(status in setOf("QUEUED", "NO_ACTIVITY", "DEFERRED", "FAILED")) { "Invalid Routine projection status" }
 		val updated = sqlExecutor.update(
 			"""
 			update routines

@@ -28,5 +28,5 @@ data class OpportunityRecord(
     val title: String, val disposition: AssessmentDisposition, val reason: String,
     val fingerprint: String?, val dismissed: Boolean, val version: Long,
     val evidenceIds: List<String>, val missingFacts: List<String>, val lastErrorCode: String?, val goalId: UUID?,
-    val goalState: String?, val agentRunId: UUID?, val updatedAt: Instant,
+    val goalState: String?, val agentRunId: UUID?, val updatedAt: Instant, val chatId: UUID? = null,
 )
