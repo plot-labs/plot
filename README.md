@@ -37,8 +37,10 @@ apps/
   api/  Kotlin Spring Boot API and generation worker
 
 packages/
-  auth/        Better Auth configuration and allowlist policy
   api-client/  typed browser client for the Plot API
+
+contracts/
+  plot-api/    versioned API contract manifest and fixtures
 ```
 
 PostgreSQL is the system of record. Flyway migrations under

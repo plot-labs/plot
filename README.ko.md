@@ -36,8 +36,10 @@ apps/
   api/  Kotlin Spring Boot API와 generation worker
 
 packages/
-  auth/        Better Auth 설정과 allowlist policy
   api-client/  Plot API용 typed browser client
+
+contracts/
+  plot-api/    버전 관리되는 API contract manifest와 fixtures
 ```
 
 PostgreSQL이 system of record이며,

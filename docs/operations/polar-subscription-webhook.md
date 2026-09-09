@@ -12,7 +12,7 @@ access is enforced per workspace until the earlier of 30 days or three
 successful content packs; failed generations do not consume the pack allowance.
 After Trial expiry or subscription revocation, reads and content export remain
 available while new generation, import/sync, edits, and other mutations return
-`WORKSPACE_READ_ONLY`. Better Auth sessions remain valid intentionally so
+`WORKSPACE_READ_ONLY`. Auth sessions remain valid intentionally so
 members can read, export, and reactivate.
 
 ## Prepare a partner checkout
