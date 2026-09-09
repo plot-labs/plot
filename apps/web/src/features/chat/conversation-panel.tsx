@@ -58,12 +58,8 @@ export function ConversationPanel() {
   return <aside aria-label="Plot conversation" style={open ? undefined : { display: "none" }}
     onKeyDown={(event) => { if (event.key === "Escape" && !event.defaultPrevented) { event.stopPropagation(); close(); } }}
     className="fixed inset-0 z-40 flex min-h-0 flex-col border-l border-black/10 bg-white shadow-xl dark:border-white/10 dark:bg-[#111113] lg:relative lg:inset-auto lg:z-10 lg:h-full lg:w-[min(480px,45vw)] lg:shrink-0">
-    <header className="flex shrink-0 items-center justify-between border-b border-black/10 px-4 py-3 dark:border-white/10">
-      <span className="font-medium">Plot</span>
-      <div className="flex items-center gap-3">
-        <button className="text-sm underline" onClick={() => { version.current += 1; setWorkspaceVersion(version.current); setTarget({}); }}>New request</button>
-        <button ref={closeButton} aria-label="Close conversation" onClick={close} className="rounded-md p-2 hover:bg-black/5"><X className="size-4" /></button>
-      </div>
+    <header className="flex shrink-0 items-center justify-end border-b border-black/10 px-4 py-3 dark:border-white/10">
+      <button ref={closeButton} aria-label="Close conversation" onClick={close} className="rounded-md p-2 hover:bg-black/5"><X className="size-4" /></button>
     </header>
     <div className="min-h-0 flex-1 overflow-y-auto">
       <ChatWorkspace key={`${workspaceVersion}:${target.chatId ?? "new"}`} target={target} onNavigate={navigate} />
