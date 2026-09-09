@@ -3,8 +3,10 @@ package com.plot.api.common
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
+import org.slf4j.LoggerFactory
 import org.springframework.core.task.TaskExecutor
 import org.springframework.core.task.TaskRejectedException
 
@@ -19,18 +21,31 @@ internal class WorkerTurnRecovery(
 	private val failureRecoveryDelay: Duration,
 	private val earliestRetryAt: () -> Instant?,
 	private val dispatch: () -> Unit,
+	private val onRetryQueryFailure: (Throwable) -> Unit = {},
 ) {
+	private val log = LoggerFactory.getLogger(WorkerTurnRecovery::class.java)
 	private val wakeup = WorkerWakeup(retryExecutor, clock, dispatch)
 
 	fun dispatch(turn: () -> Unit) {
 		try {
 			taskExecutor.execute {
+				var turnSucceeded = false
 				try {
 					turn()
-				} catch (_: RuntimeException) {
+					turnSucceeded = true
+				} catch (ex: RuntimeException) {
+					log.warn("Worker turn execution failed; scheduling failure recovery: {}", ex.message)
 					scheduleFailureRecovery()
 				} finally {
-					armEarliestRetry()
+					try {
+						armEarliestRetry()
+					} catch (ex: RuntimeException) {
+						log.warn("Worker turn earliestRetryAt query failed; scheduling failure recovery: {}", ex.message)
+						onRetryQueryFailure(ex)
+						if (turnSucceeded) {
+							scheduleFailureRecovery()
+						}
+					}
 				}
 			}
 		} catch (_: TaskRejectedException) {
@@ -50,6 +65,11 @@ internal class WorkerTurnRecovery(
 	private fun scheduleFailureRecovery() {
 		if (retryExecutor == null) return
 		val delayMillis = failureRecoveryDelay.toMillis().coerceAtLeast(1)
-		retryExecutor.schedule({ dispatch() }, delayMillis, TimeUnit.MILLISECONDS)
+		try {
+			retryExecutor.schedule({ dispatch() }, delayMillis, TimeUnit.MILLISECONDS)
+		} catch (_: RejectedExecutionException) {
+			// Executor is shutting down; ignore without crash
+		}
 	}
 }
+

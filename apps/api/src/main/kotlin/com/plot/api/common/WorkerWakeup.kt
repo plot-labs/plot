@@ -28,12 +28,16 @@ class WorkerWakeup(
 			if (armedFor.compareAndSet(armed, at)) break
 		}
 		val delay = Duration.between(clock.instant(), at).toMillis().coerceAtLeast(1)
-		executor.schedule(
-			{
-				if (armedFor.compareAndSet(at, null)) dispatch()
-			},
-			delay,
-			TimeUnit.MILLISECONDS,
-		)
+		try {
+			executor.schedule(
+				{
+					if (armedFor.compareAndSet(at, null)) dispatch()
+				},
+				delay,
+				TimeUnit.MILLISECONDS,
+			)
+		} catch (_: java.util.concurrent.RejectedExecutionException) {
+			armedFor.compareAndSet(at, null)
+		}
 	}
 }

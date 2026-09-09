@@ -97,4 +97,14 @@ class WorkerWakeupTest {
 			executor.shutdownNow()
 		}
 	}
+
+	@Test
+	fun `scheduleAt when executor is shut down does not throw exception`() {
+		val executor = Executors.newSingleThreadScheduledExecutor()
+		executor.shutdownNow()
+
+		val wakeup = WorkerWakeup(executor, clock) { }
+		// Should not throw RejectedExecutionException
+		wakeup.scheduleAt(now.plusMillis(50))
+	}
 }
