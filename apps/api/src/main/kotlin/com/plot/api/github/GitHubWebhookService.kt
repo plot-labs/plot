@@ -2,7 +2,6 @@ package com.plot.api.github
 
 import com.plot.api.observability.stopSafely
 import com.plot.api.routine.GitHubChangeRoutineService
-import com.plot.api.routine.RoutineRunDispatcher
 import io.micrometer.observation.Observation
 import io.micrometer.observation.ObservationRegistry
 import java.time.Instant
@@ -28,11 +27,10 @@ class GitHubWebhookService(
 	private val releaseDispatcher: GitHubReleaseDraftDispatcher,
 	private val accessCheckDispatcher: GitHubRepositoryAccessCheckDispatcher,
 	private val gitHubChangeRoutineService: GitHubChangeRoutineService,
-	private val routineRunDispatcher: RoutineRunDispatcher,
 	private val lifecycleService: GitHubSourceAccessLifecycleService,
 	private val observationRegistry: ObservationRegistry,
 	private val transactionService: GitHubWebhookTransactionService,
-	private val autonomy: com.plot.api.autonomy.github.GitHubAutonomyBridge? = null,
+	private val autonomy: com.plot.api.autonomy.github.GitHubAutonomyBridge,
 ) {
 	fun accept(webhook: ParsedGitHubWebhook): GitHubWebhookDelivery {
 		val observation = Observation.start("plot.github.webhook", observationRegistry)
@@ -99,9 +97,7 @@ class GitHubWebhookService(
 			webhook.repositoryId?.let { repositoryId -> scopeResolver.resolve(installationId, repositoryId) }
 		}
 		if (context == null) return mark(delivery, GitHubWebhookDisposition.IGNORED)
-		autonomy?.observe(context, delivery, webhook)
-        if (autonomy?.isActive(context.workspaceId) == true && webhook.eventType == "release" &&
-            webhook.eventAction == "published" && properties.releaseAutomationEnabled) scheduleReleaseDispatchAfterCommit()
+		autonomy.observe(context, delivery, webhook)
 
 		return when {
 			webhook.eventType == "push" && (webhook.refDeleted == true || webhook.forced == true) ->
@@ -119,18 +115,16 @@ class GitHubWebhookService(
 				}
 			}
 			webhook.eventType == "push" && webhook.ref == "refs/heads/${context.defaultBranch}" -> {
-				val queued = if (autonomy?.isActive(context.workspaceId) == true) 0
-					else gitHubChangeRoutineService.accept(context, delivery, webhook)
-				if (queued > 0) scheduleRoutineDispatchAfterCommit()
-				mark(delivery, if (queued > 0) GitHubWebhookDisposition.QUEUED else GitHubWebhookDisposition.OBSERVED)
+				mark(delivery, GitHubWebhookDisposition.OBSERVED)
 			}
 			webhook.eventType == "push" -> mark(delivery, GitHubWebhookDisposition.IGNORED)
 			// release.target_commitish may be a mutable branch. Only a canonical tag push
 			// contributes an immutable observed head SHA to the release request.
 			webhook.eventType == "release" && webhook.eventAction == "published" && webhook.tagName != null -> {
 				val queued = gitHubChangeRoutineService.accept(context, delivery, webhook)
-				if (queued > 0 && properties.releaseAutomationEnabled) scheduleReleaseDispatchAfterCommit()
 				if (gitHubChangeRoutineService.hasReleaseEventRoutines(context)) {
+                    // Publication can also wake a previously deferred request.
+                    if (properties.releaseAutomationEnabled) scheduleReleaseDispatchAfterCommit()
 					mark(delivery, if (queued > 0) GitHubWebhookDisposition.QUEUED else GitHubWebhookDisposition.OBSERVED)
 				} else {
 					enqueue(context, delivery, webhook.tagName, observedHeadSha = null)
@@ -166,18 +160,6 @@ class GitHubWebhookService(
 		TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
 			override fun afterCommit() {
 				releaseDispatcher.dispatch()
-			}
-		})
-	}
-
-	private fun scheduleRoutineDispatchAfterCommit() {
-		check(
-			TransactionSynchronizationManager.isSynchronizationActive() &&
-				TransactionSynchronizationManager.isActualTransactionActive(),
-		) { "Routine dispatch requires an active transaction" }
-		TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
-			override fun afterCommit() {
-				routineRunDispatcher.dispatch()
 			}
 		})
 	}

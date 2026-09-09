@@ -572,7 +572,6 @@ export interface AutonomyHomeItem {
 }
 
 export interface AutonomyHome {
-  mode: "OFF" | "SHADOW" | "ACTIVE";
   items: AutonomyHomeItem[];
 }
 

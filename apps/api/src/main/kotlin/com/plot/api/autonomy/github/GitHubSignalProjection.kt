@@ -19,17 +19,14 @@ class GitHubSignalProjection(
     private val opportunities: OpportunityService,
     private val sql: JooqSqlExecutor,
     private val transactions: JooqTransactionExecutor,
-    private val properties: AutonomyProperties,
     private val executions: com.plot.api.autonomy.execution.AutonomyExecutionService,
     @org.springframework.context.annotation.Lazy private val dispatcher: com.plot.api.github.GitHubReleaseDraftDispatcher? = null,
     private val limits: com.plot.api.autonomy.opportunity.OpportunityProperties = com.plot.api.autonomy.opportunity.OpportunityProperties(),
 ) {
     @Scheduled(fixedDelayString = "\${plot.autonomy.scan-delay:PT30S}", initialDelayString = "\${plot.autonomy.scan-delay:PT30S}")
     fun scan() {
-        // Owned executions must finish their projection even after rollout is disabled.
         sql.query("select distinct workspace_id from autonomy_goals where state='RUNNING' limit 100",
             { row, _ -> requireNotNull(row.getObject("workspace_id",UUID::class.java)) }).forEach(executions::reconcile)
-        if (properties.mode == AutonomyMode.OFF) return
         if (requeueChangedContext() > 0) dispatcher?.dispatch()
         inbox.failExhausted("GITHUB", Instant.now())
         for (index in 0 until 50) { if (!projectNext()) break }
@@ -42,7 +39,7 @@ class GitHubSignalProjection(
                 and o.subject_key='github-release:'||r.tag_name
             join source_scopes s on s.workspace_id=r.workspace_id and s.id=r.source_scope_id
             left join workspace_content_profiles p on p.workspace_id=r.workspace_id
-            where r.status='DEFERRED' and r.autonomy_mode='ACTIVE' and r.agent_run_id is null
+            where r.status='DEFERRED' and r.agent_run_id is null
                 and not o.dismissed and o.input_snapshot is not null
                 and (o.input_snapshot->>'contextRevision' is distinct from
                     coalesce(p.current_revision_id::text,'none')||':'||s.status_changed_at::text
@@ -51,7 +48,7 @@ class GitHubSignalProjection(
             order by r.updated_at,r.id limit 100""",limits.activeGoalLimit)
         return candidates.sumOf { row ->
             val workspace=requireNotNull(row.getObject("workspace_id",UUID::class.java))
-            if(properties.modeFor(workspace) != AutonomyMode.ACTIVE) 0 else sql.update("""update github_release_draft_requests
+            sql.update("""update github_release_draft_requests
                 set status='QUEUED',attempt_count=0,generation_attempt=generation_attempt+1,finished_at=null,
                 next_attempt_at=now(),transition_version=transition_version+1,updated_at=now()
                 where workspace_id=? and id=? and status='DEFERRED' and agent_run_id is null""",

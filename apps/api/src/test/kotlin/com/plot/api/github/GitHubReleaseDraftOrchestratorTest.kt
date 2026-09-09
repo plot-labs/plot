@@ -446,7 +446,9 @@ class GitHubReleaseDraftOrchestratorTest {
 		evidence: GitHubReleaseEvidence = GitHubReleaseEvidence(EVIDENCE_ID, listOf(WRITING_BLOCK_ID)),
 		properties: GitHubProperties = GitHubProperties(releaseAutomationEnabled = true),
 		observationRegistry: TestObservationRegistry = TestObservationRegistry.create(),
-		gate: GitHubReleasePreparationGate? = null,
+		gate: GitHubReleasePreparationGate = object : GitHubReleasePreparationGate {
+            override fun shouldPrepare(request: GitHubReleaseDraftRequest, context: GitHubReleaseSourceContext, evidence: GitHubReleaseEvidence) = true
+        },
 	): Fixture {
 		val persistence = FakeReleasePersistence()
 		val context = context()

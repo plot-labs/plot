@@ -246,12 +246,6 @@ open class GithubReleaseDraftRequests(
      */
     val ROUTINE_ID: TableField<GithubReleaseDraftRequestsRecord, UUID?> = createField(DSL.name("routine_id"), SQLDataType.UUID, this, "")
 
-    /**
-     * The column
-     * <code>public.github_release_draft_requests.autonomy_mode</code>.
-     */
-    val AUTONOMY_MODE: TableField<GithubReleaseDraftRequestsRecord, String?> = createField(DSL.name("autonomy_mode"), SQLDataType.VARCHAR, this, "")
-
     private constructor(alias: Name, aliased: Table<GithubReleaseDraftRequestsRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<GithubReleaseDraftRequestsRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<GithubReleaseDraftRequestsRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)
@@ -471,8 +465,7 @@ open class GithubReleaseDraftRequests(
         Internal.createCheck(this, DSL.name("github_release_draft_requests_generation_attempt_check"), "((generation_attempt >= 0))", true),
         Internal.createCheck(this, DSL.name("github_release_draft_requests_status_check"), "(((status)::text = ANY ((ARRAY['QUEUED'::character varying, 'RESOLVING'::character varying, 'GENERATING'::character varying, 'READY'::character varying, 'NO_ACTIVITY'::character varying, 'NEEDS_RANGE'::character varying, 'DEFERRED'::character varying, 'FAILED'::character varying])::text[])))", true),
         Internal.createCheck(this, DSL.name("github_release_draft_requests_tag_name_check"), "((length(TRIM(BOTH FROM tag_name)) > 0))", true),
-        Internal.createCheck(this, DSL.name("github_release_draft_requests_transition_version_check"), "((transition_version >= 0))", true),
-        Internal.createCheck(this, DSL.name("release_autonomy_mode_check"), "(((autonomy_mode)::text = ANY ((ARRAY['OFF'::character varying, 'SHADOW'::character varying, 'ACTIVE'::character varying])::text[])))", true)
+        Internal.createCheck(this, DSL.name("github_release_draft_requests_transition_version_check"), "((transition_version >= 0))", true)
     )
     override fun `as`(alias: String): GithubReleaseDraftRequests = GithubReleaseDraftRequests(DSL.name(alias), this)
     override fun `as`(alias: Name): GithubReleaseDraftRequests = GithubReleaseDraftRequests(alias, this)

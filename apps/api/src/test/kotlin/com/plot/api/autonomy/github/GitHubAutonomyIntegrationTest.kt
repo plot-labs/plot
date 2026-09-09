@@ -31,19 +31,18 @@ class GitHubAutonomyIntegrationTest {
     @Autowired lateinit var inbox: SignalInbox
 
     @Test
-    fun `active tag without published release cannot generate even when model says eligible`() = fixture { f ->
-        val services = services(AutonomyMode.ACTIVE)
+    fun `tag without published release cannot generate even when model says eligible`() = fixture { f ->
+        val services = services()
         assertFalse(services.bridge.shouldPrepare(f.request, f.context, f.evidence))
         val item = assertNotNull(services.opportunities.findBySubject(f.workspace, f.scope, GitHubAutonomyBridge.subject(f.request.tagName)))
         assertEquals(AssessmentDisposition.AWAITING_EVIDENCE, item.disposition)
         assertNull(item.goalId)
-        assertEquals("ACTIVE", jdbc.queryForObject("select autonomy_mode from github_release_draft_requests where id=?", String::class.java, f.request.id))
     }
 
     @Test
     fun `published release creates one goal and replay reuses assessment`() = fixture { f ->
         f.publish()
-        val services = services(AutonomyMode.ACTIVE)
+        val services = services()
         assertTrue(services.bridge.shouldPrepare(f.request, f.context, f.evidence))
         assertTrue(services.bridge.shouldPrepare(f.request, f.context, f.evidence))
         val item = assertNotNull(services.opportunities.findBySubject(f.workspace, f.scope, GitHubAutonomyBridge.subject(f.request.tagName)))
@@ -55,26 +54,23 @@ class GitHubAutonomyIntegrationTest {
     }
 
     @Test
-    fun `shadow records assessment without goal and pins ownership for retry`() = fixture { f ->
-        f.publish()
-        val shadow = services(AutonomyMode.SHADOW)
-        assertTrue(shadow.bridge.shouldPrepare(f.request, f.context, f.evidence))
-        assertEquals(0, count("autonomy_goals", f.workspace))
-        // A rollout change cannot take over a request that already chose shadow ownership.
-        assertTrue(services(AutonomyMode.ACTIVE).bridge.shouldPrepare(f.request, f.context, f.evidence))
-        assertEquals(0, count("autonomy_goals", f.workspace))
-        assertEquals("SHADOW", jdbc.queryForObject("select autonomy_mode from github_release_draft_requests where id=?", String::class.java, f.request.id))
+    fun `admission without a prior assessment cannot bypass the gate`() = fixture { f ->
+        val failure = assertFailsWith<OpportunityException> {
+            services().bridge.admitted(f.request, f.createAgent())
+        }
+        assertEquals("ASSESSMENT_REQUIRED", failure.code)
+        assertEquals(0, count("autonomy_executions", f.workspace))
     }
 
     @Test
     fun `duplicate observation projects one waiting opportunity and preserves dismissed decision`() = fixture { f ->
-        val services = services(AutonomyMode.ACTIVE)
+        val services = services()
         val webhook = ParsedGitHubWebhook(f.delivery.externalDeliveryId, "push", null, f.context.installationId,
             f.context.repositoryId, ref="refs/tags/v1", beforeSha="a".repeat(40), afterSha="b".repeat(40),
             tagName="v1", refCreated=true, refDeleted=false, forced=false, payloadHash="c".repeat(64))
         services.bridge.observe(f.context, f.delivery, webhook)
         services.bridge.observe(f.context, f.delivery, webhook)
-        val projection = GitHubSignalProjection(inbox, services.opportunities, sql, transactions, AutonomyProperties(AutonomyMode.ACTIVE), AutonomyExecutionService(sql))
+        val projection = GitHubSignalProjection(inbox, services.opportunities, sql, transactions, AutonomyExecutionService(sql))
         assertTrue(projection.projectNext())
         val item = assertNotNull(services.opportunities.findBySubject(f.workspace, f.scope, "github-release:v1"))
         assertEquals(AssessmentDisposition.AWAITING_EVIDENCE, item.disposition)
@@ -88,8 +84,8 @@ class GitHubAutonomyIntegrationTest {
     }
 
     @Test
-    fun `published event requeues deferred active request without creating another request`() = fixture { f ->
-        val services = services(AutonomyMode.ACTIVE)
+    fun `published event requeues deferred request without creating another request`() = fixture { f ->
+        val services = services()
         assertFalse(services.bridge.shouldPrepare(f.request, f.context, f.evidence))
         jdbc.update("update github_release_draft_requests set status='DEFERRED',finished_at=now() where id=?", f.request.id)
         f.publish()
@@ -106,7 +102,7 @@ class GitHubAutonomyIntegrationTest {
     @Test
     fun `admission rollback is atomic replay maps once and reconciliation requires an artifact`() = fixture { f ->
         f.publish()
-        val services = services(AutonomyMode.ACTIVE)
+        val services = services()
         assertTrue(services.bridge.shouldPrepare(f.request, f.context, f.evidence))
         val goal = assertNotNull(services.opportunities.findBySubject(f.workspace, f.scope, "github-release:v1")?.goalId)
         val agent = f.createAgent()
@@ -153,14 +149,15 @@ class GitHubAutonomyIntegrationTest {
     }
 
     @Test
-    fun `shadow model outage records failure without blocking existing preparation`() = fixture { f ->
+    fun `model outage blocks preparation and records a retryable failure`() = fixture { f ->
         f.publish()
         val opportunities = OpportunityService(sql, tx, mapper, CustomerValueAssessmentService(AssessmentGateway {
             throw AssessmentException("ASSESSMENT_PROVIDER_UNAVAILABLE", true)
         }, AssessmentProperties()), OpportunityProperties())
-        val bridge = GitHubAutonomyBridge(AutonomyProperties(AutonomyMode.SHADOW), opportunities, inbox, sql,
-            transactions, mapper, AutonomyExecutionService(sql))
-        assertTrue(bridge.shouldPrepare(f.request, f.context, f.evidence))
+        val bridge = GitHubAutonomyBridge(opportunities, inbox, sql,
+            mapper, AutonomyExecutionService(sql))
+        val failure = assertFailsWith<AssessmentException> { bridge.shouldPrepare(f.request, f.context, f.evidence) }
+        assertTrue(failure.recoverable)
         val item = assertNotNull(opportunities.findBySubject(f.workspace, f.scope, "github-release:v1"))
         assertEquals("ASSESSMENT_PROVIDER_UNAVAILABLE", item.lastErrorCode)
         assertEquals(0, count("autonomy_goals", f.workspace))
@@ -168,11 +165,11 @@ class GitHubAutonomyIntegrationTest {
 
     @Test
     fun `held release wakes once for changed context but not elapsed time`() = fixture { f ->
-        val services = services(AutonomyMode.ACTIVE)
+        val services = services()
         assertFalse(services.bridge.shouldPrepare(f.request, f.context, f.evidence))
         jdbc.update("update github_release_draft_requests set status='DEFERRED',finished_at=now() where id=?", f.request.id)
         val projection = GitHubSignalProjection(inbox, services.opportunities, sql, transactions,
-            AutonomyProperties(AutonomyMode.ACTIVE), AutonomyExecutionService(sql))
+            AutonomyExecutionService(sql))
         assertEquals(0, projection.requeueChangedContext())
         jdbc.update("update source_scopes set status_changed_at=status_changed_at+interval '1 second' where id=?", f.scope)
         assertEquals(1, projection.requeueChangedContext())
@@ -188,7 +185,7 @@ class GitHubAutonomyIntegrationTest {
         val removal = UUID.randomUUID()
         jdbc.update("""insert into github_webhook_deliveries(id,external_delivery_id,event_type,event_action,installation_id,repository_id,tag_name,payload_hash,disposition,received_at)
             values (?,?,'release','unpublished',?,?,'v1',?,'OBSERVED',now())""",removal,removal.toString(),f.context.installationId,f.context.repositoryId,"e".repeat(64))
-        val services = services(AutonomyMode.ACTIVE)
+        val services = services()
         assertFalse(services.bridge.shouldPrepare(f.request, f.context, f.evidence))
         assertEquals(AssessmentDisposition.AWAITING_EVIDENCE,
             services.opportunities.findBySubject(f.workspace, f.scope, "github-release:v1")?.disposition)
@@ -199,12 +196,12 @@ class GitHubAutonomyIntegrationTest {
     fun `freed capacity wakes cached eligible release without another model call`() = fixture { f ->
         f.publish()
         val limits=OpportunityProperties(activeGoalLimit=1)
-        val services=services(AutonomyMode.ACTIVE,limits)
+        val services=services(limits)
         val other=services.opportunities.assess(f.workspace,f.scope,"other","Other release",AssessmentInput(
             f.scope,"1",listOf(AssessmentEvidence("other","1",AssessmentEvidenceKind.RELEASE,"Other","Customer improvement",CustomerAvailability.AVAILABLE)),"Product"))
         assertFalse(services.bridge.shouldPrepare(f.request,f.context,f.evidence))
         jdbc.update("update github_release_draft_requests set status='DEFERRED',finished_at=now() where id=?",f.request.id)
-        val projection=GitHubSignalProjection(inbox,services.opportunities,sql,transactions,AutonomyProperties(AutonomyMode.ACTIVE),AutonomyExecutionService(sql),limits=limits)
+        val projection=GitHubSignalProjection(inbox,services.opportunities,sql,transactions,AutonomyExecutionService(sql),limits=limits)
         assertEquals(0,projection.requeueChangedContext())
         jdbc.update("update autonomy_goals set state='FAILED' where id=?",other.goalId)
         assertEquals(1,projection.requeueChangedContext())
@@ -215,7 +212,7 @@ class GitHubAutonomyIntegrationTest {
     @Test
     fun `changed captured input cannot execute an earlier customer-value decision`() = fixture { f ->
         f.publish()
-        val services = services(AutonomyMode.ACTIVE)
+        val services = services()
         assertTrue(services.bridge.shouldPrepare(f.request, f.context, f.evidence))
         val opportunity = assertNotNull(services.opportunities.findBySubject(f.workspace, f.scope, "github-release:v1"))
         val agent = f.createAgent()
@@ -233,13 +230,13 @@ class GitHubAutonomyIntegrationTest {
 
     private data class Services(val bridge: GitHubAutonomyBridge, val opportunities: OpportunityService, val calls: AtomicInteger)
 
-    private fun services(mode: AutonomyMode, limits: OpportunityProperties = OpportunityProperties()): Services {
+    private fun services(limits: OpportunityProperties = OpportunityProperties()): Services {
         val calls = AtomicInteger()
         val opportunities = OpportunityService(sql, tx, mapper, CustomerValueAssessmentService(AssessmentGateway { input ->
             calls.incrementAndGet()
             AssessmentDecision(AssessmentDisposition.ELIGIBLE, "Customers can use the released improvement", input.evidence.map { it.id }, emptyList())
         }, AssessmentProperties()), limits)
-        return Services(GitHubAutonomyBridge(AutonomyProperties(mode), opportunities, inbox, sql, transactions, mapper, AutonomyExecutionService(sql)), opportunities, calls)
+        return Services(GitHubAutonomyBridge(opportunities, inbox, sql, mapper, AutonomyExecutionService(sql)), opportunities, calls)
     }
 
     private fun count(table: String, workspace: UUID) = jdbc.queryForObject("select count(*) from $table where workspace_id=?", Int::class.java, workspace)

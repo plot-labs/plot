@@ -85,7 +85,7 @@ class GitHubConnectionService(
 	private val accessChecks: GitHubRepositoryAccessCheckPersistence,
 	private val accessCheckDispatcher: GitHubRepositoryAccessCheckDispatcher,
 	private val actorResolver: RequestActorResolver? = null,
-	private val autonomy: com.plot.api.autonomy.github.GitHubAutonomyBridge? = null,
+	private val autonomy: com.plot.api.autonomy.github.GitHubAutonomyBridge,
 ) {
 	fun createInstallationRequest(): GitHubInstallationRequestResponse {
 		guard.requireEnabled()
@@ -332,7 +332,7 @@ class GitHubConnectionService(
 				Timestamp.from(now),
 				Timestamp.from(now),
 			) ?: throw ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "GitHub repository could not be saved")
-			autonomy?.bootstrap(devContext.devWorkspaceId, scopeId)
+			autonomy.bootstrap(devContext.devWorkspaceId, scopeId)
 			val monitoring = monitoringPersistence.activate(devContext.devWorkspaceId, scopeId, now)
 			dispatchMonitoringAfterCommit()
 			scopeId to monitoring

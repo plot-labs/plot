@@ -98,19 +98,12 @@ class OpportunityServiceIntegrationTest {
     }
 
     @Test
-    fun `shadow assessment creates no goal and admission rollback is atomic`() = fixture { workspace, scope ->
+    fun `eligible assessment always creates a goal and repeated preparation reuses it`() = fixture { workspace, scope ->
         val calls = AtomicInteger()
         val service = service(calls, AssessmentDisposition.ELIGIBLE)
-        val item = service.assess(workspace,scope,"release:1","Release",input(scope),createGoal=false)
-        assertNull(item.goalId)
-        assertFailsWith<IllegalStateException> {
-            org.springframework.transaction.support.TransactionTemplate(tx).execute {
-                service.prepare(workspace,item.id,item.version)
-                error("roll back admission")
-            }
-        }
-        assertNull(service.find(workspace,item.id)?.goalId)
-        assertNotNull(service.prepare(workspace,item.id,item.version).goalId)
+        val item = service.assess(workspace,scope,"release:1","Release",input(scope))
+        assertNotNull(item.goalId)
+        assertEquals(item.goalId, service.prepare(workspace,item.id,item.version).goalId)
         assertEquals(1,calls.get())
     }
 

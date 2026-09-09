@@ -10,8 +10,6 @@ import com.plot.api.autonomy.assessment.AssessmentInput
 import com.plot.api.autonomy.assessment.AssessmentProperties
 import com.plot.api.autonomy.assessment.CustomerAvailability
 import com.plot.api.autonomy.assessment.CustomerValueAssessmentService
-import com.plot.api.autonomy.github.AutonomyMode
-import com.plot.api.autonomy.github.AutonomyProperties
 import com.plot.api.autonomy.opportunity.OpportunityProperties
 import com.plot.api.autonomy.opportunity.OpportunityRecord
 import com.plot.api.autonomy.opportunity.OpportunityService
@@ -76,7 +74,6 @@ class AutonomyHomeIntegrationTest {
 
         assertEquals("no-store", response.headers.cacheControl)
         assertEquals(HttpStatus.OK, response.statusCode)
-        assertEquals("ACTIVE", assertNotNull(response.body).mode)
         assertEquals(listOf(selected.record.id), assertNotNull(response.body).items.map { it.id })
         verify(access).requireActiveWorkspace(selected.record.workspaceId)
 
@@ -129,7 +126,7 @@ class AutonomyHomeIntegrationTest {
     }
 
     private fun controller(context: DevContext, access: WorkspaceAccessService) = AutonomyHomeController(
-        context,access,service(),AutonomyProperties(mode=AutonomyMode.ACTIVE),sql,
+        context,access,service(),sql,
     )
 
     private fun service() = OpportunityService(sql,transactions,mapper,

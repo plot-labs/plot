@@ -119,10 +119,6 @@ open class GithubReleaseDraftRequestsRecord() : UpdatableRecordImpl<GithubReleas
         set(value): Unit = set(24, value)
         get(): UUID? = get(24) as UUID?
 
-    open var autonomyMode: String?
-        set(value): Unit = set(25, value)
-        get(): String? = get(25) as String?
-
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -132,7 +128,7 @@ open class GithubReleaseDraftRequestsRecord() : UpdatableRecordImpl<GithubReleas
     /**
      * Create a detached, initialised GithubReleaseDraftRequestsRecord
      */
-    constructor(id: UUID? = null, workspaceId: UUID? = null, sourceScopeId: UUID? = null, initialDeliveryId: UUID? = null, tagName: String? = null, observedHeadSha: String? = null, baseSha: String? = null, headSha: String? = null, boundaryReason: String? = null, status: String? = null, attemptCount: Int? = null, generationAttempt: Int? = null, transitionVersion: Long? = null, claimedBy: String? = null, claimedAt: OffsetDateTime? = null, heartbeatAt: OffsetDateTime? = null, nextAttemptAt: OffsetDateTime? = null, generationRunId: UUID? = null, observationId: UUID? = null, errorCode: String? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, finishedAt: OffsetDateTime? = null, agentRunId: UUID? = null, routineId: UUID? = null, autonomyMode: String? = null): this() {
+    constructor(id: UUID? = null, workspaceId: UUID? = null, sourceScopeId: UUID? = null, initialDeliveryId: UUID? = null, tagName: String? = null, observedHeadSha: String? = null, baseSha: String? = null, headSha: String? = null, boundaryReason: String? = null, status: String? = null, attemptCount: Int? = null, generationAttempt: Int? = null, transitionVersion: Long? = null, claimedBy: String? = null, claimedAt: OffsetDateTime? = null, heartbeatAt: OffsetDateTime? = null, nextAttemptAt: OffsetDateTime? = null, generationRunId: UUID? = null, observationId: UUID? = null, errorCode: String? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, finishedAt: OffsetDateTime? = null, agentRunId: UUID? = null, routineId: UUID? = null): this() {
         this.id = id
         this.workspaceId = workspaceId
         this.sourceScopeId = sourceScopeId
@@ -158,7 +154,6 @@ open class GithubReleaseDraftRequestsRecord() : UpdatableRecordImpl<GithubReleas
         this.finishedAt = finishedAt
         this.agentRunId = agentRunId
         this.routineId = routineId
-        this.autonomyMode = autonomyMode
         resetChangedOnNotNull()
     }
 }

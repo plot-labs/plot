@@ -37,7 +37,7 @@ class GitHubReleaseDraftOrchestrator(
 	private val evidenceService: GitHubReleaseEvidenceService,
 	private val agentAdmission: GitHubReleaseAgentAdmission,
 	private val executionProbe: GitHubReleaseExecutionProbe,
-	private val preparationGate: GitHubReleasePreparationGate? = null,
+	private val preparationGate: GitHubReleasePreparationGate,
 ) {
 	fun process(request: GitHubReleaseDraftRequest, lease: GitHubReleaseLease): GitHubReleaseDraftStatus {
 		require(lease.workerId.isNotBlank()) { "Release worker ID is required" }
@@ -194,7 +194,7 @@ class GitHubReleaseDraftOrchestrator(
         request: GitHubReleaseDraftRequest, context: GitHubReleaseSourceContext,
         evidence: GitHubReleaseEvidence, lease: GitHubReleaseLease,
     ): Boolean {
-        if (preparationGate?.shouldPrepare(request.copy(transitionVersion = lease.transitionVersion), context, evidence) != false) return false
+        if (preparationGate.shouldPrepare(request.copy(transitionVersion = lease.transitionVersion), context, evidence)) return false
         lease.checkpoint()
         if (request.observationId == null) lease.transition { version ->
             requestPersistence.bindEvidence(request.id, version, evidence)

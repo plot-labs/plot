@@ -131,6 +131,13 @@ class GitHubReleaseAutomationIntegrationTest {
 			where status in ('QUEUED', 'RUNNING')
 			""".trimIndent(),
 		)
+		jdbcTemplate.update(
+			"""
+			update autonomy_goals
+			set state = 'FAILED', updated_at = now()
+			where state in ('QUEUED', 'RUNNING')
+			""".trimIndent(),
+		)
 		github.reset()
 		model.reset()
 		agentModel.reset()
@@ -458,7 +465,7 @@ class GitHubReleaseAutomationIntegrationTest {
 		)
 
 		val secondDeliveryId = "second-${UUID.randomUUID()}"
-		webhookService.accept(tag(fixture, secondDeliveryId, "v1.1.0", secondHead))
+		webhookService.accept(releasePublished(fixture, secondDeliveryId, "v1.1.0"))
 		assertEquals(1, releaseWorker.drain())
 		val generating = release("v1.1.0", fixture)
 		assertEquals(GitHubReleaseDraftStatus.GENERATING, generating.status)
@@ -893,6 +900,15 @@ class GitHubReleaseAutomationIntegrationTest {
 
 	@TestConfiguration(proxyBeanMethods = false)
 	class Config {
+        @Bean
+        @Primary
+        fun scriptedAssessmentGateway() = com.plot.api.autonomy.assessment.AssessmentGateway { input ->
+            com.plot.api.autonomy.assessment.AssessmentDecision(
+                com.plot.api.autonomy.assessment.AssessmentDisposition.ELIGIBLE,
+                "Fixture customer improvement", input.evidence.map { it.id }, emptyList(),
+            )
+        }
+
 		@Bean
 		@Primary
 		fun scriptedGitHubClient() = ScriptedGitHubClient()

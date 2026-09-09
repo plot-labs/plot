@@ -687,7 +687,7 @@ function invokeContractCase(
 }
 
 it("scopes autonomy reads and versioned decisions to the selected workspace", async () => {
-  const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => Response.json({ mode: "ACTIVE", items: [] }));
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => Response.json({ items: [] }));
   const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
   const controller = new AbortController();
   await client.getAutonomyHome({ signal: controller.signal });

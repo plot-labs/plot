@@ -1,6 +1,5 @@
 package com.plot.api.autonomy.home
 
-import com.plot.api.autonomy.github.AutonomyProperties
 import com.plot.api.autonomy.opportunity.OpportunityException
 import com.plot.api.autonomy.opportunity.OpportunityRecord
 import com.plot.api.autonomy.opportunity.OpportunityService
@@ -20,11 +19,10 @@ class AutonomyHomeController(
     private val context: DevContext,
     private val access: WorkspaceAccessService,
     private val opportunities: OpportunityService,
-    private val properties: AutonomyProperties,
     private val sql: JooqSqlExecutor,
 ) {
     data class VersionRequest(val expectedVersion: Long)
-    data class HomeResponse(val mode: String, val items: List<HomeItem>)
+    data class HomeResponse(val items: List<HomeItem>)
     data class HomeItem(
         val id: UUID, val sourceScopeId: UUID, val title: String, val disposition: String,
         val reason: String, val dismissed: Boolean, val version: Long, val missingFacts: List<String>,
@@ -43,7 +41,7 @@ class AutonomyHomeController(
             where s.workspace_id=? and s.status='ACTIVE' and n.status='ACTIVE' and b.status='ACTIVE'
             and c.status='ACTIVE' and b.valid_from<=now() and (b.valid_to is null or b.valid_to>now())""",
             { row, _ -> row.getObject("id", UUID::class.java) }, workspace).toSet()
-        return response(HomeResponse(properties.modeFor(workspace).name,
+        return response(HomeResponse(
             opportunities.list(workspace).filter { it.sourceScopeId in visibleScopes }.map(::item)))
     }
 

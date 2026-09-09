@@ -36,7 +36,7 @@ class OpportunityService(
     /** Claim in a short transaction, call model outside it, then compare version before committing its result. */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     fun assess(workspaceId: UUID, sourceScopeId: UUID, subjectKey: String, title: String,
-               input: AssessmentInput, now: Instant = Instant.now(), createGoal: Boolean = true): OpportunityRecord {
+               input: AssessmentInput, now: Instant = Instant.now()): OpportunityRecord {
         require(subjectKey.isNotBlank() && subjectKey.length <= 500 && title.isNotBlank() && title.length <= 1000)
         require(input.productScopeId == sourceScopeId) { "Assessment scope mismatch" }
         val frozen = input.copy(evidence = input.canonicalEvidence())
@@ -53,8 +53,8 @@ class OpportunityService(
             val item = requireNotNull(findBySubject(workspaceId, sourceScopeId, subjectKey))
             if (item.dismissed) return@transaction Claim(item, false)
             if (item.fingerprint == fingerprint) {
-                if (createGoal) cancelStaleQueued(workspaceId,item.id,fingerprint,now)
-                if (createGoal && item.disposition == AssessmentDisposition.ELIGIBLE) goal(workspaceId,item,now)
+                cancelStaleQueued(workspaceId,item.id,fingerprint,now)
+                if (item.disposition == AssessmentDisposition.ELIGIBLE) goal(workspaceId,item,now)
                 return@transaction Claim(requireNotNull(find(workspaceId,item.id)), false)
             }
             val cached = sql.queryForObject("""select * from autonomy_assessments
@@ -64,7 +64,7 @@ class OpportunityService(
                 when (cached.getString("status")) {
                     "SUCCEEDED" -> {
                         val result = mapper.readValue(cached.getString("result"), AssessmentResult::class.java)
-                        apply(workspaceId, item, title, frozen, result, now, createGoal)
+                        apply(workspaceId, item, title, frozen, result, now)
                         return@transaction Claim(requireNotNull(find(workspaceId, item.id)), false)
                     }
                     "PROCESSING" -> if (requireNotNull(cached.getTimestamp("lease_until")).toInstant() > now)
@@ -107,7 +107,7 @@ class OpportunityService(
             if (updated != 1) throw OpportunityException("ASSESSMENT_CLAIM_LOST",true)
             if (current.version != claim.item.version || current.dismissed) return@transaction current
             if (mission(workspaceId, sourceScopeId).state != "ACTIVE") throw OpportunityException("MISSION_PAUSED")
-            apply(workspaceId,current,title,frozen,result,now,createGoal)
+            apply(workspaceId,current,title,frozen,result,now)
             requireNotNull(find(workspaceId,current.id))
         }
     }
@@ -146,13 +146,13 @@ class OpportunityService(
         true
     }
 
-    private fun apply(workspace: UUID,item: OpportunityRecord,title: String,input: AssessmentInput,result: AssessmentResult,now: Instant,createGoal: Boolean) {
+    private fun apply(workspace: UUID,item: OpportunityRecord,title: String,input: AssessmentInput,result: AssessmentResult,now: Instant) {
         sql.update("""update autonomy_opportunities set title=?,fingerprint=?,disposition=?,reason=?,input_snapshot=?::jsonb,
             evidence_ids=?::jsonb,missing_facts=?::jsonb,last_error_code=null,version=version+1,updated_at=? where workspace_id=? and id=?""",
             title,result.fingerprint,result.disposition.name,result.reason,mapper.writeValueAsString(input),
             mapper.writeValueAsString(result.evidenceIds),mapper.writeValueAsString(result.missingFacts),stamp(now),workspace,item.id)
-        if (createGoal) cancelStaleQueued(workspace,item.id,result.fingerprint,now)
-        if (createGoal && result.disposition == AssessmentDisposition.ELIGIBLE) goal(workspace,requireNotNull(find(workspace,item.id)),now)
+        cancelStaleQueued(workspace,item.id,result.fingerprint,now)
+        if (result.disposition == AssessmentDisposition.ELIGIBLE) goal(workspace,requireNotNull(find(workspace,item.id)),now)
     }
     private fun cancelStaleQueued(workspace: UUID,id: UUID,fingerprint: String,now: Instant) {
         sql.update("""update autonomy_goals set state='CANCELLED',updated_at=? where workspace_id=? and opportunity_id=?

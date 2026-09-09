@@ -123,9 +123,7 @@ export function AutonomyHomeWorkspace({ view = "overview" }: { view?: "overview"
     </nav>}
     {data && <>
       {view === "overview" && <p className="mt-3 text-xs leading-5 text-black/50 dark:text-white/50">{results.length} draft activities · {pending.length} changes under consideration · {excluded.length} excluded or dismissed</p>}
-      {data.mode === "OFF" && <p className="mt-3 text-xs leading-5 text-black/50 dark:text-white/50">Automatic assessment is not enabled for this workspace. <Link className="underline" href="/settings/integrations">Manage GitHub connections</Link>.</p>}
-      {data.mode === "SHADOW" && <p className="mt-3 text-xs leading-5 text-black/50 dark:text-white/50">Assessment is in observation mode. These decisions do not control existing automations yet.</p>}
-      {data.mode === "ACTIVE" && <p className="mt-3 text-xs leading-5 text-black/50 dark:text-white/50">Plot assesses connected changes before drafting. Publishing still requires your review.</p>}
+      <p className="mt-3 text-xs leading-5 text-black/50 dark:text-white/50">Plot assesses connected changes before drafting. Publishing still requires your review.</p>
       {!loading && data.items.length === 0 && <div className={`${surfaceClass} mt-8 px-5 py-10 text-center text-sm leading-6 text-black/45 dark:text-white/45`}><h2 className="font-medium text-black/65 dark:text-white/65">No assessed changes yet</h2><p className="mt-2 text-sm leading-6 text-black/52 dark:text-white/52">New connected activity will appear here after assessment when enabled. Not every change needs a customer update.</p></div>}
       {results.length > 0 && <section className="mt-8" aria-label="Draft activity"><h2 className="font-semibold">Draft activity</h2><p className="mt-1 text-sm text-black/50 dark:text-white/50">Open the activity to inspect evidence and review the draft.</p>{rows(view === "overview" ? results.slice(0, 5) : results)}</section>}
       {view === "activity" && pending.length > 0 && <section className="mt-8" aria-label="Changes under consideration"><h2 className="font-semibold">Changes under consideration</h2>{rows(pending)}</section>}
