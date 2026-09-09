@@ -217,16 +217,16 @@ describe("Settings navigation", () => {
     expect(screen.queryByRole("link", { name: "Release notes" })).not.toBeInTheDocument();
   });
 
-  it("renders recent chats in the product sidebar history", async () => {
-    sidebarMocks.pathname = "/artifacts";
+  it("renders automation conversations in recent chats on the Automation page", async () => {
+    sidebarMocks.pathname = "/automation";
     sidebarMocks.listSessions.mockResolvedValue([{
       id: "chat-1", title: "Release notes", status: "OPEN",
       lastActivityAt: null, createdAt: "2026-07-01T00:00:00Z", updatedAt: "2026-07-01T00:00:00Z",
     }]);
     render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
 
-    expect(screen.queryByText("Recent chats")).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Release notes" })).not.toBeInTheDocument();
+    expect(await screen.findByText("Recent chats")).toBeVisible();
+    expect(screen.getByRole("link", { name: "Release notes" })).toHaveAttribute("href", "/chat?chat=chat-1");
   });
 
   it("selects the current chat while retaining Chat as the current section", async () => {

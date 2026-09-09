@@ -70,7 +70,7 @@ export function SidebarNavigation({ collapsed, settingsMode, pathname, selectedC
         ))}
       </nav>
 
-      {!settingsMode && pathname === "/chat" && recentChats.length ? (
+      {!settingsMode && recentChats.length ? (
         <div className={cn("min-h-0 flex-1 overflow-y-auto", collapsed ? "px-2" : "px-3")}>
           <div className={cn(
             "px-2 pb-1 pt-2 text-[11px] font-medium uppercase tracking-[0.08em] text-black/35 dark:text-white/35",

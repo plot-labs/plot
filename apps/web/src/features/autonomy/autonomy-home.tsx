@@ -120,7 +120,6 @@ export function AutonomyHomeWorkspace({ view = "overview" }: { view?: "overview"
     {view === "overview" && <nav aria-label="Home actions" className="mt-6 flex flex-wrap gap-3">
       <Link className={buttonClass} href="/chat">New chat</Link>
       <Link className={buttonClass} href="/contents">Review updates</Link>
-      <Link className={buttonClass} href="/automation/activity">View all activity</Link>
     </nav>}
     {data && <>
       {view === "overview" && <p className="mt-3 text-xs leading-5 text-black/50 dark:text-white/50">{results.length} draft activities · {pending.length} changes under consideration · {excluded.length} excluded or dismissed</p>}

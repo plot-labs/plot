@@ -81,6 +81,6 @@ it("does not apply an old workspace decision after a switch", async () => {
     render(<AutonomyHomeWorkspace />);
     expect(await screen.findByText(/1 changes under consideration/)).toBeVisible();
     expect(screen.queryByRole("button", { name: "Dismiss" })).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "View all activity" })).toHaveAttribute("href", "/automation/activity");
+    expect(screen.queryByRole("link", { name: "View all activity" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "New chat" })).toHaveAttribute("href", "/chat");
   });
