@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { openPlotConversation } from "@/features/chat/conversation-panel";
 import { useEffect, useRef, useState } from "react";
 import type { AutonomyHome, AutonomyHomeItem } from "@plot/api-client";
 import { getSelectedWorkspaceId, plotApiClient, PlotApiError } from "@/lib/api-client";
@@ -100,7 +101,7 @@ export function AutonomyHomeWorkspace({ view = "overview" }: { view?: "overview"
           {item.dismissed && <p className="mt-2 text-xs text-black/50 dark:text-white/50">Restoring allows assessment when new evidence arrives.</p>}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {item.chatId && item.agentRunId && <Link className={buttonClass} href={`/chat?chat=${encodeURIComponent(item.chatId)}&agent=${encodeURIComponent(item.agentRunId)}`}>Review and discuss</Link>}
+          {item.chatId && item.agentRunId && <button className={buttonClass} onClick={() => openPlotConversation({ chatId: item.chatId!, agentId: item.agentRunId! })}>Review and discuss</button>}
           {!item.agentRunId && <button className={buttonClass} disabled={busy !== null || loading} onClick={() => void changeDismissal(item)}>{busy === item.id ? "Saving…" : item.dismissed ? "Restore" : "Dismiss"}</button>}
         </div>
       </div>
@@ -115,7 +116,7 @@ export function AutonomyHomeWorkspace({ view = "overview" }: { view?: "overview"
     {error && <p role="alert" className="mt-6 rounded-md border border-red-500/20 p-3 text-sm">{error}</p>}
     {loading && <p role="status" className="mt-8 text-sm">Loading updates…</p>}
     {view === "overview" && <nav aria-label="Overview actions" className="mt-6 flex flex-wrap gap-3">
-      <Link className={buttonClass} href="/chat">Ask Plot</Link>
+      <button className={buttonClass} onClick={() => openPlotConversation()}>Ask Plot</button>
       <Link className={buttonClass} href="/updates">Review updates</Link>
       <Link className={buttonClass} href="/activity">View all activity</Link>
     </nav>}

@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { ConversationPanel } from "@/features/chat/conversation-panel";
 import { ProductSidebar } from "@/components/layout/product-sidebar";
 import { cn } from "@/lib/utils";
 import { isSettingsPath, productNavigationItems, settingsNavigationItems, navigationPath } from "./product-navigation";
@@ -66,7 +67,10 @@ export function ProductShell({ children }: { children: ReactNode }) {
           )}
         >
           <MobileProductNavigation pathname={pathname} />
-          <main className="min-h-0 w-full flex-1 overflow-y-auto lg:overflow-hidden">{children}</main>
+          <div className="flex min-h-0 flex-1">
+            <main className="min-h-0 min-w-0 flex-1 overflow-y-auto lg:overflow-hidden">{children}</main>
+            <ConversationPanel />
+          </div>
         </div>
       </div>
     </div>

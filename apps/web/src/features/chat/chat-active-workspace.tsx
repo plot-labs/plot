@@ -25,6 +25,8 @@ import { useChatArtifactDocument } from "@/features/chat/use-chat-artifact-docum
 import { plotApiClient } from "@/lib/api-client";
 import { useWorkspaceEntitlement } from "@/lib/use-workspace-entitlement";
 type ChatActiveWorkspaceProps = {
+  embedded?: boolean;
+  onNavigate?: (href: string) => void;
   activeChat: ChatSummary;
   references: SourceReference[];
   sourceError: string;
@@ -42,8 +44,9 @@ const toolbarBottomFade: CSSProperties = {
   WebkitMaskImage: "linear-gradient(black calc(100% - 12px), transparent 100%)",
 };
 
-export function ChatActiveWorkspace({ activeChat, references, sourceError, requestedAgentId, requestedArtifactId }: ChatActiveWorkspaceProps) {
-  const router = useRouter();
+export function ChatActiveWorkspace({ embedded = false, onNavigate, activeChat, references, sourceError, requestedAgentId, requestedArtifactId }: ChatActiveWorkspaceProps) {
+  const pageRouter = useRouter();
+  const router: Pick<typeof pageRouter, "replace"> = useMemo(() => onNavigate ? { replace: onNavigate } : pageRouter, [onNavigate, pageRouter]);
   const entitlement = useWorkspaceEntitlement();
   const canGenerate = entitlement?.capabilities.generate ?? true;
   const canEdit = entitlement?.capabilities.edit ?? true;
@@ -142,7 +145,7 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
   }, [activeChat.id, activeChat.title, agent.activities]);
 
   return (
-    <div ref={workspaceRef} className="relative flex h-[calc(100dvh-49px)] min-h-0 bg-[#fbfbf8] dark:bg-[#111113] lg:h-full">
+    <div ref={workspaceRef} className={`relative flex ${embedded ? "h-full" : "h-[calc(100dvh-49px)]"} min-h-0 bg-[#fbfbf8] dark:bg-[#111113] lg:h-full`}>
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex min-h-14 shrink-0 items-center bg-[#fbfbf8]/90 px-4 py-3 backdrop-blur-xl dark:bg-[#111113]/90" style={toolbarBottomFade}>
           <div className="flex w-full min-w-0 items-center justify-start gap-2 text-sm font-semibold text-black/78 dark:text-white/82">
@@ -197,7 +200,7 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
               </div>
             ) : null}
 
-            <div className="mt-5 lg:hidden">
+            <div className={embedded ? "mt-5" : "mt-5 lg:hidden"}>
               <div role="tablist" aria-label="Chat workspace panels" className="flex gap-2">
                 <button
                   ref={mobileAssistantTriggerRef}
@@ -276,7 +279,7 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
           <ChatBriefPanel value={briefDraft} onChange={setBriefDraft} contentType={contentType} />
         </div>
       </div>
-      {artifactPanelOpen && document.currentArtifact ? (
+      {!embedded && artifactPanelOpen && document.currentArtifact ? (
         <ResizeHandle
           direction="horizontal"
           isReversed
@@ -291,7 +294,7 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
         <aside
           id="artifact-editor-panel"
           aria-label="Artifact document panel"
-          className="absolute inset-0 z-30 flex min-w-0 flex-col border-l border-black/[0.08] bg-[#fbfbf8] dark:border-white/10 dark:bg-[#16171a] lg:relative lg:w-[var(--artifact-panel-width)] lg:max-w-[calc(100%-420px)] lg:shrink-0"
+          className={`absolute inset-0 z-30 flex min-w-0 flex-col border-l border-black/[0.08] bg-[#fbfbf8] dark:border-white/10 dark:bg-[#16171a] ${embedded ? "" : "lg:relative lg:w-[var(--artifact-panel-width)] lg:max-w-[calc(100%-420px)] lg:shrink-0"}`}
           style={{ "--artifact-panel-width": `${artifactPanel.size}px` } as CSSProperties}
         >
           <header className="relative z-20 flex min-h-16 shrink-0 items-center justify-between gap-3 bg-[#fbfbf8]/85 px-4 backdrop-blur-xl dark:bg-[#16171a]/85">
