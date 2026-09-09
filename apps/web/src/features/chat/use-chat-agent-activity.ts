@@ -124,6 +124,13 @@ export function useChatAgentActivity({
             });
         if (agentAbortRef.current !== controller) return;
         setAgentRun(restored);
+        if (typeof plotApiClient.getSessionTimeline === "function") {
+          void plotApiClient.getSessionTimeline(chatId, { signal: controller.signal })
+            .then((val) => {
+              if (!controller.signal.aborted) setTimeline(val);
+            })
+            .catch(() => undefined);
+        }
         if (restored.artifactId) onAgentArtifact(restored);
       } catch (error) {
         if (agentAbortRef.current === controller && !(error instanceof DOMException && error.name === "AbortError")) {
@@ -174,6 +181,11 @@ export function useChatAgentActivity({
       pendingRequestRef.current = null;
       setAgentRun(run);
       onAdmitted(run);
+      if (typeof plotApiClient.getSessionTimeline === "function") {
+        void plotApiClient.getSessionTimeline(chatId)
+          .then((val) => setTimeline(val))
+          .catch(() => undefined);
+      }
     } catch (error) {
       if (agentAbortRef.current === controller && !(error instanceof DOMException && error.name === "AbortError")) {
         if (isNonRetryableRequestError(error)) pendingRequestRef.current = null;

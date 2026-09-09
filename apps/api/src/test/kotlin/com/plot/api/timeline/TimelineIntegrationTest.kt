@@ -33,15 +33,31 @@ class TimelineIntegrationTest {
 	@BeforeEach
 	fun setup() {
 		devBootstrapService.bootstrap()
+		jdbcTemplate.update("delete from github_release_generation_attempts")
+		jdbcTemplate.update("delete from github_release_draft_evidence")
+		jdbcTemplate.update("delete from content_packs where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from agent_steps where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from github_release_draft_requests where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from generation_runs where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from artifact_runs where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from agent_runs where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from work_sessions where workspace_id = ? and routine_execution_id is null", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from work_sessions where workspace_id = ? and routine_execution_id is not null", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from routine_executions where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from routine_context_sources where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from routines where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from writing_block_scopes where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from source_imports where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from source_observations where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from writing_blocks where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from github_repository_access_checks where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from github_repository_monitoring where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from content_source_snapshots where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from github_webhook_deliveries")
 		jdbcTemplate.update("delete from source_scopes where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from connection_namespace_bindings where workspace_id = ?", devContext.devWorkspaceId)
-		jdbcTemplate.update("delete from connections where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from source_namespaces where workspace_id = ?", devContext.devWorkspaceId)
-		jdbcTemplate.update("delete from agent_steps where workspace_id = ?", devContext.devWorkspaceId)
-		jdbcTemplate.update("delete from agent_runs where workspace_id = ?", devContext.devWorkspaceId)
-		jdbcTemplate.update("delete from work_sessions where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from connections where workspace_id = ?", devContext.devWorkspaceId)
 	}
 
 	@Test
@@ -192,6 +208,113 @@ class TimelineIntegrationTest {
 		assertEquals("Needs connection", item.statusLabel)
 		assertEquals("GITHUB_ACCESS_DENIED", item.safeErrorCode)
 		assertEquals("Reconnect repository access", item.recoveryAction)
+	}
+
+	@Test
+	fun `R-010 - resolves timeline by workflow run ID and artifact ID`() {
+		val sessionId = UUID.randomUUID()
+		insertWorkSession(sessionId, devContext.devWorkspaceId)
+
+		val agentRunId = UUID.randomUUID()
+		insertAgentRun(
+			id = agentRunId,
+			workspaceId = devContext.devWorkspaceId,
+			workSessionId = sessionId,
+			status = "RUNNING",
+		)
+
+		val workflowRunId = UUID.randomUUID()
+		jdbcTemplate.update(
+			"""
+			insert into generation_runs (
+				id, workspace_id, created_by_user_id, idempotency_key, request_fingerprint,
+				status, workflow_version, prompt_version, output_schema_version, budget_version,
+				provider, model_name, budget_snapshot, user_instruction, work_session_id, agent_run_id,
+				created_at, updated_at
+			) values (?, ?, ?, ?, ?, 'WRITING', 'v1', 'v1', 'v1', 'v1',
+				'test', 'test', '{}'::jsonb, 'Write changelog', ?, ?, now(), now())
+			""".trimIndent(),
+			workflowRunId, devContext.devWorkspaceId, devContext.devUserId,
+			"idem-$workflowRunId", "fp-$workflowRunId", sessionId, agentRunId,
+		)
+
+		jdbcTemplate.update(
+			"""
+			insert into agent_steps (
+				id, workspace_id, agent_run_id, sequence, step_kind, status,
+				generation_run_id, idempotency_key, created_at
+			) values (?, ?, ?, 1, 'ARTIFACT_HANDOFF', 'RUNNING', ?, 'idem-step-1', now())
+			""".trimIndent(),
+			UUID.randomUUID(), devContext.devWorkspaceId, agentRunId, workflowRunId,
+		)
+
+		val artifactId = UUID.randomUUID()
+		jdbcTemplate.update(
+			"""
+			insert into content_packs (
+				id, workspace_id, generation_run_id, status, created_at, updated_at
+			) values (?, ?, ?, 'DRAFT', now(), now())
+			""".trimIndent(),
+			artifactId, devContext.devWorkspaceId, workflowRunId,
+		)
+
+		// 1. Resolve by workflow run ID
+		val itemByWorkflow = timelineService.getByExecutionId(workflowRunId, devContext.devWorkspaceId)
+		assertEquals(agentRunId, itemByWorkflow.id)
+		assertEquals(workflowRunId, itemByWorkflow.artifactWorkflowRunId)
+		assertEquals(artifactId, itemByWorkflow.artifactId)
+		assertEquals("ARTIFACT", itemByWorkflow.stage)
+		assertEquals("RUNNING", itemByWorkflow.status)
+
+		// 2. Resolve by artifact ID
+		val itemByArtifact = timelineService.getByExecutionId(artifactId, devContext.devWorkspaceId)
+		assertEquals(agentRunId, itemByArtifact.id)
+		assertEquals(workflowRunId, itemByArtifact.artifactWorkflowRunId)
+		assertEquals(artifactId, itemByArtifact.artifactId)
+	}
+
+	@Test
+	fun `R-011 - maps artifact workflow failure to failed timeline item`() {
+		val sessionId = UUID.randomUUID()
+		insertWorkSession(sessionId, devContext.devWorkspaceId)
+
+		val agentRunId = UUID.randomUUID()
+		insertAgentRun(
+			id = agentRunId,
+			workspaceId = devContext.devWorkspaceId,
+			workSessionId = sessionId,
+			status = "RUNNING",
+		)
+
+		val workflowRunId = UUID.randomUUID()
+		jdbcTemplate.update(
+			"""
+			insert into generation_runs (
+				id, workspace_id, created_by_user_id, idempotency_key, request_fingerprint,
+				status, workflow_version, prompt_version, output_schema_version, budget_version,
+				provider, model_name, budget_snapshot, user_instruction, work_session_id, agent_run_id,
+				finished_at, created_at, updated_at
+			) values (?, ?, ?, ?, ?, 'FAILED', 'v1', 'v1', 'v1', 'v1',
+				'test', 'test', '{}'::jsonb, 'Write changelog', ?, ?, now(), now(), now())
+			""".trimIndent(),
+			workflowRunId, devContext.devWorkspaceId, devContext.devUserId,
+			"idem-$workflowRunId", "fp-$workflowRunId", sessionId, agentRunId,
+		)
+
+		jdbcTemplate.update(
+			"""
+			insert into agent_steps (
+				id, workspace_id, agent_run_id, sequence, step_kind, status,
+				generation_run_id, idempotency_key, created_at
+			) values (?, ?, ?, 1, 'ARTIFACT_HANDOFF', 'FAILED', ?, 'idem-step-2', now())
+			""".trimIndent(),
+			UUID.randomUUID(), devContext.devWorkspaceId, agentRunId, workflowRunId,
+		)
+
+		val item = timelineService.getByExecutionId(workflowRunId, devContext.devWorkspaceId)
+		assertEquals("FAILED", item.status)
+		assertEquals("Failed", item.statusLabel)
+		assertEquals("ARTIFACT", item.stage)
 	}
 
 	private fun insertSourceScope(): UUID {

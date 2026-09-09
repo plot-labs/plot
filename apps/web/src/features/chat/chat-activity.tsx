@@ -179,19 +179,22 @@ export function AgentActivityDetail({
   if (!run && !busy && !error && !timelineItem) return null;
   const status = run?.status ?? "QUEUED";
   const linkedArtifact = Boolean(run?.artifactId);
-  const toolStatus = error || run?.status === "FAILED" || timelineItem?.status === "FAILED"
+  const effectiveStatusLabel = timelineItem?.statusLabel ?? timelineStatusLabel(status, run?.failureCode);
+  const isFailed = run?.status === "FAILED" || timelineItem?.status === "FAILED";
+  const isNeedsConnection = timelineItem?.status === "NEEDS_CONNECTION" || effectiveStatusLabel === "Needs connection";
+  const isComplete = Boolean(linkedArtifact || run?.status === "SUCCEEDED" || timelineItem?.status === "READY" || timelineItem?.status === "NO_ACTIVITY");
+  const toolStatus = error || isFailed || isNeedsConnection
     ? "error"
-    : linkedArtifact || run?.status === "SUCCEEDED" || timelineItem?.status === "READY"
+    : isComplete
       ? "complete"
       : "running";
 
-  const effectiveStatusLabel = timelineItem?.statusLabel ?? timelineStatusLabel(status, run?.failureCode);
   const effectiveStage = timelineItem?.stage ?? (linkedArtifact ? "ARTIFACT" : status === "RUNNING" ? "AGENT" : "ADMISSION");
   const effectiveUpdated = timelineItem?.updatedAt ?? run?.updatedAt;
   const effectiveNextRetry = timelineItem?.nextAttemptAt;
   const effectiveErrorCode = timelineItem?.safeErrorCode ?? run?.failureCode;
   const effectiveRecoveryAction = timelineItem?.recoveryAction ?? (
-    effectiveStatusLabel === "Needs connection"
+    isNeedsConnection
       ? "Reconnect repository access"
       : effectiveStatusLabel === "Retry scheduled"
         ? "Automatic retry scheduled"
@@ -259,7 +262,7 @@ export function AgentActivityDetail({
             calls={[{
               name: "Read connected sources",
               status: toolStatus,
-              errorMessage: error || (run?.status === "FAILED" || timelineItem?.status === "FAILED" ? "Agent stopped before an artifact was produced." : undefined),
+              errorMessage: error || (isNeedsConnection ? "Repository connection required." : isFailed ? "Agent stopped before an artifact was produced." : undefined),
             }]}
             defaultIsExpanded={false}
           />
@@ -268,8 +271,8 @@ export function AgentActivityDetail({
         </ChatMessageBubble>
       </ChatMessage>
       {error ? <ErrorNotice message={error} /> : null}
-      {(run?.status === "FAILED" || timelineItem?.status === "FAILED") && !error ? (
-        <ErrorNotice message={`Agent stopped before an artifact was produced${effectiveErrorCode ? ` (${effectiveErrorCode})` : ""}. It remains available as chat activity.`} />
+      {(isFailed || isNeedsConnection) && !error ? (
+        <ErrorNotice message={isNeedsConnection ? `Repository connection required. Reconnect repository access to proceed.` : `Agent stopped before an artifact was produced${effectiveErrorCode ? ` (${effectiveErrorCode})` : ""}. It remains available as chat activity.`} />
       ) : null}
     </section>
   );
