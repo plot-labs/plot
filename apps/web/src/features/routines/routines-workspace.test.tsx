@@ -392,7 +392,7 @@ describe("RoutinesWorkspace", () => {
     render(<RoutinesWorkspace />);
     await screen.findByText("No routines yet");
 
-    expect(screen.getByRole("heading", { name: "Automations" }).closest("section"))
+    expect(screen.getByRole("heading", { name: "Autonomy" }).closest("section"))
       .toHaveClass("lg:h-full", "lg:overflow-y-auto");
   });
 

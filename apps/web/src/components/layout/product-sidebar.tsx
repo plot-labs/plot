@@ -34,7 +34,7 @@ export function ProductSidebar({ collapsed = false, theme, onThemeChange, onTogg
   const selectedChatId = pathname === "/chat" ? searchParams.get("chat") : null;
   const settingsMode = isSettingsPath(pathname);
   const workspace = useSidebarWorkspace();
-  const recentChats = useRecentChats({ settingsMode, selectedWorkspaceId: workspace.currentWorkspaceId });
+  const recentChats = useRecentChats({ settingsMode: settingsMode || pathname !== "/chat", selectedWorkspaceId: workspace.currentWorkspaceId });
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
 
   return (

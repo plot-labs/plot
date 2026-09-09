@@ -14,9 +14,9 @@ import type { ReactNode } from "react";
 
 import { UserRound, FileText, House } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { productNavigationItems } from "./product-navigation";
+import { productNavigationItems, navigationPath } from "./product-navigation";
 
-const productIcons = { Home: HomeIcon, Chat: ChatIcon, Automations: RoutinesIcon, Library: ArtifactsIcon, Connections: IntegrationsIcon };
+const productIcons = { Overview: HomeIcon, Activity: ChatIcon, Updates: ArtifactsIcon };
 const productNavItems = productNavigationItems.map((item) => ({ ...item, icon: productIcons[item.label] }));
 
 const workspaceSettingsNavGroups = [
@@ -29,6 +29,8 @@ const workspaceSettingsNavGroups = [
     items: [
       { href: "/settings/general", label: "General", icon: SettingsIcon },
       { href: "/settings/content", label: "Content", icon: ContentIcon },
+      { href: "/settings/integrations", label: "Connections", icon: IntegrationsIcon },
+      { href: "/settings/autonomy", label: "Autonomy", icon: RoutinesIcon },
     ],
   },
 ];
@@ -66,12 +68,11 @@ export function SidebarNavigation({ collapsed, settingsMode, pathname, selectedC
             collapsed={collapsed}
             item={item}
             pathname={pathname}
-            current={item.href === "/chat" && selectedChatId ? "location" : "page"}
           />
         ))}
       </nav>
 
-      {!settingsMode && recentChats.length ? (
+      {!settingsMode && pathname === "/chat" && recentChats.length ? (
         <div className={cn("min-h-0 flex-1 overflow-y-auto", collapsed ? "px-2" : "px-3")}>
           <div className={cn(
             "px-2 pb-1 pt-2 text-[11px] font-medium uppercase tracking-[0.08em] text-black/35 dark:text-white/35",
@@ -119,7 +120,7 @@ type SidebarNavItem = {
 };
 
 function SidebarNavLink({ collapsed, item, pathname, current = "page" }: { collapsed: boolean; item: SidebarNavItem; pathname: string; current?: "page" | "location" }) {
-  const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+  const active = navigationPath(pathname) === item.href || pathname.startsWith(`${item.href}/`);
   const Icon = item.icon;
 
   return (

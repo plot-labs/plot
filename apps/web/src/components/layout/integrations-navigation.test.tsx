@@ -73,20 +73,20 @@ describe("Settings navigation", () => {
     render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
 
     const productNavigation = screen.getByRole("navigation", { name: "Product sidebar navigation" });
-    expect(within(productNavigation).getByRole("link", { name: "Chat" })).toHaveAttribute("href", "/chat");
-    expect(within(productNavigation).getByRole("link", { name: "Chat" })).not.toHaveAttribute("aria-current", "page");
-    expect(within(productNavigation).getByRole("link", { name: "Library" })).toHaveAttribute("aria-current", "page");
+    expect(within(productNavigation).getByRole("link", { name: "Activity" })).toHaveAttribute("href", "/activity");
+    expect(within(productNavigation).getByRole("link", { name: "Activity" })).not.toHaveAttribute("aria-current", "page");
+    expect(within(productNavigation).getByRole("link", { name: "Updates" })).toHaveAttribute("aria-current", "page");
     expect(screen.queryByRole("navigation", { name: "Settings navigation" })).not.toBeInTheDocument();
     expect(await screen.findByRole("button", { name: /Personal/ })).toBeVisible();
   });
 
-  it("promotes Connections out of the settings shell, including in the collapsed rail", async () => {
+  it("keeps Connections in Settings, including in the collapsed rail", async () => {
     sidebarMocks.pathname = "/settings/integrations";
     render(<ProductSidebar collapsed theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
-    const nav = screen.getByRole("navigation", { name: "Product sidebar navigation" });
+    const nav = screen.getByRole("navigation", { name: "Settings navigation" });
     expect(within(nav).getByRole("link", { name: "Connections" })).toHaveAttribute("aria-current", "page");
     expect(within(nav).getByRole("link", { name: "Connections" })).toHaveAttribute("title", "Connections");
-    expect(screen.queryByRole("navigation", { name: "Settings navigation" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "Product sidebar navigation" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings/general");
     await screen.findByRole("button", { name: /Personal/ });
   });
@@ -225,8 +225,8 @@ describe("Settings navigation", () => {
     }]);
     render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
 
-    expect(await screen.findByText("Recent chats")).toBeVisible();
-    expect(screen.getByRole("link", { name: "Release notes" })).toHaveAttribute("href", "/chat?chat=chat-1");
+    expect(screen.queryByText("Recent chats")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Release notes" })).not.toBeInTheDocument();
   });
 
   it("selects the current chat while retaining Chat as the current section", async () => {
@@ -240,7 +240,7 @@ describe("Settings navigation", () => {
 
     const historyItem = await screen.findByRole("link", { name: "Release notes" });
     expect(historyItem).toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("link", { name: "Chat" })).toHaveAttribute("aria-current", "location");
+    expect(screen.queryByRole("link", { name: "Chat" })).not.toBeInTheDocument();
   });
 
   it("renders a compact selector when only one workspace is available", async () => {

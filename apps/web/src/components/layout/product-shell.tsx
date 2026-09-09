@@ -9,7 +9,7 @@ import { usePathname } from "next/navigation";
 
 import { ProductSidebar } from "@/components/layout/product-sidebar";
 import { cn } from "@/lib/utils";
-import { isSettingsPath, productNavigationItems } from "./product-navigation";
+import { isSettingsPath, productNavigationItems, settingsNavigationItems, navigationPath } from "./product-navigation";
 
 export type ProductTheme = "system" | "light" | "dark";
 
@@ -82,8 +82,9 @@ function MobileProductNavigation({ pathname }: { pathname: string }) {
       className="flex h-[49px] shrink-0 items-center gap-1 border-b border-black/[0.08] bg-white px-2 py-2 text-xs dark:border-white/10 dark:bg-[#111113] lg:hidden"
     >
       <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
-      {productNavigationItems.map(({ href, label }) => {
-        const active = pathname === href || pathname.startsWith(`${href}/`);
+      {settingsActive && <Link href="/home" className="shrink-0 rounded-lg px-2 py-1.5 font-medium">Back to Overview</Link>}
+      {(settingsActive ? settingsNavigationItems : productNavigationItems).map(({ href, label }) => {
+        const active = navigationPath(pathname) === href || pathname.startsWith(`${href}/`);
         return (
           <Link
             key={href}

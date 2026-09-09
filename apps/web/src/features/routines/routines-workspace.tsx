@@ -367,8 +367,8 @@ export function RoutinesWorkspace() {
           <header className="border-b border-black/[0.08] px-6 pb-5 pt-8 dark:border-white/10">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <h1 id="routines-heading" className="font-serif text-[32px] font-normal leading-none tracking-[-0.025em] text-black/90 dark:text-white/92">Automations</h1>
-                <p className="mt-2 text-[13px] leading-5 text-black/48 dark:text-white/50">Turn schedules and GitHub changes into source-backed drafts.</p>
+                <h1 id="routines-heading" className="font-serif text-[32px] font-normal leading-none tracking-[-0.025em] text-black/90 dark:text-white/92">Autonomy</h1>
+                <p className="mt-2 text-[13px] leading-5 text-black/48 dark:text-white/50">Manage recurring draft preparation. Automatic assessment follows the configured workspace policy; publishing requires review.</p>
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
                 <button type="button" onClick={retryLoad} disabled={refreshDisabled} aria-label="Refresh routines" title="Refresh routines" className="inline-flex size-9 items-center justify-center rounded-[9px] text-black/45 transition hover:bg-black/[0.04] hover:text-black/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 disabled:cursor-wait disabled:opacity-45 dark:text-white/48 dark:hover:bg-white/10 dark:hover:text-white/75"><RefreshCw className={`size-3.5 ${isLoading ? "animate-spin" : ""}`} /></button>

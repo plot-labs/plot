@@ -81,10 +81,10 @@ export function ArtifactCanvasWorkspace({ artifact, client, onSaveArtifact }: Ar
       <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-black/[0.08] bg-[#f8fafc] px-5 dark:border-white/10 dark:bg-[#111113]">
         <nav aria-label="Breadcrumb" className="flex min-w-0 flex-1 items-center gap-1.5 font-sans text-[13px] leading-none">
           <Link
-            href="/artifacts"
+            href="/updates"
             className="shrink-0 rounded-sm font-medium text-black/50 transition hover:text-black/72 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15 focus-visible:ring-offset-2 dark:text-white/50 dark:hover:text-white/75"
           >
-            Artifacts
+            Updates
           </Link>
           <span aria-hidden="true" className="shrink-0 text-black/20 dark:text-white/22">/</span>
           <span aria-current="page" title={artifactTitle} className="min-w-0 truncate font-medium text-black/72 dark:text-white/76">

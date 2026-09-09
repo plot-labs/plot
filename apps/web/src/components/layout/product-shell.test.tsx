@@ -35,9 +35,9 @@ describe("ProductShell", () => {
 
     const navigation = screen.getByRole("navigation", { name: "Product navigation" });
     expect(navigation).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Home" })).toHaveAttribute("href", "/home");
-    expect(screen.getByRole("link", { name: "Chat" })).toHaveAttribute("href", "/chat");
-    expect(screen.getByRole("link", { name: "Library" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Overview" })).toHaveAttribute("href", "/home");
+    expect(screen.getByRole("link", { name: "Activity" })).toHaveAttribute("href", "/activity");
+    expect(screen.getByRole("link", { name: "Updates" })).toHaveAttribute("aria-current", "page");
 
     expect(screen.getByRole("link", { name: "Workspace settings" })).toHaveAttribute("href", "/settings/general");
   });
@@ -51,16 +51,17 @@ describe("ProductShell", () => {
       </ProductShell>,
     );
 
-    expect(screen.getByRole("link", { name: "Automations" })).toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("link", { name: "Chat" })).not.toHaveAttribute("aria-current");
-    expect(screen.getByRole("link", { name: "Library" })).not.toHaveAttribute("aria-current");
+    expect(screen.getByRole("link", { name: "Autonomy" })).toHaveAttribute("aria-current", "page");
+    expect(screen.queryByRole("link", { name: "Activity" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Updates" })).not.toBeInTheDocument();
   });
 
-  it("keeps Connections separate from Settings despite its legacy URL", () => {
+  it("places Connections within Settings", () => {
     navigation.pathname = "/settings/integrations";
     render(<ProductShell><div>Connections content</div></ProductShell>);
+    expect(screen.getByRole("link", { name: "Back to Overview" })).toHaveAttribute("href", "/home");
     expect(screen.getByRole("link", { name: "Connections" })).toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("link", { name: "Workspace settings" })).not.toHaveAttribute("aria-current");
+    expect(screen.getByRole("link", { name: "Workspace settings" })).toHaveAttribute("aria-current", "page");
   });
 
   it("keeps the document theme in sync with the product theme", async () => {

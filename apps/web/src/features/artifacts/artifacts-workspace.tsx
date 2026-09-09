@@ -77,13 +77,13 @@ function ArtifactsWorkspaceContent() {
     <section className="min-h-[calc(100dvh-49px)] overflow-y-auto bg-[#f8fafc] px-6 pb-16 pt-14 dark:bg-[#18181b] lg:h-full lg:min-h-0 lg:px-12">
       <div className="mx-auto max-w-[960px]">
         <header className="max-w-[620px]">
-          <h1 className="font-display text-[32px] font-normal leading-[1.08] tracking-[-0.025em] text-black/90 dark:text-white/92 sm:text-[36px]">Library</h1>
-          <p className="mt-2 text-sm leading-6 text-black/52 dark:text-white/52">Find your artifacts, continue a draft, or revisit published work.</p>
+          <h1 className="font-display text-[32px] font-normal leading-[1.08] tracking-[-0.025em] text-black/90 dark:text-white/92 sm:text-[36px]">Updates</h1>
+          <p className="mt-2 text-sm leading-6 text-black/52 dark:text-white/52">Review customer updates, continue a draft, or revisit published work.</p>
         </header>
 
-        <nav aria-label="Library views" className="mt-6 flex gap-2 text-sm">
-          {([ ["all", "All artifacts"], ["draft", "Draft"], ["published", "Published"] ] as const).map(([value, label]) => (
-            <Link key={value} href={value === "all" ? "/artifacts" : `/artifacts?view=${value}`} aria-current={view === value ? "page" : undefined}
+        <nav aria-label="Updates views" className="mt-6 flex gap-2 text-sm">
+          {([ ["all", "All updates"], ["draft", "Draft"], ["published", "Published"] ] as const).map(([value, label]) => (
+            <Link key={value} href={value === "all" ? "/updates" : `/updates?view=${value}`} aria-current={view === value ? "page" : undefined}
               className={`rounded-lg px-3 py-2 transition ${view === value ? "bg-black/10 font-medium dark:bg-white/15" : "text-black/55 hover:bg-black/5 dark:text-white/55 dark:hover:bg-white/10"}`}>
               {label}
             </Link>
