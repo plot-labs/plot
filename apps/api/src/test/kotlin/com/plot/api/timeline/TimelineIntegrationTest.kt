@@ -29,6 +29,7 @@ class TimelineIntegrationTest {
 	@Autowired private lateinit var devBootstrapService: DevBootstrapService
 	@Autowired private lateinit var devContext: DevContext
 	@Autowired private lateinit var timelineService: TimelineQueryService
+	@Autowired private lateinit var timelineController: TimelineController
 
 	@BeforeEach
 	fun setup() {
@@ -58,6 +59,38 @@ class TimelineIntegrationTest {
 		jdbcTemplate.update("delete from connection_namespace_bindings where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from source_namespaces where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from connections where workspace_id = ?", devContext.devWorkspaceId)
+	}
+
+	@Test
+	fun `controller lists session timeline with implicit workspace through Spring proxy`() {
+		val sessionId = UUID.randomUUID()
+		val agentRunId = UUID.randomUUID()
+		insertWorkSession(sessionId, devContext.devWorkspaceId)
+		insertAgentRun(agentRunId, devContext.devWorkspaceId, sessionId, "RUNNING")
+
+		val response = timelineController.listForSession(sessionId)
+
+		assertEquals(HttpStatus.OK, response.statusCode)
+		assertEquals("no-store", response.headers.cacheControl)
+		val item = assertNotNull(response.body).single()
+		assertEquals(agentRunId, item.id)
+		assertEquals(devContext.devWorkspaceId, item.workspaceId)
+	}
+
+	@Test
+	fun `controller gets execution timeline with implicit workspace through Spring proxy`() {
+		val sessionId = UUID.randomUUID()
+		val agentRunId = UUID.randomUUID()
+		insertWorkSession(sessionId, devContext.devWorkspaceId)
+		insertAgentRun(agentRunId, devContext.devWorkspaceId, sessionId, "RUNNING")
+
+		val response = timelineController.getByExecutionId(agentRunId)
+
+		assertEquals(HttpStatus.OK, response.statusCode)
+		assertEquals("no-store", response.headers.cacheControl)
+		val item = assertNotNull(response.body)
+		assertEquals(agentRunId, item.id)
+		assertEquals(devContext.devWorkspaceId, item.workspaceId)
 	}
 
 	@Test

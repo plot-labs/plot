@@ -20,8 +20,13 @@ class TimelineQueryService @org.springframework.beans.factory.annotation.Autowir
 	private val workspaceAccessService: WorkspaceAccessService,
 	private val clock: Clock = Clock.systemUTC(),
 ) {
+	// Resolve context inside the transactional target, not a Kotlin default argument on its proxy.
 	@Transactional(readOnly = true)
-	fun listForSession(sessionId: UUID, workspaceId: UUID = devContext.devWorkspaceId): List<ExecutionTimelineItem> {
+	fun listForSession(sessionId: UUID): List<ExecutionTimelineItem> =
+		listForSession(sessionId, devContext.devWorkspaceId)
+
+	@Transactional(readOnly = true)
+	fun listForSession(sessionId: UUID, workspaceId: UUID): List<ExecutionTimelineItem> {
 		workspaceAccessService.requireActiveWorkspace(workspaceId)
 		val sessionExists = sqlExecutor.query(
 			"select id from work_sessions where workspace_id = ? and id = ?",
@@ -91,7 +96,11 @@ class TimelineQueryService @org.springframework.beans.factory.annotation.Autowir
 	}
 
 	@Transactional(readOnly = true)
-	fun getByExecutionId(executionId: UUID, workspaceId: UUID = devContext.devWorkspaceId): ExecutionTimelineItem {
+	fun getByExecutionId(executionId: UUID): ExecutionTimelineItem =
+		getByExecutionId(executionId, devContext.devWorkspaceId)
+
+	@Transactional(readOnly = true)
+	fun getByExecutionId(executionId: UUID, workspaceId: UUID): ExecutionTimelineItem {
 		workspaceAccessService.requireActiveWorkspace(workspaceId)
 		val byAgent = sqlExecutor.query(
 			"""
