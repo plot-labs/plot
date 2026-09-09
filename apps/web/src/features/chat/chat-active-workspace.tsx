@@ -167,6 +167,7 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
                 error={agent.agentError}
                 instruction={agent.agentInstruction}
                 references={references}
+                timelineItem={agent.selectedTimelineItem}
                 artifactAction={document.currentArtifact ? (
                   <button
                     ref={artifactTriggerRef}
@@ -232,6 +233,7 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
                     loading={agent.activitiesLoading}
                     error={agent.activitiesError}
                     onSelect={selectActivity}
+                    timeline={agent.timeline}
                   />
                 </div>
               ) : null}

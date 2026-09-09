@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import type { ChatAgentRun, ContentBrief, ContentType, SourceReference } from "@plot/api-client";
+import type { ChatAgentRun, ContentBrief, ContentType, ExecutionTimelineItem, SourceReference } from "@plot/api-client";
 import { isTerminalChatAgentStatus, pollChatAgentRun } from "@/lib/chat-agent-polling";
 import { plotApiClient } from "@/lib/api-client";
 
@@ -40,6 +40,7 @@ export function useChatAgentActivity({
   onAdmitted,
 }: UseChatAgentActivityProps) {
   const [activities, setActivities] = useState<ChatAgentRun[]>([]);
+  const [timeline, setTimeline] = useState<ExecutionTimelineItem[]>([]);
   const [activitiesLoadedFor, setActivitiesLoadedFor] = useState<string | null>(null);
   const [activitiesError, setActivitiesError] = useState("");
   const [agentRun, setAgentRun] = useState<ChatAgentRun | null>(null);
@@ -59,6 +60,11 @@ export function useChatAgentActivity({
     return activities[activities.length - 1] ?? null;
   }, [activities, requestedAgentId, requestedArtifactId]);
 
+  const selectedTimelineItem = useMemo(() => {
+    if (!selectedActivity) return timeline[0] ?? null;
+    return timeline.find((item) => item.agentRunId === selectedActivity.id || item.id === selectedActivity.id) ?? null;
+  }, [selectedActivity, timeline]);
+
   useEffect(() => {
     const controller = new AbortController();
     void plotApiClient.listSessionAgentRuns(chatId, { signal: controller.signal })
@@ -73,6 +79,15 @@ export function useChatAgentActivity({
         setActivitiesError(messageFor(error, "Chat activity could not be loaded."));
         setActivitiesLoadedFor(chatId);
       });
+
+    if (typeof plotApiClient.getSessionTimeline === "function") {
+      void plotApiClient.getSessionTimeline(chatId, { signal: controller.signal })
+        .then((value) => {
+          if (!controller.signal.aborted) setTimeline(value);
+        })
+        .catch(() => undefined);
+    }
+
     return () => controller.abort();
   }, [chatId]);
 
@@ -171,7 +186,9 @@ export function useChatAgentActivity({
 
   return {
     activities,
+    timeline,
     selectedActivity,
+    selectedTimelineItem,
     activitiesLoading,
     activitiesError,
     agentRun,

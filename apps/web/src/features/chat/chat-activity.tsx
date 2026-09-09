@@ -12,9 +12,15 @@ import { Text } from "@astryxdesign/core/Text";
 import { LoaderCircle } from "lucide-react";
 import type { ReactNode } from "react";
 
-import type { ChatAgentRun, SourceReference } from "@plot/api-client";
-import { isTerminalChatAgentStatus } from "@/lib/chat-agent-polling";
-import { agentProgressLabel, agentStatusLabel, formatActivity } from "@/features/chat/chat-workspace-utils";
+import type { ChatAgentRun, ExecutionTimelineItem, SourceReference } from "@plot/api-client";
+import {
+  agentProgressLabel,
+  agentStatusLabel,
+  formatActivity,
+  formatTimelineTime,
+  isSpinningStatus,
+  timelineStatusLabel,
+} from "@/features/chat/chat-workspace-utils";
 import { ChatSourceCitations } from "@/features/chat/chat-source-citations";
 
 export function ChatActivityPanel({
@@ -23,12 +29,14 @@ export function ChatActivityPanel({
   loading,
   error,
   onSelect,
+  timeline = [],
 }: {
   activities: ChatAgentRun[];
   selectedActivityId: string | null;
   loading: boolean;
   error: string;
   onSelect: (activity: ChatAgentRun) => void;
+  timeline?: ExecutionTimelineItem[];
 }) {
   const artifacts = activities.filter((activity) => activity.artifactId && activity.artifact);
   return (
@@ -66,40 +74,132 @@ export function ChatActivityPanel({
       ) : null}
       {activities.length ? (
         <ol className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3" aria-label="Agent requests in this chat">
-          {activities.map((activity) => (
-            <li key={activity.id}>
-              <button
-                type="button"
-                aria-current={selectedActivityId === activity.id ? "true" : undefined}
-                onClick={() => onSelect(activity)}
-                className={`w-full rounded-lg border px-3 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${selectedActivityId === activity.id ? "border-black/25 bg-black/[0.04] dark:border-white/25 dark:bg-white/10" : "border-black/[0.08] hover:bg-black/[0.025] dark:border-white/10 dark:hover:bg-white/[0.06]"}`}
-              >
-                <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.07em] text-black/48 dark:text-white/52">
-                  {!isTerminalChatAgentStatus(activity.status) ? <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" /> : null}
-                  {agentStatusLabel(activity.status)}
-                </span>
-                <span className="mt-1 block truncate text-sm font-medium text-black/78 dark:text-white/82">{activity.artifact?.title || activity.instruction || "Agent request"}</span>
-                <span className="mt-1 block text-xs text-black/42 dark:text-white/45">
-                  {activity.artifact ? "Artifact available" : activity.status === "FAILED" ? "No artifact produced" : "Working; no artifact yet"} · {formatActivity(activity.createdAt)}
-                </span>
-              </button>
-            </li>
-          ))}
+          {activities.map((activity) => {
+            const timelineItem = timeline.find((item) => item.agentRunId === activity.id || item.id === activity.id);
+            const statusLabel = timelineItem?.statusLabel ?? timelineStatusLabel(activity.status, activity.failureCode);
+            const showSpinner = isSpinningStatus(
+              timelineItem?.status ?? activity.status,
+              timelineItem?.safeErrorCode ?? activity.failureCode,
+              timelineItem?.nextAttemptAt,
+            );
+            return (
+              <li key={activity.id}>
+                <button
+                  type="button"
+                  aria-current={selectedActivityId === activity.id ? "true" : undefined}
+                  onClick={() => onSelect(activity)}
+                  className={`w-full rounded-lg border px-3 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${selectedActivityId === activity.id ? "border-black/25 bg-black/[0.04] dark:border-white/25 dark:bg-white/10" : "border-black/[0.08] hover:bg-black/[0.025] dark:border-white/10 dark:hover:bg-white/[0.06]"}`}
+                >
+                  <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.07em] text-black/48 dark:text-white/52">
+                    {showSpinner ? <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" /> : null}
+                    <span>{statusLabel}</span>
+                  </span>
+                  <span className="mt-1 block truncate text-sm font-medium text-black/78 dark:text-white/82">{activity.artifact?.title || activity.instruction || "Agent request"}</span>
+                  <span className="mt-1 block text-xs text-black/42 dark:text-white/45">
+                    {activity.artifact ? "Artifact available" : activity.status === "FAILED" ? "No artifact produced" : "Working; no artifact yet"} · {formatActivity(activity.createdAt)}
+                  </span>
+                  {timelineItem?.safeErrorCode ? (
+                    <span className="mt-1 block font-mono text-[11px] text-rose-600 dark:text-rose-400">
+                      {timelineItem.safeErrorCode}
+                    </span>
+                  ) : null}
+                  {timelineItem?.nextAttemptAt ? (
+                    <span className="mt-1 block text-[11px] text-amber-600 dark:text-amber-400">
+                      Next retry: {formatTimelineTime(timelineItem.nextAttemptAt)}
+                    </span>
+                  ) : null}
+                </button>
+              </li>
+            );
+          })}
         </ol>
       ) : null}
     </section>
   );
 }
 
-export function AgentActivityDetail({ run, busy, error, instruction, references, artifactAction }: { run: ChatAgentRun | null; busy: boolean; error: string; instruction: string; references: SourceReference[]; artifactAction?: ReactNode }) {
-  if (!run && !busy && !error) return null;
+export function ExecutionTimelineCard({
+  item,
+}: {
+  item: ExecutionTimelineItem;
+}) {
+  const showSpinner = isSpinningStatus(item.status, item.safeErrorCode, item.nextAttemptAt);
+  return (
+    <div data-testid="execution-timeline-card" className="mt-3 rounded-lg border border-black/10 bg-black/[0.02] p-3 dark:border-white/10 dark:bg-white/[0.03]">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.06em] text-black/55 dark:text-white/60">
+          {showSpinner ? <LoaderCircle aria-hidden="true" data-testid="timeline-spinner" className="size-3.5 animate-spin" /> : null}
+          <span data-testid="timeline-status">{item.statusLabel}</span>
+        </span>
+        <span data-testid="timeline-stage" className="rounded bg-black/[0.05] px-1.5 py-0.5 text-[11px] font-medium tracking-wide text-black/45 dark:bg-white/10 dark:text-white/50">
+          {item.stage}
+        </span>
+      </div>
+      {item.updatedAt ? (
+        <div data-testid="timeline-updated-at" className="mt-1 text-xs text-black/42 dark:text-white/45">
+          Last updated: {formatTimelineTime(item.updatedAt)}
+        </div>
+      ) : null}
+      {item.nextAttemptAt ? (
+        <div data-testid="timeline-next-retry" className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-400">
+          Next retry: {formatTimelineTime(item.nextAttemptAt)}
+        </div>
+      ) : null}
+      {item.safeErrorCode ? (
+        <div data-testid="timeline-error-code" className="mt-1 text-xs font-mono text-rose-700 dark:text-rose-400">
+          Error: {item.safeErrorCode}
+        </div>
+      ) : null}
+      {item.recoveryAction ? (
+        <div data-testid="timeline-recovery-action" className="mt-1 text-xs text-black/60 dark:text-white/65">
+          {item.recoveryAction}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function AgentActivityDetail({
+  run,
+  busy,
+  error,
+  instruction,
+  references,
+  artifactAction,
+  timelineItem,
+}: {
+  run: ChatAgentRun | null;
+  busy: boolean;
+  error: string;
+  instruction: string;
+  references: SourceReference[];
+  artifactAction?: ReactNode;
+  timelineItem?: ExecutionTimelineItem | null;
+}) {
+  if (!run && !busy && !error && !timelineItem) return null;
   const status = run?.status ?? "QUEUED";
   const linkedArtifact = Boolean(run?.artifactId);
-  const toolStatus = error || run?.status === "FAILED"
+  const toolStatus = error || run?.status === "FAILED" || timelineItem?.status === "FAILED"
     ? "error"
-    : linkedArtifact || run?.status === "SUCCEEDED"
+    : linkedArtifact || run?.status === "SUCCEEDED" || timelineItem?.status === "READY"
       ? "complete"
       : "running";
+
+  const effectiveStatusLabel = timelineItem?.statusLabel ?? timelineStatusLabel(status, run?.failureCode);
+  const effectiveStage = timelineItem?.stage ?? (linkedArtifact ? "ARTIFACT" : status === "RUNNING" ? "AGENT" : "ADMISSION");
+  const effectiveUpdated = timelineItem?.updatedAt ?? run?.updatedAt;
+  const effectiveNextRetry = timelineItem?.nextAttemptAt;
+  const effectiveErrorCode = timelineItem?.safeErrorCode ?? run?.failureCode;
+  const effectiveRecoveryAction = timelineItem?.recoveryAction ?? (
+    effectiveStatusLabel === "Needs connection"
+      ? "Reconnect repository access"
+      : effectiveStatusLabel === "Retry scheduled"
+        ? "Automatic retry scheduled"
+        : effectiveStatusLabel === "Failed"
+          ? "Review safe error code and retry"
+          : null
+  );
+  const showSpinner = isSpinningStatus(timelineItem?.status ?? status, effectiveErrorCode, effectiveNextRetry);
 
   return (
     <section aria-label="Agent request details">
@@ -122,11 +222,44 @@ export function AgentActivityDetail({ run, busy, error, instruction, references,
           <p className="text-sm leading-6 text-black/65 dark:text-white/68">
             {linkedArtifact ? "The source review is complete. The artifact is ready below." : instruction ? agentProgressLabel(status) : "Plot is preparing the request…"}
           </p>
+
+          <div data-testid="agent-timeline" className="mt-3 rounded-lg border border-black/10 bg-black/[0.02] p-3 dark:border-white/10 dark:bg-white/[0.03]">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.06em] text-black/55 dark:text-white/60">
+                {showSpinner ? <LoaderCircle aria-hidden="true" data-testid="timeline-spinner" className="size-3.5 animate-spin" /> : null}
+                <span data-testid="timeline-status">{effectiveStatusLabel}</span>
+              </span>
+              <span data-testid="timeline-stage" className="rounded bg-black/[0.05] px-1.5 py-0.5 text-[11px] font-medium tracking-wide text-black/45 dark:bg-white/10 dark:text-white/50">
+                {effectiveStage}
+              </span>
+            </div>
+            {effectiveUpdated ? (
+              <div data-testid="timeline-updated-at" className="mt-1 text-xs text-black/42 dark:text-white/45">
+                Last updated: {formatTimelineTime(effectiveUpdated)}
+              </div>
+            ) : null}
+            {effectiveNextRetry ? (
+              <div data-testid="timeline-next-retry" className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-400">
+                Next retry: {formatTimelineTime(effectiveNextRetry)}
+              </div>
+            ) : null}
+            {effectiveErrorCode ? (
+              <div data-testid="timeline-error-code" className="mt-1 text-xs font-mono text-rose-700 dark:text-rose-400">
+                Error: {effectiveErrorCode}
+              </div>
+            ) : null}
+            {effectiveRecoveryAction ? (
+              <div data-testid="timeline-recovery-action" className="mt-1 text-xs text-black/60 dark:text-white/65">
+                {effectiveRecoveryAction}
+              </div>
+            ) : null}
+          </div>
+
           <ChatToolCalls
             calls={[{
               name: "Read connected sources",
               status: toolStatus,
-              errorMessage: error || (run?.status === "FAILED" ? "Agent stopped before an artifact was produced." : undefined),
+              errorMessage: error || (run?.status === "FAILED" || timelineItem?.status === "FAILED" ? "Agent stopped before an artifact was produced." : undefined),
             }]}
             defaultIsExpanded={false}
           />
@@ -135,7 +268,9 @@ export function AgentActivityDetail({ run, busy, error, instruction, references,
         </ChatMessageBubble>
       </ChatMessage>
       {error ? <ErrorNotice message={error} /> : null}
-      {run?.status === "FAILED" && !error ? <ErrorNotice message={`Agent stopped before an artifact was produced${run.failureCode ? ` (${run.failureCode})` : ""}. It remains available as chat activity.`} /> : null}
+      {(run?.status === "FAILED" || timelineItem?.status === "FAILED") && !error ? (
+        <ErrorNotice message={`Agent stopped before an artifact was produced${effectiveErrorCode ? ` (${effectiveErrorCode})` : ""}. It remains available as chat activity.`} />
+      ) : null}
     </section>
   );
 }

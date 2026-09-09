@@ -521,6 +521,57 @@ describe("Plot API client", () => {
     );
   });
 
+  it("fetches session execution timeline and single execution timeline with workspace scoping", async () => {
+    const timelineItem = {
+      id: "exec-1",
+      workspaceId: "workspace-1",
+      origin: "CHAT",
+      stage: "AGENT",
+      status: "RUNNING",
+      statusLabel: "Running",
+      deliveryId: null,
+      releaseRequestId: null,
+      routineId: null,
+      routineExecutionId: null,
+      agentRunId: "exec-1",
+      artifactWorkflowRunId: null,
+      artifactId: null,
+      workSessionId: "session-1",
+      attemptCount: 1,
+      maxAttempts: 3,
+      nextAttemptAt: null,
+      safeErrorCode: null,
+      recoveryAction: null,
+      createdAt: "2026-09-09T00:00:00Z",
+      updatedAt: "2026-09-09T00:00:00Z",
+      finishedAt: null,
+    };
+    const fetcher = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json([timelineItem]))
+      .mockResolvedValueOnce(Response.json(timelineItem));
+    const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
+
+    const list = await client.getSessionTimeline("session-1");
+    expect(list).toEqual([timelineItem]);
+    expect(fetcher).toHaveBeenNthCalledWith(
+      1,
+      "/api/plot/sessions/session-1/timeline",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "X-Plot-Workspace-Id": "workspace-1" }),
+      }),
+    );
+
+    const single = await client.getExecutionTimeline("exec-1");
+    expect(single).toEqual(timelineItem);
+    expect(fetcher).toHaveBeenNthCalledWith(
+      2,
+      "/api/plot/timeline/executions/exec-1",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "X-Plot-Workspace-Id": "workspace-1" }),
+      }),
+    );
+  });
+
   it("resolves the workspace ID for each request", async () => {
     const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => Response.json({}));
     let workspaceId = "stale-workspace";

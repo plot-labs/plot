@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   listSessions: vi.fn(),
   listReferences: vi.fn(),
   listSessionAgentRuns: vi.fn(),
+  getSessionTimeline: vi.fn(),
   createChatAgentRun: vi.fn(),
   getChatAgentRun: vi.fn(),
   pollChatAgentRun: vi.fn(),
@@ -26,6 +27,7 @@ vi.mock("@/lib/api-client", () => ({
     listSessions: mocks.listSessions,
     listSourceReferences: mocks.listReferences,
     listSessionAgentRuns: mocks.listSessionAgentRuns,
+    getSessionTimeline: mocks.getSessionTimeline,
     createChatAgentRun: mocks.createChatAgentRun,
     getChatAgentRun: mocks.getChatAgentRun,
     getArtifact: mocks.getArtifact,
@@ -73,6 +75,7 @@ describe("ChatWorkspace", () => {
     mocks.listSessions.mockResolvedValue([]);
     mocks.listReferences.mockResolvedValue([reference]);
     mocks.listSessionAgentRuns.mockResolvedValue([]);
+    mocks.getSessionTimeline.mockResolvedValue([]);
     mocks.pollChatAgentRun.mockImplementation(async (_client: unknown, id: string, options: { onUpdate?: (run: unknown) => void }) => {
       const next = await mocks.getChatAgentRun(id);
       options.onUpdate?.(next);
