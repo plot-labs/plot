@@ -11,6 +11,10 @@ import com.plot.api.persistence.generated.tables.AgentSteps
 import com.plot.api.persistence.generated.tables.ArtifactRuns
 import com.plot.api.persistence.generated.tables.AuthAccount
 import com.plot.api.persistence.generated.tables.AuthSession
+import com.plot.api.persistence.generated.tables.AutonomyExecutions
+import com.plot.api.persistence.generated.tables.AutonomyGoals
+import com.plot.api.persistence.generated.tables.AutonomyOpportunities
+import com.plot.api.persistence.generated.tables.AutonomySignals
 import com.plot.api.persistence.generated.tables.ConnectionNamespaceBindings
 import com.plot.api.persistence.generated.tables.ContentPacks
 import com.plot.api.persistence.generated.tables.ContentSourceSnapshots
@@ -70,6 +74,10 @@ val ARTIFACT_RUNS_WORKSPACE_CREATED_IDX: Index = Internal.createIndex(DSL.name("
 val AUTH_ACCOUNT_ISSUER_ACCOUNT_ID_UIDX: Index = Internal.createIndex(DSL.name("auth_account_issuer_account_id_uidx"), AuthAccount.AUTH_ACCOUNT, arrayOf(AuthAccount.AUTH_ACCOUNT.ISSUER, AuthAccount.AUTH_ACCOUNT.ACCOUNT_ID), true)
 val AUTH_ACCOUNT_USER_ID_IDX: Index = Internal.createIndex(DSL.name("auth_account_user_id_idx"), AuthAccount.AUTH_ACCOUNT, arrayOf(AuthAccount.AUTH_ACCOUNT.USER_ID), false)
 val AUTH_SESSION_USER_ID_IDX: Index = Internal.createIndex(DSL.name("auth_session_user_id_idx"), AuthSession.AUTH_SESSION, arrayOf(AuthSession.AUTH_SESSION.USER_ID), false)
+val AUTONOMY_EXECUTIONS_RUNNING_IDX: Index = Internal.createIndex(DSL.name("autonomy_executions_running_idx"), AutonomyExecutions.AUTONOMY_EXECUTIONS, arrayOf(AutonomyExecutions.AUTONOMY_EXECUTIONS.WORKSPACE_ID), false)
+val AUTONOMY_GOALS_ONE_ACTIVE_IDX: Index = Internal.createIndex(DSL.name("autonomy_goals_one_active_idx"), AutonomyGoals.AUTONOMY_GOALS, arrayOf(AutonomyGoals.AUTONOMY_GOALS.WORKSPACE_ID, AutonomyGoals.AUTONOMY_GOALS.OPPORTUNITY_ID), true)
+val AUTONOMY_OPPORTUNITIES_HOME_IDX: Index = Internal.createIndex(DSL.name("autonomy_opportunities_home_idx"), AutonomyOpportunities.AUTONOMY_OPPORTUNITIES, arrayOf(AutonomyOpportunities.AUTONOMY_OPPORTUNITIES.WORKSPACE_ID, AutonomyOpportunities.AUTONOMY_OPPORTUNITIES.UPDATED_AT.desc(), AutonomyOpportunities.AUTONOMY_OPPORTUNITIES.ID), false)
+val AUTONOMY_SIGNALS_DISPATCH_IDX: Index = Internal.createIndex(DSL.name("autonomy_signals_dispatch_idx"), AutonomySignals.AUTONOMY_SIGNALS, arrayOf(AutonomySignals.AUTONOMY_SIGNALS.PROVIDER, AutonomySignals.AUTONOMY_SIGNALS.AVAILABLE_AT, AutonomySignals.AUTONOMY_SIGNALS.RECEIVED_AT), false)
 val CONNECTION_NAMESPACE_BINDINGS_ONE_ACTIVE_IDX: Index = Internal.createIndex(DSL.name("connection_namespace_bindings_one_active_idx"), ConnectionNamespaceBindings.CONNECTION_NAMESPACE_BINDINGS, arrayOf(ConnectionNamespaceBindings.CONNECTION_NAMESPACE_BINDINGS.WORKSPACE_ID, ConnectionNamespaceBindings.CONNECTION_NAMESPACE_BINDINGS.PROVIDER, ConnectionNamespaceBindings.CONNECTION_NAMESPACE_BINDINGS.SOURCE_NAMESPACE_ID), true)
 val CONTENT_PACKS_ONE_PER_RELEASE_REQUEST_IDX: Index = Internal.createIndex(DSL.name("content_packs_one_per_release_request_idx"), ContentPacks.CONTENT_PACKS, arrayOf(ContentPacks.CONTENT_PACKS.WORKSPACE_ID, ContentPacks.CONTENT_PACKS.RELEASE_REQUEST_ID), true)
 val CONTENT_SOURCE_SNAPSHOTS_BUNDLE_HASH_IDX: Index = Internal.createIndex(DSL.name("content_source_snapshots_bundle_hash_idx"), ContentSourceSnapshots.CONTENT_SOURCE_SNAPSHOTS, arrayOf(ContentSourceSnapshots.CONTENT_SOURCE_SNAPSHOTS.WORKSPACE_ID, ContentSourceSnapshots.CONTENT_SOURCE_SNAPSHOTS.SOURCE_BUNDLE_HASH), false)

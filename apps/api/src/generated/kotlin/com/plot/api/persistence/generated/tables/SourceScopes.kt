@@ -7,6 +7,10 @@ package com.plot.api.persistence.generated.tables
 import com.plot.api.persistence.generated.Public
 import com.plot.api.persistence.generated.indexes.SOURCE_SCOPES_WORKSPACE_STATUS_IDX
 import com.plot.api.persistence.generated.keys.AGENT_RUN_SOURCES__AGENT_RUN_SOURCES_WORKSPACE_ID_SOURCE_SCOPE_ID_FKEY
+import com.plot.api.persistence.generated.keys.AUTONOMY_MISSIONS__AUTONOMY_MISSIONS_WORKSPACE_ID_SOURCE_SCOPE_ID_FKEY
+import com.plot.api.persistence.generated.keys.AUTONOMY_OPPORTUNITIES__AUTONOMY_OPPORTUNITIES_WORKSPACE_ID_SOURCE_SCOPE_ID_FKEY
+import com.plot.api.persistence.generated.keys.AUTONOMY_SIGNALS__AUTONOMY_SIGNALS_WORKSPACE_ID_SOURCE_NAMESPACE_ID_SOURCE_S_FKEY
+import com.plot.api.persistence.generated.keys.AUTONOMY_SIGNAL_HEADS__AUTONOMY_SIGNAL_HEADS_WORKSPACE_ID_SOURCE_NAMESPACE_ID_SOU_FKEY
 import com.plot.api.persistence.generated.keys.CONTENT_SOURCE_SNAPSHOTS__CONTENT_SOURCE_SNAPSHOTS_WORKSPACE_ID_SOURCE_SCOPE_ID_FKEY
 import com.plot.api.persistence.generated.keys.GENERATION_INPUTS__GENERATION_INPUTS_SOURCE_SCOPE_FK
 import com.plot.api.persistence.generated.keys.GENERATION_RUNS__GENERATION_RUNS_WORKSPACE_ID_SOURCE_SCOPE_ID_FKEY
@@ -26,6 +30,10 @@ import com.plot.api.persistence.generated.keys.SOURCE_SCOPES__SOURCE_SCOPES_WORK
 import com.plot.api.persistence.generated.keys.SOURCE_SCOPES__SOURCE_SCOPES_WORKSPACE_ID_SOURCE_NAMESPACE_ID_PROVIDER_FKEY
 import com.plot.api.persistence.generated.keys.WRITING_BLOCK_SCOPES__WRITING_BLOCK_SCOPES_WORKSPACE_ID_SOURCE_NAMESPACE_ID_SOUR_FKEY
 import com.plot.api.persistence.generated.tables.AgentRunSources.AgentRunSourcesPath
+import com.plot.api.persistence.generated.tables.AutonomyMissions.AutonomyMissionsPath
+import com.plot.api.persistence.generated.tables.AutonomyOpportunities.AutonomyOpportunitiesPath
+import com.plot.api.persistence.generated.tables.AutonomySignalHeads.AutonomySignalHeadsPath
+import com.plot.api.persistence.generated.tables.AutonomySignals.AutonomySignalsPath
 import com.plot.api.persistence.generated.tables.ContentSourceSnapshots.ContentSourceSnapshotsPath
 import com.plot.api.persistence.generated.tables.GenerationInputs.GenerationInputsPath
 import com.plot.api.persistence.generated.tables.GenerationRuns.GenerationRunsPath
@@ -274,6 +282,70 @@ open class SourceScopes(
 
     val agentRunSources: AgentRunSourcesPath
         get(): AgentRunSourcesPath = agentRunSources()
+
+    private lateinit var _autonomyMissions: AutonomyMissionsPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.autonomy_missions</code> table
+     */
+    fun autonomyMissions(): AutonomyMissionsPath {
+        if (!this::_autonomyMissions.isInitialized)
+            _autonomyMissions = AutonomyMissionsPath(this, null, AUTONOMY_MISSIONS__AUTONOMY_MISSIONS_WORKSPACE_ID_SOURCE_SCOPE_ID_FKEY.inverseKey)
+
+        return _autonomyMissions;
+    }
+
+    val autonomyMissions: AutonomyMissionsPath
+        get(): AutonomyMissionsPath = autonomyMissions()
+
+    private lateinit var _autonomyOpportunities: AutonomyOpportunitiesPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.autonomy_opportunities</code> table
+     */
+    fun autonomyOpportunities(): AutonomyOpportunitiesPath {
+        if (!this::_autonomyOpportunities.isInitialized)
+            _autonomyOpportunities = AutonomyOpportunitiesPath(this, null, AUTONOMY_OPPORTUNITIES__AUTONOMY_OPPORTUNITIES_WORKSPACE_ID_SOURCE_SCOPE_ID_FKEY.inverseKey)
+
+        return _autonomyOpportunities;
+    }
+
+    val autonomyOpportunities: AutonomyOpportunitiesPath
+        get(): AutonomyOpportunitiesPath = autonomyOpportunities()
+
+    private lateinit var _autonomySignalHeads: AutonomySignalHeadsPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.autonomy_signal_heads</code> table
+     */
+    fun autonomySignalHeads(): AutonomySignalHeadsPath {
+        if (!this::_autonomySignalHeads.isInitialized)
+            _autonomySignalHeads = AutonomySignalHeadsPath(this, null, AUTONOMY_SIGNAL_HEADS__AUTONOMY_SIGNAL_HEADS_WORKSPACE_ID_SOURCE_NAMESPACE_ID_SOU_FKEY.inverseKey)
+
+        return _autonomySignalHeads;
+    }
+
+    val autonomySignalHeads: AutonomySignalHeadsPath
+        get(): AutonomySignalHeadsPath = autonomySignalHeads()
+
+    private lateinit var _autonomySignals: AutonomySignalsPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.autonomy_signals</code> table
+     */
+    fun autonomySignals(): AutonomySignalsPath {
+        if (!this::_autonomySignals.isInitialized)
+            _autonomySignals = AutonomySignalsPath(this, null, AUTONOMY_SIGNALS__AUTONOMY_SIGNALS_WORKSPACE_ID_SOURCE_NAMESPACE_ID_SOURCE_S_FKEY.inverseKey)
+
+        return _autonomySignals;
+    }
+
+    val autonomySignals: AutonomySignalsPath
+        get(): AutonomySignalsPath = autonomySignals()
 
     private lateinit var _contentSourceSnapshots: ContentSourceSnapshotsPath
 

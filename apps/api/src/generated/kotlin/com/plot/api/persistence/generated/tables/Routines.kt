@@ -388,7 +388,7 @@ open class Routines(
         Internal.createCheck(this, DSL.name("routines_cadence_check"), "(((cadence)::text = ANY ((ARRAY['DAILY'::character varying, 'WEEKLY'::character varying, 'ON_GITHUB_CHANGE'::character varying, 'ON_GITHUB_RELEASE'::character varying, 'ON_GIT_TAG'::character varying])::text[])))", true),
         Internal.createCheck(this, DSL.name("routines_check"), "((((claimed_by IS NULL) AND (claimed_at IS NULL)) OR ((claimed_by IS NOT NULL) AND (claimed_at IS NOT NULL))))", true),
         Internal.createCheck(this, DSL.name("routines_instruction_check"), "((length(TRIM(BOTH FROM instruction)) > 0))", true),
-        Internal.createCheck(this, DSL.name("routines_last_run_status_check"), "(((last_run_status IS NULL) OR ((last_run_status)::text = ANY ((ARRAY['NO_ACTIVITY'::character varying, 'QUEUED'::character varying, 'WRITING'::character varying, 'REVIEWING'::character varying, 'REWRITING'::character varying, 'READY'::character varying, 'NEEDS_REVIEW'::character varying, 'FAILED'::character varying])::text[]))))", true),
+        Internal.createCheck(this, DSL.name("routines_last_run_status_check"), "(((last_run_status IS NULL) OR ((last_run_status)::text = ANY ((ARRAY['NO_ACTIVITY'::character varying, 'QUEUED'::character varying, 'WRITING'::character varying, 'REVIEWING'::character varying, 'REWRITING'::character varying, 'READY'::character varying, 'NEEDS_REVIEW'::character varying, 'FAILED'::character varying, 'DEFERRED'::character varying])::text[]))))", true),
         Internal.createCheck(this, DSL.name("routines_name_check"), "((length(TRIM(BOTH FROM name)) > 0))", true),
         Internal.createCheck(this, DSL.name("routines_transition_version_check"), "((transition_version >= 0))", true)
     )

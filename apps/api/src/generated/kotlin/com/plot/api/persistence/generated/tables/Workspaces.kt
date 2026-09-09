@@ -6,6 +6,10 @@ package com.plot.api.persistence.generated.tables
 
 import com.plot.api.persistence.generated.Public
 import com.plot.api.persistence.generated.indexes.WORKSPACES_POLAR_SUBSCRIPTION_UK
+import com.plot.api.persistence.generated.keys.AUTONOMY_DAILY_BUDGETS__AUTONOMY_DAILY_BUDGETS_WORKSPACE_ID_FKEY
+import com.plot.api.persistence.generated.keys.AUTONOMY_MISSIONS__AUTONOMY_MISSIONS_WORKSPACE_ID_FKEY
+import com.plot.api.persistence.generated.keys.AUTONOMY_OPPORTUNITIES__AUTONOMY_OPPORTUNITIES_WORKSPACE_ID_FKEY
+import com.plot.api.persistence.generated.keys.AUTONOMY_SIGNALS__AUTONOMY_SIGNALS_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.CONNECTIONS__CONNECTIONS_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.CONNECTION_NAMESPACE_BINDINGS__CONNECTION_NAMESPACE_BINDINGS_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.CONTENT_SOURCE_SNAPSHOTS__CONTENT_SOURCE_SNAPSHOTS_WORKSPACE_ID_FKEY
@@ -30,6 +34,10 @@ import com.plot.api.persistence.generated.keys.WORKSPACE_MEMBERS__WORKSPACE_MEMB
 import com.plot.api.persistence.generated.keys.WORK_SESSIONS__WORK_SESSIONS_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.WRITING_BLOCKS__WRITING_BLOCKS_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.WRITING_BLOCK_SCOPES__WRITING_BLOCK_SCOPES_WORKSPACE_ID_FKEY
+import com.plot.api.persistence.generated.tables.AutonomyDailyBudgets.AutonomyDailyBudgetsPath
+import com.plot.api.persistence.generated.tables.AutonomyMissions.AutonomyMissionsPath
+import com.plot.api.persistence.generated.tables.AutonomyOpportunities.AutonomyOpportunitiesPath
+import com.plot.api.persistence.generated.tables.AutonomySignals.AutonomySignalsPath
 import com.plot.api.persistence.generated.tables.ConnectionNamespaceBindings.ConnectionNamespaceBindingsPath
 import com.plot.api.persistence.generated.tables.Connections.ConnectionsPath
 import com.plot.api.persistence.generated.tables.ContentSourceSnapshots.ContentSourceSnapshotsPath
@@ -258,6 +266,70 @@ open class Workspaces(
 
     val users: UsersPath
         get(): UsersPath = users()
+
+    private lateinit var _autonomyDailyBudgets: AutonomyDailyBudgetsPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.autonomy_daily_budgets</code> table
+     */
+    fun autonomyDailyBudgets(): AutonomyDailyBudgetsPath {
+        if (!this::_autonomyDailyBudgets.isInitialized)
+            _autonomyDailyBudgets = AutonomyDailyBudgetsPath(this, null, AUTONOMY_DAILY_BUDGETS__AUTONOMY_DAILY_BUDGETS_WORKSPACE_ID_FKEY.inverseKey)
+
+        return _autonomyDailyBudgets;
+    }
+
+    val autonomyDailyBudgets: AutonomyDailyBudgetsPath
+        get(): AutonomyDailyBudgetsPath = autonomyDailyBudgets()
+
+    private lateinit var _autonomyMissions: AutonomyMissionsPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.autonomy_missions</code> table
+     */
+    fun autonomyMissions(): AutonomyMissionsPath {
+        if (!this::_autonomyMissions.isInitialized)
+            _autonomyMissions = AutonomyMissionsPath(this, null, AUTONOMY_MISSIONS__AUTONOMY_MISSIONS_WORKSPACE_ID_FKEY.inverseKey)
+
+        return _autonomyMissions;
+    }
+
+    val autonomyMissions: AutonomyMissionsPath
+        get(): AutonomyMissionsPath = autonomyMissions()
+
+    private lateinit var _autonomyOpportunities: AutonomyOpportunitiesPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.autonomy_opportunities</code> table
+     */
+    fun autonomyOpportunities(): AutonomyOpportunitiesPath {
+        if (!this::_autonomyOpportunities.isInitialized)
+            _autonomyOpportunities = AutonomyOpportunitiesPath(this, null, AUTONOMY_OPPORTUNITIES__AUTONOMY_OPPORTUNITIES_WORKSPACE_ID_FKEY.inverseKey)
+
+        return _autonomyOpportunities;
+    }
+
+    val autonomyOpportunities: AutonomyOpportunitiesPath
+        get(): AutonomyOpportunitiesPath = autonomyOpportunities()
+
+    private lateinit var _autonomySignals: AutonomySignalsPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.autonomy_signals</code> table
+     */
+    fun autonomySignals(): AutonomySignalsPath {
+        if (!this::_autonomySignals.isInitialized)
+            _autonomySignals = AutonomySignalsPath(this, null, AUTONOMY_SIGNALS__AUTONOMY_SIGNALS_WORKSPACE_ID_FKEY.inverseKey)
+
+        return _autonomySignals;
+    }
+
+    val autonomySignals: AutonomySignalsPath
+        get(): AutonomySignalsPath = autonomySignals()
 
     private lateinit var _connectionNamespaceBindings: ConnectionNamespaceBindingsPath
 

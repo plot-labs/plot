@@ -5,6 +5,7 @@ package com.plot.api.persistence.generated.tables
 
 
 import com.plot.api.persistence.generated.Public
+import com.plot.api.persistence.generated.keys.AUTONOMY_SIGNALS__AUTONOMY_SIGNALS_WORKSPACE_ID_SOURCE_NAMESPACE_ID_PROVIDER_FKEY
 import com.plot.api.persistence.generated.keys.CONNECTION_NAMESPACE_BINDINGS__CONNECTION_NAMESPACE_BINDINGS_WORKSPACE_ID_SOURCE_NAMESPAC_FKEY
 import com.plot.api.persistence.generated.keys.SOURCE_NAMESPACES_PKEY
 import com.plot.api.persistence.generated.keys.SOURCE_NAMESPACES_WORKSPACE_ID_ID_KEY
@@ -13,6 +14,7 @@ import com.plot.api.persistence.generated.keys.SOURCE_NAMESPACES_WORKSPACE_ID_PR
 import com.plot.api.persistence.generated.keys.SOURCE_NAMESPACES__SOURCE_NAMESPACES_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.SOURCE_SCOPES__SOURCE_SCOPES_WORKSPACE_ID_SOURCE_NAMESPACE_ID_PROVIDER_FKEY
 import com.plot.api.persistence.generated.keys.WRITING_BLOCKS__WRITING_BLOCKS_SOURCE_NAMESPACE_FK
+import com.plot.api.persistence.generated.tables.AutonomySignals.AutonomySignalsPath
 import com.plot.api.persistence.generated.tables.ConnectionNamespaceBindings.ConnectionNamespaceBindingsPath
 import com.plot.api.persistence.generated.tables.SourceScopes.SourceScopesPath
 import com.plot.api.persistence.generated.tables.Workspaces.WorkspacesPath
@@ -181,6 +183,22 @@ open class SourceNamespaces(
 
     val workspaces: WorkspacesPath
         get(): WorkspacesPath = workspaces()
+
+    private lateinit var _autonomySignals: AutonomySignalsPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.autonomy_signals</code> table
+     */
+    fun autonomySignals(): AutonomySignalsPath {
+        if (!this::_autonomySignals.isInitialized)
+            _autonomySignals = AutonomySignalsPath(this, null, AUTONOMY_SIGNALS__AUTONOMY_SIGNALS_WORKSPACE_ID_SOURCE_NAMESPACE_ID_PROVIDER_FKEY.inverseKey)
+
+        return _autonomySignals;
+    }
+
+    val autonomySignals: AutonomySignalsPath
+        get(): AutonomySignalsPath = autonomySignals()
 
     private lateinit var _connectionNamespaceBindings: ConnectionNamespaceBindingsPath
 

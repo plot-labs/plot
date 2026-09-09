@@ -450,7 +450,7 @@ open class RoutineExecutions(
         Internal.createCheck(this, DSL.name("routine_executions_check2"), "(((finished_at IS NULL) OR (finished_at >= COALESCE(started_at, created_at))))", true),
         Internal.createCheck(this, DSL.name("routine_executions_check3"), "(((activity_cursor_after IS NULL) OR (activity_cursor_before IS NULL) OR (activity_cursor_after >= activity_cursor_before)))", true),
         Internal.createCheck(this, DSL.name("routine_executions_request_fingerprint_check"), "((length(TRIM(BOTH FROM request_fingerprint)) > 0))", true),
-        Internal.createCheck(this, DSL.name("routine_executions_status_check"), "(((status)::text = ANY ((ARRAY['PROBING'::character varying, 'NO_ACTIVITY'::character varying, 'DISPATCHED'::character varying, 'FAILED'::character varying])::text[])))", true),
+        Internal.createCheck(this, DSL.name("routine_executions_status_check"), "(((status)::text = ANY ((ARRAY['PROBING'::character varying, 'NO_ACTIVITY'::character varying, 'DISPATCHED'::character varying, 'DEFERRED'::character varying, 'FAILED'::character varying])::text[])))", true),
         Internal.createCheck(this, DSL.name("routine_executions_transition_version_check"), "((transition_version >= 0))", true),
         Internal.createCheck(this, DSL.name("routine_executions_trigger_key_check"), "((length(TRIM(BOTH FROM trigger_key)) > 0))", true),
         Internal.createCheck(this, DSL.name("routine_executions_trigger_kind_check"), "(((trigger_kind)::text = ANY ((ARRAY['SCHEDULED'::character varying, 'GITHUB'::character varying, 'MANUAL'::character varying])::text[])))", true)

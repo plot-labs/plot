@@ -15,6 +15,15 @@ import com.plot.api.persistence.generated.tables.AuthJwks
 import com.plot.api.persistence.generated.tables.AuthSession
 import com.plot.api.persistence.generated.tables.AuthUser
 import com.plot.api.persistence.generated.tables.AuthVerification
+import com.plot.api.persistence.generated.tables.AutonomyAssessments
+import com.plot.api.persistence.generated.tables.AutonomyDailyBudgets
+import com.plot.api.persistence.generated.tables.AutonomyExecutions
+import com.plot.api.persistence.generated.tables.AutonomyGoals
+import com.plot.api.persistence.generated.tables.AutonomyMissions
+import com.plot.api.persistence.generated.tables.AutonomyOpportunities
+import com.plot.api.persistence.generated.tables.AutonomySignalHeads
+import com.plot.api.persistence.generated.tables.AutonomySignals
+import com.plot.api.persistence.generated.tables.AutonomyTasks
 import com.plot.api.persistence.generated.tables.ConnectionNamespaceBindings
 import com.plot.api.persistence.generated.tables.Connections
 import com.plot.api.persistence.generated.tables.ContentPacks
@@ -132,6 +141,51 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
      * The table <code>public.auth_verification</code>.
      */
     val AUTH_VERIFICATION: AuthVerification get() = AuthVerification.AUTH_VERIFICATION
+
+    /**
+     * The table <code>public.autonomy_assessments</code>.
+     */
+    val AUTONOMY_ASSESSMENTS: AutonomyAssessments get() = AutonomyAssessments.AUTONOMY_ASSESSMENTS
+
+    /**
+     * The table <code>public.autonomy_daily_budgets</code>.
+     */
+    val AUTONOMY_DAILY_BUDGETS: AutonomyDailyBudgets get() = AutonomyDailyBudgets.AUTONOMY_DAILY_BUDGETS
+
+    /**
+     * The table <code>public.autonomy_executions</code>.
+     */
+    val AUTONOMY_EXECUTIONS: AutonomyExecutions get() = AutonomyExecutions.AUTONOMY_EXECUTIONS
+
+    /**
+     * The table <code>public.autonomy_goals</code>.
+     */
+    val AUTONOMY_GOALS: AutonomyGoals get() = AutonomyGoals.AUTONOMY_GOALS
+
+    /**
+     * The table <code>public.autonomy_missions</code>.
+     */
+    val AUTONOMY_MISSIONS: AutonomyMissions get() = AutonomyMissions.AUTONOMY_MISSIONS
+
+    /**
+     * The table <code>public.autonomy_opportunities</code>.
+     */
+    val AUTONOMY_OPPORTUNITIES: AutonomyOpportunities get() = AutonomyOpportunities.AUTONOMY_OPPORTUNITIES
+
+    /**
+     * The table <code>public.autonomy_signal_heads</code>.
+     */
+    val AUTONOMY_SIGNAL_HEADS: AutonomySignalHeads get() = AutonomySignalHeads.AUTONOMY_SIGNAL_HEADS
+
+    /**
+     * The table <code>public.autonomy_signals</code>.
+     */
+    val AUTONOMY_SIGNALS: AutonomySignals get() = AutonomySignals.AUTONOMY_SIGNALS
+
+    /**
+     * The table <code>public.autonomy_tasks</code>.
+     */
+    val AUTONOMY_TASKS: AutonomyTasks get() = AutonomyTasks.AUTONOMY_TASKS
 
     /**
      * The table <code>public.connection_namespace_bindings</code>.
@@ -380,6 +434,15 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
         AuthSession.AUTH_SESSION,
         AuthUser.AUTH_USER,
         AuthVerification.AUTH_VERIFICATION,
+        AutonomyAssessments.AUTONOMY_ASSESSMENTS,
+        AutonomyDailyBudgets.AUTONOMY_DAILY_BUDGETS,
+        AutonomyExecutions.AUTONOMY_EXECUTIONS,
+        AutonomyGoals.AUTONOMY_GOALS,
+        AutonomyMissions.AUTONOMY_MISSIONS,
+        AutonomyOpportunities.AUTONOMY_OPPORTUNITIES,
+        AutonomySignalHeads.AUTONOMY_SIGNAL_HEADS,
+        AutonomySignals.AUTONOMY_SIGNALS,
+        AutonomyTasks.AUTONOMY_TASKS,
         ConnectionNamespaceBindings.CONNECTION_NAMESPACE_BINDINGS,
         Connections.CONNECTIONS,
         ContentPacks.CONTENT_PACKS,

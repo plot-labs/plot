@@ -24,12 +24,16 @@ import com.plot.api.persistence.generated.keys.AGENT_RUN_INPUTS__AGENT_RUN_INPUT
 import com.plot.api.persistence.generated.keys.AGENT_RUN_SOURCES__AGENT_RUN_SOURCES_WORKSPACE_ID_AGENT_RUN_ID_FKEY
 import com.plot.api.persistence.generated.keys.AGENT_STEPS__AGENT_STEPS_WORKSPACE_ID_AGENT_RUN_ID_FKEY
 import com.plot.api.persistence.generated.keys.ARTIFACT_RUNS__ARTIFACT_RUNS_WORKSPACE_ID_AGENT_RUN_ID_FKEY
+import com.plot.api.persistence.generated.keys.AUTONOMY_EXECUTIONS__AUTONOMY_EXECUTIONS_WORKSPACE_ID_AGENT_RUN_ID_FKEY
+import com.plot.api.persistence.generated.keys.AUTONOMY_GOALS__AUTONOMY_GOALS_WORKSPACE_ID_AGENT_RUN_ID_FKEY
 import com.plot.api.persistence.generated.keys.GENERATION_RUNS__GENERATION_RUNS_AGENT_RUN_FK
 import com.plot.api.persistence.generated.keys.GITHUB_RELEASE_DRAFT_REQUESTS__GITHUB_RELEASE_DRAFT_AGENT_RUN_FK
 import com.plot.api.persistence.generated.tables.AgentRunInputs.AgentRunInputsPath
 import com.plot.api.persistence.generated.tables.AgentRunSources.AgentRunSourcesPath
 import com.plot.api.persistence.generated.tables.AgentSteps.AgentStepsPath
 import com.plot.api.persistence.generated.tables.ArtifactRuns.ArtifactRunsPath
+import com.plot.api.persistence.generated.tables.AutonomyExecutions.AutonomyExecutionsPath
+import com.plot.api.persistence.generated.tables.AutonomyGoals.AutonomyGoalsPath
 import com.plot.api.persistence.generated.tables.ContentSourceSnapshots.ContentSourceSnapshotsPath
 import com.plot.api.persistence.generated.tables.GenerationRuns.GenerationRunsPath
 import com.plot.api.persistence.generated.tables.GithubReleaseDraftRequests.GithubReleaseDraftRequestsPath
@@ -484,6 +488,38 @@ open class AgentRuns(
 
     val artifactRuns: ArtifactRunsPath
         get(): ArtifactRunsPath = artifactRuns()
+
+    private lateinit var _autonomyExecutions: AutonomyExecutionsPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.autonomy_executions</code> table
+     */
+    fun autonomyExecutions(): AutonomyExecutionsPath {
+        if (!this::_autonomyExecutions.isInitialized)
+            _autonomyExecutions = AutonomyExecutionsPath(this, null, AUTONOMY_EXECUTIONS__AUTONOMY_EXECUTIONS_WORKSPACE_ID_AGENT_RUN_ID_FKEY.inverseKey)
+
+        return _autonomyExecutions;
+    }
+
+    val autonomyExecutions: AutonomyExecutionsPath
+        get(): AutonomyExecutionsPath = autonomyExecutions()
+
+    private lateinit var _autonomyGoals: AutonomyGoalsPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.autonomy_goals</code> table
+     */
+    fun autonomyGoals(): AutonomyGoalsPath {
+        if (!this::_autonomyGoals.isInitialized)
+            _autonomyGoals = AutonomyGoalsPath(this, null, AUTONOMY_GOALS__AUTONOMY_GOALS_WORKSPACE_ID_AGENT_RUN_ID_FKEY.inverseKey)
+
+        return _autonomyGoals;
+    }
+
+    val autonomyGoals: AutonomyGoalsPath
+        get(): AutonomyGoalsPath = autonomyGoals()
 
     private lateinit var _generationRuns: GenerationRunsPath
 
