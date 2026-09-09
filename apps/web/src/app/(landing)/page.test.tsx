@@ -12,11 +12,14 @@ describe("public landing page", () => {
     expect(
       screen.getByRole("heading", {
         level: 1,
-        name: /what actually shipped/i,
+        name: /make every release land/i,
       }),
     ).toBeVisible();
     expect(screen.getAllByText(/published GitHub release/i).length).toBeGreaterThan(0);
-    expect(screen.getByRole("heading", { name: /every claim keeps/i })).toBeVisible();
+    expect(screen.getByText(/customer awareness/i)).toBeVisible();
+    expect(screen.getByText(/customers know what changed/i)).toBeVisible();
+    expect(screen.getByRole("heading", { name: /not every change needs/i })).toBeVisible();
+    expect(screen.getByText(/supporting evidence whenever/i)).toBeVisible();
     expect(screen.getByText(/pull request #142/i)).toBeVisible();
     expect(screen.getAllByText(/publish/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/public changelog/i).length).toBeGreaterThan(0);

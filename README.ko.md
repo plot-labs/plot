@@ -2,22 +2,22 @@
   <img src="apps/web/public/plot-icon.svg" alt="Plot logo" width="88" />
   <h1>Plot</h1>
   <p><strong>빠르게 출시하고, 적게 쓰세요.</strong></p>
-  <p>출시된 작업을 검증 가능하고 출처가 표시된 고객용 콘텐츠로 만듭니다.</p>
+  <p>출시된 작업을 고객이 발견하고 이해하는 업데이트로 만듭니다.</p>
 </div>
 
 [English](README.md) | [한국어](README.ko.md)
 
 ## 제품
 
-에이전트 시대에 출시는 빨라졌습니다. 하지만 고객에게 도달하는 콘텐츠는 여전히 느립니다. Plot은 이 격차를 메우기 위해 존재합니다.
+에이전트 시대에 출시는 빨라졌습니다. 하지만 고객이 무엇이 출시됐는지 이해하게 만드는 일은 여전히 느립니다. Plot은 이 격차를 메우기 위해 존재합니다.
 
-**Changelog는 첫 번째 쐐기입니다.** 현재 제품은 출시된 GitHub release를 출처가 표시된 changelog draft로 만들고, 운영자가 검토하여 게시합니다. 동일한 신뢰 루프 — 정확한 출처 범위, 검증 가능한 인용, 휴먼 승인 게시, 절대 자동 게시 금지 — 는 미래 콘텐츠 표면의 토대입니다.
+**Changelog는 첫 번째 쐐기입니다.** 현재 제품은 어떤 변경이 고객에게 중요한지 평가하고, 출시된 GitHub release를 검토 가능한 changelog draft로 만들며, 게시 결정은 운영자에게 남겨둡니다. 검토할 때는 근거를 확인할 수 있고, 휴먼 승인 게시와 절대 자동 게시 금지는 미래 콘텐츠 표면의 토대입니다.
 
 Plot은 다음 다섯 제품 표면을 함께 제공합니다.
 
 - **Chat** — 출처를 기반으로 하는 대화형 AgentRun 작업
 - **Routines** — 예약 또는 수동으로 시작하는 AgentRun 작업
-- **Artifacts** — 편집·리비전·출처 인용이 가능한 문서와 Markdown export
+- **Artifacts** — 편집·리비전이 가능하고 근거를 확인할 수 있는 문서와 Markdown export
 - **GitHub release automation** — release webhook, 신뢰 가능한 범위 계산, draft 생성
 - **Billing/entitlement** — 구독, trial, plan, workspace 접근 정책
 

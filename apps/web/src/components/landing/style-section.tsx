@@ -64,10 +64,10 @@ export function StyleSection() {
               when it earns its place.
             </h2>
             <p className="mb-10 max-w-xl text-xl leading-relaxed text-muted-foreground">
-              The private beta stays focused on a source-cited changelog that a
-              human can review and publish. After the changelog loop works, the
-              same ship evidence can power announcement, in-app, and docs
-              snippets — separate outputs, same trust.
+              The private beta stays focused on helping each release land with
+              customers through a changelog a human can review and publish.
+              After that loop works, the same shipped work can power
+              announcement, in-app, and docs snippets.
             </p>
 
             <div className="grid gap-px overflow-hidden rounded-xl border border-foreground/10 bg-foreground/10 sm:grid-cols-3">

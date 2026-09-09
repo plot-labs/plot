@@ -18,9 +18,9 @@ export function FeaturesSection() {
     <section id="features" className="scroll-mt-24 py-20 lg:py-28">
       <div className="mx-auto max-w-[1400px] px-6 lg:px-12">
         <div className="mb-12 max-w-3xl">
-          <p className="mb-4 font-mono text-xs uppercase tracking-wider text-muted-foreground">Trace the sentence</p>
-          <h2 className="font-display text-4xl tracking-tight sm:text-5xl lg:text-6xl">Every claim keeps <br />its receipt.</h2>
-          <p className="mt-6 max-w-2xl text-lg leading-8 text-muted-foreground">Plot keeps customer-facing wording connected to the release evidence behind it. Open a source before you approve the draft.</p>
+          <p className="mb-4 font-mono text-xs uppercase tracking-wider text-muted-foreground">Decide what matters</p>
+          <h2 className="font-display text-4xl tracking-tight sm:text-5xl lg:text-6xl">Not every change needs <br />the spotlight.</h2>
+          <p className="mt-6 max-w-2xl text-lg leading-8 text-muted-foreground">Plot separates meaningful customer updates from internal noise, then prepares the wording for review. Open the supporting evidence whenever you need to check a claim.</p>
         </div>
         <div className="grid border-y border-foreground/15 lg:grid-cols-[1.15fr_0.85fr]">
           <article className="py-10 lg:border-r lg:border-foreground/15 lg:py-14 lg:pr-16">

@@ -24,7 +24,7 @@ const securityFeatures = [
   },
 ];
 
-const certifications = ["SOURCE-CITED", "SELECTED-REPO", "WORKSPACE-SCOPED", "HUMAN REVIEW", "NO AUTO-PUBLISH"];
+const certifications = ["CUSTOMER-READY", "SELECTED-REPO", "WORKSPACE-SCOPED", "HUMAN REVIEW", "NO AUTO-PUBLISH"];
 
 export function SecuritySection() {
   return (
@@ -38,9 +38,9 @@ export function SecuritySection() {
               Safety
             </span>
             <h2 className="text-4xl lg:text-6xl font-display tracking-tight mb-8">
-              Citations beat
+              Review the proof.
               <br />
-              confident fiction.
+              Then publish.
             </h2>
             <p className="text-xl text-muted-foreground leading-relaxed mb-12">
               Plot should not invent a product story. It shows which saved

@@ -44,8 +44,8 @@ export function FooterSection() {
               </Link>
 
               <p className="text-muted-foreground leading-relaxed mb-8 max-w-xs">
-                Plot turns a published GitHub release into a customer-ready
-                changelog. Every claim stays tied to its source for review and
+                Plot identifies the shipped changes customers need to know and
+                turns them into a customer-ready changelog for review and
                 approval.
               </p>
 

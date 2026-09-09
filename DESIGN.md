@@ -1,7 +1,7 @@
 ---
 version: alpha
 name: Plot
-description: Source-cited content system with editorial paper aesthetic
+description: Customer-awareness content system with editorial paper aesthetic
 colors:
   background: oklch(0.985 0 0)
   foreground: oklch(0.145 0 0)
