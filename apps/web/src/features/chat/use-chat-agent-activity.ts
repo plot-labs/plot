@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { ChatAgentRun, ContentBrief, ContentType, ExecutionTimelineItem, SourceReference } from "@plot/api-client";
 import { isTerminalChatAgentStatus, pollChatAgentRun } from "@/lib/chat-agent-polling";
@@ -49,7 +49,18 @@ export function useChatAgentActivity({
   const [agentInstruction, setAgentInstruction] = useState("");
   const agentAbortRef = useRef<AbortController | null>(null);
   const pendingRequestRef = useRef<PendingAgentRequest | null>(null);
+  const timelineRequestRef = useRef(0);
   const activitiesLoading = activitiesLoadedFor !== chatId;
+
+  const refreshTimeline = useCallback((signal: AbortSignal) => {
+    const request = ++timelineRequestRef.current;
+    if (typeof plotApiClient.getSessionTimeline !== "function") return;
+    void plotApiClient.getSessionTimeline(chatId, { signal })
+      .then((value) => {
+        if (!signal.aborted && request === timelineRequestRef.current) setTimeline(value);
+      })
+      .catch(() => undefined);
+  }, [chatId]);
 
   const selectedActivity = useMemo(() => {
     if (requestedAgentId) return activities.find((activity) => activity.id === requestedAgentId) ?? null;
@@ -80,16 +91,13 @@ export function useChatAgentActivity({
         setActivitiesLoadedFor(chatId);
       });
 
-    if (typeof plotApiClient.getSessionTimeline === "function") {
-      void plotApiClient.getSessionTimeline(chatId, { signal: controller.signal })
-        .then((value) => {
-          if (!controller.signal.aborted) setTimeline(value);
-        })
-        .catch(() => undefined);
-    }
+    refreshTimeline(controller.signal);
 
-    return () => controller.abort();
-  }, [chatId]);
+    return () => {
+      controller.abort();
+      agentAbortRef.current?.abort();
+    };
+  }, [chatId, refreshTimeline]);
 
   useEffect(() => {
     if (!requestedAgentId) return;
@@ -119,18 +127,13 @@ export function useChatAgentActivity({
                 if (agentAbortRef.current === controller) {
                   setAgentRun(next);
                   upsertActivity(setActivities, next);
+                  refreshTimeline(controller.signal);
                 }
               },
             });
         if (agentAbortRef.current !== controller) return;
         setAgentRun(restored);
-        if (typeof plotApiClient.getSessionTimeline === "function") {
-          void plotApiClient.getSessionTimeline(chatId, { signal: controller.signal })
-            .then((val) => {
-              if (!controller.signal.aborted) setTimeline(val);
-            })
-            .catch(() => undefined);
-        }
+        refreshTimeline(controller.signal);
         if (restored.artifactId) onAgentArtifact(restored);
       } catch (error) {
         if (agentAbortRef.current === controller && !(error instanceof DOMException && error.name === "AbortError")) {
@@ -149,7 +152,7 @@ export function useChatAgentActivity({
         setAgentBusy(false);
       }
     };
-  }, [chatId, onAgentArtifact, requestedAgentId]);
+  }, [chatId, onAgentArtifact, requestedAgentId, refreshTimeline]);
 
   async function submitMessage(message: string, referenceIds: string[], onRequestStart?: () => void) {
     const selected = selectReferences(references, referenceIds);
@@ -181,11 +184,7 @@ export function useChatAgentActivity({
       pendingRequestRef.current = null;
       setAgentRun(run);
       onAdmitted(run);
-      if (typeof plotApiClient.getSessionTimeline === "function") {
-        void plotApiClient.getSessionTimeline(chatId)
-          .then((val) => setTimeline(val))
-          .catch(() => undefined);
-      }
+      refreshTimeline(controller.signal);
     } catch (error) {
       if (agentAbortRef.current === controller && !(error instanceof DOMException && error.name === "AbortError")) {
         if (isNonRetryableRequestError(error)) pendingRequestRef.current = null;
