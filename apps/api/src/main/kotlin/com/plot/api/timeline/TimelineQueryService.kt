@@ -322,7 +322,8 @@ class TimelineQueryService @org.springframework.beans.factory.annotation.Autowir
 			failureCode in CONNECTION_ERROR_CODES -> "NEEDS_CONNECTION"
 			rawStatus == "FAILED" -> "FAILED"
 			rawStatus == "NO_ACTIVITY" -> "NO_ACTIVITY"
-			rawStatus in setOf("READY", "NEEDS_RANGE") -> "READY"
+			rawStatus == "READY" -> "READY"
+			rawStatus == "NEEDS_RANGE" -> "NEEDS_RANGE"
 			nextAttemptAt != null && nextAttemptAt.isAfter(clock.instant()) -> "RETRY_SCHEDULED"
 			rawStatus in setOf("RESOLVING", "GENERATING") -> "RUNNING"
 			rawStatus == "QUEUED" -> "QUEUED"
@@ -330,6 +331,7 @@ class TimelineQueryService @org.springframework.beans.factory.annotation.Autowir
 		}
 
 		val statusLabel = when (effectiveStatus) {
+			"NEEDS_RANGE" -> "Needs release range"
 			"QUEUED" -> "Waiting to start"
 			"RUNNING" -> "Running"
 			"RETRY_SCHEDULED" -> "Retry scheduled"
@@ -341,6 +343,7 @@ class TimelineQueryService @org.springframework.beans.factory.annotation.Autowir
 		}
 
 		val recoveryAction = when (effectiveStatus) {
+			"NEEDS_RANGE" -> "Select a release range"
 			"NEEDS_CONNECTION" -> "Reconnect repository access"
 			"RETRY_SCHEDULED" -> "Automatic retry scheduled"
 			"FAILED" -> "Review safe error code and retry"

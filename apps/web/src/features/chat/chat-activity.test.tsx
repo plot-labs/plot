@@ -35,6 +35,22 @@ function makeTimelineItem(overrides: Partial<ExecutionTimelineItem> = {}): Execu
 }
 
 describe("ExecutionTimelineCard (R-011)", () => {
+  it("shows a release range requirement without claiming readiness or spinning", () => {
+    render(<ExecutionTimelineCard item={makeTimelineItem({
+      origin: "RELEASE",
+      stage: "RELEASE",
+      status: "NEEDS_RANGE",
+      statusLabel: "Needs release range",
+      recoveryAction: "Select a release range",
+      artifactId: null,
+    })} />);
+
+    expect(screen.getByTestId("timeline-status")).toHaveTextContent("Needs release range");
+    expect(screen.getByTestId("timeline-recovery-action")).toHaveTextContent("Select a release range");
+    expect(screen.queryByText("Ready for review")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("timeline-spinner")).not.toBeInTheDocument();
+  });
+
   it("renders Waiting to start for queued fixture", () => {
     const item = makeTimelineItem({
       status: "QUEUED",

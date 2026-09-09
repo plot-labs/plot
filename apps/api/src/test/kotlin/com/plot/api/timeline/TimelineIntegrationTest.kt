@@ -218,6 +218,28 @@ class TimelineIntegrationTest {
 	}
 
 	@Test
+	fun `R-011 - release needing a range is not ready for review`() {
+		val scopeId = insertSourceScope()
+		val deliveryId = insertDelivery()
+		val releaseId = UUID.randomUUID()
+		jdbcTemplate.update(
+			"""
+			insert into github_release_draft_requests (
+				id, workspace_id, source_scope_id, initial_delivery_id, tag_name, status,
+				transition_version, attempt_count, created_at, updated_at
+			) values (?, ?, ?, ?, 'v-needs-range', 'NEEDS_RANGE', 1, 1, now(), now())
+			""".trimIndent(),
+			releaseId, devContext.devWorkspaceId, scopeId, deliveryId,
+		)
+
+		val item = assertNotNull(timelineController.getByExecutionId(releaseId).body)
+		assertEquals("NEEDS_RANGE", item.status)
+		assertEquals("Needs release range", item.statusLabel)
+		assertEquals("Select a release range", item.recoveryAction)
+		assertNull(item.artifactId)
+	}
+
+	@Test
 	fun `R-011 - maps release draft states and connection error code`() {
 		val scopeId = insertSourceScope()
 		val deliveryId = insertDelivery()
