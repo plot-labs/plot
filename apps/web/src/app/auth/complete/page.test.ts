@@ -26,12 +26,12 @@ describe("bootstrapErrorMessage", () => {
 });
 
 describe("AuthCompletePage", () => {
-  it("redirects a bootstrapped account to Chat", async () => {
+  it("redirects a bootstrapped account to Home", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ workspaceId: "workspace-1" })));
 
     render(createElement(AuthCompletePage));
 
     expect(await screen.findByText("Finishing sign-in…")).toBeInTheDocument();
-    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith("/chat"));
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith("/home"));
   });
 });

@@ -1,5 +1,6 @@
 export const productNavigationItems = [
-  { href: "/chat", label: "Work" },
+  { href: "/home", label: "Home" },
+  { href: "/chat", label: "Chat" },
   { href: "/routines", label: "Automations" },
   { href: "/artifacts", label: "Library" },
   { href: "/settings/integrations", label: "Connections" },

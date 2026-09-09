@@ -685,3 +685,22 @@ function invokeContractCase(
   if (typeof method !== "function") throw new Error(`Unknown PlotApiClient method ${entry.clientMethod}`);
   return (method as unknown as (...args: unknown[]) => Promise<unknown>)(...entry.args);
 }
+
+it("scopes autonomy reads and versioned decisions to the selected workspace", async () => {
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => Response.json({ mode: "ACTIVE", items: [] }));
+  const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
+  const controller = new AbortController();
+  await client.getAutonomyHome({ signal: controller.signal });
+  await client.dismissOpportunity("opportunity-1", 7);
+  await client.restoreOpportunity("opportunity-1", 8);
+  expect(fetcher.mock.calls[0]?.[0]).toBe("/api/plot/autonomy/home");
+  expect(fetcher.mock.calls[0]?.[1]?.signal).toBe(controller.signal);
+  expect(fetcher.mock.calls[1]?.[0]).toBe("/api/plot/autonomy/opportunities/opportunity-1/dismiss");
+  expect(fetcher.mock.calls[1]?.[1]?.body).toBe(JSON.stringify({ expectedVersion: 7 }));
+  expect(fetcher.mock.calls[2]?.[0]).toBe("/api/plot/autonomy/opportunities/opportunity-1/restore");
+  expect(fetcher.mock.calls[2]?.[1]?.body).toBe(JSON.stringify({ expectedVersion: 8 }));
+  for (const [, init] of fetcher.mock.calls) {
+    expect(new Headers(init?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
+    expect(init?.cache).toBe("no-store");
+  }
+});

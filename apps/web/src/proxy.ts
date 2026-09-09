@@ -52,7 +52,7 @@ export function proxy(request: NextRequest) {
 
   if (host && isGatedHost(host) && request.nextUrl.pathname === "/") {
     const url = request.nextUrl.clone();
-    url.pathname = "/chat";
+    url.pathname = "/home";
 
     return NextResponse.rewrite(url);
   }

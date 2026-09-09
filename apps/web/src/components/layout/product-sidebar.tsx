@@ -26,7 +26,7 @@ type ProductSidebarProps = {
   onToggleSidebar: () => void;
 };
 
-const appHomeHref = "/chat";
+const appHomeHref = "/home";
 
 export function ProductSidebar({ collapsed = false, theme, onThemeChange, onToggleSidebar }: ProductSidebarProps) {
   const pathname = usePathname();

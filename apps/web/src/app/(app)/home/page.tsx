@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { AutonomyHomeWorkspace } from "@/features/autonomy/autonomy-home";
 
-export default function LegacyHomePage() {
-  redirect("/chat");
+export default function HomePage() {
+  return <AutonomyHomeWorkspace />;
 }

@@ -64,6 +64,15 @@ describe("release-activity-utils", () => {
     expect(formatReleaseActivityDetail(activity({ status: "FAILED", errorCode: null }))).toBeNull();
   });
 
+  it("shows deferred decisions as held and stops generation polling", () => {
+    const held = activity({ status: "DEFERRED", artifactId: null });
+    expect(isReleaseActivityInFlight(held.status)).toBe(false);
+    expect(formatReleaseActivityLabel(held)).toBe("v2.4.0 · Draft held");
+    expect(formatReleaseActivityDetail(held)).toBe(
+      "Plot has held this draft after assessing customer value. See Home for the decision and any missing evidence.",
+    );
+  });
+
   it("accepts only lowercase 40-character commit SHAs", () => {
     expect(normalizeCommitSha(` ${"A".repeat(40)} `)).toBe("a".repeat(40));
     expect(isFullCommitSha("a".repeat(40))).toBe(true);

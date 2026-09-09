@@ -35,7 +35,8 @@ describe("ProductShell", () => {
 
     const navigation = screen.getByRole("navigation", { name: "Product navigation" });
     expect(navigation).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Work" })).toHaveAttribute("href", "/chat");
+    expect(screen.getByRole("link", { name: "Home" })).toHaveAttribute("href", "/home");
+    expect(screen.getByRole("link", { name: "Chat" })).toHaveAttribute("href", "/chat");
     expect(screen.getByRole("link", { name: "Library" })).toHaveAttribute("aria-current", "page");
 
     expect(screen.getByRole("link", { name: "Workspace settings" })).toHaveAttribute("href", "/settings/general");
@@ -51,7 +52,7 @@ describe("ProductShell", () => {
     );
 
     expect(screen.getByRole("link", { name: "Automations" })).toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("link", { name: "Work" })).not.toHaveAttribute("aria-current");
+    expect(screen.getByRole("link", { name: "Chat" })).not.toHaveAttribute("aria-current");
     expect(screen.getByRole("link", { name: "Library" })).not.toHaveAttribute("aria-current");
   });
 

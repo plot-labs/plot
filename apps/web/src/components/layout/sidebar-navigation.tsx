@@ -12,11 +12,11 @@ import type { WorkSessionSummary as ChatSummary } from "@plot/api-client";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { UserRound, FileText } from "lucide-react";
+import { UserRound, FileText, House } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { productNavigationItems } from "./product-navigation";
 
-const productIcons = { Work: ChatIcon, Automations: RoutinesIcon, Library: ArtifactsIcon, Connections: IntegrationsIcon };
+const productIcons = { Home: HomeIcon, Chat: ChatIcon, Automations: RoutinesIcon, Library: ArtifactsIcon, Connections: IntegrationsIcon };
 const productNavItems = productNavigationItems.map((item) => ({ ...item, icon: productIcons[item.label] }));
 
 const workspaceSettingsNavGroups = [
@@ -77,7 +77,7 @@ export function SidebarNavigation({ collapsed, settingsMode, pathname, selectedC
             "px-2 pb-1 pt-2 text-[11px] font-medium uppercase tracking-[0.08em] text-black/35 dark:text-white/35",
             collapsed && "sr-only",
           )}>
-            Recent work
+            Recent chats
           </div>
           <div className="space-y-1">
             {recentChats.map((chat) => (
@@ -176,4 +176,8 @@ function IntegrationsIcon() {
 
 function ContentIcon() {
   return <FileText className="size-4 shrink-0" />;
+}
+
+function HomeIcon() {
+  return <House className="size-4 shrink-0" aria-hidden="true" />;
 }

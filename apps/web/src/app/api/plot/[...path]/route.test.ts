@@ -442,3 +442,22 @@ function loadContractManifest(): ProxyContractManifest {
 function readContractFixture(path: string): unknown {
   return JSON.parse(readFileSync(new URL(path, contractRoot), "utf8")) as unknown;
 }
+
+it("allows only the exact autonomy read and versioned decision routes", async () => {
+  const id = "018fd000-0000-7000-8000-000000000002";
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => Response.json({ ok: true }));
+  for (const [method, path, status] of [
+    ["GET", "autonomy/home", 200],
+    ["POST", `autonomy/opportunities/${id}/dismiss`, 200],
+    ["POST", `autonomy/opportunities/${id}/restore`, 200],
+    ["POST", `autonomy/opportunities/${id}/publish`, 404],
+    ["GET", `autonomy/opportunities/${id}/dismiss`, 404],
+    ["POST", "autonomy/opportunities/not-a-uuid/dismiss", 404],
+    ["POST", "autonomy/home", 404],
+  ] as const) {
+    const request = new Request(`http://web.test/api/plot/${path}`, { method, headers: { Origin: "http://web.test" } });
+    const response = await proxyPlotRequest(request, path.split("/"), { fetch: fetcher });
+    expect(response.status).toBe(status);
+  }
+  expect(fetcher).toHaveBeenCalledTimes(3);
+});

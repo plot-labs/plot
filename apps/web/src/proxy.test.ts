@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { describe, expect, it } from "vitest";
 
+import { SESSION_COOKIE } from "@/lib/plot-auth";
+
 import { config, isGatedHost, proxy } from "./proxy";
 
 describe("application proxy", () => {
@@ -39,4 +41,16 @@ describe("application proxy", () => {
     expect(proxy(request).status).toBe(307);
     expect(proxy(request).headers.get("location")).toBe("http://localhost:3000/sign-in");
   });
+});
+
+
+it("opens Home at the authenticated app root while preserving explicit chat links", () => {
+  const root = new NextRequest("http://localhost:3000/", { headers: { host: "localhost:3000" } });
+  root.cookies.set(SESSION_COOKIE, "test-session");
+  expect(proxy(root).headers.get("x-middleware-rewrite")).toBe("http://localhost:3000/home");
+
+  const chat = new NextRequest("http://localhost:3000/chat?chat=session-1&agent=agent-1", { headers: { host: "localhost:3000" } });
+  chat.cookies.set(SESSION_COOKIE, "test-session");
+  expect(proxy(chat).headers.get("x-middleware-rewrite")).toBeNull();
+  expect(proxy(chat).headers.get("location")).toBeNull();
 });

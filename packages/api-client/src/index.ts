@@ -287,6 +287,7 @@ export type GitHubReleaseDraftStatus =
   | "GENERATING"
   | "READY"
   | "NO_ACTIVITY"
+  | "DEFERRED"
   | "NEEDS_RANGE"
   | "FAILED";
 
@@ -361,7 +362,7 @@ export type RoutineCadence =
   | "ON_GIT_TAG";
 export type RoutineRunStatus = string | null;
 
-export type RoutineExecutionStatus = "PROBING" | "NO_ACTIVITY" | "DISPATCHED" | "FAILED";
+export type RoutineExecutionStatus = "PROBING" | "NO_ACTIVITY" | "DISPATCHED" | "DEFERRED" | "FAILED";
 export type RoutineAgentRunStatus = "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED";
 
 export interface RoutineExecutionSummary {
@@ -554,7 +555,31 @@ export class PlotApiError extends Error {
   }
 }
 
+export interface AutonomyHomeItem {
+  id: string;
+  sourceScopeId: string;
+  title: string;
+  disposition: "EXCLUDED" | "ACCUMULATING" | "AWAITING_EVIDENCE" | "ELIGIBLE";
+  reason: string;
+  dismissed: boolean;
+  version: number;
+  missingFacts: string[];
+  lastErrorCode: string | null;
+  goalState: string | null;
+  agentRunId: string | null;
+  chatId: string | null;
+  updatedAt: string;
+}
+
+export interface AutonomyHome {
+  mode: "OFF" | "SHADOW" | "ACTIVE";
+  items: AutonomyHomeItem[];
+}
+
 export interface PlotApiClient {
+  getAutonomyHome(options?: RequestOptions): Promise<AutonomyHome>;
+  dismissOpportunity(id: string, expectedVersion: number, options?: RequestOptions): Promise<AutonomyHomeItem>;
+  restoreOpportunity(id: string, expectedVersion: number, options?: RequestOptions): Promise<AutonomyHomeItem>;
 
   createGitHubInstallationRequest(options?: RequestOptions): Promise<GitHubInstallationRequest>;
   syncGitHubInstallation(options?: RequestOptions): Promise<GitHubInstallationCallback>;
@@ -636,6 +661,13 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
   }
 
   return {
+    getAutonomyHome: (requestOptions) => request("/autonomy/home", { signal: requestOptions?.signal }),
+    dismissOpportunity: (id, expectedVersion, requestOptions) => request(`/autonomy/opportunities/${encodeURIComponent(id)}/dismiss`, {
+      method: "POST", body: JSON.stringify({ expectedVersion }), signal: requestOptions?.signal,
+    }),
+    restoreOpportunity: (id, expectedVersion, requestOptions) => request(`/autonomy/opportunities/${encodeURIComponent(id)}/restore`, {
+      method: "POST", body: JSON.stringify({ expectedVersion }), signal: requestOptions?.signal,
+    }),
     createGitHubInstallationRequest: (requestOptions) => request("/github/installations/requests", {
       method: "POST",
       signal: requestOptions?.signal,

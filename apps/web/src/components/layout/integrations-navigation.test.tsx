@@ -73,8 +73,8 @@ describe("Settings navigation", () => {
     render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
 
     const productNavigation = screen.getByRole("navigation", { name: "Product sidebar navigation" });
-    expect(within(productNavigation).getByRole("link", { name: "Work" })).toHaveAttribute("href", "/chat");
-    expect(within(productNavigation).getByRole("link", { name: "Work" })).not.toHaveAttribute("aria-current", "page");
+    expect(within(productNavigation).getByRole("link", { name: "Chat" })).toHaveAttribute("href", "/chat");
+    expect(within(productNavigation).getByRole("link", { name: "Chat" })).not.toHaveAttribute("aria-current", "page");
     expect(within(productNavigation).getByRole("link", { name: "Library" })).toHaveAttribute("aria-current", "page");
     expect(screen.queryByRole("navigation", { name: "Settings navigation" })).not.toBeInTheDocument();
     expect(await screen.findByRole("button", { name: /Personal/ })).toBeVisible();
@@ -180,9 +180,9 @@ describe("Settings navigation", () => {
   it("keeps shared workspace context above workspace settings navigation", async () => {
     render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
 
-    expect(screen.getByRole("link", { name: "Back to app" })).toHaveAttribute("href", "/chat");
+    expect(screen.getByRole("link", { name: "Back to app" })).toHaveAttribute("href", "/home");
     expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Plot home" })).toHaveAttribute("href", "/chat");
+    expect(screen.getByRole("link", { name: "Plot home" })).toHaveAttribute("href", "/home");
     expect(screen.queryByRole("link", { name: "Workspace settings" })).not.toBeInTheDocument();
     expect(await screen.findByRole("button", { name: /Personal/ })).toBeVisible();
 
@@ -225,11 +225,11 @@ describe("Settings navigation", () => {
     }]);
     render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
 
-    expect(await screen.findByText("Recent work")).toBeVisible();
+    expect(await screen.findByText("Recent chats")).toBeVisible();
     expect(screen.getByRole("link", { name: "Release notes" })).toHaveAttribute("href", "/chat?chat=chat-1");
   });
 
-  it("selects the current chat while retaining Work as the current section", async () => {
+  it("selects the current chat while retaining Chat as the current section", async () => {
     sidebarMocks.pathname = "/chat";
     sidebarMocks.search = "chat=chat-1";
     sidebarMocks.listSessions.mockResolvedValue([{
@@ -240,7 +240,7 @@ describe("Settings navigation", () => {
 
     const historyItem = await screen.findByRole("link", { name: "Release notes" });
     expect(historyItem).toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("link", { name: "Work" })).toHaveAttribute("aria-current", "location");
+    expect(screen.getByRole("link", { name: "Chat" })).toHaveAttribute("aria-current", "location");
   });
 
   it("renders a compact selector when only one workspace is available", async () => {
