@@ -122,6 +122,17 @@ class GitHubAutonomyBridge(
         if (mode != "ACTIVE") return
         val item = opportunities.findBySubject(request.workspaceId, request.sourceScopeId, subject(request.tagName)) ?: return
         item.goalId?.let {
+            // Compare the actual immutable execution inputs, not mutable source rows observed before the model call.
+            val changed=sql.queryForObject("""select exists(select 1 from autonomy_goals g,
+                lateral jsonb_array_elements(g.input_snapshot->'evidence') evidence
+                where g.workspace_id=? and g.id=? and evidence->>'kind'='CHANGE' and not exists (
+                    select 1 from agent_run_inputs i where i.workspace_id=g.workspace_id and i.agent_run_id=?
+                    and i.source_scope_id=? and i.writing_block_id::text=evidence->>'id'
+                    and coalesce(i.snapshot_title,'')=evidence->>'title'
+                    and (i.snapshot_body=evidence->>'body' or
+                        (btrim(evidence->>'body')='' and i.snapshot_body=evidence->>'title'))))""",
+                Boolean::class.java,request.workspaceId,it,agentRunId,request.sourceScopeId) == true
+            if(changed) throw com.plot.api.autonomy.opportunity.OpportunityException("ASSESSMENT_INPUT_CHANGED",true)
             opportunities.linkAgent(request.workspaceId, it, agentRunId)
             executions.admit(request.workspaceId,it,agentRunId)
         }

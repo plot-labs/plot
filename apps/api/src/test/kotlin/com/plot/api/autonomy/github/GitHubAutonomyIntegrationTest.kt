@@ -212,6 +212,25 @@ class GitHubAutonomyIntegrationTest {
         assertEquals(2,services.calls.get())
     }
 
+    @Test
+    fun `changed captured input cannot execute an earlier customer-value decision`() = fixture { f ->
+        f.publish()
+        val services = services(AutonomyMode.ACTIVE)
+        assertTrue(services.bridge.shouldPrepare(f.request, f.context, f.evidence))
+        val opportunity = assertNotNull(services.opportunities.findBySubject(f.workspace, f.scope, "github-release:v1"))
+        val agent = f.createAgent()
+        jdbc.update("update agent_run_inputs set snapshot_body='Different unassessed customer claim' where workspace_id=? and agent_run_id=?", f.workspace, agent)
+        val failure = assertFailsWith<OpportunityException> {
+            transactions.execute { services.bridge.admitted(f.request, agent) }
+        }
+        assertEquals("ASSESSMENT_INPUT_CHANGED", failure.code)
+        assertTrue(failure.recoverable)
+        assertEquals("QUEUED", services.opportunities.goalByOpportunity(f.workspace, opportunity.id)?.state)
+        assertNull(services.opportunities.goalByOpportunity(f.workspace, opportunity.id)?.agentRunId)
+        assertEquals(0, count("autonomy_tasks", f.workspace))
+        assertEquals(0, count("autonomy_executions", f.workspace))
+    }
+
     private data class Services(val bridge: GitHubAutonomyBridge, val opportunities: OpportunityService, val calls: AtomicInteger)
 
     private fun services(mode: AutonomyMode, limits: OpportunityProperties = OpportunityProperties()): Services {
@@ -226,7 +245,7 @@ class GitHubAutonomyIntegrationTest {
     private fun count(table: String, workspace: UUID) = jdbc.queryForObject("select count(*) from $table where workspace_id=?", Int::class.java, workspace)
 
     private inner class Fixture(val workspace: UUID, val scope: UUID, val context: GitHubReleaseSourceContext,
-        val delivery: GitHubWebhookDelivery, val request: GitHubReleaseDraftRequest, blockId: UUID) {
+        val delivery: GitHubWebhookDelivery, val request: GitHubReleaseDraftRequest, val blockId: UUID) {
         val evidence = GitHubReleaseEvidence(UUID.randomUUID(), listOf(blockId))
         fun createAgent(): UUID {
             val session=UUID.randomUUID(); val agent=UUID.randomUUID()
@@ -238,6 +257,13 @@ class GitHubAutonomyIntegrationTest {
                 budget_snapshot,status,origin,idempotency_key,request_fingerprint,created_at,updated_at)
                 values (?,?,?,?,'Prepare draft','test-v1','test-v1','{}'::jsonb,'QUEUED','CHAT',?,?,now(),now())""",
                 agent,workspace,session,context.createdByUserId,agent.toString(),agent.toString())
+            jdbc.update("""insert into agent_run_sources(id,workspace_id,agent_run_id,source_scope_id,source_role,order_index,captured_status,captured_status_changed_at,captured_at)
+                select ?,workspace_id,?,id,'TRIGGER',0,status,status_changed_at,now() from source_scopes where workspace_id=? and id=?""",
+                UUID.randomUUID(),agent,workspace,scope)
+            jdbc.update("""insert into agent_run_inputs(id,workspace_id,agent_run_id,source_scope_id,writing_block_id,input_kind,order_index,snapshot_title,snapshot_body,
+                original_url,content_hash,source_provider,source_kind,source_label,captured_at)
+                select ?,workspace_id,?,?,id,'SEED',0,title,body,'https://github.com/plot/repo/pull/42',content_hash,'GITHUB',source_kind,'Repo',now()
+                from writing_blocks where workspace_id=? and id=?""",UUID.randomUUID(),agent,scope,workspace,blockId)
             return agent
         }
         fun publish() {
@@ -272,7 +298,7 @@ class GitHubAutonomyIntegrationTest {
         val request=GitHubReleaseDraftRequest(requestId,workspace,scope,deliveryId,"v1","a".repeat(40),"b".repeat(40),null,GitHubReleaseDraftStatus.RESOLVING,0,0,null,null,null)
         try { action(Fixture(workspace,scope,context,delivery,request,blockId)) } finally {
             listOf("autonomy_executions","autonomy_tasks","autonomy_goals","autonomy_assessments","autonomy_opportunities","autonomy_missions","autonomy_daily_budgets",
-                "autonomy_signal_heads","autonomy_signals","github_release_draft_requests","agent_runs","work_sessions","writing_block_scopes","writing_blocks","source_scopes","connection_namespace_bindings","connections","source_namespaces").forEach {
+                "autonomy_signal_heads","autonomy_signals","github_release_draft_requests","agent_run_inputs","agent_run_sources","agent_runs","work_sessions","writing_block_scopes","writing_blocks","source_scopes","connection_namespace_bindings","connections","source_namespaces").forEach {
                 jdbc.update("delete from $it where workspace_id=?",workspace)
             }
             jdbc.update("delete from github_webhook_deliveries where installation_id=? and repository_id=?",installationId,repositoryId)
