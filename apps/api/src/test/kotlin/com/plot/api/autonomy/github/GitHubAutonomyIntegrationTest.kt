@@ -54,6 +54,17 @@ class GitHubAutonomyIntegrationTest {
     }
 
     @Test
+    fun `published but meaningless or insufficient changes never create a goal`() {
+        for (disposition in listOf(AssessmentDisposition.EXCLUDED, AssessmentDisposition.ACCUMULATING)) fixture { f ->
+            f.publish()
+            val services = services(disposition = disposition)
+            assertFalse(services.bridge.shouldPrepare(f.request, f.context, f.evidence))
+            assertEquals(disposition, services.opportunities.findBySubject(f.workspace, f.scope, "github-release:v1")?.disposition)
+            assertEquals(0, count("autonomy_goals", f.workspace))
+        }
+    }
+
+    @Test
     fun `admission without a prior assessment cannot bypass the gate`() = fixture { f ->
         val failure = assertFailsWith<OpportunityException> {
             services().bridge.admitted(f.request, f.createAgent())
@@ -230,11 +241,11 @@ class GitHubAutonomyIntegrationTest {
 
     private data class Services(val bridge: GitHubAutonomyBridge, val opportunities: OpportunityService, val calls: AtomicInteger)
 
-    private fun services(limits: OpportunityProperties = OpportunityProperties()): Services {
+    private fun services(limits: OpportunityProperties = OpportunityProperties(), disposition: AssessmentDisposition = AssessmentDisposition.ELIGIBLE): Services {
         val calls = AtomicInteger()
         val opportunities = OpportunityService(sql, tx, mapper, CustomerValueAssessmentService(AssessmentGateway { input ->
             calls.incrementAndGet()
-            AssessmentDecision(AssessmentDisposition.ELIGIBLE, "Customers can use the released improvement", input.evidence.map { it.id }, emptyList())
+            AssessmentDecision(disposition, "Customer impact assessed from release evidence", input.evidence.map { it.id }, emptyList())
         }, AssessmentProperties()), limits)
         return Services(GitHubAutonomyBridge(opportunities, inbox, sql, mapper, AutonomyExecutionService(sql)), opportunities, calls)
     }

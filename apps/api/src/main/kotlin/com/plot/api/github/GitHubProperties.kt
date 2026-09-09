@@ -18,7 +18,7 @@ data class GitHubProperties(
 	val importPageCap: Int = 20,
 	val repositoryPageCap: Int = 100,
 	val webhookSecret: String? = null,
-	val releaseAutomationEnabled: Boolean = false,
+	val releaseAutomationEnabled: Boolean = true,
 	val releaseWorkerLeaseTimeout: Duration = Duration.ofMinutes(2),
 	val releaseWorkerMaxAttempts: Int = 5,
 	val comparePageCap: Int = 10,

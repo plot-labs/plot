@@ -55,6 +55,7 @@ class GitHubWebhookApiIntegrationTest {
 
 	@BeforeEach
 	fun clearDeliveries() {
+        com.plot.api.clearAutonomyFixtures(jdbcTemplate, devContext.devWorkspaceId)
 		devBootstrapService.bootstrap()
 		jdbcTemplate.update("delete from github_release_draft_requests where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from generation_runs where workspace_id = ? and source_scope_id is not null", devContext.devWorkspaceId)

@@ -299,8 +299,9 @@ class GitHubConnectionService(
 			grantedRepository.owner,
 			grantedRepository.name,
 		)
-		val now = Instant.now()
 		val (id, monitoring) = transactionExecutor.execute {
+            // Bootstrap checks binding validity in this transaction; use the same database clock.
+            val now = requireNotNull(sqlExecutor.queryForObject("select current_timestamp", java.sql.Timestamp::class.java)).toInstant()
 			val namespaceId = bindRepositoryNamespace(connection.id, repository, now)
 			val scopeId = sqlExecutor.queryForObject(
 				"""

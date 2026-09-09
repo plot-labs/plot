@@ -1,10 +1,10 @@
 # GitHub release automation
 
-This runbook operates Plot's opt-in GitHub release-to-changelog loop. The
-automation watches an already connected repository and starts a release
-changelog only after resolving a trustworthy boundary. Explicit
-`ON_GITHUB_CHANGE` Routines remain separate activity summaries; a branch push
-is not a customer release.
+This runbook operates Plot's GitHub release-to-changelog loop. Connected
+repositories are assessed automatically. Drafting requires a trustworthy
+boundary, published release evidence, and an eligible customer-value decision.
+Legacy non-manual activity Routines are deferred; a branch push is not a
+customer release. See the [autonomy runtime](../architecture/autonomy-runtime.md).
 
 Plot prepares a review draft. It never publishes a changelog, creates a GitHub
 release, or writes to the repository.
@@ -42,10 +42,10 @@ prompts, or completions in logs.
 
 ## Runtime configuration
 
-Release generation is disabled by default:
+Release automation is enabled by default; assessment always precedes drafting:
 
 ```properties
-plot.github.release-automation-enabled=false
+plot.github.release-automation-enabled=true
 ```
 
 The base GitHub App configuration, webhook secret, and model gateway must also
@@ -99,8 +99,9 @@ fallback is required. Configuration validation therefore requires four times
 
 `plot.github.release-automation-enabled` is a process-wide flag. There is no
 workspace or repository allowlist: when true, each worker polls globally and
-may claim any runnable release request in that database. Keep the flag false
-until the checks below pass. Turning it off is also a global kill switch:
+may claim any runnable release request in that database. For the controlled
+certification exercise below, explicitly disable workers before preparing fixtures.
+Turning it off is a global release-worker kill switch:
 webhook deliveries and release requests continue to be recorded for every
 connected scope, but no release worker in that deployment will claim, recover,
 reconcile, or generate any draft. Re-enabling can drain all accumulated runnable
@@ -143,9 +144,9 @@ baseline together before enabling workers.
 
 ## Event semantics
 
-- Default-branch pushes are observational unless an enabled `ON_GITHUB_CHANGE`
-  Routine explicitly requests an activity summary. They never enqueue release
-  drafts. Non-default, deleted, and forced pushes are ignored.
+- Default-branch pushes are recorded as signals without admitting an activity
+  Routine or release draft. Non-default, deleted, and forced pushes do not
+  enqueue drafts; withdrawal observations can invalidate release evidence.
 - With release/tag Routines configured, a tag push triggers only enabled
   `ON_GIT_TAG` Routines. `release.published` triggers only enabled
   `ON_GITHUB_RELEASE` Routines. Each intended job is unique by workspace,
@@ -161,11 +162,11 @@ baseline together before enabling workers.
   reject it with `GITHUB_RELEASE_RANGE_REQUIRED`. Use the release activity
   recovery actions below. Old unverified release Routine executions cannot
   become activity batches or admit new model decisions after this cutover.
-- Other release actions are ignored. Tag push SHAs are immutable observations;
+- Unpublication and deletion invalidate availability evidence. Tag push SHAs are immutable observations;
   `release.target_commitish` is not accepted as an immutable head.
 
 A merge or branch push is not proof that a change is available to customers.
-Plot only generates from a later release boundary and always uses resolved
+Plot only generates after published release evidence and customer-value assessment, and always uses resolved
 commit SHAs, not a moving branch name.
 
 ## Source access lifecycle

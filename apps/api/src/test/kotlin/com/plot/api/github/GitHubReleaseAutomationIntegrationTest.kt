@@ -386,7 +386,7 @@ class GitHubReleaseAutomationIntegrationTest {
 	)
 
 	@Test
-	fun `pushes stay observational and the second exact release produces one review ready pack`() {
+	fun `pushes and unpublished tags wait until publication before one review ready pack`() {
 		val fixture = bindRepository()
 		val firstHead = "1".repeat(40)
 		val pullRequestCommit = "7".repeat(40)
@@ -467,6 +467,10 @@ class GitHubReleaseAutomationIntegrationTest {
 		val secondDeliveryId = "second-${UUID.randomUUID()}"
 		webhookService.accept(releasePublished(fixture, secondDeliveryId, "v1.1.0"))
 		assertEquals(1, releaseWorker.drain())
+        assertEquals(GitHubReleaseDraftStatus.DEFERRED, release("v1.1.0", fixture).status)
+        assertNull(release("v1.1.0", fixture).agentRunId)
+        webhookService.accept(releasePublished(fixture, "published-${UUID.randomUUID()}", "v1.1.0"))
+        assertEquals(1, releaseWorker.drain())
 		val generating = release("v1.1.0", fixture)
 		assertEquals(GitHubReleaseDraftStatus.GENERATING, generating.status)
 		assertEquals(firstHead, generating.baseSha)

@@ -61,6 +61,7 @@ class GitHubConnectionApiIntegrationTest {
 
 	@BeforeEach
 	fun cleanData() {
+        com.plot.api.clearAutonomyFixtures(jdbcTemplate, devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from routine_context_sources where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from routines where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from writing_block_scopes where workspace_id = ?", devContext.devWorkspaceId)
@@ -98,6 +99,9 @@ class GitHubConnectionApiIntegrationTest {
 	fun cleanInstallationCanActivateImportAndCreateRoutineWithoutDatabaseSetup() {
 		val connectionId = completeInstallation()
 		val scopeId = connect(connectionId, 1001)
+        assertEquals(1, jdbcTemplate.queryForObject(
+            "select count(*) from autonomy_missions where workspace_id=? and source_scope_id=? and state='ACTIVE'",
+            Int::class.java, devContext.devWorkspaceId, scopeId))
 
 		mockMvc.post("/api/github/repositories/$scopeId/imports") {
 			contentType = MediaType.APPLICATION_JSON

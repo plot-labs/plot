@@ -37,6 +37,7 @@ class GitHubWebhookAfterCommitIntegrationTest {
 
 	@BeforeEach
 	fun clearData() {
+        com.plot.api.clearAutonomyFixtures(jdbcTemplate, devContext.devWorkspaceId)
 		devBootstrapService.bootstrap()
 		jdbcTemplate.update("delete from github_release_draft_requests where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from github_webhook_deliveries")

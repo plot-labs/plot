@@ -54,6 +54,7 @@ class GitHubChangeRoutineIntegrationTest {
 
 	@AfterEach
 	fun removeFixtures() {
+        com.plot.api.clearAutonomyFixtures(jdbcTemplate, devContext.devWorkspaceId)
 		val workspaceId = devContext.devWorkspaceId
 		jdbcTemplate.update("delete from agent_steps where workspace_id = ?", workspaceId)
 		jdbcTemplate.update("delete from generation_runs where workspace_id = ? and agent_run_id is not null", workspaceId)
@@ -85,41 +86,23 @@ class GitHubChangeRoutineIntegrationTest {
 	}
 
 	@Test
-	fun `default branch delivery creates one canonical execution and one AgentRun`() {
-		val repository = bindRepository()
-		val routineId = insertRoutine(repository.scopeId, RoutineCadence.ON_GITHUB_CHANGE)
-		val deliveryId = "delivery-${UUID.randomUUID()}"
-		val sha = "b".repeat(40)
-
-		val webhook = pushWebhook(deliveryId, sha, "Ship routines\n\nGenerate a draft on push.", "c".repeat(64))
-		webhookService.accept(webhook)
-		webhookService.accept(webhook)
-
-		assertEquals(1, countExecutions(routineId))
-		drainOne()
-		val executionId = executionId(routineId, deliveryId)
-		assertEquals(RoutineExecutionStatus.DISPATCHED, executionStatus(executionId))
-		assertEquals("github:$routineId:${deliveryUuid(deliveryId)}", triggerKey(executionId))
-		assertEquals(1, count("work_sessions"))
-		assertEquals(1, count("agent_runs"))
-		assertEquals(1, seedCount(executionId))
-		assertEquals(0, jdbcTemplate.queryForObject(
-			"select count(*) from generation_runs where workspace_id = ? and agent_run_id is not null",
-			Int::class.java,
-			devContext.devWorkspaceId,
-		))
-		assertEquals("QUEUED", jdbcTemplate.queryForObject(
-			"select disposition from github_webhook_deliveries where external_delivery_id = ?",
-			String::class.java,
-			deliveryId,
-		))
-		assertEquals("Ship routines", jdbcTemplate.queryForObject(
-			"select title from writing_blocks where workspace_id = ? and external_object_key = ?",
-			String::class.java,
-			devContext.devWorkspaceId,
-			"commit:$sha",
-		))
-	}
+	fun `default branch delivery records one signal without bypassing assessment`() {
+        val repository = bindRepository()
+        val routineId = insertRoutine(repository.scopeId, RoutineCadence.ON_GITHUB_CHANGE)
+        val deliveryId = "delivery-${UUID.randomUUID()}"
+        val webhook = pushWebhook(deliveryId, "b".repeat(40), "Ship routines", "c".repeat(64))
+        webhookService.accept(webhook)
+        webhookService.accept(webhook)
+        assertEquals(0, countExecutions(routineId))
+        assertEquals(0, routineWorker.drain())
+        assertEquals(0, count("agent_runs"))
+        assertEquals(0, count("work_sessions"))
+        assertEquals(1, jdbcTemplate.queryForObject(
+            "select count(*) from autonomy_signals where workspace_id=? and delivery_key=?", Int::class.java,
+            devContext.devWorkspaceId, deliveryId))
+        assertEquals("OBSERVED", jdbcTemplate.queryForObject(
+            "select disposition from github_webhook_deliveries where external_delivery_id=?", String::class.java, deliveryId))
+    }
 
 	@Test
 	fun `published release and tag deliveries create the matching canonical trigger`() {
@@ -219,21 +202,15 @@ class GitHubChangeRoutineIntegrationTest {
 	}
 
 	@Test
-	fun `same external evidence in a new delivery is no activity`() {
-		val repository = bindRepository()
-		val routineId = insertRoutine(repository.scopeId, RoutineCadence.ON_GITHUB_CHANGE)
-		val sha = "4".repeat(40)
-		val firstDeliveryId = "first-${UUID.randomUUID()}"
-		val secondDeliveryId = "second-${UUID.randomUUID()}"
-		webhookService.accept(pushWebhook(firstDeliveryId, sha, "Original evidence", "a".repeat(64)))
-		drainOne()
-		webhookService.accept(pushWebhook(secondDeliveryId, sha, "Original evidence", "a".repeat(64)))
-		assertEquals(2, countExecutions(routineId))
-		drainOne()
-		assertEquals(RoutineExecutionStatus.NO_ACTIVITY, executionStatus(executionId(routineId, secondDeliveryId)))
-		assertEquals(1, count("work_sessions"))
-		assertEquals(1, count("agent_runs"))
-	}
+	fun `new deliveries of the same change never create unassessed routine drafts`() {
+        val repository = bindRepository()
+        val routineId = insertRoutine(repository.scopeId, RoutineCadence.ON_GITHUB_CHANGE)
+        for (index in 1..2) webhookService.accept(pushWebhook("repeat-${UUID.randomUUID()}", "4".repeat(40), "Original evidence", "a".repeat(64)))
+        assertEquals(0, countExecutions(routineId))
+        assertEquals(0, routineWorker.drain())
+        assertEquals(0, count("agent_runs"))
+        assertEquals(null, routinePersistence.find(devContext.devWorkspaceId, routineId)?.activityCursorSequence)
+    }
 
 	@Test
 	fun `GitHub evidence does not skip older unconsumed activity or duplicate it on manual run`() {
@@ -243,12 +220,8 @@ class GitHubChangeRoutineIntegrationTest {
 		val deliveryId = "cursor-${UUID.randomUUID()}"
 
 		webhookService.accept(pushWebhook(deliveryId, "8".repeat(40), "New event activity", "8".repeat(64)))
-		drainOne()
 		assertEquals(null, routinePersistence.find(devContext.devWorkspaceId, routineId)?.activityCursorSequence)
-		jdbcTemplate.update(
-			"update agent_runs set status = 'SUCCEEDED', finished_at = now(), updated_at = now() where routine_execution_id = ?",
-			executionId(routineId, deliveryId),
-		)
+
 
 		val routine = assertNotNull(routinePersistence.find(devContext.devWorkspaceId, routineId))
 		val manual = agentPersistence.createExecution(
@@ -266,17 +239,16 @@ class GitHubChangeRoutineIntegrationTest {
 		routineWorker.runNow(routine.workspaceId, routine.id, manual.id)
 
 		assertEquals(listOf(olderBlockId), seedIds(manual.id))
-		assertEquals(2, count("work_sessions"))
-		assertEquals(2, count("agent_runs"))
+		assertEquals(1, count("work_sessions"))
+		assertEquals(1, count("agent_runs"))
 	}
 
 	@Test
 	fun `stale canonical claim is recovered without duplicating the AgentRun`() {
 		val repository = bindRepository()
 		val routineId = insertRoutine(repository.scopeId, RoutineCadence.ON_GITHUB_CHANGE)
-		val deliveryId = "stale-${UUID.randomUUID()}"
-		webhookService.accept(pushWebhook(deliveryId, "7".repeat(40), "Recover after restart", "3".repeat(64)))
-		val executionId = executionId(routineId, deliveryId)
+        insertBlock(repository, "stale-manual", "Recover after restart")
+        val executionId = manualExecution(routineId, "stale")
 		val firstClaim = assertNotNull(agentPersistence.claimById(
 			"dead-worker",
 			devContext.devWorkspaceId,
@@ -306,19 +278,9 @@ class GitHubChangeRoutineIntegrationTest {
 		val contextNamespaceId = UUID.randomUUID()
 		val contextScopeId = UUID.randomUUID()
 		insertContextScope(contextNamespaceId, contextScopeId)
-		val deliveryId = "isolated-${UUID.randomUUID()}"
-		webhookService.accept(pushWebhook(deliveryId, "9".repeat(40), "Independent routine jobs", "2".repeat(64)))
-		assertEquals("QUEUED", jdbcTemplate.queryForObject(
-			"select disposition from github_webhook_deliveries where external_delivery_id = ?",
-			String::class.java,
-			deliveryId,
-		))
-		assertEquals(2, jdbcTemplate.queryForObject(
-			"select count(*) from routine_executions where workspace_id = ? and trigger_delivery_id = (select id from github_webhook_deliveries where external_delivery_id = ?)",
-			Int::class.java,
-			devContext.devWorkspaceId,
-			deliveryId,
-		))
+        insertBlock(repository, "manual-independent", "Independent routine jobs")
+        val firstExecutionId = manualExecution(firstRoutineId, "first")
+        val secondExecutionId = manualExecution(secondRoutineId, "second")
 		jdbcTemplate.update(
 			"insert into routine_context_sources (id, workspace_id, routine_id, source_scope_id, order_index, created_at) values (?, ?, ?, ?, 0, now())",
 			UUID.randomUUID(),
@@ -329,8 +291,8 @@ class GitHubChangeRoutineIntegrationTest {
 		jdbcTemplate.update("update source_scopes set status = 'ERROR' where id = ?", contextScopeId)
 		drainOne()
 		drainOne()
-		assertEquals(RoutineExecutionStatus.FAILED, executionStatus(executionId(firstRoutineId, deliveryId)))
-		assertEquals(RoutineExecutionStatus.DISPATCHED, executionStatus(executionId(secondRoutineId, deliveryId)))
+		assertEquals(RoutineExecutionStatus.FAILED, executionStatus(firstExecutionId))
+		assertEquals(RoutineExecutionStatus.DISPATCHED, executionStatus(secondExecutionId))
 		assertEquals(1, jdbcTemplate.queryForObject(
 			"select count(*) from agent_runs where workspace_id = ? and routine_id = ?",
 			Int::class.java,
@@ -343,12 +305,8 @@ class GitHubChangeRoutineIntegrationTest {
 	fun `older projection cannot overwrite a newer canonical execution`() {
 		val repository = bindRepository()
 		val routineId = insertRoutine(repository.scopeId, RoutineCadence.ON_GITHUB_CHANGE)
-		val firstDeliveryId = "projection-first-${UUID.randomUUID()}"
-		val secondDeliveryId = "projection-second-${UUID.randomUUID()}"
-		webhookService.accept(pushWebhook(firstDeliveryId, "5".repeat(40), "First event", "5".repeat(64)))
-		webhookService.accept(pushWebhook(secondDeliveryId, "6".repeat(40), "Second event", "6".repeat(64)))
-		val firstExecutionId = executionId(routineId, firstDeliveryId)
-		val secondExecutionId = executionId(routineId, secondDeliveryId)
+        val firstExecutionId = manualExecution(routineId, "projection-first")
+        val secondExecutionId = manualExecution(routineId, "projection-second")
 		val newerAt = Instant.parse("2026-08-09T01:00:00Z")
 		agentPersistence.projectRoutine(
 			devContext.devWorkspaceId,
@@ -396,6 +354,15 @@ class GitHubChangeRoutineIntegrationTest {
 		assertEquals("GITHUB_RELEASE_RANGE_REQUIRED", failed.errorCode)
 		assertEquals(0, count("agent_runs"))
 	}
+
+    private fun manualExecution(routineId: UUID, key: String): UUID {
+        val routine = assertNotNull(routinePersistence.find(devContext.devWorkspaceId, routineId))
+        return agentPersistence.createExecution(RoutineExecutionRequest(
+            workspaceId = routine.workspaceId, routineId = routineId, createdByUserId = routine.createdByUserId,
+            triggerSourceScopeId = routine.sourceScopeId, triggerKind = RoutineExecutionTriggerKind.MANUAL,
+            triggerKey = "manual:$key:$routineId", requestFingerprint = "manual:$key:$routineId",
+        )).id
+    }
 
 	private fun pushWebhook(
 		deliveryId: String,
