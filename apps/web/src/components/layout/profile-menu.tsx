@@ -111,7 +111,7 @@ export function ProfileMenu({
             className="flex w-full items-center gap-2 rounded-[8px] px-2 py-2 text-left transition hover:bg-black/[0.04] dark:hover:bg-white/10"
           >
             <SettingsIcon />
-            Settings
+            Account settings
           </Link>
 
           <button

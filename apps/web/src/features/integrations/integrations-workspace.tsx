@@ -314,7 +314,7 @@ export function IntegrationsWorkspace() {
       <div className="mx-auto max-w-[760px] pb-16">
         <header className="max-w-[720px]">
           <h1 className="font-serif text-[32px] font-normal leading-[1.08] tracking-[-0.025em] text-black/90 dark:text-white/92 sm:text-[36px]">
-            Integrations
+            Connections
           </h1>
           <p className="mt-2 max-w-[620px] text-[14px] leading-6 text-black/52 dark:text-white/50">
             Connect the tools that feed Plot with the context behind your product work.

@@ -28,6 +28,11 @@ design/
 # Private docs
 docs/private/
 /docs/decision/
+/docs/plans/
+/docs/strategy/
+
+# Local screenshots and review artifacts
+/artifacts/
 
 # Superpowers docs
 docs/superpowers

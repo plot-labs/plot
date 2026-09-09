@@ -59,6 +59,11 @@ class ArtifactPublishIntegrationTest {
 	@Autowired private lateinit var jdbcTemplate: JdbcTemplate
 	@Autowired private lateinit var devContext: DevContext
 	@Autowired private lateinit var objectMapper: ObjectMapper
+	@Autowired private lateinit var artifactQueryService: ArtifactQueryService
+
+	private fun assertLibraryPublication(packId: UUID, published: Boolean) {
+		assertEquals(published, artifactQueryService.list(0, 100).items.single { it.id == packId }.published)
+	}
 
 	@BeforeEach
 	@AfterEach
@@ -149,11 +154,13 @@ class ArtifactPublishIntegrationTest {
 	@Test
 	fun `unpublish keeps the internal snapshot and stops public list body and citations`() {
 		val fixture = readyPack()
+		assertLibraryPublication(fixture.packId, false)
 		val published = mockMvc.post("/api/artifact-variants/${fixture.variantId}/publish") {
 			contentType = MediaType.APPLICATION_JSON
 			content = """{"expectedRevisionNumber":1,"acknowledgeUnresolved":false}"""
 		}.andExpect { status { isOk() } }.andReturn().response.contentAsString
 		val publishedTree = objectMapper.readTree(published)
+		assertLibraryPublication(fixture.packId, true)
 		val entrySlug = publishedTree.path("entrySlug").stringValue()
 
 		mockMvc.get("/api/artifacts/${fixture.packId}").andExpect {
@@ -172,6 +179,7 @@ class ArtifactPublishIntegrationTest {
 			status { isOk() }
 			jsonPath("$.entries.length()") { value(0) }
 		}
+		assertLibraryPublication(fixture.packId, false)
 		mockMvc.get("/api/public/changelog/dev-workspace/$entrySlug").andExpect {
 			status { isNotFound() }
 			jsonPath("$.error") { value("NOT_FOUND") }

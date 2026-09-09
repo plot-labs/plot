@@ -5,7 +5,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, Settings } from "lucide-react";
 import { useState } from "react";
 
 import { ProfileMenu } from "@/components/layout/profile-menu";
@@ -17,6 +17,7 @@ import { useSidebarWorkspace } from "@/components/layout/use-sidebar-workspace";
 import { WorkspaceSwitcher } from "@/components/layout/workspace-switcher";
 import type { ProductTheme } from "@/components/layout/product-shell";
 import { cn } from "@/lib/utils";
+import { isSettingsPath } from "./product-navigation";
 
 type ProductSidebarProps = {
   collapsed?: boolean;
@@ -31,7 +32,7 @@ export function ProductSidebar({ collapsed = false, theme, onThemeChange, onTogg
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const selectedChatId = pathname === "/chat" ? searchParams.get("chat") : null;
-  const settingsMode = pathname === "/settings" || pathname.startsWith("/settings/");
+  const settingsMode = isSettingsPath(pathname);
   const workspace = useSidebarWorkspace();
   const recentChats = useRecentChats({ settingsMode, selectedWorkspaceId: workspace.currentWorkspaceId });
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
@@ -114,6 +115,14 @@ export function ProductSidebar({ collapsed = false, theme, onThemeChange, onTogg
 
         {!settingsMode && !collapsed && <SidebarOnboarding workspaceId={workspace.currentWorkspaceId} />}
         {!settingsMode ? <SidebarEntitlementNotice collapsed={collapsed} /> : null}
+
+        <nav aria-label="Workspace utilities" className={cn("pb-2", collapsed ? "px-2" : "px-3")}>
+          <Link href="/settings/general" title="Settings" aria-current={settingsMode ? "location" : undefined}
+            className={cn("flex h-8 items-center gap-2 rounded-lg text-[13px] font-medium text-black/65 hover:bg-black/5 dark:text-white/65 dark:hover:bg-white/10", collapsed ? "justify-center" : "px-2.5")}>
+            <Settings className="size-4 shrink-0" aria-hidden="true" />
+            <span className={collapsed ? "sr-only" : undefined}>Settings</span>
+          </Link>
+        </nav>
 
         <ProfileMenu
           collapsed={collapsed}

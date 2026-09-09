@@ -13,7 +13,7 @@ const sidebarMocks = vi.hoisted(() => ({
   getRoutine: vi.fn(),
   createWorkspace: vi.fn(),
   routerReplace: vi.fn(),
-  pathname: "/settings/integrations",
+  pathname: "/settings/general",
   search: "",
 }));
 
@@ -44,7 +44,7 @@ import { ProductSidebar } from "./product-sidebar";
 
 describe("Settings navigation", () => {
   beforeEach(() => {
-    sidebarMocks.pathname = "/settings/integrations";
+    sidebarMocks.pathname = "/settings/general";
     sidebarMocks.search = "";
     window.localStorage.clear();
     sidebarMocks.listSessions.mockReset();
@@ -73,11 +73,22 @@ describe("Settings navigation", () => {
     render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
 
     const productNavigation = screen.getByRole("navigation", { name: "Product sidebar navigation" });
-    expect(within(productNavigation).getByRole("link", { name: "Chat" })).toHaveAttribute("href", "/chat");
-    expect(within(productNavigation).getByRole("link", { name: "Chat" })).not.toHaveAttribute("aria-current", "page");
-    expect(within(productNavigation).getByRole("link", { name: "Artifacts" })).toHaveAttribute("aria-current", "page");
+    expect(within(productNavigation).getByRole("link", { name: "Work" })).toHaveAttribute("href", "/chat");
+    expect(within(productNavigation).getByRole("link", { name: "Work" })).not.toHaveAttribute("aria-current", "page");
+    expect(within(productNavigation).getByRole("link", { name: "Library" })).toHaveAttribute("aria-current", "page");
     expect(screen.queryByRole("navigation", { name: "Settings navigation" })).not.toBeInTheDocument();
     expect(await screen.findByRole("button", { name: /Personal/ })).toBeVisible();
+  });
+
+  it("promotes Connections out of the settings shell, including in the collapsed rail", async () => {
+    sidebarMocks.pathname = "/settings/integrations";
+    render(<ProductSidebar collapsed theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
+    const nav = screen.getByRole("navigation", { name: "Product sidebar navigation" });
+    expect(within(nav).getByRole("link", { name: "Connections" })).toHaveAttribute("aria-current", "page");
+    expect(within(nav).getByRole("link", { name: "Connections" })).toHaveAttribute("title", "Connections");
+    expect(screen.queryByRole("navigation", { name: "Settings navigation" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings/general");
+    await screen.findByRole("button", { name: /Personal/ });
   });
 
   it("opens completed and pending onboarding steps", async () => {
@@ -180,8 +191,8 @@ describe("Settings navigation", () => {
     expect(within(settingsNavigation).getByText("Workspace", { selector: "div" })).toBeInTheDocument();
     expect(within(settingsNavigation).getByRole("link", { name: "Account" })).toHaveAttribute("href", "/settings/account");
     expect(within(settingsNavigation).getByRole("link", { name: "General" })).toHaveAttribute("href", "/settings/general");
-    expect(within(settingsNavigation).getByRole("link", { name: "Integrations" })).toHaveAttribute("href", "/settings/integrations");
-    expect(within(settingsNavigation).getByRole("link", { name: "Integrations" })).toHaveAttribute("aria-current", "page");
+    expect(within(settingsNavigation).queryByRole("link", { name: "Integrations" })).not.toBeInTheDocument();
+    expect(within(settingsNavigation).getByRole("link", { name: "General" })).toHaveAttribute("aria-current", "page");
     expect(within(settingsNavigation).queryByRole("link", { name: "Artifacts" })).not.toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "Product sidebar navigation" })).not.toBeInTheDocument();
 
@@ -190,7 +201,8 @@ describe("Settings navigation", () => {
     expect(screen.queryByText("Chats", { selector: "div" })).not.toBeInTheDocument();
 
     fireEvent.click(await screen.findByRole("button", { name: /Owner.*owner@example.com/ }));
-    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings/account");
+    expect(screen.getByRole("link", { name: "Account settings" })).toHaveAttribute("href", "/settings/account");
+    expect(within(screen.getByRole("navigation", { name: "Workspace utilities" })).getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings/general");
   });
 
   it("does not load chat history in workspace settings", async () => {
@@ -213,11 +225,11 @@ describe("Settings navigation", () => {
     }]);
     render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
 
-    expect(await screen.findByText("History")).toBeVisible();
+    expect(await screen.findByText("Recent work")).toBeVisible();
     expect(screen.getByRole("link", { name: "Release notes" })).toHaveAttribute("href", "/chat?chat=chat-1");
   });
 
-  it("selects the history item instead of the Chat tab", async () => {
+  it("selects the current chat while retaining Work as the current section", async () => {
     sidebarMocks.pathname = "/chat";
     sidebarMocks.search = "chat=chat-1";
     sidebarMocks.listSessions.mockResolvedValue([{
@@ -228,7 +240,7 @@ describe("Settings navigation", () => {
 
     const historyItem = await screen.findByRole("link", { name: "Release notes" });
     expect(historyItem).toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("link", { name: "Chat" })).not.toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Work" })).toHaveAttribute("aria-current", "location");
   });
 
   it("renders a compact selector when only one workspace is available", async () => {

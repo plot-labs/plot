@@ -54,7 +54,14 @@ class ArtifactQueryService(
 		) ?: 0L
 		val items = sqlExecutor.query(
 			"""
-			select cp.id, cp.status, cp.title, coalesce(ar.content_type, 'CHANGELOG'), cp.updated_at
+			select cp.id, cp.status, cp.title, coalesce(ar.content_type, 'CHANGELOG'), cp.updated_at,
+			  exists (
+			    select 1 from content_variants cv
+			    join published_changelog_entries pce
+			      on pce.workspace_id = cv.workspace_id and pce.content_variant_id = cv.id
+			    where cv.workspace_id = cp.workspace_id and cv.content_pack_id = cp.id
+			      and cv.variant_index = 0 and pce.unpublished_at is null
+			  ) as published
 			from content_packs cp
 			left join generation_runs gr
 			  on gr.workspace_id = cp.workspace_id and gr.id = cp.generation_run_id
@@ -71,6 +78,7 @@ class ArtifactQueryService(
 					title = rs.getString(3),
 					contentType = requireNotNull(rs.getString(4)),
 					updatedAt = requireNotNull(rs.getTimestamp(5)).toInstant(),
+					published = rs.getBoolean(6),
 				)
 			},
 			devContext.devWorkspaceId, size, page * size,

@@ -39,6 +39,7 @@ describe("ArtifactsWorkspace", () => {
         {
           id: "artifact-1",
           status: "READY",
+          published: false,
           title: "Local preview artifact · Chat workspace",
           contentType: "CHANGELOG",
           updatedAt: "2026-08-08T10:00:00Z",
@@ -46,6 +47,7 @@ describe("ArtifactsWorkspace", () => {
         {
           id: "artifact-2",
           status: "NEEDS_REVIEW",
+          published: true,
           title: "v1.1.0 changelog",
           contentType: "CHANGELOG",
           updatedAt: "2026-08-06T12:00:00Z",
@@ -73,6 +75,24 @@ describe("ArtifactsWorkspace", () => {
 
     fireEvent.click(firstArtifact);
     expect(mocks.push).toHaveBeenCalledWith("/artifacts?artifact=artifact-1");
+  });
+
+  it.each([
+    ["draft", "Local preview artifact", "v1.1.0 changelog"],
+    ["published", "v1.1.0 changelog", "Local preview artifact"],
+  ])("filters %s by live publication, not generation readiness", async (view, included, excluded) => {
+    mocks.search = `view=${view}`;
+    render(<ArtifactsWorkspace />);
+    expect(await screen.findByRole("option", { name: new RegExp(included) })).toBeVisible();
+    expect(screen.queryByRole("option", { name: new RegExp(excluded) })).not.toBeInTheDocument();
+  });
+
+  it("does not misclassify unknown publication metadata as a draft", async () => {
+    mocks.search = "view=draft";
+    mocks.listArtifacts.mockResolvedValue({ items: [{ id: "old", status: "READY", title: "Unknown", contentType: "CHANGELOG", updatedAt: "2026-08-08T10:00:00Z" }], totalItems: 1 });
+    render(<ArtifactsWorkspace />);
+    expect(await screen.findByText("No unpublished drafts in this view.")).toBeVisible();
+    expect(screen.queryByRole("option")).not.toBeInTheDocument();
   });
 
   it("shows a dedicated failure state when the artifact library cannot load", async () => {

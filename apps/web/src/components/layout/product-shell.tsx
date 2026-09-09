@@ -9,6 +9,7 @@ import { usePathname } from "next/navigation";
 
 import { ProductSidebar } from "@/components/layout/product-sidebar";
 import { cn } from "@/lib/utils";
+import { isSettingsPath, productNavigationItems } from "./product-navigation";
 
 export type ProductTheme = "system" | "light" | "dark";
 
@@ -73,18 +74,15 @@ export function ProductShell({ children }: { children: ReactNode }) {
 }
 
 function MobileProductNavigation({ pathname }: { pathname: string }) {
-  const settingsActive = pathname === "/settings" || pathname.startsWith("/settings/");
+  const settingsActive = isSettingsPath(pathname);
 
   return (
     <nav
       aria-label="Product navigation"
-      className="flex h-[49px] shrink-0 items-center gap-1 border-b border-black/[0.08] bg-white px-4 py-2 text-sm dark:border-white/10 dark:bg-[#111113] lg:hidden"
+      className="flex h-[49px] shrink-0 items-center gap-1 border-b border-black/[0.08] bg-white px-2 py-2 text-xs dark:border-white/10 dark:bg-[#111113] lg:hidden"
     >
-      {[
-        { href: "/chat", label: "Chat" },
-        { href: "/routines", label: "Routines" },
-        { href: "/artifacts", label: "Artifacts" },
-      ].map(({ href, label }) => {
+      <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+      {productNavigationItems.map(({ href, label }) => {
         const active = pathname === href || pathname.startsWith(`${href}/`);
         return (
           <Link
@@ -92,7 +90,7 @@ function MobileProductNavigation({ pathname }: { pathname: string }) {
             href={href}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "rounded-[8px] px-3 py-1.5 font-medium transition",
+              "shrink-0 rounded-[8px] px-2 py-1.5 font-medium transition",
               active
                 ? "bg-[#eef0f3] text-black dark:bg-white/12 dark:text-white"
                 : "text-black/55 hover:bg-black/[0.04] dark:text-white/55 dark:hover:bg-white/10",
@@ -102,14 +100,15 @@ function MobileProductNavigation({ pathname }: { pathname: string }) {
           </Link>
         );
       })}
+      </div>
 
       <Link
-        href="/settings/integrations"
+        href="/settings/general"
         aria-label="Workspace settings"
         title="Workspace settings"
         aria-current={settingsActive ? "page" : undefined}
         className={cn(
-          "ml-auto inline-flex size-8 items-center justify-center rounded-[8px] transition",
+          "ml-auto inline-flex size-8 shrink-0 items-center justify-center rounded-[8px] transition",
           settingsActive
             ? "bg-[#eef0f3] text-black dark:bg-white/12 dark:text-white"
             : "text-black/55 hover:bg-black/[0.04] dark:text-white/55 dark:hover:bg-white/10",

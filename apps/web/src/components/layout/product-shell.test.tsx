@@ -35,10 +35,10 @@ describe("ProductShell", () => {
 
     const navigation = screen.getByRole("navigation", { name: "Product navigation" });
     expect(navigation).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Chat" })).toHaveAttribute("href", "/chat");
-    expect(screen.getByRole("link", { name: "Artifacts" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Work" })).toHaveAttribute("href", "/chat");
+    expect(screen.getByRole("link", { name: "Library" })).toHaveAttribute("aria-current", "page");
 
-    expect(screen.getByRole("link", { name: "Workspace settings" })).toHaveAttribute("href", "/settings/integrations");
+    expect(screen.getByRole("link", { name: "Workspace settings" })).toHaveAttribute("href", "/settings/general");
   });
 
   it("marks only Routines as current on the routines page", () => {
@@ -50,9 +50,16 @@ describe("ProductShell", () => {
       </ProductShell>,
     );
 
-    expect(screen.getByRole("link", { name: "Routines" })).toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("link", { name: "Chat" })).not.toHaveAttribute("aria-current");
-    expect(screen.getByRole("link", { name: "Artifacts" })).not.toHaveAttribute("aria-current");
+    expect(screen.getByRole("link", { name: "Automations" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Work" })).not.toHaveAttribute("aria-current");
+    expect(screen.getByRole("link", { name: "Library" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("keeps Connections separate from Settings despite its legacy URL", () => {
+    navigation.pathname = "/settings/integrations";
+    render(<ProductShell><div>Connections content</div></ProductShell>);
+    expect(screen.getByRole("link", { name: "Connections" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Workspace settings" })).not.toHaveAttribute("aria-current");
   });
 
   it("keeps the document theme in sync with the product theme", async () => {

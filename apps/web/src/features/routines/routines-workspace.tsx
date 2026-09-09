@@ -367,7 +367,7 @@ export function RoutinesWorkspace() {
           <header className="border-b border-black/[0.08] px-6 pb-5 pt-8 dark:border-white/10">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <h1 id="routines-heading" className="font-serif text-[32px] font-normal leading-none tracking-[-0.025em] text-black/90 dark:text-white/92">Routines</h1>
+                <h1 id="routines-heading" className="font-serif text-[32px] font-normal leading-none tracking-[-0.025em] text-black/90 dark:text-white/92">Automations</h1>
                 <p className="mt-2 text-[13px] leading-5 text-black/48 dark:text-white/50">Turn schedules and GitHub changes into source-backed drafts.</p>
               </div>
               <div className="flex shrink-0 items-center gap-1.5">

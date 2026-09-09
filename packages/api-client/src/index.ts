@@ -97,6 +97,7 @@ export interface ArtifactSummary {
   title: string | null;
   contentType: ContentType;
   updatedAt: string;
+  published?: boolean;
 }
 export interface ArtifactPage { items: ArtifactSummary[]; page: number; size: number; totalItems: number; totalPages: number }
 

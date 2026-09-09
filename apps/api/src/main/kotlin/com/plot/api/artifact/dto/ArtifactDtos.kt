@@ -51,6 +51,7 @@ data class ArtifactSummaryResponse(
 	val title: String?,
 	val contentType: String,
 	val updatedAt: Instant,
+	val published: Boolean = false,
 )
 
 data class ArtifactPageResponse(

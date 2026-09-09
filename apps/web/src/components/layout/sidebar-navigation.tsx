@@ -14,12 +14,10 @@ import type { ReactNode } from "react";
 
 import { UserRound, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { productNavigationItems } from "./product-navigation";
 
-const productNavItems = [
-  { href: "/chat", label: "Chat", icon: ChatIcon },
-  { href: "/routines", label: "Routines", icon: RoutinesIcon },
-  { href: "/artifacts", label: "Artifacts", icon: ArtifactsIcon },
-];
+const productIcons = { Work: ChatIcon, Automations: RoutinesIcon, Library: ArtifactsIcon, Connections: IntegrationsIcon };
+const productNavItems = productNavigationItems.map((item) => ({ ...item, icon: productIcons[item.label] }));
 
 const workspaceSettingsNavGroups = [
   {
@@ -31,7 +29,6 @@ const workspaceSettingsNavGroups = [
     items: [
       { href: "/settings/general", label: "General", icon: SettingsIcon },
       { href: "/settings/content", label: "Content", icon: ContentIcon },
-      { href: "/settings/integrations", label: "Integrations", icon: IntegrationsIcon },
     ],
   },
 ];
@@ -69,7 +66,7 @@ export function SidebarNavigation({ collapsed, settingsMode, pathname, selectedC
             collapsed={collapsed}
             item={item}
             pathname={pathname}
-            active={item.href === "/chat" ? pathname === "/chat" && !selectedChatId : undefined}
+            current={item.href === "/chat" && selectedChatId ? "location" : "page"}
           />
         ))}
       </nav>
@@ -80,7 +77,7 @@ export function SidebarNavigation({ collapsed, settingsMode, pathname, selectedC
             "px-2 pb-1 pt-2 text-[11px] font-medium uppercase tracking-[0.08em] text-black/35 dark:text-white/35",
             collapsed && "sr-only",
           )}>
-            History
+            Recent work
           </div>
           <div className="space-y-1">
             {recentChats.map((chat) => (
@@ -121,14 +118,15 @@ type SidebarNavItem = {
   icon: () => ReactNode;
 };
 
-function SidebarNavLink({ collapsed, item, pathname, active: activeOverride }: { collapsed: boolean; item: SidebarNavItem; pathname: string; active?: boolean }) {
-  const active = activeOverride ?? (pathname === item.href || pathname.startsWith(`${item.href}/`));
+function SidebarNavLink({ collapsed, item, pathname, current = "page" }: { collapsed: boolean; item: SidebarNavItem; pathname: string; current?: "page" | "location" }) {
+  const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
   const Icon = item.icon;
 
   return (
     <Link
       href={item.href}
-      aria-current={active ? "page" : undefined}
+      title={collapsed ? item.label : undefined}
+      aria-current={active ? current : undefined}
       className={cn(
         "flex h-8 items-center gap-2 rounded-[8px] text-[13px] font-medium transition",
         collapsed ? "mx-auto w-9 justify-center px-0" : "px-2.5",
