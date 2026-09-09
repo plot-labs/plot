@@ -11,30 +11,58 @@
 
 Agent-era shipping got faster. Making sure customers understand what shipped is still slow. Plot exists to close that gap.
 
-**Changelog is wedge 1.** The current product assesses which changes matter to customers, turns shipped GitHub releases into reviewable changelog drafts, and keeps publication under operator control. Supporting evidence remains available during review; human-approved publish and never auto-publish are the foundation for future content surfaces.
+Plot watches connected sources and makes that judgment before drafting. It can exclude changes with no customer value, hold changes that need more substance, or wait for missing evidence. When a change warrants communication, Plot prepares a draft with inspectable sources. You review, edit, and decide when to publish.
 
-Plot combines five product surfaces:
+**GitHub is the first source. Release changelogs are the first automatic output.** They are the starting point for a broader content workflow covering blog posts, B2B emails, and other ways to communicate product progress.
 
-- **Chat** — interactive, source-grounded AgentRun work.
-- **Routines** — scheduled or explicitly started AgentRun work.
-- **Artifacts** — editable, revisioned documents with supporting evidence and Markdown export.
-- **GitHub release automation** — release webhooks, trustworthy range detection, and draft generation.
-- **Billing/entitlement** — subscription, trial, plan, and workspace access policy.
+## How it works today
 
-GitHub connections, repository scopes, and writing blocks are configured in **Integrations** (workspace settings) and consumed from Chat, Routines, and Artifacts.
+```mermaid
+flowchart LR
+  A[GitHub signals] --> B[Collect release evidence]
+  B --> C{Worth communicating?}
+  C -->|No| D[Exclude]
+  C -->|Not yet| E[Hold for more evidence or context]
+  C -->|Yes| F[Prepare a draft with sources]
+  F --> G[Review and edit]
+  G --> H[Publish or export]
+```
 
-The [visual identity](DESIGN.md) defines Plot's editorial paper aesthetic for coding agents
-(DESIGN.md format): colors, typography, components, and visual rationale.
-The [system architecture overview](docs/architecture/system-overview.md) describes
-the request boundary, execution ownership, persistence conventions, and verification
-commands. Publishing remains under the user's control outside Plot.
+- **Follow connected work.** Verified GitHub webhooks feed a durable signal inbox. Release automation is enabled by default, with no separate Autonomy mode to configure.
+- **Draft when it matters.** Automatic generation requires both a customer-value decision and evidence of a published release. A merged PR, tag, or elapsed time alone does not qualify.
+- **Keep the work inspectable.** Drafts retain their source evidence and revisions. Executions appear as conversations in **History**, alongside manual requests.
+- **Keep publication deliberate.** Prepare and revise content in Plot, then publish to the hosted changelog or export Markdown. Automatic drafting does not grant publication approval.
+
+The current runtime does not yet combine held changes across releases. Legacy scheduled and generic event Routines remain deferred to prevent generation from bypassing assessment; explicit manual runs remain available. See the [autonomy runtime](docs/architecture/autonomy-runtime.md) for execution rules and implementation boundaries.
+
+## Workspace
+
+| Area | Purpose |
+| --- | --- |
+| **Home** | See what Plot is preparing and what needs review. |
+| **Chat** | Give instructions, ask questions, and work on content with Plot. |
+| **Automation** | Manage automation configuration. |
+| **Contents** | Review, edit, publish, and export generated content. |
+| **Connections** | Connect and manage product sources. |
+
+**History** in the sidebar brings manual conversations and automatic executions together.
+
+## Where we are headed
+
+The next step is to make **Automation the single place to define automatic work**, with reusable **content Skills** describing how to produce each kind of content.
+
+- **Skills** define writing instructions, required evidence, output structure, and quality criteria for a changelog, blog post, or B2B email.
+- **Automations** select sources, event or schedule triggers, and the content Skills to use. The agent decides whether the available material warrants a draft.
+- **Automatic content selection** can later choose among allowed Skills and prepare several outputs from the same customer communication goal.
+
+Skill-based automation, automatic selection of multiple content types, and Linear/Slack adapters are planned extensions. They are not part of the current GitHub release runtime.
 
 ## Repository
 
 ```txt
 apps/
   web/  Next.js application and same-origin API proxy
-  api/  Kotlin Spring Boot API and generation worker
+  api/  Kotlin Spring Boot API, integrations, and durable agent workers
 
 packages/
   api-client/  typed browser client for the Plot API
@@ -43,21 +71,25 @@ contracts/
   plot-api/    versioned API contract manifest and fixtures
 ```
 
-PostgreSQL is the system of record. Flyway migrations under
-`apps/api/src/main/resources/db/migration` are the authoritative schema.
+PostgreSQL stores signals, decisions, executions, and content. Flyway migrations under `apps/api/src/main/resources/db/migration` define the schema. The backend uses Kotlin, Spring Boot, Spring AI, and jOOQ.
 
 ## Development
 
-Requirements:
+Requirements: Java 21, Bun, Docker, and `just`.
 
-- Java 21
-- Bun
-- Docker
-- `just`
+Create `apps/api/.env.local` and `apps/web/.env.local` from their respective `.env.example` files and fill in the required configuration. GitHub event processing needs a configured GitHub App and webhook; generation needs model-provider credentials.
 
 ```bash
 bun install
+```
+
+Start the API and web application in separate terminals:
+
+```bash
 just dev-api
+```
+
+```bash
 just dev-web
 ```
 
@@ -69,10 +101,13 @@ just test
 just build
 ```
 
-API integration tests use PostgreSQL through Testcontainers.
+API integration tests use PostgreSQL through Testcontainers. Automated assessment tests use scripted model responses.
 
-## Operations
+## Documentation
 
+- [Autonomy runtime and current scope](docs/architecture/autonomy-runtime.md)
+- [System architecture and execution ownership](docs/architecture/system-overview.md)
+- [Visual identity](DESIGN.md)
 - [GitHub App development smoke test](docs/operations/github-app-development-smoke-test.md)
 - [GitHub release automation](docs/operations/github-release-automation.md)
 - [Private repository production certification](docs/operations/private-repository-production-certification.md)
