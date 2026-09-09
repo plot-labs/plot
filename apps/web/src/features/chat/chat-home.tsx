@@ -20,14 +20,12 @@ import { plotApiClient } from "@/lib/api-client";
 import { trialEndsLabel, useWorkspaceEntitlement } from "@/lib/use-workspace-entitlement";
 
 type ChatHomeProps = {
-  embedded?: boolean;
-  onNavigate?: (href: string) => void;
   references: SourceReference[];
   referencesLoading: boolean;
   referencesError: string;
 };
 
-export function ChatHome({ embedded = false, onNavigate, references, referencesLoading, referencesError }: ChatHomeProps) {
+export function ChatHome({ references, referencesLoading, referencesError }: ChatHomeProps) {
   const [startError, setStartError] = useState("");
   const [starting, setStarting] = useState(false);
   const [contentType, setContentType] = useState<ContentType>("CHANGELOG");
@@ -56,8 +54,7 @@ export function ChatHome({ embedded = false, onNavigate, references, referencesL
         brief: toContentBrief(briefDraft),
       }, idempotencyKey);
       pendingRequestRef.current = null;
-      const href = `/chat?chat=${encodeURIComponent(run.chatId)}&agent=${encodeURIComponent(run.id)}`;
-      if (onNavigate) onNavigate(href); else window.location.assign(href);
+      window.location.assign(`/chat?chat=${encodeURIComponent(run.chatId)}&agent=${encodeURIComponent(run.id)}`);
     } catch (error) {
       if (isNonRetryableRequestError(error)) pendingRequestRef.current = null;
       setStartError(messageFor(error, "The request could not be started. Try again."));
@@ -66,7 +63,7 @@ export function ChatHome({ embedded = false, onNavigate, references, referencesL
   }
 
   return (
-    <div className={`flex ${embedded ? "min-h-full" : "min-h-dvh"} flex-col items-center justify-center bg-white px-4 pb-20 pt-8 dark:bg-[#111113]`}>
+    <div className="flex min-h-dvh flex-col items-center justify-center bg-white px-4 pb-20 pt-8 dark:bg-[#111113]">
       <div className="w-full max-w-[660px]">
         <h1 className="mb-7 text-center text-[26px] font-semibold tracking-tight text-black/90 dark:text-white/92 sm:text-[28px]">
           What should Plot create?

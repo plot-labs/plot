@@ -26,11 +26,7 @@ describe("Autonomy Home", () => {
     render(<AutonomyHomeWorkspace view="activity" />);
     expect(await screen.findByText("OAuth support")).toBeInTheDocument();
     expect(screen.getByText("Confirm customer availability")).toBeInTheDocument();
-    const open = vi.fn();
-    window.addEventListener("plot:open-conversation", open);
-    fireEvent.click(screen.getByRole("button", { name: "Review and discuss" }));
-    expect(open.mock.calls[0][0].detail).toEqual({ chatId: "chat-2", agentId: "agent-2" });
-    window.removeEventListener("plot:open-conversation", open);
+    expect(screen.getByRole("link", { name: "Review and discuss" })).toHaveAttribute("href", "/chat?chat=chat-2&agent=agent-2");
     expect(screen.getByText(/Publishing still requires your review/)).toBeInTheDocument();
   });
 
@@ -85,6 +81,6 @@ it("does not apply an old workspace decision after a switch", async () => {
     render(<AutonomyHomeWorkspace />);
     expect(await screen.findByText(/1 changes under consideration/)).toBeVisible();
     expect(screen.queryByRole("button", { name: "Dismiss" })).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "View all activity" })).toHaveAttribute("href", "/activity");
-    expect(screen.getByRole("button", { name: "Ask Plot" })).toBeEnabled();
+    expect(screen.getByRole("link", { name: "View all activity" })).toHaveAttribute("href", "/automation/activity");
+    expect(screen.getByRole("link", { name: "New chat" })).toHaveAttribute("href", "/chat");
   });

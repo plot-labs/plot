@@ -7,7 +7,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { ConversationPanel } from "@/features/chat/conversation-panel";
 import { ProductSidebar } from "@/components/layout/product-sidebar";
 import { cn } from "@/lib/utils";
 import { isSettingsPath, productNavigationItems, settingsNavigationItems, navigationPath } from "./product-navigation";
@@ -69,7 +68,6 @@ export function ProductShell({ children }: { children: ReactNode }) {
           <MobileProductNavigation pathname={pathname} />
           <div className="flex min-h-0 flex-1">
             <main className="min-h-0 min-w-0 flex-1 overflow-y-auto lg:overflow-hidden">{children}</main>
-            <ConversationPanel />
           </div>
         </div>
       </div>
@@ -86,7 +84,7 @@ function MobileProductNavigation({ pathname }: { pathname: string }) {
       className="flex h-[49px] shrink-0 items-center gap-1 border-b border-black/[0.08] bg-white px-2 py-2 text-xs dark:border-white/10 dark:bg-[#111113] lg:hidden"
     >
       <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
-      {settingsActive && <Link href="/home" className="shrink-0 rounded-lg px-2 py-1.5 font-medium">Back to Overview</Link>}
+      {settingsActive && <Link href="/home" className="shrink-0 rounded-lg px-2 py-1.5 font-medium">Back to Home</Link>}
       {(settingsActive ? settingsNavigationItems : productNavigationItems).map(({ href, label }) => {
         const active = navigationPath(pathname) === href || pathname.startsWith(`${href}/`);
         return (

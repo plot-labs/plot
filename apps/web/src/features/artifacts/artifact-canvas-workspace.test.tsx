@@ -78,9 +78,9 @@ describe("ArtifactCanvasWorkspace", () => {
     render(<ArtifactCanvasWorkspace artifact={artifact} client={client()} onSaveArtifact={vi.fn()} />);
 
     const breadcrumb = screen.getByRole("navigation", { name: "Breadcrumb" });
-    expect(breadcrumb).toContainElement(screen.getByRole("link", { name: "Updates" }));
-    expect(screen.getByRole("link", { name: "Updates" })).toHaveAttribute("href", "/updates");
-    expect(breadcrumb).toHaveTextContent("Updates/OpenRouter summary provider");
+    expect(breadcrumb).toContainElement(screen.getByRole("link", { name: "Contents" }));
+    expect(screen.getByRole("link", { name: "Contents" })).toHaveAttribute("href", "/contents");
+    expect(breadcrumb).toHaveTextContent("Contents/OpenRouter summary provider");
     expect(screen.getByText("OpenRouter summary provider", { selector: '[aria-current="page"]' })).toBeVisible();
   });
 

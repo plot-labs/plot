@@ -16,7 +16,7 @@ import { UserRound, FileText, House } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { productNavigationItems, navigationPath } from "./product-navigation";
 
-const productIcons = { Overview: HomeIcon, Activity: ChatIcon, Updates: ArtifactsIcon };
+const productIcons = { Home: HomeIcon, Chat: ChatIcon, Automation: RoutinesIcon, Contents: ArtifactsIcon, Connections: IntegrationsIcon };
 const productNavItems = productNavigationItems.map((item) => ({ ...item, icon: productIcons[item.label] }));
 
 const workspaceSettingsNavGroups = [
@@ -29,8 +29,6 @@ const workspaceSettingsNavGroups = [
     items: [
       { href: "/settings/general", label: "General", icon: SettingsIcon },
       { href: "/settings/content", label: "Content", icon: ContentIcon },
-      { href: "/settings/integrations", label: "Connections", icon: IntegrationsIcon },
-      { href: "/settings/autonomy", label: "Autonomy", icon: RoutinesIcon },
     ],
   },
 ];

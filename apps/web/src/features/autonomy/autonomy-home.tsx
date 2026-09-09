@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { openPlotConversation } from "@/features/chat/conversation-panel";
 import { useEffect, useRef, useState } from "react";
 import type { AutonomyHome, AutonomyHomeItem } from "@plot/api-client";
 import { getSelectedWorkspaceId, plotApiClient, PlotApiError } from "@/lib/api-client";
@@ -103,7 +102,7 @@ export function AutonomyHomeWorkspace({ view = "overview" }: { view?: "overview"
           {item.dismissed && <p className="mt-2 text-xs text-black/50 dark:text-white/50">Restoring allows assessment when new evidence arrives.</p>}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {item.chatId && item.agentRunId && <button className={buttonClass} onClick={() => openPlotConversation({ chatId: item.chatId!, agentId: item.agentRunId! })}>Review and discuss</button>}
+          {item.chatId && item.agentRunId && <Link className={buttonClass} href={`/chat?chat=${encodeURIComponent(item.chatId)}&agent=${encodeURIComponent(item.agentRunId)}`}>Review and discuss</Link>}
           {!item.agentRunId && <button className={buttonClass} disabled={busy !== null || loading} onClick={() => void changeDismissal(item)}>{busy === item.id ? "Saving…" : item.dismissed ? "Restore" : "Dismiss"}</button>}
         </div>
       </div>
@@ -113,15 +112,15 @@ export function AutonomyHomeWorkspace({ view = "overview" }: { view?: "overview"
   return <section className="min-h-[calc(100dvh-49px)] overflow-y-auto bg-[#f8fafc] px-6 pb-16 pt-14 dark:bg-[#18181b] lg:h-full lg:min-h-0 lg:px-12">
     <div className="mx-auto max-w-[960px]">
     <div className="flex items-start justify-between gap-4">
-      <header className="max-w-[620px]"><h1 className="font-display text-[32px] font-normal leading-[1.08] tracking-[-0.025em] text-black/90 dark:text-white/92 sm:text-[36px]">{view === "overview" ? "Overview" : "Activity"}</h1><p className="mt-2 text-sm leading-6 text-black/52 dark:text-white/52">{view === "overview" ? "What Plot is preparing and what needs your attention." : "Connected changes and the reasons to prepare, hold, or exclude an update."}</p></header>
+      <header className="max-w-[620px]"><h1 className="font-display text-[32px] font-normal leading-[1.08] tracking-[-0.025em] text-black/90 dark:text-white/92 sm:text-[36px]">{view === "overview" ? "Home" : "Activity"}</h1><p className="mt-2 text-sm leading-6 text-black/52 dark:text-white/52">{view === "overview" ? "What Plot is preparing and what needs your attention." : "Connected changes and the reasons to prepare, hold, or exclude an update."}</p></header>
       <button className={buttonClass} disabled={loading || busy !== null} onClick={refresh}>Refresh</button>
     </div>
     {error && <p role="alert" className="mt-6 rounded-md border border-red-500/20 p-3 text-sm">{error}</p>}
     {loading && <p role="status" className={`${surfaceClass} mt-8 px-5 py-10 text-center text-sm text-black/45 dark:text-white/45`}>Loading updates…</p>}
-    {view === "overview" && <nav aria-label="Overview actions" className="mt-6 flex flex-wrap gap-3">
-      <button className={buttonClass} onClick={() => openPlotConversation()}>Ask Plot</button>
-      <Link className={buttonClass} href="/updates">Review updates</Link>
-      <Link className={buttonClass} href="/activity">View all activity</Link>
+    {view === "overview" && <nav aria-label="Home actions" className="mt-6 flex flex-wrap gap-3">
+      <Link className={buttonClass} href="/chat">New chat</Link>
+      <Link className={buttonClass} href="/contents">Review updates</Link>
+      <Link className={buttonClass} href="/automation/activity">View all activity</Link>
     </nav>}
     {data && <>
       {view === "overview" && <p className="mt-3 text-xs leading-5 text-black/50 dark:text-white/50">{results.length} draft activities · {pending.length} changes under consideration · {excluded.length} excluded or dismissed</p>}

@@ -77,20 +77,20 @@ function ArtifactsWorkspaceContent() {
     <section className="min-h-[calc(100dvh-49px)] overflow-y-auto bg-[#f8fafc] px-6 pb-16 pt-14 dark:bg-[#18181b] lg:h-full lg:min-h-0 lg:px-12">
       <div className="mx-auto max-w-[960px]">
         <header className="max-w-[620px]">
-          <h1 className="font-display text-[32px] font-normal leading-[1.08] tracking-[-0.025em] text-black/90 dark:text-white/92 sm:text-[36px]">Updates</h1>
+          <h1 className="font-display text-[32px] font-normal leading-[1.08] tracking-[-0.025em] text-black/90 dark:text-white/92 sm:text-[36px]">Contents</h1>
           <p className="mt-2 text-sm leading-6 text-black/52 dark:text-white/52">Review customer updates, continue a draft, or revisit published work.</p>
         </header>
 
-        <nav aria-label="Updates views" className="mt-6 flex gap-2 text-sm">
+        <nav aria-label="Contents views" className="mt-6 flex gap-2 text-sm">
           {([ ["all", "All updates"], ["draft", "Draft"], ["published", "Published"] ] as const).map(([value, label]) => (
-            <Link key={value} href={value === "all" ? "/updates" : `/updates?view=${value}`} aria-current={view === value ? "page" : undefined}
+            <Link key={value} href={value === "all" ? "/contents" : `/contents?view=${value}`} aria-current={view === value ? "page" : undefined}
               className={`rounded-lg px-3 py-2 transition ${view === value ? "bg-black/10 font-medium dark:bg-white/15" : "text-black/55 hover:bg-black/5 dark:text-white/55 dark:hover:bg-white/10"}`}>
               {label}
             </Link>
           ))}
         </nav>
         <p className="mt-3 text-xs text-black/50 dark:text-white/50">Published means currently live on your public changelog. Draft means not currently published.</p>
-        {artifactListStatus === "ready" && artifacts.some((artifact) => artifact.published === undefined) && <p role="status" className="mt-2 text-xs text-black/50 dark:text-white/50">Some publication statuses are unavailable. Those artifacts appear only in All artifacts.</p>}
+        {artifactListStatus === "ready" && artifacts.some((artifact) => artifact.published === undefined) && <p role="status" className="mt-2 text-xs text-black/50 dark:text-white/50">Some publication statuses are unavailable. Those artifacts appear only in All contents.</p>}
         {totalItems > artifacts.length && <p className="mt-2 text-xs text-black/50 dark:text-white/50">Views show the {artifacts.length} most recently updated artifacts of {totalItems}.</p>}
 
         <div className="mt-8 overflow-hidden rounded-[14px] border border-black/[0.09] bg-white/80 shadow-[0_1px_2px_rgb(15_23_42_/_0.025)] dark:border-white/10 dark:bg-white/[0.04]">
@@ -102,7 +102,7 @@ function ArtifactsWorkspaceContent() {
             </div>
           ) : visibleArtifacts.length === 0 ? (
             <div className="px-5 py-10 text-center text-sm leading-6 text-black/45 dark:text-white/45">
-              {view === "all" ? "No artifacts yet. Start in Work to create your first draft." : view === "draft" ? "No unpublished drafts in this view." : "No published artifacts in this view. Publish a reviewed changelog from its editor."}
+              {view === "all" ? "No artifacts yet. Start in Chat to create your first draft." : view === "draft" ? "No unpublished drafts in this view." : "No published artifacts in this view. Publish a reviewed changelog from its editor."}
             </div>
           ) : (
             <div className="divide-y divide-black/[0.07] dark:divide-white/[0.08]" role="listbox" aria-label="Artifacts">
