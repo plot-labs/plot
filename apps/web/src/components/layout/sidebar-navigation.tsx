@@ -76,7 +76,7 @@ export function SidebarNavigation({ collapsed, settingsMode, pathname, selectedC
             "px-2 pb-1 pt-2 text-[11px] font-medium uppercase tracking-[0.08em] text-black/35 dark:text-white/35",
             collapsed && "sr-only",
           )}>
-            Recent chats
+            History
           </div>
           <div className="space-y-1">
             {recentChats.map((chat) => (

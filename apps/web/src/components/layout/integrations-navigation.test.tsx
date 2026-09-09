@@ -217,7 +217,7 @@ describe("Settings navigation", () => {
     expect(screen.queryByRole("link", { name: "Release notes" })).not.toBeInTheDocument();
   });
 
-  it("renders automation conversations in recent chats on the Automation page", async () => {
+  it("renders automation conversations in History on the Automation page", async () => {
     sidebarMocks.pathname = "/automation";
     sidebarMocks.listSessions.mockResolvedValue([{
       id: "chat-1", title: "Release notes", status: "OPEN",
@@ -225,7 +225,7 @@ describe("Settings navigation", () => {
     }]);
     render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
 
-    expect(await screen.findByText("Recent chats")).toBeVisible();
+    expect(await screen.findByText("History")).toBeVisible();
     expect(screen.getByRole("link", { name: "Release notes" })).toHaveAttribute("href", "/chat?chat=chat-1");
   });
 
