@@ -33,7 +33,7 @@ flowchart LR
 - **Keep the work inspectable.** Drafts retain their source evidence and revisions. Executions appear as conversations in **History**, alongside manual requests.
 - **Keep publication deliberate.** Prepare and revise content in Plot, then publish to the hosted changelog or export Markdown. Automatic drafting does not grant publication approval.
 
-The current runtime does not yet combine held changes across releases. Legacy scheduled and generic event Routines remain deferred to prevent generation from bypassing assessment; explicit manual runs remain available. See the [autonomy runtime](docs/architecture/autonomy-runtime.md) for execution rules and implementation boundaries.
+The current runtime does not yet combine held changes across releases. Legacy scheduled and generic event Routines remain deferred to prevent generation from bypassing assessment; explicit manual runs remain available.
 
 ## Workspace
 
@@ -105,8 +105,6 @@ API integration tests use PostgreSQL through Testcontainers. Automated assessmen
 
 ## Documentation
 
-- [Autonomy runtime and current scope](docs/architecture/autonomy-runtime.md)
-- [System architecture and execution ownership](docs/architecture/system-overview.md)
 - [Visual identity](DESIGN.md)
 - [GitHub App development smoke test](docs/operations/github-app-development-smoke-test.md)
 - [GitHub release automation](docs/operations/github-release-automation.md)

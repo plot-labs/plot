@@ -33,7 +33,7 @@ flowchart LR
 - **작업 과정을 확인할 수 있습니다.** 초안의 출처와 리비전을 보존합니다. 실행 기록은 수동 요청과 함께 **History**의 대화로 표시됩니다.
 - **발행은 사용자가 결정합니다.** Plot에서 콘텐츠를 준비하고 수정한 뒤 호스팅된 Changelog에 발행하거나 Markdown으로 내보냅니다. 자동 초안 생성이 발행 승인을 대신하지 않습니다.
 
-현재는 여러 릴리스에 걸쳐 보류된 변경을 자동으로 묶지 않습니다. 평가를 우회하는 생성을 막기 위해 기존 예약·일반 이벤트 Routine 실행은 보류되며, 명시적인 수동 실행은 사용할 수 있습니다. 실행 규칙과 구현 범위는 [Autonomy 런타임 문서](docs/architecture/autonomy-runtime.md)를 참고하세요.
+현재는 여러 릴리스에 걸쳐 보류된 변경을 자동으로 묶지 않습니다. 평가를 우회하는 생성을 막기 위해 기존 예약·일반 이벤트 Routine 실행은 보류되며, 명시적인 수동 실행은 사용할 수 있습니다.
 
 ## 워크스페이스
 
@@ -105,8 +105,6 @@ API 통합 테스트는 Testcontainers로 PostgreSQL을 실행합니다. 자동 
 
 ## 문서
 
-- [Autonomy 런타임과 현재 구현 범위](docs/architecture/autonomy-runtime.md)
-- [시스템 아키텍처와 실행 책임](docs/architecture/system-overview.md)
 - [비주얼 아이덴티티](DESIGN.md)
 - [GitHub App 개발 smoke test](docs/operations/github-app-development-smoke-test.md)
 - [GitHub 릴리스 자동화](docs/operations/github-release-automation.md)
