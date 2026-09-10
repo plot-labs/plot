@@ -309,7 +309,7 @@ describe("RoutinesWorkspace", () => {
     );
     const artifactLinks = screen.getAllByRole("link", { name: "Open artifact for Successful routine" });
     expect(artifactLinks).toHaveLength(1);
-    expect(artifactLinks[0]).toHaveAttribute("href", "/artifacts?artifact=artifact-1");
+    expect(artifactLinks[0]).toHaveAttribute("href", "/contents?artifact=artifact-1");
   });
 
   it("loads safe agent activity in sequence order", async () => {
@@ -417,7 +417,7 @@ describe("RoutinesWorkspace", () => {
 
     expect(await screen.findByText("Latest release: v2.4.0 · Draft ready")).toBeVisible();
     expect(screen.getByRole("link", { name: "Open artifact for Release changelog release v2.4.0" }))
-      .toHaveAttribute("href", "/artifacts?artifact=artifact-release");
+      .toHaveAttribute("href", "/contents?artifact=artifact-release");
     expect(screen.queryByRole("status", { name: "Latest release for Weekly update" })).not.toBeInTheDocument();
     expect(mocks.getGitHubReleaseActivity).toHaveBeenCalledTimes(1);
     expect(screen.getAllByRole("button", { name: "Run" })).toHaveLength(1);

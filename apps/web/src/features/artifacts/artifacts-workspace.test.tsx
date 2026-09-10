@@ -74,7 +74,7 @@ describe("ArtifactsWorkspace", () => {
     expect(screen.queryByText("Select an artifact to inspect its draft and citations.")).not.toBeInTheDocument();
 
     fireEvent.click(firstArtifact);
-    expect(mocks.push).toHaveBeenCalledWith("/artifacts?artifact=artifact-1");
+    expect(mocks.push).toHaveBeenCalledWith("/contents?artifact=artifact-1");
   });
 
   it.each([

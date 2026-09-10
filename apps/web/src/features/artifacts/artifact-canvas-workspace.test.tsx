@@ -197,7 +197,7 @@ describe("ArtifactCanvasWorkspace", () => {
     expect(screen.getByText("Related Launch Announcement")).toBeVisible();
     expect(screen.getByRole("link", { name: /Related Launch Announcement/i })).toHaveAttribute(
       "href",
-      "/artifacts/related-artifact-99",
+      "/contents?artifact=related-artifact-99",
     );
   });
 });

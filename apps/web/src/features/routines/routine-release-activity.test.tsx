@@ -48,7 +48,7 @@ describe("RoutineReleaseActivity", () => {
 
     expect(await screen.findByRole("status")).toHaveTextContent("Latest release: v2.4.0 · Draft ready");
     expect(screen.getByRole("link", { name: "Open artifact for Release routine release v2.4.0" }))
-      .toHaveAttribute("href", "/artifacts?artifact=artifact-42");
+      .toHaveAttribute("href", "/contents?artifact=artifact-42");
   });
 
   it("calls retry when a failed release draft is retried", async () => {

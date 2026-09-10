@@ -109,7 +109,7 @@ export function RoutineReleaseActivity({
       <div className="flex shrink-0 items-center gap-1">
         {activity?.status === "READY" && activity.artifactId ? (
           <Link
-            href={`/artifacts?artifact=${encodeURIComponent(activity.artifactId)}`}
+            href={`/contents?artifact=${encodeURIComponent(activity.artifactId)}`}
             aria-label={`Open artifact for ${routineName} release ${activity.tagName}`}
             className="inline-flex h-7 items-center rounded-[7px] px-2 text-[11px] font-medium text-black/55 transition hover:bg-black/[0.04] hover:text-black/78 dark:text-white/58 dark:hover:bg-white/10 dark:hover:text-white/82"
           >

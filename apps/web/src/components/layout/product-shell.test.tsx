@@ -3,7 +3,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const navigation = vi.hoisted(() => ({ pathname: "/artifacts" }));
+const navigation = vi.hoisted(() => ({ pathname: "/contents" }));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => navigation.pathname,
@@ -22,11 +22,11 @@ import { ProductShell } from "./product-shell";
 
 describe("ProductShell", () => {
   beforeEach(() => {
-    navigation.pathname = "/artifacts";
+    navigation.pathname = "/contents";
     document.documentElement.dataset.theme = "light";
   });
 
-  it("links directly to workspace Settings and marks Artifacts as current", () => {
+  it("links directly to workspace Settings and marks Contents as current", () => {
     render(
       <ProductShell>
         <div>Content</div>
@@ -42,8 +42,8 @@ describe("ProductShell", () => {
     expect(screen.getByRole("link", { name: "Workspace settings" })).toHaveAttribute("href", "/settings/general");
   });
 
-  it("marks only Routines as current on the routines page", () => {
-    navigation.pathname = "/routines";
+  it("marks Automation as current on the automation page", () => {
+    navigation.pathname = "/automation";
 
     render(
       <ProductShell>

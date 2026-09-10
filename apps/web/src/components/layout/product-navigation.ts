@@ -13,11 +13,10 @@ export const settingsNavigationItems = [
 ] as const;
 
 export function isSettingsPath(pathname: string) {
-  return (pathname === "/settings" || pathname.startsWith("/settings/")) && !["/settings/integrations", "/settings/autonomy"].some((path) => pathname === path || pathname.startsWith(`${path}/`));
+  return (pathname === "/settings" || pathname.startsWith("/settings/")) && !["/settings/integrations"].some((path) => pathname === path || pathname.startsWith(`${path}/`));
 }
 
 export function navigationPath(pathname: string) {
-  if (["/artifacts", "/updates"].includes(pathname)) return "/contents";
-  if (["/routines", "/activity", "/settings/autonomy"].includes(pathname) || pathname.startsWith("/automation/")) return "/automation";
+  if (pathname.startsWith("/automation/")) return "/automation";
   return pathname;
 }

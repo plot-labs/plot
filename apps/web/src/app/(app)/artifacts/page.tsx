@@ -1,5 +1,7 @@
-import { ArtifactsWorkspace } from "@/features/artifacts/artifacts-workspace";
+import { redirect } from "next/navigation";
 
-export default function ArtifactsPage() {
-  return <ArtifactsWorkspace />;
+import { buildRedirectPath, type LegacyRouteProps } from "@/lib/route-redirect";
+
+export default async function ArtifactsPage({ searchParams }: LegacyRouteProps) {
+  redirect(buildRedirectPath("/contents", await searchParams));
 }

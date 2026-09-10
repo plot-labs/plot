@@ -121,7 +121,7 @@ function ArtifactsWorkspaceContent() {
                     type="button"
                     role="option"
                     aria-selected="false"
-                    onClick={() => router.push(`/artifacts?artifact=${encodeURIComponent(artifact.id)}`)}
+                    onClick={() => router.push(`/contents?artifact=${encodeURIComponent(artifact.id)}`)}
                     className="grid w-full grid-cols-1 gap-3 px-6 py-4 text-left transition hover:bg-white/70 focus-visible:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-black/20 active:bg-white dark:hover:bg-white/[0.04] dark:focus-visible:bg-white/[0.04] dark:focus-visible:ring-white/25 dark:active:bg-white/[0.06] sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
                   >
                     <span className="min-w-0 truncate text-[15px] font-semibold tracking-[-0.01em] text-black/82 dark:text-white/86">

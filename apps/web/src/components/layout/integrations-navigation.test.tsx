@@ -69,7 +69,7 @@ describe("Settings navigation", () => {
   });
 
   it("restores product navigation outside workspace settings", async () => {
-    sidebarMocks.pathname = "/artifacts";
+    sidebarMocks.pathname = "/contents";
     render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
 
     const productNavigation = screen.getByRole("navigation", { name: "Product sidebar navigation" });
@@ -92,7 +92,7 @@ describe("Settings navigation", () => {
   });
 
   it("opens completed and pending onboarding steps", async () => {
-    sidebarMocks.pathname = "/artifacts";
+    sidebarMocks.pathname = "/contents";
     sidebarMocks.listGitHubConnections.mockResolvedValue([{
       id: "connection-1",
       status: "ACTIVE",
@@ -114,8 +114,8 @@ describe("Settings navigation", () => {
     expect(await screen.findByLabelText("Private repository")).toBeInTheDocument();
   });
 
-  it("closes onboarding before navigating to routines", async () => {
-    sidebarMocks.pathname = "/artifacts";
+  it("closes onboarding before navigating to Automation", async () => {
+    sidebarMocks.pathname = "/contents";
     sidebarMocks.listGitHubConnections.mockResolvedValue([{ id: "connection-1", status: "ACTIVE", repositories: [] }]);
     sidebarMocks.listRoutines.mockResolvedValue([{
       id: "routine-1",
@@ -137,7 +137,7 @@ describe("Settings navigation", () => {
   });
 
   it("imports history without a generic run from onboarding", async () => {
-    sidebarMocks.pathname = "/artifacts";
+    sidebarMocks.pathname = "/contents";
     const routine = {
       id: "routine-1",
       name: "Release changelog",
@@ -244,7 +244,7 @@ describe("Settings navigation", () => {
   });
 
   it("renders a compact selector when only one workspace is available", async () => {
-    sidebarMocks.pathname = "/artifacts";
+    sidebarMocks.pathname = "/contents";
     render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
 
     const trigger = await screen.findByRole("button", { name: /Personal/ });
@@ -264,7 +264,7 @@ describe("Settings navigation", () => {
   });
 
   it("keeps workspace switching when multiple workspaces are available", async () => {
-    sidebarMocks.pathname = "/artifacts";
+    sidebarMocks.pathname = "/contents";
     vi.mocked(fetch).mockResolvedValueOnce(Response.json({
       user: { id: "user-1", email: "owner@example.com", displayName: "Owner" },
       workspaces: [

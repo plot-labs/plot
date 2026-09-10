@@ -329,7 +329,7 @@ function ArtifactSources({
             {relatedArtifacts.map((related) => (
               <li key={related.id}>
                 <Link
-                  href={`/artifacts/${related.id}`}
+                  href={`/contents?artifact=${encodeURIComponent(related.id)}`}
                   className="flex items-center justify-between rounded-lg border border-black/10 p-2.5 transition hover:border-black/20 hover:bg-black/[0.02] dark:border-white/10 dark:hover:border-white/20 dark:hover:bg-white/[0.02]"
                 >
                   <div className="min-w-0 flex-1 pr-2">
