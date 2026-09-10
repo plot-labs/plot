@@ -15,6 +15,12 @@ import {
   type RoutineAgentRunDetail,
   type RoutineCadence,
 } from "@/lib/api-client";
+import {
+  WorkspaceHeader,
+  workspaceIconButtonClass,
+  workspaceSearchClass,
+  workspaceSearchInputClass,
+} from "@/components/layout/workspace-page";
 
 import { isReleaseCadence } from "./release-activity-utils";
 import { RoutineReleaseActivity } from "./routine-release-activity";
@@ -364,14 +370,13 @@ export function RoutinesWorkspace() {
     <div className="h-full overflow-y-auto bg-[#f7f8fa] dark:bg-[#18191d] lg:overflow-hidden">
       <div className={createOpen ? "grid min-h-full lg:h-full lg:grid-cols-[minmax(340px,0.88fr)_minmax(0,1.12fr)]" : "min-h-full"}>
         <section className={createOpen ? "min-w-0 border-b border-black/[0.08] bg-[#f7f8fa] dark:border-white/10 dark:bg-[#18191d] lg:h-full lg:overflow-y-auto lg:border-b-0 lg:border-r" : "mx-auto min-h-full w-full max-w-[760px] bg-[#f7f8fa] dark:bg-[#18191d] lg:h-full lg:overflow-y-auto"} aria-labelledby="routines-heading">
-          <header className="border-b border-black/[0.08] px-6 pb-5 pt-8 dark:border-white/10">
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0">
-                <h1 id="routines-heading" className="font-serif text-[32px] font-normal leading-none tracking-[-0.025em] text-black/90 dark:text-white/92">Automation</h1>
-                <p className="mt-2 text-[13px] leading-5 text-black/48 dark:text-white/50">Manage recurring draft preparation. Automatic assessment follows the configured workspace policy; publishing requires review.</p>
-              </div>
-              <div className="flex shrink-0 items-center gap-1.5">
-                <button type="button" onClick={retryLoad} disabled={refreshDisabled} aria-label="Refresh routines" title="Refresh routines" className="inline-flex size-9 items-center justify-center rounded-[9px] text-black/45 transition hover:bg-black/[0.04] hover:text-black/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 disabled:cursor-wait disabled:opacity-45 dark:text-white/48 dark:hover:bg-white/10 dark:hover:text-white/75"><RefreshCw className={`size-3.5 ${isLoading ? "animate-spin" : ""}`} /></button>
+          <WorkspaceHeader
+            id="routines-heading"
+            title="Automation"
+            description="Manage recurring draft preparation. Automatic assessment follows the configured workspace policy; publishing requires review."
+            actions={
+              <>
+                <button type="button" onClick={retryLoad} disabled={refreshDisabled} aria-label="Refresh routines" title="Refresh routines" className={workspaceIconButtonClass}><RefreshCw className={`size-3.5 ${isLoading ? "animate-spin" : ""}`} /></button>
                 {!createOpen && (
                   <button
                     ref={createTriggerRef}
@@ -392,14 +397,15 @@ export function RoutinesWorkspace() {
                     Create
                   </button>
                 )}
-              </div>
-            </div>
-            <label className="mt-5 flex h-10 items-center gap-2.5 rounded-[9px] border border-black/10 bg-white px-3 text-[12px] text-black/40 transition focus-within:border-black/20 focus-within:ring-2 focus-within:ring-black/[0.04] dark:border-white/12 dark:bg-white/[0.04] dark:text-white/42">
+              </>
+            }
+          >
+            <label className={workspaceSearchClass}>
               <HugeiconsIcon icon={Search01Icon} size={16} color="currentColor" strokeWidth={1.5} aria-hidden="true" />
               <span className="sr-only">Search routines</span>
-              <input type="search" value={routineQuery} onChange={(event) => setRoutineQuery(event.target.value)} placeholder="Search routines" className="min-w-0 flex-1 bg-transparent text-[13px] text-black/75 outline-none placeholder:text-black/35 dark:text-white/80 dark:placeholder:text-white/35" />
+              <input type="search" value={routineQuery} onChange={(event) => setRoutineQuery(event.target.value)} placeholder="Search routines" className={workspaceSearchInputClass} />
             </label>
-          </header>
+          </WorkspaceHeader>
 
           {(loadError ?? error) && <div role="alert" className="mx-6 mt-4 flex items-center justify-between gap-3 rounded-[9px] border border-black/10 bg-white px-3 py-2.5 text-[12px] text-black/58 dark:border-white/12 dark:bg-white/[0.04] dark:text-white/60"><span>{loadError ?? error}</span><button type="button" onClick={retryLoad} disabled={refreshDisabled} aria-label="Retry loading routines" className="inline-flex size-7 items-center justify-center rounded-[7px] text-black/45 transition hover:bg-black/[0.04] disabled:cursor-wait disabled:opacity-45 dark:text-white/48 dark:hover:bg-white/10"><RefreshCw className="size-3.5" /></button></div>}
 

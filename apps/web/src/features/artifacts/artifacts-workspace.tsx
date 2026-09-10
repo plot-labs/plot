@@ -4,6 +4,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 
+import {
+  WorkspaceHeader,
+  workspaceListClass,
+  workspacePageClass,
+  workspaceSectionClass,
+} from "@/components/layout/workspace-page";
 import { ArtifactCanvasWorkspace } from "@/features/artifacts/artifact-canvas-workspace";
 import { plotApiClient, type Artifact, type ArtifactSummary } from "@/lib/api-client";
 
@@ -74,26 +80,27 @@ function ArtifactsWorkspaceContent() {
   }
 
   return (
-    <section className="min-h-[calc(100dvh-49px)] overflow-y-auto bg-[#f8fafc] px-6 pb-16 pt-14 dark:bg-[#18181b] lg:h-full lg:min-h-0 lg:px-12">
-      <div className="mx-auto max-w-[960px]">
-        <header className="max-w-[620px]">
-          <h1 className="font-display text-[32px] font-normal leading-[1.08] tracking-[-0.025em] text-black/90 dark:text-white/92 sm:text-[36px]">Contents</h1>
-          <p className="mt-2 text-sm leading-6 text-black/52 dark:text-white/52">Review customer updates, continue a draft, or revisit published work.</p>
-        </header>
-
-        <nav aria-label="Contents views" className="mt-6 flex gap-2 text-sm">
+    <div className={workspacePageClass}>
+      <section className={workspaceSectionClass} aria-labelledby="contents-heading">
+        <WorkspaceHeader
+          id="contents-heading"
+          title="Contents"
+          description="Review customer updates, continue a draft, or revisit published work."
+        >
+          <nav aria-label="Contents views" className="mt-5 flex gap-1 text-[12px]">
           {([ ["all", "All updates"], ["draft", "Draft"], ["published", "Published"] ] as const).map(([value, label]) => (
             <Link key={value} href={value === "all" ? "/contents" : `/contents?view=${value}`} aria-current={view === value ? "page" : undefined}
-              className={`rounded-lg px-3 py-2 transition ${view === value ? "bg-black/10 font-medium dark:bg-white/15" : "text-black/55 hover:bg-black/5 dark:text-white/55 dark:hover:bg-white/10"}`}>
+              className={`rounded-[7px] px-2.5 py-1.5 transition ${view === value ? "bg-black/[0.07] font-medium text-black/78 dark:bg-white/12 dark:text-white/82" : "text-black/48 hover:bg-black/[0.04] hover:text-black/72 dark:text-white/50 dark:hover:bg-white/10 dark:hover:text-white/75"}`}>
               {label}
             </Link>
           ))}
-        </nav>
-        <p className="mt-3 text-xs text-black/50 dark:text-white/50">Published means currently live on your public changelog. Draft means not currently published.</p>
-        {artifactListStatus === "ready" && artifacts.some((artifact) => artifact.published === undefined) && <p role="status" className="mt-2 text-xs text-black/50 dark:text-white/50">Some publication statuses are unavailable. Those artifacts appear only in All contents.</p>}
-        {totalItems > artifacts.length && <p className="mt-2 text-xs text-black/50 dark:text-white/50">Views show the {artifacts.length} most recently updated artifacts of {totalItems}.</p>}
+          </nav>
+          <p className="mt-3 text-[11px] leading-4 text-black/40 dark:text-white/42">Published means currently live on your public changelog. Draft means not currently published.</p>
+          {artifactListStatus === "ready" && artifacts.some((artifact) => artifact.published === undefined) && <p role="status" className="mt-2 text-[11px] text-black/40 dark:text-white/42">Some publication statuses are unavailable. Those artifacts appear only in All contents.</p>}
+          {totalItems > artifacts.length && <p className="mt-2 text-[11px] text-black/40 dark:text-white/42">Views show the {artifacts.length} most recently updated artifacts of {totalItems}.</p>}
+        </WorkspaceHeader>
 
-        <div className="mt-8 overflow-hidden rounded-[14px] border border-black/[0.09] bg-white/80 shadow-[0_1px_2px_rgb(15_23_42_/_0.025)] dark:border-white/10 dark:bg-white/[0.04]">
+        <div className={`mt-4 ${workspaceListClass}`}>
           {artifactListStatus === "loading" ? (
             <ArtifactListLoading />
           ) : artifactListStatus === "error" ? (
@@ -115,7 +122,7 @@ function ArtifactsWorkspaceContent() {
                     role="option"
                     aria-selected="false"
                     onClick={() => router.push(`/artifacts?artifact=${encodeURIComponent(artifact.id)}`)}
-                    className="grid w-full grid-cols-1 gap-3 px-5 py-4 text-left transition hover:bg-black/[0.025] focus-visible:bg-black/[0.025] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-black/20 active:bg-black/[0.045] dark:hover:bg-white/[0.045] dark:focus-visible:bg-white/[0.045] dark:focus-visible:ring-white/25 dark:active:bg-white/[0.07] sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-6 sm:py-5"
+                    className="grid w-full grid-cols-1 gap-3 px-6 py-4 text-left transition hover:bg-white/70 focus-visible:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-black/20 active:bg-white dark:hover:bg-white/[0.04] dark:focus-visible:bg-white/[0.04] dark:focus-visible:ring-white/25 dark:active:bg-white/[0.06] sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
                   >
                     <span className="min-w-0 truncate text-[15px] font-semibold tracking-[-0.01em] text-black/82 dark:text-white/86">
                       {artifact.title ?? "Generated artifact"}
@@ -133,8 +140,8 @@ function ArtifactsWorkspaceContent() {
             </div>
           )}
         </div>
-      </div>
-    </section>
+      </section>
+    </div>
   );
 }
 

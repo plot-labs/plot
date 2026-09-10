@@ -12,6 +12,15 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import {
+  WorkspaceHeader,
+  workspaceIconButtonClass,
+  workspaceNoticeClass,
+  workspacePageClass,
+  workspaceSearchClass,
+  workspaceSearchInputClass,
+  workspaceSectionClass,
+} from "@/components/layout/workspace-page";
+import {
   getSelectedWorkspaceId,
   plotApiClient,
   PlotApiError,
@@ -310,49 +319,46 @@ export function IntegrationsWorkspace() {
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-[#f4f6f8] px-5 py-8 dark:bg-[#101112] sm:px-8 sm:py-10 lg:px-10">
-      <div className="mx-auto max-w-[760px] pb-16">
-        <header className="max-w-[720px]">
-          <h1 className="font-serif text-[32px] font-normal leading-[1.08] tracking-[-0.025em] text-black/90 dark:text-white/92 sm:text-[36px]">
-            Connections
-          </h1>
-          <p className="mt-2 max-w-[620px] text-[14px] leading-6 text-black/52 dark:text-white/50">
-            Connect the tools that feed Plot with the context behind your product work.
-          </p>
-        </header>
-
-        <label className="mt-7 flex h-11 max-w-[720px] items-center gap-3 rounded-[10px] border border-black/10 bg-white px-3.5 shadow-[0_1px_2px_rgb(15_23_42_/_0.025)] transition focus-within:border-black/25 focus-within:ring-2 focus-within:ring-black/[0.04] dark:border-white/10 dark:bg-white/[0.045] dark:focus-within:border-white/25">
-          <HugeiconsIcon icon={Search01Icon} size={17} color="currentColor" strokeWidth={1.5} className="shrink-0 text-black/35 dark:text-white/35" aria-hidden="true" />
+    <div className={workspacePageClass}>
+      <section className={workspaceSectionClass} aria-labelledby="connections-heading">
+        <WorkspaceHeader
+          id="connections-heading"
+          title="Connections"
+          description="Connect the tools that feed Plot with the context behind your product work."
+        >
+        <label className={workspaceSearchClass}>
+          <HugeiconsIcon icon={Search01Icon} size={16} color="currentColor" strokeWidth={1.5} aria-hidden="true" />
           <span className="sr-only">Search integrations</span>
           <input
             type="search"
             value={integrationQuery}
             onChange={(event) => setIntegrationQuery(event.target.value)}
             placeholder="Search integrations"
-            className="min-w-0 flex-1 bg-transparent text-sm text-black/80 outline-none placeholder:text-black/35 dark:text-white/82 dark:placeholder:text-white/35"
+            className={workspaceSearchInputClass}
           />
           {integrationQuery && (
             <button
               type="button"
               onClick={() => setIntegrationQuery("")}
               aria-label="Clear integration search"
-              className="rounded-md p-1 text-black/35 transition hover:bg-black/[0.05] hover:text-black/65 dark:text-white/35 dark:hover:bg-white/10 dark:hover:text-white/70"
+              className="rounded-[6px] p-1 text-black/35 transition hover:bg-black/[0.05] hover:text-black/65 dark:text-white/35 dark:hover:bg-white/10 dark:hover:text-white/70"
             >
               <HugeiconsIcon icon={Cancel01Icon} size={15} color="currentColor" strokeWidth={1.5} aria-hidden="true" />
             </button>
           )}
         </label>
+        </WorkspaceHeader>
 
         {githubMatchesQuery && (
-          <section className="mt-8" aria-labelledby="essentials-heading">
+          <section className="mt-6 px-6" aria-labelledby="essentials-heading">
             <SectionHeading
               id="essentials-heading"
               title="Available integrations"
               description={needsRepositorySetup ? "Choose a repository" : connectionBadgeStatus === "connected" ? "Configured for this workspace" : "Ready to connect"}
             />
 
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <article className="min-h-[160px] rounded-[14px] border border-black/[0.09] bg-white p-4 shadow-[0_1px_2px_rgb(15_23_42_/_0.025)] transition duration-200 hover:-translate-y-0.5 hover:border-black/[0.16] hover:shadow-[0_8px_24px_rgb(15_23_42_/_0.06)] dark:border-white/10 dark:bg-white/[0.045] dark:hover:border-white/20 dark:hover:bg-white/[0.065]">
+            <div className="mt-3">
+              <article className="rounded-[9px] border border-black/10 bg-white p-4 transition hover:border-black/[0.16] dark:border-white/12 dark:bg-white/[0.04] dark:hover:border-white/20">
                 <div className="flex items-center gap-3">
                   <BrandIcon brand="github" />
                   <div className="min-w-0 flex-1">
@@ -367,7 +373,7 @@ export function IntegrationsWorkspace() {
                       disabled={action !== null}
                       aria-label="Disconnect GitHub"
                       title="Disconnect GitHub"
-                      className="inline-flex size-8 shrink-0 items-center justify-center rounded-[9px] border border-black/10 text-black/50 transition hover:border-black/20 hover:bg-black/[0.04] hover:text-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 disabled:cursor-wait disabled:opacity-50 dark:border-white/12 dark:text-white/55 dark:hover:border-white/25 dark:hover:bg-white/10 dark:hover:text-white/85 dark:focus-visible:ring-white/25"
+                      className={workspaceIconButtonClass}
                     >
                       {action === "disconnect" ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" /> : <HugeiconsIcon icon={Unlink04Icon} size={16} color="currentColor" strokeWidth={1.5} aria-hidden="true" />}
                     </button>
@@ -379,7 +385,7 @@ export function IntegrationsWorkspace() {
                       disabled={action !== null}
                       aria-label={connectionBadgeStatus === "attention" ? "Reconnect GitHub" : "Connect GitHub"}
                       title={connectionBadgeStatus === "attention" ? "Reconnect GitHub" : "Connect GitHub"}
-                      className="inline-flex size-8 shrink-0 items-center justify-center rounded-[9px] border border-black/10 text-black/50 transition hover:border-black/20 hover:bg-black/[0.04] hover:text-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 disabled:cursor-wait disabled:opacity-50 dark:border-white/12 dark:text-white/55 dark:hover:border-white/25 dark:hover:bg-white/10 dark:hover:text-white/85 dark:focus-visible:ring-white/25"
+                      className={workspaceIconButtonClass}
                     >
                       {action === "install" ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" /> : <HugeiconsIcon icon={Link01Icon} size={16} color="currentColor" strokeWidth={1.5} aria-hidden="true" />}
                     </button>
@@ -451,17 +457,17 @@ export function IntegrationsWorkspace() {
         )}
 
         {matchingPlannedIntegrations.length > 0 && (
-          <section className="mt-11" aria-labelledby="more-integrations-heading">
+          <section className="mt-8 px-6 pb-10" aria-labelledby="more-integrations-heading">
             <SectionHeading
               id="more-integrations-heading"
               title="More integrations"
               description="Sources we are shaping next"
             />
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
               {matchingPlannedIntegrations.map((integration) => (
                 <article
                   key={integration.name}
-                  className="group min-h-[168px] rounded-[14px] border border-black/[0.08] bg-white/75 p-5 transition duration-200 hover:-translate-y-0.5 hover:border-black/[0.15] hover:bg-white hover:shadow-[0_6px_18px_rgb(15_23_42_/_0.05)] dark:border-white/[0.09] dark:bg-white/[0.035] dark:hover:border-white/15 dark:hover:bg-white/[0.055]"
+                  className="group min-h-[150px] rounded-[9px] border border-black/10 bg-white p-4 transition hover:border-black/[0.16] dark:border-white/12 dark:bg-white/[0.04] dark:hover:border-white/20"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <BrandIcon brand={integration.brand} />
@@ -482,13 +488,12 @@ export function IntegrationsWorkspace() {
         )}
 
         {!githubMatchesQuery && matchingPlannedIntegrations.length === 0 && (
-          <div className="mt-11 rounded-[14px] border border-dashed border-black/10 px-5 py-12 text-center dark:border-white/10">
+          <div className={`mx-6 mt-4 py-10 text-center ${workspaceNoticeClass}`}>
             <p className="text-sm font-medium text-black/65 dark:text-white/68">No integrations found</p>
             <p className="mt-1 text-sm text-black/42 dark:text-white/42">Try another search term.</p>
           </div>
         )}
-      </div>
-
+      </section>
     </div>
   );
 }
@@ -504,7 +509,7 @@ function SectionHeading({
 }) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-2">
-      <h2 id={id} className="text-[15px] font-semibold tracking-[-0.01em] text-black/78 dark:text-white/82">
+      <h2 id={id} className="text-[14px] font-semibold text-black/78 dark:text-white/82">
         {title}
       </h2>
       <p className="text-[12px] text-black/38 dark:text-white/38">{description}</p>
@@ -514,7 +519,7 @@ function SectionHeading({
 
 function BrandIcon({ brand }: { brand: IntegrationBrand }) {
   return (
-    <div className="flex size-11 shrink-0 items-center justify-center rounded-[12px] border border-black/[0.08] bg-white shadow-[0_1px_1px_rgb(15_23_42_/_0.025)] dark:border-white/10">
+    <div className="flex size-10 shrink-0 items-center justify-center rounded-[9px] border border-black/[0.08] bg-white dark:border-white/10">
       {brand === "github" && (
         <svg role="img" aria-label="GitHub" viewBox="0 0 24 24" className="size-[23px] fill-[#181717]">
           <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" />
