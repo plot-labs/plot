@@ -25,7 +25,6 @@ export type {
   WorkSessionSummary,
   WorkspaceCapabilities,
   WorkspaceSummary,
-  ExecutionTimelineItem,
 } from "@plot/api-client";
 
 export const getSelectedWorkspaceId = () => typeof window === "undefined"

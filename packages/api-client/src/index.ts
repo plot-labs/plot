@@ -504,30 +504,6 @@ export interface WorkSessionSummary {
   updatedAt: string;
 }
 
-export interface ExecutionTimelineItem {
-  id: string;
-  workspaceId: string;
-  origin: string;
-  stage: string;
-  status: string;
-  statusLabel: string;
-  deliveryId?: string | null;
-  releaseRequestId?: string | null;
-  routineId?: string | null;
-  routineExecutionId?: string | null;
-  agentRunId?: string | null;
-  artifactWorkflowRunId?: string | null;
-  artifactId?: string | null;
-  workSessionId?: string | null;
-  attemptCount: number;
-  maxAttempts?: number | null;
-  nextAttemptAt?: string | null;
-  safeErrorCode?: string | null;
-  recoveryAction?: string | null;
-  createdAt: string;
-  updatedAt: string;
-  finishedAt?: string | null;
-}
 
 export interface ArtifactHistoryItem {
   position: number;
@@ -608,8 +584,6 @@ export interface PlotApiClient {
   createChatAgentRun(input: CreateChatAgentRunInput, idempotencyKey: string, options?: RequestOptions): Promise<ChatAgentRun>;
   getChatAgentRun(id: string, options?: RequestOptions): Promise<ChatAgentRun>;
   listSessionAgentRuns(id: string, options?: RequestOptions): Promise<ChatAgentRun[]>;
-  getSessionTimeline(sessionId: string, options?: RequestOptions): Promise<ExecutionTimelineItem[]>;
-  getExecutionTimeline(id: string, options?: RequestOptions): Promise<ExecutionTimelineItem>;
   listSessions(options?: RequestOptions): Promise<WorkSessionSummary[]>;
   listSourceReferences(options?: RequestOptions): Promise<SourceReference[]>;
   getArtifact(id: string, options?: RequestOptions): Promise<Artifact>;
@@ -775,12 +749,6 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
       signal: requestOptions?.signal,
     }),
     listSessionAgentRuns: (id, requestOptions) => request(`/sessions/${encodeURIComponent(id)}/agent-runs`, {
-      signal: requestOptions?.signal,
-    }),
-    getSessionTimeline: (sessionId, requestOptions) => request(`/sessions/${encodeURIComponent(sessionId)}/timeline`, {
-      signal: requestOptions?.signal,
-    }),
-    getExecutionTimeline: (id, requestOptions) => request(`/timeline/executions/${encodeURIComponent(id)}`, {
       signal: requestOptions?.signal,
     }),
     listSessions: (requestOptions) => request("/sessions", { signal: requestOptions?.signal }),

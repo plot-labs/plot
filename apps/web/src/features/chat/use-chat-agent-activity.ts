@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import type { ChatAgentRun, ContentBrief, ContentType, ExecutionTimelineItem, SourceReference } from "@plot/api-client";
+import type { ChatAgentRun, ContentBrief, ContentType, SourceReference } from "@plot/api-client";
 import { isTerminalChatAgentStatus, pollChatAgentRun } from "@/lib/chat-agent-polling";
 import { plotApiClient } from "@/lib/api-client";
 
@@ -40,7 +40,6 @@ export function useChatAgentActivity({
   onAdmitted,
 }: UseChatAgentActivityProps) {
   const [activities, setActivities] = useState<ChatAgentRun[]>([]);
-  const [timeline, setTimeline] = useState<ExecutionTimelineItem[]>([]);
   const [activitiesLoadedFor, setActivitiesLoadedFor] = useState<string | null>(null);
   const [activitiesError, setActivitiesError] = useState("");
   const [agentRun, setAgentRun] = useState<ChatAgentRun | null>(null);
@@ -49,18 +48,8 @@ export function useChatAgentActivity({
   const [agentInstruction, setAgentInstruction] = useState("");
   const agentAbortRef = useRef<AbortController | null>(null);
   const pendingRequestRef = useRef<PendingAgentRequest | null>(null);
-  const timelineRequestRef = useRef(0);
   const activitiesLoading = activitiesLoadedFor !== chatId;
 
-  const refreshTimeline = useCallback((signal: AbortSignal) => {
-    const request = ++timelineRequestRef.current;
-    if (typeof plotApiClient.getSessionTimeline !== "function") return;
-    void plotApiClient.getSessionTimeline(chatId, { signal })
-      .then((value) => {
-        if (!signal.aborted && request === timelineRequestRef.current) setTimeline(value);
-      })
-      .catch(() => undefined);
-  }, [chatId]);
 
   const selectedActivity = useMemo(() => {
     if (requestedAgentId) return activities.find((activity) => activity.id === requestedAgentId) ?? null;
@@ -71,10 +60,6 @@ export function useChatAgentActivity({
     return activities[activities.length - 1] ?? null;
   }, [activities, requestedAgentId, requestedArtifactId]);
 
-  const selectedTimelineItem = useMemo(() => {
-    if (!selectedActivity) return timeline[0] ?? null;
-    return timeline.find((item) => item.agentRunId === selectedActivity.id || item.id === selectedActivity.id) ?? null;
-  }, [selectedActivity, timeline]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -91,13 +76,12 @@ export function useChatAgentActivity({
         setActivitiesLoadedFor(chatId);
       });
 
-    refreshTimeline(controller.signal);
 
     return () => {
       controller.abort();
       agentAbortRef.current?.abort();
     };
-  }, [chatId, refreshTimeline]);
+  }, [chatId]);
 
   useEffect(() => {
     if (!requestedAgentId) return;
@@ -127,13 +111,11 @@ export function useChatAgentActivity({
                 if (agentAbortRef.current === controller) {
                   setAgentRun(next);
                   upsertActivity(setActivities, next);
-                  refreshTimeline(controller.signal);
                 }
               },
             });
         if (agentAbortRef.current !== controller) return;
         setAgentRun(restored);
-        refreshTimeline(controller.signal);
         if (restored.artifactId) onAgentArtifact(restored);
       } catch (error) {
         if (agentAbortRef.current === controller && !(error instanceof DOMException && error.name === "AbortError")) {
@@ -152,7 +134,7 @@ export function useChatAgentActivity({
         setAgentBusy(false);
       }
     };
-  }, [chatId, onAgentArtifact, requestedAgentId, refreshTimeline]);
+  }, [chatId, onAgentArtifact, requestedAgentId]);
 
   async function submitMessage(message: string, referenceIds: string[], onRequestStart?: () => void) {
     const selected = selectReferences(references, referenceIds);
@@ -184,7 +166,6 @@ export function useChatAgentActivity({
       pendingRequestRef.current = null;
       setAgentRun(run);
       onAdmitted(run);
-      refreshTimeline(controller.signal);
     } catch (error) {
       if (agentAbortRef.current === controller && !(error instanceof DOMException && error.name === "AbortError")) {
         if (isNonRetryableRequestError(error)) pendingRequestRef.current = null;
@@ -197,9 +178,7 @@ export function useChatAgentActivity({
 
   return {
     activities,
-    timeline,
     selectedActivity,
-    selectedTimelineItem,
     activitiesLoading,
     activitiesError,
     agentRun,
