@@ -47,6 +47,30 @@ class GitHubRestClientTest {
 	}
 
 	@Test
+	fun listsAppInstallationsWithAppCredentials() {
+		var requestPath: String? = null
+		var authorization: String? = null
+		val transport = GitHubHttpTransport { _, uri, headers, _ ->
+			requestPath = uri.toString()
+			authorization = headers["Authorization"]
+			GitHubHttpResponse(
+				200,
+				emptyMap(),
+				"""[{"id":88,"app_id":123,"account":{"id":9001,"login":"acme","type":"User"}}]""",
+			)
+		}
+		val client = GitHubRestClient(properties(), objectMapper, transport = transport)
+
+		val installation = client.listAppInstallations().single()
+
+		assertEquals("https://api.github.test/app/installations?per_page=100&page=1", requestPath)
+		assertTrue(authorization?.startsWith("Bearer ey") == true)
+		assertEquals(88, installation.installationId)
+		assertEquals("123", installation.appId)
+		assertEquals(9001, installation.accountId)
+	}
+
+	@Test
 	fun signsBoundedRs256AppJwtAndRequestsLeastPrivilegeRepositoryToken() {
 		val keyPair = KeyPairGenerator.getInstance("RSA").apply { initialize(2048) }.generateKeyPair()
 		var tokenAuthorization: String? = null

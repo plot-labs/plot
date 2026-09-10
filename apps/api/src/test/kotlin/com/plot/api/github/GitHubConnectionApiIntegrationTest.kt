@@ -306,6 +306,43 @@ class GitHubConnectionApiIntegrationTest {
 	}
 
 	@Test
+	fun syncRecoversPersonalInstallationWhenUserTokenCannotListInstallations() {
+		fakeClient.userInstallationError = com.plot.api.common.ApiException(
+			org.springframework.http.HttpStatus.BAD_GATEWAY,
+			"GITHUB_ACCESS_DENIED",
+			"GitHub denied access",
+		)
+		fakeClient.appInstallations = listOf(
+			GitHubUserInstallation(installationId = 88, appId = "1", accountId = 9001, accountLogin = "acme", accountType = "User"),
+			GitHubUserInstallation(installationId = 99, appId = "1", accountId = 7777, accountLogin = "someone-else", accountType = "User"),
+		)
+
+		mockMvc.post("/api/github/installations/sync")
+			.andExpect {
+				status { isOk() }
+				jsonPath("$.installationId") { value(88) }
+			}
+	}
+
+	@Test
+	fun syncPreservesAccessDeniedWhenAppHasNoMatchingPersonalInstallation() {
+		fakeClient.userInstallationError = com.plot.api.common.ApiException(
+			org.springframework.http.HttpStatus.BAD_GATEWAY,
+			"GITHUB_ACCESS_DENIED",
+			"GitHub denied access",
+		)
+		fakeClient.appInstallations = listOf(
+			GitHubUserInstallation(installationId = 99, appId = "1", accountId = 7777, accountLogin = "someone-else", accountType = "User"),
+		)
+
+		mockMvc.post("/api/github/installations/sync")
+			.andExpect {
+				status { isBadGateway() }
+				jsonPath("$.error") { value("GITHUB_ACCESS_DENIED") }
+			}
+	}
+
+	@Test
 	fun syncPrefersPersonalInstallationWhenBothPersonalAndAdminOrgExist() {
 		fakeClient.userInstallations = listOf(
 			GitHubUserInstallation(installationId = 101, appId = "1", accountId = 9001, accountLogin = "acme", accountType = "User"),
@@ -838,8 +875,15 @@ class FakeGitHubClient : GitHubClient {
 	var userInstallations: List<GitHubUserInstallation> = listOf(
 		GitHubUserInstallation(installationId = 77, appId = "1", accountId = 9001, accountLogin = "acme", accountType = "User"),
 	)
+	var appInstallations: List<GitHubUserInstallation> = emptyList()
+	var userInstallationError: com.plot.api.common.ApiException? = null
 
-	override fun listUserInstallations(userAccessToken: String): List<GitHubUserInstallation> = userInstallations
+	override fun listUserInstallations(userAccessToken: String): List<GitHubUserInstallation> {
+		userInstallationError?.let { throw it }
+		return userInstallations
+	}
+
+	override fun listAppInstallations(): List<GitHubUserInstallation> = appInstallations
 
 	override fun getInstallation(installationId: Long): GitHubInstallation {
 		installationCalls.incrementAndGet()
@@ -965,6 +1009,8 @@ class FakeGitHubClient : GitHubClient {
 		userInstallations = listOf(
 			GitHubUserInstallation(installationId = 77, appId = "1", accountId = 9001, accountLogin = "acme", accountType = "User"),
 		)
+		appInstallations = emptyList()
+		userInstallationError = null
 		failImports = false
 		failureCode = null
 		repositoryFailureCode = null

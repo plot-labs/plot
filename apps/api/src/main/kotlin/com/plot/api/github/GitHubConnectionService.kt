@@ -129,7 +129,19 @@ class GitHubConnectionService(
 				"No linked GitHub account was found; sign in with GitHub and retry",
 			)
 		val appId = properties.appId?.takeIf { it.isNotBlank() } ?: throw notConfigured()
-		val installations = githubClient.listUserInstallations(accessToken).filter { it.appId == appId }
+		val installations = try {
+			githubClient.listUserInstallations(accessToken).filter { it.appId == appId }
+		} catch (exception: ApiException) {
+			if (exception.error != "GITHUB_ACCESS_DENIED") throw exception
+			// A separately issued OAuth token can identify the user but GitHub may
+			// reject it for /user/installations. App credentials can still safely
+			// recover a personal installation by matching the linked account ID.
+			githubClient.listAppInstallations().filter {
+				it.appId == appId &&
+					it.accountType.equals("USER", ignoreCase = true) &&
+					it.accountId == link.githubAccountId
+			}.ifEmpty { throw exception }
+		}
 		if (installations.isEmpty()) {
 			throw ApiException(
 				HttpStatus.NOT_FOUND,

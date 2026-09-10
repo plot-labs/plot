@@ -130,8 +130,28 @@ class GitHubRestClient(
 	}
 
 	override fun listUserInstallations(userAccessToken: String): List<GitHubUserInstallation> {
+		return listInstallations(
+			initialUri = uri("/user/installations?per_page=100&page=1"),
+			token = userAccessToken,
+			arrayFromRoot = { it.path("installations") },
+		)
+	}
+
+	override fun listAppInstallations(): List<GitHubUserInstallation> {
+		return listInstallations(
+			initialUri = uri("/app/installations?per_page=100&page=1"),
+			token = appJwt(),
+			arrayFromRoot = { it },
+		)
+	}
+
+	private fun listInstallations(
+		initialUri: URI,
+		token: String,
+		arrayFromRoot: (JsonNode) -> JsonNode,
+	): List<GitHubUserInstallation> {
 		val installations = mutableListOf<GitHubUserInstallation>()
-		var next: URI? = uri("/user/installations?per_page=100&page=1")
+		var next: URI? = initialUri
 		var pages = 0
 		while (next != null) {
 			pages++
@@ -142,10 +162,10 @@ class GitHubRestClient(
 					"GitHub returned too many installations",
 				)
 			}
-			val response = request("GET", next, userAccessToken)
+			val response = request("GET", next, token)
 			val root = parse(response)
-			val installationArray = root.path("installations")
-			if (!installationArray.isArray) invalidResponse("GitHub returned an invalid user installation response")
+			val installationArray = arrayFromRoot(root)
+			if (!installationArray.isArray) invalidResponse("GitHub returned an invalid installation response")
 			installationArray.forEach { node ->
 				val installationId = node.path("id").longValue()
 				val appId = node.path("app_id").takeIf { it.canConvertToLong() }?.longValue()?.toString()
@@ -161,7 +181,7 @@ class GitHubRestClient(
 					accountLogin == null ||
 					accountType == null
 				) {
-					invalidResponse("GitHub returned an invalid user installation")
+					invalidResponse("GitHub returned an invalid installation")
 				}
 				installations += GitHubUserInstallation(
 					installationId = installationId,

@@ -19,6 +19,10 @@ interface GitHubClient {
 	fun listUserInstallations(userAccessToken: String): List<GitHubUserInstallation> =
 		throw UnsupportedOperationException("GitHub user installation lookup is not implemented")
 
+	/** Lists installations owned by this GitHub App using app-level credentials. */
+	fun listAppInstallations(): List<GitHubUserInstallation> =
+		throw UnsupportedOperationException("GitHub App installation lookup is not implemented")
+
 	/** Verifies a grant with a repository-scoped installation token. */
 	fun verifyRepositoryAccess(
 		installationId: Long,
