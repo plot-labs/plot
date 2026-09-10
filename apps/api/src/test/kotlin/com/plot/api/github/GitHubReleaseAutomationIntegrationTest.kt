@@ -467,10 +467,6 @@ class GitHubReleaseAutomationIntegrationTest {
 		val secondDeliveryId = "second-${UUID.randomUUID()}"
 		webhookService.accept(releasePublished(fixture, secondDeliveryId, "v1.1.0"))
 		assertEquals(1, releaseWorker.drain())
-        assertEquals(GitHubReleaseDraftStatus.DEFERRED, release("v1.1.0", fixture).status)
-        assertNull(release("v1.1.0", fixture).agentRunId)
-        webhookService.accept(releasePublished(fixture, "published-${UUID.randomUUID()}", "v1.1.0"))
-        assertEquals(1, releaseWorker.drain())
 		val generating = release("v1.1.0", fixture)
 		assertEquals(GitHubReleaseDraftStatus.GENERATING, generating.status)
 		assertEquals(firstHead, generating.baseSha)
