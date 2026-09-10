@@ -1,13 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { fetchPlotAuthSession, fetchPlotAuthToken, hasPlotSessionCookie } from "@/lib/plot-auth";
+import { fetchPlotAuthSession, fetchPlotAuthToken } from "@/lib/plot-auth";
 
 describe("plot auth helpers", () => {
-  it("detects plot.session cookies", () => {
-    expect(hasPlotSessionCookie("plot.session=abc123; other=value")).toBe(true);
-    expect(hasPlotSessionCookie("other=value")).toBe(false);
-  });
-
   it("fetches session and token from the Kotlin API", async () => {
     const fetcher = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(Response.json({ user: { id: "user-1", email: "member@example.com" } }))

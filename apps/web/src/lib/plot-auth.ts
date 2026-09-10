@@ -42,12 +42,4 @@ export async function fetchPlotAuthToken(cookieHeader: string | null): Promise<s
   }
 }
 
-export function hasPlotSessionCookie(cookieHeader: string | null): boolean {
-  if (!cookieHeader) return false;
-  return cookieHeader.split(";").some((part) => {
-    const [name, ...rest] = part.trim().split("=");
-    return name === SESSION_COOKIE && rest.join("=").length > 0;
-  });
-}
-
 export { SESSION_COOKIE };
