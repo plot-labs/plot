@@ -31,6 +31,7 @@ docs/private/
 /docs/plans/
 /docs/strategy/
 /docs/architecture/
+/docs/adr
 
 # Local screenshots and review artifacts
 /artifacts/
