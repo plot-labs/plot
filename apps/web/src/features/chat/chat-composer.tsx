@@ -7,7 +7,7 @@ import {
   ChatSendButton,
 } from "@astryxdesign/core/Chat";
 import { Citation } from "@astryxdesign/core/Citation";
-import { ArrowUp, Folder, Mic, Plus } from "lucide-react";
+import { ArrowUp, Folder, Plus } from "lucide-react";
 import type { CSSProperties, KeyboardEvent } from "react";
 import { useId, useRef, useState } from "react";
 
@@ -86,13 +86,6 @@ export function ChatComposer({
                 </button>
               </div>
               <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  aria-label="Voice input"
-                  className="inline-flex size-7.5 items-center justify-center rounded-full text-black/50 transition hover:bg-black/5 hover:text-black/80 dark:text-white/50 dark:hover:bg-white/10 dark:hover:text-white"
-                >
-                  <Mic className="size-4" />
-                </button>
                 <button
                   type="button"
                   aria-label="Send message"

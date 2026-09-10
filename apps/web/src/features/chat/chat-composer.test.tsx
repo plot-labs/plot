@@ -35,6 +35,11 @@ describe("ChatComposer", () => {
     expect(onSubmit).toHaveBeenCalledWith("Write release notes", ["source-1"]);
     expect(send).toBeDisabled();
   });
+  it("does not render a voice input control", () => {
+    render(<ChatComposer variant="center" references={references} onSubmit={vi.fn()} />);
+
+    expect(screen.queryByRole("button", { name: "Voice input" })).not.toBeInTheDocument();
+  });
 
   it("stays disabled when generation is not allowed", () => {
     render(<ChatComposer variant="center" references={references} canGenerate={false} onSubmit={vi.fn()} />);
