@@ -18,7 +18,7 @@ export function AuthShell({ children }: AuthShellProps) {
           </div>
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#171512]/90 via-[#171512]/15 to-transparent" />
           <div className="pointer-events-none absolute inset-x-8 bottom-8 z-10 max-w-md text-white">
-            <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-white/65">
+            <p className="font-sans text-[11px] uppercase tracking-[0.16em] text-white/65">
               Shipped work → customer awareness
             </p>
             <h2 className="mt-4 font-display text-5xl leading-[0.98] tracking-[-0.02em]">

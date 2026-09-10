@@ -159,7 +159,7 @@ export function WorkspaceGeneral() {
     <div className="h-full overflow-y-auto bg-[#f4f6f8] px-5 py-8 dark:bg-[#101112] sm:px-8 sm:py-10 lg:px-10">
       <div className="mx-auto max-w-[760px] pb-16">
         <header className="max-w-[620px]">
-          <h1 className="font-serif text-[32px] font-normal leading-[1.08] tracking-[-0.025em] text-black/90 dark:text-white/92 sm:text-[36px]">
+          <h1 className="font-display text-[32px] font-normal leading-[1.08] tracking-[-0.025em] text-black/90 dark:text-white/92 sm:text-[36px]">
             General
           </h1>
           <p className="mt-2 text-[14px] leading-6 text-black/52 dark:text-white/50">
@@ -210,7 +210,7 @@ export function WorkspaceGeneral() {
             ) : (
               <>
                 <div className="flex items-center gap-4">
-                  <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-[16px] bg-[#ef3f2c] font-serif text-2xl font-semibold text-white shadow-[0_4px_12px_rgb(239_63_44_/_0.18)]">
+                  <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-[16px] bg-[#ef3f2c] font-display text-2xl font-semibold text-white shadow-[0_4px_12px_rgb(239_63_44_/_0.18)]">
                     {logoUrl ? <Image src={logoUrl} alt="" width={64} height={64} unoptimized className="size-full object-cover" /> : mark}
                   </div>
                   <div className="min-w-0">
@@ -293,7 +293,7 @@ export function WorkspaceGeneral() {
                   {changelogUrl}
                 </p>
                 <p className="mt-2 text-[12px] leading-5 text-black/45 dark:text-white/45">
-                  Workspace slug: <span className="font-mono text-black/62 dark:text-white/62">{workspace.slug}</span>
+                  Workspace slug: <span className="font-sans text-black/62 dark:text-white/62">{workspace.slug}</span>
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">

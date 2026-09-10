@@ -39,7 +39,7 @@ export function LegalPage({
 
       <article className="mx-auto max-w-3xl py-20 sm:py-28">
         <header className="border-b border-black/10 pb-12">
-          <p className="font-mono text-xs uppercase tracking-[0.18em] text-black/45">
+          <p className="font-sans text-xs uppercase tracking-[0.18em] text-black/45">
             {eyebrow}
           </p>
           <h1 className="mt-4 font-display text-5xl tracking-[-0.03em] sm:text-6xl">

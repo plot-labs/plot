@@ -101,7 +101,7 @@ function renderInlineText(text: string): ReactNode[] {
       return (
         <code
           key={`${part}-${index}`}
-          className="rounded-md bg-black/[0.06] px-1.5 py-0.5 font-mono text-[0.92em] text-black/74 dark:bg-white/10 dark:text-white/78"
+          className="rounded-md bg-black/[0.06] px-1.5 py-0.5 font-sans text-[0.92em] text-black/74 dark:bg-white/10 dark:text-white/78"
         >
           {part.slice(1, -1)}
         </code>

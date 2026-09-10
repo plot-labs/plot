@@ -53,7 +53,7 @@ export function ProductPreview() {
     <div id="product-preview" className="scroll-mt-24">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
         <span>The Plot workspace</span>
-        <span className="font-mono text-[10px] uppercase tracking-wider">
+        <span className="font-sans text-[10px] uppercase tracking-wider">
           Product preview · Example data
         </span>
       </div>

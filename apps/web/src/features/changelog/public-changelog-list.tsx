@@ -23,7 +23,7 @@ export function PublicChangelogList({ workspaceSlug, entries }: PublicChangelogL
     return (
       <section aria-labelledby="changelog-empty-heading">
         <header className="border-b border-black/10 pb-10">
-          <p className="font-mono text-xs uppercase tracking-[0.18em] text-black/45">Changelog</p>
+          <p className="font-sans text-xs uppercase tracking-[0.18em] text-black/45">Changelog</p>
           <h1 id="changelog-empty-heading" className="mt-4 font-display text-5xl tracking-[-0.03em] sm:text-6xl">
             No changelog entries yet
           </h1>
@@ -38,7 +38,7 @@ export function PublicChangelogList({ workspaceSlug, entries }: PublicChangelogL
   return (
     <section aria-labelledby="changelog-list-heading">
       <header className="border-b border-black/10 pb-10">
-        <p className="font-mono text-xs uppercase tracking-[0.18em] text-black/45">Changelog</p>
+        <p className="font-sans text-xs uppercase tracking-[0.18em] text-black/45">Changelog</p>
         <h1 id="changelog-list-heading" className="mt-4 font-display text-5xl tracking-[-0.03em] sm:text-6xl">
           Updates
         </h1>
@@ -51,7 +51,7 @@ export function PublicChangelogList({ workspaceSlug, entries }: PublicChangelogL
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-black/45">
                 <time dateTime={entry.publishedAt}>{formatPublishedAt(entry.publishedAt)}</time>
                 {entry.tagName ? (
-                  <span className="rounded-full border border-black/10 px-2 py-0.5 font-mono text-xs uppercase tracking-[0.12em] text-black/55">
+                  <span className="rounded-full border border-black/10 px-2 py-0.5 font-sans text-xs uppercase tracking-[0.12em] text-black/55">
                     {entry.tagName}
                   </span>
                 ) : null}

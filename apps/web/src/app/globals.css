@@ -47,7 +47,6 @@
 
 @theme inline {
   --font-sans: var(--font-inter), 'Inter', system-ui, sans-serif;
-  --font-mono: var(--font-inter), 'Inter', system-ui, sans-serif;
   --font-display: var(--font-playfair-display), 'Playfair Display', Georgia, serif;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -93,6 +92,7 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-sans);
   }
   html {
     scroll-behavior: smooth;

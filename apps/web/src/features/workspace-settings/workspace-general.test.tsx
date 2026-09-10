@@ -42,7 +42,7 @@ describe("WorkspaceGeneral", () => {
     render(<WorkspaceGeneral />);
 
     expect(await screen.findByText(publicChangelogUrl("personal"))).toBeVisible();
-    expect(screen.getByText("personal", { selector: ".font-mono" })).toBeInTheDocument();
+    expect(screen.getByText("personal", { selector: ".font-sans" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Copy link" })).toBeVisible();
     expect(screen.getByRole("link", { name: "View live" })).toHaveAttribute("href", publicChangelogUrl("personal"));
   });

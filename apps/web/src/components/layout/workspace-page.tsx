@@ -27,7 +27,7 @@ export function WorkspaceHeader({
     <header className="border-b border-black/[0.08] px-6 pb-5 pt-8 dark:border-white/10">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <h1 id={id} className="font-serif text-[32px] font-normal leading-none tracking-[-0.025em] text-black/90 dark:text-white/92">
+          <h1 id={id} className="font-display text-[32px] font-normal leading-none tracking-[-0.025em] text-black/90 dark:text-white/92">
             {title}
           </h1>
           <p className="mt-2 text-[13px] leading-5 text-black/48 dark:text-white/50">{description}</p>

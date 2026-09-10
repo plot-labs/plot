@@ -20,7 +20,7 @@ export default function SignInPage() {
     <AuthShell>
       <div>
         <div className="text-center">
-          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-black/40">
+          <p className="font-sans text-[10px] uppercase tracking-[0.16em] text-black/40">
             Welcome back
           </p>
           <h1 className="mt-3 font-display text-[42px] leading-[1.02] tracking-[-0.02em] sm:text-5xl">

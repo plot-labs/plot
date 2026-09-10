@@ -20,63 +20,63 @@ colors:
   focus-amber: "#f59e0b"
 typography:
   display-lg:
-    fontFamily: Instrument Serif
+    fontFamily: Playfair Display
     fontSize: 96px
     fontWeight: 400
     lineHeight: 0.9
     letterSpacing: -0.03em
   display-md:
-    fontFamily: Instrument Serif
+    fontFamily: Playfair Display
     fontSize: 72px
     fontWeight: 400
     lineHeight: 0.9
     letterSpacing: -0.02em
   headline-lg:
-    fontFamily: Instrument Serif
+    fontFamily: Playfair Display
     fontSize: 48px
     fontWeight: 400
     lineHeight: 1.1
     letterSpacing: -0.02em
   headline-md:
-    fontFamily: Instrument Serif
+    fontFamily: Playfair Display
     fontSize: 32px
     fontWeight: 400
     lineHeight: 1.2
     letterSpacing: -0.02em
   body-lg:
-    fontFamily: Instrument Sans
+    fontFamily: Inter
     fontSize: 18px
     fontWeight: 400
     lineHeight: 1.6
   body-md:
-    fontFamily: Instrument Sans
+    fontFamily: Inter
     fontSize: 16px
     fontWeight: 400
     lineHeight: 1.5
   body-sm:
-    fontFamily: Instrument Sans
+    fontFamily: Inter
     fontSize: 14px
     fontWeight: 400
     lineHeight: 1.5
   body-xs:
-    fontFamily: Instrument Sans
+    fontFamily: Inter
     fontSize: 12px
     fontWeight: 400
     lineHeight: 1.5
   label-md:
-    fontFamily: JetBrains Mono
+    fontFamily: Inter
     fontSize: 12px
     fontWeight: 600
     lineHeight: 1
     letterSpacing: 0.08em
   label-sm:
-    fontFamily: JetBrains Mono
+    fontFamily: Inter
     fontSize: 11px
     fontWeight: 600
     lineHeight: 1
     letterSpacing: 0.08em
   label-xs:
-    fontFamily: JetBrains Mono
+    fontFamily: Inter
     fontSize: 10px
     fontWeight: 600
     lineHeight: 1
@@ -172,18 +172,17 @@ components:
 
 ## Overview
 
-Plot's visual identity is rooted in editorial paper aesthetics: near-monochrome ink on off-white stock, monospace labels for metadata, and serif headlines for narrative weight. The system evokes evidence review and journalistic rigor — not glossy product marketing or glassmorphic depth.
+Plot's visual identity is rooted in editorial paper aesthetics: near-monochrome ink on off-white stock, compact sans-serif labels for metadata, and Playfair Display headlines for narrative weight. The system evokes evidence review and journalistic rigor — not glossy product marketing or glassmorphic depth.
 
 The design communicates **inspection and approval**: operators review source-cited drafts in a workspace with dense controls and technical clarity; customers read published content in a generous, readable register. Both surfaces share the same factual foundation (exact ranges, inspectable citations) but present it in registers suited to their audience.
 
 The palette stays neutral except for two functional accents: **citation red** (`#ef3f2c`) marks inspectable sources in public-facing content, and **amber** (`#f59e0b`) highlights focus states and warnings in the workspace. This restraint keeps attention on content structure and evidence links, not decorative color.
 
 Fonts reinforce the editorial metaphor:
-- **Instrument Serif** for display headlines (journalistic authority)
-- **Instrument Sans** for body text (contemporary readability)
-- **JetBrains Mono** for all metadata, labels, and technical annotations (precision, not decoration)
+- **Playfair Display** for display headlines and narrative emphasis (journalistic authority)
+- **Inter** for body text, metadata, labels, and technical annotations (contemporary readability and precision)
 
-The result is a workspace that feels like a CMS for factual content: grid backgrounds, minimal shadows, pill-shaped primary actions, and monospace uppercase labels. The published changelog reads like editorial output — generous line height, citation footnotes, numbered sources — not a SaaS dashboard.
+The result is a workspace that feels like a CMS for factual content: grid backgrounds, minimal shadows, pill-shaped primary actions, and compact uppercase labels. The published changelog reads like editorial output — generous line height, citation footnotes, numbered sources — not a SaaS dashboard.
 
 ## Colors
 
@@ -200,13 +199,11 @@ All colors use OKLCH notation to preserve perceptual uniformity. The system avoi
 
 ## Typography
 
-Typography follows a three-tier strategy:
+Typography follows a two-tier strategy:
 
-1. **Instrument Serif** — Display and headline levels (`display-lg` at 96px, `headline-lg` at 48px). Reserved for landing page headlines, public changelog entry titles, and any narrative framing that benefits from editorial weight. Tracking is negative (`-0.02em` to `-0.03em`) to increase density.
+1. **Playfair Display** — Display and headline levels (`display-lg` at 96px, `headline-lg` at 48px). Reserved for landing page headlines, public changelog entry titles, and any narrative framing that benefits from editorial weight. Tracking is negative (`-0.02em` to `-0.03em`) to increase density.
 
-2. **Instrument Sans** — Body text at all scales (`body-lg` 18px, `body-md` 16px, `body-sm` 14px, `body-xs` 12px). Used for prose, descriptions, button labels, and all operator workspace UI. Line heights are generous (1.5 to 1.6) for long-form readability.
-
-3. **JetBrains Mono** — Metadata labels in three sizes (`label-md` 12px, `label-sm` 11px, `label-xs` 10px). Always uppercase with wide letter spacing (`0.08em` to `0.12em`). Used for timestamps, status badges, technical annotations, source counts, and any label that benefits from monospace precision.
+2. **Inter** — Body text at all scales (`body-lg` 18px, `body-md` 16px, `body-sm` 14px, `body-xs` 12px), including metadata, labels, and technical annotations. Used for prose, descriptions, button labels, and all operator workspace UI. Line heights are generous (1.5 to 1.6) for long-form readability.
 
 Headlines and display text are set in regular weight (400); the typeface's serifs and generous spacing provide sufficient contrast. Body text and labels use regular (400) and semibold (600) weights only — no extremes.
 
@@ -259,7 +256,7 @@ The **Plot logo** is an abstract organic mark with continuous curves, rendered i
 
 **Ghost button**: Transparent background, black text. Hover adds a subtle gray tint. Used for tertiary actions and icon-only controls.
 
-All buttons use `{typography.body-xs}` (12px Instrument Sans) for labels. Icon-only buttons are 32px square.
+All buttons use `{typography.body-xs}` (12px Inter) for labels. Icon-only buttons are 32px square.
 
 ### Citation Chips
 
@@ -267,7 +264,7 @@ The **citation chip** is a signature component. In public changelog prose, it ap
 
 - Background: `#fff4f1` (warm cream tint)
 - Text: `#ef3f2c` (citation red)
-- Font: JetBrains Mono, 11px semibold
+- Font: Inter, 11px semibold
 - Shape: `rounded-full`
 - Height: 24px
 - Padding: 0 6px
@@ -280,7 +277,7 @@ Text inputs and textareas use:
 
 - Background: `{colors.accent}` (light gray)
 - Text: `{colors.foreground}` (near-black)
-- Typography: `{typography.body-md}` (16px Instrument Sans)
+- Typography: `{typography.body-md}` (16px Inter)
 - Rounded: `{rounded.lg}`
 - Height: 40px (single-line inputs)
 - Padding: 0 12px
@@ -297,11 +294,11 @@ No card uses drop shadows unless it floats as a modal or popover.
 
 ### Tags and Status Badges
 
-Small pill-shaped labels (`rounded-full`, 20px height) with monospace uppercase text:
+Small pill-shaped labels (`rounded-full`, 20px height) with compact uppercase text:
 
 - Background: `rgba(0,0,0,0.05)`
 - Text: `{colors.muted-foreground}`
-- Font: JetBrains Mono 10px semibold, uppercase, `0.12em` letter spacing
+- Font: Inter 10px semibold, uppercase, `0.12em` letter spacing
 
 Used for release tag names, routine statuses, artifact states, and provider labels in citation sources.
 
@@ -313,7 +310,7 @@ Used for release tag names, routine statuses, artifact states, and provider labe
 
 **Hover state**: Light gray background (`rgba(0,0,0,0.04)`).
 
-Icons are 14px to 16px, from Hugeicons (free) and Lucide. All navigation uses Instrument Sans 13px medium.
+Icons are 14px to 16px, from Hugeicons (free) and Lucide. All navigation uses Inter 13px medium.
 
 ## Do's and Don'ts
 
@@ -321,9 +318,9 @@ Icons are 14px to 16px, from Hugeicons (free) and Lucide. All navigation uses In
 
 - **Use one solid primary action per screen.** A single black button makes the intended action obvious. Secondary actions can be ghost or outline buttons.
 
-- **Reserve serif for headlines and published narrative.** Instrument Serif signals "this is the story" or "this is the published output." Use Instrument Sans for all operator UI.
+- **Reserve Playfair Display for headlines and published narrative.** Playfair Display signals "this is the story" or "this is the published output." Use Inter for all operator UI.
 
-- **Keep monospace uppercase for metadata only.** JetBrains Mono with wide letter spacing (`0.08em` or more) is the visual signature of technical labels, timestamps, and status badges. Never use it for body prose.
+- **Keep metadata compact and uppercase.** Inter with wide letter spacing (`0.08em` or more) is the visual signature of technical labels, timestamps, and status badges. Use the same Inter family for body prose.
 
 - **Mark citations with the red chip in public content.** The `[1, 2]` notation in citation red is the visual proof of "this claim has sources." Workspace UI shows sources differently (popovers, lists) but never with the red chip.
 
@@ -333,7 +330,7 @@ Icons are 14px to 16px, from Hugeicons (free) and Lucide. All navigation uses In
 
 ### Don't
 
-- **Don't mix serif into operator chrome.** Workspace navigation, buttons, inputs, and control labels are always Instrument Sans. Serif is reserved for content headlines and published output.
+- **Don't mix Playfair Display into operator chrome.** Workspace navigation, buttons, inputs, and control labels are always Inter. Playfair Display is reserved for content headlines and published output.
 
 - **Don't use citation red for errors or warnings.** Citation red (`#ef3f2c`) means "inspectable source" in published content. Errors use the separate destructive color; workspace warnings use amber.
 

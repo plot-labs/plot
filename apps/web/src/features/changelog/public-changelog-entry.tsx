@@ -45,10 +45,10 @@ function MarkdownBody({ markdown }: { markdown: string }) {
         ol: ({ children }) => <ol className="mt-4 list-decimal space-y-2 pl-5">{children}</ol>,
         li: ({ children }) => <li>{children}</li>,
         code: ({ children }) => (
-          <code className="rounded bg-black/[0.05] px-1.5 py-0.5 font-mono text-[0.92em]">{children}</code>
+          <code className="rounded bg-black/[0.05] px-1.5 py-0.5 font-sans text-[0.92em]">{children}</code>
         ),
         pre: ({ children }) => (
-          <pre className="mt-4 overflow-x-auto rounded-lg border border-black/10 bg-white/70 p-4 font-mono text-sm leading-6">
+          <pre className="mt-4 overflow-x-auto rounded-lg border border-black/10 bg-white/70 p-4 font-sans text-sm leading-6">
             {children}
           </pre>
         ),
@@ -103,7 +103,7 @@ export function PublicChangelogEntryView({ workspaceSlug, entry }: PublicChangel
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-black/45">
           <time dateTime={entry.publishedAt}>{formatPublishedAt(entry.publishedAt)}</time>
           {entry.tagName ? (
-            <span className="rounded-full border border-black/10 px-2 py-0.5 font-mono text-xs uppercase tracking-[0.12em] text-black/55">
+            <span className="rounded-full border border-black/10 px-2 py-0.5 font-sans text-xs uppercase tracking-[0.12em] text-black/55">
               {entry.tagName}
             </span>
           ) : null}
@@ -153,7 +153,7 @@ export function PublicChangelogEntryView({ workspaceSlug, entry }: PublicChangel
                   rel="noopener noreferrer"
                   className="flex min-w-0 items-center gap-3 rounded-xl border border-black/10 bg-white/60 px-3 py-2.5 text-sm transition hover:border-black/20 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
                 >
-                  <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-black/[0.05] font-mono text-[11px] font-semibold text-black/55">
+                  <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-black/[0.05] font-sans text-[11px] font-semibold text-black/55">
                     {number}
                   </span>
                   <span className="min-w-0 flex-1 truncate text-black/72">{citation.sourceLabel}</span>

@@ -63,7 +63,7 @@ export function RoutineReleaseActivity({
           <form key={activity.id} onSubmit={submitRange} className="mt-2 space-y-1.5">
             {pinnedHead ? (
               <>
-                <p className="truncate font-mono text-[10px] text-black/35 dark:text-white/38">
+                <p className="truncate font-sans text-[10px] text-black/35 dark:text-white/38">
                   Tag head {activity.headSha}
                 </p>
                 <input type="hidden" name="headSha" value={activity.headSha ?? ""} />
@@ -78,7 +78,7 @@ export function RoutineReleaseActivity({
                   autoComplete="off"
                   placeholder="Head commit SHA"
                   aria-label={`Head commit SHA for ${routineName}`}
-                  className="h-7 w-full rounded-[7px] border border-black/10 bg-white px-2 font-mono text-[11px] text-black/70 outline-none focus:border-black/25 dark:border-white/12 dark:bg-white/[0.06] dark:text-white/80"
+                  className="h-7 w-full rounded-[7px] border border-black/10 bg-white px-2 font-sans text-[11px] text-black/70 outline-none focus:border-black/25 dark:border-white/12 dark:bg-white/[0.06] dark:text-white/80"
                 />
               </label>
             )}
@@ -91,7 +91,7 @@ export function RoutineReleaseActivity({
                 autoComplete="off"
                 placeholder="Previous commit SHA"
                 aria-label={`Previous commit SHA for ${routineName}`}
-                className="h-7 w-full rounded-[7px] border border-black/10 bg-white px-2 font-mono text-[11px] text-black/70 outline-none focus:border-black/25 dark:border-white/12 dark:bg-white/[0.06] dark:text-white/80"
+                className="h-7 w-full rounded-[7px] border border-black/10 bg-white px-2 font-sans text-[11px] text-black/70 outline-none focus:border-black/25 dark:border-white/12 dark:bg-white/[0.06] dark:text-white/80"
               />
             </label>
             <button

@@ -181,7 +181,7 @@ export function TiptapCitationNodeView({ node }: NodeViewProps) {
                   >
                     <ChevronLeft className="size-3.5" />
                   </button>
-                  <span className="text-[11px] font-mono font-medium text-black/40 dark:text-white/40">
+                  <span className="text-[11px] font-sans font-medium text-black/40 dark:text-white/40">
                     {currentIndex + 1} / {sourceList.length}
                   </span>
                   <button
@@ -236,7 +236,7 @@ export function TiptapCitationNodeView({ node }: NodeViewProps) {
 
             {isSafeHttpUrl(currentSource.url) ? (
               <div className="mt-3 flex items-center justify-between border-t border-black/[0.06] pt-2.5 dark:border-white/[0.08]">
-                <span className="truncate max-w-[220px] font-mono text-[11px] text-black/40 dark:text-white/40">
+                <span className="truncate max-w-[220px] font-sans text-[11px] text-black/40 dark:text-white/40">
                   {currentSource.url.replace(/^https?:\/\/(www\.)?/, "")}
                 </span>
                 <a

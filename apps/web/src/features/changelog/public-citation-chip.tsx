@@ -50,7 +50,7 @@ export function PublicCitationChip({ references }: PublicCitationChipProps) {
         aria-label={`Show citation${safeReferences.length === 1 ? "" : "s"} ${numbers}`}
         onClick={() => setOpen((current) => !current)}
         onFocus={() => setOpen(true)}
-        className="inline-flex min-h-6 items-center rounded-full border border-[#ef3f2c]/25 bg-[#fff4f1] px-1.5 align-middle font-mono text-[11px] font-semibold leading-none text-[#c73728] transition hover:border-[#ef3f2c]/45 hover:bg-[#ffeae5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ef3f2c]/35 focus-visible:ring-offset-2"
+        className="inline-flex min-h-6 items-center rounded-full border border-[#ef3f2c]/25 bg-[#fff4f1] px-1.5 align-middle font-sans text-[11px] font-semibold leading-none text-[#c73728] transition hover:border-[#ef3f2c]/45 hover:bg-[#ffeae5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ef3f2c]/35 focus-visible:ring-offset-2"
       >
         [{numbers}]
       </button>
@@ -72,7 +72,7 @@ export function PublicCitationChip({ references }: PublicCitationChipProps) {
                   rel="noopener noreferrer"
                   className="flex items-start gap-2 rounded-lg px-2 py-1.5 text-sm text-black/72 transition hover:bg-black/[0.04] hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ef3f2c]/30"
                 >
-                  <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-black/[0.05] font-mono text-[10px] font-semibold text-black/55">
+                  <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-black/[0.05] font-sans text-[10px] font-semibold text-black/55">
                     {number}
                   </span>
                   {citation.provider === "GITHUB" ? (

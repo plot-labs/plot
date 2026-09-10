@@ -258,7 +258,7 @@ export function WorkspaceAvatar({ logoUrl, mark, variant }: { logoUrl?: string |
   return (
     <span
       className={cn(
-        "flex shrink-0 items-center justify-center overflow-hidden font-serif font-semibold leading-none",
+        "flex shrink-0 items-center justify-center overflow-hidden font-display font-semibold leading-none",
         isMenu ? "size-6 rounded-[7px] text-[12px]" : "size-6 rounded-[7px] text-[14px]",
         logoUrl ? "bg-black/[0.04] dark:bg-white/10" : "bg-[#ef3f2c] text-white",
       )}

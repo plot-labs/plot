@@ -18,7 +18,7 @@ export function FeaturesSection() {
     <section id="features" className="scroll-mt-24 py-20 lg:py-28">
       <div className="mx-auto max-w-[1400px] px-6 lg:px-12">
         <div className="mb-12 max-w-3xl">
-          <p className="mb-4 font-mono text-xs uppercase tracking-wider text-muted-foreground">Decide what matters</p>
+          <p className="mb-4 font-sans text-xs uppercase tracking-wider text-muted-foreground">Decide what matters</p>
           <h2 className="font-display text-4xl tracking-tight sm:text-5xl lg:text-6xl">Not every change needs <br />the spotlight.</h2>
           <p className="mt-6 max-w-2xl text-lg leading-8 text-muted-foreground">Plot separates meaningful customer updates from internal noise, then prepares the wording for review. Open the supporting evidence whenever you need to check a claim.</p>
         </div>
@@ -26,20 +26,20 @@ export function FeaturesSection() {
           <article className="py-10 lg:border-r lg:border-foreground/15 lg:py-14 lg:pr-16">
             <div className="mb-10 flex items-center justify-between gap-4">
               <div>
-                <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Customer-facing draft</p>
+                <p className="font-sans text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Customer-facing draft</p>
                 <h3 className="mt-2 font-display text-3xl tracking-tight sm:text-4xl">Find projects faster.</h3>
               </div>
               <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"><Check aria-hidden="true" className="size-4" />2 sources</span>
             </div>
             <div className="max-w-2xl space-y-7 text-xl leading-9 text-foreground/80 sm:text-2xl sm:leading-10">
-              <p>Search your project list by name to get to the right project without scrolling.<sup className="ml-1 font-mono text-[11px] text-muted-foreground">01</sup></p>
-              <p>Pin the projects you return to most. They stay at the top of your list, ready when you are.<sup className="ml-1 font-mono text-[11px] text-muted-foreground">02</sup></p>
+              <p>Search your project list by name to get to the right project without scrolling.<sup className="ml-1 font-sans text-[11px] text-muted-foreground">01</sup></p>
+              <p>Pin the projects you return to most. They stay at the top of your list, ready when you are.<sup className="ml-1 font-sans text-[11px] text-muted-foreground">02</sup></p>
             </div>
           </article>
 
           <aside aria-label="Example source trail" className="border-t border-foreground/15 py-10 lg:border-t-0 lg:py-14 lg:pl-16">
             <div className="mb-8 flex items-center justify-between">
-              <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Source trail · v2.4</p>
+              <p className="font-sans text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Source trail · v2.4</p>
               <a
                 href="#product-preview"
                 className="inline-flex items-center gap-1 text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
@@ -51,7 +51,7 @@ export function FeaturesSection() {
             <ol>
               {sourceRows.map((source) => (
                 <li key={source.number} className="grid grid-cols-[32px_1fr] gap-4 border-t border-foreground/10 py-5 last:border-b">
-                  <span className="font-mono text-xs text-muted-foreground">{source.number}</span>
+                  <span className="font-sans text-xs text-muted-foreground">{source.number}</span>
                   <div>
                     <p className="text-sm font-medium">{source.title}</p>
                     <p className="mt-1 text-sm text-muted-foreground">{source.detail}</p>

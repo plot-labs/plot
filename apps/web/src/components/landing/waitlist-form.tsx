@@ -185,7 +185,7 @@ export function WaitlistForm() {
         </p>
       ) : null}
 
-      <p className="text-sm font-mono text-muted-foreground">
+      <p className="text-sm font-sans text-muted-foreground">
         Customer-ready drafts. You approve before anything goes live.
       </p>
     </form>

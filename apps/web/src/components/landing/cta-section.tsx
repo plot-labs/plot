@@ -5,7 +5,7 @@ export function CtaSection() {
     <section id="waitlist" className="scroll-mt-24 py-20 lg:py-28">
       <div className="mx-auto grid max-w-[1200px] items-start gap-12 px-6 lg:grid-cols-[1fr_1.15fr] lg:gap-24 lg:px-12">
         <div>
-          <p className="mb-5 font-mono text-xs uppercase tracking-wider text-muted-foreground">
+          <p className="mb-5 font-sans text-xs uppercase tracking-wider text-muted-foreground">
             Get early access
           </p>
           <h2 className="font-display text-5xl leading-[1.02] tracking-tight lg:text-7xl">

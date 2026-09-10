@@ -6,7 +6,7 @@ export function HeroSection() {
     <section className="border-b border-foreground/10 pt-32 pb-16 lg:pt-40 lg:pb-24">
       <div className="mx-auto max-w-[1400px] px-6 lg:px-12">
         <div className="mx-auto mb-14 max-w-4xl text-center lg:mb-16">
-          <p className="mb-6 font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Shipped work → customer awareness</p>
+          <p className="mb-6 font-sans text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Shipped work → customer awareness</p>
           <h1 className="font-display text-5xl leading-[1.02] tracking-tight sm:text-7xl lg:text-[88px]">Make every release <br />land.</h1>
           <p className="mx-auto mt-6 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">Plot identifies the shipped changes customers need to know, turns them into a customer-ready changelog, and keeps you in control of publication. Supporting evidence stays available when you review.</p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-5">
@@ -22,7 +22,7 @@ export function HeroSection() {
             ["Final control", "You approve publication"],
           ].map(([term, description]) => (
             <div key={term} className="border-b border-foreground/10 py-5 last:border-b-0 sm:border-r sm:border-b-0 sm:px-6 sm:first:pl-0 sm:last:border-r-0 sm:last:pr-0">
-              <dt className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{term}</dt>
+              <dt className="font-sans text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{term}</dt>
               <dd className="mt-2 text-sm font-medium">{description}</dd>
             </div>
           ))}
