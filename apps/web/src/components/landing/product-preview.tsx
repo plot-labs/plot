@@ -58,11 +58,14 @@ export function ProductPreview() {
         </span>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-black/15 bg-[#eef0f3] shadow-[0_24px_80px_-30px_rgb(0_0_0_/_0.22)]">
+      <div className="overflow-hidden rounded-[24px] bg-[#eef0f3] shadow-[0_24px_80px_-30px_rgb(0_0_0_/_0.22)]">
         <div className="flex h-[720px] text-[#18181b]">
           <LandingProductSidebar />
 
-          <div className="flex min-w-0 flex-1 flex-col bg-[#fbfbf8]">
+          <div
+            className="relative isolate flex min-w-0 flex-1 flex-col overflow-hidden bg-white lg:my-3 lg:border lg:border-r-0 lg:border-black/[0.1] lg:shadow-[-12px_0_32px_-24px_rgb(0_0_0_/_0.45)]"
+            style={{ borderTopLeftRadius: 36, borderBottomLeftRadius: 36 }}
+          >
             <div
               className="flex shrink-0 gap-1 border-b border-black/[0.08] p-2 lg:hidden"
               aria-label="Preview panels"
@@ -232,7 +235,7 @@ function LandingProductSidebar() {
   return (
     <aside
       aria-label="Example workspace sidebar"
-      className="hidden h-full w-[252px] shrink-0 flex-col border-r border-black/[0.08] bg-[#f6f7f9] pr-px text-[#2f3237] lg:flex"
+      className="hidden h-full w-[252px] shrink-0 flex-col bg-[#eef0f3] text-[#2f3237] lg:flex"
     >
       <div className="flex items-center gap-2 px-4 pb-4 pt-5">
         <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -288,6 +291,7 @@ function LandingProductSidebar() {
 
 function LandingChatHeader() {
   const fade: CSSProperties = {
+    borderTopLeftRadius: 15,
     maskImage: "linear-gradient(black calc(100% - 12px), transparent 100%)",
     WebkitMaskImage: "linear-gradient(black calc(100% - 12px), transparent 100%)",
   };
@@ -314,7 +318,10 @@ function LandingChatComposer({ onSubmit }: { onSubmit: (value: string) => void }
   }
 
   return (
-    <div className="w-full bg-[#fbfbf8]/95 px-4 pb-4 pt-3 backdrop-blur-xl sm:px-6">
+    <div
+      className="w-full bg-[#fbfbf8]/95 px-4 pb-4 pt-3 backdrop-blur-xl sm:px-6"
+      style={{ borderBottomLeftRadius: 15 }}
+    >
       <AstryxChatComposer
         onSubmit={(submitted) => {
           onSubmit(submitted);
