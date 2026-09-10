@@ -40,7 +40,7 @@ export function ProductSidebar({ collapsed = false, theme, onThemeChange, onTogg
   return (
     <>
       <aside className={cn(
-        "hidden h-dvh shrink-0 flex-col border-r border-black/[0.08] bg-[#f6f7f9] pr-px text-[#2f3237] transition-[width] duration-200 dark:border-white/10 dark:bg-[#202126] dark:text-[#f4f4f5] lg:flex",
+        "hidden h-dvh shrink-0 flex-col bg-[#f6f7f9] text-[#2f3237] transition-[width] duration-200 dark:bg-[#202126] dark:text-[#f4f4f5] lg:flex",
         collapsed ? "w-[72px]" : "w-[252px]",
       )}>
         <div className={cn(

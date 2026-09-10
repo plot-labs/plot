@@ -51,7 +51,7 @@ export function ProductShell({ children }: { children: ReactNode }) {
 
   return (
     <div className={darkMode ? "dark" : undefined}>
-      <div className="flex min-h-dvh bg-[#eef0f3] text-[#18181b] dark:bg-[#202126] dark:text-[#f4f4f5] lg:h-dvh lg:overflow-hidden">
+      <div className="flex min-h-dvh bg-[#f6f7f9] text-[#18181b] dark:bg-[#202126] dark:text-[#f4f4f5] lg:h-dvh lg:overflow-hidden">
         <ProductSidebar
           collapsed={!sidebarOpen}
           theme={theme}
@@ -61,7 +61,7 @@ export function ProductShell({ children }: { children: ReactNode }) {
 
         <div
           className={cn(
-            "relative flex min-w-0 flex-1 flex-col overflow-hidden bg-[#eef0f3] dark:bg-[#111113]",
+            "relative flex min-w-0 flex-1 flex-col overflow-hidden bg-[#eef0f3] dark:bg-[#111113] lg:my-2 lg:rounded-l-[24px] lg:border lg:border-r-0 lg:border-black/[0.08] dark:lg:border-white/10",
             !sidebarOpen && "shell-sidebar-closed",
           )}
         >
