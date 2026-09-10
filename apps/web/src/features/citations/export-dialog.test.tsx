@@ -4,7 +4,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ExportDialog } from "./export-dialog";
-import { CitedDraftEditor } from "./cited-draft-editor";
+import { TiptapDraftEditor } from "./tiptap-draft-editor";
 import { PlotApiError, type Artifact, type PlotApiClient } from "@plot/api-client";
 
 const pack: Artifact = {
@@ -187,13 +187,13 @@ describe("ExportDialog", () => {
     expect(exportArtifactVariant).toHaveBeenNthCalledWith(2, "variant-1", expect.objectContaining({ expectedRevisionNumber: 3, acknowledgedWarningKeys: ["warning-key-1"] }));
   });
 
-  it("focuses and highlights the real Lexical statement block from an export warning", async () => {
+  it("focuses and highlights the real Tiptap statement block from an export warning", async () => {
     const exportArtifactVariant = vi.fn().mockRejectedValueOnce(new PlotApiError(409, "EXPORT_CONFIRMATION_REQUIRED", "Confirm", {
       warnings: [{ key: "warning-key-1", sentenceNumber: 1, excerpt: "A claim." }],
     }));
     render(
       <>
-        <CitedDraftEditor pack={pack} onSaveArtifact={vi.fn()} />
+        <TiptapDraftEditor pack={pack} onSaveArtifact={vi.fn()} />
         <ExportDialog pack={pack} client={{ exportArtifactVariant } as unknown as PlotApiClient} />
       </>,
     );

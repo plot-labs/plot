@@ -30,7 +30,21 @@ const ArtifactIdentityExtension = Extension.create({
         types: ["paragraph", "heading", "bulletList", "orderedList", "listItem"],
         attributes: {
           nodeId: { default: null },
-          statementId: { default: null },
+          // Rendered to the DOM so export/publish warning jumps can locate
+          // and focus the affected statement block. V1 paragraphs carry
+          // `sourceStatementId` instead of `statementId`; both resolve here.
+          statementId: {
+            default: null,
+            parseHTML: (element) => element.getAttribute("data-statement-id"),
+            renderHTML: (attributes) => {
+              const id = typeof attributes.statementId === "string" && attributes.statementId
+                ? attributes.statementId
+                : typeof attributes.sourceStatementId === "string" && attributes.sourceStatementId
+                  ? attributes.sourceStatementId
+                  : null;
+              return id ? { "data-statement-id": id, tabindex: "-1" } : {};
+            },
+          },
           sourceStatementId: { default: null },
           lineage: { default: [] },
         },

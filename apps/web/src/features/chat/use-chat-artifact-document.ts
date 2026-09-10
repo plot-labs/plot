@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { Artifact, ArtifactHistoryDetail } from "@plot/api-client";
-import type { SaveArtifactInput } from "@/features/citations/cited-draft-editor";
+import type { SaveArtifactInput } from "@/features/citations/tiptap-draft-editor";
 import { plotApiClient } from "@/lib/api-client";
 
 export function useChatArtifactDocument({ requestedArtifactId, selectedActivityArtifactId }: { requestedArtifactId: string | null; selectedActivityArtifactId: string | null }) {

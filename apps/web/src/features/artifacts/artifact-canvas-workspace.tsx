@@ -12,7 +12,7 @@ import { CreateRelatedContentDialog } from "@/features/artifacts/create-related-
 import { ArtifactHistoryPanel } from "@/features/citations/artifact-history-panel";
 import { ExportDialog } from "@/features/citations/export-dialog";
 import { PublishDialog } from "@/features/citations/publish-dialog";
-import type { SaveArtifactInput } from "@/features/citations/cited-draft-editor";
+import type { SaveArtifactInput } from "@/features/citations/tiptap-draft-editor";
 import { useWorkspaceEntitlement } from "@/lib/use-workspace-entitlement";
 
 type ArtifactCanvasWorkspaceProps = {
