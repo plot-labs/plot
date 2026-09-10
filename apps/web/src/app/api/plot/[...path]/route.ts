@@ -201,9 +201,7 @@ function isAllowed(method: string, path: string[]): boolean {
   if (method === "POST" && route === "agent-runs") return true;
   if (method === "GET" && /^agent-runs\/[0-9a-fA-F-]+$/.test(route)) return true;
   if (method === "GET" && route === "sessions") return true;
-  if (method === "POST" && route === "sessions") return true;
   if (method === "GET" && /^sessions\/[^/]+\/agent-runs$/.test(route)) return true;
-  if (method === "PATCH" && /^sessions\/[^/]+$/.test(route)) return true;
   if (method === "GET" && route === "artifacts") return true;
   if (method === "GET" && /^artifacts\/[^/]+$/.test(route)) return true;
   if (method === "POST" && /^artifacts\/[^/]+\/replicate$/.test(route)) return true;

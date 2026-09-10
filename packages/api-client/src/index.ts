@@ -611,8 +611,6 @@ export interface PlotApiClient {
   getSessionTimeline(sessionId: string, options?: RequestOptions): Promise<ExecutionTimelineItem[]>;
   getExecutionTimeline(id: string, options?: RequestOptions): Promise<ExecutionTimelineItem>;
   listSessions(options?: RequestOptions): Promise<WorkSessionSummary[]>;
-  createSession(input: { title?: string | null }, options?: RequestOptions): Promise<WorkSessionSummary>;
-  updateSession(id: string, input: { title?: string }, options?: RequestOptions): Promise<WorkSessionSummary>;
   listSourceReferences(options?: RequestOptions): Promise<SourceReference[]>;
   getArtifact(id: string, options?: RequestOptions): Promise<Artifact>;
   getArtifactVariant(id: string, options?: RequestOptions): Promise<Artifact>;
@@ -786,16 +784,6 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
       signal: requestOptions?.signal,
     }),
     listSessions: (requestOptions) => request("/sessions", { signal: requestOptions?.signal }),
-    createSession: (input, requestOptions) => request("/sessions", {
-      method: "POST",
-      body: JSON.stringify(input),
-      signal: requestOptions?.signal,
-    }),
-    updateSession: (id, input, requestOptions) => request(`/sessions/${encodeURIComponent(id)}`, {
-      method: "PATCH",
-      body: JSON.stringify(input),
-      signal: requestOptions?.signal,
-    }),
     listSourceReferences: async (requestOptions) => {
       const connections = await request<GitHubConnection[]>("/github/connections", { signal: requestOptions?.signal });
       const scopes = connections

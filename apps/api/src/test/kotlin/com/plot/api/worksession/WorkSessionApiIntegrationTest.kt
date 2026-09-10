@@ -11,15 +11,11 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
 import org.springframework.context.annotation.Import
-import org.springframework.http.MediaType
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.TestPropertySource
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.get
-import org.springframework.test.web.servlet.patch
-import org.springframework.test.web.servlet.post
-import kotlin.test.assertEquals
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -73,56 +69,6 @@ class WorkSessionApiIntegrationTest {
 		)
 	}
 
-	@Test
-	fun createListAndUpdateSession() {
-		mockMvc.post("/api/sessions") {
-			contentType = MediaType.APPLICATION_JSON
-			content = """{"title":"  Draft Session  "}"""
-		}.andExpect {
-			status { isOk() }
-			jsonPath("$.title") { value("Draft Session") }
-			jsonPath("$.status") { value("OPEN") }
-			jsonPath("$.latestArtifactWorkflowId") { doesNotExist() }
-			jsonPath("$.lastActivityAt") { exists() }
-			jsonPath("$.createdAt") { exists() }
-			jsonPath("$.updatedAt") { exists() }
-			jsonPath("$.workspaceId") { doesNotExist() }
-		}
-
-		val sessionId = findSessionIdByTitle("Draft Session")
-
-		mockMvc.get("/api/sessions")
-			.andExpect {
-				status { isOk() }
-				jsonPath("$[0].id") { value(sessionId.toString()) }
-				jsonPath("$[0].title") { value("Draft Session") }
-				jsonPath("$[0].status") { value("OPEN") }
-				jsonPath("$[0].latestArtifactWorkflowId") { doesNotExist() }
-				jsonPath("$[0].workspaceId") { doesNotExist() }
-			}
-
-		mockMvc.patch("/api/sessions/$sessionId") {
-			contentType = MediaType.APPLICATION_JSON
-			content = """{"title":"  Updated Session  "}"""
-		}.andExpect {
-			status { isOk() }
-			jsonPath("$.id") { value(sessionId.toString()) }
-			jsonPath("$.title") { value("Updated Session") }
-			jsonPath("$.status") { value("OPEN") }
-			jsonPath("$.lastActivityAt") { exists() }
-			jsonPath("$.updatedAt") { exists() }
-			jsonPath("$.workspaceId") { doesNotExist() }
-		}
-
-		assertEquals(
-			"Updated Session",
-			jdbcTemplate.queryForObject(
-				"select title from work_sessions where id = ?",
-				String::class.java,
-				sessionId,
-			),
-		)
-	}
 
 	@Test
 	fun listOrdersSessionsByLatestActivity() {
@@ -167,42 +113,7 @@ class WorkSessionApiIntegrationTest {
 			}
 	}
 
-	@Test
-	fun patchReturnsNotFoundForRandomUuid() {
-		val randomUuid = UUID.randomUUID()
 
-		mockMvc.patch("/api/sessions/$randomUuid") {
-			contentType = MediaType.APPLICATION_JSON
-			content = """{"title":"Updated Session"}"""
-		}.andExpect {
-			status { isNotFound() }
-			jsonPath("$.error") { value("NOT_FOUND") }
-		}
-	}
-
-	@Test
-	fun patchReturnsBadRequestForMalformedSessionId() {
-		mockMvc.patch("/api/sessions/not-a-uuid") {
-			contentType = MediaType.APPLICATION_JSON
-			content = """{"title":"Updated Session"}"""
-		}.andExpect {
-			status { isBadRequest() }
-			jsonPath("$.error") { value("BAD_REQUEST") }
-		}
-	}
-
-	private fun findSessionIdByTitle(title: String): UUID {
-		return jdbcTemplate.queryForObject(
-			"""
-			select id
-			from work_sessions
-			where workspace_id = ? and title = ?
-			""".trimIndent(),
-			UUID::class.java,
-			devContext.devWorkspaceId,
-			title,
-		)!!
-	}
 
 	private fun insertSession(
 		id: UUID,

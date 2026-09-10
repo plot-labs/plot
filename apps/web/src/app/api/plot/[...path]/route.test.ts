@@ -15,7 +15,7 @@ describe("Plot same-origin proxy", () => {
 
   it("uses the server JWT and never forwards browser credentials", async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ ok: true }));
-    const request = new Request("http://web.test/api/plot/sessions", {
+    const request = new Request("http://web.test/api/plot/agent-runs", {
       method: "POST",
       headers: {
         Authorization: "Bearer forged",
@@ -26,7 +26,7 @@ describe("Plot same-origin proxy", () => {
       body: "{}",
     });
 
-    const response = await proxyPlotRequest(request, ["sessions"], {
+    const response = await proxyPlotRequest(request, ["agent-runs"], {
       fetch: fetcher,
       getSession: async () => ({ user: { email: "member@example.com" } }),
       getServerJwt: async () => "server-issued-jwt",
@@ -55,12 +55,12 @@ describe("Plot same-origin proxy", () => {
 
   it("rejects cross-origin state changes", async () => {
     const fetcher = vi.fn<typeof fetch>();
-    const request = new Request("http://web.test/api/plot/sessions", {
+    const request = new Request("http://web.test/api/plot/agent-runs", {
       method: "POST",
       headers: { Origin: "https://attacker.test" },
     });
 
-    const response = await proxyPlotRequest(request, ["sessions"], {
+    const response = await proxyPlotRequest(request, ["agent-runs"], {
       fetch: fetcher,
       getSession: async () => ({ user: { email: "member@example.com" } }),
       getServerJwt: async () => "server-issued-jwt",
@@ -72,11 +72,11 @@ describe("Plot same-origin proxy", () => {
 
   it("fails closed when neither Origin nor Referer is present", async () => {
     const fetcher = vi.fn<typeof fetch>();
-    const request = new Request("http://web.test/api/plot/sessions", {
+    const request = new Request("http://web.test/api/plot/agent-runs", {
       method: "POST",
     });
 
-    const response = await proxyPlotRequest(request, ["sessions"], {
+    const response = await proxyPlotRequest(request, ["agent-runs"], {
       fetch: fetcher,
       getSession: async () => ({ user: { email: "member@example.com" } }),
       getServerJwt: async () => "server-issued-jwt",
@@ -88,12 +88,12 @@ describe("Plot same-origin proxy", () => {
 
   it("accepts a same-site Referer when the Origin header is absent", async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ ok: true }));
-    const request = new Request("http://web.test/api/plot/sessions", {
+    const request = new Request("http://web.test/api/plot/agent-runs", {
       method: "POST",
       headers: { Referer: "http://web.test/dashboard" },
     });
 
-    const response = await proxyPlotRequest(request, ["sessions"], {
+    const response = await proxyPlotRequest(request, ["agent-runs"], {
       fetch: fetcher,
       getSession: async () => ({ user: { email: "member@example.com" } }),
       getServerJwt: async () => "server-issued-jwt",
@@ -104,12 +104,12 @@ describe("Plot same-origin proxy", () => {
 
   it("rejects a cross-site Referer when the Origin header is absent", async () => {
     const fetcher = vi.fn<typeof fetch>();
-    const request = new Request("http://web.test/api/plot/sessions", {
+    const request = new Request("http://web.test/api/plot/agent-runs", {
       method: "POST",
       headers: { Referer: "https://attacker.test/lure" },
     });
 
-    const response = await proxyPlotRequest(request, ["sessions"], {
+    const response = await proxyPlotRequest(request, ["agent-runs"], {
       fetch: fetcher,
       getSession: async () => ({ user: { email: "member@example.com" } }),
       getServerJwt: async () => "server-issued-jwt",
@@ -232,6 +232,7 @@ describe("Plot same-origin proxy", () => {
     ["GET", ["routines"]],
     ["GET", ["routines", "018fd000-0000-7000-8000-000000000002"]],
     ["GET", ["routines", "018fd000-0000-7000-8000-000000000002", "agent-runs", "018fd000-0000-7000-8000-000000000003"]],
+    ["GET", ["sessions"]],
     ["GET", ["sessions", "018fd000-0000-7000-8000-000000000002", "agent-runs"]],
     ["POST", ["routines"]],
     ["PATCH", ["routines", "018fd000-0000-7000-8000-000000000002"]],
@@ -378,6 +379,8 @@ describe("Plot same-origin proxy", () => {
     ["DELETE", ["generations", "run-1"]],
     ["POST", ["admin"]],
     ["GET", ["..", "secrets"]],
+    ["POST", ["sessions"]],
+    ["PATCH", ["sessions", "018fd000-0000-7000-8000-000000000002"]],
   ])("rejects arbitrary %s %o", async (method, path) => {
     const fetcher = vi.fn<typeof fetch>();
     const response = await proxyPlotRequest(new Request("http://web.test/api/plot/x", { method }), path, { fetch: fetcher });
