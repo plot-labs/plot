@@ -5,18 +5,25 @@ import com.plot.api.auth.jwt.PlotJwtService
 import com.plot.api.auth.oauth.AuthOAuthService
 import com.plot.api.auth.oauth.GitHubOAuthService
 import com.plot.api.auth.oauth.OAuthStateCodec
+import com.plot.api.auth.password.PasswordAuthenticationService
 import com.plot.api.auth.policy.AllowedEmailPolicy
 import com.plot.api.auth.session.AuthSessionService
+import com.plot.api.auth.session.AuthenticatedSession
 import com.plot.api.auth.session.SessionAuthenticationToken
 import com.plot.api.common.ApiException
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
+import jakarta.validation.Valid
+import jakarta.validation.constraints.Email
+import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.Size
 import org.springframework.http.CacheControl
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
@@ -29,6 +36,7 @@ class AuthController(
 	private val githubOAuthService: GitHubOAuthService,
 	private val oauthStateCodec: OAuthStateCodec,
 	private val authOAuthService: AuthOAuthService,
+	private val passwordAuthenticationService: PasswordAuthenticationService,
 	private val authSessionService: AuthSessionService,
 	private val plotJwtService: PlotJwtService,
 	private val allowedEmailPolicy: AllowedEmailPolicy,
@@ -40,6 +48,37 @@ class AuthController(
 		val redirectPath = callbackUrl ?: "/auth/complete"
 		val state = oauthStateCodec.encode(redirectPath)
 		return RedirectView(githubOAuthService.authorizationUrl(state))
+	}
+
+	@PostMapping("/sign-in/password")
+	fun signInPassword(
+		@Valid @RequestBody request: PasswordSignInRequest,
+		httpRequest: HttpServletRequest,
+		response: HttpServletResponse,
+	): ResponseEntity<AuthSessionResponse> {
+		val authenticated = passwordAuthenticationService.authenticate(request.email, request.password, httpRequest)
+		authSessionService.writeSessionCookie(response, authenticated.session.token)
+		return ResponseEntity.ok()
+			.cacheControl(CacheControl.noStore())
+			.body(toSessionResponse(authenticated))
+	}
+
+	@PostMapping("/sign-up/password")
+	fun signUpPassword(
+		@Valid @RequestBody request: PasswordSignUpRequest,
+		httpRequest: HttpServletRequest,
+		response: HttpServletResponse,
+	): ResponseEntity<AuthSessionResponse> {
+		val authenticated = passwordAuthenticationService.register(
+			email = request.email,
+			password = request.password,
+			name = null,
+			request = httpRequest,
+		)
+		authSessionService.writeSessionCookie(response, authenticated.session.token)
+		return ResponseEntity.ok()
+			.cacheControl(CacheControl.noStore())
+			.body(toSessionResponse(authenticated))
 	}
 
 	@GetMapping("/callback/github")
@@ -60,22 +99,25 @@ class AuthController(
 
 	@GetMapping("/session")
 	fun session(authentication: Authentication?): ResponseEntity<AuthSessionResponse> {
-		val authenticated = authenticatedSession(authentication)
-		val user = authenticated.user
 		return ResponseEntity.ok()
 			.cacheControl(CacheControl.noStore())
-			.body(AuthSessionResponse(
-				user = AuthUserResponse(
-					id = user.id,
-					email = user.email,
-					name = user.name,
-					image = user.image,
-				),
-				session = AuthSessionMetaResponse(
-					id = authenticated.session.id,
-					expiresAt = authenticated.session.expiresAt.toString(),
-				),
-			))
+			.body(toSessionResponse(authenticatedSession(authentication)))
+	}
+
+	private fun toSessionResponse(authenticated: AuthenticatedSession): AuthSessionResponse {
+		val user = authenticated.user
+		return AuthSessionResponse(
+			user = AuthUserResponse(
+				id = user.id,
+				email = user.email,
+				name = user.name,
+				image = user.image,
+			),
+			session = AuthSessionMetaResponse(
+				id = authenticated.session.id,
+				expiresAt = authenticated.session.expiresAt.toString(),
+			),
+		)
 	}
 
 	@GetMapping("/token")
@@ -129,4 +171,24 @@ data class AuthSessionMetaResponse(
 
 data class AuthTokenResponse(
 	val token: String,
+)
+
+data class PasswordSignInRequest(
+	@field:NotBlank(message = "Email is required")
+	@field:Email(message = "Enter a valid email address")
+	@field:Size(max = 320, message = "Email must be at most 320 characters")
+	val email: String,
+	@field:NotBlank(message = "Password is required")
+	@field:Size(max = 128, message = "Password must be at most 128 characters")
+	val password: String,
+)
+
+data class PasswordSignUpRequest(
+	@field:NotBlank(message = "Email is required")
+	@field:Email(message = "Enter a valid email address")
+	@field:Size(max = 320, message = "Email must be at most 320 characters")
+	val email: String,
+	@field:NotBlank(message = "Password is required")
+	@field:Size(min = 10, max = 128, message = "Password must be between 10 and 128 characters")
+	val password: String,
 )

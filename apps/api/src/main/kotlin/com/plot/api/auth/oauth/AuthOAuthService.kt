@@ -96,6 +96,7 @@ class AuthOAuthService(
 		accessToken = accessToken,
 		refreshToken = existing?.refreshToken,
 		scope = "read:user user:email read:org",
+		password = existing?.password,
 		createdAt = existing?.createdAt ?: now,
 		updatedAt = now,
 	)

@@ -16,6 +16,7 @@ data class AuthAccountRecord(
 	val accessToken: String?,
 	val refreshToken: String?,
 	val scope: String?,
+	val password: String?,
 	val createdAt: Instant,
 	val updatedAt: Instant,
 )
@@ -32,11 +33,20 @@ class AuthAccountRepository(
 		.fetchOne()
 		?.toModel()
 
+	fun findByUserIdAndProviderId(userId: String, providerId: String): AuthAccountRecord? = dsl.selectFrom(AUTH_ACCOUNT)
+		.where(
+			AUTH_ACCOUNT.USER_ID.eq(userId),
+			AUTH_ACCOUNT.PROVIDER_ID.eq(providerId),
+		)
+		.fetchOne()
+		?.toModel()
+
 	fun save(account: AuthAccountRecord): AuthAccountRecord {
 		val updated = dsl.update(AUTH_ACCOUNT)
 			.set(AUTH_ACCOUNT.ACCESS_TOKEN, account.accessToken)
 			.set(AUTH_ACCOUNT.REFRESH_TOKEN, account.refreshToken)
 			.set(AUTH_ACCOUNT.SCOPE, account.scope)
+			.set(AUTH_ACCOUNT.PASSWORD, account.password)
 			.set(AUTH_ACCOUNT.UPDATED_AT, account.updatedAt.toOffsetDateTime())
 			.where(AUTH_ACCOUNT.ID.eq(account.id))
 			.execute()
@@ -50,6 +60,7 @@ class AuthAccountRepository(
 				.set(AUTH_ACCOUNT.ACCESS_TOKEN, account.accessToken)
 				.set(AUTH_ACCOUNT.REFRESH_TOKEN, account.refreshToken)
 				.set(AUTH_ACCOUNT.SCOPE, account.scope)
+				.set(AUTH_ACCOUNT.PASSWORD, account.password)
 				.set(AUTH_ACCOUNT.CREATED_AT, account.createdAt.toOffsetDateTime())
 				.set(AUTH_ACCOUNT.UPDATED_AT, account.updatedAt.toOffsetDateTime())
 				.execute()
@@ -66,6 +77,7 @@ class AuthAccountRepository(
 		accessToken = get(AUTH_ACCOUNT.ACCESS_TOKEN),
 		refreshToken = get(AUTH_ACCOUNT.REFRESH_TOKEN),
 		scope = get(AUTH_ACCOUNT.SCOPE),
+		password = get(AUTH_ACCOUNT.PASSWORD),
 		createdAt = requireNotNull(get(AUTH_ACCOUNT.CREATED_AT)).toInstant(),
 		updatedAt = requireNotNull(get(AUTH_ACCOUNT.UPDATED_AT)).toInstant(),
 	)

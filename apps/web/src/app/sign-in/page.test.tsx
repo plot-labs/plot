@@ -19,4 +19,10 @@ describe("SignInPage", () => {
 
     expect(assign).toHaveBeenCalledWith("/api/auth/sign-in/github?callbackURL=%2Fauth%2Fcomplete");
   });
+
+  it("links visitors to the approved-account signup page", () => {
+    render(<SignInPage />);
+
+    expect(screen.getByRole("link", { name: "Create one" })).toHaveAttribute("href", "/sign-up");
+  });
 });

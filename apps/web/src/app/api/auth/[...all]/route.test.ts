@@ -40,4 +40,42 @@ describe("auth upstream proxy route", () => {
     expect(response.status).toBe(204);
     expect(fetchMock.mock.calls[0]?.[1]?.method).toBe("POST");
   });
+
+  it("proxies email password sign-in requests with their JSON body", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ user: { id: "user-1" } }), {
+      status: 200,
+      headers: { "content-type": "application/json", "set-cookie": "plot.session=abc; Path=/" },
+    }));
+    const body = JSON.stringify({ email: "member@example.com", password: "secret" });
+
+    const response = await POST(new Request("http://127.0.0.1:3000/api/auth/sign-in/password", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body,
+    }));
+
+    expect(response.status).toBe(200);
+    expect(new URL(String(fetchMock.mock.calls[0]?.[0])).pathname).toBe("/api/auth/sign-in/password");
+    expect(await new Response(fetchMock.mock.calls[0]?.[1]?.body).text()).toBe(body);
+    expect(response.headers.get("set-cookie")).toContain("plot.session=abc");
+  });
+
+  it("proxies email password sign-up requests with their JSON body", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ user: { id: "user-1" } }), {
+      status: 200,
+      headers: { "content-type": "application/json", "set-cookie": "plot.session=abc; Path=/" },
+    }));
+    const body = JSON.stringify({ email: "new@example.com", password: "long enough password" });
+
+    const response = await POST(new Request("http://127.0.0.1:3000/api/auth/sign-up/password", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body,
+    }));
+
+    expect(response.status).toBe(200);
+    expect(new URL(String(fetchMock.mock.calls[0]?.[0])).pathname).toBe("/api/auth/sign-up/password");
+    expect(await new Response(fetchMock.mock.calls[0]?.[1]?.body).text()).toBe(body);
+    expect(response.headers.get("set-cookie")).toContain("plot.session=abc");
+  });
 });

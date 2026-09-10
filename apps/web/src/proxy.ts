@@ -47,6 +47,7 @@ export function proxy(request: NextRequest) {
 
   const isPublicPath =
     request.nextUrl.pathname === "/sign-in" ||
+    request.nextUrl.pathname === "/sign-up" ||
     request.nextUrl.pathname === "/auth/complete" ||
     request.nextUrl.pathname.startsWith("/api/auth") ||
     isPublicChangelogPath(request.nextUrl.pathname);

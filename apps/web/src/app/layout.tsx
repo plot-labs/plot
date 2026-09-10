@@ -1,21 +1,16 @@
 import type { Metadata } from "next";
-import { Instrument_Sans, Instrument_Serif, JetBrains_Mono } from "next/font/google";
+import { Inter, Playfair_Display } from "next/font/google";
 import "./globals.css";
 
-const instrumentSans = Instrument_Sans({
+const inter = Inter({
   subsets: ["latin"],
-  variable: "--font-instrument",
+  variable: "--font-inter",
 });
 
-const instrumentSerif = Instrument_Serif({
+const playfairDisplay = Playfair_Display({
   subsets: ["latin"],
+  variable: "--font-playfair-display",
   weight: "400",
-  variable: "--font-instrument-serif",
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ["latin"],
-  variable: "--font-jetbrains",
 });
 
 export const metadata: Metadata = {
@@ -61,7 +56,7 @@ export default function RootLayout({
     <html
       lang="en"
       data-theme="light"
-      className={`${instrumentSans.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${playfairDisplay.variable} h-full antialiased`}
     >
       <body className="min-h-full">{children}</body>
     </html>

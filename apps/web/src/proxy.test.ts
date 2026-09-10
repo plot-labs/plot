@@ -33,6 +33,14 @@ describe("application proxy", () => {
     expect(proxy(entryRequest).status).toBe(200);
   });
 
+  it("allows unauthenticated access to sign-up on gated hosts", () => {
+    const request = new NextRequest("http://localhost:3000/sign-up", {
+      headers: { host: "localhost:3000" },
+    });
+
+    expect(proxy(request).status).toBe(200);
+  });
+
   it("redirects unauthenticated visitors away from gated app routes", () => {
     const request = new NextRequest("http://localhost:3000/chat", {
       headers: { host: "localhost:3000" },

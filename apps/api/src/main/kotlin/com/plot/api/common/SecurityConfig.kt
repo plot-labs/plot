@@ -2,14 +2,16 @@ package com.plot.api.common
 
 import com.plot.api.auth.PlotAuthProperties
 import com.plot.api.auth.jwt.PlotJwtService
-import com.plot.api.auth.session.SessionAuthenticationFilter
 import com.plot.api.auth.session.AuthSessionService
+import com.plot.api.auth.session.SessionAuthenticationFilter
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.env.Environment
 import org.springframework.http.HttpMethod
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
+import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.security.oauth2.jwt.JwtDecoder
 import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter
@@ -24,6 +26,9 @@ class SecurityConfig(
 ) {
 	@Bean
 	fun jwtDecoder(): JwtDecoder = plotJwtService.decoder()
+
+	@Bean
+	fun passwordEncoder(): PasswordEncoder = BCryptPasswordEncoder()
 
 	@Bean
 	fun sessionAuthenticationFilter(): SessionAuthenticationFilter = SessionAuthenticationFilter(authSessionService)
@@ -43,7 +48,7 @@ class SecurityConfig(
 						.requestMatchers(HttpMethod.GET, "/api/public/**").permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/public/waitlist").permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/github/webhook").permitAll()
-						.requestMatchers("/api/auth/sign-in/**", "/api/auth/callback/**").permitAll()
+						.requestMatchers("/api/auth/sign-in/**", "/api/auth/sign-up/**", "/api/auth/callback/**").permitAll()
 						.requestMatchers(HttpMethod.GET, "/api/auth/jwks").permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/auth/sign-out").permitAll()
 						.requestMatchers("/api/auth/session", "/api/auth/token").authenticated()
