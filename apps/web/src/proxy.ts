@@ -19,7 +19,8 @@ export function isGatedHost(host: string): boolean {
 
 // State-changing API traffic is cheap to spam and expensive to serve (auth
 // flows, AI triggers, upstream writes). Per-IP fixed window; best-effort per
-// instance, with platform-level protection as the outer layer.
+// isolate, with platform-level protection as the outer layer. Rejections
+// carry Retry-After so well-behaved clients back off instead of retrying hot.
 const apiWriteLimiter = createFixedWindowLimiter(60 * 1000, 60);
 
 function clientIp(request: NextRequest): string {
@@ -32,13 +33,16 @@ export function proxy(request: NextRequest) {
 
   if (
     request.nextUrl.pathname.startsWith("/api/") &&
-    !["GET", "HEAD", "OPTIONS"].includes(request.method) &&
-    apiWriteLimiter.check(clientIp(request))
+    !["GET", "HEAD", "OPTIONS"].includes(request.method)
   ) {
-    return NextResponse.json(
-      { error: "TOO_MANY_REQUESTS", message: "Too many requests" },
-      { status: 429 },
-    );
+    const key = clientIp(request);
+    if (apiWriteLimiter.check(key)) {
+      const retryAfterSec = Math.max(1, Math.ceil(apiWriteLimiter.retryAfterMs(key) / 1000));
+      return NextResponse.json(
+        { error: "TOO_MANY_REQUESTS", message: "Too many requests" },
+        { status: 429, headers: { "retry-after": String(retryAfterSec), "cache-control": "no-store" } },
+      );
+    }
   }
 
   const isPublicPath =

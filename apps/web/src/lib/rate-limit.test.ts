@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { createFixedWindowLimiter } from "./rate-limit";
 
@@ -19,14 +19,27 @@ describe("createFixedWindowLimiter", () => {
   });
 
   it("resets after the window elapses", () => {
-    const limiter = createFixedWindowLimiter(5, 1);
+    vi.useFakeTimers();
+    try {
+      const limiter = createFixedWindowLimiter(5, 1);
+      expect(limiter.check("a")).toBe(false);
+      expect(limiter.check("a")).toBe(true);
+      vi.advanceTimersByTime(10);
+      expect(limiter.check("a")).toBe(false);
+      expect(limiter.retryAfterMs("a")).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("reports a retry delay only while the key is limited", () => {
+    const limiter = createFixedWindowLimiter(60_000, 1);
+    expect(limiter.retryAfterMs("missing")).toBe(0);
     expect(limiter.check("a")).toBe(false);
+    expect(limiter.retryAfterMs("a")).toBe(0);
     expect(limiter.check("a")).toBe(true);
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        expect(limiter.check("a")).toBe(false);
-        resolve(undefined);
-      }, 10);
-    });
+    const delay = limiter.retryAfterMs("a");
+    expect(delay).toBeGreaterThan(0);
+    expect(delay).toBeLessThanOrEqual(60_000);
   });
 });

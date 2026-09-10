@@ -1,13 +1,16 @@
 export type FixedWindowLimiter = {
   /** Returns true when the key is over its allowance for the current window. */
   check: (key: string) => boolean;
+  /** Milliseconds until the key's current window expires; 0 when not limited. */
+  retryAfterMs: (key: string) => number;
 };
 
 /**
- * In-memory fixed-window counter. Best-effort by construction: on
- * multi-instance platforms each instance counts independently, so this caps
+ * In-memory fixed-window counter. Best-effort by construction: each server
+ * isolate counts independently, so on multi-instance platforms this caps
  * abuse volume rather than enforcing an exact quota — pair it with
- * platform-level protection where available.
+ * platform-level protection where available. Rejected callers get a
+ * `Retry-After` delay from `retryAfterMs` so they can back off.
  */
 export function createFixedWindowLimiter(windowMs: number, max: number): FixedWindowLimiter {
   const hits = new Map<string, { count: number; expiresAt: number }>();
@@ -29,6 +32,11 @@ export function createFixedWindowLimiter(windowMs: number, max: number): FixedWi
       }
       hit.count += 1;
       return hit.count > max;
+    },
+    retryAfterMs(key: string): number {
+      const hit = hits.get(key);
+      if (!hit || hit.count <= max) return 0;
+      return Math.max(0, hit.expiresAt - Date.now());
     },
   };
 }
