@@ -28,6 +28,9 @@ design/
 # Private docs
 docs/private/
 /docs/operations/
+/docs/solution/
+/docs/solutions/
+/docs/ideation/
 /docs/decision/
 /docs/plans/
 /docs/strategy/
