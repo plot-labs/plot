@@ -26,6 +26,7 @@ build/
 design/
 
 # Private docs
+/CONCEPTS.md
 docs/private/
 /docs/operations/
 /docs/solution/
