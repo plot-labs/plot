@@ -27,6 +27,7 @@ design/
 
 # Private docs
 docs/private/
+/docs/operations/
 /docs/decision/
 /docs/plans/
 /docs/strategy/
