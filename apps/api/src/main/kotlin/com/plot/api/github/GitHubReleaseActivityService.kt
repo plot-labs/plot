@@ -15,7 +15,7 @@ class GitHubReleaseActivityService(
 	private val requestPersistence: GitHubReleaseRequestStore,
 	private val retryService: GitHubReleaseRetryService,
 	private val actorResolver: RequestActorResolver? = null,
-	private val sql: com.plot.api.persistence.JooqSqlExecutor? = null,
+	private val sql: com.plot.api.persistence.JooqSqlExecutor,
 ) {
 	@Transactional(readOnly = true)
 	fun latest(sourceScopeId: UUID): GitHubReleaseActivityResponse? {
@@ -36,11 +36,11 @@ class GitHubReleaseActivityService(
 		val activity = requestPersistence.findActivity(requestId, sourceScopeId, workspaceId)
 			?: throw notFound()
 		val isChatRun = activity.agentRunId?.let { runId ->
-			sql?.query(
+			sql.query(
 				"select 1 from agent_runs where id = ? and origin = 'CHAT'",
 				{ _, _ -> true },
 				runId,
-			)?.firstOrNull() ?: false
+			).firstOrNull() ?: false
 		} ?: false
 		if (activity.status != GitHubReleaseDraftStatus.FAILED || isChatRun) {
 			throw ApiException(

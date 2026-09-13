@@ -203,7 +203,7 @@ export function AgentActivityDetail({
                         <RotateCcw className={`size-3 ${retrying ? "animate-spin" : ""}`} />
                         {retrying ? "Retrying…" : "Retry"}
                       </button>
-                    ) : retryEligibility?.reason && retryEligibility.reason !== "RUN_NOT_TERMINAL" ? (
+                    ) : retryEligibility?.reason && retryEligibility.reason !== "RUN_NOT_TERMINAL" && retryEligibility.reason !== "NOT_LATEST_TURN" ? (
                       <span className="text-xs text-black/40 dark:text-white/40" title={retryEligibility.reason}>
                         {retryEligibility.reason === "NOT_LATEST_VERSION" ? "Select newest response to retry" : "Retry unavailable"}
                       </span>

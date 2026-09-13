@@ -228,7 +228,7 @@ class ArtifactWorkflowPhysicalAttemptIntegrationTest {
 			claim = claim,
 			lease = invocation,
 			code = "PROVIDER_UNAVAILABLE",
-			nextAttemptAt = Instant.now(),
+			nextAttemptAt = Instant.now().minusSeconds(1),
 			metadata = ModelCallMetadata(
 				responseId = "response-1",
 				actualModel = "scripted",

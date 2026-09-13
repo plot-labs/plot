@@ -625,7 +625,12 @@ class ChatAgentAdmissionService(
 		if (runStatus == AgentRunStatus.QUEUED || runStatus == AgentRunStatus.RUNNING) {
 			return RetryEligibilityDto(eligible = false, reason = "RUN_NOT_TERMINAL")
 		}
-		if (envelope == null || envelope.envelopeFingerprint.isBlank() || envelope.generationSettingsJson.isBlank()) {
+		if (
+			envelope == null ||
+			envelope.envelopeFingerprint.isBlank() ||
+			envelope.generationSettingsJson.isBlank() ||
+			envelope.generationSettingsJson.trim() in setOf("{}", "null")
+		) {
 			return RetryEligibilityDto(eligible = false, reason = "INCOMPLETE_ENVELOPE")
 		}
 		try {
@@ -651,35 +656,31 @@ class ChatAgentAdmissionService(
 			sqlExecutor.queryForObject(
 				"select pg_advisory_xact_lock(hashtextextended(?, 0))",
 				{ _, _ -> Unit },
-				"$workspaceId:retry:$key",
+				"$workspaceId:$key",
 			)
 
-			// 1. Check idempotency: does an agent run already exist with this idempotency key?
-			val existingRunId = sqlExecutor.query(
-				"select id from agent_runs where workspace_id = ? and origin = 'CHAT' and idempotency_key = ?",
-				{ rs, _ -> rs.getObject("id", UUID::class.java) },
-				workspaceId,
-				key,
-			).firstOrNull()
-			if (existingRunId != null) {
-				val existingVersion = agentRunQueryPersistence.findResponseVersionByRunId(workspaceId, existingRunId)
-				if (existingVersion != null) {
-					return@execute getResponseVersion(existingVersion.id)
-				}
-			}
-
-			// 2. Find target version and turn
+			// 1. Find target version and turn first to identify context
 			val targetVersion = agentRunQueryPersistence.findResponseVersion(workspaceId, targetVersionId)
 				?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Target response version not found")
 			val turn = agentRunQueryPersistence.findTurn(workspaceId, targetVersion.turnId)
 				?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Turn not found")
 
-			// 3. Serialize at Chat session boundary (KTD5)
-			sqlExecutor.queryForObject(
-				"select pg_advisory_xact_lock(hashtextextended(?, 0))",
-				{ _, _ -> Unit },
-				"$workspaceId:chat:${turn.workSessionId}",
-			)
+			// 2. Check idempotency under lock
+			findExisting(workspaceId, key)?.let { existing ->
+				val existingVersion = agentRunQueryPersistence.findResponseVersionByRunId(workspaceId, existing.id)
+				if (existingVersion != null && existingVersion.turnId == turn.id) {
+					return@execute getResponseVersion(existingVersion.id)
+				}
+				throw AgentRunIdempotencyConflictException()
+			}
+
+			// 3. Serialize at Chat session boundary (KTD5) using row lock on work_sessions
+			sqlExecutor.query(
+				"select id from work_sessions where workspace_id = ? and id = ? for update",
+				{ rs, _ -> rs.getObject("id", UUID::class.java) },
+				workspaceId,
+				turn.workSessionId,
+			).firstOrNull() ?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Chat not found")
 
 			// Lock the turn
 			sqlExecutor.queryForObject(
@@ -705,7 +706,12 @@ class ChatAgentAdmissionService(
 				throw ApiException(HttpStatus.CONFLICT, "RETRY_INELIGIBLE", "Current response is still in progress")
 			}
 			val targetEnvelope = agentRunQueryPersistence.findEnvelopeForAgentRun(workspaceId, targetVersion.agentRunId)
-			if (targetEnvelope == null || targetEnvelope.envelopeFingerprint.isBlank()) {
+			if (
+				targetEnvelope == null ||
+				targetEnvelope.envelopeFingerprint.isBlank() ||
+				targetEnvelope.generationSettingsJson.isBlank() ||
+				targetEnvelope.generationSettingsJson.trim() in setOf("{}", "null")
+			) {
 				throw ApiException(HttpStatus.CONFLICT, "RETRY_INELIGIBLE", "Execution envelope is incomplete")
 			}
 
@@ -716,7 +722,7 @@ class ChatAgentAdmissionService(
 			val newVersionId = uuidGenerator.next()
 			val retryFingerprint = "${targetRun.requestFingerprint}:retry:$newVersionIndex"
 
-			sqlExecutor.update(
+			val inserted = sqlExecutor.update(
 				"""
 				insert into agent_runs (
 				  id, workspace_id, routine_execution_id, routine_id, work_session_id, created_by_user_id,
@@ -746,6 +752,14 @@ class ChatAgentAdmissionService(
 				Timestamp.from(now),
 				Timestamp.from(now),
 			)
+			if (inserted == 0) {
+				val raced = requireNotNull(findExisting(workspaceId, key))
+				val racedVersion = agentRunQueryPersistence.findResponseVersionByRunId(workspaceId, raced.id)
+				if (racedVersion != null && racedVersion.turnId == turn.id) {
+					return@execute getResponseVersion(racedVersion.id)
+				}
+				throw AgentRunIdempotencyConflictException()
+			}
 
 			// 6. Insert new chat_response_versions row
 			sqlExecutor.update(
@@ -874,12 +888,22 @@ class ChatAgentAdmissionService(
 		val userId: UUID,
 		val createdAt: Instant,
 		val fingerprint: String,
+		val promptVersion: String?,
+		val toolPolicyVersion: String?,
+		val budgetSnapshot: String?,
+		val contentType: String?,
+		val contentProfileRevisionId: UUID?,
+		val contentBriefSnapshot: String?,
+		val sourceSnapshotId: UUID?,
 	)
 
 	private fun ensureTurnsForSession(workspaceId: UUID, sessionId: UUID) {
 		val orphanRuns = sqlExecutor.query(
 			"""
-			select a.id, a.instruction_snapshot, a.created_by_user_id, a.created_at, a.request_fingerprint
+			select a.id, a.instruction_snapshot, a.created_by_user_id, a.created_at, a.request_fingerprint,
+			       a.prompt_version, a.tool_policy_version, a.budget_snapshot::text as budget_snapshot,
+			       a.content_type, a.content_profile_revision_id, a.content_brief_snapshot::text as content_brief_snapshot,
+			       a.source_snapshot_id
 			from agent_runs a
 			left join chat_response_versions v on v.workspace_id = a.workspace_id and v.agent_run_id = a.id
 			where a.workspace_id = ? and a.work_session_id = ? and v.id is null
@@ -892,12 +916,33 @@ class ChatAgentAdmissionService(
 					userId = rs.getObject("created_by_user_id", UUID::class.java) ?: devContext.devUserId,
 					createdAt = requireNotNull(rs.getTimestamp("created_at")).toInstant(),
 					fingerprint = rs.getString("request_fingerprint") ?: "legacy-fingerprint",
+					promptVersion = rs.getString("prompt_version"),
+					toolPolicyVersion = rs.getString("tool_policy_version"),
+					budgetSnapshot = rs.getString("budget_snapshot"),
+					contentType = rs.getString("content_type"),
+					contentProfileRevisionId = rs.getObject("content_profile_revision_id", UUID::class.java),
+					contentBriefSnapshot = rs.getString("content_brief_snapshot"),
+					sourceSnapshotId = rs.getObject("source_snapshot_id", UUID::class.java),
 				)
 			},
 			workspaceId,
 			sessionId,
 		)
 		for (orphan in orphanRuns) {
+			val settingsJson = if (orphan.promptVersion != null) {
+				objectMapper.writeValueAsString(
+					mapOf(
+						"promptVersion" to orphan.promptVersion,
+						"toolPolicyVersion" to (orphan.toolPolicyVersion ?: "read-only-v1"),
+						"budgetSnapshot" to (orphan.budgetSnapshot ?: budgetSnapshot()),
+						"contentType" to (orphan.contentType ?: "CHANGELOG"),
+						"contentProfileRevisionId" to orphan.contentProfileRevisionId,
+						"contentBriefSnapshot" to orphan.contentBriefSnapshot,
+					),
+				)
+			} else {
+				"{}"
+			}
 			writer().recordDirectChatRun(
 				workspaceId = workspaceId,
 				userId = orphan.userId,
@@ -905,8 +950,8 @@ class ChatAgentAdmissionService(
 				runId = orphan.id,
 				instruction = orphan.instruction,
 				fingerprint = orphan.fingerprint,
-				settingsJson = "{}",
-				sourceSnapshotId = null,
+				settingsJson = settingsJson,
+				sourceSnapshotId = orphan.sourceSnapshotId,
 				now = orphan.createdAt,
 			)
 		}

@@ -51,7 +51,7 @@ class SignalActivityProjectionService(
 
 		val evalItems = sql.query(
 			"""
-			select
+			select distinct on (e.id)
 				e.id,
 				e.source_scope_id,
 				e.signal_id,
@@ -77,6 +77,7 @@ class SignalActivityProjectionService(
 			where e.workspace_id = ?
 			  and e.source_scope_id in ($scopePlaceholders)
 			  and e.semantic_time <= ?
+			order by e.id, a.updated_at desc nulls last
 			""".trimIndent(),
 			{ rs, _ ->
 				val outcome = rs.getString("outcome") ?: "NO_GENERATION"
@@ -116,7 +117,7 @@ class SignalActivityProjectionService(
 
 		val provItems = sql.query(
 			"""
-			select
+			select distinct on (p.id)
 				p.id,
 				p.source_scope_id,
 				p.agent_run_id,
@@ -139,6 +140,7 @@ class SignalActivityProjectionService(
 			where p.workspace_id = ?
 			  and p.source_scope_id in ($scopePlaceholders)
 			  and p.semantic_time <= ?
+			order by p.id, a.updated_at desc nulls last
 			""".trimIndent(),
 			{ rs, _ ->
 				val disposition = rs.getString("disposition") ?: "NO_GENERATION"
@@ -213,8 +215,10 @@ class SignalActivityProjectionService(
 				"FAILED" -> "ACTION_REQUIRED"
 				"SUCCEEDED" -> if (artifactStatus in setOf("READY", "NEEDS_REVIEW", "READY_FOR_REVIEW")) {
 					"READY_FOR_REVIEW"
+				} else if (artifactStatus != null) {
+					"READY_FOR_REVIEW"
 				} else {
-					"IN_PROGRESS"
+					"NO_UPDATE_NEEDED"
 				}
 				"QUEUED", "RUNNING" -> "IN_PROGRESS"
 				else -> "IN_PROGRESS"
