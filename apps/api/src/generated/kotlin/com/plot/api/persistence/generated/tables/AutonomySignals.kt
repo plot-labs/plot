@@ -5,6 +5,7 @@ package com.plot.api.persistence.generated.tables
 
 
 import com.plot.api.persistence.generated.Public
+import com.plot.api.persistence.generated.indexes.AUTONOMY_SIGNALS_BACKFILL_IDX
 import com.plot.api.persistence.generated.indexes.AUTONOMY_SIGNALS_DISPATCH_IDX
 import com.plot.api.persistence.generated.keys.AUTONOMY_SIGNALS_PKEY
 import com.plot.api.persistence.generated.keys.AUTONOMY_SIGNALS_WORKSPACE_ID_ID_KEY
@@ -217,7 +218,7 @@ open class AutonomySignals(
         override fun `as`(alias: Table<*>): AutonomySignalsPath = AutonomySignalsPath(alias.qualifiedName, this)
     }
     override fun getSchema(): Schema? = if (aliased()) null else Public.PUBLIC
-    override fun getIndexes(): List<Index> = listOf(AUTONOMY_SIGNALS_DISPATCH_IDX)
+    override fun getIndexes(): List<Index> = listOf(AUTONOMY_SIGNALS_BACKFILL_IDX, AUTONOMY_SIGNALS_DISPATCH_IDX)
     override fun getPrimaryKey(): UniqueKey<AutonomySignalsRecord> = AUTONOMY_SIGNALS_PKEY
     override fun getUniqueKeys(): List<UniqueKey<AutonomySignalsRecord>> = listOf(AUTONOMY_SIGNALS_WORKSPACE_ID_ID_KEY, AUTONOMY_SIGNALS_WORKSPACE_ID_SOURCE_NAMESPACE_ID_SOURCE_SC_KEY)
     override fun getReferences(): List<ForeignKey<AutonomySignalsRecord, *>> = listOf(AUTONOMY_SIGNALS__AUTONOMY_SIGNALS_WORKSPACE_ID_FKEY, AUTONOMY_SIGNALS__AUTONOMY_SIGNALS_WORKSPACE_ID_SOURCE_NAMESPACE_ID_PROVIDER_FKEY, AUTONOMY_SIGNALS__AUTONOMY_SIGNALS_WORKSPACE_ID_SOURCE_NAMESPACE_ID_SOURCE_S_FKEY)

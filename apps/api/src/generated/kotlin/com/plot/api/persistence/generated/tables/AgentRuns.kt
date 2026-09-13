@@ -5,6 +5,7 @@ package com.plot.api.persistence.generated.tables
 
 
 import com.plot.api.persistence.generated.Public
+import com.plot.api.persistence.generated.indexes.AGENT_RUNS_BACKFILL_IDX
 import com.plot.api.persistence.generated.indexes.AGENT_RUNS_CHAT_REQUEST_KEY_IDX
 import com.plot.api.persistence.generated.indexes.AGENT_RUNS_RUNNABLE_IDX
 import com.plot.api.persistence.generated.indexes.AGENT_RUNS_SOURCE_SNAPSHOT_IDX
@@ -308,7 +309,7 @@ open class AgentRuns(
         override fun `as`(alias: Table<*>): AgentRunsPath = AgentRunsPath(alias.qualifiedName, this)
     }
     override fun getSchema(): Schema? = if (aliased()) null else Public.PUBLIC
-    override fun getIndexes(): List<Index> = listOf(AGENT_RUNS_CHAT_REQUEST_KEY_IDX, AGENT_RUNS_RUNNABLE_IDX, AGENT_RUNS_SOURCE_SNAPSHOT_IDX, AGENT_RUNS_WORKSPACE_CREATED_IDX)
+    override fun getIndexes(): List<Index> = listOf(AGENT_RUNS_BACKFILL_IDX, AGENT_RUNS_CHAT_REQUEST_KEY_IDX, AGENT_RUNS_RUNNABLE_IDX, AGENT_RUNS_SOURCE_SNAPSHOT_IDX, AGENT_RUNS_WORKSPACE_CREATED_IDX)
     override fun getPrimaryKey(): UniqueKey<AgentRunsRecord> = AGENT_RUNS_PKEY
     override fun getUniqueKeys(): List<UniqueKey<AgentRunsRecord>> = listOf(AGENT_RUNS_WORKSPACE_ID_ID_KEY, AGENT_RUNS_WORKSPACE_ID_ID_ROUTINE_ID_KEY, AGENT_RUNS_WORKSPACE_ID_ROUTINE_EXECUTION_ID_KEY)
     override fun getReferences(): List<ForeignKey<AgentRunsRecord, *>> = listOf(AGENT_RUNS__AGENT_RUNS_CONTENT_PROFILE_REVISION_FK, AGENT_RUNS__AGENT_RUNS_CREATED_BY_USER_ID_FKEY, AGENT_RUNS__AGENT_RUNS_SOURCE_SNAPSHOT_FK, AGENT_RUNS__AGENT_RUNS_WORK_SESSION_ROUTINE_EXECUTION_FK, AGENT_RUNS__AGENT_RUNS_WORKSPACE_ID_ROUTINE_EXECUTION_ID_FKEY, AGENT_RUNS__AGENT_RUNS_WORKSPACE_ID_ROUTINE_EXECUTION_ID_ROUTINE_ID_FKEY, AGENT_RUNS__AGENT_RUNS_WORKSPACE_ID_WORK_SESSION_ID_FKEY)

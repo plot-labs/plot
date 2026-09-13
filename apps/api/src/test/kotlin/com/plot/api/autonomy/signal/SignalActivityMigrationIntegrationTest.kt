@@ -8,10 +8,12 @@ import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import com.plot.api.migration.SignalActivityChatBackfillService
 import org.springframework.context.annotation.Import
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.jdbc.core.JdbcTemplate
@@ -21,6 +23,7 @@ import org.springframework.jdbc.core.JdbcTemplate
 class SignalActivityMigrationIntegrationTest {
 	@Autowired private lateinit var jdbc: JdbcTemplate
 	@Autowired private lateinit var uuidGenerator: UuidGenerator
+	@Autowired private lateinit var backfillService: SignalActivityChatBackfillService
 
 	private val workspaces = mutableListOf<UUID>()
 	private val now = Instant.parse("2026-09-13T10:00:00Z")
@@ -30,6 +33,11 @@ class SignalActivityMigrationIntegrationTest {
 		workspaces.forEach { id ->
 			jdbc.update("delete from legacy_activity_provenance where workspace_id = ?", id)
 			jdbc.update("delete from signal_evaluations where workspace_id = ?", id)
+			jdbc.update("delete from autonomy_goals where workspace_id = ?", id)
+			jdbc.update("delete from autonomy_assessments where workspace_id = ?", id)
+			jdbc.update("delete from autonomy_opportunities where workspace_id = ?", id)
+			jdbc.update("delete from autonomy_missions where workspace_id = ?", id)
+			jdbc.update("delete from autonomy_signal_heads where workspace_id = ?", id)
 			jdbc.update("delete from autonomy_signals where workspace_id = ?", id)
 			jdbc.update("delete from source_scopes where workspace_id = ?", id)
 			jdbc.update("delete from source_namespaces where workspace_id = ?", id)
@@ -153,6 +161,65 @@ class SignalActivityMigrationIntegrationTest {
 				Timestamp.from(now), Timestamp.from(now), Timestamp.from(now),
 			)
 		}
+	}
+
+	@Test
+	fun `historical Opportunity without an exact Signal relationship produces detached labeled provenance and no invented Signal key`() {
+		val fixture = createFixture()
+		val oppId = uuidGenerator.next()
+		jdbc.update(
+			"""
+			insert into autonomy_opportunities(
+				id, workspace_id, source_scope_id, subject_key, title, fingerprint,
+				disposition, reason, input_snapshot, evidence_ids, missing_facts,
+				last_error_code, dismissed, version, created_at, updated_at
+			) values (
+				?, ?, ?, 'release:historical', 'Historical release', 'fp-hist',
+				'EXCLUDED', 'Chore release excluded', '{}'::jsonb, '[]'::jsonb, '[]'::jsonb,
+				null, false, 1, ?, ?
+			)
+			""".trimIndent(),
+			oppId, fixture.workspaceId, fixture.scopeId, Timestamp.from(now), Timestamp.from(now),
+		)
+
+		val report = backfillService.runBackfill("opp-backfill-test", now.plusSeconds(3600))
+		assertTrue(report.reconciledOpportunities >= 1)
+
+		val rows = jdbc.query(
+			"select * from legacy_activity_provenance where workspace_id = ? and opportunity_id = ?",
+			{ rs, _ ->
+				mapOf(
+					"title" to rs.getString("title"),
+					"disposition" to rs.getString("disposition"),
+					"has_exact_signal_link" to rs.getBoolean("has_exact_signal_link"),
+					"uncertainty_label" to rs.getString("uncertainty_label"),
+				)
+			},
+			fixture.workspaceId,
+			oppId,
+		)
+		assertEquals(1, rows.size)
+		assertEquals("Historical release", rows[0]["title"])
+		assertEquals("EXCLUDED", rows[0]["disposition"])
+		assertEquals(false, rows[0]["has_exact_signal_link"])
+		assertEquals("MIGRATED_HISTORICAL_RECORD", rows[0]["uncertainty_label"])
+	}
+
+	@Test
+	fun `backfill catches historical signals and reconciles lag to zero`() {
+		val fixture = createFixture()
+		// fixture already inserts 1 signal into autonomy_signals
+		val report = backfillService.runBackfill("signal-backfill-test", now.plusSeconds(3600))
+		assertTrue(report.reconciledSignals >= 1)
+		assertEquals(0L, report.lag.unreconciledSignals)
+
+		val count = jdbc.queryForObject(
+			"select count(*) from signal_evaluations where workspace_id = ? and signal_id = ?",
+			Int::class.java,
+			fixture.workspaceId,
+			fixture.signalId,
+		)
+		assertEquals(1, count)
 	}
 
 	private data class Fixture(val workspaceId: UUID, val namespaceId: UUID, val scopeId: UUID, val signalId: UUID)

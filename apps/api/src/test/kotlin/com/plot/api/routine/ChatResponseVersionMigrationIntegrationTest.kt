@@ -8,10 +8,12 @@ import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import com.plot.api.migration.SignalActivityChatBackfillService
 import org.springframework.context.annotation.Import
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.jdbc.core.JdbcTemplate
@@ -21,6 +23,7 @@ import org.springframework.jdbc.core.JdbcTemplate
 class ChatResponseVersionMigrationIntegrationTest {
 	@Autowired private lateinit var jdbc: JdbcTemplate
 	@Autowired private lateinit var uuidGenerator: UuidGenerator
+	@Autowired private lateinit var backfillService: SignalActivityChatBackfillService
 
 	private val workspaces = mutableListOf<UUID>()
 	private val now = Instant.parse("2026-09-13T10:00:00Z")
@@ -212,6 +215,110 @@ class ChatResponseVersionMigrationIntegrationTest {
 				uuidGenerator.next(), f1.workspaceId, turnId, runIdInF2, Timestamp.from(now), Timestamp.from(now),
 			)
 		}
+	}
+
+	@Test
+	fun `two legacy AgentRuns in one Chat become ordered one-version turns`() {
+		val fixture = createFixture()
+		val run1 = insertAgentRun(fixture.workspaceId, fixture.sessionId, fixture.userId, "legacy-key-1")
+		val run2 = insertAgentRun(fixture.workspaceId, fixture.sessionId, fixture.userId, "legacy-key-2")
+
+		val report = backfillService.runBackfill("test-legacy-runs", now.plusSeconds(3600))
+		assertTrue(report.reconciledRuns >= 2)
+
+		val turns = jdbc.query(
+			"select id, turn_index, user_message from chat_turns where workspace_id = ? and work_session_id = ? order by turn_index asc",
+			{ rs, _ -> rs.getInt("turn_index") to rs.getString("user_message") },
+			fixture.workspaceId,
+			fixture.sessionId,
+		)
+		assertEquals(2, turns.size)
+		assertEquals(0, turns[0].first)
+		assertEquals(1, turns[1].first)
+
+		val versions = jdbc.query(
+			"select agent_run_id, version_index from chat_response_versions where workspace_id = ? order by version_index asc",
+			{ rs, _ -> rs.getObject("agent_run_id", UUID::class.java) to rs.getInt("version_index") },
+			fixture.workspaceId,
+		)
+		assertEquals(2, versions.size)
+		assertEquals(0, versions[0].second)
+		assertEquals(0, versions[1].second)
+	}
+
+	@Test
+	fun `moving a retry from pending to running does not permit a second active AgentRun for that turn`() {
+		val fixture = createFixture()
+		val turnId = uuidGenerator.next()
+		jdbc.update(
+			"insert into chat_turns(id, workspace_id, work_session_id, turn_index, user_message, created_by_user_id, created_at, updated_at) values (?, ?, ?, 0, 'Hi', ?, ?, ?)",
+			turnId, fixture.workspaceId, fixture.sessionId, fixture.userId, Timestamp.from(now), Timestamp.from(now),
+		)
+		val run1 = insertAgentRun(fixture.workspaceId, fixture.sessionId, fixture.userId, "run-pending")
+		val run2 = insertAgentRun(fixture.workspaceId, fixture.sessionId, fixture.userId, "run-second-active")
+
+		// Insert first version as active (pending/running)
+		jdbc.update(
+			"insert into chat_response_versions(id, workspace_id, turn_id, version_index, agent_run_id, is_active, created_at, updated_at) values (?, ?, ?, 0, ?, true, ?, ?)",
+			uuidGenerator.next(), fixture.workspaceId, turnId, run1, Timestamp.from(now), Timestamp.from(now),
+		)
+
+		// Inserting second active version for same turn must fail single active partial unique index
+		assertFailsWith<DataIntegrityViolationException> {
+			jdbc.update(
+				"insert into chat_response_versions(id, workspace_id, turn_id, version_index, agent_run_id, is_active, created_at, updated_at) values (?, ?, ?, 1, ?, true, ?, ?)",
+				uuidGenerator.next(), fixture.workspaceId, turnId, run2, Timestamp.from(now), Timestamp.from(now),
+			)
+		}
+
+		// Once first is terminal (is_active = false), second can be inserted as active
+		jdbc.update("update chat_response_versions set is_active = false where agent_run_id = ?", run1)
+		jdbc.update(
+			"insert into chat_response_versions(id, workspace_id, turn_id, version_index, agent_run_id, is_active, created_at, updated_at) values (?, ?, ?, 1, ?, true, ?, ?)",
+			uuidGenerator.next(), fixture.workspaceId, turnId, run2, Timestamp.from(now), Timestamp.from(now),
+		)
+		val activeCount = jdbc.queryForObject(
+			"select count(*) from chat_response_versions where workspace_id = ? and turn_id = ? and is_active = true",
+			Int::class.java,
+			fixture.workspaceId,
+			turnId,
+		)
+		assertEquals(1, activeCount)
+	}
+
+	@Test
+	fun `resumable backfill catches rows committed after initial high-water mark`() {
+		val fixture = createFixture()
+		val t1 = now
+		val run1 = insertAgentRun(fixture.workspaceId, fixture.sessionId, fixture.userId, "run-t1")
+
+		// First pass at t1
+		val r1 = backfillService.runBackfill("catchup-test", t1)
+		assertTrue(r1.reconciledRuns >= 1)
+
+		// New run at t2 > t1
+		val t2 = now.plusSeconds(120)
+		val run2Id = uuidGenerator.next()
+		jdbc.update(
+			"""
+			insert into agent_runs(
+				id, workspace_id, work_session_id, created_by_user_id, origin, idempotency_key,
+				request_fingerprint, instruction_snapshot, prompt_version, tool_policy_version,
+				budget_snapshot, status, created_at, updated_at
+			) values (?, ?, ?, ?, 'CHAT', 'run-t2', 'fp-t2', 'inst2', 'v1', 'v1', '{}'::jsonb, 'SUCCEEDED', ?, ?)
+			""".trimIndent(),
+			run2Id, fixture.workspaceId, fixture.sessionId, fixture.userId, Timestamp.from(t2), Timestamp.from(t2),
+		)
+
+		// Before second pass, lag is 1
+		val lagBefore = backfillService.computeLag(t2)
+		assertEquals(1L, lagBefore.unreconciledRuns)
+
+		// Second pass at t2 catches run 2
+		val r2 = backfillService.runBackfill("catchup-test", t2)
+		assertEquals(1, r2.reconciledRuns)
+		assertEquals(0L, r2.lag.totalLag)
+		assertEquals("COMPLETED", r2.status)
 	}
 
 	private data class Fixture(val workspaceId: UUID, val userId: UUID, val sessionId: UUID)

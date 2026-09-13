@@ -60,6 +60,7 @@ import com.plot.api.persistence.generated.tables.RoutineExecutions
 import com.plot.api.persistence.generated.tables.Routines
 import com.plot.api.persistence.generated.tables.SentenceCitations
 import com.plot.api.persistence.generated.tables.SentenceEvaluations
+import com.plot.api.persistence.generated.tables.SignalActivityChatBackfillCheckpoints
 import com.plot.api.persistence.generated.tables.SignalEvaluations
 import com.plot.api.persistence.generated.tables.SourceImports
 import com.plot.api.persistence.generated.tables.SourceNamespaces
@@ -361,6 +362,11 @@ val SENTENCE_CITATIONS: SentenceCitations = SentenceCitations.SENTENCE_CITATIONS
  * The table <code>public.sentence_evaluations</code>.
  */
 val SENTENCE_EVALUATIONS: SentenceEvaluations = SentenceEvaluations.SENTENCE_EVALUATIONS
+
+/**
+ * The table <code>public.signal_activity_chat_backfill_checkpoints</code>.
+ */
+val SIGNAL_ACTIVITY_CHAT_BACKFILL_CHECKPOINTS: SignalActivityChatBackfillCheckpoints = SignalActivityChatBackfillCheckpoints.SIGNAL_ACTIVITY_CHAT_BACKFILL_CHECKPOINTS
 
 /**
  * The table <code>public.signal_evaluations</code>.

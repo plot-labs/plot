@@ -5,6 +5,7 @@ package com.plot.api.persistence.generated.tables
 
 
 import com.plot.api.persistence.generated.Public
+import com.plot.api.persistence.generated.indexes.AUTONOMY_OPPORTUNITIES_BACKFILL_IDX
 import com.plot.api.persistence.generated.indexes.AUTONOMY_OPPORTUNITIES_HOME_IDX
 import com.plot.api.persistence.generated.keys.AUTONOMY_ASSESSMENTS__AUTONOMY_ASSESSMENTS_WORKSPACE_ID_OPPORTUNITY_ID_FKEY
 import com.plot.api.persistence.generated.keys.AUTONOMY_GOALS__AUTONOMY_GOALS_WORKSPACE_ID_OPPORTUNITY_ID_FKEY
@@ -202,7 +203,7 @@ open class AutonomyOpportunities(
         override fun `as`(alias: Table<*>): AutonomyOpportunitiesPath = AutonomyOpportunitiesPath(alias.qualifiedName, this)
     }
     override fun getSchema(): Schema? = if (aliased()) null else Public.PUBLIC
-    override fun getIndexes(): List<Index> = listOf(AUTONOMY_OPPORTUNITIES_HOME_IDX)
+    override fun getIndexes(): List<Index> = listOf(AUTONOMY_OPPORTUNITIES_BACKFILL_IDX, AUTONOMY_OPPORTUNITIES_HOME_IDX)
     override fun getPrimaryKey(): UniqueKey<AutonomyOpportunitiesRecord> = AUTONOMY_OPPORTUNITIES_PKEY
     override fun getUniqueKeys(): List<UniqueKey<AutonomyOpportunitiesRecord>> = listOf(AUTONOMY_OPPORTUNITIES_WORKSPACE_ID_ID_KEY, AUTONOMY_OPPORTUNITIES_WORKSPACE_ID_SOURCE_SCOPE_ID_SUBJECT_KEY)
     override fun getReferences(): List<ForeignKey<AutonomyOpportunitiesRecord, *>> = listOf(AUTONOMY_OPPORTUNITIES__AUTONOMY_OPPORTUNITIES_WORKSPACE_ID_FKEY, AUTONOMY_OPPORTUNITIES__AUTONOMY_OPPORTUNITIES_WORKSPACE_ID_SOURCE_SCOPE_ID_FKEY)

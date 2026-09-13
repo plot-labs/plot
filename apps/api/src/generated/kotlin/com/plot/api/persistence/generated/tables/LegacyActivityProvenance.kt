@@ -20,6 +20,7 @@ import java.util.UUID
 import kotlin.collections.Collection
 import kotlin.collections.List
 
+import org.jooq.Check
 import org.jooq.Condition
 import org.jooq.Field
 import org.jooq.ForeignKey
@@ -246,6 +247,9 @@ open class LegacyActivityProvenance(
 
     val sourceScopes: SourceScopesPath
         get(): SourceScopesPath = sourceScopes()
+    override fun getChecks(): List<Check<LegacyActivityProvenanceRecord>> = listOf(
+        Internal.createCheck(this, DSL.name("legacy_activity_provenance_disposition_check"), "(((disposition)::text = ANY ((ARRAY['NO_GENERATION'::character varying, 'ADMITTED'::character varying, 'EXCLUDED'::character varying, 'REJECTED'::character varying])::text[])))", true)
+    )
     override fun `as`(alias: String): LegacyActivityProvenance = LegacyActivityProvenance(DSL.name(alias), this)
     override fun `as`(alias: Name): LegacyActivityProvenance = LegacyActivityProvenance(alias, this)
     override fun `as`(alias: Table<*>): LegacyActivityProvenance = LegacyActivityProvenance(alias.qualifiedName, this)

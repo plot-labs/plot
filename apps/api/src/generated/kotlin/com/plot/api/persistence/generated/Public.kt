@@ -61,6 +61,7 @@ import com.plot.api.persistence.generated.tables.RoutineExecutions
 import com.plot.api.persistence.generated.tables.Routines
 import com.plot.api.persistence.generated.tables.SentenceCitations
 import com.plot.api.persistence.generated.tables.SentenceEvaluations
+import com.plot.api.persistence.generated.tables.SignalActivityChatBackfillCheckpoints
 import com.plot.api.persistence.generated.tables.SignalEvaluations
 import com.plot.api.persistence.generated.tables.SourceImports
 import com.plot.api.persistence.generated.tables.SourceNamespaces
@@ -383,6 +384,11 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
     val SENTENCE_EVALUATIONS: SentenceEvaluations get() = SentenceEvaluations.SENTENCE_EVALUATIONS
 
     /**
+     * The table <code>public.signal_activity_chat_backfill_checkpoints</code>.
+     */
+    val SIGNAL_ACTIVITY_CHAT_BACKFILL_CHECKPOINTS: SignalActivityChatBackfillCheckpoints get() = SignalActivityChatBackfillCheckpoints.SIGNAL_ACTIVITY_CHAT_BACKFILL_CHECKPOINTS
+
+    /**
      * The table <code>public.signal_evaluations</code>.
      */
     val SIGNAL_EVALUATIONS: SignalEvaluations get() = SignalEvaluations.SIGNAL_EVALUATIONS
@@ -540,6 +546,7 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
         Routines.ROUTINES,
         SentenceCitations.SENTENCE_CITATIONS,
         SentenceEvaluations.SENTENCE_EVALUATIONS,
+        SignalActivityChatBackfillCheckpoints.SIGNAL_ACTIVITY_CHAT_BACKFILL_CHECKPOINTS,
         SignalEvaluations.SIGNAL_EVALUATIONS,
         SourceImports.SOURCE_IMPORTS,
         SourceNamespaces.SOURCE_NAMESPACES,

@@ -55,6 +55,12 @@ open class ChatResponseVersionsRecord() : UpdatableRecordImpl<ChatResponseVersio
         set(value): Unit = set(8, value)
         get(): OffsetDateTime? = get(8) as OffsetDateTime?
 
+    @Suppress("INAPPLICABLE_JVM_NAME")
+    @set:JvmName("setIsActive")
+    open var isActive: Boolean?
+        set(value): Unit = set(9, value)
+        get(): Boolean? = get(9) as Boolean?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -64,7 +70,7 @@ open class ChatResponseVersionsRecord() : UpdatableRecordImpl<ChatResponseVersio
     /**
      * Create a detached, initialised ChatResponseVersionsRecord
      */
-    constructor(id: UUID? = null, workspaceId: UUID? = null, turnId: UUID? = null, versionIndex: Int? = null, agentRunId: UUID? = null, initiatorUserId: UUID? = null, lineageParentVersionId: UUID? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null): this() {
+    constructor(id: UUID? = null, workspaceId: UUID? = null, turnId: UUID? = null, versionIndex: Int? = null, agentRunId: UUID? = null, initiatorUserId: UUID? = null, lineageParentVersionId: UUID? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, isActive: Boolean? = null): this() {
         this.id = id
         this.workspaceId = workspaceId
         this.turnId = turnId
@@ -74,6 +80,7 @@ open class ChatResponseVersionsRecord() : UpdatableRecordImpl<ChatResponseVersio
         this.lineageParentVersionId = lineageParentVersionId
         this.createdAt = createdAt
         this.updatedAt = updatedAt
+        this.isActive = isActive
         resetChangedOnNotNull()
     }
 }

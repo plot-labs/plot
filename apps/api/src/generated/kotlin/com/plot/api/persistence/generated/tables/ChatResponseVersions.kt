@@ -5,6 +5,7 @@ package com.plot.api.persistence.generated.tables
 
 
 import com.plot.api.persistence.generated.Public
+import com.plot.api.persistence.generated.indexes.CHAT_RESPONSE_VERSIONS_SINGLE_ACTIVE_IDX
 import com.plot.api.persistence.generated.indexes.CHAT_RESPONSE_VERSIONS_TURN_IDX
 import com.plot.api.persistence.generated.keys.CHAT_RESPONSE_VERSIONS_PKEY
 import com.plot.api.persistence.generated.keys.CHAT_RESPONSE_VERSIONS_WORKSPACE_ID_AGENT_RUN_ID_KEY
@@ -138,6 +139,11 @@ open class ChatResponseVersions(
      */
     val UPDATED_AT: TableField<ChatResponseVersionsRecord, OffsetDateTime?> = createField(DSL.name("updated_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "")
 
+    /**
+     * The column <code>public.chat_response_versions.is_active</code>.
+     */
+    val IS_ACTIVE: TableField<ChatResponseVersionsRecord, Boolean?> = createField(DSL.name("is_active"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "")
+
     private constructor(alias: Name, aliased: Table<ChatResponseVersionsRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<ChatResponseVersionsRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<ChatResponseVersionsRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)
@@ -172,7 +178,7 @@ open class ChatResponseVersions(
         override fun `as`(alias: Table<*>): ChatResponseVersionsPath = ChatResponseVersionsPath(alias.qualifiedName, this)
     }
     override fun getSchema(): Schema? = if (aliased()) null else Public.PUBLIC
-    override fun getIndexes(): List<Index> = listOf(CHAT_RESPONSE_VERSIONS_TURN_IDX)
+    override fun getIndexes(): List<Index> = listOf(CHAT_RESPONSE_VERSIONS_SINGLE_ACTIVE_IDX, CHAT_RESPONSE_VERSIONS_TURN_IDX)
     override fun getPrimaryKey(): UniqueKey<ChatResponseVersionsRecord> = CHAT_RESPONSE_VERSIONS_PKEY
     override fun getUniqueKeys(): List<UniqueKey<ChatResponseVersionsRecord>> = listOf(CHAT_RESPONSE_VERSIONS_WORKSPACE_ID_AGENT_RUN_ID_KEY, CHAT_RESPONSE_VERSIONS_WORKSPACE_ID_ID_KEY, CHAT_RESPONSE_VERSIONS_WORKSPACE_ID_TURN_ID_VERSION_INDEX_KEY)
     override fun getReferences(): List<ForeignKey<ChatResponseVersionsRecord, *>> = listOf(CHAT_RESPONSE_VERSIONS__CHAT_RESPONSE_VERSIONS_INITIATOR_USER_ID_FKEY, CHAT_RESPONSE_VERSIONS__CHAT_RESPONSE_VERSIONS_WORKSPACE_ID_AGENT_RUN_ID_FKEY, CHAT_RESPONSE_VERSIONS__CHAT_RESPONSE_VERSIONS_WORKSPACE_ID_FKEY, CHAT_RESPONSE_VERSIONS__CHAT_RESPONSE_VERSIONS_WORKSPACE_ID_LINEAGE_PARENT_VERSION_FKEY, CHAT_RESPONSE_VERSIONS__CHAT_RESPONSE_VERSIONS_WORKSPACE_ID_TURN_ID_FKEY)

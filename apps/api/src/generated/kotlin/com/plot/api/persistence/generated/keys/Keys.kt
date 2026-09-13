@@ -60,6 +60,7 @@ import com.plot.api.persistence.generated.tables.RoutineExecutions
 import com.plot.api.persistence.generated.tables.Routines
 import com.plot.api.persistence.generated.tables.SentenceCitations
 import com.plot.api.persistence.generated.tables.SentenceEvaluations
+import com.plot.api.persistence.generated.tables.SignalActivityChatBackfillCheckpoints
 import com.plot.api.persistence.generated.tables.SignalEvaluations
 import com.plot.api.persistence.generated.tables.SourceImports
 import com.plot.api.persistence.generated.tables.SourceNamespaces
@@ -135,6 +136,7 @@ import com.plot.api.persistence.generated.tables.records.RoutineExecutionsRecord
 import com.plot.api.persistence.generated.tables.records.RoutinesRecord
 import com.plot.api.persistence.generated.tables.records.SentenceCitationsRecord
 import com.plot.api.persistence.generated.tables.records.SentenceEvaluationsRecord
+import com.plot.api.persistence.generated.tables.records.SignalActivityChatBackfillCheckpointsRecord
 import com.plot.api.persistence.generated.tables.records.SignalEvaluationsRecord
 import com.plot.api.persistence.generated.tables.records.SourceImportsRecord
 import com.plot.api.persistence.generated.tables.records.SourceNamespacesRecord
@@ -337,6 +339,7 @@ val SENTENCE_CITATIONS_WORKSPACE_ID_SENTENCE_REVISION_ID_GENERA_KEY: UniqueKey<S
 val SENTENCE_EVALUATIONS_PKEY: UniqueKey<SentenceEvaluationsRecord> = Internal.createUniqueKey(SentenceEvaluations.SENTENCE_EVALUATIONS, DSL.name("sentence_evaluations_pkey"), arrayOf(SentenceEvaluations.SENTENCE_EVALUATIONS.ID), true)
 val SENTENCE_EVALUATIONS_WORKSPACE_ID_ID_KEY: UniqueKey<SentenceEvaluationsRecord> = Internal.createUniqueKey(SentenceEvaluations.SENTENCE_EVALUATIONS, DSL.name("sentence_evaluations_workspace_id_id_key"), arrayOf(SentenceEvaluations.SENTENCE_EVALUATIONS.WORKSPACE_ID, SentenceEvaluations.SENTENCE_EVALUATIONS.ID), true)
 val SENTENCE_EVALUATIONS_WORKSPACE_ID_SENTENCE_REVISION_ID_REVI_KEY: UniqueKey<SentenceEvaluationsRecord> = Internal.createUniqueKey(SentenceEvaluations.SENTENCE_EVALUATIONS, DSL.name("sentence_evaluations_workspace_id_sentence_revision_id_revi_key"), arrayOf(SentenceEvaluations.SENTENCE_EVALUATIONS.WORKSPACE_ID, SentenceEvaluations.SENTENCE_EVALUATIONS.SENTENCE_REVISION_ID, SentenceEvaluations.SENTENCE_EVALUATIONS.REVIEW_ATTEMPT), true)
+val SIGNAL_ACTIVITY_CHAT_BACKFILL_CHECKPOINTS_PKEY: UniqueKey<SignalActivityChatBackfillCheckpointsRecord> = Internal.createUniqueKey(SignalActivityChatBackfillCheckpoints.SIGNAL_ACTIVITY_CHAT_BACKFILL_CHECKPOINTS, DSL.name("signal_activity_chat_backfill_checkpoints_pkey"), arrayOf(SignalActivityChatBackfillCheckpoints.SIGNAL_ACTIVITY_CHAT_BACKFILL_CHECKPOINTS.CHECKPOINT_KEY), true)
 val SIGNAL_EVALUATIONS_PKEY: UniqueKey<SignalEvaluationsRecord> = Internal.createUniqueKey(SignalEvaluations.SIGNAL_EVALUATIONS, DSL.name("signal_evaluations_pkey"), arrayOf(SignalEvaluations.SIGNAL_EVALUATIONS.ID), true)
 val SIGNAL_EVALUATIONS_WORKSPACE_ID_ID_KEY: UniqueKey<SignalEvaluationsRecord> = Internal.createUniqueKey(SignalEvaluations.SIGNAL_EVALUATIONS, DSL.name("signal_evaluations_workspace_id_id_key"), arrayOf(SignalEvaluations.SIGNAL_EVALUATIONS.WORKSPACE_ID, SignalEvaluations.SIGNAL_EVALUATIONS.ID), true)
 val SIGNAL_EVALUATIONS_WORKSPACE_ID_SIGNAL_ID_KEY: UniqueKey<SignalEvaluationsRecord> = Internal.createUniqueKey(SignalEvaluations.SIGNAL_EVALUATIONS, DSL.name("signal_evaluations_workspace_id_signal_id_key"), arrayOf(SignalEvaluations.SIGNAL_EVALUATIONS.WORKSPACE_ID, SignalEvaluations.SIGNAL_EVALUATIONS.SIGNAL_ID), true)
