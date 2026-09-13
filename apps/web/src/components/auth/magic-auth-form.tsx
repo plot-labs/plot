@@ -3,6 +3,8 @@
 import { CircleAlert, LoaderCircle } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
+import { VerificationCodeInput } from "./verification-code-input";
+
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type MagicAuthMode = "sign-in" | "sign-up";
@@ -144,29 +146,19 @@ export function MagicAuthForm({ mode }: MagicAuthFormProps) {
         <p className="text-center text-sm leading-6 text-black/55">
           We sent a six-digit code to <span className="font-medium text-black/75">{email}</span>.
         </p>
-        <form onSubmit={verifyCode} className="mt-6 grid gap-3" noValidate aria-busy={loading}>
-          <label htmlFor="magic-auth-code" className="grid gap-1.5">
-            <span className="text-sm font-medium leading-none text-black/75">Sign-in code</span>
-            <input
-              id="magic-auth-code"
-              name="code"
-              type="text"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              value={code}
-              onChange={(event) => {
-                setCode(event.target.value.replace(/\D/g, "").slice(0, 6));
-                setError(null);
-              }}
-              maxLength={6}
-              placeholder="123456"
-              disabled={loading}
-              required
-              aria-describedby="magic-auth-message"
-              aria-invalid={Boolean(error)}
-              className="h-11 w-full rounded-xl border border-black/12 bg-white px-4 text-center text-lg tracking-[0.28em] text-black outline-none transition-colors placeholder:text-black/25 focus:border-black/30 focus:ring-2 focus:ring-black/[0.06] aria-invalid:border-red-500/40 aria-invalid:ring-2 aria-invalid:ring-red-500/10 disabled:pointer-events-none disabled:opacity-50"
-            />
-          </label>
+        <form onSubmit={verifyCode} className="mt-6 grid gap-4" noValidate aria-busy={loading}>
+          <VerificationCodeInput
+            id="magic-auth-code"
+            label="Sign-in code"
+            value={code}
+            onChange={(value) => {
+              setCode(value);
+              setError(null);
+            }}
+            disabled={loading}
+            error={Boolean(error)}
+            describedBy="magic-auth-message"
+          />
 
           <div id="magic-auth-message" aria-live="polite">
             {error ? (

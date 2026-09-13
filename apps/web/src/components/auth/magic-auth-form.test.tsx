@@ -16,7 +16,7 @@ describe("MagicAuthForm", () => {
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: " Member@Example.com " } });
     fireEvent.click(screen.getByRole("button", { name: "Email me a sign-in code" }));
 
-    await waitFor(() => expect(screen.getByLabelText("Sign-in code")).toBeVisible());
+    await waitFor(() => expect(screen.getByLabelText("Sign-in code, digit 1 of 6")).toBeVisible());
     expect(fetchMock).toHaveBeenCalledWith("/api/auth/sign-in", expect.objectContaining({
       method: "POST",
       body: JSON.stringify({ email: "member@example.com" }),
@@ -34,7 +34,7 @@ describe("MagicAuthForm", () => {
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "new@example.com" } });
     fireEvent.click(screen.getByRole("button", { name: "Email me a sign-in code" }));
 
-    await waitFor(() => expect(screen.getByLabelText("Sign-in code")).toBeVisible());
+    await waitFor(() => expect(screen.getByLabelText("Sign-in code, digit 1 of 6")).toBeVisible());
     expect(fetchMock).toHaveBeenCalledWith("/api/auth/sign-up", expect.objectContaining({ method: "POST" }));
   });
 
@@ -49,8 +49,8 @@ describe("MagicAuthForm", () => {
     render(<MagicSignInForm />);
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "member@example.com" } });
     fireEvent.click(screen.getByRole("button", { name: "Email me a sign-in code" }));
-    await waitFor(() => expect(screen.getByLabelText("Sign-in code")).toBeVisible());
-    fireEvent.change(screen.getByLabelText("Sign-in code"), { target: { value: "123456" } });
+    await waitFor(() => expect(screen.getByLabelText("Sign-in code, digit 1 of 6")).toBeVisible());
+    fireEvent.paste(screen.getByLabelText("Sign-in code, digit 1 of 6"), { clipboardData: { getData: () => "123456" } });
     fireEvent.click(screen.getByRole("button", { name: "Continue to Plot" }));
 
     await waitFor(() => expect(assign).toHaveBeenCalledWith("/auth/complete"));
