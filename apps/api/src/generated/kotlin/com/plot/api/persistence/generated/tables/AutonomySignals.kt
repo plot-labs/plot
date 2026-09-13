@@ -13,7 +13,9 @@ import com.plot.api.persistence.generated.keys.AUTONOMY_SIGNALS__AUTONOMY_SIGNAL
 import com.plot.api.persistence.generated.keys.AUTONOMY_SIGNALS__AUTONOMY_SIGNALS_WORKSPACE_ID_SOURCE_NAMESPACE_ID_PROVIDER_FKEY
 import com.plot.api.persistence.generated.keys.AUTONOMY_SIGNALS__AUTONOMY_SIGNALS_WORKSPACE_ID_SOURCE_NAMESPACE_ID_SOURCE_S_FKEY
 import com.plot.api.persistence.generated.keys.AUTONOMY_SIGNAL_HEADS__AUTONOMY_SIGNAL_HEADS_WORKSPACE_ID_SIGNAL_ID_FKEY
+import com.plot.api.persistence.generated.keys.SIGNAL_EVALUATIONS__SIGNAL_EVALUATIONS_WORKSPACE_ID_SIGNAL_ID_FKEY
 import com.plot.api.persistence.generated.tables.AutonomySignalHeads.AutonomySignalHeadsPath
+import com.plot.api.persistence.generated.tables.SignalEvaluations.SignalEvaluationsPath
 import com.plot.api.persistence.generated.tables.SourceNamespaces.SourceNamespacesPath
 import com.plot.api.persistence.generated.tables.SourceScopes.SourceScopesPath
 import com.plot.api.persistence.generated.tables.Workspaces.WorkspacesPath
@@ -282,6 +284,22 @@ open class AutonomySignals(
 
     val autonomySignalHeads: AutonomySignalHeadsPath
         get(): AutonomySignalHeadsPath = autonomySignalHeads()
+
+    private lateinit var _signalEvaluations: SignalEvaluationsPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.signal_evaluations</code> table
+     */
+    fun signalEvaluations(): SignalEvaluationsPath {
+        if (!this::_signalEvaluations.isInitialized)
+            _signalEvaluations = SignalEvaluationsPath(this, null, SIGNAL_EVALUATIONS__SIGNAL_EVALUATIONS_WORKSPACE_ID_SIGNAL_ID_FKEY.inverseKey)
+
+        return _signalEvaluations;
+    }
+
+    val signalEvaluations: SignalEvaluationsPath
+        get(): SignalEvaluationsPath = signalEvaluations()
     override fun getChecks(): List<Check<AutonomySignalsRecord>> = listOf(
         Internal.createCheck(this, DSL.name("autonomy_signals_attempts_check"), "((attempts >= 0))", true),
         Internal.createCheck(this, DSL.name("autonomy_signals_check"), "(((NOT tombstone) OR (source_version IS NOT NULL)))", true),

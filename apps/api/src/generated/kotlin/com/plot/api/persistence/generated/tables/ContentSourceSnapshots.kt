@@ -7,11 +7,13 @@ package com.plot.api.persistence.generated.tables
 import com.plot.api.persistence.generated.Public
 import com.plot.api.persistence.generated.indexes.CONTENT_SOURCE_SNAPSHOTS_BUNDLE_HASH_IDX
 import com.plot.api.persistence.generated.keys.AGENT_RUNS__AGENT_RUNS_SOURCE_SNAPSHOT_FK
+import com.plot.api.persistence.generated.keys.CHAT_EXECUTION_ENVELOPES__CHAT_EXECUTION_ENVELOPES_WORKSPACE_ID_SOURCE_SNAPSHOT_ID_FKEY
 import com.plot.api.persistence.generated.keys.CONTENT_SOURCE_SNAPSHOTS_PKEY
 import com.plot.api.persistence.generated.keys.CONTENT_SOURCE_SNAPSHOTS_WORKSPACE_ID_ID_KEY
 import com.plot.api.persistence.generated.keys.CONTENT_SOURCE_SNAPSHOTS__CONTENT_SOURCE_SNAPSHOTS_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.CONTENT_SOURCE_SNAPSHOTS__CONTENT_SOURCE_SNAPSHOTS_WORKSPACE_ID_SOURCE_SCOPE_ID_FKEY
 import com.plot.api.persistence.generated.tables.AgentRuns.AgentRunsPath
+import com.plot.api.persistence.generated.tables.ChatExecutionEnvelopes.ChatExecutionEnvelopesPath
 import com.plot.api.persistence.generated.tables.SourceScopes.SourceScopesPath
 import com.plot.api.persistence.generated.tables.Workspaces.WorkspacesPath
 import com.plot.api.persistence.generated.tables.records.ContentSourceSnapshotsRecord
@@ -221,6 +223,22 @@ open class ContentSourceSnapshots(
 
     val agentRuns: AgentRunsPath
         get(): AgentRunsPath = agentRuns()
+
+    private lateinit var _chatExecutionEnvelopes: ChatExecutionEnvelopesPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.chat_execution_envelopes</code> table
+     */
+    fun chatExecutionEnvelopes(): ChatExecutionEnvelopesPath {
+        if (!this::_chatExecutionEnvelopes.isInitialized)
+            _chatExecutionEnvelopes = ChatExecutionEnvelopesPath(this, null, CHAT_EXECUTION_ENVELOPES__CHAT_EXECUTION_ENVELOPES_WORKSPACE_ID_SOURCE_SNAPSHOT_ID_FKEY.inverseKey)
+
+        return _chatExecutionEnvelopes;
+    }
+
+    val chatExecutionEnvelopes: ChatExecutionEnvelopesPath
+        get(): ChatExecutionEnvelopesPath = chatExecutionEnvelopes()
     override fun `as`(alias: String): ContentSourceSnapshots = ContentSourceSnapshots(DSL.name(alias), this)
     override fun `as`(alias: Name): ContentSourceSnapshots = ContentSourceSnapshots(alias, this)
     override fun `as`(alias: Table<*>): ContentSourceSnapshots = ContentSourceSnapshots(alias.qualifiedName, this)

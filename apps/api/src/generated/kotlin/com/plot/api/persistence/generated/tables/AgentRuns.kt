@@ -26,6 +26,8 @@ import com.plot.api.persistence.generated.keys.AGENT_STEPS__AGENT_STEPS_WORKSPAC
 import com.plot.api.persistence.generated.keys.ARTIFACT_RUNS__ARTIFACT_RUNS_WORKSPACE_ID_AGENT_RUN_ID_FKEY
 import com.plot.api.persistence.generated.keys.AUTONOMY_EXECUTIONS__AUTONOMY_EXECUTIONS_WORKSPACE_ID_AGENT_RUN_ID_FKEY
 import com.plot.api.persistence.generated.keys.AUTONOMY_GOALS__AUTONOMY_GOALS_WORKSPACE_ID_AGENT_RUN_ID_FKEY
+import com.plot.api.persistence.generated.keys.CHAT_EXECUTION_ENVELOPES__CHAT_EXECUTION_ENVELOPES_WORKSPACE_ID_AGENT_RUN_ID_FKEY
+import com.plot.api.persistence.generated.keys.CHAT_RESPONSE_VERSIONS__CHAT_RESPONSE_VERSIONS_WORKSPACE_ID_AGENT_RUN_ID_FKEY
 import com.plot.api.persistence.generated.keys.GENERATION_RUNS__GENERATION_RUNS_AGENT_RUN_FK
 import com.plot.api.persistence.generated.keys.GITHUB_RELEASE_DRAFT_REQUESTS__GITHUB_RELEASE_DRAFT_AGENT_RUN_FK
 import com.plot.api.persistence.generated.tables.AgentRunInputs.AgentRunInputsPath
@@ -34,6 +36,8 @@ import com.plot.api.persistence.generated.tables.AgentSteps.AgentStepsPath
 import com.plot.api.persistence.generated.tables.ArtifactRuns.ArtifactRunsPath
 import com.plot.api.persistence.generated.tables.AutonomyExecutions.AutonomyExecutionsPath
 import com.plot.api.persistence.generated.tables.AutonomyGoals.AutonomyGoalsPath
+import com.plot.api.persistence.generated.tables.ChatExecutionEnvelopes.ChatExecutionEnvelopesPath
+import com.plot.api.persistence.generated.tables.ChatResponseVersions.ChatResponseVersionsPath
 import com.plot.api.persistence.generated.tables.ContentSourceSnapshots.ContentSourceSnapshotsPath
 import com.plot.api.persistence.generated.tables.GenerationRuns.GenerationRunsPath
 import com.plot.api.persistence.generated.tables.GithubReleaseDraftRequests.GithubReleaseDraftRequestsPath
@@ -520,6 +524,38 @@ open class AgentRuns(
 
     val autonomyGoals: AutonomyGoalsPath
         get(): AutonomyGoalsPath = autonomyGoals()
+
+    private lateinit var _chatExecutionEnvelopes: ChatExecutionEnvelopesPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.chat_execution_envelopes</code> table
+     */
+    fun chatExecutionEnvelopes(): ChatExecutionEnvelopesPath {
+        if (!this::_chatExecutionEnvelopes.isInitialized)
+            _chatExecutionEnvelopes = ChatExecutionEnvelopesPath(this, null, CHAT_EXECUTION_ENVELOPES__CHAT_EXECUTION_ENVELOPES_WORKSPACE_ID_AGENT_RUN_ID_FKEY.inverseKey)
+
+        return _chatExecutionEnvelopes;
+    }
+
+    val chatExecutionEnvelopes: ChatExecutionEnvelopesPath
+        get(): ChatExecutionEnvelopesPath = chatExecutionEnvelopes()
+
+    private lateinit var _chatResponseVersions: ChatResponseVersionsPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.chat_response_versions</code> table
+     */
+    fun chatResponseVersions(): ChatResponseVersionsPath {
+        if (!this::_chatResponseVersions.isInitialized)
+            _chatResponseVersions = ChatResponseVersionsPath(this, null, CHAT_RESPONSE_VERSIONS__CHAT_RESPONSE_VERSIONS_WORKSPACE_ID_AGENT_RUN_ID_FKEY.inverseKey)
+
+        return _chatResponseVersions;
+    }
+
+    val chatResponseVersions: ChatResponseVersionsPath
+        get(): ChatResponseVersionsPath = chatResponseVersions()
 
     private lateinit var _generationRuns: GenerationRunsPath
 

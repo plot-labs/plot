@@ -13,6 +13,9 @@ import com.plot.api.persistence.generated.tables.AutonomyExecutions
 import com.plot.api.persistence.generated.tables.AutonomyGoals
 import com.plot.api.persistence.generated.tables.AutonomyOpportunities
 import com.plot.api.persistence.generated.tables.AutonomySignals
+import com.plot.api.persistence.generated.tables.ChatExecutionTranscriptEntries
+import com.plot.api.persistence.generated.tables.ChatResponseVersions
+import com.plot.api.persistence.generated.tables.ChatTurns
 import com.plot.api.persistence.generated.tables.ConnectionNamespaceBindings
 import com.plot.api.persistence.generated.tables.ContentPacks
 import com.plot.api.persistence.generated.tables.ContentSourceSnapshots
@@ -29,6 +32,7 @@ import com.plot.api.persistence.generated.tables.GithubReleaseDraftRequests
 import com.plot.api.persistence.generated.tables.GithubRepositoryAccessChecks
 import com.plot.api.persistence.generated.tables.GithubRepositoryMonitoring
 import com.plot.api.persistence.generated.tables.GithubWebhookDeliveries
+import com.plot.api.persistence.generated.tables.LegacyActivityProvenance
 import com.plot.api.persistence.generated.tables.ProductDeliveryEvents
 import com.plot.api.persistence.generated.tables.PublishedChangelogEntries
 import com.plot.api.persistence.generated.tables.PublishedChangelogEntryCitations
@@ -38,6 +42,7 @@ import com.plot.api.persistence.generated.tables.RoutineExecutionEvidence
 import com.plot.api.persistence.generated.tables.RoutineExecutions
 import com.plot.api.persistence.generated.tables.Routines
 import com.plot.api.persistence.generated.tables.SentenceCitations
+import com.plot.api.persistence.generated.tables.SignalEvaluations
 import com.plot.api.persistence.generated.tables.SourceImports
 import com.plot.api.persistence.generated.tables.SourceScopes
 import com.plot.api.persistence.generated.tables.Users
@@ -82,6 +87,9 @@ val AUTONOMY_EXECUTIONS_RUNNING_IDX: Index = Internal.createIndex(DSL.name("auto
 val AUTONOMY_GOALS_ONE_ACTIVE_IDX: Index = Internal.createIndex(DSL.name("autonomy_goals_one_active_idx"), AutonomyGoals.AUTONOMY_GOALS, arrayOf(AutonomyGoals.AUTONOMY_GOALS.WORKSPACE_ID, AutonomyGoals.AUTONOMY_GOALS.OPPORTUNITY_ID), true)
 val AUTONOMY_OPPORTUNITIES_HOME_IDX: Index = Internal.createIndex(DSL.name("autonomy_opportunities_home_idx"), AutonomyOpportunities.AUTONOMY_OPPORTUNITIES, arrayOf(AutonomyOpportunities.AUTONOMY_OPPORTUNITIES.WORKSPACE_ID, AutonomyOpportunities.AUTONOMY_OPPORTUNITIES.UPDATED_AT.desc(), AutonomyOpportunities.AUTONOMY_OPPORTUNITIES.ID), false)
 val AUTONOMY_SIGNALS_DISPATCH_IDX: Index = Internal.createIndex(DSL.name("autonomy_signals_dispatch_idx"), AutonomySignals.AUTONOMY_SIGNALS, arrayOf(AutonomySignals.AUTONOMY_SIGNALS.PROVIDER, AutonomySignals.AUTONOMY_SIGNALS.AVAILABLE_AT, AutonomySignals.AUTONOMY_SIGNALS.RECEIVED_AT), false)
+val CHAT_EXECUTION_TRANSCRIPT_ENTRIES_IDX: Index = Internal.createIndex(DSL.name("chat_execution_transcript_entries_idx"), ChatExecutionTranscriptEntries.CHAT_EXECUTION_TRANSCRIPT_ENTRIES, arrayOf(ChatExecutionTranscriptEntries.CHAT_EXECUTION_TRANSCRIPT_ENTRIES.WORKSPACE_ID, ChatExecutionTranscriptEntries.CHAT_EXECUTION_TRANSCRIPT_ENTRIES.ENVELOPE_ID, ChatExecutionTranscriptEntries.CHAT_EXECUTION_TRANSCRIPT_ENTRIES.CALL_INDEX), false)
+val CHAT_RESPONSE_VERSIONS_TURN_IDX: Index = Internal.createIndex(DSL.name("chat_response_versions_turn_idx"), ChatResponseVersions.CHAT_RESPONSE_VERSIONS, arrayOf(ChatResponseVersions.CHAT_RESPONSE_VERSIONS.WORKSPACE_ID, ChatResponseVersions.CHAT_RESPONSE_VERSIONS.TURN_ID, ChatResponseVersions.CHAT_RESPONSE_VERSIONS.VERSION_INDEX), false)
+val CHAT_TURNS_SESSION_IDX: Index = Internal.createIndex(DSL.name("chat_turns_session_idx"), ChatTurns.CHAT_TURNS, arrayOf(ChatTurns.CHAT_TURNS.WORKSPACE_ID, ChatTurns.CHAT_TURNS.WORK_SESSION_ID, ChatTurns.CHAT_TURNS.TURN_INDEX), false)
 val CONNECTION_NAMESPACE_BINDINGS_ONE_ACTIVE_IDX: Index = Internal.createIndex(DSL.name("connection_namespace_bindings_one_active_idx"), ConnectionNamespaceBindings.CONNECTION_NAMESPACE_BINDINGS, arrayOf(ConnectionNamespaceBindings.CONNECTION_NAMESPACE_BINDINGS.WORKSPACE_ID, ConnectionNamespaceBindings.CONNECTION_NAMESPACE_BINDINGS.PROVIDER, ConnectionNamespaceBindings.CONNECTION_NAMESPACE_BINDINGS.SOURCE_NAMESPACE_ID), true)
 val CONTENT_PACKS_ONE_PER_RELEASE_REQUEST_IDX: Index = Internal.createIndex(DSL.name("content_packs_one_per_release_request_idx"), ContentPacks.CONTENT_PACKS, arrayOf(ContentPacks.CONTENT_PACKS.WORKSPACE_ID, ContentPacks.CONTENT_PACKS.RELEASE_REQUEST_ID), true)
 val CONTENT_SOURCE_SNAPSHOTS_BUNDLE_HASH_IDX: Index = Internal.createIndex(DSL.name("content_source_snapshots_bundle_hash_idx"), ContentSourceSnapshots.CONTENT_SOURCE_SNAPSHOTS, arrayOf(ContentSourceSnapshots.CONTENT_SOURCE_SNAPSHOTS.WORKSPACE_ID, ContentSourceSnapshots.CONTENT_SOURCE_SNAPSHOTS.SOURCE_BUNDLE_HASH), false)
@@ -112,6 +120,7 @@ val GITHUB_REPOSITORY_ACCESS_CHECKS_STALE_CLAIM_IDX: Index = Internal.createInde
 val GITHUB_REPOSITORY_MONITORING_RUNNABLE_IDX: Index = Internal.createIndex(DSL.name("github_repository_monitoring_runnable_idx"), GithubRepositoryMonitoring.GITHUB_REPOSITORY_MONITORING, arrayOf(GithubRepositoryMonitoring.GITHUB_REPOSITORY_MONITORING.NEXT_ATTEMPT_AT, GithubRepositoryMonitoring.GITHUB_REPOSITORY_MONITORING.CREATED_AT), false)
 val GITHUB_REPOSITORY_MONITORING_STALE_CLAIM_IDX: Index = Internal.createIndex(DSL.name("github_repository_monitoring_stale_claim_idx"), GithubRepositoryMonitoring.GITHUB_REPOSITORY_MONITORING, arrayOf(GithubRepositoryMonitoring.GITHUB_REPOSITORY_MONITORING.CLAIMED_AT), false)
 val GITHUB_WEBHOOK_DELIVERIES_PROCESSING_IDX: Index = Internal.createIndex(DSL.name("github_webhook_deliveries_processing_idx"), GithubWebhookDeliveries.GITHUB_WEBHOOK_DELIVERIES, arrayOf(GithubWebhookDeliveries.GITHUB_WEBHOOK_DELIVERIES.DISPOSITION, GithubWebhookDeliveries.GITHUB_WEBHOOK_DELIVERIES.RECEIVED_AT), false)
+val LEGACY_ACTIVITY_PROVENANCE_TIME_IDX: Index = Internal.createIndex(DSL.name("legacy_activity_provenance_time_idx"), LegacyActivityProvenance.LEGACY_ACTIVITY_PROVENANCE, arrayOf(LegacyActivityProvenance.LEGACY_ACTIVITY_PROVENANCE.WORKSPACE_ID, LegacyActivityProvenance.LEGACY_ACTIVITY_PROVENANCE.SEMANTIC_TIME.desc()), false)
 val PRODUCT_DELIVERY_EVENTS_CLIENT_EVENT_ID_UIDX: Index = Internal.createIndex(DSL.name("product_delivery_events_client_event_id_uidx"), ProductDeliveryEvents.PRODUCT_DELIVERY_EVENTS, arrayOf(ProductDeliveryEvents.PRODUCT_DELIVERY_EVENTS.CLIENT_EVENT_ID), true)
 val PRODUCT_DELIVERY_EVENTS_EXPORT_KIND_USER_UIDX: Index = Internal.createIndex(DSL.name("product_delivery_events_export_kind_user_uidx"), ProductDeliveryEvents.PRODUCT_DELIVERY_EVENTS, arrayOf(ProductDeliveryEvents.PRODUCT_DELIVERY_EVENTS.GENERATION_EXPORT_EVENT_ID, ProductDeliveryEvents.PRODUCT_DELIVERY_EVENTS.KIND, ProductDeliveryEvents.PRODUCT_DELIVERY_EVENTS.CREATED_BY_USER_ID), true)
 val PRODUCT_DELIVERY_EVENTS_PUBLISHED_KIND_USER_UIDX: Index = Internal.createIndex(DSL.name("product_delivery_events_published_kind_user_uidx"), ProductDeliveryEvents.PRODUCT_DELIVERY_EVENTS, arrayOf(ProductDeliveryEvents.PRODUCT_DELIVERY_EVENTS.PUBLISHED_CHANGELOG_ENTRY_ID, ProductDeliveryEvents.PRODUCT_DELIVERY_EVENTS.KIND, ProductDeliveryEvents.PRODUCT_DELIVERY_EVENTS.CREATED_BY_USER_ID), true)
@@ -134,6 +143,7 @@ val ROUTINES_STALE_CLAIM_IDX: Index = Internal.createIndex(DSL.name("routines_st
 val ROUTINES_WORKSPACE_IDX: Index = Internal.createIndex(DSL.name("routines_workspace_idx"), Routines.ROUTINES, arrayOf(Routines.ROUTINES.WORKSPACE_ID, Routines.ROUTINES.CREATED_AT.desc()), false)
 val SENTENCE_CITATIONS_SENTENCE_IDX: Index = Internal.createIndex(DSL.name("sentence_citations_sentence_idx"), SentenceCitations.SENTENCE_CITATIONS, arrayOf(SentenceCitations.SENTENCE_CITATIONS.WORKSPACE_ID, SentenceCitations.SENTENCE_CITATIONS.SENTENCE_ID, SentenceCitations.SENTENCE_CITATIONS.CITATION_ORDER), false)
 val SENTENCE_CITATIONS_VARIANT_IDX: Index = Internal.createIndex(DSL.name("sentence_citations_variant_idx"), SentenceCitations.SENTENCE_CITATIONS, arrayOf(SentenceCitations.SENTENCE_CITATIONS.WORKSPACE_ID, SentenceCitations.SENTENCE_CITATIONS.CONTENT_VARIANT_ID, SentenceCitations.SENTENCE_CITATIONS.SENTENCE_ID, SentenceCitations.SENTENCE_CITATIONS.CITATION_ORDER), false)
+val SIGNAL_EVALUATIONS_WORKSPACE_TIME_IDX: Index = Internal.createIndex(DSL.name("signal_evaluations_workspace_time_idx"), SignalEvaluations.SIGNAL_EVALUATIONS, arrayOf(SignalEvaluations.SIGNAL_EVALUATIONS.WORKSPACE_ID, SignalEvaluations.SIGNAL_EVALUATIONS.SEMANTIC_TIME.desc()), false)
 val SOURCE_IMPORTS_ONE_RUNNING_IDX: Index = Internal.createIndex(DSL.name("source_imports_one_running_idx"), SourceImports.SOURCE_IMPORTS, arrayOf(SourceImports.SOURCE_IMPORTS.WORKSPACE_ID, SourceImports.SOURCE_IMPORTS.SOURCE_SCOPE_ID), true)
 val SOURCE_IMPORTS_WORKSPACE_CREATED_IDX: Index = Internal.createIndex(DSL.name("source_imports_workspace_created_idx"), SourceImports.SOURCE_IMPORTS, arrayOf(SourceImports.SOURCE_IMPORTS.WORKSPACE_ID, SourceImports.SOURCE_IMPORTS.CREATED_AT.desc()), false)
 val SOURCE_SCOPES_WORKSPACE_STATUS_IDX: Index = Internal.createIndex(DSL.name("source_scopes_workspace_status_idx"), SourceScopes.SOURCE_SCOPES, arrayOf(SourceScopes.SOURCE_SCOPES.WORKSPACE_ID, SourceScopes.SOURCE_SCOPES.STATUS), false)

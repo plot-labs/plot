@@ -17,9 +17,11 @@ import com.plot.api.persistence.generated.keys.GENERATION_RUNS__GENERATION_RUNS_
 import com.plot.api.persistence.generated.keys.GITHUB_RELEASE_DRAFT_REQUESTS__GITHUB_RELEASE_DRAFT_REQUESTS_WORKSPACE_ID_SOURCE_SCOPE_ID_FKEY
 import com.plot.api.persistence.generated.keys.GITHUB_REPOSITORY_ACCESS_CHECKS__GITHUB_REPOSITORY_ACCESS_CHEC_WORKSPACE_ID_SOURCE_SCOPE_ID_FKEY
 import com.plot.api.persistence.generated.keys.GITHUB_REPOSITORY_MONITORING__GITHUB_REPOSITORY_MONITORING_WORKSPACE_ID_SOURCE_SCOPE_ID_FKEY
+import com.plot.api.persistence.generated.keys.LEGACY_ACTIVITY_PROVENANCE__LEGACY_ACTIVITY_PROVENANCE_WORKSPACE_ID_SOURCE_SCOPE_ID_FKEY
 import com.plot.api.persistence.generated.keys.ROUTINES__ROUTINES_WORKSPACE_ID_SOURCE_SCOPE_ID_FKEY
 import com.plot.api.persistence.generated.keys.ROUTINE_CONTEXT_SOURCES__ROUTINE_CONTEXT_SOURCES_WORKSPACE_ID_SOURCE_SCOPE_ID_FKEY
 import com.plot.api.persistence.generated.keys.ROUTINE_EXECUTIONS__ROUTINE_EXECUTIONS_WORKSPACE_ID_TRIGGER_SOURCE_SCOPE_ID_FKEY
+import com.plot.api.persistence.generated.keys.SIGNAL_EVALUATIONS__SIGNAL_EVALUATIONS_WORKSPACE_ID_SOURCE_NAMESPACE_ID_SOURCE_FKEY
 import com.plot.api.persistence.generated.keys.SOURCE_IMPORTS__SOURCE_IMPORTS_WORKSPACE_ID_SOURCE_SCOPE_ID_FKEY
 import com.plot.api.persistence.generated.keys.SOURCE_OBSERVATIONS__SOURCE_OBSERVATIONS_WORKSPACE_ID_SOURCE_SCOPE_ID_FKEY
 import com.plot.api.persistence.generated.keys.SOURCE_SCOPES_PKEY
@@ -40,9 +42,11 @@ import com.plot.api.persistence.generated.tables.GenerationRuns.GenerationRunsPa
 import com.plot.api.persistence.generated.tables.GithubReleaseDraftRequests.GithubReleaseDraftRequestsPath
 import com.plot.api.persistence.generated.tables.GithubRepositoryAccessChecks.GithubRepositoryAccessChecksPath
 import com.plot.api.persistence.generated.tables.GithubRepositoryMonitoring.GithubRepositoryMonitoringPath
+import com.plot.api.persistence.generated.tables.LegacyActivityProvenance.LegacyActivityProvenancePath
 import com.plot.api.persistence.generated.tables.RoutineContextSources.RoutineContextSourcesPath
 import com.plot.api.persistence.generated.tables.RoutineExecutions.RoutineExecutionsPath
 import com.plot.api.persistence.generated.tables.Routines.RoutinesPath
+import com.plot.api.persistence.generated.tables.SignalEvaluations.SignalEvaluationsPath
 import com.plot.api.persistence.generated.tables.SourceImports.SourceImportsPath
 import com.plot.api.persistence.generated.tables.SourceNamespaces.SourceNamespacesPath
 import com.plot.api.persistence.generated.tables.SourceObservations.SourceObservationsPath
@@ -443,6 +447,22 @@ open class SourceScopes(
     val githubRepositoryMonitoring: GithubRepositoryMonitoringPath
         get(): GithubRepositoryMonitoringPath = githubRepositoryMonitoring()
 
+    private lateinit var _legacyActivityProvenance: LegacyActivityProvenancePath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.legacy_activity_provenance</code> table
+     */
+    fun legacyActivityProvenance(): LegacyActivityProvenancePath {
+        if (!this::_legacyActivityProvenance.isInitialized)
+            _legacyActivityProvenance = LegacyActivityProvenancePath(this, null, LEGACY_ACTIVITY_PROVENANCE__LEGACY_ACTIVITY_PROVENANCE_WORKSPACE_ID_SOURCE_SCOPE_ID_FKEY.inverseKey)
+
+        return _legacyActivityProvenance;
+    }
+
+    val legacyActivityProvenance: LegacyActivityProvenancePath
+        get(): LegacyActivityProvenancePath = legacyActivityProvenance()
+
     private lateinit var _routineContextSources: RoutineContextSourcesPath
 
     /**
@@ -490,6 +510,22 @@ open class SourceScopes(
 
     val routines: RoutinesPath
         get(): RoutinesPath = routines()
+
+    private lateinit var _signalEvaluations: SignalEvaluationsPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.signal_evaluations</code> table
+     */
+    fun signalEvaluations(): SignalEvaluationsPath {
+        if (!this::_signalEvaluations.isInitialized)
+            _signalEvaluations = SignalEvaluationsPath(this, null, SIGNAL_EVALUATIONS__SIGNAL_EVALUATIONS_WORKSPACE_ID_SOURCE_NAMESPACE_ID_SOURCE_FKEY.inverseKey)
+
+        return _signalEvaluations;
+    }
+
+    val signalEvaluations: SignalEvaluationsPath
+        get(): SignalEvaluationsPath = signalEvaluations()
 
     private lateinit var _sourceImports: SourceImportsPath
 

@@ -10,6 +10,7 @@ import com.plot.api.persistence.generated.indexes.WORK_SESSIONS_WORKSPACE_CREATE
 import com.plot.api.persistence.generated.indexes.WORK_SESSIONS_WORKSPACE_LATEST_GENERATION_IDX
 import com.plot.api.persistence.generated.keys.AGENT_RUNS__AGENT_RUNS_WORKSPACE_ID_WORK_SESSION_ID_FKEY
 import com.plot.api.persistence.generated.keys.AGENT_RUNS__AGENT_RUNS_WORK_SESSION_ROUTINE_EXECUTION_FK
+import com.plot.api.persistence.generated.keys.CHAT_TURNS__CHAT_TURNS_WORKSPACE_ID_WORK_SESSION_ID_FKEY
 import com.plot.api.persistence.generated.keys.WORK_SESSIONS_PKEY
 import com.plot.api.persistence.generated.keys.WORK_SESSIONS_ROUTINE_EXECUTION_KEY
 import com.plot.api.persistence.generated.keys.WORK_SESSIONS_WORKSPACE_ID_ID_KEY
@@ -18,6 +19,7 @@ import com.plot.api.persistence.generated.keys.WORK_SESSIONS__WORK_SESSIONS_LATE
 import com.plot.api.persistence.generated.keys.WORK_SESSIONS__WORK_SESSIONS_ROUTINE_EXECUTION_FK
 import com.plot.api.persistence.generated.keys.WORK_SESSIONS__WORK_SESSIONS_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.tables.AgentRuns.AgentRunsPath
+import com.plot.api.persistence.generated.tables.ChatTurns.ChatTurnsPath
 import com.plot.api.persistence.generated.tables.GenerationRuns.GenerationRunsPath
 import com.plot.api.persistence.generated.tables.RoutineExecutions.RoutineExecutionsPath
 import com.plot.api.persistence.generated.tables.Users.UsersPath
@@ -273,6 +275,22 @@ open class WorkSessions(
 
     val agentRunsWorkspaceIdWorkSessionIdFkey: AgentRunsPath
         get(): AgentRunsPath = agentRunsWorkspaceIdWorkSessionIdFkey()
+
+    private lateinit var _chatTurns: ChatTurnsPath
+
+    /**
+     * Get the implicit to-many join path to the <code>public.chat_turns</code>
+     * table
+     */
+    fun chatTurns(): ChatTurnsPath {
+        if (!this::_chatTurns.isInitialized)
+            _chatTurns = ChatTurnsPath(this, null, CHAT_TURNS__CHAT_TURNS_WORKSPACE_ID_WORK_SESSION_ID_FKEY.inverseKey)
+
+        return _chatTurns;
+    }
+
+    val chatTurns: ChatTurnsPath
+        get(): ChatTurnsPath = chatTurns()
     override fun `as`(alias: String): WorkSessions = WorkSessions(DSL.name(alias), this)
     override fun `as`(alias: Name): WorkSessions = WorkSessions(alias, this)
     override fun `as`(alias: Table<*>): WorkSessions = WorkSessions(alias.qualifiedName, this)

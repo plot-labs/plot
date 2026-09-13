@@ -10,6 +10,9 @@ import com.plot.api.persistence.generated.keys.AUTONOMY_DAILY_BUDGETS__AUTONOMY_
 import com.plot.api.persistence.generated.keys.AUTONOMY_MISSIONS__AUTONOMY_MISSIONS_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.AUTONOMY_OPPORTUNITIES__AUTONOMY_OPPORTUNITIES_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.AUTONOMY_SIGNALS__AUTONOMY_SIGNALS_WORKSPACE_ID_FKEY
+import com.plot.api.persistence.generated.keys.CHAT_EXECUTION_ENVELOPES__CHAT_EXECUTION_ENVELOPES_WORKSPACE_ID_FKEY
+import com.plot.api.persistence.generated.keys.CHAT_RESPONSE_VERSIONS__CHAT_RESPONSE_VERSIONS_WORKSPACE_ID_FKEY
+import com.plot.api.persistence.generated.keys.CHAT_TURNS__CHAT_TURNS_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.CONNECTIONS__CONNECTIONS_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.CONNECTION_NAMESPACE_BINDINGS__CONNECTION_NAMESPACE_BINDINGS_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.CONTENT_SOURCE_SNAPSHOTS__CONTENT_SOURCE_SNAPSHOTS_WORKSPACE_ID_FKEY
@@ -18,10 +21,12 @@ import com.plot.api.persistence.generated.keys.GITHUB_INSTALLATION_STATES__GITHU
 import com.plot.api.persistence.generated.keys.GITHUB_PRODUCT_OAUTH_STATES__GITHUB_PRODUCT_OAUTH_STATES_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.GITHUB_RELEASE_DRAFT_REQUESTS__GITHUB_RELEASE_DRAFT_REQUESTS_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.GITHUB_REPOSITORY_ACCESS_CHECKS__GITHUB_REPOSITORY_ACCESS_CHECKS_WORKSPACE_ID_FKEY
+import com.plot.api.persistence.generated.keys.LEGACY_ACTIVITY_PROVENANCE__LEGACY_ACTIVITY_PROVENANCE_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.POLAR_WEBHOOK_EVENTS__POLAR_WEBHOOK_EVENTS_MATCHED_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.PRODUCT_DELIVERY_EVENTS__PRODUCT_DELIVERY_EVENTS_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.ROUTINES__ROUTINES_WORKSPACE_ID_FKEY
+import com.plot.api.persistence.generated.keys.SIGNAL_EVALUATIONS__SIGNAL_EVALUATIONS_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.SOURCE_IMPORTS__SOURCE_IMPORTS_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.SOURCE_NAMESPACES__SOURCE_NAMESPACES_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.SOURCE_OBSERVATIONS__SOURCE_OBSERVATIONS_WORKSPACE_ID_FKEY
@@ -42,6 +47,9 @@ import com.plot.api.persistence.generated.tables.AutonomyDailyBudgets.AutonomyDa
 import com.plot.api.persistence.generated.tables.AutonomyMissions.AutonomyMissionsPath
 import com.plot.api.persistence.generated.tables.AutonomyOpportunities.AutonomyOpportunitiesPath
 import com.plot.api.persistence.generated.tables.AutonomySignals.AutonomySignalsPath
+import com.plot.api.persistence.generated.tables.ChatExecutionEnvelopes.ChatExecutionEnvelopesPath
+import com.plot.api.persistence.generated.tables.ChatResponseVersions.ChatResponseVersionsPath
+import com.plot.api.persistence.generated.tables.ChatTurns.ChatTurnsPath
 import com.plot.api.persistence.generated.tables.ConnectionNamespaceBindings.ConnectionNamespaceBindingsPath
 import com.plot.api.persistence.generated.tables.Connections.ConnectionsPath
 import com.plot.api.persistence.generated.tables.ContentSourceSnapshots.ContentSourceSnapshotsPath
@@ -50,10 +58,12 @@ import com.plot.api.persistence.generated.tables.GithubInstallationStates.Github
 import com.plot.api.persistence.generated.tables.GithubProductOauthStates.GithubProductOauthStatesPath
 import com.plot.api.persistence.generated.tables.GithubReleaseDraftRequests.GithubReleaseDraftRequestsPath
 import com.plot.api.persistence.generated.tables.GithubRepositoryAccessChecks.GithubRepositoryAccessChecksPath
+import com.plot.api.persistence.generated.tables.LegacyActivityProvenance.LegacyActivityProvenancePath
 import com.plot.api.persistence.generated.tables.PolarWebhookEvents.PolarWebhookEventsPath
 import com.plot.api.persistence.generated.tables.ProductDeliveryEvents.ProductDeliveryEventsPath
 import com.plot.api.persistence.generated.tables.PublishedChangelogEntries.PublishedChangelogEntriesPath
 import com.plot.api.persistence.generated.tables.Routines.RoutinesPath
+import com.plot.api.persistence.generated.tables.SignalEvaluations.SignalEvaluationsPath
 import com.plot.api.persistence.generated.tables.SourceImports.SourceImportsPath
 import com.plot.api.persistence.generated.tables.SourceNamespaces.SourceNamespacesPath
 import com.plot.api.persistence.generated.tables.SourceObservations.SourceObservationsPath
@@ -339,6 +349,54 @@ open class Workspaces(
     val autonomySignals: AutonomySignalsPath
         get(): AutonomySignalsPath = autonomySignals()
 
+    private lateinit var _chatExecutionEnvelopes: ChatExecutionEnvelopesPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.chat_execution_envelopes</code> table
+     */
+    fun chatExecutionEnvelopes(): ChatExecutionEnvelopesPath {
+        if (!this::_chatExecutionEnvelopes.isInitialized)
+            _chatExecutionEnvelopes = ChatExecutionEnvelopesPath(this, null, CHAT_EXECUTION_ENVELOPES__CHAT_EXECUTION_ENVELOPES_WORKSPACE_ID_FKEY.inverseKey)
+
+        return _chatExecutionEnvelopes;
+    }
+
+    val chatExecutionEnvelopes: ChatExecutionEnvelopesPath
+        get(): ChatExecutionEnvelopesPath = chatExecutionEnvelopes()
+
+    private lateinit var _chatResponseVersions: ChatResponseVersionsPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.chat_response_versions</code> table
+     */
+    fun chatResponseVersions(): ChatResponseVersionsPath {
+        if (!this::_chatResponseVersions.isInitialized)
+            _chatResponseVersions = ChatResponseVersionsPath(this, null, CHAT_RESPONSE_VERSIONS__CHAT_RESPONSE_VERSIONS_WORKSPACE_ID_FKEY.inverseKey)
+
+        return _chatResponseVersions;
+    }
+
+    val chatResponseVersions: ChatResponseVersionsPath
+        get(): ChatResponseVersionsPath = chatResponseVersions()
+
+    private lateinit var _chatTurns: ChatTurnsPath
+
+    /**
+     * Get the implicit to-many join path to the <code>public.chat_turns</code>
+     * table
+     */
+    fun chatTurns(): ChatTurnsPath {
+        if (!this::_chatTurns.isInitialized)
+            _chatTurns = ChatTurnsPath(this, null, CHAT_TURNS__CHAT_TURNS_WORKSPACE_ID_FKEY.inverseKey)
+
+        return _chatTurns;
+    }
+
+    val chatTurns: ChatTurnsPath
+        get(): ChatTurnsPath = chatTurns()
+
     private lateinit var _connectionNamespaceBindings: ConnectionNamespaceBindingsPath
 
     /**
@@ -467,6 +525,22 @@ open class Workspaces(
     val githubRepositoryAccessChecks: GithubRepositoryAccessChecksPath
         get(): GithubRepositoryAccessChecksPath = githubRepositoryAccessChecks()
 
+    private lateinit var _legacyActivityProvenance: LegacyActivityProvenancePath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.legacy_activity_provenance</code> table
+     */
+    fun legacyActivityProvenance(): LegacyActivityProvenancePath {
+        if (!this::_legacyActivityProvenance.isInitialized)
+            _legacyActivityProvenance = LegacyActivityProvenancePath(this, null, LEGACY_ACTIVITY_PROVENANCE__LEGACY_ACTIVITY_PROVENANCE_WORKSPACE_ID_FKEY.inverseKey)
+
+        return _legacyActivityProvenance;
+    }
+
+    val legacyActivityProvenance: LegacyActivityProvenancePath
+        get(): LegacyActivityProvenancePath = legacyActivityProvenance()
+
     private lateinit var _polarWebhookEvents: PolarWebhookEventsPath
 
     /**
@@ -530,6 +604,22 @@ open class Workspaces(
 
     val routines: RoutinesPath
         get(): RoutinesPath = routines()
+
+    private lateinit var _signalEvaluations: SignalEvaluationsPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.signal_evaluations</code> table
+     */
+    fun signalEvaluations(): SignalEvaluationsPath {
+        if (!this::_signalEvaluations.isInitialized)
+            _signalEvaluations = SignalEvaluationsPath(this, null, SIGNAL_EVALUATIONS__SIGNAL_EVALUATIONS_WORKSPACE_ID_FKEY.inverseKey)
+
+        return _signalEvaluations;
+    }
+
+    val signalEvaluations: SignalEvaluationsPath
+        get(): SignalEvaluationsPath = signalEvaluations()
 
     private lateinit var _sourceImports: SourceImportsPath
 

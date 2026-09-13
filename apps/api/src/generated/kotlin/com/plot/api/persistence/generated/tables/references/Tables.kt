@@ -18,6 +18,10 @@ import com.plot.api.persistence.generated.tables.AutonomyOpportunities
 import com.plot.api.persistence.generated.tables.AutonomySignalHeads
 import com.plot.api.persistence.generated.tables.AutonomySignals
 import com.plot.api.persistence.generated.tables.AutonomyTasks
+import com.plot.api.persistence.generated.tables.ChatExecutionEnvelopes
+import com.plot.api.persistence.generated.tables.ChatExecutionTranscriptEntries
+import com.plot.api.persistence.generated.tables.ChatResponseVersions
+import com.plot.api.persistence.generated.tables.ChatTurns
 import com.plot.api.persistence.generated.tables.ConnectionNamespaceBindings
 import com.plot.api.persistence.generated.tables.Connections
 import com.plot.api.persistence.generated.tables.ContentPacks
@@ -43,6 +47,7 @@ import com.plot.api.persistence.generated.tables.GithubReleaseGenerationAttempts
 import com.plot.api.persistence.generated.tables.GithubRepositoryAccessChecks
 import com.plot.api.persistence.generated.tables.GithubRepositoryMonitoring
 import com.plot.api.persistence.generated.tables.GithubWebhookDeliveries
+import com.plot.api.persistence.generated.tables.LegacyActivityProvenance
 import com.plot.api.persistence.generated.tables.ModelInvocations
 import com.plot.api.persistence.generated.tables.PolarWebhookEvents
 import com.plot.api.persistence.generated.tables.ProductDeliveryEvents
@@ -55,6 +60,7 @@ import com.plot.api.persistence.generated.tables.RoutineExecutions
 import com.plot.api.persistence.generated.tables.Routines
 import com.plot.api.persistence.generated.tables.SentenceCitations
 import com.plot.api.persistence.generated.tables.SentenceEvaluations
+import com.plot.api.persistence.generated.tables.SignalEvaluations
 import com.plot.api.persistence.generated.tables.SourceImports
 import com.plot.api.persistence.generated.tables.SourceNamespaces
 import com.plot.api.persistence.generated.tables.SourceObservations
@@ -145,6 +151,26 @@ val AUTONOMY_SIGNALS: AutonomySignals = AutonomySignals.AUTONOMY_SIGNALS
  * The table <code>public.autonomy_tasks</code>.
  */
 val AUTONOMY_TASKS: AutonomyTasks = AutonomyTasks.AUTONOMY_TASKS
+
+/**
+ * The table <code>public.chat_execution_envelopes</code>.
+ */
+val CHAT_EXECUTION_ENVELOPES: ChatExecutionEnvelopes = ChatExecutionEnvelopes.CHAT_EXECUTION_ENVELOPES
+
+/**
+ * The table <code>public.chat_execution_transcript_entries</code>.
+ */
+val CHAT_EXECUTION_TRANSCRIPT_ENTRIES: ChatExecutionTranscriptEntries = ChatExecutionTranscriptEntries.CHAT_EXECUTION_TRANSCRIPT_ENTRIES
+
+/**
+ * The table <code>public.chat_response_versions</code>.
+ */
+val CHAT_RESPONSE_VERSIONS: ChatResponseVersions = ChatResponseVersions.CHAT_RESPONSE_VERSIONS
+
+/**
+ * The table <code>public.chat_turns</code>.
+ */
+val CHAT_TURNS: ChatTurns = ChatTurns.CHAT_TURNS
 
 /**
  * The table <code>public.connection_namespace_bindings</code>.
@@ -272,6 +298,11 @@ val GITHUB_REPOSITORY_MONITORING: GithubRepositoryMonitoring = GithubRepositoryM
 val GITHUB_WEBHOOK_DELIVERIES: GithubWebhookDeliveries = GithubWebhookDeliveries.GITHUB_WEBHOOK_DELIVERIES
 
 /**
+ * The table <code>public.legacy_activity_provenance</code>.
+ */
+val LEGACY_ACTIVITY_PROVENANCE: LegacyActivityProvenance = LegacyActivityProvenance.LEGACY_ACTIVITY_PROVENANCE
+
+/**
  * The table <code>public.model_invocations</code>.
  */
 val MODEL_INVOCATIONS: ModelInvocations = ModelInvocations.MODEL_INVOCATIONS
@@ -330,6 +361,11 @@ val SENTENCE_CITATIONS: SentenceCitations = SentenceCitations.SENTENCE_CITATIONS
  * The table <code>public.sentence_evaluations</code>.
  */
 val SENTENCE_EVALUATIONS: SentenceEvaluations = SentenceEvaluations.SENTENCE_EVALUATIONS
+
+/**
+ * The table <code>public.signal_evaluations</code>.
+ */
+val SIGNAL_EVALUATIONS: SignalEvaluations = SignalEvaluations.SIGNAL_EVALUATIONS
 
 /**
  * The table <code>public.source_imports</code>.

@@ -8,6 +8,8 @@ import com.plot.api.persistence.generated.Public
 import com.plot.api.persistence.generated.indexes.USERS_AUTH_IDENTITY_IDX
 import com.plot.api.persistence.generated.keys.AGENT_RUNS__AGENT_RUNS_CREATED_BY_USER_ID_FKEY
 import com.plot.api.persistence.generated.keys.ARTIFACT_RUNS__ARTIFACT_RUNS_CREATED_BY_USER_ID_FKEY
+import com.plot.api.persistence.generated.keys.CHAT_RESPONSE_VERSIONS__CHAT_RESPONSE_VERSIONS_INITIATOR_USER_ID_FKEY
+import com.plot.api.persistence.generated.keys.CHAT_TURNS__CHAT_TURNS_CREATED_BY_USER_ID_FKEY
 import com.plot.api.persistence.generated.keys.CONNECTIONS__CONNECTIONS_CREATED_BY_USER_ID_FKEY
 import com.plot.api.persistence.generated.keys.CONTENT_VARIANT_REVISIONS__CONTENT_VARIANT_REVISIONS_CREATED_BY_USER_ID_FKEY
 import com.plot.api.persistence.generated.keys.CONTENT_VARIANT_SENTENCE_REVISIONS__CONTENT_VARIANT_SENTENCE_REVISIONS_CREATED_BY_USER_ID_FKEY
@@ -34,6 +36,8 @@ import com.plot.api.persistence.generated.keys.WORK_SESSIONS__WORK_SESSIONS_CREA
 import com.plot.api.persistence.generated.keys.WRITING_BLOCKS__WRITING_BLOCKS_CREATED_BY_USER_ID_FKEY
 import com.plot.api.persistence.generated.tables.AgentRuns.AgentRunsPath
 import com.plot.api.persistence.generated.tables.ArtifactRuns.ArtifactRunsPath
+import com.plot.api.persistence.generated.tables.ChatResponseVersions.ChatResponseVersionsPath
+import com.plot.api.persistence.generated.tables.ChatTurns.ChatTurnsPath
 import com.plot.api.persistence.generated.tables.Connections.ConnectionsPath
 import com.plot.api.persistence.generated.tables.ContentVariantRevisions.ContentVariantRevisionsPath
 import com.plot.api.persistence.generated.tables.ContentVariantSentenceRevisions.ContentVariantSentenceRevisionsPath
@@ -231,6 +235,38 @@ open class Users(
 
     val artifactRuns: ArtifactRunsPath
         get(): ArtifactRunsPath = artifactRuns()
+
+    private lateinit var _chatResponseVersions: ChatResponseVersionsPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.chat_response_versions</code> table
+     */
+    fun chatResponseVersions(): ChatResponseVersionsPath {
+        if (!this::_chatResponseVersions.isInitialized)
+            _chatResponseVersions = ChatResponseVersionsPath(this, null, CHAT_RESPONSE_VERSIONS__CHAT_RESPONSE_VERSIONS_INITIATOR_USER_ID_FKEY.inverseKey)
+
+        return _chatResponseVersions;
+    }
+
+    val chatResponseVersions: ChatResponseVersionsPath
+        get(): ChatResponseVersionsPath = chatResponseVersions()
+
+    private lateinit var _chatTurns: ChatTurnsPath
+
+    /**
+     * Get the implicit to-many join path to the <code>public.chat_turns</code>
+     * table
+     */
+    fun chatTurns(): ChatTurnsPath {
+        if (!this::_chatTurns.isInitialized)
+            _chatTurns = ChatTurnsPath(this, null, CHAT_TURNS__CHAT_TURNS_CREATED_BY_USER_ID_FKEY.inverseKey)
+
+        return _chatTurns;
+    }
+
+    val chatTurns: ChatTurnsPath
+        get(): ChatTurnsPath = chatTurns()
 
     private lateinit var _connections: ConnectionsPath
 
