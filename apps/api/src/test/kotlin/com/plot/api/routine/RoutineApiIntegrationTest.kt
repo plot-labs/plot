@@ -612,6 +612,8 @@ class RoutineApiIntegrationTest {
 			jsonPath("$.contentType") { value("CHANGELOG") }
 		}
 
+		jdbcTemplate.update("update agent_runs set status = 'SUCCEEDED' where id = ?", UUID.fromString(firstRunId))
+
 		mockMvc.post("/api/agent-runs") {
 			header("Idempotency-Key", "chat-request-2")
 			contentType = MediaType.APPLICATION_JSON

@@ -23,7 +23,7 @@ const activityItem = (overrides: Partial<ActivityItem> = {}): ActivityItem => ({
   chatId: null,
   artifactId: null,
   title: "OAuth support",
-  status: "FOUND",
+  status: "IN_PROGRESS",
   reason: "Release availability is under evaluation.",
   semanticTime: "2026-09-09T00:00:00Z",
   updatedAt: "2026-09-09T00:00:00Z",
@@ -57,7 +57,7 @@ describe("Autonomy Home", () => {
 
     render(<AutonomyHomeWorkspace view="activity" />);
     expect(await screen.findByText("OAuth support")).toBeInTheDocument();
-    expect(screen.getByText("Evaluating")).toBeInTheDocument();
+    expect(screen.getByText("Drafting in progress")).toBeInTheDocument();
     expect(screen.getByText("API changes")).toBeInTheDocument();
     expect(screen.getByText("Ready for review")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Review and discuss" })).toHaveAttribute(

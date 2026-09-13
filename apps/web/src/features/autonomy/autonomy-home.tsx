@@ -105,13 +105,13 @@ export function AutonomyHomeWorkspace({ view = "overview" }: { view?: "overview"
   }
 
   const attentionItems = items.filter((item) =>
-    item.status === "READY_FOR_REVIEW" || item.status === "ACTION_REQUIRED" || item.status === "IN_PROGRESS" || item.status === "FOUND"
+    item.status === "READY_FOR_REVIEW" || item.status === "ACTION_REQUIRED" || item.status === "IN_PROGRESS"
   );
   const decidedItems = items.filter((item) => item.status === "NO_UPDATE_NEEDED" || item.status === "EXCLUDED");
 
   const filteredItems = items.filter((item) => {
     if (filter === "ATTENTION") {
-      return item.status === "READY_FOR_REVIEW" || item.status === "ACTION_REQUIRED" || item.status === "IN_PROGRESS" || item.status === "FOUND";
+      return item.status === "READY_FOR_REVIEW" || item.status === "ACTION_REQUIRED" || item.status === "IN_PROGRESS";
     }
     if (filter === "DECIDED") {
       return item.status === "NO_UPDATE_NEEDED" || item.status === "EXCLUDED";
@@ -293,7 +293,6 @@ export function AutonomyHomeWorkspace({ view = "overview" }: { view?: "overview"
 
 function statusLabel(status: ActivityStatus): string {
   switch (status) {
-    case "FOUND": return "Evaluating";
     case "IN_PROGRESS": return "Drafting in progress";
     case "READY_FOR_REVIEW": return "Ready for review";
     case "ACTION_REQUIRED": return "Action required";

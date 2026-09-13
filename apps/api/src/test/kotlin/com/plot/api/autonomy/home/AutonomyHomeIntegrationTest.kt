@@ -28,7 +28,7 @@ class AutonomyHomeIntegrationTest {
     @AfterEach
     fun cleanup() {
         workspaces.forEach { workspace ->
-            listOf("legacy_activity_provenance", "signal_evaluations", "autonomy_daily_budgets",
+            listOf("legacy_activity_provenance", "signal_evaluations",
                 "autonomy_signal_heads", "autonomy_signals", "source_scopes",
                 "connection_namespace_bindings", "connections", "source_namespaces").forEach {
                 jdbc.update("delete from $it where workspace_id=?", workspace)

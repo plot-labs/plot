@@ -67,24 +67,28 @@ export function useChatAgentActivity({
     return [
       {
         id: `turn-synthetic-${chatId}`,
+        workSessionId: chatId,
         turnIndex: 0,
         userMessage: rawActivities[0]?.instruction || "User message",
         createdAt: rawActivities[0]?.createdAt || new Date().toISOString(),
-        selectedVersionId: selectedVersionId ?? rawActivities[rawActivities.length - 1]?.id ?? null,
+        updatedAt: rawActivities[0]?.updatedAt || new Date().toISOString(),
+        selectedVersionId: selectedVersionId ?? rawActivities[rawActivities.length - 1]?.id ?? "",
         versions: rawActivities.map((act, index) => ({
           id: act.id,
+          turnId: `turn-synthetic-${chatId}`,
           versionIndex: index,
           agentRunId: act.id,
           status: act.status,
-          instructionSnapshot: act.instruction || "",
-          content: null,
+          instruction: act.instruction || "",
           failureCode: act.failureCode,
-          failureDetails: null,
-          lineageParentVersionId: null,
           artifactId: act.artifactId,
-          artifactTitle: act.artifact?.title || null,
-          artifactVariantId: null,
-          artifactRevisionId: null,
+          artifact: act.artifact ? {
+            id: act.artifact.id,
+            status: act.artifact.status,
+            title: act.artifact.title,
+            contentType: act.contentType,
+            updatedAt: act.artifact.updatedAt,
+          } : null,
           createdAt: act.createdAt,
           updatedAt: act.updatedAt,
           retryEligibility: {
@@ -102,7 +106,7 @@ export function useChatAgentActivity({
         turn.versions.map((version) => ({
           id: version.agentRunId,
           chatId,
-          instruction: version.instructionSnapshot || turn.userMessage,
+          instruction: version.instruction || turn.userMessage,
           contentType: "CHANGELOG" as ContentType,
           contentProfileRevisionId: null,
           brief: null,
@@ -113,7 +117,7 @@ export function useChatAgentActivity({
             ? {
                 id: version.artifactId,
                 status: version.status === "SUCCEEDED" ? "READY" : "DRAFT",
-                title: version.artifactTitle || "Generated artifact",
+                title: version.artifact?.title || "Generated artifact",
                 contentType: "CHANGELOG" as ContentType,
                 updatedAt: version.updatedAt,
               }
@@ -242,7 +246,7 @@ export function useChatAgentActivity({
       onAgentArtifact({
         id: ver.agentRunId,
         chatId,
-        instruction: ver.instructionSnapshot,
+        instruction: ver.instruction,
         contentType,
         contentProfileRevisionId: null,
         brief: null,
@@ -252,7 +256,7 @@ export function useChatAgentActivity({
         artifact: {
           id: ver.artifactId,
           status: ver.status === "SUCCEEDED" ? "READY" : "DRAFT",
-          title: ver.artifactTitle || "Generated artifact",
+          title: ver.artifact?.title || "Generated artifact",
           contentType,
           updatedAt: ver.updatedAt,
         },
@@ -287,7 +291,7 @@ export function useChatAgentActivity({
       const fakeRun: ChatAgentRun = {
         id: newVersion.agentRunId,
         chatId,
-        instruction: newVersion.instructionSnapshot,
+        instruction: newVersion.instruction,
         contentType,
         contentProfileRevisionId: null,
         brief: null,

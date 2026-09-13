@@ -172,7 +172,7 @@ export function ChatActiveWorkspace({
                   const runForDetail = agent.agentRun?.id === selectedVersion?.agentRunId ? agent.agentRun : selectedVersion ? {
                     id: selectedVersion.agentRunId,
                     chatId: activeChat.id,
-                    instruction: selectedVersion.instructionSnapshot || turn.userMessage,
+                    instruction: selectedVersion.instruction || turn.userMessage,
                     contentType,
                     contentProfileRevisionId: null,
                     brief: null,
@@ -182,7 +182,7 @@ export function ChatActiveWorkspace({
                     artifact: selectedVersion.artifactId ? {
                       id: selectedVersion.artifactId,
                       status: selectedVersion.status === "SUCCEEDED" ? "READY" : "DRAFT",
-                      title: selectedVersion.artifactTitle || "Generated artifact",
+                      title: selectedVersion.artifact?.title || "Generated artifact",
                       contentType,
                       updatedAt: selectedVersion.updatedAt,
                     } : null,
@@ -202,7 +202,7 @@ export function ChatActiveWorkspace({
                           run={runForDetail}
                           busy={isLatestTurn && (agent.agentBusy || agent.isPendingRun)}
                           error={isLatestTurn ? agent.agentError : ""}
-                          instruction={selectedVersion.instructionSnapshot || turn.userMessage}
+                          instruction={selectedVersion.instruction || turn.userMessage}
                           references={references}
                           versions={turn.versions}
                           selectedVersionId={selectedVersion.id}
