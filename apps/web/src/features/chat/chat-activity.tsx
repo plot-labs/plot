@@ -9,10 +9,10 @@ import {
 } from "@astryxdesign/core/Chat";
 import { Timestamp } from "@astryxdesign/core/Timestamp";
 import { Text } from "@astryxdesign/core/Text";
-import { LoaderCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight, LoaderCircle, RotateCcw } from "lucide-react";
 import type { ReactNode } from "react";
 
-import type { ChatAgentRun, SourceReference } from "@plot/api-client";
+import type { ChatAgentRun, ChatResponseVersion, RetryEligibility, SourceReference } from "@plot/api-client";
 import {
   agentProgressLabel,
   agentStatusLabel,
@@ -107,6 +107,12 @@ export function AgentActivityDetail({
   instruction,
   references,
   artifactAction,
+  versions = [],
+  selectedVersionId = null,
+  onSelectVersion,
+  onRetry,
+  retrying = false,
+  retryEligibility = null,
 }: {
   run: ChatAgentRun | null;
   busy: boolean;
@@ -114,6 +120,12 @@ export function AgentActivityDetail({
   instruction: string;
   references: SourceReference[];
   artifactAction?: ReactNode;
+  versions?: ChatResponseVersion[];
+  selectedVersionId?: string | null;
+  onSelectVersion?: (versionId: string) => void;
+  onRetry?: () => void;
+  retrying?: boolean;
+  retryEligibility?: RetryEligibility | null;
 }) {
   if (!run && !busy && !error) return null;
   const status = run?.status ?? "QUEUED";
@@ -127,6 +139,10 @@ export function AgentActivityDetail({
       ? "complete"
       : "running";
 
+  const currentVersionIndex = versions.length > 0 && selectedVersionId
+    ? Math.max(0, versions.findIndex((v) => v.id === selectedVersionId))
+    : versions.length > 0 ? versions.length - 1 : 0;
+
   return (
     <section aria-label="Agent request details">
       <ChatMessage sender="assistant">
@@ -138,9 +154,62 @@ export function AgentActivityDetail({
               className="mt-4"
               timestamp={run ? <Timestamp value={run.createdAt} format="time" /> : undefined}
               footer={
-                <Text type="supporting" color="secondary">
-                  Source agent
-                </Text>
+                <div className="mt-2 flex w-full flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <Text type="supporting" color="secondary">
+                      Source agent
+                    </Text>
+                    {versions.length > 1 && (
+                      <div className="flex items-center gap-1 text-xs" role="navigation" aria-label="Response versions">
+                        <button
+                          type="button"
+                          disabled={currentVersionIndex <= 0}
+                          onClick={() => {
+                            const prev = versions[currentVersionIndex - 1];
+                            if (prev && onSelectVersion) onSelectVersion(prev.id);
+                          }}
+                          aria-label="Previous response version"
+                          className="rounded p-0.5 text-black/50 hover:bg-black/5 disabled:opacity-30 dark:text-white/50 dark:hover:bg-white/10"
+                        >
+                          <ChevronLeft className="size-3.5" />
+                        </button>
+                        <span aria-live="polite" className="text-black/55 dark:text-white/55">
+                          Response {currentVersionIndex + 1} of {versions.length}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={currentVersionIndex >= versions.length - 1}
+                          onClick={() => {
+                            const next = versions[currentVersionIndex + 1];
+                            if (next && onSelectVersion) onSelectVersion(next.id);
+                          }}
+                          aria-label="Next response version"
+                          className="rounded p-0.5 text-black/50 hover:bg-black/5 disabled:opacity-30 dark:text-white/50 dark:hover:bg-white/10"
+                        >
+                          <ChevronRight className="size-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {retryEligibility?.eligible ? (
+                      <button
+                        type="button"
+                        disabled={retrying || status === "QUEUED" || status === "RUNNING"}
+                        onClick={onRetry}
+                        aria-label="Retry response"
+                        className="inline-flex items-center gap-1 rounded-md border border-black/10 bg-white px-2.5 py-1 text-xs font-medium text-black/70 hover:bg-black/[0.03] disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-white/70 dark:hover:bg-white/[0.08]"
+                      >
+                        <RotateCcw className={`size-3 ${retrying ? "animate-spin" : ""}`} />
+                        {retrying ? "Retrying…" : "Retry"}
+                      </button>
+                    ) : retryEligibility?.reason && retryEligibility.reason !== "RUN_NOT_TERMINAL" ? (
+                      <span className="text-xs text-black/40 dark:text-white/40" title={retryEligibility.reason}>
+                        {retryEligibility.reason === "NOT_LATEST_VERSION" ? "Select newest response to retry" : "Retry unavailable"}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
               }
             />
           }

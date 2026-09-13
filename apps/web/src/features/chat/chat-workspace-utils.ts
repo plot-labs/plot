@@ -4,8 +4,14 @@ import type { ChatAgentRun, SourceReference } from "@plot/api-client";
 
 export type PendingAgentRequest = { key: string; fingerprint: string };
 
-export function chatHref(chatId: string, agentRunId: string | null = null, artifactId: string | null = null) {
+export function chatHref(
+  chatId: string,
+  agentRunId: string | null = null,
+  artifactId: string | null = null,
+  versionId: string | null = null,
+) {
   const params = new URLSearchParams({ chat: chatId });
+  if (versionId) params.set("version", versionId);
   if (agentRunId) params.set("agent", agentRunId);
   if (artifactId) params.set("artifact", artifactId);
   return `/chat?${params.toString()}`;

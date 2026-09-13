@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   listSessions: vi.fn(),
   listReferences: vi.fn(),
   listSessionAgentRuns: vi.fn(),
+  listChatTurns: vi.fn(),
+  retryChatResponse: vi.fn(),
   createChatAgentRun: vi.fn(),
   getChatAgentRun: vi.fn(),
   pollChatAgentRun: vi.fn(),
@@ -26,6 +28,8 @@ vi.mock("@/lib/api-client", () => ({
     listSessions: mocks.listSessions,
     listSourceReferences: mocks.listReferences,
     listSessionAgentRuns: mocks.listSessionAgentRuns,
+    listChatTurns: mocks.listChatTurns,
+    retryChatResponse: mocks.retryChatResponse,
     createChatAgentRun: mocks.createChatAgentRun,
     getChatAgentRun: mocks.getChatAgentRun,
     getArtifact: mocks.getArtifact,
@@ -73,6 +77,7 @@ describe("ChatWorkspace", () => {
     mocks.listSessions.mockResolvedValue([]);
     mocks.listReferences.mockResolvedValue([reference]);
     mocks.listSessionAgentRuns.mockResolvedValue([]);
+    mocks.listChatTurns.mockResolvedValue([]);
     mocks.pollChatAgentRun.mockImplementation(async (_client: unknown, id: string, options: { onUpdate?: (run: unknown) => void }) => {
       const next = await mocks.getChatAgentRun(id);
       options.onUpdate?.(next);
@@ -243,5 +248,117 @@ describe("ChatWorkspace", () => {
     expect(await screen.findByRole("tabpanel", { name: "History panel" })).toBeVisible();
     fireEvent.click(historyTrigger!);
     await waitFor(() => expect(document.activeElement).toBe(historyTrigger));
+  });
+
+  it("allows switching between response versions", async () => {
+    mocks.search = "chat=chat-1";
+    mocks.listSessions.mockResolvedValue([chat]);
+    const version1 = {
+      id: "ver-1",
+      versionIndex: 0,
+      agentRunId: "agent-1",
+      status: "SUCCEEDED" as const,
+      instructionSnapshot: "Release notes v1",
+      content: "Changelog version 1",
+      failureCode: null,
+      failureDetails: null,
+      lineageParentVersionId: null,
+      artifactId: null,
+      artifactTitle: null,
+      artifactVariantId: null,
+      artifactRevisionId: null,
+      createdAt: "2026-07-01T00:01:00Z",
+      updatedAt: "2026-07-01T00:01:00Z",
+      retryEligibility: { eligible: false, reason: "NOT_LATEST_VERSION" },
+    };
+    const version2 = {
+      id: "ver-2",
+      versionIndex: 1,
+      agentRunId: "agent-2",
+      status: "SUCCEEDED" as const,
+      instructionSnapshot: "Release notes v2",
+      content: "Changelog version 2",
+      failureCode: null,
+      failureDetails: null,
+      lineageParentVersionId: "ver-1",
+      artifactId: "artifact-1",
+      artifactTitle: "Release v2",
+      artifactVariantId: "variant-1",
+      artifactRevisionId: "rev-1",
+      createdAt: "2026-07-01T00:02:00Z",
+      updatedAt: "2026-07-01T00:02:00Z",
+      retryEligibility: { eligible: true, reason: null },
+    };
+    mocks.listChatTurns.mockResolvedValue([
+      {
+        id: "turn-1",
+        turnIndex: 0,
+        userMessage: "Write release notes",
+        createdAt: "2026-07-01T00:00:00Z",
+        selectedVersionId: "ver-2",
+        versions: [version1, version2],
+      },
+    ]);
+
+    render(<ChatWorkspace />);
+    expect(await screen.findByText("Response 2 of 2")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry response" })).toBeInTheDocument();
+
+    // Click Previous response version
+    fireEvent.click(screen.getByRole("button", { name: "Previous response version" }));
+    expect(await screen.findByText("Response 1 of 2")).toBeInTheDocument();
+    // Version 1 is not latest, so Retry button is not offered
+    expect(screen.queryByRole("button", { name: "Retry response" })).not.toBeInTheDocument();
+  });
+
+  it("admits Retry for eligible latest response", async () => {
+    mocks.search = "chat=chat-1";
+    mocks.listSessions.mockResolvedValue([chat]);
+    const terminalFailedVersion = {
+      id: "ver-failed",
+      versionIndex: 0,
+      agentRunId: "agent-failed",
+      status: "FAILED" as const,
+      instructionSnapshot: "Release notes draft",
+      content: null,
+      failureCode: "MODEL_TIMEOUT",
+      failureDetails: "Exhausted retries",
+      lineageParentVersionId: null,
+      artifactId: null,
+      artifactTitle: null,
+      artifactVariantId: null,
+      artifactRevisionId: null,
+      createdAt: "2026-07-01T00:01:00Z",
+      updatedAt: "2026-07-01T00:01:00Z",
+      retryEligibility: { eligible: true, reason: null },
+    };
+    mocks.listChatTurns.mockResolvedValue([
+      {
+        id: "turn-1",
+        turnIndex: 0,
+        userMessage: "Write release notes",
+        createdAt: "2026-07-01T00:00:00Z",
+        selectedVersionId: "ver-failed",
+        versions: [terminalFailedVersion],
+      },
+    ]);
+    const retriedQueuedVersion = {
+      ...terminalFailedVersion,
+      id: "ver-retried",
+      versionIndex: 1,
+      agentRunId: "agent-retried",
+      status: "QUEUED" as const,
+      failureCode: null,
+      failureDetails: null,
+      retryEligibility: { eligible: false, reason: "RUN_NOT_TERMINAL" },
+    };
+    mocks.retryChatResponse.mockResolvedValue(retriedQueuedVersion);
+    mocks.getChatAgentRun.mockResolvedValue(agentRun({ id: "agent-retried", status: "SUCCEEDED" }));
+
+    render(<ChatWorkspace />);
+    const retryBtn = await screen.findByRole("button", { name: "Retry response" });
+    fireEvent.click(retryBtn);
+
+    await waitFor(() => expect(mocks.retryChatResponse).toHaveBeenCalledWith("ver-failed", expect.any(String), expect.anything()));
   });
 });

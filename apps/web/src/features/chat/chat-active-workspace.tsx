@@ -30,6 +30,7 @@ type ChatActiveWorkspaceProps = {
   sourceError: string;
   requestedAgentId: string | null;
   requestedArtifactId: string | null;
+  requestedVersionId?: string | null;
 };
 
 const chatBottomFade: CSSProperties = {
@@ -42,7 +43,14 @@ const toolbarBottomFade: CSSProperties = {
   WebkitMaskImage: "linear-gradient(black calc(100% - 12px), transparent 100%)",
 };
 
-export function ChatActiveWorkspace({ activeChat, references, sourceError, requestedAgentId, requestedArtifactId }: ChatActiveWorkspaceProps) {
+export function ChatActiveWorkspace({
+  activeChat,
+  references,
+  sourceError,
+  requestedAgentId,
+  requestedArtifactId,
+  requestedVersionId = null,
+}: ChatActiveWorkspaceProps) {
   const router = useRouter();
   const entitlement = useWorkspaceEntitlement();
   const canGenerate = entitlement?.capabilities.generate ?? true;
@@ -75,6 +83,7 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
     chatId: activeChat.id,
     requestedAgentId,
     requestedArtifactId,
+    requestedVersionId,
     references,
     sourceError,
     brief,
@@ -154,39 +163,120 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
         <div className="min-h-0 flex-1 overflow-y-auto bg-[#fbfbf8] dark:bg-[#16171a]" style={chatBottomFade}>
           <div className="mx-auto w-full max-w-[760px] px-4 pb-12 pt-8 sm:px-6">
             <ChatMessageList density="compact" gap={4} style={{ flex: "none" }}>
-              {messages.map((message) => (
-                <ChatMessage key={message.id} sender="user">
-                  <ChatMessageBubble className="max-w-[min(680px,92%)]">
-                    <p>{message.content}</p>
-                  </ChatMessageBubble>
-                </ChatMessage>
-              ))}
-              <AgentActivityDetail
-                run={agent.agentRun ?? agent.selectedActivity}
-                busy={agent.agentBusy}
-                error={agent.agentError}
-                instruction={agent.agentInstruction}
-                references={references}
-                artifactAction={document.currentArtifact ? (
-                  <button
-                    ref={artifactTriggerRef}
-                    id="artifact-preview"
-                    type="button"
-                    aria-controls="artifact-editor-panel"
-                    aria-expanded={artifactPanelOpen}
-                    onClick={() => setArtifactPanelOpen(true)}
-                    className="flex w-full items-center justify-between gap-4 rounded-xl border border-black/[0.08] bg-white/70 px-4 py-3 text-left transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/[0.07] dark:focus-visible:ring-white/25"
-                  >
-                    <span className="min-w-0 truncate text-sm font-medium text-black/82 dark:text-white/85">
-                      {document.currentArtifact.title || "Generated artifact"}
-                    </span>
-                    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-black/[0.035] px-3 py-1.5 text-xs font-medium text-black/50 dark:bg-white/[0.06] dark:text-white/55">
-                      <Eye aria-hidden="true" className="size-3.5" />
-                      Open artifact
-                    </span>
-                  </button>
-                ) : undefined}
-              />
+              {agent.turns.length > 0 ? (
+                agent.turns.map((turn, turnIdx) => {
+                  const isLatestTurn = turnIdx === agent.turns.length - 1;
+                  const selectedVersion = turn.versions.find((v) => v.id === turn.selectedVersionId)
+                    ?? turn.versions[turn.versions.length - 1]
+                    ?? null;
+                  const runForDetail = agent.agentRun?.id === selectedVersion?.agentRunId ? agent.agentRun : selectedVersion ? {
+                    id: selectedVersion.agentRunId,
+                    chatId: activeChat.id,
+                    instruction: selectedVersion.instructionSnapshot || turn.userMessage,
+                    contentType,
+                    contentProfileRevisionId: null,
+                    brief: null,
+                    status: selectedVersion.status,
+                    failureCode: selectedVersion.failureCode,
+                    artifactId: selectedVersion.artifactId,
+                    artifact: selectedVersion.artifactId ? {
+                      id: selectedVersion.artifactId,
+                      status: selectedVersion.status === "SUCCEEDED" ? "READY" : "DRAFT",
+                      title: selectedVersion.artifactTitle || "Generated artifact",
+                      contentType,
+                      updatedAt: selectedVersion.updatedAt,
+                    } : null,
+                    createdAt: selectedVersion.createdAt,
+                    updatedAt: selectedVersion.updatedAt,
+                  } : null;
+
+                  return (
+                    <div key={turn.id} className="space-y-4">
+                      <ChatMessage sender="user">
+                        <ChatMessageBubble className="max-w-[min(680px,92%)]">
+                          <p>{turn.userMessage}</p>
+                        </ChatMessageBubble>
+                      </ChatMessage>
+                      {selectedVersion && (
+                        <AgentActivityDetail
+                          run={runForDetail}
+                          busy={isLatestTurn && (agent.agentBusy || agent.isPendingRun)}
+                          error={isLatestTurn ? agent.agentError : ""}
+                          instruction={selectedVersion.instructionSnapshot || turn.userMessage}
+                          references={references}
+                          versions={turn.versions}
+                          selectedVersionId={selectedVersion.id}
+                          onSelectVersion={(versionId) => {
+                            agent.selectVersion(turn.id, versionId);
+                            const found = turn.versions.find((v) => v.id === versionId);
+                            if (found) {
+                              router.replace(chatHref(activeChat.id, found.agentRunId, found.artifactId, found.id), { scroll: false });
+                            }
+                          }}
+                          onRetry={isLatestTurn ? () => void agent.retryResponse(selectedVersion.id) : undefined}
+                          retrying={agent.retrying}
+                          retryEligibility={isLatestTurn ? selectedVersion.retryEligibility : { eligible: false, reason: "NOT_LATEST_TURN" }}
+                          artifactAction={document.currentArtifact && selectedVersion.artifactId === document.currentArtifact.id ? (
+                            <button
+                              ref={artifactTriggerRef}
+                              id="artifact-preview"
+                              type="button"
+                              aria-controls="artifact-editor-panel"
+                              aria-expanded={artifactPanelOpen}
+                              onClick={() => setArtifactPanelOpen(true)}
+                              className="flex w-full items-center justify-between gap-4 rounded-xl border border-black/[0.08] bg-white/70 px-4 py-3 text-left transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/[0.07] dark:focus-visible:ring-white/25"
+                            >
+                              <span className="min-w-0 truncate text-sm font-medium text-black/82 dark:text-white/85">
+                                {document.currentArtifact.title || "Generated artifact"}
+                              </span>
+                              <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-black/[0.035] px-3 py-1.5 text-xs font-medium text-black/50 dark:bg-white/[0.06] dark:text-white/55">
+                                <Eye aria-hidden="true" className="size-3.5" />
+                                Open artifact
+                              </span>
+                            </button>
+                          ) : undefined}
+                        />
+                      )}
+                    </div>
+                  );
+                })
+              ) : (
+                <>
+                  {messages.map((message) => (
+                    <ChatMessage key={message.id} sender="user">
+                      <ChatMessageBubble className="max-w-[min(680px,92%)]">
+                        <p>{message.content}</p>
+                      </ChatMessageBubble>
+                    </ChatMessage>
+                  ))}
+                  <AgentActivityDetail
+                    run={agent.agentRun ?? agent.selectedActivity}
+                    busy={agent.agentBusy}
+                    error={agent.agentError}
+                    instruction={agent.agentInstruction}
+                    references={references}
+                    artifactAction={document.currentArtifact ? (
+                      <button
+                        ref={artifactTriggerRef}
+                        id="artifact-preview"
+                        type="button"
+                        aria-controls="artifact-editor-panel"
+                        aria-expanded={artifactPanelOpen}
+                        onClick={() => setArtifactPanelOpen(true)}
+                        className="flex w-full items-center justify-between gap-4 rounded-xl border border-black/[0.08] bg-white/70 px-4 py-3 text-left transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/[0.07] dark:focus-visible:ring-white/25"
+                      >
+                        <span className="min-w-0 truncate text-sm font-medium text-black/82 dark:text-white/85">
+                          {document.currentArtifact.title || "Generated artifact"}
+                        </span>
+                        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-black/[0.035] px-3 py-1.5 text-xs font-medium text-black/50 dark:bg-white/[0.06] dark:text-white/55">
+                          <Eye aria-hidden="true" className="size-3.5" />
+                          Open artifact
+                        </span>
+                      </button>
+                    ) : undefined}
+                  />
+                </>
+              )}
             </ChatMessageList>
 
             {document.artifactError ? <ErrorNotice message={document.artifactError} /> : null}
@@ -254,15 +344,20 @@ export function ChatActiveWorkspace({ activeChat, references, sourceError, reque
           id="chat-composer"
           key={references.map((reference) => reference.id).join(":") || "no-references"}
           variant="dock"
-          placeholder="Ask Plot to create another source-backed artifact..."
+          placeholder={agent.isPendingRun ? "Response in progress. Wait for it to finish..." : "Ask Plot to create another source-backed artifact..."}
           onSubmit={(message, ids) => {
             setArtifactPanelOpen(false);
             void agent.submitMessage(message, ids, document.clearArtifactSelection);
           }}
           references={toComposerReferences(references)}
-          busy={document.artifactLoading || agent.agentBusy || agent.activitiesLoading}
-          canGenerate={canGenerate}
+          busy={document.artifactLoading || agent.agentBusy || agent.activitiesLoading || agent.isPendingRun}
+          canGenerate={canGenerate && !agent.isPendingRun}
         />
+        {agent.isPendingRun && (
+          <p className="mx-auto max-w-[720px] px-4 pt-1 text-center text-xs text-black/50 dark:text-white/50">
+            Response in progress. Wait for it to finish before sending a follow-up.
+          </p>
+        )}
         <div className="mx-auto w-full max-w-[720px] px-4 pb-3 sm:px-6">
           <div className="mb-2">
             <ChatContentTypeSelector

@@ -1,8 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import type { ChatAgentRun, ContentBrief, ContentType, SourceReference } from "@plot/api-client";
+import type {
+  ChatAgentRun,
+  ChatTurn,
+  ContentBrief,
+  ContentType,
+  SourceReference,
+} from "@plot/api-client";
 import { isTerminalChatAgentStatus, pollChatAgentRun } from "@/lib/chat-agent-polling";
 import { plotApiClient } from "@/lib/api-client";
 
@@ -20,6 +26,7 @@ type UseChatAgentActivityProps = {
   chatId: string;
   requestedAgentId: string | null;
   requestedArtifactId: string | null;
+  requestedVersionId?: string | null;
   references: SourceReference[];
   sourceError: string;
   brief?: ContentBrief;
@@ -32,6 +39,7 @@ export function useChatAgentActivity({
   chatId,
   requestedAgentId,
   requestedArtifactId,
+  requestedVersionId = null,
   references,
   sourceError,
   brief,
@@ -39,17 +47,84 @@ export function useChatAgentActivity({
   onAgentArtifact,
   onAdmitted,
 }: UseChatAgentActivityProps) {
-  const [activities, setActivities] = useState<ChatAgentRun[]>([]);
+  const [turns, setTurns] = useState<ChatTurn[]>([]);
+  const [rawActivities, setRawActivities] = useState<ChatAgentRun[]>([]);
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(requestedVersionId);
   const [activitiesLoadedFor, setActivitiesLoadedFor] = useState<string | null>(null);
   const [activitiesError, setActivitiesError] = useState("");
   const [agentRun, setAgentRun] = useState<ChatAgentRun | null>(null);
   const [agentError, setAgentError] = useState("");
   const [agentBusy, setAgentBusy] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const [agentInstruction, setAgentInstruction] = useState("");
   const agentAbortRef = useRef<AbortController | null>(null);
   const pendingRequestRef = useRef<PendingAgentRequest | null>(null);
   const activitiesLoading = activitiesLoadedFor !== chatId;
 
+  const effectiveTurns = useMemo<ChatTurn[]>(() => {
+    if (turns.length > 0) return turns;
+    if (rawActivities.length === 0) return [];
+    return [
+      {
+        id: `turn-synthetic-${chatId}`,
+        turnIndex: 0,
+        userMessage: rawActivities[0]?.instruction || "User message",
+        createdAt: rawActivities[0]?.createdAt || new Date().toISOString(),
+        selectedVersionId: selectedVersionId ?? rawActivities[rawActivities.length - 1]?.id ?? null,
+        versions: rawActivities.map((act, index) => ({
+          id: act.id,
+          versionIndex: index,
+          agentRunId: act.id,
+          status: act.status,
+          instructionSnapshot: act.instruction || "",
+          content: null,
+          failureCode: act.failureCode,
+          failureDetails: null,
+          lineageParentVersionId: null,
+          artifactId: act.artifactId,
+          artifactTitle: act.artifact?.title || null,
+          artifactVariantId: null,
+          artifactRevisionId: null,
+          createdAt: act.createdAt,
+          updatedAt: act.updatedAt,
+          retryEligibility: {
+            eligible: isTerminalChatAgentStatus(act.status) && index === rawActivities.length - 1,
+            reason: isTerminalChatAgentStatus(act.status) ? null : "RUN_NOT_TERMINAL",
+          },
+        })),
+      },
+    ];
+  }, [turns, rawActivities, chatId, selectedVersionId]);
+
+  const activities = useMemo(() => {
+    if (turns.length > 0) {
+      return turns.flatMap((turn) =>
+        turn.versions.map((version) => ({
+          id: version.agentRunId,
+          chatId,
+          instruction: version.instructionSnapshot || turn.userMessage,
+          contentType: "CHANGELOG" as ContentType,
+          contentProfileRevisionId: null,
+          brief: null,
+          status: version.status,
+          failureCode: version.failureCode,
+          artifactId: version.artifactId,
+          artifact: version.artifactId
+            ? {
+                id: version.artifactId,
+                status: version.status === "SUCCEEDED" ? "READY" : "DRAFT",
+                title: version.artifactTitle || "Generated artifact",
+                contentType: "CHANGELOG" as ContentType,
+                updatedAt: version.updatedAt,
+              }
+            : null,
+          createdAt: version.createdAt,
+          updatedAt: version.updatedAt,
+        })),
+      );
+    }
+    return rawActivities;
+  }, [turns, chatId, rawActivities]);
 
   const selectedActivity = useMemo(() => {
     if (requestedAgentId) return activities.find((activity) => activity.id === requestedAgentId) ?? null;
@@ -60,13 +135,34 @@ export function useChatAgentActivity({
     return activities[activities.length - 1] ?? null;
   }, [activities, requestedAgentId, requestedArtifactId]);
 
+  const isPendingRun = useMemo(() => {
+    if (agentBusy) return true;
+    const latestTurn = effectiveTurns[effectiveTurns.length - 1];
+    if (!latestTurn) return false;
+    return latestTurn.versions.some((v) => v.status === "QUEUED" || v.status === "RUNNING");
+  }, [agentBusy, effectiveTurns]);
 
   useEffect(() => {
     const controller = new AbortController();
-    void plotApiClient.listSessionAgentRuns(chatId, { signal: controller.signal })
-      .then((value) => {
+    Promise.all([
+      typeof plotApiClient.listChatTurns === "function"
+        ? Promise.resolve().then(() => plotApiClient.listChatTurns(chatId, { selectedVersionId: requestedVersionId ?? undefined, signal: controller.signal })).catch(() => null)
+        : Promise.resolve(null),
+      typeof plotApiClient.listSessionAgentRuns === "function"
+        ? Promise.resolve().then(() => plotApiClient.listSessionAgentRuns(chatId, { signal: controller.signal })).catch(() => [])
+        : Promise.resolve([]),
+    ])
+      .then(([turnsResult, runsResult]) => {
         if (controller.signal.aborted) return;
-        setActivities(value);
+        if (turnsResult && turnsResult.length > 0) {
+          setTurns(turnsResult);
+          if (requestedVersionId) {
+            setSelectedVersionId(requestedVersionId);
+          }
+        } else {
+          setTurns([]);
+        }
+        setRawActivities(runsResult || []);
         setActivitiesError("");
         setActivitiesLoadedFor(chatId);
       })
@@ -76,12 +172,11 @@ export function useChatAgentActivity({
         setActivitiesLoadedFor(chatId);
       });
 
-
     return () => {
       controller.abort();
       agentAbortRef.current?.abort();
     };
-  }, [chatId]);
+  }, [chatId, requestedVersionId]);
 
   useEffect(() => {
     if (!requestedAgentId) return;
@@ -110,7 +205,7 @@ export function useChatAgentActivity({
               onUpdate: (next) => {
                 if (agentAbortRef.current === controller) {
                   setAgentRun(next);
-                  upsertActivity(setActivities, next);
+                  upsertActivity(setRawActivities, next);
                 }
               },
             });
@@ -135,6 +230,105 @@ export function useChatAgentActivity({
       }
     };
   }, [chatId, onAgentArtifact, requestedAgentId]);
+
+  const selectVersion = useCallback((turnId: string, versionId: string) => {
+    setSelectedVersionId(versionId);
+    setTurns((prev) =>
+      prev.map((t) => (t.id === turnId ? { ...t, selectedVersionId: versionId } : t)),
+    );
+    const turn = effectiveTurns.find((t) => t.id === turnId);
+    const ver = turn?.versions.find((v) => v.id === versionId);
+    if (ver?.artifactId) {
+      onAgentArtifact({
+        id: ver.agentRunId,
+        chatId,
+        instruction: ver.instructionSnapshot,
+        contentType,
+        contentProfileRevisionId: null,
+        brief: null,
+        status: ver.status,
+        failureCode: ver.failureCode,
+        artifactId: ver.artifactId,
+        artifact: {
+          id: ver.artifactId,
+          status: ver.status === "SUCCEEDED" ? "READY" : "DRAFT",
+          title: ver.artifactTitle || "Generated artifact",
+          contentType,
+          updatedAt: ver.updatedAt,
+        },
+        createdAt: ver.createdAt,
+        updatedAt: ver.updatedAt,
+      });
+    }
+  }, [chatId, contentType, effectiveTurns, onAgentArtifact]);
+
+  const retryResponse = useCallback(async (versionId: string) => {
+    if (retrying || isPendingRun) return;
+    setRetrying(true);
+    setAgentError("");
+    const idempotencyKey = crypto.randomUUID();
+    const controller = new AbortController();
+    agentAbortRef.current = controller;
+
+    try {
+      const newVersion = await plotApiClient.retryChatResponse(versionId, idempotencyKey, { signal: controller.signal });
+      setSelectedVersionId(newVersion.id);
+      setTurns((prev) => {
+        const latestIdx = prev.length - 1;
+        if (latestIdx < 0) return prev;
+        const latest = prev[latestIdx]!;
+        const updatedVersions = [...latest.versions.filter((v) => v.id !== newVersion.id), newVersion];
+        return [
+          ...prev.slice(0, latestIdx),
+          { ...latest, selectedVersionId: newVersion.id, versions: updatedVersions },
+        ];
+      });
+
+      const fakeRun: ChatAgentRun = {
+        id: newVersion.agentRunId,
+        chatId,
+        instruction: newVersion.instructionSnapshot,
+        contentType,
+        contentProfileRevisionId: null,
+        brief: null,
+        status: newVersion.status,
+        failureCode: null,
+        artifactId: null,
+        artifact: null,
+        createdAt: newVersion.createdAt,
+        updatedAt: newVersion.updatedAt,
+      };
+      setAgentRun(fakeRun);
+      onAdmitted(fakeRun);
+
+      const completedRun = await pollChatAgentRun(plotApiClient, newVersion.agentRunId, {
+        signal: controller.signal,
+        initialRun: fakeRun,
+        onUpdate: (next) => {
+          setAgentRun(next);
+        },
+      });
+      setAgentRun(completedRun);
+      if (completedRun.artifactId) onAgentArtifact(completedRun);
+
+      // Refresh turns to get finalized status and retryEligibility
+      const freshTurns = await plotApiClient.listChatTurns(chatId, { signal: controller.signal });
+      if (freshTurns) setTurns(freshTurns);
+    } catch (err) {
+      if (!(err instanceof DOMException && err.name === "AbortError")) {
+        // Reconcile indeterminate state
+        try {
+          const freshTurns = await plotApiClient.listChatTurns(chatId);
+          if (freshTurns) setTurns(freshTurns);
+        } catch {
+          // ignore
+        }
+        setAgentError(messageFor(err, "Retry failed"));
+      }
+    } finally {
+      setRetrying(false);
+    }
+  }, [chatId, contentType, isPendingRun, onAdmitted, onAgentArtifact, retrying]);
 
   async function submitMessage(message: string, referenceIds: string[], onRequestStart?: () => void) {
     const selected = selectReferences(references, referenceIds);
@@ -166,6 +360,12 @@ export function useChatAgentActivity({
       pendingRequestRef.current = null;
       setAgentRun(run);
       onAdmitted(run);
+
+      // Fetch updated turns
+      const turnsUpdate = await plotApiClient.listChatTurns(chatId, { signal: controller.signal }).catch(() => null);
+      if (turnsUpdate && turnsUpdate.length > 0) {
+        setTurns(turnsUpdate);
+      }
     } catch (error) {
       if (agentAbortRef.current === controller && !(error instanceof DOMException && error.name === "AbortError")) {
         if (isNonRetryableRequestError(error)) pendingRequestRef.current = null;
@@ -177,8 +377,14 @@ export function useChatAgentActivity({
   }
 
   return {
+    turns: effectiveTurns,
     activities,
     selectedActivity,
+    selectedVersionId,
+    selectVersion,
+    retryResponse,
+    retrying,
+    isPendingRun,
     activitiesLoading,
     activitiesError,
     agentRun,

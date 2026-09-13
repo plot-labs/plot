@@ -19,6 +19,7 @@ function ChatWorkspaceContent() {
   const requestedChatId = searchParams.get("chat");
   const requestedAgentId = searchParams.get("agent");
   const requestedArtifactId = searchParams.get("artifact");
+  const requestedVersionId = searchParams.get("version");
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [references, setReferences] = useState<SourceReference[]>([]);
   const [workspaceRevision, setWorkspaceRevision] = useState(0);
@@ -60,6 +61,7 @@ function ChatWorkspaceContent() {
         sourceError={referencesError}
         requestedAgentId={requestedAgentId}
         requestedArtifactId={requestedArtifactId}
+        requestedVersionId={requestedVersionId}
       />
     );
   }
