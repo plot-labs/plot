@@ -72,7 +72,7 @@ export function parseWorkOSWebConfig(environment: WorkOSWebEnvironment = process
     throw new Error("PLOT_WORKOS_ALLOWED_ORIGINS is required when WorkOS auth is enabled");
   }
   const normalizedOrigins = allowedOrigins.map((origin) => assertHttpUrl(origin, "PLOT_WORKOS_ALLOWED_ORIGINS"));
-  const sessionCookieName = (environment.PLOT_WORKOS_SESSION_COOKIE_NAME ?? "plot.session").trim();
+  const sessionCookieName = (environment.PLOT_WORKOS_SESSION_COOKIE_NAME ?? "wos-session").trim();
   if (!SAFE_COOKIE_NAME.test(sessionCookieName)) {
     throw new Error("PLOT_WORKOS_SESSION_COOKIE_NAME contains unsafe characters");
   }

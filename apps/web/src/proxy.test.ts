@@ -25,6 +25,8 @@ describe("application proxy", () => {
     delete process.env.WORKOS_CLIENT_ID;
     delete process.env.WORKOS_API_KEY;
     delete process.env.WORKOS_COOKIE_PASSWORD;
+    delete process.env.WORKOS_COOKIE_NAME;
+    delete process.env.PLOT_WORKOS_SESSION_COOKIE_NAME;
     delete process.env.NEXT_PUBLIC_WORKOS_REDIRECT_URI;
     delete process.env.PLOT_APP_ORIGIN;
     delete process.env.PLOT_WORKOS_ALLOWED_ORIGINS;
@@ -125,6 +127,19 @@ describe("application proxy", () => {
       redirectUri: "http://localhost:3000/auth/callback",
       middlewareAuth: { enabled: false, unauthenticatedPaths: [] },
     }));
+  });
+
+  it("uses AuthKit's default cookie when custom cookie names are unset", async () => {
+    process.env.WORKOS_AUTH_ENABLED = "true";
+    process.env.NEXT_PUBLIC_WORKOS_REDIRECT_URI = "http://localhost:3000/auth/callback";
+    authkitProxyMock.mockReturnValue(async () => NextResponse.next());
+
+    const request = new NextRequest("http://localhost:3000/", { headers: { host: "localhost:3000" } });
+    request.cookies.set("wos-session", "managed-session");
+    const response = await proxy(request);
+
+    expect(response.headers.get("x-middleware-rewrite")).toBe("http://localhost:3000/home");
+    expect(authkitProxyMock).toHaveBeenCalledTimes(1);
   });
 });
 

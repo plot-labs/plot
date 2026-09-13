@@ -1,0 +1,18 @@
+# Local-only sources and generated dependencies must never enter deployments.
+/docs/
+/artifacts/
+/design/
+/.claude/
+/.cursor/
+/.delta/
+/.generation-certification/
+/.playwright-cli/
+/.shannon/
+/.superpowers/
+/apps/api/
+/node_modules/
+**/node_modules/
+/.git/
+/.next/
+**/.next/
+/.bun/

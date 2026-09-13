@@ -1,7 +1,7 @@
 import { withAuth } from "@workos-inc/authkit-nextjs";
 
-/** Default AuthKit cookie name; kept as a shared naming constant for the proxy. */
-export const SESSION_COOKIE = "plot.session";
+/** AuthKit's default cookie name; kept as a shared naming constant for the proxy. */
+export const SESSION_COOKIE = "wos-session";
 
 export type PlotAuthSession = {
   user: {
