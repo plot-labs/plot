@@ -50,8 +50,8 @@ class AutonomyHomeIntegrationTest {
     @AfterEach
     fun cleanup() {
         workspaces.forEach { workspace ->
-            listOf("autonomy_goals", "autonomy_assessments", "autonomy_opportunities", "autonomy_missions",
-                "autonomy_daily_budgets", "source_scopes", "connection_namespace_bindings", "connections", "source_namespaces").forEach {
+            listOf("legacy_activity_provenance", "signal_evaluations", "autonomy_goals", "autonomy_assessments", "autonomy_opportunities", "autonomy_missions",
+                "autonomy_daily_budgets", "autonomy_signal_heads", "autonomy_signals", "source_scopes", "connection_namespace_bindings", "connections", "source_namespaces").forEach {
                 jdbc.update("delete from $it where workspace_id=?", workspace)
             }
             jdbc.update("delete from workspaces where id=?", workspace)
@@ -125,8 +125,9 @@ class AutonomyHomeIntegrationTest {
         verify(access,times(2)).requireWritable(fixture.record.workspaceId)
     }
 
+
     private fun controller(context: DevContext, access: WorkspaceAccessService) = AutonomyHomeController(
-        context,access,service(),sql,
+        context, access, service(), sql,
     )
 
     private fun service() = OpportunityService(sql,transactions,mapper,
