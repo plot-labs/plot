@@ -671,12 +671,16 @@ it("queries chat turns, response versions, and retry eligibility", async () => {
   await client.listChatTurns("session-1", { selectedVersionId: "ver-1", signal: controller.signal });
   await client.getChatResponseVersion("ver-1", { signal: controller.signal });
   await client.getRetryEligibility("ver-1", { signal: controller.signal });
+  await client.retryChatResponse("ver-1", "idem-retry-1", { signal: controller.signal });
   expect(fetcher.mock.calls[0]?.[0]).toBe("/api/plot/sessions/session-1/turns?selectedVersionId=ver-1");
   expect(fetcher.mock.calls[0]?.[1]?.signal).toBe(controller.signal);
   expect(fetcher.mock.calls[1]?.[0]).toBe("/api/plot/agent-runs/versions/ver-1");
   expect(fetcher.mock.calls[1]?.[1]?.signal).toBe(controller.signal);
   expect(fetcher.mock.calls[2]?.[0]).toBe("/api/plot/agent-runs/versions/ver-1/eligibility");
   expect(fetcher.mock.calls[2]?.[1]?.signal).toBe(controller.signal);
+  expect(fetcher.mock.calls[3]?.[0]).toBe("/api/plot/agent-runs/versions/ver-1/retry");
+  expect(fetcher.mock.calls[3]?.[1]?.method).toBe("POST");
+  expect(new Headers(fetcher.mock.calls[3]?.[1]?.headers).get("Idempotency-Key")).toBe("idem-retry-1");
   for (const [, init] of fetcher.mock.calls) {
     expect(new Headers(init?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
     expect(init?.cache).toBe("no-store");

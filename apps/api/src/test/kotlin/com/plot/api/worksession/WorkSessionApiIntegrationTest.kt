@@ -16,12 +16,13 @@ import org.springframework.test.context.TestPropertySource
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.get
+import org.springframework.test.web.servlet.post
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration::class)
 @ActiveProfiles("test")
-@TestPropertySource(properties = ["plot.dev-bootstrap.enabled=true"])
+@TestPropertySource(properties = ["plot.dev-bootstrap.enabled=true", "server.address=127.0.0.1"])
 class WorkSessionApiIntegrationTest {
 
 	@Autowired
@@ -134,6 +135,50 @@ class WorkSessionApiIntegrationTest {
 				jsonPath("$[1].userMessage") { value("Customer update") }
 				jsonPath("$[1].versions.length()") { value(1) }
 				jsonPath("$[1].versions[0].agentRunId") { value(secondRun.toString()) }
+			}
+	}
+
+	@Test
+	fun retryChatResponseCreatesNewVersionAndIsIdempotent() {
+		val sessionId = UUID.randomUUID()
+		insertSession(sessionId, title = "Agent session", createdAt = Instant.parse("2026-01-01T00:00:00Z"))
+		val runId = insertChatAgentRun(sessionId, Instant.parse("2026-01-01T01:00:00Z"), "Changelog draft")
+
+		val turnsResponse = mockMvc.get("/api/sessions/$sessionId/turns")
+			.andExpect { status { isOk() } }
+			.andReturn()
+		val mapper = tools.jackson.databind.ObjectMapper()
+		val tree = mapper.readTree(turnsResponse.response.contentAsString)
+		val versionId = tree[0]["versions"][0]["id"].asText()
+
+		mockMvc.post("/api/agent-runs/versions/$versionId/retry") {
+			header("Idempotency-Key", "retry-key-1")
+		}.andExpect {
+			status { isAccepted() }
+			jsonPath("$.versionIndex") { value(1) }
+			jsonPath("$.status") { value("QUEUED") }
+		}
+
+		mockMvc.post("/api/agent-runs/versions/$versionId/retry") {
+			header("Idempotency-Key", "retry-key-1")
+		}.andExpect {
+			status { isAccepted() }
+			jsonPath("$.versionIndex") { value(1) }
+			jsonPath("$.status") { value("QUEUED") }
+		}
+
+		mockMvc.get("/api/sessions/$sessionId/turns")
+			.andExpect {
+				status { isOk() }
+				jsonPath("$.length()") { value(1) }
+				jsonPath("$[0].versions.length()") { value(2) }
+				jsonPath("$[0].versions[0].versionIndex") { value(0) }
+				jsonPath("$[0].versions[0].retryEligibility.eligible") { value(false) }
+				jsonPath("$[0].versions[0].retryEligibility.reason") { value("NOT_LATEST_VERSION") }
+				jsonPath("$[0].versions[1].versionIndex") { value(1) }
+				jsonPath("$[0].versions[1].status") { value("QUEUED") }
+				jsonPath("$[0].versions[1].retryEligibility.eligible") { value(false) }
+				jsonPath("$[0].versions[1].retryEligibility.reason") { value("RUN_NOT_TERMINAL") }
 			}
 	}
 

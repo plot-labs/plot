@@ -661,6 +661,7 @@ export interface PlotApiClient {
   listChatTurns(sessionId: string, options?: { selectedVersionId?: string } & RequestOptions): Promise<ChatTurn[]>;
   getChatResponseVersion(versionId: string, options?: RequestOptions): Promise<ChatResponseVersion>;
   getRetryEligibility(versionId: string, options?: RequestOptions): Promise<RetryEligibility>;
+  retryChatResponse(versionId: string, idempotencyKey: string, options?: RequestOptions): Promise<ChatResponseVersion>;
   listSessions(options?: RequestOptions): Promise<WorkSessionSummary[]>;
   listSourceReferences(options?: RequestOptions): Promise<SourceReference[]>;
   getArtifact(id: string, options?: RequestOptions): Promise<Artifact>;
@@ -849,6 +850,14 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
     },
     getChatResponseVersion: (versionId, requestOptions) => request(`/agent-runs/versions/${encodeURIComponent(versionId)}`, { signal: requestOptions?.signal }),
     getRetryEligibility: (versionId, requestOptions) => request(`/agent-runs/versions/${encodeURIComponent(versionId)}/eligibility`, { signal: requestOptions?.signal }),
+    retryChatResponse: (versionId, idempotencyKey, requestOptions) => request(
+      `/agent-runs/versions/${encodeURIComponent(versionId)}/retry`,
+      {
+        method: "POST",
+        headers: { "Idempotency-Key": idempotencyKey },
+        signal: requestOptions?.signal,
+      },
+    ),
     listSessions: (requestOptions) => request("/sessions", { signal: requestOptions?.signal }),
     listSourceReferences: async (requestOptions) => {
       const connections = await request<GitHubConnection[]>("/github/connections", { signal: requestOptions?.signal });

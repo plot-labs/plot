@@ -58,4 +58,16 @@ class ChatAgentController(
 	): ResponseEntity<List<ChatTurnDto>> = ResponseEntity.ok()
 		.cacheControl(CacheControl.noStore())
 		.body(service.listTurnsForSession(sessionId, selectedVersionId))
+
+	@PostMapping("/versions/{versionId}/retry")
+	fun retry(
+		@PathVariable versionId: UUID,
+		@RequestHeader("Idempotency-Key") idempotencyKey: String,
+	): ResponseEntity<ChatResponseVersionDto> {
+		val response = service.retry(versionId, idempotencyKey)
+		return ResponseEntity.accepted()
+			.location(URI.create("/api/agent-runs/versions/${response.id}"))
+			.cacheControl(CacheControl.noStore())
+			.body(response)
+	}
 }

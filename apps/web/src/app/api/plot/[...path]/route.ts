@@ -183,7 +183,7 @@ function callbackErrorKind(status: number, code: unknown): "invalid" | "unauthor
 function isAllowed(method: string, path: string[]): boolean {
   if (path.length === 0 || path.some((segment) => !safeSegment.test(segment))) return false;
   const route = path.join("/");
-  if (method === "GET" && route === "autonomy/home") return true;
+  if (method === "GET" && (route === "autonomy/home" || route === "autonomy/activity")) return true;
   if (method === "POST" && path.length === 4 && path[0] === "autonomy" && path[1] === "opportunities"
     && uuidPattern.test(path[2]) && ["dismiss", "restore"].includes(path[3])) return true;
 	if (method === "GET" && route === "me") return true;
@@ -221,8 +221,11 @@ function isAllowed(method: string, path: string[]): boolean {
   if (method === "POST" && /^routines\/[0-9a-fA-F-]+\/run$/.test(route)) return true;
   if (method === "POST" && route === "agent-runs") return true;
   if (method === "GET" && /^agent-runs\/[0-9a-fA-F-]+$/.test(route)) return true;
+  if (method === "GET" && /^agent-runs\/versions\/[^/]+(?:\/eligibility)?$/.test(route)) return true;
+  if (method === "POST" && /^agent-runs\/versions\/[^/]+\/retry$/.test(route)) return true;
   if (method === "GET" && route === "sessions") return true;
   if (method === "GET" && /^sessions\/[^/]+\/agent-runs$/.test(route)) return true;
+  if (method === "GET" && /^sessions\/[^/]+\/turns$/.test(route)) return true;
   if (method === "GET" && route === "artifacts") return true;
   if (method === "GET" && /^artifacts\/[^/]+$/.test(route)) return true;
   if (method === "POST" && /^artifacts\/[^/]+\/replicate$/.test(route)) return true;

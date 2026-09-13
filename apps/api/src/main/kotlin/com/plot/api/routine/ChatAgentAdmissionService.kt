@@ -636,6 +636,238 @@ class ChatAgentAdmissionService(
 		return RetryEligibilityDto(eligible = true, reason = null)
 	}
 
+	fun retry(targetVersionId: UUID, idempotencyKey: String): ChatResponseVersionDto {
+		val workspaceId = devContext.devWorkspaceId
+		val userId = devContext.devUserId
+		val key = idempotencyKey.trim()
+		if (key.isBlank() || key.length > 200) {
+			throw ApiException(HttpStatus.BAD_REQUEST, "IDEMPOTENCY_KEY_REQUIRED", "Idempotency-Key is required")
+		}
+		sourceManagedAccessGuard.requireReadable()
+		workspaceAccessService.requireWritable(workspaceId)
+
+		return transactionExecutor.execute {
+			// Lock on idempotency key
+			sqlExecutor.queryForObject(
+				"select pg_advisory_xact_lock(hashtextextended(?, 0))",
+				{ _, _ -> Unit },
+				"$workspaceId:retry:$key",
+			)
+
+			// 1. Check idempotency: does an agent run already exist with this idempotency key?
+			val existingRunId = sqlExecutor.query(
+				"select id from agent_runs where workspace_id = ? and origin = 'CHAT' and idempotency_key = ?",
+				{ rs, _ -> rs.getObject("id", UUID::class.java) },
+				workspaceId,
+				key,
+			).firstOrNull()
+			if (existingRunId != null) {
+				val existingVersion = agentRunQueryPersistence.findResponseVersionByRunId(workspaceId, existingRunId)
+				if (existingVersion != null) {
+					return@execute getResponseVersion(existingVersion.id)
+				}
+			}
+
+			// 2. Find target version and turn
+			val targetVersion = agentRunQueryPersistence.findResponseVersion(workspaceId, targetVersionId)
+				?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Target response version not found")
+			val turn = agentRunQueryPersistence.findTurn(workspaceId, targetVersion.turnId)
+				?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Turn not found")
+
+			// 3. Serialize at Chat session boundary (KTD5)
+			sqlExecutor.queryForObject(
+				"select pg_advisory_xact_lock(hashtextextended(?, 0))",
+				{ _, _ -> Unit },
+				"$workspaceId:chat:${turn.workSessionId}",
+			)
+
+			// Lock the turn
+			sqlExecutor.queryForObject(
+				"select id from chat_turns where workspace_id = ? and id = ? for update",
+				{ rs, _ -> rs.getObject("id", UUID::class.java) },
+				workspaceId,
+				turn.id,
+			)
+
+			// 4. Re-evaluate eligibility under lock
+			val allTurns = agentRunQueryPersistence.listTurns(workspaceId, turn.workSessionId)
+			val maxTurnIndex = allTurns.maxOfOrNull { it.turnIndex } ?: 0
+			if (turn.turnIndex != maxTurnIndex) {
+				throw ApiException(HttpStatus.CONFLICT, "RETRY_INELIGIBLE", "Only the latest turn can be retried")
+			}
+			val versions = agentRunQueryPersistence.listResponseVersionsForTurn(workspaceId, turn.id)
+			val maxVersionIndex = versions.maxOfOrNull { it.versionIndex } ?: 0
+			if (targetVersion.versionIndex != maxVersionIndex) {
+				throw ApiException(HttpStatus.CONFLICT, "RETRY_INELIGIBLE", "Only the newest response version can be retried")
+			}
+			val targetRun = requireNotNull(agentRunQueryPersistence.findAgentRun(workspaceId, targetVersion.agentRunId))
+			if (targetRun.status == AgentRunStatus.QUEUED || targetRun.status == AgentRunStatus.RUNNING) {
+				throw ApiException(HttpStatus.CONFLICT, "RETRY_INELIGIBLE", "Current response is still in progress")
+			}
+			val targetEnvelope = agentRunQueryPersistence.findEnvelopeForAgentRun(workspaceId, targetVersion.agentRunId)
+			if (targetEnvelope == null || targetEnvelope.envelopeFingerprint.isBlank()) {
+				throw ApiException(HttpStatus.CONFLICT, "RETRY_INELIGIBLE", "Execution envelope is incomplete")
+			}
+
+			// 5. Admit new AgentRun
+			val newRunId = uuidGenerator.next()
+			val now = Instant.now()
+			val newVersionIndex = maxVersionIndex + 1
+			val newVersionId = uuidGenerator.next()
+			val retryFingerprint = "${targetRun.requestFingerprint}:retry:$newVersionIndex"
+
+			sqlExecutor.update(
+				"""
+				insert into agent_runs (
+				  id, workspace_id, routine_execution_id, routine_id, work_session_id, created_by_user_id,
+				  origin, idempotency_key, request_fingerprint,
+				  instruction_snapshot, prompt_version, tool_policy_version, budget_snapshot, content_type,
+				  content_profile_revision_id, content_brief_snapshot,
+				  status, max_attempts, created_at, updated_at
+				) values (?, ?, null, null, ?, ?, 'CHAT', ?, ?, ?, ?, ?, ?::jsonb, ?,
+				  ?, ?::jsonb,
+				  'QUEUED', ?, ?, ?)
+				on conflict (workspace_id, idempotency_key) where origin = 'CHAT' do nothing
+				""".trimIndent(),
+				newRunId,
+				workspaceId,
+				turn.workSessionId,
+				userId,
+				key,
+				retryFingerprint,
+				targetRun.instructionSnapshot,
+				targetRun.promptVersion,
+				targetRun.toolPolicyVersion,
+				targetRun.budgetSnapshotJson,
+				targetRun.contentType.name,
+				targetRun.contentProfileRevisionId,
+				targetRun.contentBriefSnapshotJson,
+				targetRun.maxAttempts,
+				Timestamp.from(now),
+				Timestamp.from(now),
+			)
+
+			// 6. Insert new chat_response_versions row
+			sqlExecutor.update(
+				"""
+				insert into chat_response_versions (
+				  id, workspace_id, turn_id, version_index, agent_run_id, initiator_user_id,
+				  lineage_parent_version_id, created_at, updated_at
+				) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+				on conflict (workspace_id, agent_run_id) do nothing
+				""".trimIndent(),
+				newVersionId,
+				workspaceId,
+				turn.id,
+				newVersionIndex,
+				newRunId,
+				userId,
+				targetVersion.id,
+				Timestamp.from(now),
+				Timestamp.from(now),
+			)
+
+			// 7. Insert new chat_execution_envelopes row
+			val newEnvelopeId = uuidGenerator.next()
+			sqlExecutor.update(
+				"""
+				insert into chat_execution_envelopes (
+				  id, workspace_id, agent_run_id, fingerprint_version, envelope_fingerprint,
+				  generation_settings, source_snapshot_id, created_at
+				) values (?, ?, ?, ?, ?, ?::jsonb, ?, ?)
+				on conflict (workspace_id, agent_run_id) do nothing
+				""".trimIndent(),
+				newEnvelopeId,
+				workspaceId,
+				newRunId,
+				targetEnvelope.fingerprintVersion,
+				retryFingerprint,
+				targetEnvelope.generationSettingsJson,
+				targetEnvelope.sourceSnapshotId,
+				Timestamp.from(now),
+			)
+
+			// 8. Clone sources from targetRun
+			val targetSources = agentRunQueryPersistence.listAgentRunSources(workspaceId, targetRun.id)
+			for (source in targetSources) {
+				sqlExecutor.update(
+					"""
+					insert into agent_run_sources (
+					  id, workspace_id, agent_run_id, source_scope_id, source_role, order_index,
+					  captured_status, captured_status_changed_at, captured_at
+					) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+					""".trimIndent(),
+					uuidGenerator.next(),
+					workspaceId,
+					newRunId,
+					source.sourceScopeId,
+					source.role.name,
+					source.orderIndex,
+					source.capturedStatus,
+					Timestamp.from(source.capturedStatusChangedAt),
+					Timestamp.from(now),
+				)
+			}
+
+			// 9. Clone inputs from targetRun
+			val targetInputs = agentRunQueryPersistence.listAgentRunInputs(workspaceId, targetRun.id)
+			for (input in targetInputs) {
+				sqlExecutor.update(
+					"""
+					insert into agent_run_inputs (
+					  id, workspace_id, agent_run_id, routine_id, source_scope_id, writing_block_id,
+					  source_provider, source_kind, source_label, input_kind, order_index,
+					  activity_sequence, snapshot_title, snapshot_body, snapshot_excerpt, original_url,
+					  source_created_at, source_updated_at, content_hash, captured_at
+					) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+					""".trimIndent(),
+					uuidGenerator.next(),
+					workspaceId,
+					newRunId,
+					input.routineId,
+					input.sourceScopeId,
+					input.writingBlockId,
+					input.sourceProvider,
+					input.sourceKind,
+					input.sourceLabel,
+					input.inputKind.name,
+					input.orderIndex,
+					input.activitySequence,
+					input.snapshotTitle,
+					input.snapshotBody,
+					input.snapshotExcerpt,
+					input.originalUrl,
+					input.sourceCreatedAt?.let { Timestamp.from(it) },
+					input.sourceUpdatedAt?.let { Timestamp.from(it) },
+					input.contentHash,
+					Timestamp.from(now),
+				)
+			}
+
+			// 10. Clone tool transcript entries (if any)
+			sqlExecutor.update(
+				"""
+				insert into chat_execution_transcript_entries (
+				  id, workspace_id, envelope_id, call_index, tool_name, normalized_arguments, bounded_result, adopted_input_hash, created_at
+				)
+				select gen_random_uuid(), workspace_id, ?, call_index, tool_name, normalized_arguments, bounded_result, adopted_input_hash, ?
+				from chat_execution_transcript_entries
+				where workspace_id = ? and envelope_id = ?
+				""".trimIndent(),
+				newEnvelopeId,
+				Timestamp.from(now),
+				workspaceId,
+				targetEnvelope.id,
+			)
+
+			// 11. Dispatch
+			scheduleAgentRunDispatchAfterCommit()
+
+			// 12. Return the new version DTO
+			getResponseVersion(newVersionId)
+		}
+	}
+
 	private data class OrphanRun(
 		val id: UUID,
 		val instruction: String,
@@ -720,6 +952,15 @@ class ChatAgentAdmissionService(
 		).singleOrNull() ?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Chat not found")
 		if (session.routineExecutionId != null) {
 			throw ApiException(HttpStatus.CONFLICT, "CHAT_NOT_INTERACTIVE", "Routine Chats cannot receive interactive requests")
+		}
+		val hasActiveRun = sqlExecutor.queryForObject(
+			"select exists(select 1 from agent_runs where workspace_id = ? and work_session_id = ? and status in ('QUEUED', 'RUNNING'))",
+			Boolean::class.java,
+			workspaceId,
+			workSessionId,
+		) ?: false
+		if (hasActiveRun) {
+			throw ApiException(HttpStatus.CONFLICT, "CHAT_RUN_IN_PROGRESS", "Wait for the current response to complete before sending another message")
 		}
 		sqlExecutor.update(
 			"update work_sessions set last_activity_at = ?, updated_at = ? where workspace_id = ? and id = ?",
