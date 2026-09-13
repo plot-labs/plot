@@ -663,3 +663,22 @@ it("scopes autonomy reads and versioned decisions to the selected workspace", as
     expect(init?.cache).toBe("no-store");
   }
 });
+
+it("queries chat turns, response versions, and retry eligibility", async () => {
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => Response.json({ eligible: true }));
+  const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
+  const controller = new AbortController();
+  await client.listChatTurns("session-1", { selectedVersionId: "ver-1", signal: controller.signal });
+  await client.getChatResponseVersion("ver-1", { signal: controller.signal });
+  await client.getRetryEligibility("ver-1", { signal: controller.signal });
+  expect(fetcher.mock.calls[0]?.[0]).toBe("/api/plot/sessions/session-1/turns?selectedVersionId=ver-1");
+  expect(fetcher.mock.calls[0]?.[1]?.signal).toBe(controller.signal);
+  expect(fetcher.mock.calls[1]?.[0]).toBe("/api/plot/agent-runs/versions/ver-1");
+  expect(fetcher.mock.calls[1]?.[1]?.signal).toBe(controller.signal);
+  expect(fetcher.mock.calls[2]?.[0]).toBe("/api/plot/agent-runs/versions/ver-1/eligibility");
+  expect(fetcher.mock.calls[2]?.[1]?.signal).toBe(controller.signal);
+  for (const [, init] of fetcher.mock.calls) {
+    expect(new Headers(init?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
+    expect(init?.cache).toBe("no-store");
+  }
+});

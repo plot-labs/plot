@@ -24,4 +24,10 @@ class WorkSessionController(
 	@GetMapping("/{id}/agent-runs")
 	fun listAgentRuns(@PathVariable id: UUID): List<ChatAgentRunResponse> = chatAgentAdmissionService.listForSession(id)
 
+	@GetMapping("/{id}/turns")
+	fun listTurns(
+		@PathVariable id: UUID,
+		@org.springframework.web.bind.annotation.RequestParam(required = false) selectedVersionId: UUID? = null,
+	): List<com.plot.api.routine.dto.ChatTurnDto> = chatAgentAdmissionService.listTurnsForSession(id, selectedVersionId)
+
 }

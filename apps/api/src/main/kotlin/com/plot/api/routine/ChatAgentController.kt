@@ -1,7 +1,10 @@
 package com.plot.api.routine
 
 import com.plot.api.routine.dto.ChatAgentRunResponse
+import com.plot.api.routine.dto.ChatResponseVersionDto
+import com.plot.api.routine.dto.ChatTurnDto
 import com.plot.api.routine.dto.CreateChatAgentRunRequest
+import com.plot.api.routine.dto.RetryEligibilityDto
 import jakarta.validation.Valid
 import java.net.URI
 import java.util.UUID
@@ -13,6 +16,7 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 
 @RestController
@@ -36,4 +40,22 @@ class ChatAgentController(
 	fun get(@PathVariable id: UUID): ResponseEntity<ChatAgentRunResponse> = ResponseEntity.ok()
 		.cacheControl(CacheControl.noStore())
 		.body(service.get(id))
+
+	@GetMapping("/versions/{versionId}")
+	fun getResponseVersion(@PathVariable versionId: UUID): ResponseEntity<ChatResponseVersionDto> = ResponseEntity.ok()
+		.cacheControl(CacheControl.noStore())
+		.body(service.getResponseVersion(versionId))
+
+	@GetMapping("/versions/{versionId}/eligibility")
+	fun getRetryEligibility(@PathVariable versionId: UUID): ResponseEntity<RetryEligibilityDto> = ResponseEntity.ok()
+		.cacheControl(CacheControl.noStore())
+		.body(service.getResponseVersion(versionId).retryEligibility)
+
+	@GetMapping("/sessions/{sessionId}/turns")
+	fun listTurns(
+		@PathVariable sessionId: UUID,
+		@RequestParam(required = false) selectedVersionId: UUID? = null,
+	): ResponseEntity<List<ChatTurnDto>> = ResponseEntity.ok()
+		.cacheControl(CacheControl.noStore())
+		.body(service.listTurnsForSession(sessionId, selectedVersionId))
 }

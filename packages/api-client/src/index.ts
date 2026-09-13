@@ -430,6 +430,43 @@ export interface ChatAgentRun {
   updatedAt: string;
 }
 
+export interface RetryEligibility {
+  eligible: boolean;
+  reason?: string | null;
+}
+
+export interface ChatResponseVersion {
+  id: string;
+  turnId: string;
+  versionIndex: number;
+  agentRunId: string;
+  status: RoutineAgentRunStatus;
+  failureCode: string | null;
+  instruction: string;
+  artifactId: string | null;
+  artifact: {
+    id: string;
+    status: string;
+    title: string | null;
+    contentType: ContentType;
+    updatedAt: string;
+  } | null;
+  retryEligibility: RetryEligibility;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ChatTurn {
+  id: string;
+  workSessionId: string;
+  turnIndex: number;
+  userMessage: string;
+  versions: ChatResponseVersion[];
+  selectedVersionId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ConfirmedFactInput {
   body: string;
   kind?: string;
@@ -621,6 +658,9 @@ export interface PlotApiClient {
   createChatAgentRun(input: CreateChatAgentRunInput, idempotencyKey: string, options?: RequestOptions): Promise<ChatAgentRun>;
   getChatAgentRun(id: string, options?: RequestOptions): Promise<ChatAgentRun>;
   listSessionAgentRuns(id: string, options?: RequestOptions): Promise<ChatAgentRun[]>;
+  listChatTurns(sessionId: string, options?: { selectedVersionId?: string } & RequestOptions): Promise<ChatTurn[]>;
+  getChatResponseVersion(versionId: string, options?: RequestOptions): Promise<ChatResponseVersion>;
+  getRetryEligibility(versionId: string, options?: RequestOptions): Promise<RetryEligibility>;
   listSessions(options?: RequestOptions): Promise<WorkSessionSummary[]>;
   listSourceReferences(options?: RequestOptions): Promise<SourceReference[]>;
   getArtifact(id: string, options?: RequestOptions): Promise<Artifact>;
@@ -801,6 +841,14 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
     listSessionAgentRuns: (id, requestOptions) => request(`/sessions/${encodeURIComponent(id)}/agent-runs`, {
       signal: requestOptions?.signal,
     }),
+    listChatTurns: (sessionId, queryOptions) => {
+      const params = new URLSearchParams();
+      if (queryOptions?.selectedVersionId) params.set("selectedVersionId", queryOptions.selectedVersionId);
+      const queryString = params.toString();
+      return request(`/sessions/${encodeURIComponent(sessionId)}/turns${queryString ? `?${queryString}` : ""}`, { signal: queryOptions?.signal });
+    },
+    getChatResponseVersion: (versionId, requestOptions) => request(`/agent-runs/versions/${encodeURIComponent(versionId)}`, { signal: requestOptions?.signal }),
+    getRetryEligibility: (versionId, requestOptions) => request(`/agent-runs/versions/${encodeURIComponent(versionId)}/eligibility`, { signal: requestOptions?.signal }),
     listSessions: (requestOptions) => request("/sessions", { signal: requestOptions?.signal }),
     listSourceReferences: async (requestOptions) => {
       const connections = await request<GitHubConnection[]>("/github/connections", { signal: requestOptions?.signal });

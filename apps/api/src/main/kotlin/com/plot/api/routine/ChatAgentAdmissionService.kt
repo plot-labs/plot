@@ -12,8 +12,11 @@ import com.plot.api.dev.DevContext
 import com.plot.api.entitlement.WorkspaceAccessService
 import com.plot.api.routine.dto.ChatAgentRunResponse
 import com.plot.api.routine.dto.ChatAgentArtifactSummaryResponse
+import com.plot.api.routine.dto.ChatResponseVersionDto
+import com.plot.api.routine.dto.ChatTurnDto
 import com.plot.api.routine.dto.ContentBriefRequest
 import com.plot.api.routine.dto.CreateChatAgentRunRequest
+import com.plot.api.routine.dto.RetryEligibilityDto
 import com.plot.api.routine.dto.toChatResponse
 import com.plot.api.source.SourceManagedAccessGuard
 import java.security.MessageDigest
@@ -494,6 +497,187 @@ class ChatAgentAdmissionService(
 		}
 		return agentRunQueryPersistence.listSessionAgentRuns(devContext.devWorkspaceId, sessionId)
 			.map { it.toChatResponseFor(agentRunQueryPersistence) }
+	}
+
+	fun listTurnsForSession(sessionId: UUID, selectedVersionId: UUID? = null): List<ChatTurnDto> {
+		val workspaceId = devContext.devWorkspaceId
+		if (!agentRunQueryPersistence.sessionExists(workspaceId, sessionId)) {
+			throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Chat not found")
+		}
+		workspaceAccessService.requireActiveWorkspace(workspaceId)
+		ensureTurnsForSession(workspaceId, sessionId)
+
+		val turns = agentRunQueryPersistence.listTurns(workspaceId, sessionId)
+		if (turns.isEmpty()) return emptyList()
+
+		val maxTurnIndex = turns.maxOf { it.turnIndex }
+		val result = mutableListOf<ChatTurnDto>()
+
+		for (turn in turns) {
+			val versions = agentRunQueryPersistence.listResponseVersionsForTurn(workspaceId, turn.id)
+			val maxVersionIndex = versions.maxOfOrNull { it.versionIndex } ?: 0
+			val isLatestTurn = turn.turnIndex == maxTurnIndex
+
+			val versionDtos = versions.map { v ->
+				val run = requireNotNull(agentRunQueryPersistence.findAgentRun(workspaceId, v.agentRunId))
+				val artifact = agentRunQueryPersistence.findArtifactForAgentRun(workspaceId, v.agentRunId)?.let {
+					ChatAgentArtifactSummaryResponse(it.id, it.status, it.title, run.contentType, it.updatedAt)
+				}
+				val isNewestVersion = v.versionIndex == maxVersionIndex
+				val envelope = agentRunQueryPersistence.findEnvelopeForAgentRun(workspaceId, v.agentRunId)
+				val eligibility = computeEligibility(
+					workspaceId = workspaceId,
+					isLatestTurn = isLatestTurn,
+					isNewestVersion = isNewestVersion,
+					runStatus = run.status,
+					envelope = envelope,
+				)
+
+				ChatResponseVersionDto(
+					id = v.id,
+					turnId = turn.id,
+					versionIndex = v.versionIndex,
+					agentRunId = v.agentRunId,
+					status = run.status,
+					failureCode = run.failureCode,
+					instruction = run.instructionSnapshot,
+					artifactId = artifact?.id,
+					artifact = artifact,
+					retryEligibility = eligibility,
+					createdAt = v.createdAt,
+					updatedAt = v.updatedAt,
+				)
+			}
+
+			val chosenVersionId = if (selectedVersionId != null && versionDtos.any { it.id == selectedVersionId }) {
+				selectedVersionId
+			} else {
+				versionDtos.lastOrNull()?.id ?: turn.id
+			}
+
+			result.add(
+				ChatTurnDto(
+					id = turn.id,
+					workSessionId = sessionId,
+					turnIndex = turn.turnIndex,
+					userMessage = turn.userMessage,
+					versions = versionDtos,
+					selectedVersionId = chosenVersionId,
+					createdAt = turn.createdAt,
+					updatedAt = turn.updatedAt,
+				)
+			)
+		}
+
+		return result
+	}
+
+	fun getResponseVersion(versionId: UUID): ChatResponseVersionDto {
+		val workspaceId = devContext.devWorkspaceId
+		val v = agentRunQueryPersistence.findResponseVersion(workspaceId, versionId)
+			?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Response version not found")
+		val turn = requireNotNull(agentRunQueryPersistence.findTurn(workspaceId, v.turnId))
+		val turns = agentRunQueryPersistence.listTurns(workspaceId, turn.workSessionId)
+		val maxTurnIndex = turns.maxOfOrNull { it.turnIndex } ?: 0
+		val versions = agentRunQueryPersistence.listResponseVersionsForTurn(workspaceId, turn.id)
+		val maxVersionIndex = versions.maxOfOrNull { it.versionIndex } ?: 0
+		val run = requireNotNull(agentRunQueryPersistence.findAgentRun(workspaceId, v.agentRunId))
+		val artifact = agentRunQueryPersistence.findArtifactForAgentRun(workspaceId, v.agentRunId)?.let {
+			ChatAgentArtifactSummaryResponse(it.id, it.status, it.title, run.contentType, it.updatedAt)
+		}
+		val envelope = agentRunQueryPersistence.findEnvelopeForAgentRun(workspaceId, v.agentRunId)
+		val eligibility = computeEligibility(
+			workspaceId = workspaceId,
+			isLatestTurn = turn.turnIndex == maxTurnIndex,
+			isNewestVersion = v.versionIndex == maxVersionIndex,
+			runStatus = run.status,
+			envelope = envelope,
+		)
+		return ChatResponseVersionDto(
+			id = v.id,
+			turnId = turn.id,
+			versionIndex = v.versionIndex,
+			agentRunId = v.agentRunId,
+			status = run.status,
+			failureCode = run.failureCode,
+			instruction = run.instructionSnapshot,
+			artifactId = artifact?.id,
+			artifact = artifact,
+			retryEligibility = eligibility,
+			createdAt = v.createdAt,
+			updatedAt = v.updatedAt,
+		)
+	}
+
+	fun computeEligibility(
+		workspaceId: UUID,
+		isLatestTurn: Boolean,
+		isNewestVersion: Boolean,
+		runStatus: AgentRunStatus,
+		envelope: ChatExecutionEnvelopeRow?,
+	): RetryEligibilityDto {
+		if (!isLatestTurn) {
+			return RetryEligibilityDto(eligible = false, reason = "NOT_LATEST_TURN")
+		}
+		if (!isNewestVersion) {
+			return RetryEligibilityDto(eligible = false, reason = "NOT_LATEST_VERSION")
+		}
+		if (runStatus == AgentRunStatus.QUEUED || runStatus == AgentRunStatus.RUNNING) {
+			return RetryEligibilityDto(eligible = false, reason = "RUN_NOT_TERMINAL")
+		}
+		if (envelope == null || envelope.envelopeFingerprint.isBlank() || envelope.generationSettingsJson.isBlank()) {
+			return RetryEligibilityDto(eligible = false, reason = "INCOMPLETE_ENVELOPE")
+		}
+		try {
+			workspaceAccessService.requireWritable(workspaceId)
+		} catch (_: Exception) {
+			return RetryEligibilityDto(eligible = false, reason = "UNAUTHORIZED")
+		}
+		return RetryEligibilityDto(eligible = true, reason = null)
+	}
+
+	private data class OrphanRun(
+		val id: UUID,
+		val instruction: String,
+		val userId: UUID,
+		val createdAt: Instant,
+		val fingerprint: String,
+	)
+
+	private fun ensureTurnsForSession(workspaceId: UUID, sessionId: UUID) {
+		val orphanRuns = sqlExecutor.query(
+			"""
+			select a.id, a.instruction_snapshot, a.created_by_user_id, a.created_at, a.request_fingerprint
+			from agent_runs a
+			left join chat_response_versions v on v.workspace_id = a.workspace_id and v.agent_run_id = a.id
+			where a.workspace_id = ? and a.work_session_id = ? and v.id is null
+			order by a.created_at, a.id
+			""".trimIndent(),
+			{ rs, _ ->
+				OrphanRun(
+					id = requireNotNull(rs.getObject("id", UUID::class.java)),
+					instruction = rs.getString("instruction_snapshot") ?: "",
+					userId = rs.getObject("created_by_user_id", UUID::class.java) ?: devContext.devUserId,
+					createdAt = requireNotNull(rs.getTimestamp("created_at")).toInstant(),
+					fingerprint = rs.getString("request_fingerprint") ?: "legacy-fingerprint",
+				)
+			},
+			workspaceId,
+			sessionId,
+		)
+		for (orphan in orphanRuns) {
+			writer().recordDirectChatRun(
+				workspaceId = workspaceId,
+				userId = orphan.userId,
+				chatId = sessionId,
+				runId = orphan.id,
+				instruction = orphan.instruction,
+				fingerprint = orphan.fingerprint,
+				settingsJson = "{}",
+				sourceSnapshotId = null,
+				now = orphan.createdAt,
+			)
+		}
 	}
 
 	private fun AgentRunRecord.toChatResponseFor(persistence: AgentRunQueryPersistence): ChatAgentRunResponse {

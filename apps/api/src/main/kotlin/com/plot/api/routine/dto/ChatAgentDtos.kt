@@ -117,3 +117,34 @@ fun AgentRunRecord.toChatResponse(
 	createdAt = createdAt,
 	updatedAt = updatedAt,
 )
+
+data class RetryEligibilityDto(
+	val eligible: Boolean,
+	val reason: String? = null,
+)
+
+data class ChatResponseVersionDto(
+	val id: UUID,
+	val turnId: UUID,
+	val versionIndex: Int,
+	val agentRunId: UUID,
+	val status: AgentRunStatus,
+	val failureCode: String?,
+	val instruction: String,
+	val artifactId: UUID?,
+	val artifact: ChatAgentArtifactSummaryResponse?,
+	val retryEligibility: RetryEligibilityDto,
+	val createdAt: Instant,
+	val updatedAt: Instant,
+)
+
+data class ChatTurnDto(
+	val id: UUID,
+	val workSessionId: UUID,
+	val turnIndex: Int,
+	val userMessage: String,
+	val versions: List<ChatResponseVersionDto>,
+	val selectedVersionId: UUID,
+	val createdAt: Instant,
+	val updatedAt: Instant,
+)

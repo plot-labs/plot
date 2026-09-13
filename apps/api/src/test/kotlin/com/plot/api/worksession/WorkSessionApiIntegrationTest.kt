@@ -113,6 +113,30 @@ class WorkSessionApiIntegrationTest {
 			}
 	}
 
+	@Test
+	fun listSessionTurnsReturnsTurnsWithVersionsAndEligibility() {
+		val sessionId = UUID.randomUUID()
+		insertSession(sessionId, title = "Agent session", createdAt = Instant.parse("2026-01-01T00:00:00Z"))
+		val firstRun = insertChatAgentRun(sessionId, Instant.parse("2026-01-01T01:00:00Z"), "Changelog")
+		val secondRun = insertChatAgentRun(sessionId, Instant.parse("2026-01-01T02:00:00Z"), "Customer update")
+
+		mockMvc.get("/api/sessions/$sessionId/turns")
+			.andExpect {
+				status { isOk() }
+				jsonPath("$.length()") { value(2) }
+				jsonPath("$[0].turnIndex") { value(0) }
+				jsonPath("$[0].userMessage") { value("Changelog") }
+				jsonPath("$[0].versions.length()") { value(1) }
+				jsonPath("$[0].versions[0].agentRunId") { value(firstRun.toString()) }
+				jsonPath("$[0].versions[0].retryEligibility.eligible") { value(false) }
+				jsonPath("$[0].versions[0].retryEligibility.reason") { value("NOT_LATEST_TURN") }
+				jsonPath("$[1].turnIndex") { value(1) }
+				jsonPath("$[1].userMessage") { value("Customer update") }
+				jsonPath("$[1].versions.length()") { value(1) }
+				jsonPath("$[1].versions[0].agentRunId") { value(secondRun.toString()) }
+			}
+	}
+
 
 
 	private fun insertSession(
