@@ -24,7 +24,7 @@ describe("VerifyEmailPage", () => {
 
     expect(screen.getByRole("heading", { name: "Verify your email" })).toBeVisible();
     expect(screen.getByText("member@example.com")).toBeVisible();
-    fireEvent.change(screen.getByLabelText("Verification code"), { target: { value: "123456" } });
+    fireEvent.paste(screen.getByLabelText("Verification code, digit 1 of 6"), { clipboardData: { getData: () => "123456" } });
     fireEvent.click(screen.getByRole("button", { name: "Verify email" }));
 
     await waitFor(() => expect(assign).toHaveBeenCalledWith("/auth/complete"));
