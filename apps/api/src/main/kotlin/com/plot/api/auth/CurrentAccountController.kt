@@ -1,5 +1,9 @@
 package com.plot.api.auth
 
+import com.plot.api.auth.workos.WorkOSOrganizationMappingRepository
+import com.plot.api.auth.workos.WorkOSMembershipGateway
+import com.plot.api.auth.workos.WorkOSMembershipProjectionService
+import com.plot.api.auth.workos.WorkOSProviderException
 import com.plot.api.entitlement.WorkspaceCapabilities
 import com.plot.api.entitlement.WorkspaceEntitlementReader
 import com.plot.api.workspace.UserRepository
@@ -18,6 +22,7 @@ data class CurrentAccountWorkspace(
 	val name: String,
 	val slug: String,
 	val logoUrl: String?,
+	val organizationId: String?,
 	val role: String,
 	val plan: String,
 	val entitlementStatus: String,
@@ -29,6 +34,7 @@ data class CurrentAccountResponse(
 	val user: CurrentAccountUser,
 	val workspaces: List<CurrentAccountWorkspace>,
 	val defaultWorkspaceId: UUID,
+	val activeOrganizationId: String?,
 )
 
 @RestController
@@ -39,11 +45,26 @@ class CurrentAccountController(
 	private val memberRepository: WorkspaceMemberRepository,
 	private val workspaceRepository: WorkspaceRepository,
 	private val entitlementReader: WorkspaceEntitlementReader,
+	private val workOSProperties: WorkOSAuthProperties,
+	private val workOSOrganizationMappingRepository: WorkOSOrganizationMappingRepository,
+	private val workOSMembershipGateway: WorkOSMembershipGateway,
+	private val workOSMembershipProjectionService: WorkOSMembershipProjectionService,
 ) {
 	@GetMapping
 	fun me(): ResponseEntity<CurrentAccountResponse> {
 		val actor = actorResolver.requireActor()
 		val user = userRepository.findById(actor.userId).orElseThrow { IllegalStateException("Authenticated user disappeared") }
+		if (workOSProperties.enabled) {
+			try {
+				workOSMembershipGateway.listForUser(actor.workOSUserId).forEach(workOSMembershipProjectionService::reconcile)
+			} catch (failure: WorkOSProviderException) {
+				throw com.plot.api.common.ApiException(
+					org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+					"WORKOS_MEMBERSHIP_REFRESH_UNAVAILABLE",
+					"Workspace access could not be refreshed",
+				).also { it.initCause(failure) }
+			}
+		}
 		val memberships = memberRepository.findAllByUserIdAndStatusOrderByCreatedAtAsc(actor.userId, "ACTIVE")
 		val workspaces = workspaceRepository.findAllByIdInAndStatus(memberships.map { it.workspaceId }, "ACTIVE")
 			.associateBy { it.id }
@@ -55,6 +76,9 @@ class CurrentAccountController(
 					workspace.name,
 					workspace.slug,
 					workspace.logoUrl,
+					if (workOSProperties.enabled) {
+						workOSOrganizationMappingRepository.findByWorkspaceId(workspace.id)?.workOSOrganizationId
+					} else null,
 					member.role,
 					workspace.plan,
 					entitlement.status,
@@ -64,13 +88,17 @@ class CurrentAccountController(
 				)
 			}
 		}
+		val activeOrganizationId = actorResolver.currentWorkOSOrganizationId()
+		val activeWorkspaceId = activeOrganizationId
+			?.let { organizationId -> response.firstOrNull { it.organizationId == organizationId }?.id }
 		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(
 			CurrentAccountResponse(
 				CurrentAccountUser(user.id, user.email, user.displayName),
 				response,
-				response.firstOrNull()?.id ?: throw com.plot.api.common.ApiException(
+				activeWorkspaceId ?: response.firstOrNull()?.id ?: throw com.plot.api.common.ApiException(
 					org.springframework.http.HttpStatus.FORBIDDEN, "ACCESS_DENIED", "Access denied",
 				),
+				activeOrganizationId,
 			),
 		)
 	}

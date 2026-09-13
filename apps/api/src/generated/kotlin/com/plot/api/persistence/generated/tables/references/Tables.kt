@@ -9,11 +9,6 @@ import com.plot.api.persistence.generated.tables.AgentRunSources
 import com.plot.api.persistence.generated.tables.AgentRuns
 import com.plot.api.persistence.generated.tables.AgentSteps
 import com.plot.api.persistence.generated.tables.ArtifactRuns
-import com.plot.api.persistence.generated.tables.AuthAccount
-import com.plot.api.persistence.generated.tables.AuthJwks
-import com.plot.api.persistence.generated.tables.AuthSession
-import com.plot.api.persistence.generated.tables.AuthUser
-import com.plot.api.persistence.generated.tables.AuthVerification
 import com.plot.api.persistence.generated.tables.AutonomyAssessments
 import com.plot.api.persistence.generated.tables.AutonomyDailyBudgets
 import com.plot.api.persistence.generated.tables.AutonomyExecutions
@@ -38,6 +33,10 @@ import com.plot.api.persistence.generated.tables.GenerationInputs
 import com.plot.api.persistence.generated.tables.GenerationRuns
 import com.plot.api.persistence.generated.tables.GenerationWorkflowSteps
 import com.plot.api.persistence.generated.tables.GithubInstallationStates
+import com.plot.api.persistence.generated.tables.GithubProductCredentialBackfill
+import com.plot.api.persistence.generated.tables.GithubProductCredentialQuarantine
+import com.plot.api.persistence.generated.tables.GithubProductCredentials
+import com.plot.api.persistence.generated.tables.GithubProductOauthStates
 import com.plot.api.persistence.generated.tables.GithubReleaseDraftEvidence
 import com.plot.api.persistence.generated.tables.GithubReleaseDraftRequests
 import com.plot.api.persistence.generated.tables.GithubReleaseGenerationAttempts
@@ -63,6 +62,11 @@ import com.plot.api.persistence.generated.tables.SourceScopes
 import com.plot.api.persistence.generated.tables.Users
 import com.plot.api.persistence.generated.tables.WaitlistSignups
 import com.plot.api.persistence.generated.tables.WorkSessions
+import com.plot.api.persistence.generated.tables.WorkosIdentityMappings
+import com.plot.api.persistence.generated.tables.WorkosMembershipEventInbox
+import com.plot.api.persistence.generated.tables.WorkosOrganizationMappings
+import com.plot.api.persistence.generated.tables.WorkosProvisioning
+import com.plot.api.persistence.generated.tables.WorkosWorkspaceProvisioning
 import com.plot.api.persistence.generated.tables.WorkspaceContentProfileRevisions
 import com.plot.api.persistence.generated.tables.WorkspaceContentProfiles
 import com.plot.api.persistence.generated.tables.WorkspaceMembers
@@ -96,31 +100,6 @@ val AGENT_STEPS: AgentSteps = AgentSteps.AGENT_STEPS
  * The table <code>public.artifact_runs</code>.
  */
 val ARTIFACT_RUNS: ArtifactRuns = ArtifactRuns.ARTIFACT_RUNS
-
-/**
- * The table <code>public.auth_account</code>.
- */
-val AUTH_ACCOUNT: AuthAccount = AuthAccount.AUTH_ACCOUNT
-
-/**
- * The table <code>public.auth_jwks</code>.
- */
-val AUTH_JWKS: AuthJwks = AuthJwks.AUTH_JWKS
-
-/**
- * The table <code>public.auth_session</code>.
- */
-val AUTH_SESSION: AuthSession = AuthSession.AUTH_SESSION
-
-/**
- * The table <code>public.auth_user</code>.
- */
-val AUTH_USER: AuthUser = AuthUser.AUTH_USER
-
-/**
- * The table <code>public.auth_verification</code>.
- */
-val AUTH_VERIFICATION: AuthVerification = AuthVerification.AUTH_VERIFICATION
 
 /**
  * The table <code>public.autonomy_assessments</code>.
@@ -241,6 +220,26 @@ val GENERATION_WORKFLOW_STEPS: GenerationWorkflowSteps = GenerationWorkflowSteps
  * The table <code>public.github_installation_states</code>.
  */
 val GITHUB_INSTALLATION_STATES: GithubInstallationStates = GithubInstallationStates.GITHUB_INSTALLATION_STATES
+
+/**
+ * The table <code>public.github_product_credential_backfill</code>.
+ */
+val GITHUB_PRODUCT_CREDENTIAL_BACKFILL: GithubProductCredentialBackfill = GithubProductCredentialBackfill.GITHUB_PRODUCT_CREDENTIAL_BACKFILL
+
+/**
+ * The table <code>public.github_product_credential_quarantine</code>.
+ */
+val GITHUB_PRODUCT_CREDENTIAL_QUARANTINE: GithubProductCredentialQuarantine = GithubProductCredentialQuarantine.GITHUB_PRODUCT_CREDENTIAL_QUARANTINE
+
+/**
+ * The table <code>public.github_product_credentials</code>.
+ */
+val GITHUB_PRODUCT_CREDENTIALS: GithubProductCredentials = GithubProductCredentials.GITHUB_PRODUCT_CREDENTIALS
+
+/**
+ * The table <code>public.github_product_oauth_states</code>.
+ */
+val GITHUB_PRODUCT_OAUTH_STATES: GithubProductOauthStates = GithubProductOauthStates.GITHUB_PRODUCT_OAUTH_STATES
 
 /**
  * The table <code>public.github_release_draft_evidence</code>.
@@ -366,6 +365,31 @@ val WAITLIST_SIGNUPS: WaitlistSignups = WaitlistSignups.WAITLIST_SIGNUPS
  * The table <code>public.work_sessions</code>.
  */
 val WORK_SESSIONS: WorkSessions = WorkSessions.WORK_SESSIONS
+
+/**
+ * The table <code>public.workos_identity_mappings</code>.
+ */
+val WORKOS_IDENTITY_MAPPINGS: WorkosIdentityMappings = WorkosIdentityMappings.WORKOS_IDENTITY_MAPPINGS
+
+/**
+ * The table <code>public.workos_membership_event_inbox</code>.
+ */
+val WORKOS_MEMBERSHIP_EVENT_INBOX: WorkosMembershipEventInbox = WorkosMembershipEventInbox.WORKOS_MEMBERSHIP_EVENT_INBOX
+
+/**
+ * The table <code>public.workos_organization_mappings</code>.
+ */
+val WORKOS_ORGANIZATION_MAPPINGS: WorkosOrganizationMappings = WorkosOrganizationMappings.WORKOS_ORGANIZATION_MAPPINGS
+
+/**
+ * The table <code>public.workos_provisioning</code>.
+ */
+val WORKOS_PROVISIONING: WorkosProvisioning = WorkosProvisioning.WORKOS_PROVISIONING
+
+/**
+ * The table <code>public.workos_workspace_provisioning</code>.
+ */
+val WORKOS_WORKSPACE_PROVISIONING: WorkosWorkspaceProvisioning = WorkosWorkspaceProvisioning.WORKOS_WORKSPACE_PROVISIONING
 
 /**
  * The table <code>public.workspace_content_profile_revisions</code>.

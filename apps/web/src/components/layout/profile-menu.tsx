@@ -117,8 +117,15 @@ export function ProfileMenu({
           <button
             type="button"
             onClick={async () => {
-              await fetch("/api/auth/sign-out", { method: "POST", credentials: "include" });
-              window.location.assign("/sign-in");
+              try {
+                await fetch("/api/auth/sign-out", { method: "POST", credentials: "include" });
+              } finally {
+                // The AuthKit route clears the managed cookie even when the
+                // provider logout redirect is unavailable. Always leave the
+                // app surface so stale client state cannot look signed in.
+                window.localStorage.removeItem("plot.workspaceId");
+                window.location.assign("/sign-in");
+              }
             }}
             className="flex w-full items-center gap-2 rounded-[8px] px-2 py-2 text-left transition hover:bg-black/[0.04] dark:hover:bg-white/10"
           >

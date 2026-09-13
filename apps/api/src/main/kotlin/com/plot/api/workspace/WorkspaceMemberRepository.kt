@@ -60,6 +60,7 @@ class WorkspaceMemberRepository(
 			.set(WORKSPACE_MEMBERS.JOINED_AT, member.joinedAt.toOffsetDateTime())
 			.set(WORKSPACE_MEMBERS.CREATED_AT, member.createdAt.toOffsetDateTime())
 			.set(WORKSPACE_MEMBERS.UPDATED_AT, member.updatedAt.toOffsetDateTime())
+			.set(WORKSPACE_MEMBERS.WORKOS_MEMBERSHIP_ID, member.workOSMembershipId)
 			.where(WORKSPACE_MEMBERS.ID.eq(member.id))
 			.execute()
 		if (updated == 0) {
@@ -72,9 +73,44 @@ class WorkspaceMemberRepository(
 				.set(WORKSPACE_MEMBERS.JOINED_AT, member.joinedAt.toOffsetDateTime())
 				.set(WORKSPACE_MEMBERS.CREATED_AT, member.createdAt.toOffsetDateTime())
 				.set(WORKSPACE_MEMBERS.UPDATED_AT, member.updatedAt.toOffsetDateTime())
+				.set(WORKSPACE_MEMBERS.WORKOS_MEMBERSHIP_ID, member.workOSMembershipId)
 				.execute()
 		}
 		return member
+	}
+
+	fun upsertWorkOSProjection(
+		workspaceId: UUID,
+		userId: UUID,
+		role: String,
+		status: String,
+		workOSMembershipId: String?,
+		now: Instant,
+	): WorkspaceMember {
+		val existing = findByWorkspaceIdAndUserId(workspaceId, userId)
+		val id = existing?.id ?: UUID.randomUUID()
+		val joinedAt = existing?.joinedAt ?: now
+		val createdAt = existing?.createdAt ?: now
+		val membershipId = workOSMembershipId ?: existing?.workOSMembershipId
+		dsl.insertInto(WORKSPACE_MEMBERS)
+			.set(WORKSPACE_MEMBERS.ID, id)
+			.set(WORKSPACE_MEMBERS.WORKSPACE_ID, workspaceId)
+			.set(WORKSPACE_MEMBERS.USER_ID, userId)
+			.set(WORKSPACE_MEMBERS.ROLE, role)
+			.set(WORKSPACE_MEMBERS.STATUS, status)
+			.set(WORKSPACE_MEMBERS.JOINED_AT, joinedAt.toOffsetDateTime())
+			.set(WORKSPACE_MEMBERS.CREATED_AT, createdAt.toOffsetDateTime())
+			.set(WORKSPACE_MEMBERS.UPDATED_AT, now.toOffsetDateTime())
+			.set(WORKSPACE_MEMBERS.WORKOS_MEMBERSHIP_ID, membershipId)
+			.onConflict(WORKSPACE_MEMBERS.WORKSPACE_ID, WORKSPACE_MEMBERS.USER_ID)
+			.doUpdate()
+			.set(WORKSPACE_MEMBERS.ROLE, role)
+			.set(WORKSPACE_MEMBERS.STATUS, status)
+			.set(WORKSPACE_MEMBERS.UPDATED_AT, now.toOffsetDateTime())
+			.set(WORKSPACE_MEMBERS.WORKOS_MEMBERSHIP_ID, membershipId)
+			.execute()
+		return findByWorkspaceIdAndUserId(workspaceId, userId)
+			?: error("WorkOS membership projection could not be read after upsert")
 	}
 
 	fun delete(member: WorkspaceMember) {
@@ -90,6 +126,7 @@ class WorkspaceMemberRepository(
 		WORKSPACE_MEMBERS.JOINED_AT,
 		WORKSPACE_MEMBERS.CREATED_AT,
 		WORKSPACE_MEMBERS.UPDATED_AT,
+		WORKSPACE_MEMBERS.WORKOS_MEMBERSHIP_ID,
 	).from(WORKSPACE_MEMBERS)
 
 	private fun Record.toModel() = WorkspaceMember(
@@ -101,6 +138,7 @@ class WorkspaceMemberRepository(
 		joinedAt = requireNotNull(get(WORKSPACE_MEMBERS.JOINED_AT)).toInstant(),
 		createdAt = requireNotNull(get(WORKSPACE_MEMBERS.CREATED_AT)).toInstant(),
 		updatedAt = requireNotNull(get(WORKSPACE_MEMBERS.UPDATED_AT)).toInstant(),
+		workOSMembershipId = get(WORKSPACE_MEMBERS.WORKOS_MEMBERSHIP_ID),
 	)
 }
 

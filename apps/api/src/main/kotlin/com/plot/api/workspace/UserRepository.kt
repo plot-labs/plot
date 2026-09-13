@@ -25,14 +25,6 @@ class UserRepository(
 		.fetchOne()
 		?.toModel()
 
-	fun findByAuthIssuerAndAuthSubject(authIssuer: String, authSubject: String): User? = select()
-		.where(
-			USERS.AUTH_ISSUER.eq(authIssuer),
-			USERS.AUTH_SUBJECT.eq(authSubject),
-		)
-		.fetchOne()
-		?.toModel()
-
 	fun save(user: User): User {
 		val updated = dsl.update(USERS)
 			.set(USERS.EMAIL, user.email)
@@ -40,8 +32,6 @@ class UserRepository(
 			.set(USERS.STATUS, user.status)
 			.set(USERS.CREATED_AT, user.createdAt.toOffsetDateTime())
 			.set(USERS.UPDATED_AT, user.updatedAt.toOffsetDateTime())
-			.set(USERS.AUTH_ISSUER, user.authIssuer)
-			.set(USERS.AUTH_SUBJECT, user.authSubject)
 			.where(USERS.ID.eq(user.id))
 			.execute()
 		if (updated == 0) {
@@ -52,8 +42,6 @@ class UserRepository(
 				.set(USERS.STATUS, user.status)
 				.set(USERS.CREATED_AT, user.createdAt.toOffsetDateTime())
 				.set(USERS.UPDATED_AT, user.updatedAt.toOffsetDateTime())
-				.set(USERS.AUTH_ISSUER, user.authIssuer)
-				.set(USERS.AUTH_SUBJECT, user.authSubject)
 				.execute()
 		}
 		return user
@@ -66,8 +54,6 @@ class UserRepository(
 		USERS.STATUS,
 		USERS.CREATED_AT,
 		USERS.UPDATED_AT,
-		USERS.AUTH_ISSUER,
-		USERS.AUTH_SUBJECT,
 	).from(USERS)
 
 	private fun Record.toModel() = User(
@@ -75,8 +61,6 @@ class UserRepository(
 		email = requireNotNull(get(USERS.EMAIL)),
 		displayName = requireNotNull(get(USERS.DISPLAY_NAME)),
 		status = requireNotNull(get(USERS.STATUS)),
-		authIssuer = get(USERS.AUTH_ISSUER),
-		authSubject = get(USERS.AUTH_SUBJECT),
 		createdAt = requireNotNull(get(USERS.CREATED_AT)).toInstant(),
 		updatedAt = requireNotNull(get(USERS.UPDATED_AT)).toInstant(),
 	)

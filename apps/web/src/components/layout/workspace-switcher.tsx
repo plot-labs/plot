@@ -21,13 +21,15 @@ type WorkspaceSwitcherProps = {
   workspaceMenuOpen: boolean;
   setWorkspaceMenuOpen: Dispatch<SetStateAction<boolean>>;
   onOpen: () => void;
-  selectWorkspace: (id: string) => void;
+  selectWorkspace: (id: string) => void | Promise<void>;
   creatingWorkspace: boolean;
   setCreatingWorkspace: Dispatch<SetStateAction<boolean>>;
   workspaceName: string;
   setWorkspaceName: Dispatch<SetStateAction<string>>;
   workspaceCreateError: string | null;
   setWorkspaceCreateError: Dispatch<SetStateAction<string | null>>;
+  workspaceSwitchError: string | null;
+  switchingWorkspaceId: string | null;
   isCreatingWorkspace: boolean;
   handleCreateWorkspace: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
 };
@@ -50,6 +52,8 @@ export function WorkspaceSwitcher({
   setWorkspaceName,
   workspaceCreateError,
   setWorkspaceCreateError,
+  workspaceSwitchError,
+  switchingWorkspaceId,
   isCreatingWorkspace,
   handleCreateWorkspace,
 }: WorkspaceSwitcherProps) {
@@ -162,8 +166,10 @@ export function WorkspaceSwitcher({
                       setWorkspaceMenuOpen(false);
                       return;
                     }
-                    selectWorkspace(workspace.id);
+                    void selectWorkspace(workspace.id);
                   }}
+                  disabled={switchingWorkspaceId !== null}
+                  aria-busy={switchingWorkspaceId === workspace.id}
                   className={cn(
                     "flex h-9 w-full items-center gap-2 rounded-[8px] px-2 text-left font-medium transition hover:bg-black/[0.04] focus-visible:bg-black/[0.04] focus-visible:outline-none dark:hover:bg-white/10 dark:focus-visible:bg-white/10",
                     workspace.selected && "bg-black/[0.035] text-black/82 dark:bg-white/[0.07] dark:text-white/88",
@@ -171,10 +177,17 @@ export function WorkspaceSwitcher({
                 >
                   <WorkspaceAvatar logoUrl={workspace.logoUrl} mark={workspace.mark} variant="menu" />
                   <span className="min-w-0 flex-1 truncate text-[13px]">{workspace.name}</span>
-                  {workspace.selected && <Check className="size-4 shrink-0 text-black/55 dark:text-white/60" />}
+                  {switchingWorkspaceId === workspace.id ? (
+                    <span aria-hidden="true" className="size-3.5 animate-spin rounded-full border-2 border-black/20 border-t-black/60 dark:border-white/20 dark:border-t-white/70" />
+                  ) : workspace.selected ? <Check className="size-4 shrink-0 text-black/55 dark:text-white/60" /> : null}
                 </button>
               ))}
             </div>
+            {workspaceSwitchError && (
+              <p role="alert" className="border-t border-black/[0.08] px-3 py-2 text-[12px] leading-4 text-red-600 dark:border-white/10 dark:text-red-300">
+                {workspaceSwitchError}
+              </p>
+            )}
             <div className="border-t border-black/[0.08] p-1 dark:border-white/10">
               <button
                 type="button"

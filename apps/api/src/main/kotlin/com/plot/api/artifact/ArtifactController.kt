@@ -14,8 +14,8 @@ import com.plot.api.artifact.dto.RecordProductDeliveryEventRequest
 import com.plot.api.artifact.dto.SaveContentVariantRequest
 import com.plot.api.artifact.dto.UnpublishContentVariantResponse
 import com.plot.api.artifact.dto.ReplicateContentRequest
+import com.plot.api.auth.AuthorizedWorkspaceContext
 import com.plot.api.common.WorkspacePrincipal
-import com.plot.api.dev.DevContext
 import com.plot.api.entitlement.CompletionAllowed
 import com.plot.api.entitlement.ReadOnlyAllowed
 import com.plot.api.entitlement.SafetyAllowed
@@ -47,7 +47,7 @@ class ArtifactController(
 	private val publishService: ArtifactPublishService,
 	private val deliveryEventService: ProductDeliveryEventService,
 	private val chatAgentAdmissionService: ChatAgentAdmissionService,
-	private val devContext: DevContext,
+	private val authorizedWorkspaceContext: AuthorizedWorkspaceContext,
 ) {
 	@GetMapping("/artifacts")
 	fun list(
@@ -66,8 +66,9 @@ class ArtifactController(
 		@RequestHeader("Idempotency-Key") idempotencyKey: String,
 		@Valid @RequestBody request: ReplicateContentRequest,
 	): ResponseEntity<ChatAgentRunResponse> {
+		val context = authorizedWorkspaceContext.require()
 		val response = chatAgentAdmissionService.admitReplication(
-			principal = WorkspacePrincipal(devContext.devWorkspaceId, devContext.devUserId),
+			principal = WorkspacePrincipal(context.workspace.workspaceId, context.actor.userId),
 			artifactId = id,
 			request = request,
 			idempotencyKey = idempotencyKey,

@@ -15,6 +15,7 @@ import com.plot.api.persistence.generated.keys.CONNECTION_NAMESPACE_BINDINGS__CO
 import com.plot.api.persistence.generated.keys.CONTENT_SOURCE_SNAPSHOTS__CONTENT_SOURCE_SNAPSHOTS_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.GENERATION_RUNS__GENERATION_RUNS_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.GITHUB_INSTALLATION_STATES__GITHUB_INSTALLATION_STATES_WORKSPACE_ID_FKEY
+import com.plot.api.persistence.generated.keys.GITHUB_PRODUCT_OAUTH_STATES__GITHUB_PRODUCT_OAUTH_STATES_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.GITHUB_RELEASE_DRAFT_REQUESTS__GITHUB_RELEASE_DRAFT_REQUESTS_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.GITHUB_REPOSITORY_ACCESS_CHECKS__GITHUB_REPOSITORY_ACCESS_CHECKS_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.POLAR_WEBHOOK_EVENTS__POLAR_WEBHOOK_EVENTS_MATCHED_WORKSPACE_ID_FKEY
@@ -25,6 +26,9 @@ import com.plot.api.persistence.generated.keys.SOURCE_IMPORTS__SOURCE_IMPORTS_WO
 import com.plot.api.persistence.generated.keys.SOURCE_NAMESPACES__SOURCE_NAMESPACES_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.SOURCE_OBSERVATIONS__SOURCE_OBSERVATIONS_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.SOURCE_SCOPES__SOURCE_SCOPES_WORKSPACE_ID_FKEY
+import com.plot.api.persistence.generated.keys.WORKOS_ORGANIZATION_MAPPINGS__WORKOS_ORGANIZATION_MAPPINGS_WORKSPACE_ID_FKEY
+import com.plot.api.persistence.generated.keys.WORKOS_PROVISIONING__WORKOS_PROVISIONING_WORKSPACE_ID_FKEY
+import com.plot.api.persistence.generated.keys.WORKOS_WORKSPACE_PROVISIONING__WORKOS_WORKSPACE_PROVISIONING_WORKSPACE_ID_FKEY
 import com.plot.api.persistence.generated.keys.WORKSPACES_PKEY
 import com.plot.api.persistence.generated.keys.WORKSPACES_SLUG_KEY
 import com.plot.api.persistence.generated.keys.WORKSPACES__WORKSPACES_CREATED_BY_USER_ID_FKEY
@@ -43,6 +47,7 @@ import com.plot.api.persistence.generated.tables.Connections.ConnectionsPath
 import com.plot.api.persistence.generated.tables.ContentSourceSnapshots.ContentSourceSnapshotsPath
 import com.plot.api.persistence.generated.tables.GenerationRuns.GenerationRunsPath
 import com.plot.api.persistence.generated.tables.GithubInstallationStates.GithubInstallationStatesPath
+import com.plot.api.persistence.generated.tables.GithubProductOauthStates.GithubProductOauthStatesPath
 import com.plot.api.persistence.generated.tables.GithubReleaseDraftRequests.GithubReleaseDraftRequestsPath
 import com.plot.api.persistence.generated.tables.GithubRepositoryAccessChecks.GithubRepositoryAccessChecksPath
 import com.plot.api.persistence.generated.tables.PolarWebhookEvents.PolarWebhookEventsPath
@@ -55,6 +60,9 @@ import com.plot.api.persistence.generated.tables.SourceObservations.SourceObserv
 import com.plot.api.persistence.generated.tables.SourceScopes.SourceScopesPath
 import com.plot.api.persistence.generated.tables.Users.UsersPath
 import com.plot.api.persistence.generated.tables.WorkSessions.WorkSessionsPath
+import com.plot.api.persistence.generated.tables.WorkosOrganizationMappings.WorkosOrganizationMappingsPath
+import com.plot.api.persistence.generated.tables.WorkosProvisioning.WorkosProvisioningPath
+import com.plot.api.persistence.generated.tables.WorkosWorkspaceProvisioning.WorkosWorkspaceProvisioningPath
 import com.plot.api.persistence.generated.tables.WorkspaceContentProfileRevisions.WorkspaceContentProfileRevisionsPath
 import com.plot.api.persistence.generated.tables.WorkspaceContentProfiles.WorkspaceContentProfilesPath
 import com.plot.api.persistence.generated.tables.WorkspaceMembers.WorkspaceMembersPath
@@ -411,6 +419,22 @@ open class Workspaces(
     val githubInstallationStates: GithubInstallationStatesPath
         get(): GithubInstallationStatesPath = githubInstallationStates()
 
+    private lateinit var _githubProductOauthStates: GithubProductOauthStatesPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.github_product_oauth_states</code> table
+     */
+    fun githubProductOauthStates(): GithubProductOauthStatesPath {
+        if (!this::_githubProductOauthStates.isInitialized)
+            _githubProductOauthStates = GithubProductOauthStatesPath(this, null, GITHUB_PRODUCT_OAUTH_STATES__GITHUB_PRODUCT_OAUTH_STATES_WORKSPACE_ID_FKEY.inverseKey)
+
+        return _githubProductOauthStates;
+    }
+
+    val githubProductOauthStates: GithubProductOauthStatesPath
+        get(): GithubProductOauthStatesPath = githubProductOauthStates()
+
     private lateinit var _githubReleaseDraftRequests: GithubReleaseDraftRequestsPath
 
     /**
@@ -586,6 +610,54 @@ open class Workspaces(
 
     val workSessions: WorkSessionsPath
         get(): WorkSessionsPath = workSessions()
+
+    private lateinit var _workosOrganizationMappings: WorkosOrganizationMappingsPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.workos_organization_mappings</code> table
+     */
+    fun workosOrganizationMappings(): WorkosOrganizationMappingsPath {
+        if (!this::_workosOrganizationMappings.isInitialized)
+            _workosOrganizationMappings = WorkosOrganizationMappingsPath(this, null, WORKOS_ORGANIZATION_MAPPINGS__WORKOS_ORGANIZATION_MAPPINGS_WORKSPACE_ID_FKEY.inverseKey)
+
+        return _workosOrganizationMappings;
+    }
+
+    val workosOrganizationMappings: WorkosOrganizationMappingsPath
+        get(): WorkosOrganizationMappingsPath = workosOrganizationMappings()
+
+    private lateinit var _workosProvisioning: WorkosProvisioningPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.workos_provisioning</code> table
+     */
+    fun workosProvisioning(): WorkosProvisioningPath {
+        if (!this::_workosProvisioning.isInitialized)
+            _workosProvisioning = WorkosProvisioningPath(this, null, WORKOS_PROVISIONING__WORKOS_PROVISIONING_WORKSPACE_ID_FKEY.inverseKey)
+
+        return _workosProvisioning;
+    }
+
+    val workosProvisioning: WorkosProvisioningPath
+        get(): WorkosProvisioningPath = workosProvisioning()
+
+    private lateinit var _workosWorkspaceProvisioning: WorkosWorkspaceProvisioningPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.workos_workspace_provisioning</code> table
+     */
+    fun workosWorkspaceProvisioning(): WorkosWorkspaceProvisioningPath {
+        if (!this::_workosWorkspaceProvisioning.isInitialized)
+            _workosWorkspaceProvisioning = WorkosWorkspaceProvisioningPath(this, null, WORKOS_WORKSPACE_PROVISIONING__WORKOS_WORKSPACE_PROVISIONING_WORKSPACE_ID_FKEY.inverseKey)
+
+        return _workosWorkspaceProvisioning;
+    }
+
+    val workosWorkspaceProvisioning: WorkosWorkspaceProvisioningPath
+        get(): WorkosWorkspaceProvisioningPath = workosWorkspaceProvisioning()
 
     private lateinit var _workspaceContentProfileRevisions: WorkspaceContentProfileRevisionsPath
 

@@ -28,7 +28,7 @@ import {
   type GitHubRepository,
 } from "@/lib/api-client";
 
-type IntegrationAction = "install" | "disconnect" | "enable" | null;
+type IntegrationAction = "install" | "reauthenticate" | "disconnect" | "enable" | null;
 
 type IntegrationBrand = "figma" | "github" | "linear" | "notion" | "slack";
 
@@ -68,6 +68,7 @@ export function IntegrationsWorkspace() {
   const searchParams = useSearchParams();
   const callbackConnectionId = searchParams.get("githubConnection");
   const callbackError = searchParams.get("githubError");
+  const callbackConnected = searchParams.get("githubConnected") === "1";
   const [preferredConnectionId] = useState(callbackConnectionId);
   const [connections, setConnections] = useState<GitHubConnection[]>([]);
   const [availableRepositories, setAvailableRepositories] = useState<GitHubRepository[]>([]);
@@ -78,7 +79,7 @@ export function IntegrationsWorkspace() {
   const [action, setAction] = useState<IntegrationAction>(null);
   const actionRef = useRef<IntegrationAction>(null);
   const actionAbortRef = useRef<AbortController | null>(null);
-  const [message, setMessage] = useState<string | null>(callbackError ? callbackMessage(callbackError) : null);
+  const [message, setMessage] = useState<string | null>(callbackError ? callbackMessage(callbackError) : callbackConnected ? "GitHub account connected." : null);
   const [messageRequestId, setMessageRequestId] = useState<string | null>(null);
   const [reloadNonce, setReloadNonce] = useState(0);
   const [integrationQuery, setIntegrationQuery] = useState("");
@@ -186,8 +187,8 @@ export function IntegrationsWorkspace() {
   }, [preferredConnectionId, reloadNonce]);
 
   useEffect(() => {
-    if (callbackConnectionId || callbackError) router.replace("/settings/integrations");
-  }, [callbackConnectionId, callbackError, router]);
+    if (callbackConnectionId || callbackError || callbackConnected) router.replace("/settings/integrations");
+  }, [callbackConnectionId, callbackError, callbackConnected, router]);
 
   const installGitHub = async () => {
     if (actionRef.current) return;
@@ -228,8 +229,20 @@ export function IntegrationsWorkspace() {
     }
   };
 
-  const reauthenticateGitHub = () => {
-    window.location.assign("/api/auth/sign-in/github?callbackURL=%2Fsettings%2Fintegrations");
+  const reauthenticateGitHub = async () => {
+    if (actionRef.current) return;
+    actionRef.current = "reauthenticate";
+    setAction("reauthenticate");
+    setMessage(null);
+    try {
+      const request = await plotApiClient.startGitHubProductOAuth("/settings/integrations");
+      window.location.assign(request.authorizationUrl);
+    } catch (error) {
+      setMessage(errorMessage(error));
+      setMessageRequestId(providerRequestId(error));
+      actionRef.current = null;
+      setAction(null);
+    }
   };
 
   const enableRepository = async () => {
@@ -440,12 +453,12 @@ export function IntegrationsWorkspace() {
                       <div className="mt-3 border-t border-black/[0.07] pt-3 dark:border-white/[0.08]">
                         <button
                           type="button"
-                          onClick={reauthenticateGitHub}
+                          onClick={() => { void reauthenticateGitHub(); }}
                           disabled={action !== null}
                           className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[8px] bg-[#252a30] px-3 text-[12px] font-medium text-white transition hover:bg-[#171a1e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 disabled:cursor-wait disabled:opacity-45 dark:bg-white dark:text-[#18191b] dark:hover:bg-white/90"
                         >
-                          <HugeiconsIcon icon={Link01Icon} size={14} color="currentColor" strokeWidth={1.5} aria-hidden="true" />
-                          Sign in with GitHub
+                          {action === "reauthenticate" ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" /> : <HugeiconsIcon icon={Link01Icon} size={14} color="currentColor" strokeWidth={1.5} aria-hidden="true" />}
+                          Reconnect GitHub account
                         </button>
                       </div>
                     )}
@@ -624,6 +637,7 @@ function callbackMessage(value: string) {
   if (value === "invalid") return "The GitHub installation link expired. Try connecting again.";
   if (value === "unauthorized") return "Only the workspace owner can connect GitHub.";
   if (value === "unavailable") return "GitHub is temporarily unavailable. Try again shortly.";
+  if (value === "failed") return "GitHub account authorization could not be completed. Try again.";
   return "GitHub could not be connected. Try again.";
 }
 
@@ -633,9 +647,11 @@ function errorMessage(error: unknown) {
     if (error.code === "GITHUB_RATE_LIMITED") return "GitHub rate limit reached. Wait a moment, then retry.";
     if (error.code === "GITHUB_NOT_FOUND") return "The previous GitHub installation was replaced or removed. Reconnect GitHub to restore access.";
     if (error.code === "GITHUB_ACCESS_DENIED" || error.code === "CONNECTION_INACTIVE" || error.code === "REPOSITORY_INACTIVE") return "GitHub access was revoked. Reconnect GitHub, then retry.";
-    if (error.code === "GITHUB_REAUTH_REQUIRED") return "GitHub re-authentication is required. Sign in with GitHub again to grant organization access.";
+    if (error.code === "GITHUB_REAUTH_REQUIRED") return "GitHub authorization must be refreshed. Connect GitHub again to grant organization access.";
     if (error.code === "GITHUB_INSTALLATION_AMBIGUOUS") return "Multiple GitHub App installations found. Visit GitHub settings to manage your installations, then reconnect the account you want to use.";
-    if (error.code === "GITHUB_ACCOUNT_NOT_LINKED") return "No linked GitHub account found. Sign in with GitHub first, then retry.";
+    if (error.code === "GITHUB_ACCOUNT_NOT_LINKED") return "No linked GitHub account found. Connect a GitHub account first, then retry.";
+    if (error.code === "GITHUB_PRODUCT_OAUTH_NOT_CONFIGURED") return "GitHub account authorization is not configured for this environment.";
+    if (error.code === "GITHUB_SCOPE_REQUIRED") return "GitHub authorization did not grant the permissions required for repository access.";
     if (error.code === "FORBIDDEN") return "Workspace owner must connect GitHub.";
     if (error.code === "GITHUB_PROVIDER_UNAVAILABLE") return "GitHub is temporarily unavailable. Try again shortly.";
     return "GitHub request failed. Try again.";

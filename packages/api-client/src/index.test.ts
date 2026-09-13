@@ -12,6 +12,7 @@ function workspaceSummary(overrides: Partial<WorkspaceSummary> = {}): WorkspaceS
     slug: "personal",
     status: "ACTIVE",
     logoUrl: null,
+    organizationId: null,
     publicCitationsEnabled: true,
     plan: "founding",
     entitlementStatus: "active",
@@ -205,6 +206,22 @@ describe("Plot API client", () => {
 
     expect(fetcher).toHaveBeenCalledWith(
       "/api/plot/github/installations/sync",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
+  });
+
+  it("starts product GitHub OAuth with a safe return path", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json({
+      authorizationUrl: "https://github.com/login/oauth/authorize?state=opaque-state",
+      expiresAt: "2026-09-11T00:15:00Z",
+    }));
+    const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
+
+    await client.startGitHubProductOAuth("/settings/integrations");
+
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/plot/github/oauth/start?returnTo=%2Fsettings%2Fintegrations",
       expect.objectContaining({ method: "POST" }),
     );
     expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");

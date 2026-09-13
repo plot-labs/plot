@@ -86,6 +86,8 @@ export function ProductSidebar({ collapsed = false, theme, onThemeChange, onTogg
           setWorkspaceName={workspace.setWorkspaceName}
           workspaceCreateError={workspace.workspaceCreateError}
           setWorkspaceCreateError={workspace.setWorkspaceCreateError}
+          workspaceSwitchError={workspace.workspaceSwitchError}
+          switchingWorkspaceId={workspace.switchingWorkspaceId}
           isCreatingWorkspace={workspace.isCreatingWorkspace}
           handleCreateWorkspace={workspace.handleCreateWorkspace}
         />

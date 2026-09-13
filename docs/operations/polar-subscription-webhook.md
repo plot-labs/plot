@@ -12,13 +12,14 @@ access is enforced per workspace until the earlier of 30 days or three
 successful content packs; failed generations do not consume the pack allowance.
 After Trial expiry or subscription revocation, reads and content export remain
 available while new generation, import/sync, edits, and other mutations return
-`WORKSPACE_READ_ONLY`. Auth sessions remain valid intentionally so
+`WORKSPACE_READ_ONLY`. WorkOS sessions remain valid intentionally so
 members can read, export, and reactivate.
 
 ## Prepare a partner checkout
 
-1. Add the partner's sign-in email to `AUTH_ALLOWED_EMAILS`.
-2. Have the partner sign in once so Plot creates the user and workspace.
+1. Create or invite the partner through the WorkOS project and require email
+   verification according to the project's AuthKit policy.
+2. Have the partner sign in once so Plot creates the mapped user and Workspace.
 3. Resolve the active workspace that will own the subscription:
 
    ```sql

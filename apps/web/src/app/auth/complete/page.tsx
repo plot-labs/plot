@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 type BootstrapAccountResponse = {
   workspaceId: string;
+  organizationId: string;
 };
 
 type BootstrapErrorResponse = {
@@ -24,7 +25,14 @@ export default function AuthCompletePage() {
           throw new Error(payload?.error ?? (response.status === 409 ? "ACCOUNT_LINK_REQUIRED" : "ACCESS_DENIED"));
         }
         const account = await response.json() as BootstrapAccountResponse;
-        if (!account.workspaceId) throw new Error("ACCESS_DENIED");
+        if (!account.workspaceId || !account.organizationId) throw new Error("ACCESS_DENIED");
+        const sessionResponse = await fetch("/api/auth/refresh-organization", {
+          method: "POST",
+          credentials: "include",
+          headers: { Accept: "application/json", "Content-Type": "application/json" },
+          body: JSON.stringify({ organizationId: account.organizationId }),
+        });
+        if (!sessionResponse.ok) throw new Error("AUTH_SESSION_REFRESH_FAILED");
         window.localStorage.setItem("plot.workspaceId", account.workspaceId);
         if (!cancelled) router.replace("/home");
       })
@@ -49,5 +57,6 @@ export function bootstrapErrorMessage(failure: unknown): string {
   if (code === "UNAUTHORIZED") return "Sign-in could not be completed. Please try again.";
   if (code === "ACCESS_DENIED") return "Plot could not create your workspace (ACCESS_DENIED).";
   if (code === "PLOT_UPSTREAM_UNAVAILABLE") return "Plot API is unavailable. Please try again.";
+  if (code === "AUTH_SESSION_REFRESH_FAILED") return "Your sign-in session could not be completed. Please try again.";
   return "Plot could not create your workspace. Please try again.";
 }

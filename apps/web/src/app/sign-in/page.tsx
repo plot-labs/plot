@@ -1,19 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { LoaderCircle, LockKeyhole } from "lucide-react";
 
 import { AuthShell } from "@/components/auth/auth-shell";
 import { GitHubMark } from "@/components/auth/github-mark";
-import { PasswordSignInForm } from "@/components/auth/password-sign-in-form";
+import { MagicSignInForm } from "@/components/auth/magic-auth-form";
 
 export default function SignInPage() {
+  return (
+    <Suspense fallback={<main className="min-h-dvh bg-[#f7f7f4]" />}>
+      <SignInContent />
+    </Suspense>
+  );
+}
+
+function SignInContent() {
   const [loading, setLoading] = useState(false);
+  const searchParams = useSearchParams();
+  const notice = signInNotice(searchParams);
 
   function signInWithGitHub() {
     setLoading(true);
-    window.location.assign("/api/auth/sign-in/github?callbackURL=%2Fauth%2Fcomplete");
+    window.location.assign("/api/auth/sign-in?returnTo=%2Fauth%2Fcomplete");
   }
 
   return (
@@ -30,6 +41,12 @@ export default function SignInPage() {
             Log in to keep your releases moving.
           </p>
         </div>
+
+        {notice ? (
+          <p role="status" className="mt-5 rounded-xl border border-black/10 bg-white px-4 py-3 text-center text-sm leading-6 text-black/65">
+            {notice}
+          </p>
+        ) : null}
 
         <div className="mt-8">
           <button
@@ -52,12 +69,12 @@ export default function SignInPage() {
             <span className="h-px flex-1 bg-black/10" />
           </div>
 
-          <PasswordSignInForm />
+          <MagicSignInForm />
 
           <div className="mt-4 grid gap-2 text-center text-xs text-black/45">
             <div className="flex items-center justify-center gap-2">
               <LockKeyhole className="size-3.5" aria-hidden="true" />
-              <span>Only approved Plot accounts can sign in.</span>
+              <span>We’ll email you a secure, one-time sign-in code.</span>
             </div>
             <p>
               Need an account?{" "}
@@ -70,4 +87,18 @@ export default function SignInPage() {
       </div>
     </AuthShell>
   );
+}
+
+function signInNotice(searchParams: Pick<URLSearchParams, "get">): string | null {
+  return searchParams.get("verified")
+    ? "Email verified. Sign in to continue."
+    : searchParams.get("error") === "provider_cancelled"
+        ? "GitHub sign-in was cancelled. You can try again."
+        : searchParams.get("error") === "session_refresh_failed"
+          ? "Your session expired. Please sign in again."
+          : searchParams.get("error") === "provider_unavailable"
+            ? "Authentication service is temporarily unavailable. Please try again."
+            : searchParams.get("error") === "callback_failed"
+              ? "We couldn’t complete sign-in. Please try again."
+              : null;
 }

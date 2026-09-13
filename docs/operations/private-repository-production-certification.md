@@ -78,7 +78,7 @@ fly secrets list --app useplot-api --json \
 ```
 
 The deployment secret store must contain the names required by the current
-application, including the datasource, Plot auth/JWKS, GitHub App and
+application, including the datasource, WorkOS API verification, GitHub App and
 webhook, OpenRouter/Spring AI, Polar, and Langfuse OTLP credentials. The exact
 names are documented in the existing operations runbooks. Do not use `fly ssh
 console`, shell history, process listings, or log output to print a secret.

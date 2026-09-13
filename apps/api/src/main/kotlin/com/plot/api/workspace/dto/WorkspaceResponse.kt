@@ -19,4 +19,5 @@ data class WorkspaceResponse(
 	val role: String? = null,
 	val createdAt: Instant,
 	val updatedAt: Instant,
+	val organizationId: String? = null,
 )

@@ -5,6 +5,7 @@ package com.plot.api.persistence.generated.tables
 
 
 import com.plot.api.persistence.generated.Public
+import com.plot.api.persistence.generated.indexes.WORKSPACE_MEMBERS_WORKOS_MEMBERSHIP_UIDX
 import com.plot.api.persistence.generated.keys.WORKSPACE_MEMBERS_PKEY
 import com.plot.api.persistence.generated.keys.WORKSPACE_MEMBERS_WORKSPACE_ID_ID_KEY
 import com.plot.api.persistence.generated.keys.WORKSPACE_MEMBERS_WORKSPACE_ID_USER_ID_KEY
@@ -23,6 +24,7 @@ import kotlin.collections.List
 import org.jooq.Condition
 import org.jooq.Field
 import org.jooq.ForeignKey
+import org.jooq.Index
 import org.jooq.InverseForeignKey
 import org.jooq.Name
 import org.jooq.Path
@@ -120,6 +122,11 @@ open class WorkspaceMembers(
      */
     val UPDATED_AT: TableField<WorkspaceMembersRecord, OffsetDateTime?> = createField(DSL.name("updated_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false), this, "")
 
+    /**
+     * The column <code>public.workspace_members.workos_membership_id</code>.
+     */
+    val WORKOS_MEMBERSHIP_ID: TableField<WorkspaceMembersRecord, String?> = createField(DSL.name("workos_membership_id"), SQLDataType.CLOB, this, "")
+
     private constructor(alias: Name, aliased: Table<WorkspaceMembersRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<WorkspaceMembersRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<WorkspaceMembersRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)
@@ -152,6 +159,7 @@ open class WorkspaceMembers(
         override fun `as`(alias: Table<*>): WorkspaceMembersPath = WorkspaceMembersPath(alias.qualifiedName, this)
     }
     override fun getSchema(): Schema? = if (aliased()) null else Public.PUBLIC
+    override fun getIndexes(): List<Index> = listOf(WORKSPACE_MEMBERS_WORKOS_MEMBERSHIP_UIDX)
     override fun getPrimaryKey(): UniqueKey<WorkspaceMembersRecord> = WORKSPACE_MEMBERS_PKEY
     override fun getUniqueKeys(): List<UniqueKey<WorkspaceMembersRecord>> = listOf(WORKSPACE_MEMBERS_WORKSPACE_ID_ID_KEY, WORKSPACE_MEMBERS_WORKSPACE_ID_USER_ID_KEY)
     override fun getReferences(): List<ForeignKey<WorkspaceMembersRecord, *>> = listOf(WORKSPACE_MEMBERS__WORKSPACE_MEMBERS_USER_ID_FKEY, WORKSPACE_MEMBERS__WORKSPACE_MEMBERS_WORKSPACE_ID_FKEY)

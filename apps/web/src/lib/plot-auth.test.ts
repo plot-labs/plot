@@ -1,19 +1,33 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { fetchPlotAuthSession, fetchPlotAuthToken } from "@/lib/plot-auth";
+const withAuth = vi.hoisted(() => vi.fn());
+
+vi.mock("@workos-inc/authkit-nextjs", () => ({ withAuth }));
+
+import { fetchPlotAuthSession } from "@/lib/plot-auth";
 
 describe("plot auth helpers", () => {
-  it("fetches session and token from the Kotlin API", async () => {
-    const fetcher = vi.fn<typeof fetch>()
-      .mockResolvedValueOnce(Response.json({ user: { id: "user-1", email: "member@example.com" } }))
-      .mockResolvedValueOnce(Response.json({ token: "jwt-token" }));
-    vi.stubGlobal("fetch", fetcher);
+  it("reads the managed WorkOS session and keeps its access token server-side", async () => {
+    withAuth.mockResolvedValue({
+      user: {
+        id: "user-1",
+        email: "member@example.com",
+        name: "Plot Member",
+        profilePictureUrl: null,
+      },
+      accessToken: "workos-access-token",
+      organizationId: "org-1",
+    });
 
-    const cookie = "plot.session=abc123";
-    const session = await fetchPlotAuthSession(cookie);
-    const token = await fetchPlotAuthToken(cookie);
+    const session = await fetchPlotAuthSession();
 
     expect(session?.user?.id).toBe("user-1");
-    expect(token).toBe("jwt-token");
+    expect(session?.accessToken).toBe("workos-access-token");
+    expect(session?.organizationId).toBe("org-1");
+  });
+
+  it("returns no session when AuthKit has no authenticated user", async () => {
+    withAuth.mockResolvedValue({ user: null });
+    await expect(fetchPlotAuthSession()).resolves.toBeNull();
   });
 });

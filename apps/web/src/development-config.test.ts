@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 describe("local development config", () => {
-  it("uses one loopback host for Next.js and auth", () => {
+  it("uses one loopback host for Next.js and WorkOS", () => {
     const readEnv = (path: string) =>
       Object.fromEntries(
         readFileSync(new URL(path, import.meta.url), "utf8")
@@ -20,8 +20,8 @@ describe("local development config", () => {
 
     expect(packageJson.scripts.dev).toContain(`--hostname ${appUrl.hostname}`);
     expect(webEnv.PLOT_API_BASE_URL).toBe(apiUrl.origin);
-    expect(apiEnv.PLOT_AUTH_ISSUER).toBe(appUrl.origin);
-    expect(apiEnv.PLOT_AUTH_APP_ORIGIN).toBe(appUrl.origin);
-    expect(apiEnv.PLOT_AUTH_API_ORIGIN).toBe(appUrl.origin);
+    expect(webEnv.NEXT_PUBLIC_WORKOS_REDIRECT_URI).toBe(`${appUrl.origin}/auth/callback`);
+    expect(webEnv.PLOT_WORKOS_ALLOWED_ORIGINS).toBe(appUrl.origin);
+    expect(apiEnv.PLOT_WORKOS_ENABLED).toBe("false");
   });
 });

@@ -41,6 +41,10 @@ import org.springframework.test.web.servlet.put
 	"plot.github.app-slug=plot",
 	"plot.github.private-key=test-key",
 	"plot.github.state-secret=test-state-secret",
+	"plot.github.product-oauth-client-id=test-client",
+	"plot.github.product-oauth-client-secret=test-secret",
+	"plot.github.product-oauth-redirect-uri=http://127.0.0.1:3000/api/plot/github/oauth/callback",
+	"plot.github.product-credential-encryption-key=01234567890123456789012345678901",
 	"server.address=127.0.0.1",
 ])
 class GitHubConnectionApiIntegrationTest {
@@ -55,6 +59,9 @@ class GitHubConnectionApiIntegrationTest {
 
 	@Autowired
 	private lateinit var fakeClient: FakeGitHubClient
+
+	@Autowired
+	private lateinit var productCredentialRepository: GitHubProductCredentialRepository
 
 	@Autowired
 	private lateinit var monitoringWorker: GitHubRepositoryMonitoringWorker
@@ -79,20 +86,23 @@ class GitHubConnectionApiIntegrationTest {
 		fakeClient.reset()
 	}
 
-	/** The dev user normally only exists after a real GitHub OAuth login; link it by hand. */
+	/** Product GitHub credentials are explicitly seeded separately from account auth. */
 	private fun seedLinkedGitHubAccount(scope: String = "read:user user:email read:org") {
-		jdbcTemplate.update(
-			"insert into auth_user (id, name, email, email_verified, created_at, updated_at) " +
-				"values ('auth-user-dev', 'Dev User', 'dev-github@example.com', true, now(), now()) " +
-				"on conflict (id) do nothing",
-		)
-		jdbcTemplate.update(
-			"insert into auth_account (id, account_id, provider_id, issuer, user_id, access_token, scope, created_at, updated_at) " +
-				"values ('acct-dev', '9001', 'github', 'local:oauth:github', 'auth-user-dev', 'gh-token', ?, now(), now()) " +
-				"on conflict (id) do update set access_token = excluded.access_token, scope = excluded.scope, updated_at = excluded.updated_at",
-			scope,
-		)
-		jdbcTemplate.update("update users set auth_subject = 'auth-user-dev' where id = ?", devContext.devUserId)
+		val now = Instant.now()
+		productCredentialRepository.saveActive(GitHubProductCredential(
+			id = UUID.randomUUID(),
+			userId = devContext.devUserId,
+			githubAccountId = 9001L,
+			githubLogin = "acme",
+			accessToken = "gh-token",
+			refreshToken = null,
+			scope = scope,
+			status = "ACTIVE",
+			createdAt = now,
+			updatedAt = now,
+			revokedAt = null,
+			encryptionKeyVersion = "v1",
+		))
 	}
 
 	@Test
@@ -237,7 +247,7 @@ class GitHubConnectionApiIntegrationTest {
 
 	@Test
 	fun installationCallbackRejectsCallersWithoutALinkedGitHubAccount() {
-		jdbcTemplate.update("update users set auth_subject = null where id = ?", devContext.devUserId)
+		productCredentialRepository.retireActiveForUser(devContext.devUserId, Instant.now())
 		val state = mockMvc.post("/api/github/installations/requests")
 			.andReturn().response.contentAsString
 		val stateValue = Regex("\"state\":\"([^\"]+)\"").find(state)!!.groupValues[1]

@@ -1,45 +1,39 @@
-const SESSION_COOKIE = "plot.session";
+import { withAuth } from "@workos-inc/authkit-nextjs";
 
-function plotApiBaseUrl(): string {
-  return (process.env.PLOT_API_BASE_URL ?? "http://127.0.0.1:8080").replace(/\/$/, "");
-}
+/** Default AuthKit cookie name; kept as a shared naming constant for the proxy. */
+export const SESSION_COOKIE = "plot.session";
 
 export type PlotAuthSession = {
-  user?: {
-    id?: string;
-    email?: string | null;
-    name?: string | null;
-    image?: string | null;
+  user: {
+    id: string;
+    email: string;
+    name: string | null;
+    image: string | null;
   };
+  accessToken: string;
+  organizationId?: string;
 } | null;
 
-export async function fetchPlotAuthSession(cookieHeader: string | null): Promise<PlotAuthSession> {
-  if (!cookieHeader) return null;
+/**
+ * Reads the AuthKit session that the WorkOS proxy attached to this request.
+ * The sealed browser cookie is intentionally never forwarded to Kotlin and
+ * the API receives only the short-lived WorkOS access token.
+ */
+export async function fetchPlotAuthSession(): Promise<PlotAuthSession> {
   try {
-    const response = await fetch(`${plotApiBaseUrl()}/api/auth/session`, {
-      headers: { cookie: cookieHeader, accept: "application/json" },
-      cache: "no-store",
-    });
-    if (!response.ok) return null;
-    return await response.json() as PlotAuthSession;
+    const session = await withAuth();
+    if (!session.user || !session.accessToken) return null;
+    return {
+      user: {
+        id: session.user.id,
+        email: session.user.email,
+        name: session.user.name,
+        image: session.user.profilePictureUrl,
+      },
+      accessToken: session.accessToken,
+      ...(session.organizationId ? { organizationId: session.organizationId } : {}),
+    };
   } catch {
     return null;
   }
 }
-
-export async function fetchPlotAuthToken(cookieHeader: string | null): Promise<string | null> {
-  if (!cookieHeader) return null;
-  try {
-    const response = await fetch(`${plotApiBaseUrl()}/api/auth/token`, {
-      headers: { cookie: cookieHeader, accept: "application/json" },
-      cache: "no-store",
-    });
-    if (!response.ok) return null;
-    const payload = await response.json() as { token?: string };
-    return payload.token ?? null;
-  } catch {
-    return null;
-  }
-}
-
-export { SESSION_COOKIE };

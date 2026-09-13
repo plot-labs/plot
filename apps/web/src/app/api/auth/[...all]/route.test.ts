@@ -4,78 +4,17 @@ const fetchMock = vi.fn<typeof fetch>();
 
 import { GET, POST } from "./route";
 
-describe("auth upstream proxy route", () => {
+describe("retired auth catch-all route", () => {
   beforeEach(() => {
     fetchMock.mockReset();
     vi.stubGlobal("fetch", fetchMock);
     delete process.env.PLOT_API_BASE_URL;
   });
 
-  it("proxies GET requests to the Kotlin auth API", async () => {
-    fetchMock.mockResolvedValue(new Response(JSON.stringify({ user: { id: "user-1" } }), {
-      status: 200,
-      headers: { "content-type": "application/json", "set-cookie": "plot.session=abc; Path=/" },
-    }));
+  it.each([GET, POST])("does not proxy unsupported auth requests to Kotlin", async (handler) => {
+    const response = await handler(new Request("http://127.0.0.1:3000/api/auth/session", { method: handler === GET ? "GET" : "POST" }));
 
-    const response = await GET(new Request("http://127.0.0.1:3000/api/auth/session", {
-      headers: { cookie: "plot.session=abc" },
-    }));
-
-    expect(response.status).toBe(200);
-    expect(fetchMock).toHaveBeenCalledOnce();
-    const upstreamUrl = new URL(String(fetchMock.mock.calls[0]?.[0]));
-    expect(upstreamUrl.origin).toBe("http://127.0.0.1:8080");
-    expect(upstreamUrl.pathname).toBe("/api/auth/session");
-    expect(response.headers.get("set-cookie")).toContain("plot.session=abc");
-  });
-
-  it("proxies POST sign-out requests", async () => {
-    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
-
-    const response = await POST(new Request("http://127.0.0.1:3000/api/auth/sign-out", {
-      method: "POST",
-      headers: { cookie: "plot.session=abc" },
-    }));
-
-    expect(response.status).toBe(204);
-    expect(fetchMock.mock.calls[0]?.[1]?.method).toBe("POST");
-  });
-
-  it("proxies email password sign-in requests with their JSON body", async () => {
-    fetchMock.mockResolvedValue(new Response(JSON.stringify({ user: { id: "user-1" } }), {
-      status: 200,
-      headers: { "content-type": "application/json", "set-cookie": "plot.session=abc; Path=/" },
-    }));
-    const body = JSON.stringify({ email: "member@example.com", password: "secret" });
-
-    const response = await POST(new Request("http://127.0.0.1:3000/api/auth/sign-in/password", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body,
-    }));
-
-    expect(response.status).toBe(200);
-    expect(new URL(String(fetchMock.mock.calls[0]?.[0])).pathname).toBe("/api/auth/sign-in/password");
-    expect(await new Response(fetchMock.mock.calls[0]?.[1]?.body).text()).toBe(body);
-    expect(response.headers.get("set-cookie")).toContain("plot.session=abc");
-  });
-
-  it("proxies email password sign-up requests with their JSON body", async () => {
-    fetchMock.mockResolvedValue(new Response(JSON.stringify({ user: { id: "user-1" } }), {
-      status: 200,
-      headers: { "content-type": "application/json", "set-cookie": "plot.session=abc; Path=/" },
-    }));
-    const body = JSON.stringify({ email: "new@example.com", password: "long enough password" });
-
-    const response = await POST(new Request("http://127.0.0.1:3000/api/auth/sign-up/password", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body,
-    }));
-
-    expect(response.status).toBe(200);
-    expect(new URL(String(fetchMock.mock.calls[0]?.[0])).pathname).toBe("/api/auth/sign-up/password");
-    expect(await new Response(fetchMock.mock.calls[0]?.[1]?.body).text()).toBe(body);
-    expect(response.headers.get("set-cookie")).toContain("plot.session=abc");
+    expect(response.status).toBe(404);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

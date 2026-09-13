@@ -14,6 +14,9 @@ import com.plot.api.persistence.generated.keys.CONTENT_VARIANT_SENTENCE_REVISION
 import com.plot.api.persistence.generated.keys.GENERATION_EXPORT_EVENTS__GENERATION_EXPORT_EVENTS_CREATED_BY_USER_ID_FKEY
 import com.plot.api.persistence.generated.keys.GENERATION_RUNS__GENERATION_RUNS_CREATED_BY_USER_ID_FKEY
 import com.plot.api.persistence.generated.keys.GITHUB_INSTALLATION_STATES__GITHUB_INSTALLATION_STATES_USER_ID_FKEY
+import com.plot.api.persistence.generated.keys.GITHUB_PRODUCT_CREDENTIALS__GITHUB_PRODUCT_CREDENTIALS_USER_ID_FKEY
+import com.plot.api.persistence.generated.keys.GITHUB_PRODUCT_CREDENTIAL_QUARANTINE__GITHUB_PRODUCT_CREDENTIAL_QUARANTINE_PLOT_USER_ID_FKEY
+import com.plot.api.persistence.generated.keys.GITHUB_PRODUCT_OAUTH_STATES__GITHUB_PRODUCT_OAUTH_STATES_USER_ID_FKEY
 import com.plot.api.persistence.generated.keys.POLAR_WEBHOOK_EVENTS__POLAR_WEBHOOK_EVENTS_MATCHED_USER_ID_FKEY
 import com.plot.api.persistence.generated.keys.PRODUCT_DELIVERY_EVENTS__PRODUCT_DELIVERY_EVENTS_CREATED_BY_USER_ID_FKEY
 import com.plot.api.persistence.generated.keys.PUBLISHED_CHANGELOG_ENTRIES__PUBLISHED_CHANGELOG_ENTRIES_PUBLISHED_BY_USER_ID_FKEY
@@ -22,6 +25,8 @@ import com.plot.api.persistence.generated.keys.ROUTINES__ROUTINES_CREATED_BY_USE
 import com.plot.api.persistence.generated.keys.ROUTINE_EXECUTIONS__ROUTINE_EXECUTIONS_CREATED_BY_USER_ID_FKEY
 import com.plot.api.persistence.generated.keys.USERS_EMAIL_KEY
 import com.plot.api.persistence.generated.keys.USERS_PKEY
+import com.plot.api.persistence.generated.keys.WORKOS_IDENTITY_MAPPINGS__WORKOS_IDENTITY_MAPPINGS_PLOT_USER_ID_FKEY
+import com.plot.api.persistence.generated.keys.WORKOS_PROVISIONING__WORKOS_PROVISIONING_PLOT_USER_ID_FKEY
 import com.plot.api.persistence.generated.keys.WORKSPACES__WORKSPACES_CREATED_BY_USER_ID_FKEY
 import com.plot.api.persistence.generated.keys.WORKSPACE_CONTENT_PROFILE_REVISIONS__WORKSPACE_CONTENT_PROFILE_REVISIONS_CREATED_BY_USER_ID_FKEY
 import com.plot.api.persistence.generated.keys.WORKSPACE_MEMBERS__WORKSPACE_MEMBERS_USER_ID_FKEY
@@ -35,12 +40,17 @@ import com.plot.api.persistence.generated.tables.ContentVariantSentenceRevisions
 import com.plot.api.persistence.generated.tables.GenerationExportEvents.GenerationExportEventsPath
 import com.plot.api.persistence.generated.tables.GenerationRuns.GenerationRunsPath
 import com.plot.api.persistence.generated.tables.GithubInstallationStates.GithubInstallationStatesPath
+import com.plot.api.persistence.generated.tables.GithubProductCredentialQuarantine.GithubProductCredentialQuarantinePath
+import com.plot.api.persistence.generated.tables.GithubProductCredentials.GithubProductCredentialsPath
+import com.plot.api.persistence.generated.tables.GithubProductOauthStates.GithubProductOauthStatesPath
 import com.plot.api.persistence.generated.tables.PolarWebhookEvents.PolarWebhookEventsPath
 import com.plot.api.persistence.generated.tables.ProductDeliveryEvents.ProductDeliveryEventsPath
 import com.plot.api.persistence.generated.tables.PublishedChangelogEntries.PublishedChangelogEntriesPath
 import com.plot.api.persistence.generated.tables.RoutineExecutions.RoutineExecutionsPath
 import com.plot.api.persistence.generated.tables.Routines.RoutinesPath
 import com.plot.api.persistence.generated.tables.WorkSessions.WorkSessionsPath
+import com.plot.api.persistence.generated.tables.WorkosIdentityMappings.WorkosIdentityMappingsPath
+import com.plot.api.persistence.generated.tables.WorkosProvisioning.WorkosProvisioningPath
 import com.plot.api.persistence.generated.tables.WorkspaceContentProfileRevisions.WorkspaceContentProfileRevisionsPath
 import com.plot.api.persistence.generated.tables.WorkspaceMembers.WorkspaceMembersPath
 import com.plot.api.persistence.generated.tables.Workspaces.WorkspacesPath
@@ -318,6 +328,54 @@ open class Users(
     val githubInstallationStates: GithubInstallationStatesPath
         get(): GithubInstallationStatesPath = githubInstallationStates()
 
+    private lateinit var _githubProductCredentialQuarantine: GithubProductCredentialQuarantinePath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.github_product_credential_quarantine</code> table
+     */
+    fun githubProductCredentialQuarantine(): GithubProductCredentialQuarantinePath {
+        if (!this::_githubProductCredentialQuarantine.isInitialized)
+            _githubProductCredentialQuarantine = GithubProductCredentialQuarantinePath(this, null, GITHUB_PRODUCT_CREDENTIAL_QUARANTINE__GITHUB_PRODUCT_CREDENTIAL_QUARANTINE_PLOT_USER_ID_FKEY.inverseKey)
+
+        return _githubProductCredentialQuarantine;
+    }
+
+    val githubProductCredentialQuarantine: GithubProductCredentialQuarantinePath
+        get(): GithubProductCredentialQuarantinePath = githubProductCredentialQuarantine()
+
+    private lateinit var _githubProductCredentials: GithubProductCredentialsPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.github_product_credentials</code> table
+     */
+    fun githubProductCredentials(): GithubProductCredentialsPath {
+        if (!this::_githubProductCredentials.isInitialized)
+            _githubProductCredentials = GithubProductCredentialsPath(this, null, GITHUB_PRODUCT_CREDENTIALS__GITHUB_PRODUCT_CREDENTIALS_USER_ID_FKEY.inverseKey)
+
+        return _githubProductCredentials;
+    }
+
+    val githubProductCredentials: GithubProductCredentialsPath
+        get(): GithubProductCredentialsPath = githubProductCredentials()
+
+    private lateinit var _githubProductOauthStates: GithubProductOauthStatesPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.github_product_oauth_states</code> table
+     */
+    fun githubProductOauthStates(): GithubProductOauthStatesPath {
+        if (!this::_githubProductOauthStates.isInitialized)
+            _githubProductOauthStates = GithubProductOauthStatesPath(this, null, GITHUB_PRODUCT_OAUTH_STATES__GITHUB_PRODUCT_OAUTH_STATES_USER_ID_FKEY.inverseKey)
+
+        return _githubProductOauthStates;
+    }
+
+    val githubProductOauthStates: GithubProductOauthStatesPath
+        get(): GithubProductOauthStatesPath = githubProductOauthStates()
+
     private lateinit var _polarWebhookEvents: PolarWebhookEventsPath
 
     /**
@@ -431,6 +489,38 @@ open class Users(
 
     val workSessions: WorkSessionsPath
         get(): WorkSessionsPath = workSessions()
+
+    private lateinit var _workosIdentityMappings: WorkosIdentityMappingsPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.workos_identity_mappings</code> table
+     */
+    fun workosIdentityMappings(): WorkosIdentityMappingsPath {
+        if (!this::_workosIdentityMappings.isInitialized)
+            _workosIdentityMappings = WorkosIdentityMappingsPath(this, null, WORKOS_IDENTITY_MAPPINGS__WORKOS_IDENTITY_MAPPINGS_PLOT_USER_ID_FKEY.inverseKey)
+
+        return _workosIdentityMappings;
+    }
+
+    val workosIdentityMappings: WorkosIdentityMappingsPath
+        get(): WorkosIdentityMappingsPath = workosIdentityMappings()
+
+    private lateinit var _workosProvisioning: WorkosProvisioningPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.workos_provisioning</code> table
+     */
+    fun workosProvisioning(): WorkosProvisioningPath {
+        if (!this::_workosProvisioning.isInitialized)
+            _workosProvisioning = WorkosProvisioningPath(this, null, WORKOS_PROVISIONING__WORKOS_PROVISIONING_PLOT_USER_ID_FKEY.inverseKey)
+
+        return _workosProvisioning;
+    }
+
+    val workosProvisioning: WorkosProvisioningPath
+        get(): WorkosProvisioningPath = workosProvisioning()
 
     private lateinit var _workspaceContentProfileRevisions: WorkspaceContentProfileRevisionsPath
 

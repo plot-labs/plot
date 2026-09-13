@@ -1,6 +1,6 @@
 package com.plot.api.billing
 
-import com.plot.api.auth.PlotAuthProperties
+import com.plot.api.auth.workos.WorkOSIdentityMappingRepository
 import com.plot.api.common.ApiException
 import com.plot.api.workspace.User
 import com.plot.api.workspace.UserRepository
@@ -24,7 +24,7 @@ class PolarSubscriptionService(
 	private val userRepository: UserRepository,
 	private val workspaceRepository: WorkspaceRepository,
 	private val memberRepository: WorkspaceMemberRepository,
-	private val authProperties: PlotAuthProperties,
+	private val workOSIdentityMappingRepository: WorkOSIdentityMappingRepository,
 	private val clock: Clock = Clock.systemUTC(),
 ) {
 	@Transactional
@@ -122,16 +122,18 @@ class PolarSubscriptionService(
 		if (externalId.isNullOrBlank()) return null
 		val plotUserId = runCatching { UUID.fromString(externalId) }.getOrNull()
 		if (plotUserId != null) userRepository.findById(plotUserId).orElse(null)?.let { return it }
-		return userRepository.findByAuthIssuerAndAuthSubject(authProperties.issuer, externalId)
+		return workOSIdentityMappingRepository.findByWorkOSUserId(externalId)
+			?.let { mapping -> userRepository.findById(mapping.plotUserId).orElse(null) }
 	}
 
 	private fun targetForUser(user: User): BillingTarget? {
-		val workspace = memberRepository
+		val workspaces = memberRepository
 			.findAllByUserIdAndStatusOrderByCreatedAtAsc(user.id, "ACTIVE")
 			.asSequence()
 			.mapNotNull { membership -> workspaceRepository.findByIdAndStatus(membership.workspaceId, "ACTIVE") }
-			.firstOrNull()
-			?: return null
+			.toList()
+		if (workspaces.size != 1) return null
+		val workspace = workspaces.single()
 		return BillingTarget(user, workspace)
 	}
 

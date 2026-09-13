@@ -10,11 +10,6 @@ import com.plot.api.persistence.generated.tables.AgentRunSources
 import com.plot.api.persistence.generated.tables.AgentRuns
 import com.plot.api.persistence.generated.tables.AgentSteps
 import com.plot.api.persistence.generated.tables.ArtifactRuns
-import com.plot.api.persistence.generated.tables.AuthAccount
-import com.plot.api.persistence.generated.tables.AuthJwks
-import com.plot.api.persistence.generated.tables.AuthSession
-import com.plot.api.persistence.generated.tables.AuthUser
-import com.plot.api.persistence.generated.tables.AuthVerification
 import com.plot.api.persistence.generated.tables.AutonomyAssessments
 import com.plot.api.persistence.generated.tables.AutonomyDailyBudgets
 import com.plot.api.persistence.generated.tables.AutonomyExecutions
@@ -39,6 +34,10 @@ import com.plot.api.persistence.generated.tables.GenerationInputs
 import com.plot.api.persistence.generated.tables.GenerationRuns
 import com.plot.api.persistence.generated.tables.GenerationWorkflowSteps
 import com.plot.api.persistence.generated.tables.GithubInstallationStates
+import com.plot.api.persistence.generated.tables.GithubProductCredentialBackfill
+import com.plot.api.persistence.generated.tables.GithubProductCredentialQuarantine
+import com.plot.api.persistence.generated.tables.GithubProductCredentials
+import com.plot.api.persistence.generated.tables.GithubProductOauthStates
 import com.plot.api.persistence.generated.tables.GithubReleaseDraftEvidence
 import com.plot.api.persistence.generated.tables.GithubReleaseDraftRequests
 import com.plot.api.persistence.generated.tables.GithubReleaseGenerationAttempts
@@ -64,6 +63,11 @@ import com.plot.api.persistence.generated.tables.SourceScopes
 import com.plot.api.persistence.generated.tables.Users
 import com.plot.api.persistence.generated.tables.WaitlistSignups
 import com.plot.api.persistence.generated.tables.WorkSessions
+import com.plot.api.persistence.generated.tables.WorkosIdentityMappings
+import com.plot.api.persistence.generated.tables.WorkosMembershipEventInbox
+import com.plot.api.persistence.generated.tables.WorkosOrganizationMappings
+import com.plot.api.persistence.generated.tables.WorkosProvisioning
+import com.plot.api.persistence.generated.tables.WorkosWorkspaceProvisioning
 import com.plot.api.persistence.generated.tables.WorkspaceContentProfileRevisions
 import com.plot.api.persistence.generated.tables.WorkspaceContentProfiles
 import com.plot.api.persistence.generated.tables.WorkspaceMembers
@@ -116,31 +120,6 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
      * The table <code>public.artifact_runs</code>.
      */
     val ARTIFACT_RUNS: ArtifactRuns get() = ArtifactRuns.ARTIFACT_RUNS
-
-    /**
-     * The table <code>public.auth_account</code>.
-     */
-    val AUTH_ACCOUNT: AuthAccount get() = AuthAccount.AUTH_ACCOUNT
-
-    /**
-     * The table <code>public.auth_jwks</code>.
-     */
-    val AUTH_JWKS: AuthJwks get() = AuthJwks.AUTH_JWKS
-
-    /**
-     * The table <code>public.auth_session</code>.
-     */
-    val AUTH_SESSION: AuthSession get() = AuthSession.AUTH_SESSION
-
-    /**
-     * The table <code>public.auth_user</code>.
-     */
-    val AUTH_USER: AuthUser get() = AuthUser.AUTH_USER
-
-    /**
-     * The table <code>public.auth_verification</code>.
-     */
-    val AUTH_VERIFICATION: AuthVerification get() = AuthVerification.AUTH_VERIFICATION
 
     /**
      * The table <code>public.autonomy_assessments</code>.
@@ -261,6 +240,26 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
      * The table <code>public.github_installation_states</code>.
      */
     val GITHUB_INSTALLATION_STATES: GithubInstallationStates get() = GithubInstallationStates.GITHUB_INSTALLATION_STATES
+
+    /**
+     * The table <code>public.github_product_credential_backfill</code>.
+     */
+    val GITHUB_PRODUCT_CREDENTIAL_BACKFILL: GithubProductCredentialBackfill get() = GithubProductCredentialBackfill.GITHUB_PRODUCT_CREDENTIAL_BACKFILL
+
+    /**
+     * The table <code>public.github_product_credential_quarantine</code>.
+     */
+    val GITHUB_PRODUCT_CREDENTIAL_QUARANTINE: GithubProductCredentialQuarantine get() = GithubProductCredentialQuarantine.GITHUB_PRODUCT_CREDENTIAL_QUARANTINE
+
+    /**
+     * The table <code>public.github_product_credentials</code>.
+     */
+    val GITHUB_PRODUCT_CREDENTIALS: GithubProductCredentials get() = GithubProductCredentials.GITHUB_PRODUCT_CREDENTIALS
+
+    /**
+     * The table <code>public.github_product_oauth_states</code>.
+     */
+    val GITHUB_PRODUCT_OAUTH_STATES: GithubProductOauthStates get() = GithubProductOauthStates.GITHUB_PRODUCT_OAUTH_STATES
 
     /**
      * The table <code>public.github_release_draft_evidence</code>.
@@ -388,6 +387,31 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
     val WORK_SESSIONS: WorkSessions get() = WorkSessions.WORK_SESSIONS
 
     /**
+     * The table <code>public.workos_identity_mappings</code>.
+     */
+    val WORKOS_IDENTITY_MAPPINGS: WorkosIdentityMappings get() = WorkosIdentityMappings.WORKOS_IDENTITY_MAPPINGS
+
+    /**
+     * The table <code>public.workos_membership_event_inbox</code>.
+     */
+    val WORKOS_MEMBERSHIP_EVENT_INBOX: WorkosMembershipEventInbox get() = WorkosMembershipEventInbox.WORKOS_MEMBERSHIP_EVENT_INBOX
+
+    /**
+     * The table <code>public.workos_organization_mappings</code>.
+     */
+    val WORKOS_ORGANIZATION_MAPPINGS: WorkosOrganizationMappings get() = WorkosOrganizationMappings.WORKOS_ORGANIZATION_MAPPINGS
+
+    /**
+     * The table <code>public.workos_provisioning</code>.
+     */
+    val WORKOS_PROVISIONING: WorkosProvisioning get() = WorkosProvisioning.WORKOS_PROVISIONING
+
+    /**
+     * The table <code>public.workos_workspace_provisioning</code>.
+     */
+    val WORKOS_WORKSPACE_PROVISIONING: WorkosWorkspaceProvisioning get() = WorkosWorkspaceProvisioning.WORKOS_WORKSPACE_PROVISIONING
+
+    /**
      * The table <code>public.workspace_content_profile_revisions</code>.
      */
     val WORKSPACE_CONTENT_PROFILE_REVISIONS: WorkspaceContentProfileRevisions get() = WorkspaceContentProfileRevisions.WORKSPACE_CONTENT_PROFILE_REVISIONS
@@ -429,11 +453,6 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
         AgentRuns.AGENT_RUNS,
         AgentSteps.AGENT_STEPS,
         ArtifactRuns.ARTIFACT_RUNS,
-        AuthAccount.AUTH_ACCOUNT,
-        AuthJwks.AUTH_JWKS,
-        AuthSession.AUTH_SESSION,
-        AuthUser.AUTH_USER,
-        AuthVerification.AUTH_VERIFICATION,
         AutonomyAssessments.AUTONOMY_ASSESSMENTS,
         AutonomyDailyBudgets.AUTONOMY_DAILY_BUDGETS,
         AutonomyExecutions.AUTONOMY_EXECUTIONS,
@@ -458,6 +477,10 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
         GenerationRuns.GENERATION_RUNS,
         GenerationWorkflowSteps.GENERATION_WORKFLOW_STEPS,
         GithubInstallationStates.GITHUB_INSTALLATION_STATES,
+        GithubProductCredentialBackfill.GITHUB_PRODUCT_CREDENTIAL_BACKFILL,
+        GithubProductCredentialQuarantine.GITHUB_PRODUCT_CREDENTIAL_QUARANTINE,
+        GithubProductCredentials.GITHUB_PRODUCT_CREDENTIALS,
+        GithubProductOauthStates.GITHUB_PRODUCT_OAUTH_STATES,
         GithubReleaseDraftEvidence.GITHUB_RELEASE_DRAFT_EVIDENCE,
         GithubReleaseDraftRequests.GITHUB_RELEASE_DRAFT_REQUESTS,
         GithubReleaseGenerationAttempts.GITHUB_RELEASE_GENERATION_ATTEMPTS,
@@ -483,6 +506,11 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
         Users.USERS,
         WaitlistSignups.WAITLIST_SIGNUPS,
         WorkSessions.WORK_SESSIONS,
+        WorkosIdentityMappings.WORKOS_IDENTITY_MAPPINGS,
+        WorkosMembershipEventInbox.WORKOS_MEMBERSHIP_EVENT_INBOX,
+        WorkosOrganizationMappings.WORKOS_ORGANIZATION_MAPPINGS,
+        WorkosProvisioning.WORKOS_PROVISIONING,
+        WorkosWorkspaceProvisioning.WORKOS_WORKSPACE_PROVISIONING,
         WorkspaceContentProfileRevisions.WORKSPACE_CONTENT_PROFILE_REVISIONS,
         WorkspaceContentProfiles.WORKSPACE_CONTENT_PROFILES,
         WorkspaceMembers.WORKSPACE_MEMBERS,

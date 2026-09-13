@@ -48,21 +48,6 @@ class PolarWebhookApiIntegrationTest {
 	@BeforeEach
 	fun resetBillingState() {
 		jdbcTemplate.update("delete from polar_webhook_events")
-		jdbcTemplate.update("delete from auth_session")
-		jdbcTemplate.update(
-			"""
-			insert into auth_user (id, name, email, email_verified, created_at, updated_at)
-			values (?, 'Dev User', 'dev@plot.local', true, now(), now())
-			on conflict (id) do update set email = excluded.email, updated_at = excluded.updated_at
-			""".trimIndent(),
-			DEV_AUTH_SUBJECT,
-		)
-		jdbcTemplate.update(
-			"update users set auth_issuer = ?, auth_subject = ? where id = ?",
-			"https://app.useplot.xyz",
-			DEV_AUTH_SUBJECT,
-			devContext.devUserId,
-		)
 		jdbcTemplate.update(
 			"""
 			update workspaces
@@ -78,7 +63,6 @@ class PolarWebhookApiIntegrationTest {
 			""".trimIndent(),
 			devContext.devWorkspaceId,
 		)
-		ensureOtherUser()
 	}
 
 	@Test
@@ -101,13 +85,11 @@ class PolarWebhookApiIntegrationTest {
 	}
 
 	@Test
-	fun revokedMakesWorkspaceReadOnlyAndPreservesSessions() {
+	fun revokedMakesWorkspaceReadOnly() {
 		postWebhook(
 			"msg_promote",
 			subscriptionEvent("subscription.active", "sub_revoke", referenceId = devContext.devUserId),
 		).andExpect { status { isNoContent() } }
-		insertSession("session-dev", DEV_AUTH_SUBJECT)
-		insertSession("session-other", OTHER_AUTH_SUBJECT)
 
 		postWebhook(
 			"msg_revoke",
@@ -115,8 +97,6 @@ class PolarWebhookApiIntegrationTest {
 		).andExpect { status { isNoContent() } }
 
 		assertWorkspace("founding", "revoked", "read_only", "sub_revoke", "cus_active")
-		assertEquals(1, sessionCount(DEV_AUTH_SUBJECT))
-		assertEquals(1, sessionCount(OTHER_AUTH_SUBJECT))
 		assertEvent("msg_revoke", "DEMOTED", devContext.devUserId, devContext.devWorkspaceId)
 	}
 
@@ -295,50 +275,4 @@ class PolarWebhookApiIntegrationTest {
 		assertEquals(workspaceId, row["matched_workspace_id"])
 	}
 
-	private fun insertSession(id: String, authSubject: String) {
-		jdbcTemplate.update(
-			"""
-			insert into auth_session (
-			  id, expires_at, token, created_at, updated_at, user_id
-			) values (?, now() + interval '1 day', ?, now(), now(), ?)
-			""".trimIndent(),
-			id,
-			"token-$id",
-			authSubject,
-		)
-	}
-
-	private fun sessionCount(authSubject: String): Int = jdbcTemplate.queryForObject(
-		"select count(*) from auth_session where user_id = ?",
-		Int::class.java,
-		authSubject,
-	) ?: 0
-
-	private fun ensureOtherUser() {
-		jdbcTemplate.update(
-			"""
-			insert into auth_user (id, name, email, email_verified, created_at, updated_at)
-			values (?, 'Other User', 'other@plot.local', true, now(), now())
-			on conflict (id) do update set email = excluded.email, updated_at = excluded.updated_at
-			""".trimIndent(),
-			OTHER_AUTH_SUBJECT,
-		)
-		jdbcTemplate.update(
-			"""
-			insert into users (
-			  id, email, display_name, status, auth_issuer, auth_subject, created_at, updated_at
-			) values (?, 'other@plot.local', 'Other User', 'ACTIVE', ?, ?, now(), now())
-			on conflict (id) do update set auth_subject = excluded.auth_subject, updated_at = excluded.updated_at
-			""".trimIndent(),
-			OTHER_USER_ID,
-			"https://app.useplot.xyz",
-			OTHER_AUTH_SUBJECT,
-		)
-	}
-
-	private companion object {
-		const val DEV_AUTH_SUBJECT = "auth-dev"
-		const val OTHER_AUTH_SUBJECT = "auth-other"
-		val OTHER_USER_ID: UUID = UUID.fromString("018fd000-0000-7000-8000-000000000099")
-	}
 }

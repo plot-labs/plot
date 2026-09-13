@@ -1,7 +1,7 @@
 package com.plot.api.entitlement
 
 import com.plot.api.common.ApiException
-import com.plot.api.dev.DevContext
+import com.plot.api.auth.AuthorizedWorkspaceContext
 import com.plot.api.workspace.Workspace
 import com.plot.api.workspace.WorkspaceRepository
 import java.time.Instant
@@ -12,12 +12,12 @@ import org.springframework.transaction.annotation.Transactional
 
 @Service
 class WorkspaceAccessService(
-	private val devContext: DevContext,
+	private val authorizedWorkspaceContext: AuthorizedWorkspaceContext,
 	private val workspaceRepository: WorkspaceRepository,
 	private val entitlementReader: WorkspaceEntitlementReader,
 ) {
 	@Transactional(noRollbackFor = [ApiException::class])
-	fun requireWritable() = requireWritable(devContext.devWorkspaceId)
+	fun requireWritable() = requireWritable(authorizedWorkspaceContext.require().workspace.workspaceId)
 
 	@Transactional(noRollbackFor = [ApiException::class])
 	fun requireWritable(workspaceId: UUID) {
@@ -32,7 +32,7 @@ class WorkspaceAccessService(
 	}
 
 	@Transactional(noRollbackFor = [ApiException::class])
-	fun requireActiveWorkspace() = requireActiveWorkspace(devContext.devWorkspaceId)
+	fun requireActiveWorkspace() = requireActiveWorkspace(authorizedWorkspaceContext.require().workspace.workspaceId)
 
 	@Transactional(noRollbackFor = [ApiException::class])
 	fun requireActiveWorkspace(workspaceId: UUID) {
@@ -41,7 +41,7 @@ class WorkspaceAccessService(
 	}
 
 	@Transactional(noRollbackFor = [ApiException::class])
-	fun requireCompletionAllowed() = requireCompletionAllowed(devContext.devWorkspaceId)
+	fun requireCompletionAllowed() = requireCompletionAllowed(authorizedWorkspaceContext.require().workspace.workspaceId)
 
 	@Transactional(noRollbackFor = [ApiException::class])
 	fun requireCompletionAllowed(workspaceId: UUID) {

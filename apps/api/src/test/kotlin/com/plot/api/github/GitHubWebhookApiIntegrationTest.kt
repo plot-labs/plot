@@ -29,7 +29,6 @@ import org.springframework.mock.web.MockFilterChain
 import org.springframework.mock.web.MockHttpServletRequest
 import org.springframework.mock.web.MockHttpServletResponse
 import org.springframework.test.web.servlet.MockMvc
-import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
 
 private const val GITHUB_WEBHOOK_SECRET = "test-github-webhook-secret"
@@ -38,11 +37,9 @@ private const val MAX_WEBHOOK_PAYLOAD_BYTES = 1_048_576
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration::class, GitHubWebhookApiIntegrationTest.Config::class)
-@ActiveProfiles("production-like")
+@ActiveProfiles("test")
 @TestPropertySource(properties = [
 	"plot.github.webhook-secret=$GITHUB_WEBHOOK_SECRET",
-	"plot.auth.enabled=true",
-	"plot.auth.required=true",
 ])
 class GitHubWebhookApiIntegrationTest {
 	@Autowired private lateinit var mockMvc: MockMvc
@@ -600,11 +597,6 @@ class GitHubWebhookApiIntegrationTest {
 			content = "{}"
 			header("X-Hub-Signature-256", sign("{}"))
 		}.andExpect { status { isBadRequest() } }
-	}
-
-	@Test
-	fun leavesOtherGitHubRoutesAuthenticated() {
-		mockMvc.get("/api/github/installations/requests").andExpect { status { isUnauthorized() } }
 	}
 
 	private fun postWebhook(deliveryId: String, eventType: String, body: String) = mockMvc.post("/api/github/webhook") {

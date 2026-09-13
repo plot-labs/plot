@@ -10,6 +10,7 @@ export type SidebarWorkspace = {
   name: string;
   slug: string;
   logoUrl: string | null;
+  organizationId: string | null;
   role: string;
 };
 
@@ -17,6 +18,7 @@ export type SidebarAccount = {
   user: { id: string; email: string; displayName: string };
   workspaces: SidebarWorkspace[];
   defaultWorkspaceId: string;
+  activeOrganizationId?: string | null;
 };
 
 export function useSidebarWorkspace() {
@@ -26,6 +28,8 @@ export function useSidebarWorkspace() {
   const [creatingWorkspace, setCreatingWorkspace] = useState(false);
   const [workspaceName, setWorkspaceName] = useState("");
   const [workspaceCreateError, setWorkspaceCreateError] = useState<string | null>(null);
+  const [workspaceSwitchError, setWorkspaceSwitchError] = useState<string | null>(null);
+  const [switchingWorkspaceId, setSwitchingWorkspaceId] = useState<string | null>(null);
   const [isCreatingWorkspace, setIsCreatingWorkspace] = useState(false);
 
   useEffect(() => {
@@ -36,8 +40,11 @@ export function useSidebarWorkspace() {
         if (cancelled || !value) return;
         setAccount(value);
         const savedId = window.localStorage.getItem("plot.workspaceId");
+        const activeWorkspace = value.activeOrganizationId
+          ? value.workspaces.find((item) => item.organizationId === value.activeOrganizationId)
+          : undefined;
         const savedWorkspace = savedId ? value.workspaces.find((item) => item.id === savedId) : undefined;
-        const resolvedWorkspaceId = savedWorkspace?.id ?? value.defaultWorkspaceId ?? value.workspaces[0]?.id ?? null;
+        const resolvedWorkspaceId = activeWorkspace?.id ?? savedWorkspace?.id ?? value.defaultWorkspaceId ?? value.workspaces[0]?.id ?? null;
         if (resolvedWorkspaceId) window.localStorage.setItem("plot.workspaceId", resolvedWorkspaceId);
         else window.localStorage.removeItem("plot.workspaceId");
         setSelectedWorkspaceId(resolvedWorkspaceId);
@@ -79,11 +86,37 @@ export function useSidebarWorkspace() {
     selected: item.id === currentWorkspaceId,
   })) ?? [];
 
-  function selectWorkspace(id: string) {
-    window.localStorage.setItem("plot.workspaceId", id);
-    setSelectedWorkspaceId(id);
-    setWorkspaceMenuOpen(false);
-    window.dispatchEvent(new CustomEvent("plot:workspace-changed", { detail: { id } }));
+  async function selectWorkspace(id: string) {
+    if (switchingWorkspaceId) return;
+    const workspace = account?.workspaces.find((item) => item.id === id);
+    if (!workspace || id === currentWorkspaceId) {
+      setWorkspaceMenuOpen(false);
+      return;
+    }
+
+    setWorkspaceSwitchError(null);
+    setSwitchingWorkspaceId(id);
+    try {
+      if (workspace.organizationId) {
+        const response = await fetch("/api/auth/refresh-organization", {
+          method: "POST",
+          headers: { "content-type": "application/json", Accept: "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ organizationId: workspace.organizationId }),
+        });
+        if (!response.ok) throw new Error("WORKSPACE_SWITCH_FAILED");
+        const payload = await response.json() as { organizationId?: unknown };
+        if (payload.organizationId !== workspace.organizationId) throw new Error("WORKSPACE_SWITCH_FAILED");
+      }
+      window.localStorage.setItem("plot.workspaceId", id);
+      setSelectedWorkspaceId(id);
+      setWorkspaceMenuOpen(false);
+      window.dispatchEvent(new CustomEvent("plot:workspace-changed", { detail: { id } }));
+    } catch {
+      setWorkspaceSwitchError("Workspace could not be switched. Your current workspace is still active.");
+    } finally {
+      setSwitchingWorkspaceId(null);
+    }
   }
 
   async function handleCreateWorkspace(event: FormEvent<HTMLFormElement>) {
@@ -94,10 +127,13 @@ export function useSidebarWorkspace() {
     setIsCreatingWorkspace(true);
     setWorkspaceCreateError(null);
     try {
-      const workspace = await plotApiClient.createWorkspace({ name });
+      const idempotencyKey = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const workspace = await plotApiClient.createWorkspace({ name }, { idempotencyKey });
       window.localStorage.setItem("plot.workspaceId", workspace.id);
       setAccount((current) => current
-        ? { ...current, workspaces: [...current.workspaces, { ...workspace, role: workspace.role ?? "OWNER" }] }
+        ? { ...current, workspaces: [...current.workspaces, { ...workspace, organizationId: workspace.organizationId ?? null, role: workspace.role ?? "OWNER" }] }
         : current);
       setSelectedWorkspaceId(workspace.id);
       setWorkspaceMenuOpen(false);
@@ -127,6 +163,9 @@ export function useSidebarWorkspace() {
     setWorkspaceName,
     workspaceCreateError,
     setWorkspaceCreateError,
+    workspaceSwitchError,
+    setWorkspaceSwitchError,
+    switchingWorkspaceId,
     isCreatingWorkspace,
     selectWorkspace,
     handleCreateWorkspace,

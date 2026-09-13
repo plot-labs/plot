@@ -51,6 +51,10 @@ open class WorkspaceMembersRecord() : UpdatableRecordImpl<WorkspaceMembersRecord
         set(value): Unit = set(7, value)
         get(): OffsetDateTime? = get(7) as OffsetDateTime?
 
+    open var workosMembershipId: String?
+        set(value): Unit = set(8, value)
+        get(): String? = get(8) as String?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -60,7 +64,7 @@ open class WorkspaceMembersRecord() : UpdatableRecordImpl<WorkspaceMembersRecord
     /**
      * Create a detached, initialised WorkspaceMembersRecord
      */
-    constructor(id: UUID? = null, workspaceId: UUID? = null, userId: UUID? = null, role: String? = null, status: String? = null, joinedAt: OffsetDateTime? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null): this() {
+    constructor(id: UUID? = null, workspaceId: UUID? = null, userId: UUID? = null, role: String? = null, status: String? = null, joinedAt: OffsetDateTime? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, workosMembershipId: String? = null): this() {
         this.id = id
         this.workspaceId = workspaceId
         this.userId = userId
@@ -69,6 +73,7 @@ open class WorkspaceMembersRecord() : UpdatableRecordImpl<WorkspaceMembersRecord
         this.joinedAt = joinedAt
         this.createdAt = createdAt
         this.updatedAt = updatedAt
+        this.workosMembershipId = workosMembershipId
         resetChangedOnNotNull()
     }
 }

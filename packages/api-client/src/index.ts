@@ -190,10 +190,15 @@ export interface PublicChangelogEntry extends PublicChangelogEntrySummary {
 	documentVersion?: 1 | 2;
 }
 
-export interface RequestOptions { signal?: AbortSignal }
+export interface RequestOptions { signal?: AbortSignal; idempotencyKey?: string }
 
 export interface GitHubInstallationRequest {
   installUrl: string;
+  expiresAt: string;
+}
+
+export interface GitHubProductOAuthStart {
+  authorizationUrl: string;
   expiresAt: string;
 }
 
@@ -343,6 +348,7 @@ export interface WorkspaceSummary {
   slug: string;
   status: string;
   logoUrl: string | null;
+  organizationId: string | null;
   publicCitationsEnabled: boolean;
   plan: string;
   entitlementStatus: string;
@@ -557,6 +563,7 @@ export interface PlotApiClient {
   restoreOpportunity(id: string, expectedVersion: number, options?: RequestOptions): Promise<AutonomyHomeItem>;
 
   createGitHubInstallationRequest(options?: RequestOptions): Promise<GitHubInstallationRequest>;
+  startGitHubProductOAuth(returnTo?: "/settings/integrations" | "/chat", options?: RequestOptions): Promise<GitHubProductOAuthStart>;
   syncGitHubInstallation(options?: RequestOptions): Promise<GitHubInstallationCallback>;
   listGitHubConnections(options?: RequestOptions): Promise<GitHubConnection[]>;
   listGitHubRepositories(connectionId: string, options?: RequestOptions): Promise<GitHubRepository[]>;
@@ -643,6 +650,10 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
       method: "POST",
       signal: requestOptions?.signal,
     }),
+    startGitHubProductOAuth: (returnTo, requestOptions) => request(
+      `/github/oauth/start${returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : ""}`,
+      { method: "POST", signal: requestOptions?.signal },
+    ),
     syncGitHubInstallation: (requestOptions) => request("/github/installations/sync", {
       method: "POST",
       signal: requestOptions?.signal,
@@ -703,6 +714,7 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
       method: "POST",
       body: JSON.stringify(input),
       signal: requestOptions?.signal,
+      headers: requestOptions?.idempotencyKey ? { "Idempotency-Key": requestOptions.idempotencyKey } : undefined,
     }),
     getWorkspace: (id, requestOptions) => request(`/workspaces/${encodeURIComponent(id)}`, { signal: requestOptions?.signal }),
     updateWorkspace: (id, input, requestOptions) => request(`/workspaces/${encodeURIComponent(id)}`, {

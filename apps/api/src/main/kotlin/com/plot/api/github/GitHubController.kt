@@ -23,9 +23,35 @@ import org.springframework.web.bind.annotation.RestController
 @RequestMapping("/api/github")
 class GitHubInstallationController(
 	private val connectionService: GitHubConnectionService,
+	private val oauthService: GitHubOAuthService,
 	private val importService: GitHubImportService,
 	private val releaseActivityService: GitHubReleaseActivityService,
 ) {
+	@PostMapping("/oauth/start")
+	fun startProductOAuth(
+		@RequestParam(name = "returnTo", required = false) returnTo: String?,
+	): ResponseEntity<GitHubProductOAuthStartResponse> = ResponseEntity
+		.ok()
+		.cacheControl(CacheControl.noStore())
+		.body(oauthService.start(returnTo))
+
+	@GetMapping("/oauth/callback")
+	fun completeProductOAuth(
+		@RequestParam(name = "code", required = false) code: String?,
+		@RequestParam state: String,
+		@RequestParam(name = "error", required = false) error: String?,
+	): ResponseEntity<GitHubProductOAuthCallbackResponse> {
+		if (!error.isNullOrBlank()) {
+			throw ApiException(HttpStatus.BAD_REQUEST, "GITHUB_OAUTH_CANCELLED", "GitHub authorization was cancelled")
+		}
+		if (code.isNullOrBlank()) {
+			throw ApiException(HttpStatus.BAD_REQUEST, "GITHUB_CALLBACK_INVALID", "GitHub callback is invalid")
+		}
+		return ResponseEntity.ok()
+			.cacheControl(CacheControl.noStore())
+			.body(oauthService.complete(code, state))
+	}
+
 	@PostMapping("/installations/requests")
 	fun createInstallationRequest(): ResponseEntity<GitHubInstallationRequestResponse> = ResponseEntity
 		.ok()

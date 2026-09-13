@@ -9,8 +9,6 @@ import com.plot.api.persistence.generated.tables.AgentRunSources
 import com.plot.api.persistence.generated.tables.AgentRuns
 import com.plot.api.persistence.generated.tables.AgentSteps
 import com.plot.api.persistence.generated.tables.ArtifactRuns
-import com.plot.api.persistence.generated.tables.AuthAccount
-import com.plot.api.persistence.generated.tables.AuthSession
 import com.plot.api.persistence.generated.tables.AutonomyExecutions
 import com.plot.api.persistence.generated.tables.AutonomyGoals
 import com.plot.api.persistence.generated.tables.AutonomyOpportunities
@@ -24,6 +22,9 @@ import com.plot.api.persistence.generated.tables.GenerationExportEvents
 import com.plot.api.persistence.generated.tables.GenerationInputs
 import com.plot.api.persistence.generated.tables.GenerationRuns
 import com.plot.api.persistence.generated.tables.GithubInstallationStates
+import com.plot.api.persistence.generated.tables.GithubProductCredentialQuarantine
+import com.plot.api.persistence.generated.tables.GithubProductCredentials
+import com.plot.api.persistence.generated.tables.GithubProductOauthStates
 import com.plot.api.persistence.generated.tables.GithubReleaseDraftRequests
 import com.plot.api.persistence.generated.tables.GithubRepositoryAccessChecks
 import com.plot.api.persistence.generated.tables.GithubRepositoryMonitoring
@@ -42,6 +43,12 @@ import com.plot.api.persistence.generated.tables.SourceScopes
 import com.plot.api.persistence.generated.tables.Users
 import com.plot.api.persistence.generated.tables.WaitlistSignups
 import com.plot.api.persistence.generated.tables.WorkSessions
+import com.plot.api.persistence.generated.tables.WorkosIdentityMappings
+import com.plot.api.persistence.generated.tables.WorkosMembershipEventInbox
+import com.plot.api.persistence.generated.tables.WorkosOrganizationMappings
+import com.plot.api.persistence.generated.tables.WorkosProvisioning
+import com.plot.api.persistence.generated.tables.WorkosWorkspaceProvisioning
+import com.plot.api.persistence.generated.tables.WorkspaceMembers
 import com.plot.api.persistence.generated.tables.Workspaces
 import com.plot.api.persistence.generated.tables.WritingBlockScopes
 import com.plot.api.persistence.generated.tables.WritingBlocks
@@ -71,9 +78,6 @@ val AGENT_STEPS_AGENT_ORDER_IDX: Index = Internal.createIndex(DSL.name("agent_st
 val AGENT_STEPS_ONE_HANDOFF_PER_GENERATION_IDX: Index = Internal.createIndex(DSL.name("agent_steps_one_handoff_per_generation_idx"), AgentSteps.AGENT_STEPS, arrayOf(AgentSteps.AGENT_STEPS.WORKSPACE_ID, AgentSteps.AGENT_STEPS.GENERATION_RUN_ID), true)
 val ARTIFACT_RUNS_AGENT_IDEMPOTENCY_KEY_IDX: Index = Internal.createIndex(DSL.name("artifact_runs_agent_idempotency_key_idx"), ArtifactRuns.ARTIFACT_RUNS, arrayOf(ArtifactRuns.ARTIFACT_RUNS.WORKSPACE_ID, ArtifactRuns.ARTIFACT_RUNS.AGENT_RUN_ID, ArtifactRuns.ARTIFACT_RUNS.IDEMPOTENCY_KEY), true)
 val ARTIFACT_RUNS_WORKSPACE_CREATED_IDX: Index = Internal.createIndex(DSL.name("artifact_runs_workspace_created_idx"), ArtifactRuns.ARTIFACT_RUNS, arrayOf(ArtifactRuns.ARTIFACT_RUNS.WORKSPACE_ID, ArtifactRuns.ARTIFACT_RUNS.CREATED_AT.desc(), ArtifactRuns.ARTIFACT_RUNS.ID), false)
-val AUTH_ACCOUNT_ISSUER_ACCOUNT_ID_UIDX: Index = Internal.createIndex(DSL.name("auth_account_issuer_account_id_uidx"), AuthAccount.AUTH_ACCOUNT, arrayOf(AuthAccount.AUTH_ACCOUNT.ISSUER, AuthAccount.AUTH_ACCOUNT.ACCOUNT_ID), true)
-val AUTH_ACCOUNT_USER_ID_IDX: Index = Internal.createIndex(DSL.name("auth_account_user_id_idx"), AuthAccount.AUTH_ACCOUNT, arrayOf(AuthAccount.AUTH_ACCOUNT.USER_ID), false)
-val AUTH_SESSION_USER_ID_IDX: Index = Internal.createIndex(DSL.name("auth_session_user_id_idx"), AuthSession.AUTH_SESSION, arrayOf(AuthSession.AUTH_SESSION.USER_ID), false)
 val AUTONOMY_EXECUTIONS_RUNNING_IDX: Index = Internal.createIndex(DSL.name("autonomy_executions_running_idx"), AutonomyExecutions.AUTONOMY_EXECUTIONS, arrayOf(AutonomyExecutions.AUTONOMY_EXECUTIONS.WORKSPACE_ID), false)
 val AUTONOMY_GOALS_ONE_ACTIVE_IDX: Index = Internal.createIndex(DSL.name("autonomy_goals_one_active_idx"), AutonomyGoals.AUTONOMY_GOALS, arrayOf(AutonomyGoals.AUTONOMY_GOALS.WORKSPACE_ID, AutonomyGoals.AUTONOMY_GOALS.OPPORTUNITY_ID), true)
 val AUTONOMY_OPPORTUNITIES_HOME_IDX: Index = Internal.createIndex(DSL.name("autonomy_opportunities_home_idx"), AutonomyOpportunities.AUTONOMY_OPPORTUNITIES, arrayOf(AutonomyOpportunities.AUTONOMY_OPPORTUNITIES.WORKSPACE_ID, AutonomyOpportunities.AUTONOMY_OPPORTUNITIES.UPDATED_AT.desc(), AutonomyOpportunities.AUTONOMY_OPPORTUNITIES.ID), false)
@@ -93,6 +97,10 @@ val GENERATION_RUNS_RUNNABLE_IDX: Index = Internal.createIndex(DSL.name("generat
 val GENERATION_RUNS_STALE_CLAIM_IDX: Index = Internal.createIndex(DSL.name("generation_runs_stale_claim_idx"), GenerationRuns.GENERATION_RUNS, arrayOf(GenerationRuns.GENERATION_RUNS.HEARTBEAT_AT), false)
 val GENERATION_RUNS_WORKSPACE_SESSION_CREATED_IDX: Index = Internal.createIndex(DSL.name("generation_runs_workspace_session_created_idx"), GenerationRuns.GENERATION_RUNS, arrayOf(GenerationRuns.GENERATION_RUNS.WORKSPACE_ID, GenerationRuns.GENERATION_RUNS.WORK_SESSION_ID, GenerationRuns.GENERATION_RUNS.CREATED_AT, GenerationRuns.GENERATION_RUNS.ID), false)
 val GITHUB_INSTALLATION_STATES_EXPIRY_IDX: Index = Internal.createIndex(DSL.name("github_installation_states_expiry_idx"), GithubInstallationStates.GITHUB_INSTALLATION_STATES, arrayOf(GithubInstallationStates.GITHUB_INSTALLATION_STATES.EXPIRES_AT), false)
+val GITHUB_PRODUCT_CREDENTIAL_QUARANTINE_CREATED_IDX: Index = Internal.createIndex(DSL.name("github_product_credential_quarantine_created_idx"), GithubProductCredentialQuarantine.GITHUB_PRODUCT_CREDENTIAL_QUARANTINE, arrayOf(GithubProductCredentialQuarantine.GITHUB_PRODUCT_CREDENTIAL_QUARANTINE.CREATED_AT), false)
+val GITHUB_PRODUCT_CREDENTIALS_ACTIVE_USER_UIDX: Index = Internal.createIndex(DSL.name("github_product_credentials_active_user_uidx"), GithubProductCredentials.GITHUB_PRODUCT_CREDENTIALS, arrayOf(GithubProductCredentials.GITHUB_PRODUCT_CREDENTIALS.USER_ID), true)
+val GITHUB_PRODUCT_CREDENTIALS_STATUS_IDX: Index = Internal.createIndex(DSL.name("github_product_credentials_status_idx"), GithubProductCredentials.GITHUB_PRODUCT_CREDENTIALS, arrayOf(GithubProductCredentials.GITHUB_PRODUCT_CREDENTIALS.STATUS, GithubProductCredentials.GITHUB_PRODUCT_CREDENTIALS.UPDATED_AT), false)
+val GITHUB_PRODUCT_OAUTH_STATES_EXPIRY_IDX: Index = Internal.createIndex(DSL.name("github_product_oauth_states_expiry_idx"), GithubProductOauthStates.GITHUB_PRODUCT_OAUTH_STATES, arrayOf(GithubProductOauthStates.GITHUB_PRODUCT_OAUTH_STATES.EXPIRES_AT), false)
 val GITHUB_RELEASE_DEFAULT_IDENTITY_IDX: Index = Internal.createIndex(DSL.name("github_release_default_identity_idx"), GithubReleaseDraftRequests.GITHUB_RELEASE_DRAFT_REQUESTS, arrayOf(GithubReleaseDraftRequests.GITHUB_RELEASE_DRAFT_REQUESTS.WORKSPACE_ID, GithubReleaseDraftRequests.GITHUB_RELEASE_DRAFT_REQUESTS.SOURCE_SCOPE_ID, GithubReleaseDraftRequests.GITHUB_RELEASE_DRAFT_REQUESTS.TAG_NAME), true)
 val GITHUB_RELEASE_DRAFT_AGENT_RUN_IDX: Index = Internal.createIndex(DSL.name("github_release_draft_agent_run_idx"), GithubReleaseDraftRequests.GITHUB_RELEASE_DRAFT_REQUESTS, arrayOf(GithubReleaseDraftRequests.GITHUB_RELEASE_DRAFT_REQUESTS.WORKSPACE_ID, GithubReleaseDraftRequests.GITHUB_RELEASE_DRAFT_REQUESTS.AGENT_RUN_ID), true)
 val GITHUB_RELEASE_DRAFT_REQUESTS_RECONCILE_IDX: Index = Internal.createIndex(DSL.name("github_release_draft_requests_reconcile_idx"), GithubReleaseDraftRequests.GITHUB_RELEASE_DRAFT_REQUESTS, arrayOf(GithubReleaseDraftRequests.GITHUB_RELEASE_DRAFT_REQUESTS.STATUS, GithubReleaseDraftRequests.GITHUB_RELEASE_DRAFT_REQUESTS.UPDATED_AT), false)
@@ -134,6 +142,12 @@ val WAITLIST_SIGNUPS_CREATED_AT_IDX: Index = Internal.createIndex(DSL.name("wait
 val WORK_SESSIONS_ONE_PER_ROUTINE_EXECUTION_IDX: Index = Internal.createIndex(DSL.name("work_sessions_one_per_routine_execution_idx"), WorkSessions.WORK_SESSIONS, arrayOf(WorkSessions.WORK_SESSIONS.WORKSPACE_ID, WorkSessions.WORK_SESSIONS.ROUTINE_EXECUTION_ID), true)
 val WORK_SESSIONS_WORKSPACE_CREATED_IDX: Index = Internal.createIndex(DSL.name("work_sessions_workspace_created_idx"), WorkSessions.WORK_SESSIONS, arrayOf(WorkSessions.WORK_SESSIONS.WORKSPACE_ID, WorkSessions.WORK_SESSIONS.CREATED_AT.desc()), false)
 val WORK_SESSIONS_WORKSPACE_LATEST_GENERATION_IDX: Index = Internal.createIndex(DSL.name("work_sessions_workspace_latest_generation_idx"), WorkSessions.WORK_SESSIONS, arrayOf(WorkSessions.WORK_SESSIONS.WORKSPACE_ID, WorkSessions.WORK_SESSIONS.LATEST_GENERATION_RUN_ID), false)
+val WORKOS_IDENTITY_MAPPINGS_PLOT_USER_IDX: Index = Internal.createIndex(DSL.name("workos_identity_mappings_plot_user_idx"), WorkosIdentityMappings.WORKOS_IDENTITY_MAPPINGS, arrayOf(WorkosIdentityMappings.WORKOS_IDENTITY_MAPPINGS.PLOT_USER_ID), false)
+val WORKOS_MEMBERSHIP_EVENT_RETRY_IDX: Index = Internal.createIndex(DSL.name("workos_membership_event_retry_idx"), WorkosMembershipEventInbox.WORKOS_MEMBERSHIP_EVENT_INBOX, arrayOf(WorkosMembershipEventInbox.WORKOS_MEMBERSHIP_EVENT_INBOX.STATE, WorkosMembershipEventInbox.WORKOS_MEMBERSHIP_EVENT_INBOX.NEXT_ATTEMPT_AT), false)
+val WORKOS_ORGANIZATION_MAPPINGS_WORKOS_USER_IDX: Index = Internal.createIndex(DSL.name("workos_organization_mappings_workos_user_idx"), WorkosOrganizationMappings.WORKOS_ORGANIZATION_MAPPINGS, arrayOf(WorkosOrganizationMappings.WORKOS_ORGANIZATION_MAPPINGS.WORKOS_USER_ID), false)
+val WORKOS_PROVISIONING_ORGANIZATION_UIDX: Index = Internal.createIndex(DSL.name("workos_provisioning_organization_uidx"), WorkosProvisioning.WORKOS_PROVISIONING, arrayOf(WorkosProvisioning.WORKOS_PROVISIONING.WORKOS_ORGANIZATION_ID), true)
+val WORKOS_WORKSPACE_PROVISIONING_WORKSPACE_UIDX: Index = Internal.createIndex(DSL.name("workos_workspace_provisioning_workspace_uidx"), WorkosWorkspaceProvisioning.WORKOS_WORKSPACE_PROVISIONING, arrayOf(WorkosWorkspaceProvisioning.WORKOS_WORKSPACE_PROVISIONING.WORKSPACE_ID), true)
+val WORKSPACE_MEMBERS_WORKOS_MEMBERSHIP_UIDX: Index = Internal.createIndex(DSL.name("workspace_members_workos_membership_uidx"), WorkspaceMembers.WORKSPACE_MEMBERS, arrayOf(WorkspaceMembers.WORKSPACE_MEMBERS.WORKOS_MEMBERSHIP_ID), true)
 val WORKSPACES_POLAR_SUBSCRIPTION_UK: Index = Internal.createIndex(DSL.name("workspaces_polar_subscription_uk"), Workspaces.WORKSPACES, arrayOf(Workspaces.WORKSPACES.POLAR_SUBSCRIPTION_ID), true)
 val WRITING_BLOCK_SCOPES_SCOPE_CREATED_IDX: Index = Internal.createIndex(DSL.name("writing_block_scopes_scope_created_idx"), WritingBlockScopes.WRITING_BLOCK_SCOPES, arrayOf(WritingBlockScopes.WRITING_BLOCK_SCOPES.WORKSPACE_ID, WritingBlockScopes.WRITING_BLOCK_SCOPES.SOURCE_SCOPE_ID, WritingBlockScopes.WRITING_BLOCK_SCOPES.LAST_SEEN_AT.desc(), WritingBlockScopes.WRITING_BLOCK_SCOPES.WRITING_BLOCK_ID), false)
 val WRITING_BLOCKS_WORKSPACE_ACTIVITY_IDX: Index = Internal.createIndex(DSL.name("writing_blocks_workspace_activity_idx"), WritingBlocks.WRITING_BLOCKS, arrayOf(WritingBlocks.WRITING_BLOCKS.WORKSPACE_ID, WritingBlocks.WRITING_BLOCKS.ACTIVITY_SEQUENCE), false)

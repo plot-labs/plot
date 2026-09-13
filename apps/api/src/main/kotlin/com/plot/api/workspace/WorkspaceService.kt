@@ -3,6 +3,12 @@ package com.plot.api.workspace
 import com.plot.api.common.ApiException
 import com.plot.api.common.UuidGenerator
 import com.plot.api.auth.RequestActorResolver
+import com.plot.api.auth.WorkOSAuthProperties
+import com.plot.api.auth.workos.WorkOSOrganizationMappingRepository
+import com.plot.api.auth.workos.WorkOSOrganizationGateway
+import com.plot.api.auth.workos.WorkOSProviderException
+import com.plot.api.auth.workos.WorkOSWorkspaceProvisioningRepository
+import com.plot.api.persistence.JooqTransactionExecutor
 import com.plot.api.dev.DevContext
 import com.plot.api.entitlement.TrialPolicy
 import com.plot.api.entitlement.WorkspaceEntitlementReader
@@ -24,12 +30,21 @@ class WorkspaceService(
 	private val entitlementReader: WorkspaceEntitlementReader,
 	private val uuidGenerator: UuidGenerator,
 	private val actorResolver: RequestActorResolver? = null,
+	private val workOSProperties: WorkOSAuthProperties,
+	private val workOSOrganizationMappingRepository: WorkOSOrganizationMappingRepository,
+	private val workOSOrganizationGateway: WorkOSOrganizationGateway,
+	private val workOSWorkspaceProvisioningRepository: WorkOSWorkspaceProvisioningRepository,
+	private val transactionExecutor: JooqTransactionExecutor,
 ) {
 
-	@Transactional
-	fun create(request: CreateWorkspaceRequest): WorkspaceResponse {
+	fun create(request: CreateWorkspaceRequest, idempotencyKey: String? = null): WorkspaceResponse {
 		val actor = actorResolver?.current()
 		val userId = actor?.userId ?: devContext.devUserId
+		if (workOSProperties.enabled && actor != null) return createWorkOSWorkspace(request, actor.userId, actor.workOSUserId, idempotencyKey)
+		return transactionExecutor.execute { createLocalWorkspace(request, userId) }
+	}
+
+	private fun createLocalWorkspace(request: CreateWorkspaceRequest, userId: UUID): WorkspaceResponse {
 		val activeWorkspaces = memberRepository.countByUserIdAndStatus(userId, "ACTIVE")
 		if (activeWorkspaces >= WorkspacePolicy.MAX_ACTIVE_PER_USER) {
 			throw ApiException(HttpStatus.FORBIDDEN, "WORKSPACE_LIMIT_REACHED", "Workspace limit reached")
@@ -59,7 +74,98 @@ class WorkspaceService(
 			createdAt = now,
 			updatedAt = now,
 		))
-		return workspace.toResponse(entitlementReader.resolve(workspace), "OWNER")
+		return toResponse(workspace, "OWNER")
+	}
+
+	private fun createWorkOSWorkspace(
+		request: CreateWorkspaceRequest,
+		userId: UUID,
+		workOSUserId: String,
+		requestIdempotencyKey: String?,
+	): WorkspaceResponse {
+		val name = request.name.trim()
+		if (name.isBlank()) throw ApiException(HttpStatus.BAD_REQUEST, "WORKSPACE_NAME_REQUIRED", "Workspace name is required")
+		val callerKey = requestIdempotencyKey?.trim().takeIf { !it.isNullOrBlank() }
+		if (callerKey != null && !IDEMPOTENCY_KEY.matches(callerKey)) {
+			throw ApiException(HttpStatus.BAD_REQUEST, "IDEMPOTENCY_KEY_INVALID", "Idempotency key is invalid")
+		}
+		val stableKey = "plot-workspace-$userId-${callerKey ?: UUID.randomUUID()}"
+		val existing = workOSWorkspaceProvisioningRepository.findByIdempotencyKey(stableKey)
+		val workspaceId = existing?.workspaceId ?: uuidGenerator.next()
+		val externalId = workspaceExternalId(workspaceId)
+		val ledger = workOSWorkspaceProvisioningRepository.startOrResume(
+			workOSOrganizationId = externalId,
+			workOSUserId = workOSUserId,
+			workspaceId = workspaceId,
+			idempotencyKey = stableKey,
+			now = Instant.now(),
+		)
+		if (ledger.workOSUserId != workOSUserId) {
+			throw ApiException(HttpStatus.CONFLICT, "IDEMPOTENCY_KEY_REUSED", "Idempotency key was reused")
+		}
+		if (ledger.state == "COMPLETED") {
+			val completedWorkspace = ledger.workspaceId?.let { workspaceRepository.findByIdAndStatus(it, "ACTIVE") }
+			if (completedWorkspace != null) {
+				val member = memberRepository.findByWorkspaceIdAndUserIdAndStatus(completedWorkspace.id, userId, "ACTIVE")
+					?: throw ApiException(HttpStatus.SERVICE_UNAVAILABLE, "WORKSPACE_PROVISIONING_RETRY_REQUIRED", "Workspace setup is still in progress")
+				return toResponse(completedWorkspace, member.role)
+			}
+		}
+
+		return try {
+			val organization = workOSOrganizationGateway.findByExternalId(externalId)
+				?: workOSOrganizationGateway.createOrganization(name.take(80), externalId, stableKey)
+			workOSOrganizationMappingRepository.findByOrganizationId(organization.id)?.let { mapping ->
+				if (mapping.workspaceId != workspaceId) throw ApiException(HttpStatus.CONFLICT, "WORKSPACE_PROVISIONING_CONFLICT", "Workspace setup could not be reconciled")
+			}
+			workOSWorkspaceProvisioningRepository.markOrganizationReady(externalId, Instant.now())
+			val membership = workOSOrganizationGateway.ensureOwnerMembership(
+				organizationId = organization.id,
+				userId = workOSUserId,
+				idempotencyKey = stableKey,
+			)
+			transactionExecutor.execute {
+				val now = Instant.now()
+				val workspace = workspaceRepository.findByIdAndStatus(workspaceId, "ACTIVE") ?: workspaceRepository.save(Workspace(
+					id = workspaceId,
+					name = name,
+					slug = "workspace-${workspaceId.toString().replace("-", "").takeLast(12)}",
+					createdByUserId = userId,
+					status = "ACTIVE",
+					createdAt = now,
+					updatedAt = now,
+					trialStartedAt = now,
+					trialEndsAt = now.plus(TrialPolicy.DURATION),
+				))
+				val member = memberRepository.upsertWorkOSProjection(
+					workspaceId = workspace.id,
+					userId = userId,
+					role = "OWNER",
+					status = "ACTIVE",
+					workOSMembershipId = membership.id,
+					now = now,
+				)
+				workOSOrganizationMappingRepository.save(
+					com.plot.api.auth.workos.WorkOSOrganizationMapping(organization.id, workOSUserId, workspace.id),
+					now,
+				)
+				// The ledger is keyed by the deterministic external ID used before
+				// the provider resource exists. Keep using that key after the
+				// provider returns its opaque Organization ID so retries can reach
+				// the COMPLETED row and converge on the same local Workspace.
+				workOSWorkspaceProvisioningRepository.markCompleted(externalId, workspace.id, now)
+				toResponse(workspace, member.role)
+			}
+		} catch (failure: ApiException) {
+			workOSWorkspaceProvisioningRepository.markFailed(externalId, failure, Instant.now())
+			throw failure
+		} catch (failure: WorkOSProviderException) {
+			workOSWorkspaceProvisioningRepository.markFailed(externalId, failure, Instant.now())
+			throw ApiException(HttpStatus.SERVICE_UNAVAILABLE, "WORKOS_PROVIDER_UNAVAILABLE", "Workspace setup is temporarily unavailable")
+		} catch (failure: RuntimeException) {
+			workOSWorkspaceProvisioningRepository.markFailed(externalId, failure, Instant.now())
+			throw ApiException(HttpStatus.SERVICE_UNAVAILABLE, "WORKSPACE_PROVISIONING_RETRY_REQUIRED", "Workspace setup could not be completed")
+		}
 	}
 
 	@Transactional(readOnly = true)
@@ -67,7 +173,7 @@ class WorkspaceService(
 		val workspace = findDevWorkspace(id)
 		val membership = memberRepository.findByWorkspaceIdAndUserIdAndStatus(id, devContext.devUserId, "ACTIVE")
 			?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Workspace not found")
-		return workspace.toResponse(entitlementReader.resolve(workspace), membership.role)
+		return toResponse(workspace, membership.role)
 	}
 
 	@Transactional
@@ -103,8 +209,16 @@ class WorkspaceService(
 		workspace.updatedAt = java.time.Instant.now()
 		workspaceRepository.save(workspace)
 
-		return workspace.toResponse(entitlementReader.resolve(workspace), selectedWorkspace?.role ?: membership.role)
+		return toResponse(workspace, selectedWorkspace?.role ?: membership.role)
 	}
+
+	private fun toResponse(workspace: Workspace, role: String) = workspace
+		.toResponse(entitlementReader.resolve(workspace), role)
+		.copy(
+			organizationId = if (workOSProperties.enabled) {
+				workOSOrganizationMappingRepository.findByWorkspaceId(workspace.id)?.workOSOrganizationId
+			} else null,
+		)
 
 	private fun findDevWorkspace(id: UUID): Workspace {
 		// The path identifier may never override the BFF-selected tenant. Keep
@@ -125,5 +239,7 @@ class WorkspaceService(
 
 	companion object {
 		private val RASTER_LOGO_DATA_URL = Regex("^data:image/(?:png|jpeg|jpg|gif|webp);base64,[A-Za-z0-9+/=]+$")
+		private val IDEMPOTENCY_KEY = Regex("^[A-Za-z0-9._:-]{8,200}$")
+		private fun workspaceExternalId(workspaceId: UUID) = "plot-workspace-$workspaceId"
 	}
 }

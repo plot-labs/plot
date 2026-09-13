@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RestController
 
 @RestController
@@ -22,7 +23,10 @@ class WorkspaceController(
 
 	@PostMapping
 	@ReadOnlyAllowed
-	fun create(@Valid @RequestBody request: CreateWorkspaceRequest): WorkspaceResponse = workspaceService.create(request)
+	fun create(
+		@Valid @RequestBody request: CreateWorkspaceRequest,
+		@RequestHeader("Idempotency-Key", required = false) idempotencyKey: String?,
+	): WorkspaceResponse = workspaceService.create(request, idempotencyKey)
 
 	@GetMapping("/{id}")
 	fun get(@PathVariable id: UUID): WorkspaceResponse {

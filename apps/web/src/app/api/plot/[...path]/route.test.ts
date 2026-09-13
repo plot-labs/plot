@@ -1,19 +1,24 @@
 import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 
-import { proxyPlotRequest, serverJwtPayload } from "./route";
+const withAuth = vi.hoisted(() => vi.fn());
+
+vi.mock("@workos-inc/authkit-nextjs", () => ({ withAuth }));
+
+import { proxyPlotRequest } from "./route";
+
+const authenticatedSession = {
+  user: {
+    id: "workos-user",
+    email: "member@example.com",
+    name: "Plot Member",
+    image: null,
+      },
+      accessToken: "workos-access-token",
+};
 
 describe("Plot same-origin proxy", () => {
-  it("builds Kotlin JWT claims from the verified auth session", () => {
-    expect(serverJwtPayload({ user: { id: " auth-user ", email: " Member@Example.com ", name: " Plot Member " } })).toEqual({
-      sub: "auth-user",
-      email: "member@example.com",
-      name: "Plot Member",
-    });
-    expect(serverJwtPayload({ user: { id: "auth-user", email: null } })).toBeNull();
-  });
-
-  it("uses the server JWT and never forwards browser credentials", async () => {
+  it("uses the managed WorkOS access token and never forwards browser credentials", async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ ok: true }));
     const request = new Request("http://web.test/api/plot/agent-runs", {
       method: "POST",
@@ -28,13 +33,12 @@ describe("Plot same-origin proxy", () => {
 
     const response = await proxyPlotRequest(request, ["agent-runs"], {
       fetch: fetcher,
-      getSession: async () => ({ user: { email: "member@example.com" } }),
-      getServerJwt: async () => "server-issued-jwt",
+      getSession: async () => authenticatedSession,
     });
 
     expect(response.status).toBe(200);
     const initHeaders = new Headers(fetcher.mock.calls[0]?.[1]?.headers);
-    expect(initHeaders.get("authorization")).toBe("Bearer server-issued-jwt");
+    expect(initHeaders.get("authorization")).toBe("Bearer workos-access-token");
     expect(initHeaders.get("cookie")).toBeNull();
     expect(initHeaders.get("x-plot-workspace-id")).toBe("018fd000-0000-7000-8000-000000000002");
   });
@@ -46,7 +50,7 @@ describe("Plot same-origin proxy", () => {
     const response = await proxyPlotRequest(request, ["me"], {
       fetch: fetcher,
       getSession: async () => null,
-      getServerJwt: async () => "should-not-be-called",
+      getAccessToken: async () => "should-not-be-called",
     });
 
     expect(response.status).toBe(401);
@@ -62,8 +66,8 @@ describe("Plot same-origin proxy", () => {
 
     const response = await proxyPlotRequest(request, ["agent-runs"], {
       fetch: fetcher,
-      getSession: async () => ({ user: { email: "member@example.com" } }),
-      getServerJwt: async () => "server-issued-jwt",
+      getSession: async () => authenticatedSession,
+      getAccessToken: async () => "server-issued-workos-token",
     });
 
     expect(response.status).toBe(403);
@@ -78,8 +82,8 @@ describe("Plot same-origin proxy", () => {
 
     const response = await proxyPlotRequest(request, ["agent-runs"], {
       fetch: fetcher,
-      getSession: async () => ({ user: { email: "member@example.com" } }),
-      getServerJwt: async () => "server-issued-jwt",
+      getSession: async () => authenticatedSession,
+      getAccessToken: async () => "server-issued-workos-token",
     });
 
     expect(response.status).toBe(403);
@@ -95,8 +99,8 @@ describe("Plot same-origin proxy", () => {
 
     const response = await proxyPlotRequest(request, ["agent-runs"], {
       fetch: fetcher,
-      getSession: async () => ({ user: { email: "member@example.com" } }),
-      getServerJwt: async () => "server-issued-jwt",
+      getSession: async () => authenticatedSession,
+      getAccessToken: async () => "server-issued-workos-token",
     });
 
     expect(response.status).toBe(200);
@@ -111,8 +115,8 @@ describe("Plot same-origin proxy", () => {
 
     const response = await proxyPlotRequest(request, ["agent-runs"], {
       fetch: fetcher,
-      getSession: async () => ({ user: { email: "member@example.com" } }),
-      getServerJwt: async () => "server-issued-jwt",
+      getSession: async () => authenticatedSession,
+      getAccessToken: async () => "server-issued-workos-token",
     });
 
     expect(response.status).toBe(403);
@@ -132,8 +136,8 @@ describe("Plot same-origin proxy", () => {
       });
       const accepted = await proxyPlotRequest(mirroredHost, ["workspaces"], {
         fetch: fetcher,
-        getSession: async () => ({ user: { email: "member@example.com" } }),
-        getServerJwt: async () => "server-issued-jwt",
+        getSession: async () => authenticatedSession,
+        getAccessToken: async () => "server-issued-workos-token",
       });
       expect(accepted.status).toBe(200);
 
@@ -143,8 +147,8 @@ describe("Plot same-origin proxy", () => {
       });
       const rejected = await proxyPlotRequest(hostMatch, ["workspaces"], {
         fetch: fetcher,
-        getSession: async () => ({ user: { email: "member@example.com" } }),
-        getServerJwt: async () => "server-issued-jwt",
+        getSession: async () => authenticatedSession,
+        getAccessToken: async () => "server-issued-workos-token",
       });
       expect(rejected.status).toBe(403);
     } finally {
@@ -161,8 +165,8 @@ describe("Plot same-origin proxy", () => {
 
     const response = await proxyPlotRequest(request, ["account", "bootstrap"], {
       fetch: fetcher,
-      getSession: async () => ({ user: { email: "member@example.com" } }),
-      getServerJwt: async () => "server-issued-jwt",
+      getSession: async () => authenticatedSession,
+      getAccessToken: async () => "server-issued-workos-token",
     });
 
     expect(response.status).toBe(200);
@@ -374,6 +378,42 @@ describe("Plot same-origin proxy", () => {
     expect(response.headers.get("location")).toBe("http://web.test/settings/integrations?githubError=invalid");
   });
 
+  it("turns a successful product GitHub OAuth callback into the requested safe return redirect", async () => {
+    const response = await proxyPlotRequest(
+      new Request("http://web.test/api/plot/github/oauth/callback?code=private-code&state=private-state"),
+      ["github", "oauth", "callback"],
+      {
+        fetch: vi.fn<typeof fetch>().mockResolvedValue(Response.json({
+          connectionId: "018fd000-0000-7000-8000-000000000002",
+          returnPath: "/settings/integrations",
+          githubAccountLogin: "plot-labs",
+          errorCode: null,
+        }, { status: 200 })),
+        baseUrl: "http://127.0.0.1:8080",
+      },
+    );
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("http://web.test/settings/integrations?githubConnected=1");
+  });
+
+  it("falls back to the settings return path and hides product OAuth callback errors", async () => {
+    const response = await proxyPlotRequest(
+      new Request("http://web.test/api/plot/github/oauth/callback?code=private-code&state=private-state"),
+      ["github", "oauth", "callback"],
+      {
+        fetch: vi.fn<typeof fetch>().mockResolvedValue(Response.json({
+          returnPath: "https://attacker.test/steal",
+          errorCode: "GITHUB_SCOPE_REQUIRED",
+        }, { status: 401 })),
+        baseUrl: "http://127.0.0.1:8080",
+      },
+    );
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("http://web.test/settings/integrations?githubError=unauthorized");
+  });
+
   it.each([
     ["GET", ["https:", "attacker.test"]],
     ["DELETE", ["generations", "run-1"]],
@@ -412,8 +452,8 @@ describe("Plot same-origin proxy", () => {
         {
           fetch: fetcher,
           baseUrl: "http://127.0.0.1:8080",
-          getSession: async () => ({ user: { email: "member@example.com" } }),
-          getServerJwt: async () => "server-issued-jwt",
+          getSession: async () => authenticatedSession,
+          getAccessToken: async () => "server-issued-workos-token",
         },
       );
 

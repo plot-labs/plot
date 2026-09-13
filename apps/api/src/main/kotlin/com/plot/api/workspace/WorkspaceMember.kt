@@ -12,4 +12,5 @@ class WorkspaceMember(
 	var joinedAt: Instant,
 	var createdAt: Instant,
 	var updatedAt: Instant,
+	var workOSMembershipId: String? = null,
 )

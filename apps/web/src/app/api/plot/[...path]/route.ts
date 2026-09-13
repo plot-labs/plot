@@ -1,4 +1,4 @@
-import { fetchPlotAuthSession, fetchPlotAuthToken, type PlotAuthSession } from "@/lib/plot-auth";
+import { fetchPlotAuthSession, type PlotAuthSession } from "@/lib/plot-auth";
 
 const allowedRequestHeaders = new Set(["accept", "content-type", "idempotency-key", "x-plot-workspace-id"]);
 const allowedResponseHeaders = new Set(["cache-control", "content-disposition", "content-type", "location"]);
@@ -10,7 +10,7 @@ type ProxyDependencies = {
   fetch?: typeof fetch;
   baseUrl?: string;
   getSession?: (request: Request) => Promise<PlotAuthSession>;
-  getServerJwt?: (session: PlotAuthSession, cookieHeader: string | null) => Promise<string | null>;
+  getAccessToken?: (session: PlotAuthSession) => Promise<string | null>;
 };
 
 export const dynamic = "force-dynamic";
@@ -82,7 +82,7 @@ export async function proxyPlotRequest(
   }
   headers.delete("authorization");
   headers.delete("cookie");
-  headers.set("Authorization", `Bearer ${authResult.jwt}`);
+  headers.set("Authorization", `Bearer ${authResult.accessToken}`);
   const body = request.method === "GET" || request.method === "HEAD" ? undefined : await request.arrayBuffer();
   let upstreamResponse: Response;
   try {
@@ -102,6 +102,9 @@ export async function proxyPlotRequest(
   }
   if (request.method === "GET" && path.join("/") === "github/installations/callback") {
     return githubInstallationCallbackRedirect(request, upstreamResponse);
+  }
+  if (request.method === "GET" && path.join("/") === "github/oauth/callback") {
+    return githubProductOAuthCallbackRedirect(request, upstreamResponse);
   }
   const responseHeaders = new Headers({ "Cache-Control": "no-store" });
   upstreamResponse.headers.forEach((value, key) => {
@@ -145,6 +148,22 @@ async function githubInstallationCallbackRedirect(request: Request, upstreamResp
   return Response.redirect(integrationsUrl, 303);
 }
 
+async function githubProductOAuthCallbackRedirect(request: Request, upstreamResponse: Response): Promise<Response> {
+  const payload = await readJsonRecord(upstreamResponse);
+  const returnPath = safeGitHubReturnPath(payload?.returnPath);
+  const destination = new URL(returnPath, browserFacingOrigin(request) ?? request.url);
+  if (upstreamResponse.ok && typeof payload?.errorCode !== "string") {
+    destination.searchParams.set("githubConnected", "1");
+    return Response.redirect(destination, 303);
+  }
+  destination.searchParams.set("githubError", callbackErrorKind(upstreamResponse.status, payload?.errorCode ?? payload?.error));
+  return Response.redirect(destination, 303);
+}
+
+function safeGitHubReturnPath(value: unknown): "/settings/integrations" | "/chat" {
+  return value === "/chat" ? "/chat" : "/settings/integrations";
+}
+
 async function readJsonRecord(response: Response): Promise<Record<string, unknown> | null> {
   try {
     const value: unknown = await response.json();
@@ -180,6 +199,8 @@ function isAllowed(method: string, path: string[]): boolean {
   if (method === "POST" && route === "github/installations/sync") return true;
   if (method === "POST" && route === "github/installations/callback") return true;
   if (method === "GET" && route === "github/installations/callback") return true;
+  if (method === "POST" && route === "github/oauth/start") return true;
+  if (method === "GET" && route === "github/oauth/callback") return true;
   if (method === "PUT" && /^github\/repositories\/[^/]+$/.test(route)) return true;
   if (method === "DELETE" && /^github\/repositories\/[^/]+$/.test(route)) return true;
   if (method === "GET" && /^github\/repositories\/[^/]+\/monitoring$/.test(route)) return true;
@@ -216,32 +237,31 @@ function isAllowed(method: string, path: string[]): boolean {
   return method === "POST" && /^artifact-variants\/[^/]+\/delivery-events$/.test(route);
 }
 
-type AuthResult = { ok: true; jwt: string } | { ok: false; response: Response };
+type AuthResult = { ok: true; accessToken: string } | { ok: false; response: Response };
 
 async function authenticateRequest(request: Request, dependencies: ProxyDependencies): Promise<AuthResult> {
-  if (process.env.NODE_ENV === "test" && dependencies.fetch && !dependencies.getSession && !dependencies.getServerJwt) {
-    return { ok: true, jwt: "test-injected" };
+  if (process.env.NODE_ENV === "test" && dependencies.fetch && !dependencies.getSession && !dependencies.getAccessToken) {
+    return { ok: true, accessToken: "test-injected" };
   }
-  const cookieHeader = request.headers.get("cookie");
   let session: PlotAuthSession;
   try {
     session = dependencies.getSession
       ? await dependencies.getSession(request)
-      : await fetchPlotAuthSession(cookieHeader);
+      : await fetchPlotAuthSession();
   } catch {
     return unauthorizedResponse();
   }
-  if (!session?.user?.email) return unauthorizedResponse();
-  let jwt: string | null;
+  if (!session?.user?.id) return unauthorizedResponse();
+  let accessToken: string | null;
   try {
-    jwt = dependencies.getServerJwt
-      ? await dependencies.getServerJwt(session, cookieHeader)
-      : await fetchPlotAuthToken(cookieHeader);
+    accessToken = dependencies.getAccessToken
+      ? await dependencies.getAccessToken(session)
+      : session.accessToken;
   } catch {
-    jwt = null;
+    accessToken = null;
   }
-  if (!jwt) return unauthorizedResponse();
-  return { ok: true, jwt };
+  if (!accessToken) return unauthorizedResponse();
+  return { ok: true, accessToken };
 }
 
 function unauthorizedResponse(): AuthResult {
@@ -252,14 +272,6 @@ function unauthorizedResponse(): AuthResult {
       headers: { "Cache-Control": "no-store" },
     }),
   };
-}
-
-export function serverJwtPayload(session: PlotAuthSession): { sub: string; email: string; name: string } | null {
-  const subject = session?.user?.id?.trim();
-  const email = session?.user?.email?.trim().toLowerCase();
-  if (!subject || !email) return null;
-  const name = session?.user?.name?.trim() || email.split("@")[0] || email;
-  return { sub: subject, email, name };
 }
 
 function isStateChanging(method: string): boolean {

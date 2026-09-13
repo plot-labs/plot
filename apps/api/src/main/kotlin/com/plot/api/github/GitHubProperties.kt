@@ -12,6 +12,13 @@ data class GitHubProperties(
 	val appSlug: String? = null,
 	val privateKey: String? = null,
 	val stateSecret: String? = null,
+	val productOAuthClientId: String? = null,
+	val productOAuthClientSecret: String? = null,
+	val productOAuthRedirectUri: String? = null,
+	val productOAuthScopes: String = "read:user user:email read:org",
+	val productCredentialEncryptionKey: String? = null,
+	val productCredentialEncryptionKeyVersion: String = "v1",
+	val productCredentialBackfillBatchSize: Int = 100,
 	val apiBaseUrl: String = "https://api.github.com",
 	val webBaseUrl: String = "https://github.com",
 	val stateTtlSeconds: Long = 900,
@@ -65,6 +72,12 @@ data class GitHubProperties(
 		require(accessCheckMaxAttempts in 1..3) {
 			"plot.github.access-check-max-attempts must be between one and three"
 		}
+		require(productCredentialEncryptionKeyVersion.matches(SAFE_KEY_VERSION)) {
+			"plot.github.product-credential-encryption-key-version is invalid"
+		}
+		require(productCredentialBackfillBatchSize in 1..500) {
+			"plot.github.product-credential-backfill-batch-size must be between one and 500"
+		}
 		require(maxResponseBytes > 0) { "plot.github.max-response-bytes must be positive" }
 		require(maxReleasePullRequests > 0) { "plot.github.max-release-pull-requests must be positive" }
 		require(maxReleaseEvidenceBlocks > 0) { "plot.github.max-release-evidence-blocks must be positive" }
@@ -84,5 +97,6 @@ data class GitHubProperties(
 
 	private companion object {
 		const val MAX_MONITORING_HTTP_REQUESTS = 4L
+		val SAFE_KEY_VERSION = Regex("^[A-Za-z0-9._-]{1,32}$")
 	}
 }

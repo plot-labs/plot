@@ -1,3 +1,4 @@
+import { authkitProxy } from "@workos-inc/authkit-nextjs";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { SESSION_COOKIE } from "@/lib/plot-auth";
@@ -23,12 +24,48 @@ export function isGatedHost(host: string): boolean {
 // carry Retry-After so well-behaved clients back off instead of retrying hot.
 const apiWriteLimiter = createFixedWindowLimiter(60 * 1000, 60);
 
+function workOSAuthEnabled(): boolean {
+  return [process.env.WORKOS_AUTH_ENABLED, process.env.PLOT_WORKOS_ENABLED]
+    .some((value) => value?.trim().toLowerCase() === "true");
+}
+
+function workOSSessionCookieName(): string {
+  return process.env.WORKOS_COOKIE_NAME?.trim() ||
+    process.env.PLOT_WORKOS_SESSION_COOKIE_NAME?.trim() ||
+    SESSION_COOKIE;
+}
+
+function workOSSessionRequest(request: NextRequest): boolean {
+  if (!workOSAuthEnabled()) return false;
+  if (request.nextUrl.pathname === "/auth/callback") return false;
+  return request.cookies.has(workOSSessionCookieName());
+}
+
+async function refreshWorkOSSession(request: NextRequest): Promise<NextResponse | Response | null> {
+  if (!workOSSessionRequest(request)) return null;
+  const redirectUri = process.env.NEXT_PUBLIC_WORKOS_REDIRECT_URI?.trim();
+  if (!redirectUri) return null;
+
+  try {
+    const middleware = authkitProxy({
+      redirectUri,
+      middlewareAuth: { enabled: false, unauthenticatedPaths: [] },
+      signUpPaths: ["/sign-up"],
+    }) as unknown as (request: NextRequest) => Promise<NextResponse | Response | undefined> | NextResponse | Response | undefined;
+    return (await middleware(request)) ?? null;
+  } catch {
+    const destination = new URL("/sign-in", request.url);
+    destination.searchParams.set("error", "session_refresh_failed");
+    return NextResponse.redirect(destination);
+  }
+}
+
 function clientIp(request: NextRequest): string {
   const forwarded = request.headers.get("x-forwarded-for");
   return forwarded?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown";
 }
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest): Promise<NextResponse | Response> {
   const host = request.headers.get("host")?.split(":")[0]?.toLowerCase();
 
   if (
@@ -49,20 +86,27 @@ export function proxy(request: NextRequest) {
     request.nextUrl.pathname === "/sign-in" ||
     request.nextUrl.pathname === "/sign-up" ||
     request.nextUrl.pathname === "/auth/complete" ||
+    request.nextUrl.pathname === "/auth/callback" ||
+    request.nextUrl.pathname === "/auth/verify-email" ||
     request.nextUrl.pathname.startsWith("/api/auth") ||
     isPublicChangelogPath(request.nextUrl.pathname);
-  if (host && isGatedHost(host) && !isPublicPath && !request.cookies.has(SESSION_COOKIE)) {
+  if (host && isGatedHost(host) && !isPublicPath && !request.cookies.has(workOSSessionCookieName())) {
     return NextResponse.redirect(new URL("/sign-in", request.url));
   }
+
+  const workOSResponse = await refreshWorkOSSession(request);
+  if (workOSResponse?.headers.get("location")) return workOSResponse;
 
   if (host && isGatedHost(host) && request.nextUrl.pathname === "/") {
     const url = request.nextUrl.clone();
     url.pathname = "/home";
 
-    return NextResponse.rewrite(url);
+    const response = NextResponse.rewrite(url);
+    workOSResponse?.headers.forEach((value, key) => response.headers.set(key, value));
+    return response;
   }
 
-  return NextResponse.next();
+  return workOSResponse ?? NextResponse.next();
 }
 
 export const config = {

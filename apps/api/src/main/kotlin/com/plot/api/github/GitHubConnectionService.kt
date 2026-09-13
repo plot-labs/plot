@@ -76,6 +76,7 @@ class GitHubConnectionService(
 	private val devContext: DevContext,
 	private val stateService: GitHubInstallationStateService,
 	private val githubClient: GitHubClient,
+	private val productCredentialRepository: GitHubProductCredentialRepository,
 	private val sqlExecutor: JooqSqlExecutor,
 	private val transactionExecutor: JooqTransactionExecutor,
 	private val objectMapper: ObjectMapper,
@@ -115,18 +116,31 @@ class GitHubConnectionService(
 	fun syncExistingInstallation(): GitHubCallbackResponse {
 		guard.requireEnabled()
 		requireOwner()
-		val userId = devContext.devUserId
+		val actor = actorResolver?.current()
+		val userId = actor?.userId ?: devContext.devUserId
+		val workspaceId = actor?.let { actorResolver.requireWorkspace().workspaceId } ?: devContext.devWorkspaceId
+		return syncExistingInstallationForProductCredential(userId, workspaceId, requireOwner = actor != null)
+	}
+
+	/** Reuses only the product-owned GitHub credential, never account-auth storage. */
+	fun syncExistingInstallationForProductCredential(
+		userId: UUID,
+		workspaceId: UUID,
+		requireOwner: Boolean = true,
+	): GitHubCallbackResponse {
+		guard.requireEnabled()
+		if (requireOwner) requireOwnerMembership(userId, workspaceId)
 		val link = findLinkedGitHubAccount(userId)
 			?: throw ApiException(
 				HttpStatus.BAD_REQUEST,
 				"GITHUB_ACCOUNT_NOT_LINKED",
-				"No linked GitHub account was found; sign in with GitHub and retry",
+				"No linked GitHub account was found; connect a GitHub account and retry",
 			)
 		val accessToken = link.accessToken?.takeIf { it.isNotBlank() }
 			?: throw ApiException(
 				HttpStatus.BAD_REQUEST,
 				"GITHUB_ACCOUNT_NOT_LINKED",
-				"No linked GitHub account was found; sign in with GitHub and retry",
+				"No linked GitHub account was found; connect a GitHub account and retry",
 			)
 		val appId = properties.appId?.takeIf { it.isNotBlank() } ?: throw notConfigured()
 		val installations = try {
@@ -151,7 +165,7 @@ class GitHubConnectionService(
 		}
 		val installationId = selectAccessibleInstallation(installations, link)
 		verifyInstallationOwnership(userId, installationId)
-		return activateInstallation(userId, devContext.devWorkspaceId, installationId)
+		return activateInstallation(userId, workspaceId, installationId)
 	}
 
 	private fun activateInstallation(userId: UUID, workspaceId: UUID, installationId: Long): GitHubCallbackResponse {
@@ -215,7 +229,7 @@ class GitHubConnectionService(
 			throw ApiException(
 				HttpStatus.UNAUTHORIZED,
 				"GITHUB_REAUTH_REQUIRED",
-				"GitHub re-authentication is required to check organization membership; sign in with GitHub again",
+				"GitHub authorization must be refreshed to check organization membership; connect GitHub again",
 			)
 		}
 		val adminOrgs = installations.filter { it.accountType.equals("ORGANIZATION", ignoreCase = true) }
@@ -528,6 +542,21 @@ class GitHubConnectionService(
 		}
 	}
 
+	private fun requireOwnerMembership(userId: UUID, workspaceId: UUID) {
+		val ownerMembership = sqlExecutor.queryForObject(
+			"""
+			select count(*) from workspace_members
+			where workspace_id = ? and user_id = ? and status = 'ACTIVE' and role = 'OWNER'
+			""".trimIndent(),
+			Int::class.java,
+			workspaceId,
+			userId,
+		) ?: 0
+		if (ownerMembership != 1) {
+			throw ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Workspace owner access is required")
+		}
+	}
+
 	/** The callback has no workspace header; its one-time signed state is authoritative. */
 	private fun requireCallbackOwner(state: GitHubInstallationStateBinding) {
 		val actor = actorResolver?.current()
@@ -556,7 +585,7 @@ class GitHubConnectionService(
 	 */
 	private fun verifyInstallationOwnership(userId: UUID, installationId: Long) {
 		val link = findLinkedGitHubAccount(userId)
-			?: throw installationNotOwned("No linked GitHub account was found; sign in with GitHub and retry")
+			?: throw installationNotOwned("No linked GitHub account was found; connect a GitHub account and retry")
 		val installation = try {
 			githubClient.getInstallation(installationId)
 		} catch (exception: ApiException) {
@@ -581,7 +610,7 @@ class GitHubConnectionService(
 				throw ApiException(
 					HttpStatus.UNAUTHORIZED,
 					"GITHUB_REAUTH_REQUIRED",
-					"GitHub re-authentication is required to check organization membership; sign in with GitHub again",
+					"GitHub authorization must be refreshed to check organization membership; connect GitHub again",
 				)
 			}
 			throw exception
@@ -593,24 +622,15 @@ class GitHubConnectionService(
 		return scope.split(" ", ",").any { it.trim() == "read:org" }
 	}
 
-	private fun findLinkedGitHubAccount(userId: UUID): LinkedGitHubAccount? = sqlExecutor.query(
-		"""
-		select a.account_id, a.access_token, a.scope
-		from users u
-		join auth_account a on a.user_id = u.auth_subject and a.provider_id = 'github'
-		where u.id = ? and u.auth_subject is not null
-		order by a.updated_at desc
-		limit 1
-		""".trimIndent(),
-		{ rs, _ ->
+	private fun findLinkedGitHubAccount(userId: UUID): LinkedGitHubAccount? = productCredentialRepository
+		.findActiveByUserId(userId)
+		?.let { credential ->
 			LinkedGitHubAccount(
-				githubAccountId = rs.getString(1)?.toLongOrNull() ?: 0L,
-				accessToken = rs.getString(2),
-				scope = rs.getString(3),
+				githubAccountId = credential.githubAccountId,
+				accessToken = credential.accessToken,
+				scope = credential.scope,
 			)
-		},
-		userId,
-	).firstOrNull()
+		}
 
 	private fun installationNotOwned(message: String = "GitHub installation does not belong to the authenticated user") =
 		ApiException(HttpStatus.FORBIDDEN, "GITHUB_INSTALLATION_NOT_OWNED", message)

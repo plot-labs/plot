@@ -27,11 +27,18 @@ describe("bootstrapErrorMessage", () => {
 
 describe("AuthCompletePage", () => {
   it("redirects a bootstrapped account to Home", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ workspaceId: "workspace-1" })));
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(Response.json({ workspaceId: "workspace-1", organizationId: "org-1" }))
+      .mockResolvedValueOnce(Response.json({ organizationId: "org-1" }));
+    vi.stubGlobal("fetch", fetchMock);
 
     render(createElement(AuthCompletePage));
 
     expect(await screen.findByText("Finishing sign-in…")).toBeInTheDocument();
     await vi.waitFor(() => expect(replace).toHaveBeenCalledWith("/home"));
+    expect(fetchMock).toHaveBeenCalledWith("/api/auth/refresh-organization", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ organizationId: "org-1" }),
+    }));
   });
 });
