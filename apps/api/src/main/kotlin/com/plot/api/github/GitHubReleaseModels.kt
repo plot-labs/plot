@@ -71,6 +71,7 @@ data class GitHubReleaseActivityRecord(
 	val transitionVersion: Long,
 	val createdAt: Instant,
 	val updatedAt: Instant,
+	val agentRunId: UUID? = null,
 )
 
 class GitHubReleaseRetryRejectedException : RuntimeException("GitHub release retry is no longer valid")

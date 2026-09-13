@@ -45,6 +45,8 @@ class GitHubReleaseActivityApiIntegrationTest {
 		jdbcTemplate.update("delete from github_release_draft_evidence")
 		jdbcTemplate.update("update content_packs set release_request_id = null where release_request_id is not null")
 		jdbcTemplate.update("delete from github_release_draft_requests")
+		jdbcTemplate.update("delete from agent_runs")
+		jdbcTemplate.update("delete from work_sessions")
 		jdbcTemplate.update("delete from github_webhook_deliveries")
 	}
 
@@ -140,6 +142,36 @@ class GitHubReleaseActivityApiIntegrationTest {
 		val foreignRequestId = insertRequest(foreignWorkspaceId, foreignScopeId, "FAILED")
 		mockMvc.post("/api/github/repositories/$foreignScopeId/release-activity/$foreignRequestId/retry")
 			.andExpect { status { isNotFound() } }
+
+		val executedFailedId = insertRequest(devContext.devWorkspaceId, sourceScopeId, "FAILED", tagName = "v1.4.0")
+		val sessionId = UUID.randomUUID()
+		jdbcTemplate.update(
+			"insert into work_sessions (id, workspace_id, title, status, created_by_user_id, created_at, updated_at) values (?, ?, 'Session', 'ACTIVE', ?, now(), now())",
+			sessionId, devContext.devWorkspaceId, devContext.devUserId,
+		)
+		val agentRunId = UUID.randomUUID()
+		jdbcTemplate.update(
+			"""
+			insert into agent_runs (
+				id, workspace_id, work_session_id, created_by_user_id, origin, idempotency_key, request_fingerprint, instruction_snapshot,
+				prompt_version, tool_policy_version, budget_snapshot, status,
+				current_step, attempt_count, max_attempts, created_at, updated_at
+			) values (?, ?, ?, ?, 'CHAT', ?, ?, 'test instruction', 'chat-agent-v1', 'read-only-v1', '{}'::jsonb,
+				'FAILED', 0, 0, 3, now(), now())
+			""".trimIndent(),
+			agentRunId,
+			devContext.devWorkspaceId,
+			sessionId,
+			devContext.devUserId,
+			"agent-$agentRunId",
+			"fingerprint-$agentRunId",
+		)
+		jdbcTemplate.update("update github_release_draft_requests set agent_run_id = ? where id = ?", agentRunId, executedFailedId)
+		mockMvc.post("/api/github/repositories/$sourceScopeId/release-activity/$executedFailedId/retry")
+			.andExpect {
+				status { isConflict() }
+				jsonPath("$.error") { value("RELEASE_NOT_RETRYABLE") }
+			}
 	}
 
 	@Test

@@ -110,16 +110,12 @@ class GitHubReleaseDraftWorker(
 	}
 
 	private fun isRetryable(exception: RuntimeException): Boolean = when (exception) {
-		is com.plot.api.autonomy.assessment.AssessmentException -> exception.recoverable
-		is com.plot.api.autonomy.opportunity.OpportunityException -> exception.recoverable
 		is ApiException -> exception.error in RETRYABLE_API_ERRORS
 		is TransientDataAccessException, is TaskRejectedException -> true
 		else -> false
 	}
 
 	private fun safeErrorCode(exception: RuntimeException): String = when (exception) {
-		is com.plot.api.autonomy.assessment.AssessmentException -> exception.code
-		is com.plot.api.autonomy.opportunity.OpportunityException -> exception.code
 		is ApiException -> exception.error.takeIf(::isSafeErrorCode) ?: "RELEASE_PROCESSING_FAILED"
 		is GitHubReleasePermanentException -> exception.safeErrorCode
 		is TransientDataAccessException -> "RELEASE_STORAGE_TRANSIENT"

@@ -574,22 +574,6 @@ export class PlotApiError extends Error {
   }
 }
 
-export interface AutonomyHomeItem {
-  id: string;
-  sourceScopeId: string;
-  title: string;
-  disposition: "EXCLUDED" | "AWAITING_EVIDENCE" | "ELIGIBLE";
-  reason: string;
-  dismissed: boolean;
-  version: number;
-  missingFacts: string[];
-  lastErrorCode: string | null;
-  goalState: string | null;
-  agentRunId: string | null;
-  chatId: string | null;
-  updatedAt: string;
-}
-
 export type ActivityStatus =
   | "IN_PROGRESS"
   | "READY_FOR_REVIEW"
@@ -619,15 +603,8 @@ export interface ActivityPage {
   highWaterMark: string;
 }
 
-export interface AutonomyHome {
-  items: AutonomyHomeItem[];
-}
-
 export interface PlotApiClient {
-  getAutonomyHome(options?: RequestOptions): Promise<AutonomyHome>;
   getActivity(query?: { cursor?: string; limit?: number; highWaterMark?: string }, options?: RequestOptions): Promise<ActivityPage>;
-  dismissOpportunity(id: string, expectedVersion: number, options?: RequestOptions): Promise<AutonomyHomeItem>;
-  restoreOpportunity(id: string, expectedVersion: number, options?: RequestOptions): Promise<AutonomyHomeItem>;
 
   createGitHubInstallationRequest(options?: RequestOptions): Promise<GitHubInstallationRequest>;
   startGitHubProductOAuth(returnTo?: "/settings/integrations" | "/chat", options?: RequestOptions): Promise<GitHubProductOAuthStart>;
@@ -710,7 +687,6 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
   }
 
   return {
-    getAutonomyHome: (requestOptions) => request("/autonomy/home", { signal: requestOptions?.signal }),
     getActivity: (query, requestOptions) => {
       const params = new URLSearchParams();
       if (query?.cursor) params.set("cursor", query.cursor);
@@ -719,12 +695,6 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
       const queryString = params.toString();
       return request(`/autonomy/activity${queryString ? `?${queryString}` : ""}`, { signal: requestOptions?.signal });
     },
-    dismissOpportunity: (id, expectedVersion, requestOptions) => request(`/autonomy/opportunities/${encodeURIComponent(id)}/dismiss`, {
-      method: "POST", body: JSON.stringify({ expectedVersion }), signal: requestOptions?.signal,
-    }),
-    restoreOpportunity: (id, expectedVersion, requestOptions) => request(`/autonomy/opportunities/${encodeURIComponent(id)}/restore`, {
-      method: "POST", body: JSON.stringify({ expectedVersion }), signal: requestOptions?.signal,
-    }),
     createGitHubInstallationRequest: (requestOptions) => request("/github/installations/requests", {
       method: "POST",
       signal: requestOptions?.signal,

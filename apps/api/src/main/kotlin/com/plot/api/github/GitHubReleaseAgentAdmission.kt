@@ -24,7 +24,7 @@ class DefaultGitHubReleaseAgentAdmission(
 	private val requestPersistence: GitHubReleaseRequestStore,
 	private val chatAgentAdmissionService: ChatAgentAdmissionService,
 	private val routineService: GitHubReleaseRoutineService,
-	private val preparationGate: GitHubReleasePreparationGate,
+	private val preparationGate: GitHubReleasePreparationGate? = null,
 ) : GitHubReleaseAgentAdmission {
 	override fun prepare(request: GitHubReleaseDraftRequest) {
 		if (request.routineId != null) routineService.prepare(request)
@@ -51,7 +51,7 @@ class DefaultGitHubReleaseAgentAdmission(
 			chatTitle = "GitHub release ${request.tagName}",
 		)
 		requestPersistence.linkAgentRun(request.id, evidenceTransitionVersion, evidence.observationId, agentRun.id)
-		preparationGate.admitted(request, agentRun.id)
+		preparationGate?.admitted(request, agentRun.id)
 		return agentRun
 	}
 }

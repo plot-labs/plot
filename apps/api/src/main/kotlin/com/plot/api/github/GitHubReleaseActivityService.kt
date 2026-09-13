@@ -34,7 +34,7 @@ class GitHubReleaseActivityService(
 		requireScope(sourceScopeId, workspaceId)
 		val activity = requestPersistence.findActivity(requestId, sourceScopeId, workspaceId)
 			?: throw notFound()
-		if (activity.status != GitHubReleaseDraftStatus.FAILED) {
+		if (activity.status != GitHubReleaseDraftStatus.FAILED || activity.agentRunId != null) {
 			throw ApiException(
 				HttpStatus.CONFLICT,
 				"RELEASE_NOT_RETRYABLE",

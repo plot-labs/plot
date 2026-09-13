@@ -183,9 +183,7 @@ function callbackErrorKind(status: number, code: unknown): "invalid" | "unauthor
 function isAllowed(method: string, path: string[]): boolean {
   if (path.length === 0 || path.some((segment) => !safeSegment.test(segment))) return false;
   const route = path.join("/");
-  if (method === "GET" && (route === "autonomy/home" || route === "autonomy/activity")) return true;
-  if (method === "POST" && path.length === 4 && path[0] === "autonomy" && path[1] === "opportunities"
-    && uuidPattern.test(path[2]) && ["dismiss", "restore"].includes(path[3])) return true;
+  if (method === "GET" && route === "autonomy/activity") return true;
 	if (method === "GET" && route === "me") return true;
 	if (method === "POST" && route === "account/bootstrap") return true;
 	if (method === "POST" && route === "workspaces") return true;

@@ -455,7 +455,7 @@ status, attempt_count, generation_attempt, transition_version, agent_run_id, gen
 
 internal val activityColumns = """
 r.id, r.source_scope_id, r.tag_name, r.status, r.base_sha, r.head_sha, r.boundary_reason,
-cp.id as content_pack_id, r.error_code, r.transition_version, r.created_at, r.updated_at
+cp.id as content_pack_id, r.error_code, r.transition_version, r.created_at, r.updated_at, r.agent_run_id
 """.trimIndent()
 
 internal fun SqlRow.toReleaseDraftRequest(): GitHubReleaseDraftRequest = GitHubReleaseDraftRequest(
@@ -492,6 +492,7 @@ internal fun SqlRow.toReleaseActivity(): GitHubReleaseActivityRecord = GitHubRel
 	transitionVersion = getLong("transition_version"),
 	createdAt = requireNotNull(getTimestamp("created_at")).toInstant(),
 	updatedAt = requireNotNull(getTimestamp("updated_at")).toInstant(),
+	agentRunId = getObject("agent_run_id", UUID::class.java),
 )
 
 private fun Instant.toOffsetDateTime(): OffsetDateTime = atOffset(ZoneOffset.UTC)
