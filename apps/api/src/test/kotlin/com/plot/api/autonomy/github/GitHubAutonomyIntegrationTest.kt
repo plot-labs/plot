@@ -54,14 +54,12 @@ class GitHubAutonomyIntegrationTest {
     }
 
     @Test
-    fun `published but meaningless or insufficient changes never create a goal`() {
-        for (disposition in listOf(AssessmentDisposition.EXCLUDED, AssessmentDisposition.ACCUMULATING)) fixture { f ->
-            f.publish()
-            val services = services(disposition = disposition)
-            assertFalse(services.bridge.shouldPrepare(f.request, f.context, f.evidence))
-            assertEquals(disposition, services.opportunities.findBySubject(f.workspace, f.scope, "github-release:v1")?.disposition)
-            assertEquals(0, count("autonomy_goals", f.workspace))
-        }
+    fun `published but meaningless or insufficient changes never create a goal`() = fixture { f ->
+        f.publish()
+        val services = services(disposition = AssessmentDisposition.EXCLUDED)
+        assertFalse(services.bridge.shouldPrepare(f.request, f.context, f.evidence))
+        assertEquals(AssessmentDisposition.EXCLUDED, services.opportunities.findBySubject(f.workspace, f.scope, "github-release:v1")?.disposition)
+        assertEquals(0, count("autonomy_goals", f.workspace))
     }
 
     @Test

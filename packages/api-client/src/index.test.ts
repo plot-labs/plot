@@ -647,14 +647,17 @@ it("scopes autonomy reads and versioned decisions to the selected workspace", as
   const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
   const controller = new AbortController();
   await client.getAutonomyHome({ signal: controller.signal });
+  await client.getActivity({ cursor: "cur-1", limit: 10, highWaterMark: "2026-09-13T10:00:00Z" }, { signal: controller.signal });
   await client.dismissOpportunity("opportunity-1", 7);
   await client.restoreOpportunity("opportunity-1", 8);
   expect(fetcher.mock.calls[0]?.[0]).toBe("/api/plot/autonomy/home");
   expect(fetcher.mock.calls[0]?.[1]?.signal).toBe(controller.signal);
-  expect(fetcher.mock.calls[1]?.[0]).toBe("/api/plot/autonomy/opportunities/opportunity-1/dismiss");
-  expect(fetcher.mock.calls[1]?.[1]?.body).toBe(JSON.stringify({ expectedVersion: 7 }));
-  expect(fetcher.mock.calls[2]?.[0]).toBe("/api/plot/autonomy/opportunities/opportunity-1/restore");
-  expect(fetcher.mock.calls[2]?.[1]?.body).toBe(JSON.stringify({ expectedVersion: 8 }));
+  expect(fetcher.mock.calls[1]?.[0]).toBe("/api/plot/autonomy/activity?cursor=cur-1&limit=10&highWaterMark=2026-09-13T10%3A00%3A00Z");
+  expect(fetcher.mock.calls[1]?.[1]?.signal).toBe(controller.signal);
+  expect(fetcher.mock.calls[2]?.[0]).toBe("/api/plot/autonomy/opportunities/opportunity-1/dismiss");
+  expect(fetcher.mock.calls[2]?.[1]?.body).toBe(JSON.stringify({ expectedVersion: 7 }));
+  expect(fetcher.mock.calls[3]?.[0]).toBe("/api/plot/autonomy/opportunities/opportunity-1/restore");
+  expect(fetcher.mock.calls[3]?.[1]?.body).toBe(JSON.stringify({ expectedVersion: 8 }));
   for (const [, init] of fetcher.mock.calls) {
     expect(new Headers(init?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
     expect(init?.cache).toBe("no-store");

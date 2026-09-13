@@ -541,7 +541,7 @@ export interface AutonomyHomeItem {
   id: string;
   sourceScopeId: string;
   title: string;
-  disposition: "EXCLUDED" | "ACCUMULATING" | "AWAITING_EVIDENCE" | "ELIGIBLE";
+  disposition: "EXCLUDED" | "AWAITING_EVIDENCE" | "ELIGIBLE";
   reason: string;
   dismissed: boolean;
   version: number;
@@ -553,12 +553,42 @@ export interface AutonomyHomeItem {
   updatedAt: string;
 }
 
+export type ActivityStatus =
+  | "IN_PROGRESS"
+  | "READY_FOR_REVIEW"
+  | "ACTION_REQUIRED"
+  | "NO_UPDATE_NEEDED"
+  | "EXCLUDED";
+
+export interface ActivityItem {
+  id: string;
+  sourceScopeId: string;
+  signalId: string | null;
+  responseVersionId: string | null;
+  agentRunId: string | null;
+  chatId: string | null;
+  artifactId: string | null;
+  title: string;
+  status: ActivityStatus;
+  reason: string;
+  semanticTime: string;
+  updatedAt: string;
+}
+
+export interface ActivityPage {
+  items: ActivityItem[];
+  nextCursor: string | null;
+  hasMore: boolean;
+  highWaterMark: string;
+}
+
 export interface AutonomyHome {
   items: AutonomyHomeItem[];
 }
 
 export interface PlotApiClient {
   getAutonomyHome(options?: RequestOptions): Promise<AutonomyHome>;
+  getActivity(query?: { cursor?: string; limit?: number; highWaterMark?: string }, options?: RequestOptions): Promise<ActivityPage>;
   dismissOpportunity(id: string, expectedVersion: number, options?: RequestOptions): Promise<AutonomyHomeItem>;
   restoreOpportunity(id: string, expectedVersion: number, options?: RequestOptions): Promise<AutonomyHomeItem>;
 
@@ -640,6 +670,14 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
 
   return {
     getAutonomyHome: (requestOptions) => request("/autonomy/home", { signal: requestOptions?.signal }),
+    getActivity: (query, requestOptions) => {
+      const params = new URLSearchParams();
+      if (query?.cursor) params.set("cursor", query.cursor);
+      if (query?.limit) params.set("limit", String(query.limit));
+      if (query?.highWaterMark) params.set("highWaterMark", query.highWaterMark);
+      const queryString = params.toString();
+      return request(`/autonomy/activity${queryString ? `?${queryString}` : ""}`, { signal: requestOptions?.signal });
+    },
     dismissOpportunity: (id, expectedVersion, requestOptions) => request(`/autonomy/opportunities/${encodeURIComponent(id)}/dismiss`, {
       method: "POST", body: JSON.stringify({ expectedVersion }), signal: requestOptions?.signal,
     }),

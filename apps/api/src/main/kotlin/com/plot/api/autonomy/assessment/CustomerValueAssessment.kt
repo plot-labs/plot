@@ -6,7 +6,7 @@ import java.util.UUID
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.stereotype.Service
 
-enum class AssessmentDisposition { EXCLUDED, ACCUMULATING, AWAITING_EVIDENCE, ELIGIBLE }
+enum class AssessmentDisposition { EXCLUDED, AWAITING_EVIDENCE, ELIGIBLE }
 enum class AssessmentEvidenceKind { RELEASE, CHANGE, ISSUE, DISCUSSION, DOCUMENT }
 enum class CustomerAvailability { AVAILABLE, UNAVAILABLE, UNKNOWN }
 

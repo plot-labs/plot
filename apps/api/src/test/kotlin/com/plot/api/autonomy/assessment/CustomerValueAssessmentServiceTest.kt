@@ -43,10 +43,8 @@ class CustomerValueAssessmentServiceTest {
         assertThrows(AssessmentException::class.java) { service(decision().copy(reason = " ")).assess(input()) }
         assertThrows(AssessmentException::class.java) { service(decision(AssessmentDisposition.AWAITING_EVIDENCE)).assess(input()) }
     }
-    @Test fun `published release can still be excluded or accumulated`() {
-        for (disposition in listOf(AssessmentDisposition.EXCLUDED, AssessmentDisposition.ACCUMULATING)) {
-            assertEquals(disposition, service(decision(disposition)).assess(input()).disposition)
-        }
+    @Test fun `published release can still be excluded`() {
+        assertEquals(AssessmentDisposition.EXCLUDED, service(decision(AssessmentDisposition.EXCLUDED)).assess(input()).disposition)
     }
     @Test fun `available release must itself be cited`() {
         val discussion = evidence(kind = AssessmentEvidenceKind.DISCUSSION).copy(id = "e2")

@@ -7,6 +7,9 @@ import com.plot.api.common.ApiException
 import com.plot.api.dev.DevContext
 import com.plot.api.entitlement.WorkspaceAccessService
 import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.autonomy.signal.ActivityPage
+import com.plot.api.autonomy.signal.SignalActivityProjectionService
+import java.time.Instant
 import java.util.UUID
 import org.springframework.http.CacheControl
 import org.springframework.http.HttpStatus
@@ -20,6 +23,7 @@ class AutonomyHomeController(
     private val access: WorkspaceAccessService,
     private val opportunities: OpportunityService,
     private val sql: JooqSqlExecutor,
+    private val activityProjection: SignalActivityProjectionService? = null,
 ) {
     data class VersionRequest(val expectedVersion: Long)
     data class HomeResponse(val items: List<HomeItem>)
@@ -34,16 +38,32 @@ class AutonomyHomeController(
     fun home(): ResponseEntity<HomeResponse> {
         val workspace = context.devWorkspaceId
         access.requireActiveWorkspace(workspace)
-        val visibleScopes = sql.query("""select distinct s.id from source_scopes s
-            join source_namespaces n on n.workspace_id=s.workspace_id and n.id=s.source_namespace_id
-            join connection_namespace_bindings b on b.workspace_id=s.workspace_id and b.source_namespace_id=n.id
-            join connections c on c.workspace_id=b.workspace_id and c.id=b.connection_id
-            where s.workspace_id=? and s.status='ACTIVE' and n.status='ACTIVE' and b.status='ACTIVE'
-            and c.status='ACTIVE' and b.valid_from<=now() and (b.valid_to is null or b.valid_to>now())""",
-            { row, _ -> row.getObject("id", UUID::class.java) }, workspace).toSet()
+        val visibleScopes = getVisibleScopes(workspace)
         return response(HomeResponse(
             opportunities.list(workspace).filter { it.sourceScopeId in visibleScopes }.map(::item)))
     }
+
+    @GetMapping("/activity")
+    fun activity(
+        @RequestParam(required = false) cursor: String?,
+        @RequestParam(required = false, defaultValue = "20") limit: Int,
+        @RequestParam(required = false) highWaterMark: String?,
+    ): ResponseEntity<ActivityPage> {
+        val workspace = context.devWorkspaceId
+        access.requireActiveWorkspace(workspace)
+        val visibleScopes = getVisibleScopes(workspace)
+        val hwm = highWaterMark?.let { Instant.parse(it) }
+        val projection = activityProjection ?: SignalActivityProjectionService(sql)
+        return response(projection.projectActivity(workspace, visibleScopes, limit, cursor, hwm))
+    }
+
+    private fun getVisibleScopes(workspace: UUID): Set<UUID> = sql.query("""select distinct s.id from source_scopes s
+        join source_namespaces n on n.workspace_id=s.workspace_id and n.id=s.source_namespace_id
+        join connection_namespace_bindings b on b.workspace_id=s.workspace_id and b.source_namespace_id=n.id
+        join connections c on c.workspace_id=b.workspace_id and c.id=b.connection_id
+        where s.workspace_id=? and s.status='ACTIVE' and n.status='ACTIVE' and b.status='ACTIVE'
+        and c.status='ACTIVE' and b.valid_from<=now() and (b.valid_to is null or b.valid_to>now())""",
+        { row, _ -> row.getObject("id", UUID::class.java) }, workspace).filterNotNull().toSet()
 
     @PostMapping("/opportunities/{id}/dismiss")
     fun dismiss(@PathVariable id: UUID, @RequestBody request: VersionRequest) = change {

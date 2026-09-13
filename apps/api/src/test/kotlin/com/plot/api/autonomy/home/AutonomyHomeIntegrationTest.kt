@@ -125,6 +125,27 @@ class AutonomyHomeIntegrationTest {
         verify(access,times(2)).requireWritable(fixture.record.workspaceId)
     }
 
+    @Test
+    fun `activity returns paginated activity items for visible scopes`() {
+        val selected = fixture()
+        val context = mock(DevContext::class.java)
+        val access = mock(WorkspaceAccessService::class.java)
+        `when`(context.devWorkspaceId).thenReturn(selected.record.workspaceId)
+        val controller = controller(context, access)
+
+        jdbc.update("""
+            insert into legacy_activity_provenance(id, workspace_id, source_scope_id, title, disposition, reason, semantic_time, created_at)
+            values (?, ?, ?, 'Legacy v1.0', 'EXCLUDED', 'No customer value', now(), now())
+        """, UUID.randomUUID(), selected.record.workspaceId, selected.record.sourceScopeId)
+
+        val response = controller.activity(null, 20, null)
+        assertEquals(HttpStatus.OK, response.statusCode)
+        val body = assertNotNull(response.body)
+        assertEquals(1, body.items.size)
+        assertEquals("Legacy v1.0", body.items[0].title)
+        assertEquals("EXCLUDED", body.items[0].status)
+    }
+
 
     private fun controller(context: DevContext, access: WorkspaceAccessService) = AutonomyHomeController(
         context, access, service(), sql,
