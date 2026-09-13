@@ -4,16 +4,16 @@
 -- 1. Chat logical turns
 create table chat_turns (
   id uuid primary key,
-  workspace_id uuid not null references workspaces(id),
+  workspace_id uuid not null references workspaces(id) on delete cascade,
   work_session_id uuid not null,
   turn_index integer not null check (turn_index >= 0),
   user_message text not null,
-  created_by_user_id uuid references users(id),
+  created_by_user_id uuid references users(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (workspace_id, id),
   unique (workspace_id, work_session_id, turn_index),
-  foreign key (workspace_id, work_session_id) references work_sessions(workspace_id, id) on delete restrict
+  foreign key (workspace_id, work_session_id) references work_sessions(workspace_id, id) on delete cascade
 );
 
 create index chat_turns_session_idx on chat_turns(workspace_id, work_session_id, turn_index);
@@ -21,20 +21,20 @@ create index chat_turns_session_idx on chat_turns(workspace_id, work_session_id,
 -- 2. Chat response versions
 create table chat_response_versions (
   id uuid primary key,
-  workspace_id uuid not null references workspaces(id),
+  workspace_id uuid not null references workspaces(id) on delete cascade,
   turn_id uuid not null,
   version_index integer not null check (version_index >= 0),
   agent_run_id uuid not null,
-  initiator_user_id uuid references users(id),
+  initiator_user_id uuid references users(id) on delete set null,
   lineage_parent_version_id uuid,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (workspace_id, id),
   unique (workspace_id, turn_id, version_index),
   unique (workspace_id, agent_run_id),
-  foreign key (workspace_id, turn_id) references chat_turns(workspace_id, id) on delete restrict,
-  foreign key (workspace_id, agent_run_id) references agent_runs(workspace_id, id) on delete restrict,
-  foreign key (workspace_id, lineage_parent_version_id) references chat_response_versions(workspace_id, id)
+  foreign key (workspace_id, turn_id) references chat_turns(workspace_id, id) on delete cascade,
+  foreign key (workspace_id, agent_run_id) references agent_runs(workspace_id, id) on delete cascade,
+  foreign key (workspace_id, lineage_parent_version_id) references chat_response_versions(workspace_id, id) on delete set null
 );
 
 create index chat_response_versions_turn_idx on chat_response_versions(workspace_id, turn_id, version_index);
@@ -42,7 +42,7 @@ create index chat_response_versions_turn_idx on chat_response_versions(workspace
 -- 3. Signal evaluation evidence
 create table signal_evaluations (
   id uuid primary key,
-  workspace_id uuid not null references workspaces(id),
+  workspace_id uuid not null references workspaces(id) on delete cascade,
   signal_id uuid not null,
   source_namespace_id uuid not null,
   source_scope_id uuid not null,
@@ -59,9 +59,9 @@ create table signal_evaluations (
   updated_at timestamptz not null default now(),
   unique (workspace_id, id),
   unique (workspace_id, signal_id),
-  foreign key (workspace_id, signal_id) references autonomy_signals(workspace_id, id) on delete restrict,
-  foreign key (workspace_id, source_namespace_id, source_scope_id) references source_scopes(workspace_id, source_namespace_id, id),
-  foreign key (workspace_id, admitted_response_version_id) references chat_response_versions(workspace_id, id)
+  foreign key (workspace_id, signal_id) references autonomy_signals(workspace_id, id) on delete cascade,
+  foreign key (workspace_id, source_namespace_id, source_scope_id) references source_scopes(workspace_id, source_namespace_id, id) on delete cascade,
+  foreign key (workspace_id, admitted_response_version_id) references chat_response_versions(workspace_id, id) on delete set null
 );
 
 create index signal_evaluations_workspace_time_idx on signal_evaluations(workspace_id, semantic_time desc);
@@ -69,7 +69,7 @@ create index signal_evaluations_workspace_time_idx on signal_evaluations(workspa
 -- 4. Frozen execution envelopes
 create table chat_execution_envelopes (
   id uuid primary key,
-  workspace_id uuid not null references workspaces(id),
+  workspace_id uuid not null references workspaces(id) on delete cascade,
   agent_run_id uuid not null,
   fingerprint_version integer not null default 1,
   envelope_fingerprint varchar(64) not null,
@@ -78,8 +78,8 @@ create table chat_execution_envelopes (
   created_at timestamptz not null default now(),
   unique (workspace_id, id),
   unique (workspace_id, agent_run_id),
-  foreign key (workspace_id, agent_run_id) references agent_runs(workspace_id, id) on delete restrict,
-  foreign key (workspace_id, source_snapshot_id) references content_source_snapshots(workspace_id, id)
+  foreign key (workspace_id, agent_run_id) references agent_runs(workspace_id, id) on delete cascade,
+  foreign key (workspace_id, source_snapshot_id) references content_source_snapshots(workspace_id, id) on delete set null
 );
 
 -- 5. Tool transcript entries
@@ -103,7 +103,7 @@ create index chat_execution_transcript_entries_idx on chat_execution_transcript_
 -- 6. Detached legacy activity provenance
 create table legacy_activity_provenance (
   id uuid primary key,
-  workspace_id uuid not null references workspaces(id),
+  workspace_id uuid not null references workspaces(id) on delete cascade,
   source_scope_id uuid not null,
   opportunity_id uuid,
   goal_id uuid,

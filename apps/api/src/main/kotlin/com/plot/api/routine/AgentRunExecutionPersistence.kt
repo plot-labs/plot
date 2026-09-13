@@ -32,7 +32,9 @@ class AgentRunExecutionPersistence(
 	@Lazy private val releaseReconciliation: GitHubReleaseReconciliationTrigger? = null,
 	dslContext: DSLContext,
 	private val clock: Clock? = null,
+	private val compatibilityWriter: ChatCompatibilityWriter? = null,
 ) {
+	private fun writer(): ChatCompatibilityWriter = compatibilityWriter ?: ChatCompatibilityWriter(sqlExecutor, uuidGenerator)
 	private val dsl: DSLContext = dslContext.configuration()
 		.derive(dslContext.settings().withRenderSchema(false))
 		.dsl()
@@ -340,6 +342,16 @@ class AgentRunExecutionPersistence(
 				AGENT_STEPS.STATUS.eq(AgentStepStatus.RUNNING.name),
 			)
 			.execute()
+		writer().recordTranscriptEntry(
+			workspaceId = claim.workspaceId,
+			agentRunId = claim.agentRunId,
+			callIndex = step.sequence,
+			toolName = step.toolName ?: "UNKNOWN",
+			argumentsJson = step.argumentsJson,
+			resultJson = resultJson,
+			adoptedInputHash = adopted?.contentHash,
+			now = now,
+		)
 		advanceAndRelease(claim, run.currentStep + 1, now)
 		requireNotNull(queryPersistence.findStep(claim.workspaceId, claim.agentRunId, stepId))
 	}
@@ -368,6 +380,16 @@ class AgentRunExecutionPersistence(
 			)
 			.execute()
 		if (stepUpdated != 1) throw AgentRunClaimLostException()
+		writer().recordTranscriptEntry(
+			workspaceId = claim.workspaceId,
+			agentRunId = claim.agentRunId,
+			callIndex = step.sequence,
+			toolName = step.toolName ?: "UNKNOWN",
+			argumentsJson = step.argumentsJson,
+			resultJson = resultJson,
+			adoptedInputHash = null,
+			now = now,
+		)
 		advanceAndRelease(claim, run.currentStep + 1, now)
 		requireNotNull(queryPersistence.findStep(claim.workspaceId, claim.agentRunId, stepId))
 	}

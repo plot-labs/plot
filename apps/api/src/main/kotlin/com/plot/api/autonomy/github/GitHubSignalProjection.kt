@@ -22,6 +22,7 @@ class GitHubSignalProjection(
     private val executions: com.plot.api.autonomy.execution.AutonomyExecutionService,
     @org.springframework.context.annotation.Lazy private val dispatcher: com.plot.api.github.GitHubReleaseDraftDispatcher? = null,
     private val limits: com.plot.api.autonomy.opportunity.OpportunityProperties = com.plot.api.autonomy.opportunity.OpportunityProperties(),
+    private val signalEvaluationPersistence: com.plot.api.autonomy.signal.SignalEvaluationPersistence? = null,
 ) {
     @Scheduled(fixedDelayString = "\${plot.autonomy.scan-delay:PT30S}", initialDelayString = "\${plot.autonomy.scan-delay:PT30S}")
     fun scan() {
@@ -76,6 +77,24 @@ class GitHubSignalProjection(
                     UUID.randomUUID(),envelope.workspaceId,envelope.sourceScopeId,key,
                     if(isRelease) envelope.objectKey.removePrefix("release:") else "Repository changes",
                     "Change observed. Waiting for release evidence and customer-value assessment.",Timestamp.from(now),Timestamp.from(now))
+
+                val evalPersistence = signalEvaluationPersistence ?: com.plot.api.autonomy.signal.SignalEvaluationPersistence(sql, com.plot.api.common.UuidGenerator())
+                evalPersistence.assertWriterInvariants(legacyWriterActive = true)
+                val inputFingerprint = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest("${envelope.sourceScopeId}:${envelope.objectKey}:${envelope.sourceVersion}".toByteArray())
+                    .joinToString("") { "%02x".format(it) }
+                evalPersistence.recordEvaluation(
+                    workspaceId = envelope.workspaceId,
+                    signalId = claim.id,
+                    sourceNamespaceId = envelope.sourceNamespaceId,
+                    sourceScopeId = envelope.sourceScopeId,
+                    inputFingerprint = inputFingerprint,
+                    outcome = "NO_GENERATION",
+                    reason = if (isRelease) "Release observed: ${envelope.objectKey.removePrefix("release:")}. Assessment pending." else "Repository changes observed. Assessment pending.",
+                    semanticTime = envelope.sourceVersion ?: now,
+                    now = now,
+                )
+
                 check(inbox.finish(claim,Instant.now())) { "Signal lease lost" }
                 true
             }

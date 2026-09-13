@@ -10,6 +10,8 @@ import java.time.Instant
 import java.util.UUID
 import org.springframework.stereotype.Component
 
+import tools.jackson.databind.ObjectMapper
+
 @Component
 class AgentRunAdmissionPersistence(
 	private val sqlExecutor: JooqSqlExecutor,
@@ -18,7 +20,10 @@ class AgentRunAdmissionPersistence(
 	private val queryPersistence: AgentRunQueryPersistence,
 	private val contentProfilePersistence: ContentProfilePersistence,
 	private val clock: Clock? = null,
+	private val compatibilityWriter: ChatCompatibilityWriter? = null,
+	private val objectMapper: ObjectMapper = ObjectMapper(),
 ) {
+	private fun writer(): ChatCompatibilityWriter = compatibilityWriter ?: ChatCompatibilityWriter(sqlExecutor, uuidGenerator)
 	private fun currentInstant(): Instant = clock?.instant() ?: Instant.now()
 
 	private data class RoutineCursor(val value: Long?, val enabled: Boolean, val releaseCadence: Boolean)
@@ -177,6 +182,27 @@ class AgentRunAdmissionPersistence(
 				Timestamp.from(input.capturedAt),
 			)
 		}
+
+		val settingsJson = objectMapper.writeValueAsString(
+			mapOf(
+				"promptVersion" to request.promptVersion.trim(),
+				"toolPolicyVersion" to request.toolPolicyVersion.trim(),
+				"budgetSnapshot" to request.budgetSnapshotJson,
+				"contentType" to request.contentType.name,
+				"contentProfileRevisionId" to profileRevisionId,
+				"contentBriefSnapshot" to request.contentBriefSnapshotJson,
+			),
+		)
+		writer().recordRoutineRun(
+			workspaceId = workspaceId,
+			userId = execution.createdByUserId,
+			workSessionId = workSessionId,
+			runId = agentRunId,
+			instruction = request.instructionSnapshot.trim(),
+			fingerprint = request.requestFingerprint ?: "routine:$executionId",
+			settingsJson = settingsJson,
+			now = now,
+		)
 
 		val finishedAt = now
 		val sqlArgs: Array<Any> = (listOf<Any>(

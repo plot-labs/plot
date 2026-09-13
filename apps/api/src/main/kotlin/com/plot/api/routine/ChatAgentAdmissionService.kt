@@ -44,7 +44,9 @@ class ChatAgentAdmissionService(
 	private val contentProfileService: ContentProfileService,
 	private val contentSourceSnapshotService: ContentSourceSnapshotService,
 	private val workspaceAccessService: WorkspaceAccessService,
+	private val compatibilityWriter: ChatCompatibilityWriter? = null,
 ) {
+	private fun writer(): ChatCompatibilityWriter = compatibilityWriter ?: ChatCompatibilityWriter(sqlExecutor, uuidGenerator)
 	fun admit(request: CreateChatAgentRunRequest, idempotencyKey: String): ChatAgentRunResponse {
 		sourceManagedAccessGuard.requireReadable()
 		val run = admitInternal(
@@ -270,6 +272,28 @@ class ChatAgentAdmissionService(
 				)
 			}
 
+			val settingsJson = objectMapper.writeValueAsString(
+				mapOf(
+					"promptVersion" to "chat-agent-v1",
+					"toolPolicyVersion" to "read-only-v1",
+					"budgetSnapshot" to budgetSnapshot(),
+					"contentType" to request.contentType.name,
+					"contentProfileRevisionId" to frozenProfileRevisionId,
+					"contentBriefSnapshot" to briefJson,
+				),
+			)
+			writer().recordDirectChatRun(
+				workspaceId = workspaceId,
+				userId = userId,
+				chatId = chatId,
+				runId = runId,
+				instruction = normalizedInstruction,
+				fingerprint = fingerprint,
+				settingsJson = settingsJson,
+				sourceSnapshotId = snapshot.id,
+				now = now,
+			)
+
 			val admittedRun = requireNotNull(agentRunQueryPersistence.findAgentRun(workspaceId, runId))
 			scheduleAgentRunDispatchAfterCommit()
 			admittedRun
@@ -412,6 +436,28 @@ class ChatAgentAdmissionService(
 				)
 				insertSeed(workspaceId, runId, seed, now)
 			}
+
+			val settingsJson = objectMapper.writeValueAsString(
+				mapOf(
+					"promptVersion" to "chat-agent-v1",
+					"toolPolicyVersion" to "read-only-v1",
+					"budgetSnapshot" to budgetSnapshot(),
+					"contentType" to contentType.name,
+					"contentProfileRevisionId" to frozenProfileRevisionId,
+					"contentBriefSnapshot" to briefJson,
+				),
+			)
+			writer().recordDirectChatRun(
+				workspaceId = workspaceId,
+				userId = userId,
+				chatId = chatId,
+				runId = runId,
+				instruction = normalizedInstruction,
+				fingerprint = fingerprint,
+				settingsJson = settingsJson,
+				sourceSnapshotId = null,
+				now = now,
+			)
 
 			val run = requireNotNull(agentRunQueryPersistence.findAgentRun(workspaceId, runId))
 			scheduleAgentRunDispatchAfterCommit()

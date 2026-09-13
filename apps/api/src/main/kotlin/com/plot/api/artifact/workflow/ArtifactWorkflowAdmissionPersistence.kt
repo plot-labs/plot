@@ -9,6 +9,7 @@ import com.plot.api.entitlement.TrialPolicy
 import com.plot.api.persistence.JooqSqlExecutor
 import com.plot.api.persistence.JooqTransactionExecutor
 import com.plot.api.routine.AgentToolAccessException
+import com.plot.api.routine.ChatCompatibilityWriter
 import java.sql.Timestamp
 import java.time.Clock
 import java.time.Instant
@@ -26,7 +27,9 @@ class ArtifactWorkflowAdmissionPersistence(
 	private val materializationPersistence: ArtifactWorkflowMaterializationPersistence,
 	private val contentTypeRegistry: ContentTypeRegistry,
 	private val clock: Clock = Clock.systemUTC(),
+	private val compatibilityWriter: ChatCompatibilityWriter? = null,
 ) {
+	private fun writer(): ChatCompatibilityWriter = compatibilityWriter ?: ChatCompatibilityWriter(sqlExecutor, uuidGenerator)
 	fun findIdempotentRun(
 		workspaceId: UUID,
 		createdByUserId: UUID,
@@ -155,11 +158,22 @@ class ArtifactWorkflowAdmissionPersistence(
 		if (inserted == 0) {
 			val raced = sqlExecutor.query(
 				"select id, request_fingerprint from generation_runs where workspace_id = ? and created_by_user_id = ? and idempotency_key = ?",
-			{ rs, _ -> requireNotNull(rs.getObject(1, UUID::class.java)) to requireNotNull(rs.getString(2)) },
+				{ rs, _ -> requireNotNull(rs.getObject(1, UUID::class.java)) to requireNotNull(rs.getString(2)) },
 				reservation.workspaceId, reservation.createdByUserId, reservation.idempotencyKey,
 			).single()
 			if (raced.second != reservation.requestFingerprint) throw ArtifactWorkflowIdempotencyConflictException()
 			return@execute queryPersistence.loadState(reservation.workspaceId, raced.first)
+		}
+		reservation.agentRunId?.let { agentRunId ->
+			val snapshotId = sqlExecutor.queryForObject(
+				"select source_snapshot_id from agent_runs where workspace_id = ? and id = ?",
+				UUID::class.java,
+				reservation.workspaceId,
+				agentRunId,
+			)
+			if (snapshotId != null) {
+				writer().linkSourceSnapshot(reservation.workspaceId, agentRunId, snapshotId)
+			}
 		}
 		reservation.state.evidence.forEach { materializationPersistence.insertEvidence(reservation.workspaceId, it) }
 		materializationPersistence.insertCheckpoint(reservation.workspaceId, reservation.state, "EVIDENCE_SET", now)
