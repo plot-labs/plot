@@ -29,8 +29,10 @@ class ApiApplicationTests {
 	@Test
 	fun contextStartsAndAppliesFlywayMigrations() {
 		assertTrue(flyway.configuration.isGroup)
+
+		val currentMigrationVersion = requireNotNull(flyway.info().current()).version.version
 		assertEquals(
-			"49",
+			currentMigrationVersion,
 			jdbcTemplate.queryForObject(
 				"select version from flyway_schema_history where success order by installed_rank desc limit 1",
 				String::class.java,
