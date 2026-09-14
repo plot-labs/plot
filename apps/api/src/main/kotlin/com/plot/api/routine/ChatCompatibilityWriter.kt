@@ -69,8 +69,8 @@ class ChatCompatibilityWriter(
 			"""
 			insert into chat_response_versions (
 				id, workspace_id, turn_id, version_index, agent_run_id, initiator_user_id,
-				lineage_parent_version_id, created_at, updated_at
-			) values (?, ?, ?, 0, ?, ?, null, ?, ?)
+				lineage_parent_version_id, is_active, created_at, updated_at
+			) values (?, ?, ?, 0, ?, ?, null, true, ?, ?)
 			on conflict (workspace_id, agent_run_id) do nothing
 			""".trimIndent(),
 			versionId,
@@ -148,8 +148,8 @@ class ChatCompatibilityWriter(
 			"""
 			insert into chat_response_versions (
 				id, workspace_id, turn_id, version_index, agent_run_id, initiator_user_id,
-				lineage_parent_version_id, created_at, updated_at
-			) values (?, ?, ?, 0, ?, ?, null, ?, ?)
+				lineage_parent_version_id, is_active, created_at, updated_at
+			) values (?, ?, ?, 0, ?, ?, null, true, ?, ?)
 			on conflict (workspace_id, agent_run_id) do nothing
 			""".trimIndent(),
 			versionId,

@@ -719,6 +719,11 @@ class AgentRunExecutionPersistence(
 			)
 			.execute()
 		if (updated != 1) throw AgentRunClaimLostException()
+		sqlExecutor.update(
+			"update chat_response_versions set is_active = false, updated_at = now() where workspace_id = ? and agent_run_id = ?",
+			claim.workspaceId,
+			claim.agentRunId,
+		)
 		projectRoutineTerminal(run, status, errorCode, now)
 		val terminal = requireNotNull(queryPersistence.findAgentRun(claim.workspaceId, claim.agentRunId))
 		notifyReleaseReconciliationAfterCommit(terminal.workspaceId, terminal.id)
@@ -885,6 +890,11 @@ class AgentRunExecutionPersistence(
 					AGENT_RUNS.STATUS.eq(AgentRunStatus.RUNNING.name),
 				)
 				.execute()
+			sqlExecutor.update(
+				"update chat_response_versions set is_active = false, updated_at = now() where workspace_id = ? and agent_run_id = ?",
+				workspaceId,
+				agentRunId,
+			)
 			queryPersistence.findAgentRun(requireNotNull(workspaceId), requireNotNull(agentRunId))?.let { run ->
 				projectRoutineTerminal(run, AgentRunStatus.FAILED, "AGENT_RETRY_EXHAUSTED", now)
 			}

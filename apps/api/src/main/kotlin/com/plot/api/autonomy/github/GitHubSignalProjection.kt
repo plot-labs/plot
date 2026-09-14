@@ -6,6 +6,7 @@ import com.plot.api.persistence.JooqSqlExecutor
 import com.plot.api.persistence.JooqTransactionExecutor
 import java.time.Duration
 import java.time.Instant
+import java.util.UUID
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 
@@ -39,15 +40,60 @@ class GitHubSignalProjection(
                 val inputFingerprint = java.security.MessageDigest.getInstance("SHA-256")
                     .digest("${envelope.sourceScopeId}:${envelope.objectKey}:${envelope.sourceVersion}".toByteArray())
                     .joinToString("") { "%02x".format(it) }
+                val tagName = if (isRelease) envelope.objectKey.removePrefix("release:") else null
+                val draftInfo = tagName?.let { tag ->
+                    sql.query(
+                        """
+                        select r.status, r.agent_run_id, v.id as version_id
+                        from github_release_draft_requests r
+                        left join chat_response_versions v on v.workspace_id = r.workspace_id and v.agent_run_id = r.agent_run_id
+                        where r.workspace_id = ? and r.source_scope_id = ? and r.tag_name = ?
+                        """.trimIndent(),
+                        { rs, _ ->
+                            Triple(
+                                rs.getString("status"),
+                                rs.getString("agent_run_id")?.let { UUID.fromString(it) },
+                                rs.getString("version_id")?.let { UUID.fromString(it) },
+                            )
+                        },
+                        envelope.workspaceId,
+                        envelope.sourceScopeId,
+                        tag,
+                    ).firstOrNull()
+                }
+
+                val outcome: String
+                val reason: String
+                val admittedVersionId: java.util.UUID?
+
+                if (draftInfo?.second != null) {
+                    outcome = "ADMITTED"
+                    reason = "Release draft admitted: $tagName"
+                    admittedVersionId = draftInfo.third
+                } else if (draftInfo?.first == "NO_ACTIVITY") {
+                    outcome = "NO_GENERATION"
+                    reason = "Internal maintenance changes only, no customer value"
+                    admittedVersionId = null
+                } else if (isRelease) {
+                    outcome = "NO_GENERATION"
+                    reason = "Release observed: $tagName. Assessment pending."
+                    admittedVersionId = null
+                } else {
+                    outcome = "NO_GENERATION"
+                    reason = "Repository changes observed. Assessment pending."
+                    admittedVersionId = null
+                }
+
                 evalPersistence.recordEvaluation(
                     workspaceId = envelope.workspaceId,
                     signalId = claim.id,
                     sourceNamespaceId = envelope.sourceNamespaceId,
                     sourceScopeId = envelope.sourceScopeId,
                     inputFingerprint = inputFingerprint,
-                    outcome = "NO_GENERATION",
-                    reason = if (isRelease) "Release observed: ${envelope.objectKey.removePrefix("release:")}. Assessment pending." else "Repository changes observed. Assessment pending.",
+                    outcome = outcome,
+                    reason = reason,
                     semanticTime = envelope.sourceVersion ?: now,
+                    admittedResponseVersionId = admittedVersionId,
                     now = now,
                 )
 

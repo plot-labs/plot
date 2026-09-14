@@ -86,6 +86,8 @@ class SignalActivityChatBackfillService(
 			select count(*)
 			from agent_runs
 			where created_at <= ?
+			  and origin = 'CHAT'
+			  and work_session_id is not null
 			  and id not in (select agent_run_id from chat_response_versions)
 			""".trimIndent(),
 			Long::class.java,
@@ -129,6 +131,8 @@ class SignalActivityChatBackfillService(
 			       prompt_version, tool_policy_version, request_fingerprint, status, created_at, updated_at
 			from agent_runs
 			where created_at <= ?
+			  and origin = 'CHAT'
+			  and work_session_id is not null
 			  and id not in (select agent_run_id from chat_response_versions)
 			order by work_session_id, created_at asc, id asc
 			""".trimIndent(),
@@ -230,14 +234,15 @@ class SignalActivityChatBackfillService(
 	fun reconcileOpportunities(watermark: Instant): Int {
 		val opps = sqlExecutor.query(
 			"""
-			select o.id, o.workspace_id, o.source_scope_id, o.title, o.disposition, o.reason,
+			select distinct on (o.id)
+			       o.id, o.workspace_id, o.source_scope_id, o.title, o.disposition, o.reason,
 			       o.missing_facts, o.last_error_code, o.dismissed, o.created_at, o.updated_at,
 			       g.id as goal_id, g.agent_run_id
 			from autonomy_opportunities o
 			left join autonomy_goals g on g.workspace_id = o.workspace_id and g.opportunity_id = o.id
 			where o.created_at <= ?
 			  and o.id not in (select opportunity_id from legacy_activity_provenance where opportunity_id is not null)
-			order by o.created_at asc, o.id asc
+			order by o.id, (g.agent_run_id is not null) desc, g.created_at desc nulls last
 			""".trimIndent(),
 			{ rs, _ ->
 				HistoricalOpportunity(
@@ -266,7 +271,7 @@ class SignalActivityChatBackfillService(
 				opp.agentRunId != null -> "ADMITTED"
 				else -> "NO_GENERATION"
 			}
-			val provId = uuidGenerator.next()
+			val provId = UUID.nameUUIDFromBytes("legacy_provenance:${opp.workspaceId}:${opp.id}".toByteArray())
 			sqlExecutor.update(
 				"""
 				insert into legacy_activity_provenance (

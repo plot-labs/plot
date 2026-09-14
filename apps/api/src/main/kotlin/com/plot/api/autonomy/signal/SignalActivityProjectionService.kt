@@ -45,13 +45,32 @@ class SignalActivityProjectionService(
 		}
 
 		val scopePlaceholders = visibleScopeIds.joinToString(",") { "?" }
+		val (cursorInstant, cursorId) = if (cursor != null) {
+			val parts = cursor.split("_")
+			if (parts.size == 2) {
+				val cursorEpoch = parts[0].toLongOrNull()
+				val id = try { UUID.fromString(parts[1]) } catch (_: Exception) { null }
+				if (cursorEpoch != null && id != null) {
+					Instant.ofEpochMilli(cursorEpoch) to id
+				} else null to null
+			} else null to null
+		} else null to null
+
 		val evalArgs = mutableListOf<Any>(workspaceId)
 		evalArgs.addAll(visibleScopeIds)
 		evalArgs.add(Timestamp.from(hwm))
 
+		val evalCursorClause = if (cursorInstant != null && cursorId != null) {
+			evalArgs.add(Timestamp.from(cursorInstant))
+			evalArgs.add(Timestamp.from(cursorInstant))
+			evalArgs.add(cursorId)
+			"and (e.semantic_time < ? or (e.semantic_time = ? and e.id < ?))"
+		} else ""
+		evalArgs.add(limit + 1)
+
 		val evalItems = sql.query(
 			"""
-			select distinct on (e.id)
+			select distinct on (e.semantic_time, e.id)
 				e.id,
 				e.source_scope_id,
 				e.signal_id,
@@ -77,7 +96,9 @@ class SignalActivityProjectionService(
 			where e.workspace_id = ?
 			  and e.source_scope_id in ($scopePlaceholders)
 			  and e.semantic_time <= ?
-			order by e.id, a.updated_at desc nulls last
+			  $evalCursorClause
+			order by e.semantic_time desc, e.id desc
+			limit ?
 			""".trimIndent(),
 			{ rs, _ ->
 				val outcome = rs.getString("outcome") ?: "NO_GENERATION"
@@ -115,9 +136,17 @@ class SignalActivityProjectionService(
 		provArgs.addAll(visibleScopeIds)
 		provArgs.add(Timestamp.from(hwm))
 
+		val provCursorClause = if (cursorInstant != null && cursorId != null) {
+			provArgs.add(Timestamp.from(cursorInstant))
+			provArgs.add(Timestamp.from(cursorInstant))
+			provArgs.add(cursorId)
+			"and (p.semantic_time < ? or (p.semantic_time = ? and p.id < ?))"
+		} else ""
+		provArgs.add(limit + 1)
+
 		val provItems = sql.query(
 			"""
-			select distinct on (p.id)
+			select distinct on (p.semantic_time, p.id)
 				p.id,
 				p.source_scope_id,
 				p.agent_run_id,
@@ -140,7 +169,9 @@ class SignalActivityProjectionService(
 			where p.workspace_id = ?
 			  and p.source_scope_id in ($scopePlaceholders)
 			  and p.semantic_time <= ?
-			order by p.id, a.updated_at desc nulls last
+			  $provCursorClause
+			order by p.semantic_time desc, p.id desc
+			limit ?
 			""".trimIndent(),
 			{ rs, _ ->
 				val disposition = rs.getString("disposition") ?: "NO_GENERATION"
@@ -172,28 +203,8 @@ class SignalActivityProjectionService(
 			compareByDescending<ActivityItem> { it.semanticTime }.thenByDescending { it.id },
 		)
 
-		val filteredByCursor = if (cursor != null) {
-			val parts = cursor.split("_")
-			if (parts.size == 2) {
-				val cursorEpoch = parts[0].toLongOrNull()
-				val cursorId = try { UUID.fromString(parts[1]) } catch (_: Exception) { null }
-				if (cursorEpoch != null && cursorId != null) {
-					val cursorInstant = Instant.ofEpochMilli(cursorEpoch)
-					allItems.filter { item ->
-						item.semanticTime < cursorInstant || (item.semanticTime == cursorInstant && item.id < cursorId)
-					}
-				} else {
-					allItems
-				}
-			} else {
-				allItems
-			}
-		} else {
-			allItems
-		}
-
-		val paged = filteredByCursor.take(limit)
-		val hasMore = filteredByCursor.size > limit
+		val paged = allItems.take(limit)
+		val hasMore = allItems.size > limit
 		val nextCursor = if (hasMore && paged.isNotEmpty()) {
 			val last = paged.last()
 			"${last.semanticTime.toEpochMilli()}_${last.id}"

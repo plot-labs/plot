@@ -239,6 +239,32 @@ class WorkSessionApiIntegrationTest {
 			Timestamp.from(createdAt),
 			Timestamp.from(createdAt),
 		)
+		val envelopeId = UUID.randomUUID()
+		jdbcTemplate.update(
+			"""
+			insert into chat_execution_envelopes (
+				id, workspace_id, agent_run_id, fingerprint_version, envelope_fingerprint,
+				generation_settings, source_snapshot_id, created_at
+			) values (?, ?, ?, 1, ?, '{"promptVersion":"chat-agent-v1","toolPolicyVersion":"read-only-v1"}'::jsonb, null, ?)
+			""".trimIndent(),
+			envelopeId,
+			devContext.devWorkspaceId,
+			id,
+			"fingerprint-$id",
+			Timestamp.from(createdAt),
+		)
+		jdbcTemplate.update(
+			"""
+			insert into chat_execution_transcript_entries (
+				id, workspace_id, envelope_id, call_index, tool_name, normalized_arguments,
+				bounded_result, adopted_input_hash, created_at
+			) values (?, ?, ?, 0, 'INITIAL', '{}'::jsonb, '{}'::jsonb, null, ?)
+			""".trimIndent(),
+			UUID.randomUUID(),
+			devContext.devWorkspaceId,
+			envelopeId,
+			Timestamp.from(createdAt),
+		)
 		return id
 	}
 }

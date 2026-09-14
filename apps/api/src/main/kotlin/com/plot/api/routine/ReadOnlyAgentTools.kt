@@ -105,6 +105,48 @@ class ReadOnlyAgentTools(
 		writingBlockId: UUID,
 	): AgentToolResult {
 		val source = requireActiveAllowedSource(workspaceId, agentRunId, sourceScopeId)
+		val frozenInput = sqlExecutor.query(
+			"""
+			select writing_block_id, source_scope_id, snapshot_title, snapshot_body,
+			       snapshot_excerpt, original_url, source_created_at, source_updated_at, content_hash,
+			       source_provider, source_kind, source_label, input_kind, order_index, activity_sequence, captured_at
+			from agent_run_inputs
+			where workspace_id = ? and agent_run_id = ? and writing_block_id = ?
+			""".trimIndent(),
+			{ rs, _ ->
+				AgentRunInputRequest(
+					routineId = null,
+					sourceScopeId = requireNotNull(rs.getObject("source_scope_id", UUID::class.java)),
+					writingBlockId = requireNotNull(rs.getObject("writing_block_id", UUID::class.java)),
+					sourceProvider = rs.getString("source_provider") ?: "GITHUB",
+					sourceKind = rs.getString("source_kind") ?: "COMMIT",
+					sourceLabel = rs.getString("source_label") ?: source.label,
+					inputKind = AgentRunInputKind.TOOL_RESULT,
+					orderIndex = 0,
+					activitySequence = null,
+					snapshotTitle = rs.getString("snapshot_title"),
+					snapshotBody = requireNotNull(rs.getString("snapshot_body")),
+					snapshotExcerpt = rs.getString("snapshot_excerpt"),
+					originalUrl = requireNotNull(rs.getString("original_url")),
+					sourceCreatedAt = rs.getTimestamp("source_created_at")?.toInstant(),
+					sourceUpdatedAt = rs.getTimestamp("source_updated_at")?.toInstant(),
+					contentHash = requireNotNull(rs.getString("content_hash")),
+					capturedAt = rs.getTimestamp("captured_at")?.toInstant() ?: Instant.now(),
+				)
+			},
+			workspaceId,
+			agentRunId,
+			writingBlockId,
+		).firstOrNull()
+
+		if (frozenInput != null) {
+			return AgentToolResult(
+				sourceScopeId = sourceScopeId,
+				sourceStatusChangedAt = source.statusChangedAt,
+				adoptedInput = frozenInput,
+			)
+		}
+
 		val block = sqlExecutor.query(
 			"""
 			select block.id, block.title, block.body, block.url, block.canonical_url,

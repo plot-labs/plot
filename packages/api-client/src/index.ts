@@ -435,6 +435,13 @@ export interface RetryEligibility {
   reason?: string | null;
 }
 
+export interface ChatCitation {
+  id: string;
+  title: string | null;
+  excerpt: string;
+  url: string | null;
+}
+
 export interface ChatResponseVersion {
   id: string;
   turnId: string;
@@ -452,6 +459,8 @@ export interface ChatResponseVersion {
     updatedAt: string;
   } | null;
   retryEligibility: RetryEligibility;
+  sources?: SourceReference[];
+  citations?: ChatCitation[];
   createdAt: string;
   updatedAt: string;
 }

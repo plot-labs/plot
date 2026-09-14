@@ -123,6 +123,19 @@ data class RetryEligibilityDto(
 	val reason: String? = null,
 )
 
+data class ChatResponseSourceDto(
+	val id: UUID,
+	val displayName: String,
+	val role: String,
+)
+
+data class ChatResponseCitationDto(
+	val id: UUID,
+	val title: String?,
+	val excerpt: String,
+	val url: String?,
+)
+
 data class ChatResponseVersionDto(
 	val id: UUID,
 	val turnId: UUID,
@@ -134,6 +147,8 @@ data class ChatResponseVersionDto(
 	val artifactId: UUID?,
 	val artifact: ChatAgentArtifactSummaryResponse?,
 	val retryEligibility: RetryEligibilityDto,
+	val sources: List<ChatResponseSourceDto> = emptyList(),
+	val citations: List<ChatResponseCitationDto> = emptyList(),
 	val createdAt: Instant,
 	val updatedAt: Instant,
 )

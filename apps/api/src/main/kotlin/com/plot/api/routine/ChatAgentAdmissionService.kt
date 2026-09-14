@@ -12,6 +12,8 @@ import com.plot.api.dev.DevContext
 import com.plot.api.entitlement.WorkspaceAccessService
 import com.plot.api.routine.dto.ChatAgentRunResponse
 import com.plot.api.routine.dto.ChatAgentArtifactSummaryResponse
+import com.plot.api.routine.dto.ChatResponseCitationDto
+import com.plot.api.routine.dto.ChatResponseSourceDto
 import com.plot.api.routine.dto.ChatResponseVersionDto
 import com.plot.api.routine.dto.ChatTurnDto
 import com.plot.api.routine.dto.ContentBriefRequest
@@ -531,7 +533,24 @@ class ChatAgentAdmissionService(
 					isNewestVersion = isNewestVersion,
 					runStatus = run.status,
 					envelope = envelope,
+					agentRunId = v.agentRunId,
 				)
+
+				val sources = agentRunQueryPersistence.listAgentRunSources(workspaceId, v.agentRunId).map { s ->
+					ChatResponseSourceDto(
+						id = s.sourceScopeId,
+						displayName = s.role.name,
+						role = s.role.name,
+					)
+				}
+				val citations = agentRunQueryPersistence.listAgentRunInputs(workspaceId, v.agentRunId).map { i ->
+					ChatResponseCitationDto(
+						id = i.writingBlockId,
+						title = i.snapshotTitle,
+						excerpt = i.snapshotExcerpt.orEmpty(),
+						url = i.originalUrl,
+					)
+				}
 
 				ChatResponseVersionDto(
 					id = v.id,
@@ -544,6 +563,8 @@ class ChatAgentAdmissionService(
 					artifactId = artifact?.id,
 					artifact = artifact,
 					retryEligibility = eligibility,
+					sources = sources,
+					citations = citations,
 					createdAt = v.createdAt,
 					updatedAt = v.updatedAt,
 				)
@@ -592,7 +613,23 @@ class ChatAgentAdmissionService(
 			isNewestVersion = v.versionIndex == maxVersionIndex,
 			runStatus = run.status,
 			envelope = envelope,
+			agentRunId = v.agentRunId,
 		)
+		val sources = agentRunQueryPersistence.listAgentRunSources(workspaceId, v.agentRunId).map { s ->
+			ChatResponseSourceDto(
+				id = s.sourceScopeId,
+				displayName = s.role.name,
+				role = s.role.name,
+			)
+		}
+		val citations = agentRunQueryPersistence.listAgentRunInputs(workspaceId, v.agentRunId).map { i ->
+			ChatResponseCitationDto(
+				id = i.writingBlockId,
+				title = i.snapshotTitle,
+				excerpt = i.snapshotExcerpt.orEmpty(),
+				url = i.originalUrl,
+			)
+		}
 		return ChatResponseVersionDto(
 			id = v.id,
 			turnId = turn.id,
@@ -604,6 +641,8 @@ class ChatAgentAdmissionService(
 			artifactId = artifact?.id,
 			artifact = artifact,
 			retryEligibility = eligibility,
+			sources = sources,
+			citations = citations,
 			createdAt = v.createdAt,
 			updatedAt = v.updatedAt,
 		)
@@ -615,6 +654,7 @@ class ChatAgentAdmissionService(
 		isNewestVersion: Boolean,
 		runStatus: AgentRunStatus,
 		envelope: ChatExecutionEnvelopeRow?,
+		agentRunId: UUID? = null,
 	): RetryEligibilityDto {
 		if (!isLatestTurn) {
 			return RetryEligibilityDto(eligible = false, reason = "NOT_LATEST_TURN")
@@ -632,6 +672,17 @@ class ChatAgentAdmissionService(
 			envelope.generationSettingsJson.trim() in setOf("{}", "null")
 		) {
 			return RetryEligibilityDto(eligible = false, reason = "INCOMPLETE_ENVELOPE")
+		}
+		if (agentRunId != null) {
+			val hasEvidence = envelope.sourceSnapshotId != null ||
+				sqlExecutor.queryForObject(
+					"select exists(select 1 from agent_run_inputs where workspace_id = ? and agent_run_id = ?) or exists(select 1 from chat_execution_transcript_entries where workspace_id = ? and envelope_id = ?)",
+					Boolean::class.java,
+					workspaceId, agentRunId, workspaceId, envelope.id,
+				) == true
+			if (!hasEvidence) {
+				return RetryEligibilityDto(eligible = false, reason = "INCOMPLETE_ENVELOPE")
+			}
 		}
 		try {
 			workspaceAccessService.requireWritable(workspaceId)
@@ -714,13 +765,24 @@ class ChatAgentAdmissionService(
 			) {
 				throw ApiException(HttpStatus.CONFLICT, "RETRY_INELIGIBLE", "Execution envelope is incomplete")
 			}
+			val hasEvidence = targetEnvelope.sourceSnapshotId != null ||
+				sqlExecutor.queryForObject(
+					"select exists(select 1 from agent_run_inputs where workspace_id = ? and agent_run_id = ?) or exists(select 1 from chat_execution_transcript_entries where workspace_id = ? and envelope_id = ?)",
+					Boolean::class.java,
+					workspaceId, targetRun.id, workspaceId, targetEnvelope.id,
+				) == true
+			if (!hasEvidence) {
+				throw ApiException(HttpStatus.CONFLICT, "RETRY_INELIGIBLE", "Execution envelope is incomplete")
+			}
 
 			// 5. Admit new AgentRun
 			val newRunId = uuidGenerator.next()
 			val now = Instant.now()
 			val newVersionIndex = maxVersionIndex + 1
 			val newVersionId = uuidGenerator.next()
-			val retryFingerprint = "${targetRun.requestFingerprint}:retry:$newVersionIndex"
+			val retryFingerprint = MessageDigest.getInstance("SHA-256")
+				.digest("${targetRun.requestFingerprint}:retry:$newVersionIndex".toByteArray(Charsets.UTF_8))
+				.joinToString("") { "%02x".format(it) }
 
 			val inserted = sqlExecutor.update(
 				"""
@@ -761,13 +823,19 @@ class ChatAgentAdmissionService(
 				throw AgentRunIdempotencyConflictException()
 			}
 
-			// 6. Insert new chat_response_versions row
+			// 6. Deactivate previous version for this turn and insert new active version
+			sqlExecutor.update(
+				"update chat_response_versions set is_active = false, updated_at = ? where workspace_id = ? and turn_id = ? and is_active = true",
+				Timestamp.from(now),
+				workspaceId,
+				turn.id,
+			)
 			sqlExecutor.update(
 				"""
 				insert into chat_response_versions (
 				  id, workspace_id, turn_id, version_index, agent_run_id, initiator_user_id,
-				  lineage_parent_version_id, created_at, updated_at
-				) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+				  lineage_parent_version_id, is_active, created_at, updated_at
+				) values (?, ?, ?, ?, ?, ?, ?, true, ?, ?)
 				on conflict (workspace_id, agent_run_id) do nothing
 				""".trimIndent(),
 				newVersionId,

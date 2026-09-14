@@ -77,7 +77,10 @@ export function AutonomyHomeWorkspace({ view = "overview" }: { view?: "overview"
     return () => controller.abort();
   }, [revision]);
 
+  const loadMoreAbortRef = useRef<AbortController | null>(null);
+
   function refresh() {
+    loadMoreAbortRef.current?.abort();
     setError(null);
     setPaginationError(null);
     setLoading(true);
@@ -86,6 +89,13 @@ export function AutonomyHomeWorkspace({ view = "overview" }: { view?: "overview"
 
   async function loadMore() {
     if (loadingMore || !nextCursor || !hasMore) return;
+    loadMoreAbortRef.current?.abort();
+    const controller = new AbortController();
+    loadMoreAbortRef.current = controller;
+    const current = generation.current;
+    const workspace = getSelectedWorkspaceId();
+    const valid = () => !controller.signal.aborted && generation.current === current && workspace === getSelectedWorkspaceId();
+
     setLoadingMore(true);
     setPaginationError(null);
     try {
@@ -93,14 +103,20 @@ export function AutonomyHomeWorkspace({ view = "overview" }: { view?: "overview"
         cursor: nextCursor,
         highWaterMark: highWaterMark ?? undefined,
         limit: 20,
-      });
-      setItems((prev) => [...prev, ...page.items]);
-      setNextCursor(page.nextCursor);
-      setHasMore(page.hasMore);
+      }, { signal: controller.signal });
+      if (valid()) {
+        setItems((prev) => [...prev, ...page.items]);
+        setNextCursor(page.nextCursor);
+        setHasMore(page.hasMore);
+      }
     } catch (cause) {
-      setPaginationError(cause instanceof Error ? cause.message : "Could not load more activity.");
+      if (valid() && !controller.signal.aborted) {
+        setPaginationError(cause instanceof Error ? cause.message : "Could not load more activity.");
+      }
     } finally {
-      setLoadingMore(false);
+      if (valid()) {
+        setLoadingMore(false);
+      }
     }
   }
 

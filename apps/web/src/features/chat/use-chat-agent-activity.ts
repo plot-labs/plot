@@ -59,6 +59,7 @@ export function useChatAgentActivity({
   const [agentInstruction, setAgentInstruction] = useState("");
   const agentAbortRef = useRef<AbortController | null>(null);
   const pendingRequestRef = useRef<PendingAgentRequest | null>(null);
+  const retryIdempotencyKeysRef = useRef<Map<string, string>>(new Map());
   const activitiesLoading = activitiesLoadedFor !== chatId;
 
   const effectiveTurns = useMemo<ChatTurn[]>(() => {
@@ -131,13 +132,17 @@ export function useChatAgentActivity({
   }, [turns, chatId, rawActivities]);
 
   const selectedActivity = useMemo(() => {
+    if (selectedVersionId) {
+      const verActivity = activities.find((a) => a.id === selectedVersionId);
+      if (verActivity) return verActivity;
+    }
     if (requestedAgentId) return activities.find((activity) => activity.id === requestedAgentId) ?? null;
     if (requestedArtifactId) {
       const artifactActivity = activities.find((activity) => activity.artifactId === requestedArtifactId);
       if (artifactActivity) return artifactActivity;
     }
     return activities[activities.length - 1] ?? null;
-  }, [activities, requestedAgentId, requestedArtifactId]);
+  }, [activities, selectedVersionId, requestedAgentId, requestedArtifactId]);
 
   const isPendingRun = useMemo(() => {
     if (agentBusy) return true;
@@ -148,16 +153,24 @@ export function useChatAgentActivity({
 
   useEffect(() => {
     const controller = new AbortController();
+    let loadError: unknown = null;
     Promise.all([
       typeof plotApiClient.listChatTurns === "function"
-        ? Promise.resolve().then(() => plotApiClient.listChatTurns(chatId, { selectedVersionId: requestedVersionId ?? undefined, signal: controller.signal })).catch(() => null)
+        ? plotApiClient.listChatTurns(chatId, { selectedVersionId: requestedVersionId ?? undefined, signal: controller.signal })
+            .catch((err) => { loadError = err; return null; })
         : Promise.resolve(null),
       typeof plotApiClient.listSessionAgentRuns === "function"
-        ? Promise.resolve().then(() => plotApiClient.listSessionAgentRuns(chatId, { signal: controller.signal })).catch(() => [])
-        : Promise.resolve([]),
+        ? plotApiClient.listSessionAgentRuns(chatId, { signal: controller.signal })
+            .catch((err) => { if (!loadError) loadError = err; return null; })
+        : Promise.resolve(null),
     ])
       .then(([turnsResult, runsResult]) => {
         if (controller.signal.aborted) return;
+        if (loadError && !turnsResult && !runsResult) {
+          setActivitiesError(messageFor(loadError, "Chat activity could not be loaded."));
+          setActivitiesLoadedFor(chatId);
+          return;
+        }
         if (turnsResult && turnsResult.length > 0) {
           setTurns(turnsResult);
           if (requestedVersionId) {
@@ -270,12 +283,17 @@ export function useChatAgentActivity({
     if (retrying || isPendingRun) return;
     setRetrying(true);
     setAgentError("");
-    const idempotencyKey = crypto.randomUUID();
+    let idempotencyKey = retryIdempotencyKeysRef.current.get(versionId);
+    if (!idempotencyKey) {
+      idempotencyKey = crypto.randomUUID();
+      retryIdempotencyKeysRef.current.set(versionId, idempotencyKey);
+    }
     const controller = new AbortController();
     agentAbortRef.current = controller;
 
     try {
       const newVersion = await plotApiClient.retryChatResponse(versionId, idempotencyKey, { signal: controller.signal });
+      retryIdempotencyKeysRef.current.delete(versionId);
       setSelectedVersionId(newVersion.id);
       setTurns((prev) => {
         const latestIdx = prev.length - 1;
@@ -323,7 +341,13 @@ export function useChatAgentActivity({
         // Reconcile indeterminate state
         try {
           const freshTurns = await plotApiClient.listChatTurns(chatId);
-          if (freshTurns) setTurns(freshTurns);
+          if (freshTurns) {
+            setTurns(freshTurns);
+            const latestTurn = freshTurns[freshTurns.length - 1];
+            if (latestTurn?.versions.some((v) => v.lineageParentVersionId === versionId || v.versionIndex > 0)) {
+              retryIdempotencyKeysRef.current.delete(versionId);
+            }
+          }
         } catch {
           // ignore
         }
