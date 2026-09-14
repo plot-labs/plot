@@ -43,7 +43,7 @@ class SignalActivityChatBackfillIntegrationTest {
 
 	@Test
 	fun `bounded batches resume from durable phase cursors and exclude post-watermark rows`() {
-		val watermark = Instant.parse("2026-09-14T00:00:00Z")
+		val watermark = Instant.parse("2000-01-01T00:00:00Z")
 		val fixture = fixture(watermark.minusSeconds(30))
 		insertLegacyRun(fixture, watermark.minusSeconds(10))
 		insertOpportunity(fixture, watermark.minusSeconds(10))

@@ -68,6 +68,7 @@ class ContentProfileApiIntegrationTest {
 		jdbcTemplate.update("delete from agent_run_inputs where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from agent_run_sources where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from agent_runs where workspace_id = ?", devContext.devWorkspaceId)
+		jdbcTemplate.update("delete from content_source_snapshots where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from work_sessions where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from writing_block_scopes where workspace_id = ?", devContext.devWorkspaceId)
 		jdbcTemplate.update("delete from writing_blocks where workspace_id = ?", devContext.devWorkspaceId)
