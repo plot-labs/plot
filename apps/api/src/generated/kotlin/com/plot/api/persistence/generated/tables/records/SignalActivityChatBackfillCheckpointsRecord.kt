@@ -47,6 +47,26 @@ open class SignalActivityChatBackfillCheckpointsRecord() : UpdatableRecordImpl<S
         set(value): Unit = set(6, value)
         get(): OffsetDateTime? = get(6) as OffsetDateTime?
 
+    open var attemptedCount: Long?
+        set(value): Unit = set(7, value)
+        get(): Long? = get(7) as Long?
+
+    open var insertedCount: Long?
+        set(value): Unit = set(8, value)
+        get(): Long? = get(8) as Long?
+
+    open var skippedCount: Long?
+        set(value): Unit = set(9, value)
+        get(): Long? = get(9) as Long?
+
+    open var leaseOwner: String?
+        set(value): Unit = set(10, value)
+        get(): String? = get(10) as String?
+
+    open var leaseExpiresAt: OffsetDateTime?
+        set(value): Unit = set(11, value)
+        get(): OffsetDateTime? = get(11) as OffsetDateTime?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -57,7 +77,7 @@ open class SignalActivityChatBackfillCheckpointsRecord() : UpdatableRecordImpl<S
      * Create a detached, initialised
      * SignalActivityChatBackfillCheckpointsRecord
      */
-    constructor(checkpointKey: String? = null, highWaterMark: OffsetDateTime? = null, lastProcessedId: UUID? = null, status: String? = null, reconciledCount: Long? = null, lagCount: Long? = null, updatedAt: OffsetDateTime? = null): this() {
+    constructor(checkpointKey: String? = null, highWaterMark: OffsetDateTime? = null, lastProcessedId: UUID? = null, status: String? = null, reconciledCount: Long? = null, lagCount: Long? = null, updatedAt: OffsetDateTime? = null, attemptedCount: Long? = null, insertedCount: Long? = null, skippedCount: Long? = null, leaseOwner: String? = null, leaseExpiresAt: OffsetDateTime? = null): this() {
         this.checkpointKey = checkpointKey
         this.highWaterMark = highWaterMark
         this.lastProcessedId = lastProcessedId
@@ -65,6 +85,11 @@ open class SignalActivityChatBackfillCheckpointsRecord() : UpdatableRecordImpl<S
         this.reconciledCount = reconciledCount
         this.lagCount = lagCount
         this.updatedAt = updatedAt
+        this.attemptedCount = attemptedCount
+        this.insertedCount = insertedCount
+        this.skippedCount = skippedCount
+        this.leaseOwner = leaseOwner
+        this.leaseExpiresAt = leaseExpiresAt
         resetChangedOnNotNull()
     }
 }

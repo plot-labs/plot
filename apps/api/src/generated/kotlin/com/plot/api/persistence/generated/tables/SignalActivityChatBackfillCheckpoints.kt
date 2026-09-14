@@ -5,6 +5,7 @@ package com.plot.api.persistence.generated.tables
 
 
 import com.plot.api.persistence.generated.Public
+import com.plot.api.persistence.generated.indexes.SIGNAL_ACTIVITY_CHAT_BACKFILL_CHECKPOINT_LEASE_IDX
 import com.plot.api.persistence.generated.keys.SIGNAL_ACTIVITY_CHAT_BACKFILL_CHECKPOINTS_PKEY
 import com.plot.api.persistence.generated.tables.records.SignalActivityChatBackfillCheckpointsRecord
 
@@ -12,10 +13,12 @@ import java.time.OffsetDateTime
 import java.util.UUID
 
 import kotlin.collections.Collection
+import kotlin.collections.List
 
 import org.jooq.Condition
 import org.jooq.Field
 import org.jooq.ForeignKey
+import org.jooq.Index
 import org.jooq.InverseForeignKey
 import org.jooq.Name
 import org.jooq.PlainSQL
@@ -114,6 +117,36 @@ open class SignalActivityChatBackfillCheckpoints(
      */
     val UPDATED_AT: TableField<SignalActivityChatBackfillCheckpointsRecord, OffsetDateTime?> = createField(DSL.name("updated_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "")
 
+    /**
+     * The column
+     * <code>public.signal_activity_chat_backfill_checkpoints.attempted_count</code>.
+     */
+    val ATTEMPTED_COUNT: TableField<SignalActivityChatBackfillCheckpointsRecord, Long?> = createField(DSL.name("attempted_count"), SQLDataType.BIGINT.nullable(false).defaultValue(DSL.field(DSL.raw("0"), SQLDataType.BIGINT)), this, "")
+
+    /**
+     * The column
+     * <code>public.signal_activity_chat_backfill_checkpoints.inserted_count</code>.
+     */
+    val INSERTED_COUNT: TableField<SignalActivityChatBackfillCheckpointsRecord, Long?> = createField(DSL.name("inserted_count"), SQLDataType.BIGINT.nullable(false).defaultValue(DSL.field(DSL.raw("0"), SQLDataType.BIGINT)), this, "")
+
+    /**
+     * The column
+     * <code>public.signal_activity_chat_backfill_checkpoints.skipped_count</code>.
+     */
+    val SKIPPED_COUNT: TableField<SignalActivityChatBackfillCheckpointsRecord, Long?> = createField(DSL.name("skipped_count"), SQLDataType.BIGINT.nullable(false).defaultValue(DSL.field(DSL.raw("0"), SQLDataType.BIGINT)), this, "")
+
+    /**
+     * The column
+     * <code>public.signal_activity_chat_backfill_checkpoints.lease_owner</code>.
+     */
+    val LEASE_OWNER: TableField<SignalActivityChatBackfillCheckpointsRecord, String?> = createField(DSL.name("lease_owner"), SQLDataType.VARCHAR(64), this, "")
+
+    /**
+     * The column
+     * <code>public.signal_activity_chat_backfill_checkpoints.lease_expires_at</code>.
+     */
+    val LEASE_EXPIRES_AT: TableField<SignalActivityChatBackfillCheckpointsRecord, OffsetDateTime?> = createField(DSL.name("lease_expires_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "")
+
     private constructor(alias: Name, aliased: Table<SignalActivityChatBackfillCheckpointsRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<SignalActivityChatBackfillCheckpointsRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<SignalActivityChatBackfillCheckpointsRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)
@@ -138,6 +171,7 @@ open class SignalActivityChatBackfillCheckpoints(
      */
     constructor(): this(DSL.name("signal_activity_chat_backfill_checkpoints"), null)
     override fun getSchema(): Schema? = if (aliased()) null else Public.PUBLIC
+    override fun getIndexes(): List<Index> = listOf(SIGNAL_ACTIVITY_CHAT_BACKFILL_CHECKPOINT_LEASE_IDX)
     override fun getPrimaryKey(): UniqueKey<SignalActivityChatBackfillCheckpointsRecord> = SIGNAL_ACTIVITY_CHAT_BACKFILL_CHECKPOINTS_PKEY
     override fun `as`(alias: String): SignalActivityChatBackfillCheckpoints = SignalActivityChatBackfillCheckpoints(DSL.name(alias), this)
     override fun `as`(alias: Name): SignalActivityChatBackfillCheckpoints = SignalActivityChatBackfillCheckpoints(alias, this)

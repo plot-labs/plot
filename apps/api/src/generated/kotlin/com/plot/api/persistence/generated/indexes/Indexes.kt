@@ -9,6 +9,9 @@ import com.plot.api.persistence.generated.tables.AgentRunSources
 import com.plot.api.persistence.generated.tables.AgentRuns
 import com.plot.api.persistence.generated.tables.AgentSteps
 import com.plot.api.persistence.generated.tables.ArtifactRuns
+import com.plot.api.persistence.generated.tables.AutonomyExecutions
+import com.plot.api.persistence.generated.tables.AutonomyGoals
+import com.plot.api.persistence.generated.tables.AutonomyOpportunities
 import com.plot.api.persistence.generated.tables.AutonomySignals
 import com.plot.api.persistence.generated.tables.ChatExecutionTranscriptEntries
 import com.plot.api.persistence.generated.tables.ChatResponseVersions
@@ -39,6 +42,7 @@ import com.plot.api.persistence.generated.tables.RoutineExecutionEvidence
 import com.plot.api.persistence.generated.tables.RoutineExecutions
 import com.plot.api.persistence.generated.tables.Routines
 import com.plot.api.persistence.generated.tables.SentenceCitations
+import com.plot.api.persistence.generated.tables.SignalActivityChatBackfillCheckpoints
 import com.plot.api.persistence.generated.tables.SignalEvaluations
 import com.plot.api.persistence.generated.tables.SourceImports
 import com.plot.api.persistence.generated.tables.SourceScopes
@@ -81,6 +85,10 @@ val AGENT_STEPS_AGENT_ORDER_IDX: Index = Internal.createIndex(DSL.name("agent_st
 val AGENT_STEPS_ONE_HANDOFF_PER_GENERATION_IDX: Index = Internal.createIndex(DSL.name("agent_steps_one_handoff_per_generation_idx"), AgentSteps.AGENT_STEPS, arrayOf(AgentSteps.AGENT_STEPS.WORKSPACE_ID, AgentSteps.AGENT_STEPS.GENERATION_RUN_ID), true)
 val ARTIFACT_RUNS_AGENT_IDEMPOTENCY_KEY_IDX: Index = Internal.createIndex(DSL.name("artifact_runs_agent_idempotency_key_idx"), ArtifactRuns.ARTIFACT_RUNS, arrayOf(ArtifactRuns.ARTIFACT_RUNS.WORKSPACE_ID, ArtifactRuns.ARTIFACT_RUNS.AGENT_RUN_ID, ArtifactRuns.ARTIFACT_RUNS.IDEMPOTENCY_KEY), true)
 val ARTIFACT_RUNS_WORKSPACE_CREATED_IDX: Index = Internal.createIndex(DSL.name("artifact_runs_workspace_created_idx"), ArtifactRuns.ARTIFACT_RUNS, arrayOf(ArtifactRuns.ARTIFACT_RUNS.WORKSPACE_ID, ArtifactRuns.ARTIFACT_RUNS.CREATED_AT.desc(), ArtifactRuns.ARTIFACT_RUNS.ID), false)
+val AUTONOMY_EXECUTIONS_RUNNING_IDX: Index = Internal.createIndex(DSL.name("autonomy_executions_running_idx"), AutonomyExecutions.AUTONOMY_EXECUTIONS, arrayOf(AutonomyExecutions.AUTONOMY_EXECUTIONS.WORKSPACE_ID), false)
+val AUTONOMY_GOALS_ONE_ACTIVE_IDX: Index = Internal.createIndex(DSL.name("autonomy_goals_one_active_idx"), AutonomyGoals.AUTONOMY_GOALS, arrayOf(AutonomyGoals.AUTONOMY_GOALS.WORKSPACE_ID, AutonomyGoals.AUTONOMY_GOALS.OPPORTUNITY_ID), true)
+val AUTONOMY_OPPORTUNITIES_BACKFILL_IDX: Index = Internal.createIndex(DSL.name("autonomy_opportunities_backfill_idx"), AutonomyOpportunities.AUTONOMY_OPPORTUNITIES, arrayOf(AutonomyOpportunities.AUTONOMY_OPPORTUNITIES.CREATED_AT, AutonomyOpportunities.AUTONOMY_OPPORTUNITIES.ID), false)
+val AUTONOMY_OPPORTUNITIES_HOME_IDX: Index = Internal.createIndex(DSL.name("autonomy_opportunities_home_idx"), AutonomyOpportunities.AUTONOMY_OPPORTUNITIES, arrayOf(AutonomyOpportunities.AUTONOMY_OPPORTUNITIES.WORKSPACE_ID, AutonomyOpportunities.AUTONOMY_OPPORTUNITIES.UPDATED_AT.desc(), AutonomyOpportunities.AUTONOMY_OPPORTUNITIES.ID), false)
 val AUTONOMY_SIGNALS_BACKFILL_IDX: Index = Internal.createIndex(DSL.name("autonomy_signals_backfill_idx"), AutonomySignals.AUTONOMY_SIGNALS, arrayOf(AutonomySignals.AUTONOMY_SIGNALS.RECEIVED_AT, AutonomySignals.AUTONOMY_SIGNALS.ID), false)
 val AUTONOMY_SIGNALS_DISPATCH_IDX: Index = Internal.createIndex(DSL.name("autonomy_signals_dispatch_idx"), AutonomySignals.AUTONOMY_SIGNALS, arrayOf(AutonomySignals.AUTONOMY_SIGNALS.PROVIDER, AutonomySignals.AUTONOMY_SIGNALS.AVAILABLE_AT, AutonomySignals.AUTONOMY_SIGNALS.RECEIVED_AT), false)
 val CHAT_EXECUTION_TRANSCRIPT_ENTRIES_IDX: Index = Internal.createIndex(DSL.name("chat_execution_transcript_entries_idx"), ChatExecutionTranscriptEntries.CHAT_EXECUTION_TRANSCRIPT_ENTRIES, arrayOf(ChatExecutionTranscriptEntries.CHAT_EXECUTION_TRANSCRIPT_ENTRIES.WORKSPACE_ID, ChatExecutionTranscriptEntries.CHAT_EXECUTION_TRANSCRIPT_ENTRIES.ENVELOPE_ID, ChatExecutionTranscriptEntries.CHAT_EXECUTION_TRANSCRIPT_ENTRIES.CALL_INDEX), false)
@@ -140,6 +148,7 @@ val ROUTINES_STALE_CLAIM_IDX: Index = Internal.createIndex(DSL.name("routines_st
 val ROUTINES_WORKSPACE_IDX: Index = Internal.createIndex(DSL.name("routines_workspace_idx"), Routines.ROUTINES, arrayOf(Routines.ROUTINES.WORKSPACE_ID, Routines.ROUTINES.CREATED_AT.desc()), false)
 val SENTENCE_CITATIONS_SENTENCE_IDX: Index = Internal.createIndex(DSL.name("sentence_citations_sentence_idx"), SentenceCitations.SENTENCE_CITATIONS, arrayOf(SentenceCitations.SENTENCE_CITATIONS.WORKSPACE_ID, SentenceCitations.SENTENCE_CITATIONS.SENTENCE_ID, SentenceCitations.SENTENCE_CITATIONS.CITATION_ORDER), false)
 val SENTENCE_CITATIONS_VARIANT_IDX: Index = Internal.createIndex(DSL.name("sentence_citations_variant_idx"), SentenceCitations.SENTENCE_CITATIONS, arrayOf(SentenceCitations.SENTENCE_CITATIONS.WORKSPACE_ID, SentenceCitations.SENTENCE_CITATIONS.CONTENT_VARIANT_ID, SentenceCitations.SENTENCE_CITATIONS.SENTENCE_ID, SentenceCitations.SENTENCE_CITATIONS.CITATION_ORDER), false)
+val SIGNAL_ACTIVITY_CHAT_BACKFILL_CHECKPOINT_LEASE_IDX: Index = Internal.createIndex(DSL.name("signal_activity_chat_backfill_checkpoint_lease_idx"), SignalActivityChatBackfillCheckpoints.SIGNAL_ACTIVITY_CHAT_BACKFILL_CHECKPOINTS, arrayOf(SignalActivityChatBackfillCheckpoints.SIGNAL_ACTIVITY_CHAT_BACKFILL_CHECKPOINTS.LEASE_EXPIRES_AT), false)
 val SIGNAL_EVALUATIONS_WORKSPACE_TIME_IDX: Index = Internal.createIndex(DSL.name("signal_evaluations_workspace_time_idx"), SignalEvaluations.SIGNAL_EVALUATIONS, arrayOf(SignalEvaluations.SIGNAL_EVALUATIONS.WORKSPACE_ID, SignalEvaluations.SIGNAL_EVALUATIONS.SEMANTIC_TIME.desc()), false)
 val SOURCE_IMPORTS_ONE_RUNNING_IDX: Index = Internal.createIndex(DSL.name("source_imports_one_running_idx"), SourceImports.SOURCE_IMPORTS, arrayOf(SourceImports.SOURCE_IMPORTS.WORKSPACE_ID, SourceImports.SOURCE_IMPORTS.SOURCE_SCOPE_ID), true)
 val SOURCE_IMPORTS_WORKSPACE_CREATED_IDX: Index = Internal.createIndex(DSL.name("source_imports_workspace_created_idx"), SourceImports.SOURCE_IMPORTS, arrayOf(SourceImports.SOURCE_IMPORTS.WORKSPACE_ID, SourceImports.SOURCE_IMPORTS.CREATED_AT.desc()), false)

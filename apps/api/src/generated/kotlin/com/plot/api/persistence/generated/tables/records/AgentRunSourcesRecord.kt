@@ -55,6 +55,10 @@ open class AgentRunSourcesRecord() : UpdatableRecordImpl<AgentRunSourcesRecord>(
         set(value): Unit = set(8, value)
         get(): OffsetDateTime? = get(8) as OffsetDateTime?
 
+    open var sourceDisplayName: String?
+        set(value): Unit = set(9, value)
+        get(): String? = get(9) as String?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -64,7 +68,7 @@ open class AgentRunSourcesRecord() : UpdatableRecordImpl<AgentRunSourcesRecord>(
     /**
      * Create a detached, initialised AgentRunSourcesRecord
      */
-    constructor(id: UUID? = null, workspaceId: UUID? = null, agentRunId: UUID? = null, sourceScopeId: UUID? = null, sourceRole: String? = null, orderIndex: Int? = null, capturedStatus: String? = null, capturedStatusChangedAt: OffsetDateTime? = null, capturedAt: OffsetDateTime? = null): this() {
+    constructor(id: UUID? = null, workspaceId: UUID? = null, agentRunId: UUID? = null, sourceScopeId: UUID? = null, sourceRole: String? = null, orderIndex: Int? = null, capturedStatus: String? = null, capturedStatusChangedAt: OffsetDateTime? = null, capturedAt: OffsetDateTime? = null, sourceDisplayName: String? = null): this() {
         this.id = id
         this.workspaceId = workspaceId
         this.agentRunId = agentRunId
@@ -74,6 +78,7 @@ open class AgentRunSourcesRecord() : UpdatableRecordImpl<AgentRunSourcesRecord>(
         this.capturedStatus = capturedStatus
         this.capturedStatusChangedAt = capturedStatusChangedAt
         this.capturedAt = capturedAt
+        this.sourceDisplayName = sourceDisplayName
         resetChangedOnNotNull()
     }
 }
