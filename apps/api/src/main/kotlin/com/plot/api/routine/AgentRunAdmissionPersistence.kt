@@ -27,7 +27,7 @@ class AgentRunAdmissionPersistence(
 	private fun currentInstant(): Instant = clock?.instant() ?: Instant.now()
 
 	private data class RoutineCursor(val value: Long?, val enabled: Boolean, val releaseCadence: Boolean)
-	private data class LockedSource(val id: UUID, val status: String, val statusChangedAt: Instant)
+	private data class LockedSource(val id: UUID, val displayName: String, val status: String, val statusChangedAt: Instant)
 
 	fun dispatch(
 		workspaceId: UUID,
@@ -132,16 +132,17 @@ class AgentRunAdmissionPersistence(
 			val captured = lockedSources[source.sourceScopeId]
 			sqlExecutor.update(
 				"""
-				insert into agent_run_sources (
-				  id, workspace_id, agent_run_id, source_scope_id, source_role, order_index,
-				  captured_status, captured_status_changed_at, captured_at
-				) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+					insert into agent_run_sources (
+					  id, workspace_id, agent_run_id, source_scope_id, source_display_name, source_role, order_index,
+					  captured_status, captured_status_changed_at, captured_at
+					) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				""".trimIndent(),
 				uuidGenerator.next(),
-				workspaceId,
-				agentRunId,
-				source.sourceScopeId,
-				source.role.name,
+					workspaceId,
+					agentRunId,
+					source.sourceScopeId,
+					captured?.displayName,
+					source.role.name,
 				index,
 				captured?.status ?: source.capturedStatus,
 				Timestamp.from(captured?.statusChangedAt ?: source.capturedStatusChangedAt),
@@ -430,7 +431,7 @@ class AgentRunAdmissionPersistence(
 		val placeholders = distinctIds.joinToString(",") { "?" }
 		val rows = sqlExecutor.query(
 			"""
-			select scope.id, scope.status,
+				select scope.id, scope.display_name, scope.status,
 			       greatest(
 			         scope.status_changed_at,
 			         namespace.updated_at,
@@ -452,9 +453,10 @@ class AgentRunAdmissionPersistence(
 			for update of scope, namespace, binding, connection
 			""".trimIndent(),
 				{ rs, _ ->
-					LockedSource(
-						id = requireNotNull(rs.getObject("id", UUID::class.java)),
-						status = requireNotNull(rs.getString("status")),
+						LockedSource(
+							id = requireNotNull(rs.getObject("id", UUID::class.java)),
+							displayName = requireNotNull(rs.getString("display_name")),
+							status = requireNotNull(rs.getString("status")),
 						statusChangedAt = requireNotNull(rs.getTimestamp("lifecycle_version_at")).toInstant(),
 				)
 			},

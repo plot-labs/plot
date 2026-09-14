@@ -141,15 +141,16 @@ class AgentRunWorker(
 			executeStep(claim, run, running, budget)
 			return
 		}
-		if (!queryPersistence.allAgentSourcesActive(run.workspaceId, run.id)) {
+		val frozenReplay = queryPersistence.isFrozenReplay(run.workspaceId, run.id)
+		if (!frozenReplay && !queryPersistence.allAgentSourcesActive(run.workspaceId, run.id)) {
 			throw AgentToolAccessException("SOURCE_NOT_READY")
 		}
 
 		workspaceAccessService.requireWritable(run.workspaceId)
 		val countedRun = executionPersistence.beginModelDecision(claim, budget.maxModelCalls)
 		val inputs = queryPersistence.listAgentRunInputs(run.workspaceId, run.id)
-		val sources = tools.listAllowedSources(run.workspaceId, run.id).sources
-		if (sources.size != queryPersistence.listAgentRunSources(run.workspaceId, run.id).size) {
+		val sources = tools.listAllowedSources(run.workspaceId, run.id, frozenReplay).sources
+		if (!frozenReplay && sources.size != queryPersistence.listAgentRunSources(run.workspaceId, run.id).size) {
 			throw AgentToolAccessException("SOURCE_NOT_READY")
 		}
 		val decision = decisionGateway.decide(
@@ -199,7 +200,7 @@ class AgentRunWorker(
 			maxToolCalls = budget.maxToolCalls,
 			now = clock.instant(),
 		)
-		executeStep(claim, countedRun, step, budget)
+		executeStep(claim, countedRun, step, budget, frozenReplay)
 	}
 
 	private fun executeStep(
@@ -207,12 +208,13 @@ class AgentRunWorker(
 		run: AgentRunRecord,
 		step: AgentStepRecord,
 		budget: AgentBudgetSnapshot,
+		frozenReplay: Boolean = queryPersistence.isFrozenReplay(run.workspaceId, run.id),
 	) {
 		val arguments = objectMapper.readValue(step.argumentsJson, AgentStepArguments::class.java)
 		workspaceAccessService.requireWritable(run.workspaceId)
 		when (arguments.action) {
 			AgentDecisionAction.LIST_ALLOWED_SOURCES -> {
-				val result = tools.listAllowedSources(run.workspaceId, run.id)
+				val result = tools.listAllowedSources(run.workspaceId, run.id, frozenReplay)
 				executionPersistence.completeToolStep(
 					claim = claim,
 					stepId = step.id,
@@ -232,8 +234,9 @@ class AgentRunWorker(
 				val result = tools.searchWritingBlocks(
 					run.workspaceId,
 					run.id,
-					sourceScopeId,
+					 sourceScopeId,
 					requireNotNull(arguments.query),
+					frozenReplay,
 				)
 				executionPersistence.completeToolStep(
 					claim = claim,
@@ -255,7 +258,7 @@ class AgentRunWorker(
 			AgentDecisionAction.READ_WRITING_BLOCKS -> {
 				val sourceScopeId = requireNotNull(arguments.sourceScopeId)
 				val writingBlockId = resolveReadableBlockId(run, sourceScopeId, requireNotNull(arguments.writingBlockId))
-				val result = tools.readWritingBlock(run.workspaceId, run.id, sourceScopeId, writingBlockId)
+				val result = tools.readWritingBlock(run.workspaceId, run.id, sourceScopeId, writingBlockId, frozenReplay)
 				val adopted = requireNotNull(result.adoptedInput)
 				executionPersistence.completeToolStep(
 					claim = claim,

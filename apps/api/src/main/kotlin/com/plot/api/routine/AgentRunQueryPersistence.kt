@@ -61,7 +61,7 @@ class AgentRunQueryPersistence(
 	).singleOrNull()
 	fun listAgentRunSources(workspaceId: UUID, agentRunId: UUID): List<AgentRunSourceRecord> = sqlExecutor.query(
 		"""
-		select id, workspace_id, agent_run_id, source_scope_id, source_role, order_index,
+		select id, workspace_id, agent_run_id, source_scope_id, source_display_name, source_role, order_index,
 		       captured_status, captured_status_changed_at, captured_at
 		from agent_run_sources
 		where workspace_id = ? and agent_run_id = ?
@@ -182,6 +182,9 @@ class AgentRunQueryPersistence(
 		).single()
 		return counts.first > 0 && counts.first == counts.second
 	}
+
+	fun isFrozenReplay(workspaceId: UUID, agentRunId: UUID): Boolean =
+		findResponseVersionByRunId(workspaceId, agentRunId)?.lineageParentVersionId != null
 	fun findRunningStep(workspaceId: UUID, agentRunId: UUID, sequence: Int): AgentStepRecord? =
 		findStepBySequence(workspaceId, agentRunId, sequence)?.takeIf { it.status == AgentStepStatus.RUNNING }
 	internal fun requireAgentClaim(claim: ClaimedAgentRun): AgentRunRecord {
@@ -264,7 +267,11 @@ class AgentRunQueryPersistence(
 		agentRunId,
 		id,
 	).firstOrNull()
-	internal fun requireAllAgentSourcesActiveForUpdate(workspaceId: UUID, agentRunId: UUID) {
+	internal fun requireAllAgentSourcesActiveForUpdate(
+		workspaceId: UUID,
+		agentRunId: UUID,
+		allowDisconnectedConnection: Boolean = false,
+	) {
 		val expected = sqlExecutor.queryForObject(
 			"select count(*) from agent_run_sources where workspace_id = ? and agent_run_id = ?",
 			Int::class.java,
@@ -292,29 +299,33 @@ class AgentRunQueryPersistence(
 			workspaceId,
 			agentRunId,
 		)
-		val connectedScopeIds = sqlExecutor.query(
-			"""
-			select scope.id
-			from agent_run_sources source
-			join source_scopes scope
-			  on scope.workspace_id = source.workspace_id and scope.id = source.source_scope_id
-			join connection_namespace_bindings binding
-			  on binding.workspace_id = scope.workspace_id
-			 and binding.source_namespace_id = scope.source_namespace_id
-			 and binding.provider = scope.provider
-			join connections connection
-			  on connection.workspace_id = binding.workspace_id
-			 and connection.id = binding.connection_id
-			 and connection.provider = binding.provider
-			where source.workspace_id = ? and source.agent_run_id = ?
-			  and binding.status = 'ACTIVE' and connection.status = 'ACTIVE'
-			order by scope.id
-			for update of binding, connection
-			""".trimIndent(),
-			{ rs, _ -> requireNotNull(rs.getObject("id", UUID::class.java)) },
-			workspaceId,
-			agentRunId,
-		).toSet()
+		val connectedScopeIds = if (allowDisconnectedConnection) {
+			statuses.map { it.first }.toSet()
+		} else {
+			sqlExecutor.query(
+				"""
+				select scope.id
+				from agent_run_sources source
+				join source_scopes scope
+				  on scope.workspace_id = source.workspace_id and scope.id = source.source_scope_id
+				join connection_namespace_bindings binding
+				  on binding.workspace_id = scope.workspace_id
+				 and binding.source_namespace_id = scope.source_namespace_id
+				 and binding.provider = scope.provider
+				join connections connection
+				  on connection.workspace_id = binding.workspace_id
+				 and connection.id = binding.connection_id
+				 and connection.provider = binding.provider
+				where source.workspace_id = ? and source.agent_run_id = ?
+				  and binding.status = 'ACTIVE' and connection.status = 'ACTIVE'
+				order by scope.id
+				for update of binding, connection
+				""".trimIndent(),
+				{ rs, _ -> requireNotNull(rs.getObject("id", UUID::class.java)) },
+				workspaceId,
+				agentRunId,
+			).toSet()
+		}
 		if (
 			expected == 0 ||
 			statuses.size != expected ||

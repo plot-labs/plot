@@ -8,6 +8,7 @@ import com.plot.api.persistence.SqlRow
 import java.time.Instant
 import java.util.UUID
 import org.springframework.stereotype.Component
+import tools.jackson.databind.ObjectMapper
 
 data class AgentSearchItem(
 	val writingBlockId: UUID,
@@ -27,9 +28,26 @@ data class AgentToolResult(
 class ReadOnlyAgentTools(
 	private val sqlExecutor: JooqSqlExecutor,
 	private val properties: RoutineAgentProperties,
+	private val objectMapper: ObjectMapper,
 ) {
-	fun listAllowedSources(workspaceId: UUID, agentRunId: UUID): AgentToolResult = AgentToolResult(
-		sources = sqlExecutor.query(
+	fun listAllowedSources(workspaceId: UUID, agentRunId: UUID, frozenReplay: Boolean = false): AgentToolResult = AgentToolResult(
+		sources = if (frozenReplay) {
+			sqlExecutor.query(
+				"""
+					select source.source_scope_id, source.source_display_name, source.source_role
+				from agent_run_sources source
+				where source.workspace_id = ? and source.agent_run_id = ?
+				order by source.order_index, source.source_scope_id
+				""".trimIndent(),
+				{ rs, _ -> AgentSourceView(
+					requireNotNull(rs.getObject(1, UUID::class.java)),
+						requireNotNull(rs.getString(2)),
+						requireNotNull(rs.getString(3)),
+				) },
+				workspaceId,
+				agentRunId,
+			)
+		} else sqlExecutor.query(
 			"""
 			select scope.id, scope.display_name, source.source_role
 			from agent_run_sources source
@@ -62,7 +80,9 @@ class ReadOnlyAgentTools(
 		agentRunId: UUID,
 		sourceScopeId: UUID,
 		query: String,
+		frozenReplay: Boolean = false,
 	): AgentToolResult {
+		if (frozenReplay) return replaySearch(workspaceId, agentRunId, sourceScopeId, query)
 		val source = requireActiveAllowedSource(workspaceId, agentRunId, sourceScopeId)
 		val normalized = query.trim().take(200)
 		require(normalized.isNotBlank()) { "Search query is required" }
@@ -103,7 +123,9 @@ class ReadOnlyAgentTools(
 		agentRunId: UUID,
 		sourceScopeId: UUID,
 		writingBlockId: UUID,
+		frozenReplay: Boolean = false,
 	): AgentToolResult {
+		if (frozenReplay) return replayRead(workspaceId, agentRunId, sourceScopeId, writingBlockId)
 		val source = requireActiveAllowedSource(workspaceId, agentRunId, sourceScopeId)
 		val frozenInput = sqlExecutor.query(
 			"""
@@ -174,6 +196,137 @@ class ReadOnlyAgentTools(
 			adoptedInput = block,
 		)
 	}
+
+	private fun replaySearch(
+		workspaceId: UUID,
+		agentRunId: UUID,
+		sourceScopeId: UUID,
+		query: String,
+	): AgentToolResult {
+		requireFrozenSourceAllowed(workspaceId, agentRunId, sourceScopeId)
+		val normalized = query.trim().take(200)
+		require(normalized.isNotBlank()) { "Search query is required" }
+		val result = matchingTranscriptEntry(workspaceId, agentRunId) { arguments, toolName ->
+			toolName == "SEARCH_WRITING_BLOCKS" &&
+				arguments.path("action").asText() == "SEARCH_WRITING_BLOCKS" &&
+				arguments.path("sourceScopeId").asText() == sourceScopeId.toString() &&
+				arguments.path("query").asText() == normalized
+		} ?: throw AgentToolAccessException("FROZEN_EVIDENCE_MISS")
+		val matches = result.path("matches").iterator().asSequence().map { item ->
+			AgentSearchItem(
+				writingBlockId = UUID.fromString(item.path("writingBlockId").asText()),
+				title = item.path("title").takeUnless { it.isNull }?.asText()?.take(MAX_RESULT_TITLE),
+				excerpt = item.path("excerpt").asText().take(MAX_RESULT_EXCERPT),
+			)
+		}.toList()
+		return AgentToolResult(sourceScopeId = sourceScopeId, matches = matches)
+	}
+
+	private fun replayRead(
+		workspaceId: UUID,
+		agentRunId: UUID,
+		sourceScopeId: UUID,
+		writingBlockId: UUID,
+	): AgentToolResult {
+		val source = requireFrozenSourceAllowed(workspaceId, agentRunId, sourceScopeId)
+		val frozenInput = sqlExecutor.query(
+			"""
+			select writing_block_id, source_scope_id, snapshot_title, snapshot_body,
+			       snapshot_excerpt, original_url, source_created_at, source_updated_at, content_hash,
+			       source_provider, source_kind, source_label, input_kind, order_index, activity_sequence, captured_at
+			from agent_run_inputs
+			where workspace_id = ? and agent_run_id = ? and source_scope_id = ? and writing_block_id = ?
+			""".trimIndent(),
+			{ rs, _ -> rs.toFrozenInput(source.label) },
+			workspaceId,
+			agentRunId,
+			sourceScopeId,
+			writingBlockId,
+		).firstOrNull() ?: throw AgentToolAccessException("FROZEN_EVIDENCE_MISS")
+		val recorded = matchingTranscriptEntry(workspaceId, agentRunId) { arguments, toolName ->
+			val recordedInputId = arguments.path("writingBlockId").asText()
+			toolName == "READ_WRITING_BLOCKS" &&
+				arguments.path("action").asText() == "READ_WRITING_BLOCKS" &&
+				arguments.path("sourceScopeId").asText() == sourceScopeId.toString() &&
+				(recordedInputId == writingBlockId.toString() || recordedInputId.isNotBlank() && sqlExecutor.queryForObject(
+					"""
+					select exists(
+					  select 1 from agent_run_inputs
+					  where workspace_id = ? and agent_run_id = ? and id::text = ? and writing_block_id = ?
+					)
+					""".trimIndent(),
+					Boolean::class.java,
+					workspaceId,
+					agentRunId,
+					recordedInputId,
+					writingBlockId,
+				) == true)
+		}
+		if (recorded == null) {
+			throw AgentToolAccessException("FROZEN_EVIDENCE_MISS")
+		}
+		return AgentToolResult(sourceScopeId = sourceScopeId, adoptedInput = frozenInput)
+	}
+
+	private fun matchingTranscriptEntry(
+		workspaceId: UUID,
+		agentRunId: UUID,
+		matches: (tools.jackson.databind.JsonNode, String) -> Boolean,
+	): tools.jackson.databind.JsonNode? = sqlExecutor.query(
+		"""
+		select entry.tool_name, entry.normalized_arguments::text, entry.bounded_result::text
+		from chat_execution_transcript_entries entry
+		join chat_execution_envelopes envelope
+		  on envelope.workspace_id = entry.workspace_id and envelope.id = entry.envelope_id
+		where envelope.workspace_id = ? and envelope.agent_run_id = ?
+		order by entry.call_index
+		""".trimIndent(),
+		{ rs, _ -> Triple(
+			requireNotNull(rs.getString(1)),
+			objectMapper.readTree(requireNotNull(rs.getString(2))),
+			objectMapper.readTree(requireNotNull(rs.getString(3))),
+		) },
+		workspaceId,
+		agentRunId,
+	).firstOrNull { (toolName, arguments, _) -> matches(arguments, toolName) }?.third
+
+	private fun requireFrozenSourceAllowed(workspaceId: UUID, agentRunId: UUID, sourceScopeId: UUID): AllowedSource = sqlExecutor.query(
+		"""
+		select scope.display_name, scope.status_changed_at
+		from agent_run_sources source
+		join source_scopes scope
+		  on scope.workspace_id = source.workspace_id and scope.id = source.source_scope_id
+		join source_namespaces namespace
+		  on namespace.workspace_id = scope.workspace_id and namespace.id = scope.source_namespace_id
+		 and namespace.provider = scope.provider
+		where source.workspace_id = ? and source.agent_run_id = ? and source.source_scope_id = ?
+		  and scope.status = 'ACTIVE' and namespace.status = 'ACTIVE'
+		""".trimIndent(),
+		{ rs, _ -> AllowedSource(requireNotNull(rs.getString(1)), requireNotNull(rs.getTimestamp(2)).toInstant()) },
+		workspaceId,
+		agentRunId,
+		sourceScopeId,
+	).singleOrNull() ?: throw AgentToolAccessException("SOURCE_NOT_ALLOWED")
+
+	private fun SqlRow.toFrozenInput(sourceLabel: String): AgentRunInputRequest = AgentRunInputRequest(
+		routineId = null,
+		sourceScopeId = requireNotNull(getObject("source_scope_id", UUID::class.java)),
+		writingBlockId = requireNotNull(getObject("writing_block_id", UUID::class.java)),
+		sourceProvider = getString("source_provider") ?: "GITHUB",
+		sourceKind = getString("source_kind") ?: "COMMIT",
+		sourceLabel = getString("source_label") ?: sourceLabel,
+		inputKind = AgentRunInputKind.TOOL_RESULT,
+		orderIndex = getInt("order_index"),
+		activitySequence = getObject("activity_sequence", Long::class.java),
+		snapshotTitle = getString("snapshot_title"),
+		snapshotBody = requireNotNull(getString("snapshot_body")),
+		snapshotExcerpt = getString("snapshot_excerpt"),
+		originalUrl = requireNotNull(getString("original_url")),
+		sourceCreatedAt = getTimestamp("source_created_at")?.toInstant(),
+		sourceUpdatedAt = getTimestamp("source_updated_at")?.toInstant(),
+		contentHash = requireNotNull(getString("content_hash")),
+		capturedAt = requireNotNull(getTimestamp("captured_at")).toInstant(),
+	)
 
 	private fun requireActiveAllowedSource(
 		workspaceId: UUID,

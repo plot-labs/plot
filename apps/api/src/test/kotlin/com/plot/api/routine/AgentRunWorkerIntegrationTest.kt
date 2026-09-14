@@ -785,6 +785,63 @@ class AgentRunWorkerIntegrationTest {
 		assertEquals(1, count("select count(*) from generation_runs where agent_run_id = ?", admitted.agentRunId))
 	}
 
+	@Test
+	fun `chat retry replays frozen search after the live connection disconnects`() {
+		val source = insertSource("acme/frozen-replay")
+		val blockId = insertBlock(source, "Frozen search", "Immutable original search evidence")
+		val admitted = chatAdmission.admit(
+			CreateChatAgentRunRequest(
+				instruction = "Draft from frozen evidence",
+				writingBlockIds = listOf(blockId),
+			),
+			"frozen-replay-original-${UUID.randomUUID()}",
+		)
+		var retrying = false
+		agentModel.scriptedDecision = { request ->
+			if (request.completedSteps.isEmpty()) {
+				AgentDecision(
+					AgentDecisionAction.SEARCH_WRITING_BLOCKS,
+					sourceScopeId = source.scopeId,
+					query = "immutable",
+				)
+			} else if (!retrying) {
+				throw AgentDecisionException("ORIGINAL_TERMINAL", false, "End the original run")
+			} else {
+				AgentDecision(
+					AgentDecisionAction.CREATE_ARTIFACT,
+					selectedInputIds = request.inputs.map { it.id },
+				)
+			}
+		}
+
+		assertTrue(agentWorker.processOne())
+		assertTrue(agentWorker.processOne())
+		assertEquals("FAILED", agentStatus(admitted.id))
+
+		val targetVersionId = chatAdmission.listTurnsForSession(admitted.chatId).single().versions.single().id
+		val retried = chatAdmission.retry(targetVersionId, "frozen-replay-retry-${UUID.randomUUID()}")
+		retrying = true
+		assertTrue(jdbcTemplate.queryForObject(
+			"select exists(select 1 from chat_response_versions where agent_run_id = ? and lineage_parent_version_id is not null)",
+			Boolean::class.java,
+			retried.agentRunId,
+		) == true)
+		jdbcTemplate.update(
+			"update connections set status = 'DISABLED', status_changed_at = now(), updated_at = now() where workspace_id = ?",
+			devContext.devWorkspaceId,
+		)
+
+		assertTrue(agentWorker.processOne())
+		assertEquals(3, agentModel.requests.size)
+		assertEquals("RUNNING", agentStatus(retried.agentRunId))
+		val replayResult = assertNotNull(jdbcTemplate.queryForObject(
+			"select result::text from agent_steps where agent_run_id = ? and tool_name = 'SEARCH_WRITING_BLOCKS'",
+			String::class.java,
+			retried.agentRunId,
+		))
+		assertTrue(replayResult.contains(blockId.toString()))
+	}
+
 	private fun admitAgent(name: String, sourceLabel: String): AdmittedAgent {
 		val source = insertSource(sourceLabel)
 		val blockId = insertBlock(source, "Activity", "Immutable activity body")

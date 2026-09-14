@@ -219,7 +219,11 @@ class AgentRunExecutionPersistence(
 	fun beginModelDecision(claim: ClaimedAgentRun, maxModelCalls: Int): AgentRunRecord = transactionExecutor.execute {
 		require(maxModelCalls > 0) { "Agent model-call budget must be positive" }
 		val run = queryPersistence.requireAgentClaim(claim)
-		queryPersistence.requireAllAgentSourcesActiveForUpdate(claim.workspaceId, claim.agentRunId)
+		queryPersistence.requireAllAgentSourcesActiveForUpdate(
+			claim.workspaceId,
+			claim.agentRunId,
+			allowDisconnectedConnection = queryPersistence.isFrozenReplay(claim.workspaceId, claim.agentRunId),
+		)
 		if (run.modelCallCount >= maxModelCalls) {
 			throw AgentRunBudgetExceededException("AGENT_MODEL_CALL_LIMIT")
 		}
@@ -244,7 +248,11 @@ class AgentRunExecutionPersistence(
 		now: Instant = currentInstant(),
 	): AgentStepRecord = transactionExecutor.execute {
 		val run = queryPersistence.requireAgentClaim(claim)
-		queryPersistence.requireAllAgentSourcesActiveForUpdate(claim.workspaceId, claim.agentRunId)
+		queryPersistence.requireAllAgentSourcesActiveForUpdate(
+			claim.workspaceId,
+			claim.agentRunId,
+			allowDisconnectedConnection = queryPersistence.isFrozenReplay(claim.workspaceId, claim.agentRunId),
+		)
 		require(request.agentRunId == claim.agentRunId) { "Agent step belongs to another run" }
 		require(request.sequence == run.currentStep) { "Agent step sequence is stale" }
 		require(request.status == AgentStepStatus.RUNNING) { "Reserved Agent step must be running" }
@@ -307,7 +315,11 @@ class AgentRunExecutionPersistence(
 			"Agent read step is stale"
 		}
 		require(step.status == AgentStepStatus.RUNNING) { "Agent read step is not running" }
-		queryPersistence.requireAllAgentSourcesActiveForUpdate(claim.workspaceId, claim.agentRunId)
+		queryPersistence.requireAllAgentSourcesActiveForUpdate(
+			claim.workspaceId,
+			claim.agentRunId,
+			allowDisconnectedConnection = queryPersistence.isFrozenReplay(claim.workspaceId, claim.agentRunId),
+		)
 		if (sourceScopeId != null && sourceStatusChangedAt != null) {
 			requireSourceVersion(claim.workspaceId, claim.agentRunId, sourceScopeId, sourceStatusChangedAt)
 		}

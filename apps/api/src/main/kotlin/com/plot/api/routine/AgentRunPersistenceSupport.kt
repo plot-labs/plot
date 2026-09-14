@@ -105,6 +105,7 @@ internal fun SqlRow.toAgentRunSource() = AgentRunSourceRecord(
 		workspaceId = requireNotNull(getObject("workspace_id", UUID::class.java)),
 		agentRunId = requireNotNull(getObject("agent_run_id", UUID::class.java)),
 		sourceScopeId = requireNotNull(getObject("source_scope_id", UUID::class.java)),
+		displayName = getString("source_display_name"),
 		role = AgentRunSourceRole.valueOf(requireNotNull(getString("source_role"))),
 		orderIndex = getInt("order_index"),
 		capturedStatus = requireNotNull(getString("captured_status")),

@@ -192,6 +192,7 @@ describe("ChatWorkspace", () => {
   it("restores generated activity when History opens a session without an Agent query", async () => {
     mocks.search = "chat=chat-1";
     mocks.listSessions.mockResolvedValue([chat]);
+    mocks.listChatTurns.mockRejectedValue(new Error("Response history unavailable"));
     const succeeded = agentRun({ status: "SUCCEEDED", artifactId: "artifact-1", artifact: artifactSummary });
     mocks.listSessionAgentRuns.mockResolvedValue([succeeded]);
 
@@ -200,6 +201,7 @@ describe("ChatWorkspace", () => {
     expect(screen.queryByText("Reviewed artifact")).not.toBeInTheDocument();
     expect(screen.getByText("Source agent")).toBeVisible();
     expect(mocks.getChatAgentRun).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Retry response" })).not.toBeInTheDocument();
   });
 
   it("starts a follow-up Agent request with the active Chat linkage", async () => {
@@ -346,6 +348,7 @@ describe("ChatWorkspace", () => {
       ...terminalFailedVersion,
       id: "ver-retried",
       versionIndex: 1,
+      lineageParentVersionId: "ver-failed",
       agentRunId: "agent-retried",
       status: "QUEUED" as const,
       failureCode: null,
@@ -360,5 +363,46 @@ describe("ChatWorkspace", () => {
     fireEvent.click(retryBtn);
 
     await waitFor(() => expect(mocks.retryChatResponse).toHaveBeenCalledWith("ver-failed", expect.any(String), expect.anything()));
+  });
+
+  it("keeps the Retry idempotency key when reconciliation finds only the target retry version", async () => {
+    mocks.search = "chat=chat-1";
+    mocks.listSessions.mockResolvedValue([chat]);
+    const retriedTarget = {
+      id: "ver-target",
+      versionIndex: 1,
+      lineageParentVersionId: "ver-original",
+      agentRunId: "agent-target",
+      status: "FAILED" as const,
+      instruction: "Release notes draft",
+      failureCode: "MODEL_TIMEOUT",
+      artifactId: null,
+      artifact: null,
+      createdAt: "2026-07-01T00:01:00Z",
+      updatedAt: "2026-07-01T00:01:00Z",
+      retryEligibility: { eligible: true, reason: null },
+    };
+    const turns = [{
+      id: "turn-1",
+      workSessionId: "chat-1",
+      turnIndex: 0,
+      userMessage: "Write release notes",
+      selectedVersionId: "ver-target",
+      createdAt: "2026-07-01T00:00:00Z",
+      updatedAt: "2026-07-01T00:01:00Z",
+      versions: [retriedTarget],
+    }];
+    mocks.listChatTurns.mockResolvedValue(turns);
+    mocks.retryChatResponse.mockRejectedValue(new TypeError("Network request failed"));
+
+    render(<ChatWorkspace />);
+    const retry = await screen.findByRole("button", { name: "Retry response" });
+    fireEvent.click(retry);
+    await waitFor(() => expect(mocks.retryChatResponse).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Network request failed");
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry response" }));
+    await waitFor(() => expect(mocks.retryChatResponse).toHaveBeenCalledTimes(2));
+    expect(mocks.retryChatResponse.mock.calls[1]?.[1]).toBe(mocks.retryChatResponse.mock.calls[0]?.[1]);
   });
 });

@@ -23,6 +23,7 @@ class ChatCompatibilityWriter(
 		sourceSnapshotId: UUID? = null,
 		now: Instant = Instant.now(),
 	) {
+		lockChatSession(workspaceId, chatId)
 		val existingVersion = sqlExecutor.queryForObject(
 			"select id from chat_response_versions where workspace_id = ? and agent_run_id = ?",
 			UUID::class.java,
@@ -111,6 +112,7 @@ class ChatCompatibilityWriter(
 		settingsJson: String,
 		now: Instant = Instant.now(),
 	) {
+		lockChatSession(workspaceId, workSessionId)
 		val existingVersion = sqlExecutor.queryForObject(
 			"select id from chat_response_versions where workspace_id = ? and agent_run_id = ?",
 			UUID::class.java,
@@ -203,9 +205,7 @@ class ChatCompatibilityWriter(
 				id, workspace_id, envelope_id, call_index, tool_name, normalized_arguments,
 				bounded_result, adopted_input_hash, created_at
 			) values (?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?, ?)
-			on conflict (workspace_id, envelope_id, call_index) do update
-			set bounded_result = excluded.bounded_result,
-			    adopted_input_hash = coalesce(excluded.adopted_input_hash, chat_execution_transcript_entries.adopted_input_hash)
+			on conflict (workspace_id, envelope_id, call_index) do nothing
 			""".trimIndent(),
 			transcriptId,
 			workspaceId,
@@ -225,6 +225,15 @@ class ChatCompatibilityWriter(
 			sourceSnapshotId,
 			workspaceId,
 			agentRunId,
+		)
+	}
+
+	private fun lockChatSession(workspaceId: UUID, chatId: UUID) {
+		sqlExecutor.queryForObject(
+			"select id from work_sessions where workspace_id = ? and id = ? for update",
+			UUID::class.java,
+			workspaceId,
+			chatId,
 		)
 	}
 }

@@ -196,6 +196,7 @@ data class AgentRunSourceRecord(
 	val workspaceId: UUID,
 	val agentRunId: UUID,
 	val sourceScopeId: UUID,
+	val displayName: String?,
 	val role: AgentRunSourceRole,
 	val orderIndex: Int,
 	val capturedStatus: String,

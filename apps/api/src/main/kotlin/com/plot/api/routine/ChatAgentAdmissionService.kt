@@ -228,18 +228,21 @@ class ChatAgentAdmissionService(
 				return@execute raced
 			}
 
-			if (snapshot.sourceScopeId != null) {
-				sqlExecutor.update(
-					"""
-					insert into agent_run_sources (
-					  id, workspace_id, agent_run_id, source_scope_id, source_role, order_index,
-					  captured_status, captured_status_changed_at, captured_at
-					) values (?, ?, ?, ?, 'CONTEXT', 0, 'ACTIVE', ?, ?)
+				if (snapshot.sourceScopeId != null) {
+					val sourceDisplayName = snapshot.inputs.firstOrNull { it.sourceScopeId == snapshot.sourceScopeId }?.sourceLabel
+						?: requireActiveScopeDisplayName(workspaceId, snapshot.sourceScopeId)
+					sqlExecutor.update(
+						"""
+						insert into agent_run_sources (
+						  id, workspace_id, agent_run_id, source_scope_id, source_display_name, source_role, order_index,
+						  captured_status, captured_status_changed_at, captured_at
+						) values (?, ?, ?, ?, ?, 'CONTEXT', 0, 'ACTIVE', ?, ?)
 					""".trimIndent(),
 					uuidGenerator.next(),
-					workspaceId,
-					runId,
-					snapshot.sourceScopeId,
+						workspaceId,
+						runId,
+						snapshot.sourceScopeId,
+						sourceDisplayName,
 					Timestamp.from(now),
 					Timestamp.from(now),
 				)
@@ -410,15 +413,16 @@ class ChatAgentAdmissionService(
 			sources.forEachIndexed { index, source ->
 				sqlExecutor.update(
 					"""
-					insert into agent_run_sources (
-					  id, workspace_id, agent_run_id, source_scope_id, source_role, order_index,
-					  captured_status, captured_status_changed_at, captured_at
-					) values (?, ?, ?, ?, 'CONTEXT', ?, 'ACTIVE', ?, ?)
+						insert into agent_run_sources (
+						  id, workspace_id, agent_run_id, source_scope_id, source_display_name, source_role, order_index,
+						  captured_status, captured_status_changed_at, captured_at
+						) values (?, ?, ?, ?, ?, 'CONTEXT', ?, 'ACTIVE', ?, ?)
 					""".trimIndent(),
 					uuidGenerator.next(),
-					workspaceId,
-					runId,
-					source.id,
+						workspaceId,
+						runId,
+						source.id,
+						source.displayName,
 					index,
 					Timestamp.from(source.lifecycleVersionAt),
 					Timestamp.from(now),
@@ -452,6 +456,7 @@ class ChatAgentAdmissionService(
 					"contentBriefSnapshot" to briefJson,
 				),
 			)
+			val sourceSnapshot = contentSourceSnapshotService.findOrCreateSnapshotForAgentRun(workspaceId, runId)
 			writer().recordDirectChatRun(
 				workspaceId = workspaceId,
 				userId = userId,
@@ -460,7 +465,7 @@ class ChatAgentAdmissionService(
 				instruction = normalizedInstruction,
 				fingerprint = fingerprint,
 				settingsJson = settingsJson,
-				sourceSnapshotId = null,
+				sourceSnapshotId = sourceSnapshot.id,
 				now = now,
 			)
 
@@ -539,7 +544,7 @@ class ChatAgentAdmissionService(
 				val sources = agentRunQueryPersistence.listAgentRunSources(workspaceId, v.agentRunId).map { s ->
 					ChatResponseSourceDto(
 						id = s.sourceScopeId,
-						displayName = s.role.name,
+							displayName = s.displayName ?: s.role.name,
 						role = s.role.name,
 					)
 				}
@@ -557,6 +562,7 @@ class ChatAgentAdmissionService(
 					turnId = turn.id,
 					versionIndex = v.versionIndex,
 					agentRunId = v.agentRunId,
+					lineageParentVersionId = v.lineageParentVersionId,
 					status = run.status,
 					failureCode = run.failureCode,
 					instruction = run.instructionSnapshot,
@@ -618,7 +624,7 @@ class ChatAgentAdmissionService(
 		val sources = agentRunQueryPersistence.listAgentRunSources(workspaceId, v.agentRunId).map { s ->
 			ChatResponseSourceDto(
 				id = s.sourceScopeId,
-				displayName = s.role.name,
+					displayName = s.displayName ?: s.role.name,
 				role = s.role.name,
 			)
 		}
@@ -635,6 +641,7 @@ class ChatAgentAdmissionService(
 			turnId = turn.id,
 			versionIndex = v.versionIndex,
 			agentRunId = v.agentRunId,
+			lineageParentVersionId = v.lineageParentVersionId,
 			status = run.status,
 			failureCode = run.failureCode,
 			instruction = run.instructionSnapshot,
@@ -665,24 +672,8 @@ class ChatAgentAdmissionService(
 		if (runStatus == AgentRunStatus.QUEUED || runStatus == AgentRunStatus.RUNNING) {
 			return RetryEligibilityDto(eligible = false, reason = "RUN_NOT_TERMINAL")
 		}
-		if (
-			envelope == null ||
-			envelope.envelopeFingerprint.isBlank() ||
-			envelope.generationSettingsJson.isBlank() ||
-			envelope.generationSettingsJson.trim() in setOf("{}", "null")
-		) {
+		if (agentRunId == null || !hasCompleteFrozenEnvelope(workspaceId, agentRunId, envelope)) {
 			return RetryEligibilityDto(eligible = false, reason = "INCOMPLETE_ENVELOPE")
-		}
-		if (agentRunId != null) {
-			val hasEvidence = envelope.sourceSnapshotId != null ||
-				sqlExecutor.queryForObject(
-					"select exists(select 1 from agent_run_inputs where workspace_id = ? and agent_run_id = ?) or exists(select 1 from chat_execution_transcript_entries where workspace_id = ? and envelope_id = ?)",
-					Boolean::class.java,
-					workspaceId, agentRunId, workspaceId, envelope.id,
-				) == true
-			if (!hasEvidence) {
-				return RetryEligibilityDto(eligible = false, reason = "INCOMPLETE_ENVELOPE")
-			}
 		}
 		try {
 			workspaceAccessService.requireWritable(workspaceId)
@@ -690,6 +681,70 @@ class ChatAgentAdmissionService(
 			return RetryEligibilityDto(eligible = false, reason = "UNAUTHORIZED")
 		}
 		return RetryEligibilityDto(eligible = true, reason = null)
+	}
+
+	private fun hasCompleteFrozenEnvelope(
+		workspaceId: UUID,
+		agentRunId: UUID,
+		envelope: ChatExecutionEnvelopeRow?,
+	): Boolean {
+		if (
+			envelope == null ||
+			envelope.envelopeFingerprint.isBlank() ||
+			envelope.sourceSnapshotId == null
+		) return false
+		val settings = runCatching { objectMapper.readTree(envelope.generationSettingsJson) }.getOrNull() ?: return false
+		if (settings !is tools.jackson.databind.node.ObjectNode) return false
+		val requiredSettings = setOf(
+			"promptVersion",
+			"toolPolicyVersion",
+			"budgetSnapshot",
+			"contentType",
+			"contentBriefSnapshot",
+		)
+		if (requiredSettings.any { !settings.has(it) }) return false
+		return sqlExecutor.queryForObject(
+			"""
+			select exists(
+			  select 1
+			  from content_source_snapshots snapshot
+			  where snapshot.workspace_id = ? and snapshot.id = ?
+			    and jsonb_typeof(snapshot.inputs_snapshot) = 'array'
+			)
+			and (
+			  select count(*) from agent_run_inputs input
+			  where input.workspace_id = ? and input.agent_run_id = ? and input.input_kind = 'SEED'
+			) >= coalesce((
+			  select jsonb_array_length(snapshot.inputs_snapshot)
+			  from content_source_snapshots snapshot
+			  where snapshot.workspace_id = ? and snapshot.id = ?
+			), 0)
+			and coalesce((
+			  select bool_and(
+			    entry.tool_name <> '' and jsonb_typeof(entry.normalized_arguments) = 'object'
+			      and jsonb_typeof(entry.bounded_result) = 'object'
+			  )
+			  from chat_execution_transcript_entries entry
+			  where entry.workspace_id = ? and entry.envelope_id = ?
+				), true)
+				and not exists (
+				  select 1 from agent_run_sources source
+				  where source.workspace_id = ? and source.agent_run_id = ?
+				    and coalesce(nullif(trim(source.source_display_name), ''), '') = ''
+				)
+				""".trimIndent(),
+			Boolean::class.java,
+			workspaceId,
+			envelope.sourceSnapshotId,
+			workspaceId,
+			agentRunId,
+			workspaceId,
+			envelope.sourceSnapshotId,
+				workspaceId,
+				envelope.id,
+				workspaceId,
+				agentRunId,
+		) == true
 	}
 
 	fun retry(targetVersionId: UUID, idempotencyKey: String): ChatResponseVersionDto {
@@ -757,21 +812,8 @@ class ChatAgentAdmissionService(
 				throw ApiException(HttpStatus.CONFLICT, "RETRY_INELIGIBLE", "Current response is still in progress")
 			}
 			val targetEnvelope = agentRunQueryPersistence.findEnvelopeForAgentRun(workspaceId, targetVersion.agentRunId)
-			if (
-				targetEnvelope == null ||
-				targetEnvelope.envelopeFingerprint.isBlank() ||
-				targetEnvelope.generationSettingsJson.isBlank() ||
-				targetEnvelope.generationSettingsJson.trim() in setOf("{}", "null")
-			) {
-				throw ApiException(HttpStatus.CONFLICT, "RETRY_INELIGIBLE", "Execution envelope is incomplete")
-			}
-			val hasEvidence = targetEnvelope.sourceSnapshotId != null ||
-				sqlExecutor.queryForObject(
-					"select exists(select 1 from agent_run_inputs where workspace_id = ? and agent_run_id = ?) or exists(select 1 from chat_execution_transcript_entries where workspace_id = ? and envelope_id = ?)",
-					Boolean::class.java,
-					workspaceId, targetRun.id, workspaceId, targetEnvelope.id,
-				) == true
-			if (!hasEvidence) {
+				?: throw ApiException(HttpStatus.CONFLICT, "RETRY_INELIGIBLE", "Execution envelope is incomplete")
+			if (!hasCompleteFrozenEnvelope(workspaceId, targetRun.id, targetEnvelope)) {
 				throw ApiException(HttpStatus.CONFLICT, "RETRY_INELIGIBLE", "Execution envelope is incomplete")
 			}
 
@@ -874,15 +916,16 @@ class ChatAgentAdmissionService(
 			for (source in targetSources) {
 				sqlExecutor.update(
 					"""
-					insert into agent_run_sources (
-					  id, workspace_id, agent_run_id, source_scope_id, source_role, order_index,
-					  captured_status, captured_status_changed_at, captured_at
-					) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+						insert into agent_run_sources (
+						  id, workspace_id, agent_run_id, source_scope_id, source_display_name, source_role, order_index,
+						  captured_status, captured_status_changed_at, captured_at
+						) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 					""".trimIndent(),
 					uuidGenerator.next(),
-					workspaceId,
-					newRunId,
-					source.sourceScopeId,
+						workspaceId,
+						newRunId,
+						source.sourceScopeId,
+						source.displayName,
 					source.role.name,
 					source.orderIndex,
 					source.capturedStatus,
@@ -1087,7 +1130,7 @@ class ChatAgentAdmissionService(
 
 	private fun lockActiveSources(workspaceId: UUID): List<FrozenSource> = sqlExecutor.query(
 		"""
-		select scope.id,
+		select scope.id, scope.display_name,
 		       greatest(scope.status_changed_at, namespace.updated_at, binding.updated_at, connection.updated_at)
 		         as lifecycle_version_at
 		from source_scopes scope
@@ -1104,7 +1147,7 @@ class ChatAgentAdmissionService(
 		order by scope.id
 		for update of scope, namespace, binding, connection
 		""".trimIndent(),
-		{ rs, _ -> FrozenSource(requireNotNull(rs.getObject("id", UUID::class.java)), requireNotNull(rs.getTimestamp("lifecycle_version_at")).toInstant()) },
+			{ rs, _ -> FrozenSource(requireNotNull(rs.getObject("id", UUID::class.java)), requireNotNull(rs.getString("display_name")), requireNotNull(rs.getTimestamp("lifecycle_version_at")).toInstant()) },
 		workspaceId,
 	)
 
@@ -1187,7 +1230,13 @@ class ChatAgentAdmissionService(
 			.joinToString("") { byte -> "%02x".format(byte) }
 	}
 
-	private data class FrozenSource(val id: UUID, val lifecycleVersionAt: Instant)
+	private fun requireActiveScopeDisplayName(workspaceId: UUID, sourceScopeId: UUID): String = requireNotNull(sqlExecutor.queryForObject(
+		"select display_name from source_scopes where workspace_id = ? and id = ? and status = 'ACTIVE'",
+		String::class.java,
+		workspaceId,
+		sourceScopeId,
+	))
+	private data class FrozenSource(val id: UUID, val displayName: String, val lifecycleVersionAt: Instant)
 	private data class ChatSessionRow(val routineExecutionId: UUID?)
 	private data class SourceArtifactRunInfo(
 		val agentRunId: UUID,

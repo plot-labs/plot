@@ -442,6 +442,12 @@ export interface ChatCitation {
   url: string | null;
 }
 
+export interface ChatResponseSource {
+  id: string;
+  displayName: string;
+  role: string;
+}
+
 export interface ChatResponseVersion {
   id: string;
   turnId: string;
@@ -459,7 +465,8 @@ export interface ChatResponseVersion {
     updatedAt: string;
   } | null;
   retryEligibility: RetryEligibility;
-  sources?: SourceReference[];
+  lineageParentVersionId: string | null;
+  sources?: ChatResponseSource[];
   citations?: ChatCitation[];
   createdAt: string;
   updatedAt: string;

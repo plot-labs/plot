@@ -141,6 +141,7 @@ data class ChatResponseVersionDto(
 	val turnId: UUID,
 	val versionIndex: Int,
 	val agentRunId: UUID,
+	val lineageParentVersionId: UUID?,
 	val status: AgentRunStatus,
 	val failureCode: String?,
 	val instruction: String,

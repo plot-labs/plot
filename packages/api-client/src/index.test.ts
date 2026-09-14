@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 
 
-import type { PlotApiClient, WorkspaceSummary } from "./index";
+import type { ChatResponseVersion, PlotApiClient, WorkspaceSummary } from "./index";
 import { PlotApiError, createPlotApiClient, fetchPublicChangelog, fetchPublicChangelogEntry } from "./index";
 
 function workspaceSummary(overrides: Partial<WorkspaceSummary> = {}): WorkspaceSummary {
@@ -676,4 +676,27 @@ it("queries chat turns, response versions, and retry eligibility", async () => {
     expect(new Headers(init?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
     expect(init?.cache).toBe("no-store");
   }
+});
+
+it("models response-version lineage and response-local source summaries", () => {
+  const version = {
+    id: "ver-2",
+    turnId: "turn-1",
+    versionIndex: 1,
+    lineageParentVersionId: "ver-1",
+    agentRunId: "run-2",
+    status: "QUEUED" as const,
+    failureCode: null,
+    instruction: "Write release notes",
+    artifactId: null,
+    artifact: null,
+    retryEligibility: { eligible: false, reason: "RUN_NOT_TERMINAL" },
+    sources: [{ id: "source-1", displayName: "Release v1.2", role: "SELECTED" }],
+    citations: [],
+    createdAt: "2026-09-14T00:00:00Z",
+    updatedAt: "2026-09-14T00:00:00Z",
+  } satisfies ChatResponseVersion;
+
+  expect(version.lineageParentVersionId).toBe("ver-1");
+  expect(version.sources?.[0]).toEqual({ id: "source-1", displayName: "Release v1.2", role: "SELECTED" });
 });

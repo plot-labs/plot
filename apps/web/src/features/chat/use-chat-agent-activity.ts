@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   ChatAgentRun,
+  ChatResponseVersion,
   ChatTurn,
   ContentBrief,
   ContentType,
@@ -34,6 +35,10 @@ type UseChatAgentActivityProps = {
   onAgentArtifact: (run: ChatAgentRun) => void;
   onAdmitted: (run: ChatAgentRun) => void;
 };
+
+function isConfirmedRetryChild(version: ChatResponseVersion, parentVersionId: string): boolean {
+  return version.id !== parentVersionId && version.lineageParentVersionId === parentVersionId;
+}
 
 export function useChatAgentActivity({
   chatId,
@@ -78,6 +83,7 @@ export function useChatAgentActivity({
           id: act.id,
           turnId: `turn-synthetic-${chatId}`,
           versionIndex: index,
+          lineageParentVersionId: null,
           agentRunId: act.id,
           status: act.status,
           instruction: act.instruction || "",
@@ -93,8 +99,8 @@ export function useChatAgentActivity({
           createdAt: act.createdAt,
           updatedAt: act.updatedAt,
           retryEligibility: {
-            eligible: isTerminalChatAgentStatus(act.status) && index === rawActivities.length - 1,
-            reason: isTerminalChatAgentStatus(act.status) ? null : "RUN_NOT_TERMINAL",
+            eligible: false,
+            reason: "AUTHORITATIVE_HISTORY_UNAVAILABLE",
           },
         })),
       },
@@ -293,7 +299,9 @@ export function useChatAgentActivity({
 
     try {
       const newVersion = await plotApiClient.retryChatResponse(versionId, idempotencyKey, { signal: controller.signal });
-      retryIdempotencyKeysRef.current.delete(versionId);
+      if (isConfirmedRetryChild(newVersion, versionId)) {
+        retryIdempotencyKeysRef.current.delete(versionId);
+      }
       setSelectedVersionId(newVersion.id);
       setTurns((prev) => {
         const latestIdx = prev.length - 1;
@@ -343,8 +351,7 @@ export function useChatAgentActivity({
           const freshTurns = await plotApiClient.listChatTurns(chatId);
           if (freshTurns) {
             setTurns(freshTurns);
-            const latestTurn = freshTurns[freshTurns.length - 1];
-            if (latestTurn?.versions.some((v) => v.lineageParentVersionId === versionId || v.versionIndex > 0)) {
+            if (freshTurns.some((turn) => turn.versions.some((version) => isConfirmedRetryChild(version, versionId)))) {
               retryIdempotencyKeysRef.current.delete(versionId);
             }
           }

@@ -219,6 +219,19 @@ class WorkSessionApiIntegrationTest {
 
 	private fun insertChatAgentRun(sessionId: UUID, createdAt: Instant, instruction: String): UUID {
 		val id = UUID.randomUUID()
+		val snapshotId = UUID.randomUUID()
+		jdbcTemplate.update(
+			"""
+			insert into content_source_snapshots (
+				id, workspace_id, source_bundle_hash, source_scope_id, captured_at, brief_snapshot, inputs_snapshot, created_at
+			) values (?, ?, ?, null, ?, null, '[]'::jsonb, ?)
+			""".trimIndent(),
+			snapshotId,
+			devContext.devWorkspaceId,
+			"snapshot-$id",
+			Timestamp.from(createdAt),
+			Timestamp.from(createdAt),
+		)
 		jdbcTemplate.update(
 			"""
 			insert into agent_runs (
@@ -239,18 +252,25 @@ class WorkSessionApiIntegrationTest {
 			Timestamp.from(createdAt),
 			Timestamp.from(createdAt),
 		)
+		jdbcTemplate.update(
+			"update agent_runs set source_snapshot_id = ? where workspace_id = ? and id = ?",
+			snapshotId,
+			devContext.devWorkspaceId,
+			id,
+		)
 		val envelopeId = UUID.randomUUID()
 		jdbcTemplate.update(
 			"""
 			insert into chat_execution_envelopes (
 				id, workspace_id, agent_run_id, fingerprint_version, envelope_fingerprint,
 				generation_settings, source_snapshot_id, created_at
-			) values (?, ?, ?, 1, ?, '{"promptVersion":"chat-agent-v1","toolPolicyVersion":"read-only-v1"}'::jsonb, null, ?)
+			) values (?, ?, ?, 1, ?, '{"promptVersion":"chat-agent-v1","toolPolicyVersion":"read-only-v1","budgetSnapshot":{},"contentType":"CHANGELOG","contentBriefSnapshot":null}'::jsonb, ?, ?)
 			""".trimIndent(),
 			envelopeId,
 			devContext.devWorkspaceId,
 			id,
 			"fingerprint-$id",
+			snapshotId,
 			Timestamp.from(createdAt),
 		)
 		jdbcTemplate.update(
