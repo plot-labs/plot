@@ -131,6 +131,42 @@ describe("Autonomy Home", () => {
     expect(screen.queryByText("OAuth support")).not.toBeInTheDocument();
   });
 
+  it("clears pagination loading when a workspace refresh cancels the page request", async () => {
+    let finishPageRequest!: (value: ActivityPage) => void;
+    api.getActivity
+      .mockResolvedValueOnce({
+        items: [activityItem({ id: "act-1", title: "Workspace one" })],
+        nextCursor: "cursor-2",
+        hasMore: true,
+        highWaterMark: "hwm-1",
+      })
+      .mockReturnValueOnce(new Promise<ActivityPage>((resolve) => { finishPageRequest = resolve; }))
+      .mockResolvedValueOnce({
+        items: [activityItem({ id: "act-2", title: "Workspace two" })],
+        nextCursor: "cursor-3",
+        hasMore: true,
+        highWaterMark: "hwm-2",
+      });
+
+    render(<AutonomyHomeWorkspace view="activity" />);
+    expect(await screen.findByText("Workspace one")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Load more activity" }));
+    expect(screen.getByRole("button", { name: "Loading more activity…" })).toBeDisabled();
+
+    act(() => {
+      localStorage.setItem("plot.workspaceId", "workspace-2");
+      window.dispatchEvent(new Event("plot:workspace-changed"));
+    });
+
+    expect(await screen.findByText("Workspace two")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Load more activity" })).toBeEnabled();
+
+    await act(async () => {
+      finishPageRequest({ items: [], nextCursor: null, hasMore: false, highWaterMark: "hwm-1" });
+    });
+  });
+
   it("renders empty activity state when no items exist", async () => {
     api.getActivity.mockResolvedValue({
       items: [],

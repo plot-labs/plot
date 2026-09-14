@@ -30,10 +30,13 @@ export function AutonomyHomeWorkspace({ view = "overview" }: { view?: "overview"
   const [filter, setFilter] = useState<"ALL" | "ATTENTION" | "DECIDED">("ALL");
   const [revision, setRevision] = useState(0);
   const generation = useRef(0);
+  const loadMoreAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     const change = () => {
       generation.current += 1;
+      loadMoreAbortRef.current?.abort();
+      loadMoreAbortRef.current = null;
       setItems([]);
       setNextCursor(null);
       setHasMore(false);
@@ -41,11 +44,14 @@ export function AutonomyHomeWorkspace({ view = "overview" }: { view?: "overview"
       setError(null);
       setPaginationError(null);
       setLoading(true);
+      setLoadingMore(false);
       setRevision((value) => value + 1);
     };
     window.addEventListener("plot:workspace-changed", change);
     return () => {
       generation.current += 1;
+      loadMoreAbortRef.current?.abort();
+      loadMoreAbortRef.current = null;
       window.removeEventListener("plot:workspace-changed", change);
     };
   }, []);
@@ -77,10 +83,10 @@ export function AutonomyHomeWorkspace({ view = "overview" }: { view?: "overview"
     return () => controller.abort();
   }, [revision]);
 
-  const loadMoreAbortRef = useRef<AbortController | null>(null);
-
   function refresh() {
     loadMoreAbortRef.current?.abort();
+    loadMoreAbortRef.current = null;
+    setLoadingMore(false);
     setError(null);
     setPaginationError(null);
     setLoading(true);
@@ -114,7 +120,8 @@ export function AutonomyHomeWorkspace({ view = "overview" }: { view?: "overview"
         setPaginationError(cause instanceof Error ? cause.message : "Could not load more activity.");
       }
     } finally {
-      if (valid()) {
+      if (loadMoreAbortRef.current === controller) {
+        loadMoreAbortRef.current = null;
         setLoadingMore(false);
       }
     }
@@ -185,7 +192,7 @@ export function AutonomyHomeWorkspace({ view = "overview" }: { view?: "overview"
             <button
               type="button"
               className={workspaceIconButtonClass}
-              disabled={loading || loadingMore}
+              disabled={loading}
               onClick={refresh}
               aria-label="Refresh updates"
               title="Refresh updates"
