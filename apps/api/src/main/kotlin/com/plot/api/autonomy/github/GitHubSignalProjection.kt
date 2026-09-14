@@ -62,6 +62,15 @@ class GitHubSignalProjection(
                     ).firstOrNull()
                 }
 
+                // Release admission is asynchronous. Do not materialize a final
+                // NO_GENERATION decision while its draft can still create a Chat run;
+                // DefaultGitHubReleaseAgentAdmission will converge this signal when it
+                // links the admitted response version.
+                if (isRelease && draftInfo?.first in PENDING_RELEASE_ADMISSION_STATUSES) {
+                    check(inbox.finish(claim, Instant.now())) { "Signal lease lost" }
+                    return@execute true
+                }
+
                 val outcome: String
                 val reason: String
                 val admittedVersionId: java.util.UUID?
@@ -106,3 +115,5 @@ class GitHubSignalProjection(
         return true
     }
 }
+
+private val PENDING_RELEASE_ADMISSION_STATUSES = setOf("QUEUED", "RESOLVING", "GENERATING", "DEFERRED")

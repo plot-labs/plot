@@ -61,6 +61,30 @@ class AutonomyHomeIntegrationTest {
         verify(access).requireActiveWorkspace(selected.workspaceId)
     }
 
+    @Test
+    fun `activity bounds an oversized requested page`() {
+        val selected = fixture()
+        val context = mock(DevContext::class.java)
+        val access = mock(WorkspaceAccessService::class.java)
+        `when`(context.devWorkspaceId).thenReturn(selected.workspaceId)
+        val controller = AutonomyHomeController(context, access, sql)
+
+        repeat(101) { index ->
+            jdbc.update(
+                """
+                insert into legacy_activity_provenance(
+                    id, workspace_id, source_scope_id, title, disposition, reason, semantic_time, created_at
+                ) values (?, ?, ?, ?, 'EXCLUDED', 'No customer value', now() - (? * interval '1 second'), now())
+                """.trimIndent(),
+                UUID.randomUUID(), selected.workspaceId, selected.scopeId, "Legacy $index", index,
+            )
+        }
+
+        val response = controller.activity(null, 10_000, null)
+
+        assertEquals(100, assertNotNull(response.body).items.size)
+    }
+
     private fun fixture(workspace: UUID = UUID.randomUUID()): Fixture {
         if (workspaces.add(workspace)) jdbc.update(
             "insert into workspaces(id,name,slug,status,created_at,updated_at) values (?,'Home test',?,'ACTIVE',now(),now())",

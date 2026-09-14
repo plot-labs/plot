@@ -1,6 +1,7 @@
 package com.plot.api.github
 
 import com.plot.api.common.WorkspacePrincipal
+import com.plot.api.autonomy.signal.SignalEvaluationPersistence
 import com.plot.api.routine.AgentRunRecord
 import com.plot.api.routine.ChatAgentAdmissionService
 import org.springframework.stereotype.Component
@@ -24,6 +25,7 @@ class DefaultGitHubReleaseAgentAdmission(
 	private val requestPersistence: GitHubReleaseRequestStore,
 	private val chatAgentAdmissionService: ChatAgentAdmissionService,
 	private val routineService: GitHubReleaseRoutineService,
+	private val signalEvaluations: SignalEvaluationPersistence,
 	private val preparationGate: GitHubReleasePreparationGate? = null,
 ) : GitHubReleaseAgentAdmission {
 	override fun prepare(request: GitHubReleaseDraftRequest) {
@@ -51,6 +53,12 @@ class DefaultGitHubReleaseAgentAdmission(
 			chatTitle = "GitHub release ${request.tagName}",
 		)
 		requestPersistence.linkAgentRun(request.id, evidenceTransitionVersion, evidence.observationId, agentRun.id)
+		signalEvaluations.recordReleaseAdmission(
+			workspaceId = request.workspaceId,
+			sourceScopeId = request.sourceScopeId,
+			tagName = request.tagName,
+			agentRunId = agentRun.id,
+		)
 		preparationGate?.admitted(request, agentRun.id)
 		return agentRun
 	}

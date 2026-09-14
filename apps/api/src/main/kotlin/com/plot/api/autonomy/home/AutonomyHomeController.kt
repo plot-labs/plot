@@ -22,6 +22,10 @@ class AutonomyHomeController(
     private val sql: JooqSqlExecutor,
     private val activityProjection: SignalActivityProjectionService? = null,
 ) {
+    companion object {
+        private const val MAX_ACTIVITY_PAGE_SIZE = 100
+    }
+
     @GetMapping("/activity")
     fun activity(
         @RequestParam(required = false) cursor: String?,
@@ -33,7 +37,8 @@ class AutonomyHomeController(
         val visibleScopes = getVisibleScopes(workspace)
         val hwm = highWaterMark?.let { Instant.parse(it) }
         val projection = activityProjection ?: SignalActivityProjectionService(sql)
-        return response(projection.projectActivity(workspace, visibleScopes, limit, cursor, hwm))
+        val pageSize = limit.coerceIn(1, MAX_ACTIVITY_PAGE_SIZE)
+        return response(projection.projectActivity(workspace, visibleScopes, pageSize, cursor, hwm))
     }
 
     private fun getVisibleScopes(workspace: UUID): Set<UUID> = sql.query("""select distinct s.id from source_scopes s
