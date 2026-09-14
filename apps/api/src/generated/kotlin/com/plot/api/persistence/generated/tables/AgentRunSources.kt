@@ -133,6 +133,11 @@ open class AgentRunSources(
      */
     val CAPTURED_AT: TableField<AgentRunSourcesRecord, OffsetDateTime?> = createField(DSL.name("captured_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false), this, "")
 
+    /**
+     * The column <code>public.agent_run_sources.source_display_name</code>.
+     */
+    val SOURCE_DISPLAY_NAME: TableField<AgentRunSourcesRecord, String?> = createField(DSL.name("source_display_name"), SQLDataType.VARCHAR, this, "")
+
     private constructor(alias: Name, aliased: Table<AgentRunSourcesRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<AgentRunSourcesRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<AgentRunSourcesRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)
