@@ -154,13 +154,25 @@ export function AgentActivityDetail({
               className="mt-4"
               timestamp={run ? <Timestamp value={run.createdAt} format="time" /> : undefined}
               footer={
-                <div className="mt-2 flex w-full flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <Text type="supporting" color="secondary">
+                <div className="mt-2 flex w-full flex-wrap items-center justify-between gap-3 text-black/50 dark:text-white/50">
+                  <div className="flex items-center gap-1.5">
+                    <Text type="supporting" color="secondary" className="mr-1.5">
                       Source agent
                     </Text>
+                    {retryEligibility?.eligible && (
+                      <button
+                        type="button"
+                        disabled={retrying || status === "QUEUED" || status === "RUNNING"}
+                        onClick={onRetry}
+                        aria-label="Retry response"
+                        title="Retry"
+                        className="inline-flex size-6 items-center justify-center rounded text-black/45 transition-colors hover:bg-black/5 hover:text-black/75 disabled:opacity-30 dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white/75"
+                      >
+                        <RotateCcw className={`size-3.5 ${retrying ? "animate-spin" : ""}`} />
+                      </button>
+                    )}
                     {versions.length > 1 && (
-                      <div className="flex items-center gap-1 text-xs" role="navigation" aria-label="Response versions">
+                      <div className="flex items-center gap-0.5 text-xs text-black/50 dark:text-white/50" role="navigation" aria-label="Response versions">
                         <button
                           type="button"
                           disabled={currentVersionIndex <= 0}
@@ -169,12 +181,13 @@ export function AgentActivityDetail({
                             if (prev && onSelectVersion) onSelectVersion(prev.id);
                           }}
                           aria-label="Previous response version"
-                          className="rounded p-0.5 text-black/50 hover:bg-black/5 disabled:opacity-30 dark:text-white/50 dark:hover:bg-white/10"
+                          className="inline-flex size-6 items-center justify-center rounded text-black/45 transition-colors hover:bg-black/5 hover:text-black/75 disabled:opacity-25 dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white/75"
                         >
                           <ChevronLeft className="size-3.5" />
                         </button>
-                        <span aria-live="polite" className="text-black/55 dark:text-white/55">
-                          Response {currentVersionIndex + 1} of {versions.length}
+                        <span aria-live="polite" className="px-0.5 text-[11px] font-normal tabular-nums text-black/60 dark:text-white/60">
+                          <span className="sr-only">Response {currentVersionIndex + 1} of {versions.length}</span>
+                          <span aria-hidden="true">{currentVersionIndex + 1}/{versions.length}</span>
                         </span>
                         <button
                           type="button"
@@ -184,30 +197,12 @@ export function AgentActivityDetail({
                             if (next && onSelectVersion) onSelectVersion(next.id);
                           }}
                           aria-label="Next response version"
-                          className="rounded p-0.5 text-black/50 hover:bg-black/5 disabled:opacity-30 dark:text-white/50 dark:hover:bg-white/10"
+                          className="inline-flex size-6 items-center justify-center rounded text-black/45 transition-colors hover:bg-black/5 hover:text-black/75 disabled:opacity-25 dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white/75"
                         >
                           <ChevronRight className="size-3.5" />
                         </button>
                       </div>
                     )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {retryEligibility?.eligible ? (
-                      <button
-                        type="button"
-                        disabled={retrying || status === "QUEUED" || status === "RUNNING"}
-                        onClick={onRetry}
-                        aria-label="Retry response"
-                        className="inline-flex items-center gap-1 rounded-md border border-black/10 bg-white px-2.5 py-1 text-xs font-medium text-black/70 hover:bg-black/[0.03] disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-white/70 dark:hover:bg-white/[0.08]"
-                      >
-                        <RotateCcw className={`size-3 ${retrying ? "animate-spin" : ""}`} />
-                        {retrying ? "Retrying…" : "Retry"}
-                      </button>
-                    ) : retryEligibility?.reason && retryEligibility.reason !== "RUN_NOT_TERMINAL" && retryEligibility.reason !== "NOT_LATEST_TURN" ? (
-                      <span className="text-xs text-black/40 dark:text-white/40" title={retryEligibility.reason}>
-                        {retryEligibility.reason === "NOT_LATEST_VERSION" ? "Select newest response to retry" : "Retry unavailable"}
-                      </span>
-                    ) : null}
                   </div>
                 </div>
               }
