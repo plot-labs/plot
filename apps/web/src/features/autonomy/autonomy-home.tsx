@@ -133,7 +133,7 @@ export function AutonomyHomeWorkspace({ view = "overview" }: { view?: "overview"
                 <p className="mt-1 text-sm leading-6 text-black/52 dark:text-white/52">{item.reason}</p>
                 {item.semanticTime && (
                   <p className="mt-1 text-xs text-black/40 dark:text-white/40">
-                    {new Date(item.semanticTime).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                    {new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(item.semanticTime))}
                   </p>
                 )}
               </div>

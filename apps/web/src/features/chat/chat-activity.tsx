@@ -7,12 +7,22 @@ import {
   ChatSystemMessage,
   ChatToolCalls,
 } from "@astryxdesign/core/Chat";
-import { Timestamp } from "@astryxdesign/core/Timestamp";
 import { Text } from "@astryxdesign/core/Text";
 import { ChevronLeft, ChevronRight, LoaderCircle, RotateCcw } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { ChatAgentRun, ChatResponseVersion, RetryEligibility, SourceReference } from "@plot/api-client";
+
+function formatChatTime(value: string | number | Date): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(date);
+}
+
 import {
   agentProgressLabel,
   agentStatusLabel,
@@ -151,14 +161,13 @@ export function AgentActivityDetail({
           className="w-full min-w-0 max-w-full"
           metadata={
             <ChatMessageMetadata
-              className="mt-4"
-              timestamp={run ? <Timestamp value={run.createdAt} format="time" /> : undefined}
+              className="mt-3 whitespace-nowrap"
+              timestamp={run ? <time dateTime={new Date(run.createdAt).toISOString()} className="whitespace-nowrap">{formatChatTime(run.createdAt)}</time> : undefined}
               footer={
-                <div className="mt-2 flex w-full flex-wrap items-center justify-between gap-3 text-black/50 dark:text-white/50">
-                  <div className="flex items-center gap-1.5">
-                    <Text type="supporting" color="secondary" className="mr-1.5">
-                      Source agent
-                    </Text>
+                <div className="flex items-center gap-1.5 whitespace-nowrap text-black/50 dark:text-white/50">
+                  <Text type="supporting" color="secondary" className="mr-1">
+                    Source agent
+                  </Text>
                     {retryEligibility?.eligible && (
                       <button
                         type="button"
@@ -204,7 +213,6 @@ export function AgentActivityDetail({
                       </div>
                     )}
                   </div>
-                </div>
               }
             />
           }
