@@ -29,6 +29,7 @@ class ReadOnlyAgentTools(
 	private val sqlExecutor: JooqSqlExecutor,
 	private val properties: AgentProperties,
 	private val objectMapper: ObjectMapper,
+	private val snapshots: AgentExecutionSnapshotPersistence,
 ) {
 	fun listAllowedSources(workspaceId: UUID, agentRunId: UUID, frozenReplay: Boolean = false): AgentToolResult = AgentToolResult(
 		sources = if (frozenReplay) {
@@ -206,7 +207,7 @@ class ReadOnlyAgentTools(
 		requireFrozenSourceAllowed(workspaceId, agentRunId, sourceScopeId)
 		val normalized = query.trim().take(200)
 		require(normalized.isNotBlank()) { "Search query is required" }
-		val result = matchingTranscriptEntry(workspaceId, agentRunId) { arguments, toolName ->
+		val result = snapshots.matchingTranscriptEntry(workspaceId, agentRunId) { arguments, toolName ->
 			toolName == "SEARCH_WRITING_BLOCKS" &&
 				arguments.path("action").asText() == "SEARCH_WRITING_BLOCKS" &&
 				arguments.path("sourceScopeId").asText() == sourceScopeId.toString() &&
@@ -243,7 +244,7 @@ class ReadOnlyAgentTools(
 			sourceScopeId,
 			writingBlockId,
 		).firstOrNull() ?: throw AgentToolAccessException("FROZEN_EVIDENCE_MISS")
-		val recorded = matchingTranscriptEntry(workspaceId, agentRunId) { arguments, toolName ->
+		val recorded = snapshots.matchingTranscriptEntry(workspaceId, agentRunId) { arguments, toolName ->
 			val recordedInputId = arguments.path("writingBlockId").asText()
 			toolName == "READ_WRITING_BLOCKS" &&
 				arguments.path("action").asText() == "READ_WRITING_BLOCKS" &&
@@ -267,28 +268,6 @@ class ReadOnlyAgentTools(
 		}
 		return AgentToolResult(sourceScopeId = sourceScopeId, adoptedInput = frozenInput)
 	}
-
-	private fun matchingTranscriptEntry(
-		workspaceId: UUID,
-		agentRunId: UUID,
-		matches: (tools.jackson.databind.JsonNode, String) -> Boolean,
-	): tools.jackson.databind.JsonNode? = sqlExecutor.query(
-		"""
-		select entry.tool_name, entry.normalized_arguments::text, entry.bounded_result::text
-		from chat_execution_transcript_entries entry
-		join chat_execution_envelopes envelope
-		  on envelope.workspace_id = entry.workspace_id and envelope.id = entry.envelope_id
-		where envelope.workspace_id = ? and envelope.agent_run_id = ?
-		order by entry.call_index
-		""".trimIndent(),
-		{ rs, _ -> Triple(
-			requireNotNull(rs.getString(1)),
-			objectMapper.readTree(requireNotNull(rs.getString(2))),
-			objectMapper.readTree(requireNotNull(rs.getString(3))),
-		) },
-		workspaceId,
-		agentRunId,
-	).firstOrNull { (toolName, arguments, _) -> matches(arguments, toolName) }?.third
 
 	private fun requireFrozenSourceAllowed(workspaceId: UUID, agentRunId: UUID, sourceScopeId: UUID): AllowedSource = sqlExecutor.query(
 		"""

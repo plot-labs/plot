@@ -1,5 +1,6 @@
 package com.plot.api.chat
 
+import com.plot.api.agent.AgentExecutionSnapshotPersistence
 import com.plot.api.common.UuidGenerator
 import com.plot.api.persistence.JooqSqlExecutor
 import java.sql.Timestamp
@@ -11,6 +12,7 @@ import org.springframework.stereotype.Component
 class ChatCompatibilityWriter(
 	private val sqlExecutor: JooqSqlExecutor,
 	private val uuidGenerator: UuidGenerator,
+	private val snapshots: AgentExecutionSnapshotPersistence,
 ) {
 	fun recordDirectChatRun(
 		workspaceId: UUID,
@@ -83,23 +85,7 @@ class ChatCompatibilityWriter(
 			Timestamp.from(now),
 		)
 
-		val envelopeId = uuidGenerator.next()
-		sqlExecutor.update(
-			"""
-			insert into chat_execution_envelopes (
-				id, workspace_id, agent_run_id, fingerprint_version, envelope_fingerprint,
-				generation_settings, source_snapshot_id, created_at
-			) values (?, ?, ?, 1, ?, ?::jsonb, ?, ?)
-			on conflict (workspace_id, agent_run_id) do nothing
-			""".trimIndent(),
-			envelopeId,
-			workspaceId,
-			runId,
-			fingerprint,
-			settingsJson,
-			sourceSnapshotId,
-			Timestamp.from(now),
-		)
+		snapshots.insertEnvelope(uuidGenerator.next(), workspaceId, runId, 1, fingerprint, settingsJson, sourceSnapshotId, now)
 	}
 
 	fun recordRoutineRun(
@@ -163,69 +149,7 @@ class ChatCompatibilityWriter(
 			Timestamp.from(now),
 		)
 
-		val envelopeId = uuidGenerator.next()
-		sqlExecutor.update(
-			"""
-			insert into chat_execution_envelopes (
-				id, workspace_id, agent_run_id, fingerprint_version, envelope_fingerprint,
-				generation_settings, source_snapshot_id, created_at
-			) values (?, ?, ?, 1, ?, ?::jsonb, null, ?)
-			on conflict (workspace_id, agent_run_id) do nothing
-			""".trimIndent(),
-			envelopeId,
-			workspaceId,
-			runId,
-			fingerprint,
-			settingsJson,
-			Timestamp.from(now),
-		)
-	}
-
-	fun recordTranscriptEntry(
-		workspaceId: UUID,
-		agentRunId: UUID,
-		callIndex: Int,
-		toolName: String,
-		argumentsJson: String,
-		resultJson: String,
-		adoptedInputHash: String? = null,
-		now: Instant = Instant.now(),
-	) {
-		val envelopeId = sqlExecutor.queryForObject(
-			"select id from chat_execution_envelopes where workspace_id = ? and agent_run_id = ?",
-			UUID::class.java,
-			workspaceId,
-			agentRunId,
-		) ?: return
-
-		val transcriptId = uuidGenerator.next()
-		sqlExecutor.update(
-			"""
-			insert into chat_execution_transcript_entries (
-				id, workspace_id, envelope_id, call_index, tool_name, normalized_arguments,
-				bounded_result, adopted_input_hash, created_at
-			) values (?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?, ?)
-			on conflict (workspace_id, envelope_id, call_index) do nothing
-			""".trimIndent(),
-			transcriptId,
-			workspaceId,
-			envelopeId,
-			callIndex,
-			toolName,
-			argumentsJson,
-			resultJson,
-			adoptedInputHash,
-			Timestamp.from(now),
-		)
-	}
-
-	fun linkSourceSnapshot(workspaceId: UUID, agentRunId: UUID, sourceSnapshotId: UUID) {
-		sqlExecutor.update(
-			"update chat_execution_envelopes set source_snapshot_id = ? where workspace_id = ? and agent_run_id = ? and source_snapshot_id is null",
-			sourceSnapshotId,
-			workspaceId,
-			agentRunId,
-		)
+		snapshots.insertEnvelope(uuidGenerator.next(), workspaceId, runId, 1, fingerprint, settingsJson, null, now)
 	}
 
 	private fun lockChatSession(workspaceId: UUID, chatId: UUID) {

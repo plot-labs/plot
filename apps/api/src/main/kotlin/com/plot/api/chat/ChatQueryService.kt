@@ -1,5 +1,6 @@
 package com.plot.api.chat
 
+import com.plot.api.agent.AgentExecutionSnapshotPersistence
 import com.plot.api.chat.dto.ChatAgentArtifactSummaryResponse
 import com.plot.api.chat.dto.ChatAgentRunResponse
 import com.plot.api.chat.dto.ChatResponseCitationDto
@@ -17,9 +18,7 @@ import com.plot.api.agent.AgentRunOrigin
 import com.plot.api.agent.AgentRunQueryPersistence
 import com.plot.api.agent.AgentRunRecord
 import com.plot.api.agent.AgentRunStatus
-import com.plot.api.agent.ChatExecutionEnvelopeRow
-import com.plot.api.agent.ChatResponseVersionRow
-import com.plot.api.agent.ChatTurnRow
+import com.plot.api.agent.AgentExecutionEnvelope
 import com.plot.api.agent.AgentProperties
 import java.time.Instant
 import java.util.UUID
@@ -32,6 +31,8 @@ class ChatQueryService(
 	private val devContext: DevContext,
 	private val sqlExecutor: JooqSqlExecutor,
 	private val agentRunQueryPersistence: AgentRunQueryPersistence,
+	private val chatPersistence: ChatPersistence,
+	private val snapshots: AgentExecutionSnapshotPersistence,
 	private val workspaceAccessService: WorkspaceAccessService,
 	private val objectMapper: ObjectMapper,
 	private val properties: AgentProperties,
@@ -45,29 +46,29 @@ class ChatQueryService(
 	}
 
 	fun listForSession(sessionId: UUID): List<ChatAgentRunResponse> {
-		if (!agentRunQueryPersistence.sessionExists(devContext.devWorkspaceId, sessionId)) {
+		if (!chatPersistence.sessionExists(devContext.devWorkspaceId, sessionId)) {
 			throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Chat not found")
 		}
-		return agentRunQueryPersistence.listSessionAgentRuns(devContext.devWorkspaceId, sessionId)
+		return chatPersistence.listSessionAgentRuns(devContext.devWorkspaceId, sessionId)
 			.map { toRunResponse(it) }
 	}
 
 	fun listTurnsForSession(sessionId: UUID, selectedVersionId: UUID? = null): List<ChatTurnDto> {
 		val workspaceId = devContext.devWorkspaceId
-		if (!agentRunQueryPersistence.sessionExists(workspaceId, sessionId)) {
+		if (!chatPersistence.sessionExists(workspaceId, sessionId)) {
 			throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Chat not found")
 		}
 		workspaceAccessService.requireActiveWorkspace(workspaceId)
 		projectLegacyRunsIntoTurns(workspaceId, sessionId)
 
-		val turns = agentRunQueryPersistence.listTurns(workspaceId, sessionId)
+		val turns = chatPersistence.listTurns(workspaceId, sessionId)
 		if (turns.isEmpty()) return emptyList()
 
 		val maxTurnIndex = turns.maxOf { it.turnIndex }
 		val result = mutableListOf<ChatTurnDto>()
 
 		for (turn in turns) {
-			val versions = agentRunQueryPersistence.listResponseVersionsForTurn(workspaceId, turn.id)
+			val versions = chatPersistence.listResponseVersionsForTurn(workspaceId, turn.id)
 			val maxVersionIndex = versions.maxOfOrNull { it.versionIndex } ?: 0
 			val isLatestTurn = turn.turnIndex == maxTurnIndex
 
@@ -100,12 +101,12 @@ class ChatQueryService(
 
 	fun getVersion(versionId: UUID): ChatResponseVersionDto {
 		val workspaceId = devContext.devWorkspaceId
-		val v = agentRunQueryPersistence.findResponseVersion(workspaceId, versionId)
+		val v = chatPersistence.findResponseVersion(workspaceId, versionId)
 			?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Response version not found")
-		val turn = requireNotNull(agentRunQueryPersistence.findTurn(workspaceId, v.turnId))
-		val turns = agentRunQueryPersistence.listTurns(workspaceId, turn.workSessionId)
+		val turn = requireNotNull(chatPersistence.findTurn(workspaceId, v.turnId))
+		val turns = chatPersistence.listTurns(workspaceId, turn.workSessionId)
 		val maxTurnIndex = turns.maxOfOrNull { it.turnIndex } ?: 0
-		val versions = agentRunQueryPersistence.listResponseVersionsForTurn(workspaceId, turn.id)
+		val versions = chatPersistence.listResponseVersionsForTurn(workspaceId, turn.id)
 		val maxVersionIndex = versions.maxOfOrNull { it.versionIndex } ?: 0
 		return toVersionResponse(workspaceId, turn, v, turn.turnIndex == maxTurnIndex, v.versionIndex == maxVersionIndex)
 	}
@@ -121,7 +122,7 @@ class ChatQueryService(
 		val artifact = agentRunQueryPersistence.findArtifactForAgentRun(workspaceId, v.agentRunId)?.let {
 			ChatAgentArtifactSummaryResponse(it.id, it.status, it.title, run.contentType, it.updatedAt)
 		}
-		val envelope = agentRunQueryPersistence.findEnvelopeForAgentRun(workspaceId, v.agentRunId)
+		val envelope = snapshots.findEnvelopeForAgentRun(workspaceId, v.agentRunId)
 		val eligibility = computeEligibility(
 			workspaceId = workspaceId,
 			isLatestTurn = isLatestTurn,
@@ -169,7 +170,7 @@ class ChatQueryService(
 		isLatestTurn: Boolean,
 		isNewestVersion: Boolean,
 		runStatus: AgentRunStatus,
-		envelope: ChatExecutionEnvelopeRow?,
+		envelope: AgentExecutionEnvelope?,
 		agentRunId: UUID? = null,
 	): RetryEligibilityDto {
 		if (!isLatestTurn) {
@@ -181,7 +182,7 @@ class ChatQueryService(
 		if (runStatus == AgentRunStatus.QUEUED || runStatus == AgentRunStatus.RUNNING) {
 			return RetryEligibilityDto(eligible = false, reason = "RUN_NOT_TERMINAL")
 		}
-		if (agentRunId == null || !hasCompleteFrozenEnvelope(workspaceId, agentRunId, envelope)) {
+		if (agentRunId == null || !snapshots.hasCompleteFrozenEnvelope(workspaceId, agentRunId, envelope)) {
 			return RetryEligibilityDto(eligible = false, reason = "INCOMPLETE_ENVELOPE")
 		}
 		try {
@@ -190,70 +191,6 @@ class ChatQueryService(
 			return RetryEligibilityDto(eligible = false, reason = "UNAUTHORIZED")
 		}
 		return RetryEligibilityDto(eligible = true, reason = null)
-	}
-
-	internal fun hasCompleteFrozenEnvelope(
-		workspaceId: UUID,
-		agentRunId: UUID,
-		envelope: ChatExecutionEnvelopeRow?,
-	): Boolean {
-		if (
-			envelope == null ||
-			envelope.envelopeFingerprint.isBlank() ||
-			envelope.sourceSnapshotId == null
-		) return false
-		val settings = runCatching { objectMapper.readTree(envelope.generationSettingsJson) }.getOrNull() ?: return false
-		if (settings !is tools.jackson.databind.node.ObjectNode) return false
-		val requiredSettings = setOf(
-			"promptVersion",
-			"toolPolicyVersion",
-			"budgetSnapshot",
-			"contentType",
-			"contentBriefSnapshot",
-		)
-		if (requiredSettings.any { !settings.has(it) }) return false
-		return sqlExecutor.queryForObject(
-			"""
-			select exists(
-			  select 1
-			  from content_source_snapshots snapshot
-			  where snapshot.workspace_id = ? and snapshot.id = ?
-			    and jsonb_typeof(snapshot.inputs_snapshot) = 'array'
-			)
-			and (
-			  select count(*) from agent_run_inputs input
-			  where input.workspace_id = ? and input.agent_run_id = ? and input.input_kind = 'SEED'
-			) >= coalesce((
-			  select jsonb_array_length(snapshot.inputs_snapshot)
-			  from content_source_snapshots snapshot
-			  where snapshot.workspace_id = ? and snapshot.id = ?
-			), 0)
-			and coalesce((
-			  select bool_and(
-			    entry.tool_name <> '' and jsonb_typeof(entry.normalized_arguments) = 'object'
-			      and jsonb_typeof(entry.bounded_result) = 'object'
-			  )
-			  from chat_execution_transcript_entries entry
-			  where entry.workspace_id = ? and entry.envelope_id = ?
-				), true)
-				and not exists (
-				  select 1 from agent_run_sources source
-				  where source.workspace_id = ? and source.agent_run_id = ?
-				    and coalesce(nullif(trim(source.source_display_name), ''), '') = ''
-				)
-				""".trimIndent(),
-			Boolean::class.java,
-			workspaceId,
-			envelope.sourceSnapshotId,
-			workspaceId,
-			agentRunId,
-			workspaceId,
-			envelope.sourceSnapshotId,
-				workspaceId,
-				envelope.id,
-				workspaceId,
-				agentRunId,
-		) == true
 	}
 
 	private data class OrphanRun(

@@ -1,5 +1,8 @@
 package com.plot.api.routine
 
+import com.plot.api.config.AgentRunCompletionProjectionAdapter
+import com.plot.api.chat.ChatPersistence
+import com.plot.api.agent.AgentExecutionSnapshotPersistence
 import com.plot.api.agent.AgentRunExecutionPersistence
 import com.plot.api.agent.AgentRunInputKind
 import com.plot.api.agent.AgentRunInputRequest
@@ -61,7 +64,8 @@ class RoutineAgentMigrationIntegrationTest {
 		val schemaSqlExecutor = JooqSqlExecutor(DSL.using(schemaDataSource, SQLDialect.POSTGRES))
 		val schemaTransactionExecutor = JooqTransactionExecutor()
 		val queryPersistence = AgentRunQueryPersistence(schemaSqlExecutor)
-		val compatibilityWriter = ChatCompatibilityWriter(schemaSqlExecutor, uuidGenerator)
+		val snapshots = AgentExecutionSnapshotPersistence(schemaSqlExecutor, uuidGenerator, ObjectMapper())
+		val compatibilityWriter = ChatCompatibilityWriter(schemaSqlExecutor, uuidGenerator, snapshots)
 		val artifactRunPersistence = ArtifactRunPersistence(
 			DSL.using(schemaDataSource, SQLDialect.POSTGRES),
 			uuidGenerator,
@@ -92,7 +96,8 @@ class RoutineAgentMigrationIntegrationTest {
 				uuidGenerator,
 				queryPersistence,
 				artifactRunPersistence,
-				compatibilityWriter = compatibilityWriter,
+				snapshots = snapshots,
+				completionProjection = AgentRunCompletionProjectionAdapter(ChatPersistence(schemaSqlExecutor), RoutineAgentRunProjection(schemaSqlExecutor)),
 				releaseReconciliation = null,
 				dslContext = DSL.using(schemaDataSource, SQLDialect.POSTGRES),
 			),
