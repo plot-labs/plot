@@ -14,16 +14,14 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import org.junit.jupiter.api.Test
 import org.jetbrains.exposed.v1.spring7.transaction.SpringTransactionManager
-import org.jooq.DSLContext
-import org.jooq.SQLDialect
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.ApplicationContext
-import org.springframework.dao.DuplicateKeyException
-import org.springframework.jdbc.core.JdbcTemplate
-import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
+import org.springframework.dao.DuplicateKeyException
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.TestPropertySource
 import org.springframework.transaction.PlatformTransactionManager
@@ -37,9 +35,6 @@ class ExposedFoundationIntegrationTest {
 
 	@Autowired
 	private lateinit var applicationContext: ApplicationContext
-
-	@Autowired
-	private lateinit var dsl: DSLContext
 
 	@Autowired
 	private lateinit var devContext: DevContext
@@ -57,8 +52,7 @@ class ExposedFoundationIntegrationTest {
 	private lateinit var rollbackFixture: MixedPersistenceRollbackFixture
 
 	@Test
-	fun bootProvidesPostgresDslAndOneExposedTransactionManager() {
-		assertEquals(SQLDialect.POSTGRES, dsl.configuration().dialect())
+	fun bootProvidesOneExposedTransactionManager() {
 		val transactionManagers = applicationContext.getBeansOfType(PlatformTransactionManager::class.java)
 		assertEquals(1, transactionManagers.size)
 		assertIs<SpringTransactionManager>(transactionManagers.values.single())
@@ -123,7 +117,7 @@ class ExposedFoundationIntegrationTest {
 	}
 
 	@Test
-	fun jooqAndExposedWritesRollBackTogether() {
+	fun repositoryWritesRollBackTogether() {
 		val workspaceId = UUID.randomUUID()
 		val sessionId = UUID.randomUUID()
 

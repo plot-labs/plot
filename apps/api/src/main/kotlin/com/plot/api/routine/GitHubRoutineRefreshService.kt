@@ -119,7 +119,7 @@ class GitHubRoutineRefreshService(
 		}
 
 		val completedAt = clock.instant()
-		transactionExecutor.executeWithoutResult {
+		transactionExecutor.execute {
 			sqlExecutor.update(
 				"""
 				update source_observations
@@ -149,7 +149,7 @@ class GitHubRoutineRefreshService(
 	): RoutineRefreshCursor {
 		val now = clock.instant()
 		val cursor = RoutineRefreshCursor(uuidGenerator.next(), nextPage = null, pagesFetched = 0)
-		transactionExecutor.executeWithoutResult {
+		transactionExecutor.execute {
 			sqlExecutor.update(
 				"""
 				insert into source_observations (

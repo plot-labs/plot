@@ -81,7 +81,7 @@ class AgentRunExecutionPersistence(
 				false
 			}
 		}
-	} ?: false
+	}
 
 	/**
 	 * Resumes every agent run parked on an artifact workflow that already reached a
@@ -176,7 +176,7 @@ class AgentRunExecutionPersistence(
 		claim: ClaimedAgentRun,
 		now: Instant = currentInstant(),
 	) {
-		transactionExecutor.executeWithoutResult {
+		transactionExecutor.execute {
 			queryPersistence.requireAgentClaim(claim)
 			val updated = sqlExecutor.update(
 				"""

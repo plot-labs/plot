@@ -260,7 +260,7 @@ class ArtifactWorkflowExecutionPersistence(
 		nextAttemptAt: Instant,
 		metadata: ModelCallMetadata? = null,
 	) {
-		transactionExecutor.executeWithoutResult {
+		transactionExecutor.execute {
 			requireClaim(claim)
 			val now = clock.instant()
 			requireExactlyOne(
@@ -344,7 +344,7 @@ class ArtifactWorkflowExecutionPersistence(
 		state: ArtifactWorkflowState,
 		metadata: ModelCallMetadata?,
 	) {
-		transactionExecutor.executeWithoutResult {
+		transactionExecutor.execute {
 			requireClaim(claim)
 			val now = clock.instant()
 			requireExactlyOne(sqlExecutor.update(
@@ -404,7 +404,7 @@ class ArtifactWorkflowExecutionPersistence(
 		metadata: ModelCallMetadata? = null,
 		failure: Throwable? = null,
 	) {
-		transactionExecutor.executeWithoutResult {
+		transactionExecutor.execute {
 			requireClaim(claim)
 			val now = clock.instant()
 			requireExactlyOne(sqlExecutor.update(
@@ -433,7 +433,7 @@ class ArtifactWorkflowExecutionPersistence(
 	}
 
 	fun failClaim(claim: ClaimedArtifactWorkflowRun, state: ArtifactWorkflowState, code: String) {
-		transactionExecutor.executeWithoutResult {
+		transactionExecutor.execute {
 			requireClaim(claim)
 			failClaimedRun(claim, state, code, clock.instant())
 		}

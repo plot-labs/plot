@@ -260,7 +260,7 @@ class RoutineAgentPersistence(
 		now: Instant = currentInstant(),
 	) {
 		if (writingBlockIds.isEmpty()) return
-		transactionExecutor.executeWithoutResult {
+		transactionExecutor.execute {
 			writingBlockIds.distinct().forEachIndexed { index, writingBlockId ->
 				sqlExecutor.update(
 					"""
