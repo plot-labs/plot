@@ -5,9 +5,9 @@ import com.plot.api.common.UuidGenerator
 import com.plot.api.config.PlotAiProperties
 import com.plot.api.content.FrozenPromptVersionLookup
 import com.plot.api.entitlement.WorkspaceAccessService
-import com.plot.api.routine.AgentRunExecutionPersistence
-import com.plot.api.routine.ArtifactWorkflowAgentRunCompletionHandler
-import com.plot.api.routine.RoutineAgentProperties
+import com.plot.api.agent.AgentRunExecutionPersistence
+import com.plot.api.agent.ArtifactWorkflowAgentRunCompletionHandler
+import com.plot.api.agent.AgentProperties
 import io.micrometer.observation.ObservationRegistry
 import java.time.Clock
 import java.time.Duration
@@ -46,7 +46,7 @@ class ArtifactWorkflowConfiguration {
 		leaseFactory: ArtifactWorkflowRunLeaseFactory,
 		observationRegistry: ObservationRegistry,
 		workspaceAccessService: WorkspaceAccessService,
-		routineAgentProperties: RoutineAgentProperties,
+		routineAgentProperties: AgentProperties,
 		agentRunCompletion: ArtifactWorkflowAgentRunCompletionHandler,
 	): ArtifactWorkflowRunWorker = ArtifactWorkflowRunWorker(
 		executionPersistence = executionPersistence,

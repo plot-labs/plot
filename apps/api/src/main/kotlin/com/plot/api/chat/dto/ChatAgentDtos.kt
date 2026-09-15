@@ -5,8 +5,8 @@ import com.plot.api.content.ConfirmedFact
 import com.plot.api.content.ContentBrief
 import com.plot.api.content.ContentBriefDestination
 import com.plot.api.content.ContentType
-import com.plot.api.routine.AgentRunRecord
-import com.plot.api.routine.AgentRunStatus
+import com.plot.api.agent.AgentRunRecord
+import com.plot.api.agent.AgentRunStatus
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size

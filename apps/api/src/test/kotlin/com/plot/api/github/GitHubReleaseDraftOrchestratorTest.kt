@@ -6,9 +6,9 @@ import com.plot.api.artifact.run.ArtifactRunStatus
 import com.plot.api.artifact.run.ArtifactRunWorkflowState
 import com.plot.api.artifact.workflow.ArtifactWorkflowRunStatus
 import com.plot.api.artifact.workflow.ArtifactWorkflowState
-import com.plot.api.routine.AgentRunOrigin
-import com.plot.api.routine.AgentRunRecord
-import com.plot.api.routine.AgentRunStatus
+import com.plot.api.agent.AgentRunOrigin
+import com.plot.api.agent.AgentRunRecord
+import com.plot.api.agent.AgentRunStatus
 import io.micrometer.observation.tck.TestObservationRegistry
 import java.time.Clock
 import java.time.Duration

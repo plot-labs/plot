@@ -1,4 +1,4 @@
-package com.plot.api.routine
+package com.plot.api.agent
 
 import com.plot.api.github.GitHubReleaseReconciliationTrigger
 import java.time.Clock
@@ -17,7 +17,7 @@ class DefaultArtifactWorkflowAgentRunCompletion(
 	private val executionPersistence: AgentRunExecutionPersistence,
 	private val agentRunDispatcher: AgentRunDispatcher,
 	@Lazy private val releaseReconciliation: GitHubReleaseReconciliationTrigger,
-	private val properties: RoutineAgentProperties,
+	private val properties: AgentProperties,
 	private val clock: Clock = Clock.systemUTC(),
 ) : ArtifactWorkflowAgentRunCompletionHandler {
 	override fun onTerminal(workspaceId: UUID, workflowRunId: UUID) {

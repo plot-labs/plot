@@ -1,5 +1,12 @@
 package com.plot.api.routine
 
+import com.plot.api.agent.AgentRunInputKind
+import com.plot.api.agent.AgentRunInputRecord
+import com.plot.api.agent.AgentRunInputRequest
+import com.plot.api.agent.AgentRunQueryPersistence
+import com.plot.api.agent.AgentRunRecord
+import com.plot.api.agent.AgentRunSourceRole
+
 import com.plot.api.chat.ChatCompatibilityWriter
 import com.plot.api.common.UuidGenerator
 import com.plot.api.contentprofile.ContentProfilePersistence
@@ -13,7 +20,7 @@ import org.springframework.stereotype.Component
 import tools.jackson.databind.ObjectMapper
 
 @Component
-class AgentRunAdmissionPersistence(
+class RoutineAgentAdmissionPersistence(
 	private val sqlExecutor: JooqSqlExecutor,
 	private val transactionExecutor: JooqTransactionExecutor,
 	private val uuidGenerator: UuidGenerator,
@@ -31,7 +38,7 @@ class AgentRunAdmissionPersistence(
 	fun dispatch(
 		workspaceId: UUID,
 		executionId: UUID,
-		request: AgentRunDispatchRequest,
+		request: RoutineAgentDispatchRequest,
 		now: Instant = currentInstant(),
 		workerId: String? = null,
 	): AgentRunRecord = transactionExecutor.execute {
@@ -329,7 +336,7 @@ class AgentRunAdmissionPersistence(
 	).firstOrNull()
 	private fun validateDispatchRequest(
 		execution: RoutineExecutionRecord,
-		request: AgentRunDispatchRequest,
+		request: RoutineAgentDispatchRequest,
 		lockedSources: Map<UUID, LockedSource>,
 	) {
 		require(request.instructionSnapshot.isNotBlank()) { "Agent instruction snapshot is required" }
@@ -395,7 +402,7 @@ class AgentRunAdmissionPersistence(
 		}
 	}
 
-	private fun validateReleaseEvidence(execution: RoutineExecutionRecord, request: AgentRunDispatchRequest) {
+	private fun validateReleaseEvidence(execution: RoutineExecutionRecord, request: RoutineAgentDispatchRequest) {
 		val bound = sqlExecutor.query(
 				"""
 				select block.id, block.activity_sequence, block.content_hash

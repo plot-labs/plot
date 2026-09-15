@@ -20,7 +20,7 @@ import io.micrometer.observation.ObservationRegistry
 import java.time.Clock
 import java.time.Duration
 import java.util.UUID
-import com.plot.api.routine.ArtifactWorkflowAgentRunCompletionHandler
+import com.plot.api.agent.ArtifactWorkflowAgentRunCompletionHandler
 
 class ArtifactWorkflowRunWorker(
 	private val executionPersistence: ArtifactWorkflowExecutionPersistence,

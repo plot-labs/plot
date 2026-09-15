@@ -1,7 +1,7 @@
 package com.plot.api.routine.dto
 
-import com.plot.api.routine.AgentRunRecord
-import com.plot.api.routine.AgentStepRecord
+import com.plot.api.agent.AgentRunRecord
+import com.plot.api.agent.AgentStepRecord
 import com.plot.api.routine.RoutineCadence
 import com.plot.api.routine.RoutineExecutionSummaryRecord
 import com.plot.api.routine.RoutineRecord

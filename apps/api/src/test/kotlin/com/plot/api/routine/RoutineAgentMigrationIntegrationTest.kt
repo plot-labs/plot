@@ -1,5 +1,16 @@
 package com.plot.api.routine
 
+import com.plot.api.agent.AgentRunExecutionPersistence
+import com.plot.api.agent.AgentRunInputKind
+import com.plot.api.agent.AgentRunInputRequest
+import com.plot.api.agent.AgentRunOrigin
+import com.plot.api.agent.AgentRunQueryPersistence
+import com.plot.api.agent.AgentRunSourceRequest
+import com.plot.api.agent.AgentRunSourceRole
+import com.plot.api.agent.AgentStepKind
+import com.plot.api.agent.AgentStepRequest
+import com.plot.api.agent.AgentStepStatus
+
 import com.plot.api.TestcontainersConfiguration
 import com.plot.api.artifact.run.ArtifactRunPersistence
 import com.plot.api.chat.ChatCompatibilityWriter
@@ -61,7 +72,7 @@ class RoutineAgentMigrationIntegrationTest {
 				schemaTransactionExecutor,
 				uuidGenerator,
 			),
-			admissionPersistence = AgentRunAdmissionPersistence(
+			admissionPersistence = RoutineAgentAdmissionPersistence(
 				schemaSqlExecutor,
 				schemaTransactionExecutor,
 				uuidGenerator,
@@ -559,7 +570,7 @@ class RoutineAgentMigrationIntegrationTest {
 			activityCursorBefore = activityCursorBefore,
 		)
 
-	private fun dispatchRequest(fixture: Fixture) = AgentRunDispatchRequest(
+	private fun dispatchRequest(fixture: Fixture) = RoutineAgentDispatchRequest(
 		instructionSnapshot = "Draft a concise update",
 		promptVersion = "prompt-v1",
 		toolPolicyVersion = "tools-v1",
@@ -759,7 +770,7 @@ class RoutineAgentMigrationIntegrationTest {
 
 	private class AgentRunMigrationPersistence(
 		private val routinePersistence: RoutineAgentPersistence,
-		private val admissionPersistence: AgentRunAdmissionPersistence,
+		private val admissionPersistence: RoutineAgentAdmissionPersistence,
 		private val queryPersistence: AgentRunQueryPersistence,
 		private val executionPersistence: AgentRunExecutionPersistence,
 	) {
@@ -794,7 +805,7 @@ class RoutineAgentMigrationIntegrationTest {
 		fun dispatch(
 			workspaceId: UUID,
 			executionId: UUID,
-			request: AgentRunDispatchRequest,
+			request: RoutineAgentDispatchRequest,
 			now: Instant = Instant.now(),
 			workerId: String? = null,
 		) = admissionPersistence.dispatch(workspaceId, executionId, request, now, workerId)

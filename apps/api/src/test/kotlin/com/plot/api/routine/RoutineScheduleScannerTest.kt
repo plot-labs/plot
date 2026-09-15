@@ -1,5 +1,7 @@
 package com.plot.api.routine
 
+import com.plot.api.agent.AgentProperties
+
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -19,7 +21,7 @@ class RoutineScheduleScannerTest {
 		val scanner = RoutineScheduleScanner(
 			worker = worker,
 			dispatcher = dispatcher,
-			agentProperties = RoutineAgentProperties(workersEnabled = true),
+			agentProperties = AgentProperties(workersEnabled = true),
 		)
 
 		scanner.scan()
@@ -37,7 +39,7 @@ class RoutineScheduleScannerTest {
 		val scanner = RoutineScheduleScanner(
 			worker = worker,
 			dispatcher = dispatcher,
-			agentProperties = RoutineAgentProperties(workersEnabled = true),
+			agentProperties = AgentProperties(workersEnabled = true),
 		)
 
 		assert(scanner.scanDue())
@@ -53,7 +55,7 @@ class RoutineScheduleScannerTest {
 		val scanner = RoutineScheduleScanner(
 			worker = worker,
 			dispatcher = dispatcher,
-			agentProperties = RoutineAgentProperties(workersEnabled = false),
+			agentProperties = AgentProperties(workersEnabled = false),
 		)
 
 		scanner.scan()
@@ -70,7 +72,7 @@ class RoutineScheduleScannerTest {
 		val scanner = RoutineScheduleScanner(
 			worker = worker,
 			dispatcher = dispatcher,
-			agentProperties = RoutineAgentProperties(workersEnabled = true),
+			agentProperties = AgentProperties(workersEnabled = true),
 		)
 
 		assertFalse(scanner.scanDue())

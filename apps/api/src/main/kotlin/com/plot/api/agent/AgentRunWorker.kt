@@ -1,4 +1,4 @@
-package com.plot.api.routine
+package com.plot.api.agent
 
 import com.plot.api.ai.provider.AgentDecision
 import com.plot.api.ai.provider.AgentDecisionAction
@@ -33,7 +33,7 @@ class AgentRunWorker(
 	private val artifactWorkflowRunService: ArtifactWorkflowRunService,
 	private val artifactRunPersistence: ArtifactRunPersistence,
 	private val workspaceAccessService: WorkspaceAccessService,
-	private val properties: RoutineAgentProperties,
+	private val properties: AgentProperties,
 	private val objectMapper: ObjectMapper,
 	@Lazy private val agentRunDispatcher: AgentRunDispatcher,
 	private val clock: Clock = Clock.systemUTC(),

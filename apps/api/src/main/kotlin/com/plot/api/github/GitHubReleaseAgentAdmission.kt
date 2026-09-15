@@ -3,7 +3,7 @@ package com.plot.api.github
 import com.plot.api.autonomy.signal.SignalEvaluationPersistence
 import com.plot.api.chat.ChatRunService
 import com.plot.api.common.WorkspacePrincipal
-import com.plot.api.routine.AgentRunRecord
+import com.plot.api.agent.AgentRunRecord
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
 

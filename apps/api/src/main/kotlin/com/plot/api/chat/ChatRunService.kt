@@ -16,16 +16,16 @@ import com.plot.api.dev.DevContext
 import com.plot.api.entitlement.WorkspaceAccessService
 import com.plot.api.persistence.JooqSqlExecutor
 import com.plot.api.persistence.JooqTransactionExecutor
-import com.plot.api.routine.AgentRunDispatcher
-import com.plot.api.routine.AgentRunIdempotencyConflictException
-import com.plot.api.routine.AgentRunInputKind
-import com.plot.api.routine.AgentRunInputRequest
-import com.plot.api.routine.AgentRunQueryPersistence
-import com.plot.api.routine.AgentRunRecord
-import com.plot.api.routine.AgentRunStatus
-import com.plot.api.routine.AgentToolAccessException
-import com.plot.api.routine.ReadOnlyAgentTools
-import com.plot.api.routine.RoutineAgentProperties
+import com.plot.api.agent.AgentRunDispatcher
+import com.plot.api.agent.AgentRunIdempotencyConflictException
+import com.plot.api.agent.AgentRunInputKind
+import com.plot.api.agent.AgentRunInputRequest
+import com.plot.api.agent.AgentRunQueryPersistence
+import com.plot.api.agent.AgentRunRecord
+import com.plot.api.agent.AgentRunStatus
+import com.plot.api.agent.AgentToolAccessException
+import com.plot.api.agent.ReadOnlyAgentTools
+import com.plot.api.agent.AgentProperties
 import com.plot.api.source.SourceManagedAccessGuard
 import java.security.MessageDigest
 import java.sql.Timestamp
@@ -45,7 +45,7 @@ class ChatRunService(
 	private val uuidGenerator: UuidGenerator,
 	private val agentRunQueryPersistence: AgentRunQueryPersistence,
 	private val tools: ReadOnlyAgentTools,
-	private val properties: RoutineAgentProperties,
+	private val properties: AgentProperties,
 	private val objectMapper: ObjectMapper,
 	private val sourceManagedAccessGuard: SourceManagedAccessGuard,
 	private val agentRunDispatcher: AgentRunDispatcher,

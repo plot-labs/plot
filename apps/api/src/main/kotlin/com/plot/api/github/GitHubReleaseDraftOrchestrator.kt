@@ -4,8 +4,8 @@ import com.plot.api.common.WorkspacePrincipal
 import com.plot.api.artifact.run.ArtifactRunPersistence
 import com.plot.api.artifact.run.ArtifactRunStatus
 import com.plot.api.artifact.run.ArtifactRunWorkflowState
-import com.plot.api.routine.AgentRunQueryPersistence
-import com.plot.api.routine.AgentRunStatus
+import com.plot.api.agent.AgentRunQueryPersistence
+import com.plot.api.agent.AgentRunStatus
 import java.util.UUID
 import org.springframework.stereotype.Component
 import org.springframework.stereotype.Service

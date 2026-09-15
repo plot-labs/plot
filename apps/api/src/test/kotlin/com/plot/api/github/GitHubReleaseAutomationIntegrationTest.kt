@@ -22,8 +22,8 @@ import com.plot.api.artifact.workflow.model.SentenceReview
 import com.plot.api.artifact.workflow.model.TargetedRewriteOutput
 import com.plot.api.artifact.workflow.model.WriterOutput
 import com.plot.api.artifact.workflow.model.WriterSentence
-import com.plot.api.routine.AgentRunWorker
-import com.plot.api.routine.ArtifactWorkflowAgentRunCompletionHandler
+import com.plot.api.agent.AgentRunWorker
+import com.plot.api.agent.ArtifactWorkflowAgentRunCompletionHandler
 import com.plot.api.routine.ScriptedAgentDecisionGateway
 import java.time.Duration
 import java.time.Instant
