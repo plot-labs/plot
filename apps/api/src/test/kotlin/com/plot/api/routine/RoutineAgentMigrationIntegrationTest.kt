@@ -1,5 +1,6 @@
 package com.plot.api.routine
 
+import com.plot.api.agent.AgentRunRegistrationPersistence
 import com.plot.api.config.AgentRunCompletionProjectionAdapter
 import com.plot.api.chat.ChatPersistence
 import com.plot.api.agent.AgentExecutionSnapshotPersistence
@@ -64,6 +65,7 @@ class RoutineAgentMigrationIntegrationTest {
 		val schemaSqlExecutor = JooqSqlExecutor(DSL.using(schemaDataSource, SQLDialect.POSTGRES))
 		val schemaTransactionExecutor = JooqTransactionExecutor()
 		val queryPersistence = AgentRunQueryPersistence(schemaSqlExecutor)
+		val registration = AgentRunRegistrationPersistence(schemaSqlExecutor, uuidGenerator, queryPersistence)
 		val snapshots = AgentExecutionSnapshotPersistence(schemaSqlExecutor, uuidGenerator, ObjectMapper())
 		val compatibilityWriter = ChatCompatibilityWriter(schemaSqlExecutor, uuidGenerator, snapshots)
 		val artifactRunPersistence = ArtifactRunPersistence(
@@ -71,6 +73,7 @@ class RoutineAgentMigrationIntegrationTest {
 			uuidGenerator,
 		)
 		persistence = AgentRunMigrationPersistence(
+			registration = registration,
 			routinePersistence = RoutineAgentPersistence(
 				schemaSqlExecutor,
 				schemaTransactionExecutor,
@@ -81,6 +84,7 @@ class RoutineAgentMigrationIntegrationTest {
 				schemaTransactionExecutor,
 				uuidGenerator,
 				queryPersistence,
+				registration,
 				ContentProfilePersistence(
 					schemaSqlExecutor,
 					schemaTransactionExecutor,
@@ -432,7 +436,7 @@ class RoutineAgentMigrationIntegrationTest {
 		)
 		assertFailsWith<DataIntegrityViolationException> {
 			withSchema {
-				persistence.appendInput(
+				persistence.insertInput(
 					fixture.workspaceId,
 					firstRun.id,
 					contextStepInput.copy(activitySequence = 11),
@@ -440,7 +444,7 @@ class RoutineAgentMigrationIntegrationTest {
 			}
 		}
 		val appended = withSchema {
-			persistence.appendInput(fixture.workspaceId, firstRun.id, contextStepInput)
+			persistence.insertInput(fixture.workspaceId, firstRun.id, contextStepInput)
 		}
 		assertEquals(AgentRunInputKind.TOOL_RESULT, appended.inputKind)
 		assertEquals(2, withSchema { persistence.listAgentRunInputs(fixture.workspaceId, firstRun.id).size })
@@ -774,6 +778,7 @@ class RoutineAgentMigrationIntegrationTest {
 	}
 
 	private class AgentRunMigrationPersistence(
+		private val registration: AgentRunRegistrationPersistence,
 		private val routinePersistence: RoutineAgentPersistence,
 		private val admissionPersistence: RoutineAgentAdmissionPersistence,
 		private val queryPersistence: AgentRunQueryPersistence,
@@ -824,12 +829,10 @@ class RoutineAgentMigrationIntegrationTest {
 		fun findAgentRun(workspaceId: UUID, agentRunId: UUID) =
 			queryPersistence.findAgentRun(workspaceId, agentRunId)
 
-		fun appendInput(
-			workspaceId: UUID,
-			agentRunId: UUID,
-			input: AgentRunInputRequest,
-			now: Instant = Instant.now(),
-		) = admissionPersistence.appendInput(workspaceId, agentRunId, input, now)
+		fun insertInput(workspaceId: UUID, agentRunId: UUID, input: AgentRunInputRequest): com.plot.api.agent.AgentRunInputRecord {
+			val id = registration.insertInput(workspaceId, agentRunId, input)
+			return requireNotNull(queryPersistence.findInput(workspaceId, agentRunId, id))
+		}
 
 		fun appendStep(
 			workspaceId: UUID,

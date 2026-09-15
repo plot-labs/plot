@@ -1,5 +1,9 @@
 package com.plot.api.chat
 
+import com.plot.api.agent.AgentRunOrigin
+import com.plot.api.agent.AgentRunSourceRole
+import com.plot.api.agent.NewAgentRun
+import com.plot.api.agent.AgentRunRegistrationPersistence
 import com.plot.api.agent.AgentExecutionSnapshotPersistence
 import com.plot.api.artifact.dto.ReplicateContentRequest
 import com.plot.api.chat.dto.ChatAgentRunResponse
@@ -45,6 +49,7 @@ class ChatRunService(
 	private val transactionExecutor: JooqTransactionExecutor,
 	private val uuidGenerator: UuidGenerator,
 	private val agentRunQueryPersistence: AgentRunQueryPersistence,
+	private val registration: AgentRunRegistrationPersistence,
 	private val chatPersistence: ChatPersistence,
 	private val snapshots: AgentExecutionSnapshotPersistence,
 	private val tools: ReadOnlyAgentTools,
@@ -199,36 +204,28 @@ class ChatRunService(
 			val chatId = resolveChat(null, workspaceId, userId, "Replicated ${request.contentType.name} from ${sourceRunInfo.title ?: sourceRunInfo.contentType.name}")
 			val runId = uuidGenerator.next()
 			val now = Instant.now()
-			val inserted = sqlExecutor.update(
-				"""
-				insert into agent_runs (
-				  id, workspace_id, routine_execution_id, routine_id, work_session_id, created_by_user_id,
-				  origin, idempotency_key, request_fingerprint,
-				  instruction_snapshot, prompt_version, tool_policy_version, budget_snapshot, content_type,
-				  content_profile_revision_id, content_brief_snapshot, source_snapshot_id,
-				  status, max_attempts, created_at, updated_at
-				) values (?, ?, null, null, ?, ?, 'CHAT', ?, ?, ?, 'chat-agent-v1', 'read-only-v1', ?::jsonb, ?,
-				  ?, ?::jsonb, ?,
-				  'QUEUED', ?, ?, ?)
-				on conflict (workspace_id, idempotency_key) where origin = 'CHAT' do nothing
-				""".trimIndent(),
-				runId,
-				workspaceId,
-				chatId,
-				userId,
-				key,
-				fingerprint,
-				normalizedInstruction,
-				objectMapper.writeValueAsString(properties.chatBudgetSnapshot()),
-				request.contentType.name,
-				frozenProfileRevisionId,
-				briefJson,
-				snapshot.id,
-				properties.maxAttempts,
-				Timestamp.from(now),
-				Timestamp.from(now),
+			val inserted = registration.insertChatIfAbsent(
+				NewAgentRun(
+					id = runId,
+					workspaceId = workspaceId,
+					workSessionId = chatId,
+					createdByUserId = userId,
+					origin = AgentRunOrigin.CHAT,
+					idempotencyKey = key,
+					requestFingerprint = fingerprint,
+					instructionSnapshot = normalizedInstruction,
+					promptVersion = "chat-agent-v1",
+					toolPolicyVersion = "read-only-v1",
+					budgetSnapshotJson = objectMapper.writeValueAsString(properties.chatBudgetSnapshot()),
+					contentType = request.contentType,
+					contentProfileRevisionId = frozenProfileRevisionId,
+					contentBriefSnapshotJson = briefJson,
+					maxAttempts = properties.maxAttempts,
+					sourceSnapshotId = snapshot.id,
+				),
+				now,
 			)
-			if (inserted == 0) {
+			if (!inserted) {
 				val raced = requireNotNull(findExisting(workspaceId, key))
 				if (raced.requestFingerprint != fingerprint) throw AgentRunIdempotencyConflictException()
 				return@execute raced
@@ -237,53 +234,15 @@ class ChatRunService(
 				if (snapshot.sourceScopeId != null) {
 					val sourceDisplayName = snapshot.inputs.firstOrNull { it.sourceScopeId == snapshot.sourceScopeId }?.sourceLabel
 						?: requireActiveScopeDisplayName(workspaceId, snapshot.sourceScopeId)
-					sqlExecutor.update(
-						"""
-						insert into agent_run_sources (
-						  id, workspace_id, agent_run_id, source_scope_id, source_display_name, source_role, order_index,
-						  captured_status, captured_status_changed_at, captured_at
-						) values (?, ?, ?, ?, ?, 'CONTEXT', 0, 'ACTIVE', ?, ?)
-					""".trimIndent(),
-					uuidGenerator.next(),
-						workspaceId,
-						runId,
-						snapshot.sourceScopeId,
-						sourceDisplayName,
-					Timestamp.from(now),
-					Timestamp.from(now),
-				)
+					registration.insertSource(
+						workspaceId, runId, snapshot.sourceScopeId, sourceDisplayName, AgentRunSourceRole.CONTEXT,
+						0, "ACTIVE", now, now,
+					)
 			}
 
 			// Generate brand-new agent_run_input rows with unique IDs [E16]
 			snapshot.inputs.forEachIndexed { index, input ->
-				sqlExecutor.update(
-					"""
-					insert into agent_run_inputs (
-					  id, workspace_id, agent_run_id, routine_id, source_scope_id, writing_block_id,
-					  source_provider, source_kind, source_label,
-					  input_kind, order_index, activity_sequence, snapshot_title, snapshot_body,
-					  snapshot_excerpt, original_url, source_created_at, source_updated_at,
-					  content_hash, captured_at
-					) values (?, ?, ?, null, ?, ?, ?, ?, ?, 'SEED', ?, null, ?, ?, ?, ?, ?, ?, ?, ?)
-					""".trimIndent(),
-					uuidGenerator.next(),
-					workspaceId,
-					runId,
-					input.sourceScopeId,
-					input.writingBlockId,
-					input.sourceProvider,
-					input.sourceKind,
-					input.sourceLabel,
-					index,
-					input.snapshotTitle,
-					input.snapshotBody,
-					input.snapshotExcerpt,
-					input.originalUrl,
-					input.sourceCreatedAt?.let(Timestamp::from),
-					input.sourceUpdatedAt?.let(Timestamp::from),
-					input.contentHash,
-					Timestamp.from(now),
-				)
+				registration.insertSnapshotInput(workspaceId, runId, input, index, now)
 			}
 
 			val settingsJson = objectMapper.writeValueAsString(
@@ -382,56 +341,36 @@ class ChatRunService(
 			val chatId = resolveChat(workSessionId, workspaceId, userId, chatTitle ?: normalizedInstruction)
 			val runId = uuidGenerator.next()
 			val now = Instant.now()
-			val inserted = sqlExecutor.update(
-				"""
-				insert into agent_runs (
-				  id, workspace_id, routine_execution_id, routine_id, work_session_id, created_by_user_id,
-				  origin, idempotency_key, request_fingerprint,
-				  instruction_snapshot, prompt_version, tool_policy_version, budget_snapshot, content_type,
-				  content_profile_revision_id, content_brief_snapshot,
-				  status, max_attempts, created_at, updated_at
-				) values (?, ?, null, null, ?, ?, 'CHAT', ?, ?, ?, 'chat-agent-v1', 'read-only-v1', ?::jsonb, ?,
-				  ?, ?::jsonb,
-				  'QUEUED', ?, ?, ?)
-				on conflict (workspace_id, idempotency_key) where origin = 'CHAT' do nothing
-				""".trimIndent(),
-				runId,
-				workspaceId,
-				chatId,
-				userId,
-				key,
-				fingerprint,
-				normalizedInstruction,
-				objectMapper.writeValueAsString(properties.chatBudgetSnapshot()),
-				contentType.name,
-				frozenProfileRevisionId,
-				briefJson,
-				properties.maxAttempts,
-				Timestamp.from(now),
-				Timestamp.from(now),
+			val inserted = registration.insertChatIfAbsent(
+				NewAgentRun(
+					id = runId,
+					workspaceId = workspaceId,
+					workSessionId = chatId,
+					createdByUserId = userId,
+					origin = AgentRunOrigin.CHAT,
+					idempotencyKey = key,
+					requestFingerprint = fingerprint,
+					instructionSnapshot = normalizedInstruction,
+					promptVersion = "chat-agent-v1",
+					toolPolicyVersion = "read-only-v1",
+					budgetSnapshotJson = objectMapper.writeValueAsString(properties.chatBudgetSnapshot()),
+					contentType = contentType,
+					contentProfileRevisionId = frozenProfileRevisionId,
+					contentBriefSnapshotJson = briefJson,
+					maxAttempts = properties.maxAttempts,
+				),
+				now,
 			)
-			if (inserted == 0) {
+			if (!inserted) {
 				val raced = requireNotNull(findExisting(workspaceId, key))
 				if (raced.requestFingerprint != fingerprint) throw AgentRunIdempotencyConflictException()
 				return@execute raced
 			}
 
 			sources.forEachIndexed { index, source ->
-				sqlExecutor.update(
-					"""
-						insert into agent_run_sources (
-						  id, workspace_id, agent_run_id, source_scope_id, source_display_name, source_role, order_index,
-						  captured_status, captured_status_changed_at, captured_at
-						) values (?, ?, ?, ?, ?, 'CONTEXT', ?, 'ACTIVE', ?, ?)
-					""".trimIndent(),
-					uuidGenerator.next(),
-						workspaceId,
-						runId,
-						source.id,
-						source.displayName,
-					index,
-					Timestamp.from(source.lifecycleVersionAt),
-					Timestamp.from(now),
+				registration.insertSource(
+					workspaceId, runId, source.id, source.displayName, AgentRunSourceRole.CONTEXT,
+					index, "ACTIVE", source.lifecycleVersionAt, now,
 				)
 			}
 
@@ -449,7 +388,7 @@ class ChatRunService(
 					activitySequence = null,
 					orderIndex = index,
 				)
-				insertSeed(workspaceId, runId, seed, now)
+				registration.insertInput(workspaceId, runId, seed.copy(capturedAt = now))
 			}
 
 			val settingsJson = objectMapper.writeValueAsString(
@@ -576,37 +515,27 @@ class ChatRunService(
 				.digest("${targetRun.requestFingerprint}:retry:$newVersionIndex".toByteArray(Charsets.UTF_8))
 				.joinToString("") { "%02x".format(it) }
 
-			val inserted = sqlExecutor.update(
-				"""
-				insert into agent_runs (
-				  id, workspace_id, routine_execution_id, routine_id, work_session_id, created_by_user_id,
-				  origin, idempotency_key, request_fingerprint,
-				  instruction_snapshot, prompt_version, tool_policy_version, budget_snapshot, content_type,
-				  content_profile_revision_id, content_brief_snapshot,
-				  status, max_attempts, created_at, updated_at
-				) values (?, ?, null, null, ?, ?, 'CHAT', ?, ?, ?, ?, ?, ?::jsonb, ?,
-				  ?, ?::jsonb,
-				  'QUEUED', ?, ?, ?)
-				on conflict (workspace_id, idempotency_key) where origin = 'CHAT' do nothing
-				""".trimIndent(),
-				newRunId,
-				workspaceId,
-				turn.workSessionId,
-				userId,
-				key,
-				retryFingerprint,
-				targetRun.instructionSnapshot,
-				targetRun.promptVersion,
-				targetRun.toolPolicyVersion,
-				targetRun.budgetSnapshotJson,
-				targetRun.contentType.name,
-				targetRun.contentProfileRevisionId,
-				targetRun.contentBriefSnapshotJson,
-				targetRun.maxAttempts,
-				Timestamp.from(now),
-				Timestamp.from(now),
+			val inserted = registration.insertChatIfAbsent(
+				NewAgentRun(
+					id = newRunId,
+					workspaceId = workspaceId,
+					workSessionId = turn.workSessionId,
+					createdByUserId = userId,
+					origin = AgentRunOrigin.CHAT,
+					idempotencyKey = key,
+					requestFingerprint = retryFingerprint,
+					instructionSnapshot = targetRun.instructionSnapshot,
+					promptVersion = targetRun.promptVersion,
+					toolPolicyVersion = targetRun.toolPolicyVersion,
+					budgetSnapshotJson = targetRun.budgetSnapshotJson,
+					contentType = targetRun.contentType,
+					contentProfileRevisionId = targetRun.contentProfileRevisionId,
+					contentBriefSnapshotJson = targetRun.contentBriefSnapshotJson,
+					maxAttempts = targetRun.maxAttempts,
+				),
+				now,
 			)
-			if (inserted == 0) {
+			if (!inserted) {
 				val raced = requireNotNull(findExisting(workspaceId, key))
 				val racedVersion = chatPersistence.findResponseVersionByRunId(workspaceId, raced.id)
 				if (racedVersion != null && racedVersion.turnId == turn.id) {
@@ -648,63 +577,7 @@ class ChatRunService(
 				retryFingerprint, targetEnvelope.generationSettingsJson, targetEnvelope.sourceSnapshotId, now,
 			)
 
-			// 8. Clone sources from targetRun
-			val targetSources = agentRunQueryPersistence.listAgentRunSources(workspaceId, targetRun.id)
-			for (source in targetSources) {
-				sqlExecutor.update(
-					"""
-						insert into agent_run_sources (
-						  id, workspace_id, agent_run_id, source_scope_id, source_display_name, source_role, order_index,
-						  captured_status, captured_status_changed_at, captured_at
-						) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-					""".trimIndent(),
-					uuidGenerator.next(),
-						workspaceId,
-						newRunId,
-						source.sourceScopeId,
-						source.displayName,
-					source.role.name,
-					source.orderIndex,
-					source.capturedStatus,
-					Timestamp.from(source.capturedStatusChangedAt),
-					Timestamp.from(now),
-				)
-			}
-
-			// 9. Clone inputs from targetRun
-			val targetInputs = agentRunQueryPersistence.listAgentRunInputs(workspaceId, targetRun.id)
-			for (input in targetInputs) {
-				sqlExecutor.update(
-					"""
-					insert into agent_run_inputs (
-					  id, workspace_id, agent_run_id, routine_id, source_scope_id, writing_block_id,
-					  source_provider, source_kind, source_label, input_kind, order_index,
-					  activity_sequence, snapshot_title, snapshot_body, snapshot_excerpt, original_url,
-					  source_created_at, source_updated_at, content_hash, captured_at
-					) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-					""".trimIndent(),
-					uuidGenerator.next(),
-					workspaceId,
-					newRunId,
-					input.routineId,
-					input.sourceScopeId,
-					input.writingBlockId,
-					input.sourceProvider,
-					input.sourceKind,
-					input.sourceLabel,
-					input.inputKind.name,
-					input.orderIndex,
-					input.activitySequence,
-					input.snapshotTitle,
-					input.snapshotBody,
-					input.snapshotExcerpt,
-					input.originalUrl,
-					input.sourceCreatedAt?.let { Timestamp.from(it) },
-					input.sourceUpdatedAt?.let { Timestamp.from(it) },
-					input.contentHash,
-					Timestamp.from(now),
-				)
-			}
+			registration.copySourcesAndInputs(workspaceId, targetRun.id, newRunId, now)
 
 			// 10. Clone tool transcript entries (if any)
 			snapshots.copyTranscript(workspaceId, targetEnvelope.id, newEnvelopeId, now)
@@ -811,36 +684,6 @@ class ChatRunService(
 		).firstOrNull()
 	}
 
-	private fun insertSeed(workspaceId: UUID, agentRunId: UUID, input: AgentRunInputRequest, now: Instant) {
-		sqlExecutor.update(
-			"""
-			insert into agent_run_inputs (
-			  id, workspace_id, agent_run_id, routine_id, source_scope_id, writing_block_id,
-			  source_provider, source_kind, source_label,
-			  input_kind, order_index, activity_sequence, snapshot_title, snapshot_body,
-			  snapshot_excerpt, original_url, source_created_at, source_updated_at,
-			  content_hash, captured_at
-			) values (?, ?, ?, null, ?, ?, ?, ?, ?, 'SEED', ?, null, ?, ?, ?, ?, ?, ?, ?, ?)
-			""".trimIndent(),
-			uuidGenerator.next(),
-			workspaceId,
-			agentRunId,
-			input.sourceScopeId,
-			input.writingBlockId,
-			input.sourceProvider,
-			input.sourceKind,
-			input.sourceLabel,
-			input.orderIndex,
-			input.snapshotTitle,
-			input.snapshotBody,
-			input.snapshotExcerpt,
-			input.originalUrl,
-			input.sourceCreatedAt?.let(Timestamp::from),
-			input.sourceUpdatedAt?.let(Timestamp::from),
-			input.contentHash,
-			Timestamp.from(now),
-		)
-	}
 
 	private fun findExisting(workspaceId: UUID, key: String): AgentRunRecord? =
 		chatPersistence.findChatAgentRunByIdempotencyKey(workspaceId, key, forUpdate = true)

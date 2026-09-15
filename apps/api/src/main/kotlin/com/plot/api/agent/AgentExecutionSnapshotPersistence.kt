@@ -74,7 +74,9 @@ class AgentExecutionSnapshotPersistence(
 		},
 		workspaceId,
 		agentRunId,
-	).firstOrNull()	fun isFrozenReplay(workspaceId: UUID, agentRunId: UUID): Boolean =
+	).firstOrNull()
+
+	fun isFrozenReplay(workspaceId: UUID, agentRunId: UUID): Boolean =
 		sqlExecutor.queryForObject(
 			"select exists(select 1 from chat_response_versions where workspace_id = ? and agent_run_id = ? and lineage_parent_version_id is not null)",
 			Boolean::class.java, workspaceId, agentRunId,
