@@ -46,6 +46,12 @@ class SkillService(private val sql: SqlExecutor, private val mapper: ObjectMappe
 		return mapper.writeValueAsString(skillIds.map { read(workspaceId, requireNotNull(it)) })
 	}
 
+	fun freezeCatalog(workspaceId: UUID, selectedJson: String): String {
+		val selected = FrozenSkills.read(selectedJson)
+		val available = list(workspaceId).take(32).map { read(workspaceId, it.id) }
+		return mapper.writeValueAsString((selected + available).distinctBy { it.id })
+	}
+
 	@Transactional
 	fun create(workspaceId: UUID, request: SkillRequest): SkillSnapshot {
 		val id = ids.next()

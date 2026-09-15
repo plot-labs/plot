@@ -97,6 +97,11 @@ class RoutineApiIntegrationTest {
         val retry = chatRuns.retry(versionId, "retry-${UUID.randomUUID()}")
         val frozen = jdbcTemplate.queryForObject("select skills_snapshot::text from agent_runs where id = ?", String::class.java, retry.agentRunId)!!
         assertEquals(skill, com.plot.api.skill.FrozenSkills.read(frozen).single())
+        val originalCatalog = jdbcTemplate.queryForObject("select skill_catalog::text from agent_runs where id = ?", String::class.java, run.id)!!
+        val retryCatalog = jdbcTemplate.queryForObject("select skill_catalog::text from agent_runs where id = ?", String::class.java, retry.agentRunId)!!
+        assertEquals(originalCatalog, retryCatalog)
+        assertEquals(skill, com.plot.api.skill.FrozenSkills.read(retryCatalog).single { it.id == skill.id })
+
         val instruction = com.plot.api.skill.FrozenSkills.instruction("Draft changes", frozen)
         assertTrue(instruction.contains("Write concise customer benefits."))
         assertFalse(instruction.contains("Changed guidance."))

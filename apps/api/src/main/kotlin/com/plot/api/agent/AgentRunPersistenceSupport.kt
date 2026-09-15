@@ -13,7 +13,7 @@ internal val agentStepMapper = { rs: SqlRow, _: Int -> rs.toAgentStep() }
 internal val selectAgentRunSql = """
 		select a.id, a.workspace_id, a.routine_execution_id, a.work_session_id, a.routine_id, a.origin,
 		       a.idempotency_key, a.request_fingerprint, a.created_by_user_id,
-		       a.instruction_snapshot, a.skills_snapshot::text, a.prompt_version, a.tool_policy_version, a.budget_snapshot::text,
+		       a.instruction_snapshot, a.skills_snapshot::text, a.skill_catalog::text, a.prompt_version, a.tool_policy_version, a.budget_snapshot::text,
 		       a.content_type, a.content_profile_revision_id, a.content_brief_snapshot::text,
 		       a.status, a.current_step, a.attempt_count, a.max_attempts,
 		       a.model_call_count, a.tool_call_count, a.next_attempt_at,
@@ -34,6 +34,7 @@ internal fun SqlRow.toAgentRun() = AgentRunRecord(
 		createdByUserId = requireNotNull(getObject("created_by_user_id", UUID::class.java)),
 		instructionSnapshot = requireNotNull(getString("instruction_snapshot")),
 		skillsSnapshotJson = requireNotNull(getString("skills_snapshot")),
+	skillCatalogJson = requireNotNull(getString("skill_catalog")),
 		promptVersion = requireNotNull(getString("prompt_version")),
 		toolPolicyVersion = requireNotNull(getString("tool_policy_version")),
 		budgetSnapshotJson = requireNotNull(getString("budget_snapshot")),

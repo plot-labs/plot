@@ -533,6 +533,7 @@ class ChatRunService(
 					requestFingerprint = retryFingerprint,
 					instructionSnapshot = targetRun.instructionSnapshot,
 					skillsSnapshotJson = targetRun.skillsSnapshotJson,
+					skillCatalogJson = targetRun.skillCatalogJson,
 					promptVersion = targetRun.promptVersion,
 					toolPolicyVersion = targetRun.toolPolicyVersion,
 					budgetSnapshotJson = targetRun.budgetSnapshotJson,

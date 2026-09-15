@@ -15,6 +15,7 @@ class AgentRunRegistrationPersistence(
 	private val sqlExecutor: SqlExecutor,
 	private val uuidGenerator: UuidGenerator,
 	private val queries: AgentRunQueryPersistence,
+	private val skills: com.plot.api.skill.SkillService,
 ) {
 	fun insertRequired(run: NewAgentRun, now: Instant) {
 		insert(run, now, ignoreChatIdempotencyConflict = false)
@@ -28,20 +29,22 @@ class AgentRunRegistrationPersistence(
 		val conflictClause = if (ignoreChatIdempotencyConflict) {
 			"on conflict (workspace_id, idempotency_key) where origin = 'CHAT' do nothing"
 		} else ""
+		val selectedSkills = skillsSnapshot(run)
+		val catalog = run.skillCatalogJson ?: skills.freezeCatalog(run.workspaceId, selectedSkills)
 		return sqlExecutor.update(
 			"""
 			insert into agent_runs (
 			  id, workspace_id, routine_execution_id, routine_id, work_session_id, created_by_user_id,
 			  origin, idempotency_key, request_fingerprint,
-			  instruction_snapshot, skills_snapshot, prompt_version, tool_policy_version, budget_snapshot, content_type,
+			  instruction_snapshot, skills_snapshot, skill_catalog, prompt_version, tool_policy_version, budget_snapshot, content_type,
 			  content_profile_revision_id, content_brief_snapshot, source_snapshot_id,
 			  status, current_step, attempt_count, max_attempts, created_at, updated_at
-			) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?::jsonb, ?, ?, ?::jsonb, ?, 'QUEUED', 0, 0, ?, ?, ?)
+			) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?, ?, ?::jsonb, ?, ?, ?::jsonb, ?, 'QUEUED', 0, 0, ?, ?, ?)
 			$conflictClause
 			""".trimIndent(),
 			run.id, run.workspaceId, run.routineExecutionId, run.routineId, run.workSessionId, run.createdByUserId,
 			run.origin.name, run.idempotencyKey, run.requestFingerprint,
-			run.instructionSnapshot, skillsSnapshot(run), run.promptVersion, run.toolPolicyVersion, run.budgetSnapshotJson, run.contentType.name,
+			run.instructionSnapshot, selectedSkills, catalog, run.promptVersion, run.toolPolicyVersion, run.budgetSnapshotJson, run.contentType.name,
 			run.contentProfileRevisionId, run.contentBriefSnapshotJson, run.sourceSnapshotId,
 			run.maxAttempts, Timestamp.from(now), Timestamp.from(now),
 		)
@@ -167,6 +170,7 @@ data class NewAgentRun(
 	val requestFingerprint: String,
 	val instructionSnapshot: String,
 	val skillsSnapshotJson: String? = null,
+	val skillCatalogJson: String? = null,
 	val promptVersion: String,
 	val toolPolicyVersion: String,
 	val budgetSnapshotJson: String,
