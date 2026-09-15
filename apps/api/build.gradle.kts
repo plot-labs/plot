@@ -43,6 +43,8 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-validation")
 	implementation("org.springframework.boot:spring-boot-starter-webmvc")
 	implementation("org.flywaydb:flyway-database-postgresql:11.14.1")
+	implementation("org.jetbrains.exposed:exposed-java-time:1.5.0")
+	implementation("org.jetbrains.exposed:exposed-spring-boot4-starter:1.5.0")
 	implementation("com.workos:workos:7.1.0")
 	implementation("org.jetbrains.kotlin:kotlin-reflect")
 	implementation("org.springframework.ai:spring-ai-starter-model-openai")

@@ -11,7 +11,9 @@ import java.time.temporal.ChronoUnit
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
 import org.junit.jupiter.api.Test
+import org.jetbrains.exposed.v1.spring7.transaction.SpringTransactionManager
 import org.jooq.DSLContext
 import org.jooq.SQLDialect
 import org.springframework.beans.factory.annotation.Autowired
@@ -28,10 +30,10 @@ import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.annotation.Transactional
 
 @SpringBootTest
-@Import(TestcontainersConfiguration::class, JooqFoundationTestConfiguration::class)
+@Import(TestcontainersConfiguration::class, ExposedFoundationTestConfiguration::class)
 @ActiveProfiles("test")
 @TestPropertySource(properties = ["plot.dev-bootstrap.enabled=true"])
-class JooqFoundationIntegrationTest {
+class ExposedFoundationIntegrationTest {
 
 	@Autowired
 	private lateinit var applicationContext: ApplicationContext
@@ -49,19 +51,18 @@ class JooqFoundationIntegrationTest {
 	private lateinit var workSessionPersistence: WorkSessionPersistence
 
 	@Autowired
-	private lateinit var rollbackFixture: MixedJooqRollbackFixture
+	private lateinit var rollbackFixture: MixedPersistenceRollbackFixture
 
 	@Test
-	fun bootProvidesPostgresDslAndOneTransactionManager() {
+	fun bootProvidesPostgresDslAndOneExposedTransactionManager() {
 		assertEquals(SQLDialect.POSTGRES, dsl.configuration().dialect())
-		assertEquals(
-			1,
-			applicationContext.getBeansOfType(PlatformTransactionManager::class.java).size,
-		)
+		val transactionManagers = applicationContext.getBeansOfType(PlatformTransactionManager::class.java)
+		assertEquals(1, transactionManagers.size)
+		assertIs<SpringTransactionManager>(transactionManagers.values.single())
 	}
 
 	@Test
-	fun jooqConstraintFailuresUseSpringDuplicateKeyTaxonomy() {
+	fun exposedConstraintFailuresUseSpringDuplicateKeyTaxonomy() {
 		val id = UUID.randomUUID()
 		val now = Instant.parse("2026-08-14T00:00:00Z")
 		val session = WorkSession(
@@ -87,7 +88,7 @@ class JooqFoundationIntegrationTest {
 	}
 
 	@Test
-	fun jooqWritesRollBackTogether() {
+	fun jooqAndExposedWritesRollBackTogether() {
 		val workspaceId = UUID.randomUUID()
 		val sessionId = UUID.randomUUID()
 
@@ -115,18 +116,18 @@ class JooqFoundationIntegrationTest {
 }
 
 @TestConfiguration(proxyBeanMethods = false)
-class JooqFoundationTestConfiguration {
+class ExposedFoundationTestConfiguration {
 	@Bean
 	fun mixedPersistenceRollbackFixture(
 		devContext: DevContext,
 		workspaceRepository: WorkspaceRepository,
 		workSessionPersistence: WorkSessionPersistence,
-	): MixedJooqRollbackFixture {
-		return MixedJooqRollbackFixture(devContext, workspaceRepository, workSessionPersistence)
+	): MixedPersistenceRollbackFixture {
+		return MixedPersistenceRollbackFixture(devContext, workspaceRepository, workSessionPersistence)
 	}
 }
 
-open class MixedJooqRollbackFixture(
+open class MixedPersistenceRollbackFixture(
 	private val devContext: DevContext,
 	private val workspaceRepository: WorkspaceRepository,
 	private val workSessionPersistence: WorkSessionPersistence,
