@@ -27,6 +27,8 @@ import { RoutineReleaseActivity } from "./routine-release-activity";
 import { RoutineTriggerPicker } from "./routine-trigger-picker";
 import { SourceRepositoryPicker, type SourceOption } from "./source-repository-picker";
 
+import { SkillSelector } from "@/features/skills/skill-selector";
+
 const defaultInstruction = "Create a concise update from the latest changes.";
 
 export function RoutinesWorkspace() {
@@ -35,6 +37,7 @@ export function RoutinesWorkspace() {
   const [name, setName] = useState("");
   const [sourceScopeId, setSourceScopeId] = useState("");
   const [contextSourceScopeIds, setContextSourceScopeIds] = useState<string[]>([]);
+  const [skillIds, setSkillIds] = useState<string[]>([]);
   const [instruction, setInstruction] = useState(defaultInstruction);
   const [cadence, setCadence] = useState<RoutineCadence>("WEEKLY");
   const [isLoading, setIsLoading] = useState(true);
@@ -198,12 +201,14 @@ export function RoutinesWorkspace() {
         sourceScopeId,
         contextSourceScopeIds,
         instruction: instruction.trim(),
+        skillIds,
         cadence,
       }, { signal: controller.signal });
       if (!requestIsCurrent(controller, workspaceRevision, workspaceId)) return;
       setRoutines((current) => [routine, ...current]);
       setName("");
       setInstruction(defaultInstruction);
+      setSkillIds([]);
       setContextSourceScopeIds([]);
       restoreCreateFocusRef.current = true;
       setCreateOpen(false);
@@ -427,6 +432,7 @@ export function RoutinesWorkspace() {
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <h2 className="truncate text-[14px] font-semibold text-black/82 dark:text-white/86">{routine.name}</h2>
+                            {routine.skills?.length ? <p className="mt-1 text-xs text-black/45 dark:text-white/45">Skills: {routine.skills.map((skill) => skill.name).join(", ")}</p> : null}
                             <p className="mt-1 text-[12px] leading-5 text-black/45 dark:text-white/45">{formatCadence(routine.cadence)}</p>
                           </div>
                           <span className="shrink-0 text-[11px] font-medium text-black/38 dark:text-white/40">{routine.enabled ? "On" : "Paused"}</span>
@@ -507,6 +513,7 @@ export function RoutinesWorkspace() {
                   <span>Draft instruction</span>
                   <textarea value={instruction} onChange={(event) => setInstruction(event.target.value)} maxLength={2_000} rows={4} className="w-full resize-y rounded-[9px] border border-black/10 bg-white px-3 py-2.5 text-sm font-normal leading-5 text-black/80 outline-none placeholder:text-black/35 focus:border-black/25 focus:ring-2 focus:ring-black/[0.05] dark:border-white/12 dark:bg-white/[0.06] dark:text-white/85 dark:placeholder:text-white/35" />
                 </label>
+                <SkillSelector value={skillIds} onChange={setSkillIds} disabled={isSaving} />
                 <div className="flex flex-col gap-2.5 text-[12px] font-medium text-black/62 dark:text-white/65">
                   <span>Trigger</span>
                   <RoutineTriggerPicker value={cadence} onChange={setCadence} />

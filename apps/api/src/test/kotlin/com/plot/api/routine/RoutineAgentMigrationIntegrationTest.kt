@@ -63,7 +63,8 @@ class RoutineAgentMigrationIntegrationTest {
 		val schemaSqlExecutor = SqlExecutor(schemaJdbcTemplate)
 		val schemaTransactionExecutor = TransactionExecutor()
 		val queryPersistence = AgentRunQueryPersistence(schemaSqlExecutor)
-		val registration = AgentRunRegistrationPersistence(schemaSqlExecutor, uuidGenerator, queryPersistence)
+		val registration = AgentRunRegistrationPersistence(schemaSqlExecutor, uuidGenerator, queryPersistence,
+			com.plot.api.skill.SkillService(schemaSqlExecutor, tools.jackson.module.kotlin.jacksonObjectMapper(), uuidGenerator))
 		val snapshots = AgentExecutionSnapshotPersistence(schemaSqlExecutor, uuidGenerator, ObjectMapper())
 		val compatibilityWriter = ChatCompatibilityWriter(schemaSqlExecutor, uuidGenerator, snapshots)
 		val artifactRunPersistence = ArtifactRunPersistence(

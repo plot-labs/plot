@@ -45,8 +45,8 @@ export function validateSourceSelection(all: SourceReference[], _selected: Sourc
   return "";
 }
 
-export function pendingAgentRequestKey(ref: { current: PendingAgentRequest | null }, instruction: string, writingBlockIds: string[]) {
-  const fingerprint = `${instruction}\u0000${writingBlockIds.join("\u0000")}`;
+export function pendingAgentRequestKey(ref: { current: PendingAgentRequest | null }, instruction: string, writingBlockIds: string[], settings = "") {
+  const fingerprint = `${instruction}\u0000${writingBlockIds.join("\u0000")}\u0000${settings}`;
   if (ref.current?.fingerprint === fingerprint) return ref.current.key;
   const next = { key: crypto.randomUUID(), fingerprint };
   ref.current = next;

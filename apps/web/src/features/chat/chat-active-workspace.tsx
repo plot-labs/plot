@@ -345,9 +345,9 @@ export function ChatActiveWorkspace({
           key={references.map((reference) => reference.id).join(":") || "no-references"}
           variant="dock"
           placeholder={agent.isPendingRun ? "Response in progress. Wait for it to finish..." : "Ask Plot to create another source-backed artifact..."}
-          onSubmit={(message, ids) => {
+          onSubmit={(message, ids, skills) => {
             setArtifactPanelOpen(false);
-            void agent.submitMessage(message, ids, document.clearArtifactSelection);
+            void agent.submitMessage(message, ids, document.clearArtifactSelection, skills);
           }}
           references={toComposerReferences(references)}
           busy={document.artifactLoading || agent.agentBusy || agent.activitiesLoading || agent.isPendingRun}

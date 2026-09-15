@@ -24,7 +24,7 @@ import com.plot.api.artifact.workflow.model.WriterOutput
 import com.plot.api.artifact.workflow.model.WriterSentence
 import com.plot.api.agent.AgentRunWorker
 import com.plot.api.agent.ArtifactWorkflowAgentRunCompletionHandler
-import com.plot.api.routine.ScriptedAgentDecisionGateway
+import com.plot.api.routine.ScriptedAgentRuntime
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
@@ -83,7 +83,7 @@ class GitHubReleaseAutomationIntegrationTest {
 	@Autowired private lateinit var model: ScriptedArtifactWorkflowModelGateway
 	@Autowired private lateinit var agentWorker: AgentRunWorker
 	@Autowired private lateinit var agentRunCompletion: ArtifactWorkflowAgentRunCompletionHandler
-	@Autowired private lateinit var agentModel: ScriptedAgentDecisionGateway
+	@Autowired private lateinit var agentModel: ScriptedAgentRuntime
 	@Autowired private lateinit var jdbcTemplate: JdbcTemplate
 	@Autowired private lateinit var devContext: DevContext
 
@@ -903,7 +903,7 @@ class GitHubReleaseAutomationIntegrationTest {
 
 		@Bean
 		@Primary
-		fun scriptedAgentDecisionGateway() = ScriptedAgentDecisionGateway()
+		fun scriptedAgentRuntime() = ScriptedAgentRuntime()
 
 		@Bean
 		@Primary

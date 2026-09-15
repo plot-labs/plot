@@ -11,10 +11,12 @@ import { ArrowUp, Folder, Plus } from "lucide-react";
 import type { CSSProperties, KeyboardEvent } from "react";
 import { useId, useRef, useState } from "react";
 
+import { SkillSelector } from "@/features/skills/skill-selector";
+
 import { resolveComposerReferenceIds } from "./chat-workspace-utils";
 
 type ChatComposerProps = {
-  onSubmit: (message: string, referenceIds: string[]) => void;
+  onSubmit: (message: string, referenceIds: string[], skillIds: string[]) => void;
   variant?: "center" | "dock";
   id?: string;
   placeholder?: string;
@@ -33,6 +35,7 @@ export function ChatComposer({
   canGenerate = true,
 }: ChatComposerProps) {
   const submittingRef = useRef(false);
+  const [skillIds, setSkillIds] = useState<string[]>([]);
   const [centerPrompt, setCenterPrompt] = useState("");
   const hasConnectedSource = references.some((reference) => reference.available);
 
@@ -42,7 +45,7 @@ export function ChatComposer({
     if (!trimmed) return;
 
     submittingRef.current = true;
-    onSubmit(trimmed, resolveComposerReferenceIds(references, []));
+    onSubmit(trimmed, resolveComposerReferenceIds(references, []), skillIds);
     queueMicrotask(() => {
       submittingRef.current = false;
     });
@@ -77,6 +80,7 @@ export function ChatComposer({
             />
             <div className="flex items-center justify-between pt-3 pb-1">
               <div className="flex items-center gap-1.5">
+                <SkillSelector value={skillIds} onChange={setSkillIds} disabled={busy} />
                 <button
                   type="button"
                   aria-label="Add attachment"
@@ -129,7 +133,7 @@ export function ChatComposer({
         elevation="none"
         drawer={references.length ? <ComposerSources references={references} /> : undefined}
         input={<ChatComposerInput label="Chat message" maxRows={7} />}
-        footerActions={<span className="text-xs text-black/42 dark:text-white/45">Enter to send</span>}
+        footerActions={<SkillSelector value={skillIds} onChange={setSkillIds} disabled={busy} />}
         sendButton={<ComposerSendButton />}
         className="mx-auto max-w-[720px]"
         style={{

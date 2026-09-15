@@ -1,0 +1,9 @@
+[
+  {
+    "id": "019a0000-0000-7000-8000-000000000001",
+    "name": "changelog",
+    "description": "Write customer-facing updates.",
+    "revision": 1,
+    "isSystem": true
+  }
+]

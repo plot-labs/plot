@@ -59,14 +59,14 @@ class ObservationSafetyTest {
 	fun providerErrorIsReplacedWithSafeCodeBeforeTracingHandlersSeeIt() {
 		val observations = TestObservationRegistry.create()
 		observations.observationConfig().observationHandler(SensitiveObservationErrorHandler())
-		val observation = Observation.start("spring.ai.chat", observations)
+		val observation = Observation.start("plot.koog.model", observations)
 
 		observation.error(IllegalStateException("private provider response body"))
 		assertTrue(observation.context.error?.stackTrace?.isEmpty() == true)
 		observation.stopSafely()
 
 		observations.assertThat()
-			.hasObservationWithNameEqualTo("spring.ai.chat")
+			.hasObservationWithNameEqualTo("plot.koog.model")
 			.that()
 			.hasError()
 			.assertThatError()

@@ -203,10 +203,10 @@ class AgentRunExecutionPersistence(
 		}
 		val updated = sqlExecutor.update(
 			"""
-			update agent_runs set model_call_count = model_call_count + 1, updated_at = ?
+			update agent_runs set model_call_count = model_call_count + 1, claimed_at = ?, updated_at = ?
 			where workspace_id = ? and id = ? and claimed_by = ? and transition_version = ? and status = 'RUNNING'
 			""".trimIndent(),
-			Timestamp.from(currentInstant()), claim.workspaceId, claim.agentRunId, claim.workerId, claim.transitionVersion,
+			Timestamp.from(currentInstant()), Timestamp.from(currentInstant()), claim.workspaceId, claim.agentRunId, claim.workerId, claim.transitionVersion,
 		)
 		if (updated != 1) throw AgentRunClaimLostException()
 		requireNotNull(queryPersistence.findAgentRun(claim.workspaceId, claim.agentRunId))
@@ -260,6 +260,7 @@ class AgentRunExecutionPersistence(
 		requireNotNull(queryPersistence.findStep(claim.workspaceId, claim.agentRunId, id))
 	}
 	fun completeToolStep(
+		retainClaim: Boolean = false,
 		claim: ClaimedAgentRun,
 		stepId: UUID,
 		resultJson: String,
@@ -320,10 +321,12 @@ class AgentRunExecutionPersistence(
 			adoptedInputHash = adopted?.contentHash,
 			now = now,
 		)
-		advanceAndRelease(claim, run.currentStep + 1, now)
+		if (retainClaim) advanceRuntime(claim, run.currentStep + 1, now)
+		else advanceAndRelease(claim, run.currentStep + 1, now)
 		requireNotNull(queryPersistence.findStep(claim.workspaceId, claim.agentRunId, stepId))
 	}
 	fun failToolStep(
+		retainClaim: Boolean = false,
 		claim: ClaimedAgentRun,
 		stepId: UUID,
 		code: String,
@@ -353,7 +356,8 @@ class AgentRunExecutionPersistence(
 			adoptedInputHash = null,
 			now = now,
 		)
-		advanceAndRelease(claim, run.currentStep + 1, now)
+		if (retainClaim) advanceRuntime(claim, run.currentStep + 1, now)
+		else advanceAndRelease(claim, run.currentStep + 1, now)
 		requireNotNull(queryPersistence.findStep(claim.workspaceId, claim.agentRunId, stepId))
 	}
 	fun linkArtifactWorkflowStep(
@@ -552,6 +556,20 @@ class AgentRunExecutionPersistence(
 			""".trimIndent(),
 			Timestamp.from(now), claim.workspaceId, claim.agentRunId, claim.workerId, claim.transitionVersion,
 		)
+	}
+
+	fun releaseRuntime(claim: ClaimedAgentRun) = transactionExecutor.execute {
+		queryPersistence.requireAgentClaim(claim)
+		advanceAndRelease(claim, null, currentInstant())
+	}
+
+	private fun advanceRuntime(claim: ClaimedAgentRun, nextStep: Int, now: Instant) {
+		val updated = sqlExecutor.update(
+			"""update agent_runs set current_step = ?, claimed_at = ?, updated_at = ?
+			where workspace_id = ? and id = ? and claimed_by = ? and transition_version = ? and status = 'RUNNING'""",
+			nextStep, Timestamp.from(now), Timestamp.from(now), claim.workspaceId, claim.agentRunId, claim.workerId, claim.transitionVersion,
+		)
+		if (updated != 1) throw AgentRunClaimLostException()
 	}
 
 	private fun advanceAndRelease(

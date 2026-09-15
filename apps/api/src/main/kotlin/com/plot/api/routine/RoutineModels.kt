@@ -23,6 +23,7 @@ data class RoutineRecord(
 	val sourceLabel: String,
 	val name: String,
 	val instruction: String,
+	val skillsSnapshotJson: String = "[]",
 	val cadence: RoutineCadence,
 	val enabled: Boolean,
 	val activityCursorSequence: Long?,

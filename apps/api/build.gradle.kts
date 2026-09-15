@@ -1,6 +1,7 @@
 plugins {
 	kotlin("jvm") version "2.4.0"
 	kotlin("plugin.spring") version "2.4.0"
+	kotlin("plugin.serialization") version "2.4.0"
 	id("org.springframework.boot") version "4.0.7"
 	id("io.spring.dependency-management") version "1.1.7"
 }
@@ -19,7 +20,7 @@ repositories {
 	mavenCentral()
 }
 
-extra["springAiVersion"] = "2.0.0"
+extra["koogVersion"] = "1.2.0"
 extra["kotlin.version"] = "2.4.0"
 
 dependencies {
@@ -34,7 +35,10 @@ dependencies {
 	implementation("org.jetbrains.exposed:exposed-spring-boot4-starter:1.5.0")
 	implementation("com.workos:workos:7.1.0")
 	implementation("org.jetbrains.kotlin:kotlin-reflect")
-	implementation("org.springframework.ai:spring-ai-starter-model-openai")
+	implementation("ai.koog:agents-core:${property("koogVersion")}")
+	implementation("ai.koog:prompt-executor-openrouter-client:${property("koogVersion")}")
+	implementation("ai.koog:http-client-java:${property("koogVersion")}")
+	implementation("ai.koog:skills:${property("koogVersion")}-beta")
 	implementation("tools.jackson.module:jackson-module-kotlin")
 	developmentOnly("org.springframework.boot:spring-boot-docker-compose")
 	runtimeOnly("org.postgresql:postgresql")
@@ -46,12 +50,6 @@ dependencies {
 	testImplementation("org.testcontainers:testcontainers-junit-jupiter")
 	testImplementation("org.testcontainers:testcontainers-postgresql")
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-}
-
-dependencyManagement {
-	imports {
-		mavenBom("org.springframework.ai:spring-ai-bom:${property("springAiVersion")}")
-	}
 }
 
 sourceSets {
@@ -85,7 +83,7 @@ tasks.register<Test>("liveEval") {
 		val requiredEnvVars = listOf(
 			"PLOT_AI_MODEL",
 			"PLOT_AI_ROUTING_PROVIDER",
-			"SPRING_AI_OPENAI_API_KEY",
+			"PLOT_AI_API_KEY",
 		)
 		val missing = requiredEnvVars.filter { System.getenv(it).isNullOrBlank() }
 		if (missing.isNotEmpty()) {
@@ -94,7 +92,7 @@ tasks.register<Test>("liveEval") {
 					"Example:\n" +
 					"  PLOT_AI_MODEL=openai/gpt-4o-mini-2024-07-18\n" +
 					"  PLOT_AI_ROUTING_PROVIDER=openai\n" +
-					"  SPRING_AI_OPENAI_API_KEY=<your-api-key>",
+					"  PLOT_AI_API_KEY=<your-api-key>",
 			)
 		}
 	}
@@ -102,5 +100,4 @@ tasks.register<Test>("liveEval") {
 	environment("SPRING_PROFILES_ACTIVE", "test")
 	environment("PLOT_EVAL_LIVE", "true")
 	systemProperty("plot.ai.enabled", "true")
-	systemProperty("spring.ai.model.chat", "chat")
 }

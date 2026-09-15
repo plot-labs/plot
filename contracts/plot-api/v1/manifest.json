@@ -103,7 +103,9 @@
           "customerTerms": "workspace, artifact, source",
           "tone": "Clear and direct",
           "defaultLocale": "en",
-          "bannedPhrases": ["synergy"]
+          "bannedPhrases": [
+            "synergy"
+          ]
         }
       ],
       "method": "PUT",
@@ -810,6 +812,99 @@
       ],
       "requestFixture": null,
       "successFixture": "fixtures/public-changelog-entry.json",
+      "errorFixture": null,
+      "enumDomains": {}
+    },
+    {
+      "id": "skill.list",
+      "surface": "skill",
+      "clientMethod": "listSkills",
+      "args": [],
+      "method": "GET",
+      "routeTemplate": "/skills",
+      "route": "/skills",
+      "successStatus": 200,
+      "authContext": "workspace-member",
+      "requiredHeaders": [
+        "accept",
+        "x-plot-workspace-id"
+      ],
+      "requestFixture": null,
+      "successFixture": "fixtures/skills.json",
+      "errorFixture": null,
+      "enumDomains": {}
+    },
+    {
+      "id": "skill.get",
+      "surface": "skill",
+      "clientMethod": "getSkill",
+      "args": [
+        "019a0000-0000-7000-8000-000000000001"
+      ],
+      "method": "GET",
+      "routeTemplate": "/skills/{id}",
+      "route": "/skills/019a0000-0000-7000-8000-000000000001",
+      "successStatus": 200,
+      "authContext": "workspace-member",
+      "requiredHeaders": [
+        "accept",
+        "x-plot-workspace-id"
+      ],
+      "requestFixture": null,
+      "successFixture": "fixtures/skill.json",
+      "errorFixture": null,
+      "enumDomains": {}
+    },
+    {
+      "id": "skill.create",
+      "surface": "skill",
+      "clientMethod": "createSkill",
+      "args": [
+        {
+          "name": "changelog",
+          "description": "Write customer-facing updates.",
+          "content": "Describe changes using supplied evidence."
+        }
+      ],
+      "method": "POST",
+      "routeTemplate": "/skills",
+      "route": "/skills",
+      "successStatus": 201,
+      "authContext": "workspace-member",
+      "requiredHeaders": [
+        "accept",
+        "x-plot-workspace-id",
+        "content-type"
+      ],
+      "requestFixture": "fixtures/skill-create-request.json",
+      "successFixture": "fixtures/skill.json",
+      "errorFixture": null,
+      "enumDomains": {}
+    },
+    {
+      "id": "skill.update",
+      "surface": "skill",
+      "clientMethod": "updateSkill",
+      "args": [
+        "019a0000-0000-7000-8000-000000000001",
+        {
+          "name": "changelog",
+          "description": "Write customer-facing updates.",
+          "content": "Describe changes using supplied evidence."
+        }
+      ],
+      "method": "PUT",
+      "routeTemplate": "/skills/{id}",
+      "route": "/skills/019a0000-0000-7000-8000-000000000001",
+      "successStatus": 200,
+      "authContext": "workspace-member",
+      "requiredHeaders": [
+        "accept",
+        "x-plot-workspace-id",
+        "content-type"
+      ],
+      "requestFixture": "fixtures/skill-create-request.json",
+      "successFixture": "fixtures/skill.json",
       "errorFixture": null,
       "enumDomains": {}
     }

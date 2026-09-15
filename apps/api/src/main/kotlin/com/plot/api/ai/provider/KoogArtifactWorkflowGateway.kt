@@ -1,7 +1,5 @@
 package com.plot.api.ai.provider
 
-import com.openai.errors.OpenAIRetryableException
-import com.openai.errors.OpenAIServiceException
 import com.plot.api.ai.prompt.ChangelogPrompt
 import com.plot.api.config.PlotAiProperties
 import com.plot.api.content.ContentTypeRegistry
@@ -13,13 +11,8 @@ import com.plot.api.artifact.workflow.model.WriterOutput
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
-import org.springframework.ai.chat.client.ChatClient
-import org.springframework.ai.chat.prompt.ChatOptions
-import org.springframework.ai.openai.OpenAiChatOptions
-import org.springframework.beans.factory.ObjectProvider
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
-import org.springframework.core.env.Environment
 
 object ModelSchemas {
 	val WRITER = """{"${'$'}schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["sentences","layout"],"properties":{"sentences":{"type":"array","minItems":1,"maxItems":6,"items":{"type":"object","additionalProperties":false,"required":["body","intent","conflictEvidenceIds"],"properties":{"body":{"type":"string","minLength":1},"intent":{"type":"string","enum":["FACTUAL","EDITORIAL","UNRESOLVED_CONFLICT"]},"conflictEvidenceIds":{"type":"array","items":{"type":"string","format":"uuid"}}}}},"layout":{"type":"array","maxItems":6,"items":{"${'$'}ref":"#/${'$'}defs/layoutNode"}}},"${'$'}defs":{"layoutNode":{"type":"object","additionalProperties":false,"required":["type","statementIndex","tag","listType","start","children"],"properties":{"type":{"type":"string","enum":["heading","paragraph","list","listItem"]},"statementIndex":{"type":["integer","null"],"minimum":0},"tag":{"type":["string","null"],"enum":["h1","h2","h3",null]},"listType":{"type":["string","null"],"enum":["bullet","ordered",null]},"start":{"type":["integer","null"],"minimum":1},"children":{"type":"array","maxItems":6,"items":{"${'$'}ref":"#/${'$'}defs/layoutNode"}}}}}}"""
@@ -58,7 +51,7 @@ class TransientModelTransportException(message: String, cause: Throwable? = null
 class NonTransientModelTransportException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
 class MalformedModelOutputException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
 
-class SpringAiOpenAiArtifactWorkflowGateway(
+class KoogArtifactWorkflowGateway(
 	private val transport: StructuredChatTransport,
 	private val properties: PlotAiProperties,
 	private val contentTypeRegistry: ContentTypeRegistry,
@@ -149,124 +142,16 @@ class SpringAiOpenAiArtifactWorkflowGateway(
 	)
 }
 
-class SpringAiStructuredChatTransport(
-	builder: ChatClient.Builder,
-	private val properties: PlotAiProperties,
-) : StructuredChatTransport {
-	internal val writerClient: ChatClient = builder.clone().build()
-	internal val reviewerClient: ChatClient = builder.clone().build()
-	private val optionsByRole = ModelRole.entries.associateWith(::buildOptions)
-
-	internal fun optionsFor(role: ModelRole): ChatOptions = optionsByRole.getValue(role)
-
-	private fun buildOptions(role: ModelRole): ChatOptions {
-		val builder = OpenAiChatOptions.builder()
-			.baseUrl(properties.baseUrl)
-			.model(requireNotNull(properties.model))
-			.maxCompletionTokens(properties.maxOutputTokens)
-			.timeout(properties.timeout)
-			.maxRetries(0)
-			.customHeaders(mapOf(
-				"X-OpenRouter-Metadata" to "enabled",
-				"X-OpenRouter-Title" to "Plot",
-			))
-			.extraBody(mapOf("provider" to properties.openRouterProviderPolicy))
-			.outputSchema(ModelSchemas.forRole(role))
-		if (properties.supportsTemperature) {
-			builder.temperature(if (role == ModelRole.REVIEWER) properties.reviewerTemperature else properties.writerTemperature)
-		}
-		return builder.build()
-	}
-
-	override fun <T : Any> exchange(request: StructuredChatRequest, responseType: Class<T>): StructuredTransportResponse<T> {
-		val client = if (request.role == ModelRole.REVIEWER) reviewerClient else writerClient
-		try {
-			val entity = client.prompt()
-				.system(request.prompt.system)
-				.user(request.prompt.user)
-				.options(optionsFor(request.role).mutate())
-				.call()
-				.responseEntity(responseType)
-			val response = entity.response ?: throw MalformedModelOutputException("Structured response metadata is missing")
-			val value = entity.entity ?: throw MalformedModelOutputException("Structured response body is missing")
-			val metadata = response.metadata
-			val usage = metadata.usage
-			return StructuredTransportResponse(
-				value = value,
-				responseId = metadata.id,
-				actualModel = metadata.model,
-				finishReason = response.result?.metadata?.finishReason,
-				promptTokens = usage.promptTokens,
-				completionTokens = usage.completionTokens,
-				totalTokens = usage.totalTokens,
-			)
-		} catch (failure: OpenAIRetryableException) {
-			throw TransientModelTransportException("OpenAI request failed transiently", failure)
-		} catch (failure: OpenAIServiceException) {
-			throw NonTransientModelTransportException("OpenAI rejected the request", failure)
-		} catch (failure: MalformedModelOutputException) {
-			throw failure
-		} catch (failure: RuntimeException) {
-			if (failure.isStructuredOutputFailure()) {
-				throw MalformedModelOutputException("Structured output conversion failed", failure)
-			}
-			throw NonTransientModelTransportException("OpenAI request failed", failure)
-		}
-	}
-
-	private fun Throwable.isStructuredOutputFailure(): Boolean = generateSequence(this) { it.cause }
-		.map { it::class.qualifiedName.orEmpty() }
-		.any { name -> name.contains("Json", ignoreCase = true) || name.contains("Conversion", ignoreCase = true) }
-}
-
 @Configuration(proxyBeanMethods = false)
 class ArtifactWorkflowModelGatewayConfiguration {
 	@Bean
 	fun artifactWorkflowModelGateway(
-		builderProvider: ObjectProvider<ChatClient.Builder>,
+		transport: KoogModelTransport,
 		properties: PlotAiProperties,
 		contentTypeRegistry: ContentTypeRegistry,
 		frozenPromptVersionLookup: FrozenPromptVersionLookup,
 		frozenContentContextLookup: FrozenContentContextLookup,
-		environment: Environment,
-	): ArtifactWorkflowModelGateway {
-		// Do not resolve ChatClient.Builder when artifact workflows are disabled: with
-		// spring.ai.model.chat=none its factory exists but intentionally has no ChatModel.
-		if (properties.configured) validateRuntimeOpenRouterConfiguration(properties, environment)
-		val builder = if (properties.configured) builderProvider.ifAvailable else null
-		return if (properties.configured && builder != null) {
-			SpringAiOpenAiArtifactWorkflowGateway(
-				SpringAiStructuredChatTransport(builder, properties),
-				properties,
-				contentTypeRegistry,
-				frozenPromptVersionLookup,
-				frozenContentContextLookup,
-			)
-		} else {
-			DisabledArtifactWorkflowModelGateway()
-		}
-	}
-
-	private fun validateRuntimeOpenRouterConfiguration(properties: PlotAiProperties, environment: Environment) {
-		require(environment.getProperty("spring.ai.openai.base-url", properties.baseUrl) == PlotAiProperties.OPENROUTER_BASE_URL) {
-			"spring.ai.openai.base-url must match the canonical OpenRouter API origin"
-		}
-		val frameworkRetries = environment.getProperty(
-			"spring.ai.openai.chat.max-retries",
-			Int::class.java,
-			environment.getProperty("spring.ai.openai.max-retries", Int::class.java, 0),
-		)
-		require(frameworkRetries == 0) { "Spring AI framework retries must remain disabled" }
-		val loggingKeys = listOf(
-			"spring.ai.chat.observations.log-prompt",
-			"spring.ai.chat.observations.log-completion",
-			"spring.ai.chat.observations.include-error-logging",
-			"spring.ai.chat.client.observations.log-prompt",
-			"spring.ai.chat.client.observations.log-completion",
-			"spring.ai.chat.client.observations.include-error-logging",
-		)
-		require(loggingKeys.none { environment.getProperty(it, Boolean::class.java, false) }) {
-			"Spring AI prompt and completion logging must remain disabled"
-		}
-	}
+	): ArtifactWorkflowModelGateway = if (properties.configured) {
+		KoogArtifactWorkflowGateway(transport, properties, contentTypeRegistry, frozenPromptVersionLookup, frozenContentContextLookup)
+	} else DisabledArtifactWorkflowModelGateway()
 }

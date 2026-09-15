@@ -10,7 +10,8 @@ import com.plot.api.TestcontainersConfiguration
 import com.plot.api.ai.provider.AgentDecision
 import com.plot.api.ai.provider.AgentDecisionAction
 import com.plot.api.ai.provider.AgentDecisionException
-import com.plot.api.ai.provider.AgentDecisionGateway
+import com.plot.api.ai.provider.AgentRuntime
+import com.plot.api.ai.provider.AgentRuntimeHost
 import com.plot.api.ai.provider.AgentDecisionRequest
 import com.plot.api.ai.provider.ArtifactWorkflowModelGateway
 import com.plot.api.ai.provider.ModelCallMetadata
@@ -83,7 +84,7 @@ class AgentRunWorkerIntegrationTest {
 	@Autowired private lateinit var artifactWorkflowWorker: ArtifactWorkflowRunWorker
 	@Autowired private lateinit var chatAdmission: ChatRunService
 	@Autowired private lateinit var chatQueries: ChatQueryService
-	@Autowired private lateinit var agentModel: ScriptedAgentDecisionGateway
+	@Autowired private lateinit var agentModel: ScriptedAgentRuntime
 	@Autowired private lateinit var artifactWorkflowModel: AgentArtifactWorkflowModelGateway
 
 	@BeforeEach
@@ -126,6 +127,9 @@ class AgentRunWorkerIntegrationTest {
 			sourceScopeId = trigger.scopeId,
 			instruction = "Create a cited update from the relevant sources",
 			cadence = RoutineCadence.DAILY,
+            skillsSnapshotJson = tools.jackson.module.kotlin.jacksonObjectMapper().writeValueAsString(listOf(
+                com.plot.api.skill.SkillSnapshot(UUID.randomUUID(), "benefits", "Customer benefits", "Focus on customer benefits.", 1),
+            )),
 		)
 		agentPersistence.addContextSource(routine.workspaceId, routine.id, context.scopeId, 0)
 		val execution = agentPersistence.createExecution(
@@ -245,6 +249,8 @@ class AgentRunWorkerIntegrationTest {
 		assertEquals(listOf(agentRunId), historyRuns.map { it.id })
 		assertNotNull(historyRuns.single().artifactId)
 		assertEquals(3, agentModel.requests.size)
+        assertTrue(agentModel.requests.none { it.instruction.contains("Focus on customer benefits.") })
+        assertTrue(artifactWorkflowModel.writerRequests.single().instruction.orEmpty().contains("Focus on customer benefits."))
 		assertTrue(agentModel.requests.none { request ->
 			request.toString().contains("MUTATED SECRET") || request.toString().contains("Authorization")
 		})
@@ -851,6 +857,62 @@ class AgentRunWorkerIntegrationTest {
 		assertTrue(replayResult.contains(blockId.toString()))
 	}
 
+	@Test
+	fun `native Koog runtime loads deleted supporting skill and creates a grounded artifact in one claim`() {
+		val skillId = UUID.randomUUID()
+		jdbcTemplate.update("insert into skills (id, workspace_id, name, description, content) values (?, ?, ?, ?, ?)",
+			skillId, devContext.devWorkspaceId, "native-${UUID.randomUUID()}", "Supporting guide", "Frozen supporting instruction.")
+		val admitted = admitAgent("Native runtime", "acme/native")
+		jdbcTemplate.update("update agent_runs set budget_snapshot = budget_snapshot || '{\"maxModelCalls\":8,\"maxToolCalls\":8}'::jsonb where id = ?", admitted.agentRunId)
+		jdbcTemplate.update("delete from skills where id = ?", skillId)
+		var modelCalls = 0
+		agentModel.nativeRuntime = nativeRuntime { prompt ->
+			modelCalls++
+			when (modelCalls) {
+				1 -> { assertFalse(prompt.contains("Frozen supporting instruction.")); nativeCall("LIST_AVAILABLE_SKILLS") }
+				2 -> { assertFalse(prompt.contains("Frozen supporting instruction.")); assertTrue(prompt.contains(skillId.toString()))
+					nativeCall("GET_SKILL", """{"skillId":"$skillId"}""") }
+				3 -> { assertTrue(prompt.contains("Frozen supporting instruction."))
+					nativeCall("READ_WRITING_BLOCKS", """{"sourceScopeId":"${admitted.source.scopeId}","writingBlockIds":["${admitted.blockId}"]}""") }
+				else -> {
+					val inputId = jdbcTemplate.queryForObject("select id from agent_run_inputs where agent_run_id = ? and input_kind = 'TOOL_RESULT'", UUID::class.java, admitted.agentRunId)!!
+					assertTrue(prompt.contains(inputId.toString()))
+					nativeCall("CREATE_ARTIFACT", """{"selectedInputIds":["$inputId"]}""")
+				}
+			}
+		}
+		assertTrue(agentWorker.processOne())
+		assertEquals(4, modelCalls)
+		assertEquals(4, count("select model_call_count from agent_runs where id = ?", admitted.agentRunId))
+		assertEquals(3, count("select tool_call_count from agent_runs where id = ?", admitted.agentRunId))
+		assertEquals(1, count("select count(*) from generation_runs where agent_run_id = ?", admitted.agentRunId))
+		artifactWorkflowWorker.drain()
+		assertEquals("SUCCEEDED", agentStatus(admitted.agentRunId))
+		assertTrue(artifactWorkflowModel.writerRequests.single().instruction.orEmpty().contains("Frozen supporting instruction."))
+	}
+
+	@Test
+	fun `native Koog runtime refuses a skill outside the frozen catalog`() {
+		val admitted = admitAgent("Forbidden skill", "acme/forbidden-skill")
+		agentModel.nativeRuntime = nativeRuntime { nativeCall("GET_SKILL", """{"skillId":"${UUID.randomUUID()}"}""") }
+		assertTrue(agentWorker.processOne())
+		assertEquals("FAILED", agentStatus(admitted.agentRunId))
+		assertEquals("SKILL_NOT_ALLOWED", agentFailure(admitted.agentRunId))
+		assertEquals(0, count("select count(*) from generation_runs where agent_run_id = ?", admitted.agentRunId))
+	}
+
+	private fun nativeRuntime(next: (String) -> ai.koog.prompt.message.Message.Assistant): AgentRuntime =
+		com.plot.api.ai.provider.KoogAgentRuntime(
+			ai.koog.prompt.llm.LLModel(ai.koog.prompt.llm.LLMProvider.OpenRouter, "test", listOf(ai.koog.prompt.llm.LLMCapability.Completion, ai.koog.prompt.llm.LLMCapability.Tools)),
+			ai.koog.prompt.params.LLMParams(), tools.jackson.module.kotlin.jacksonObjectMapper(),
+		) { prompt, _, _ -> next(prompt.toString()) }
+
+	private fun nativeCall(name: String, arguments: String = "{}") = ai.koog.prompt.message.Message.Assistant(
+		parts = listOf(ai.koog.prompt.message.MessagePart.Tool.Call(UUID.randomUUID().toString(), name,
+			kotlinx.serialization.json.Json.parseToJsonElement(arguments) as kotlinx.serialization.json.JsonObject)),
+		metaInfo = ai.koog.prompt.message.ResponseMetaInfo.Empty,
+	)
+
 	private fun admitAgent(name: String, sourceLabel: String): AdmittedAgent {
 		val source = insertSource(sourceLabel)
 		val blockId = insertBlock(source, "Activity", "Immutable activity body")
@@ -1010,7 +1072,7 @@ class AgentRunWorkerIntegrationTest {
 	class Config {
 		@Bean
 		@Primary
-		fun scriptedAgentDecisionGateway() = ScriptedAgentDecisionGateway()
+		fun scriptedAgentRuntime() = ScriptedAgentRuntime()
 
 		@Bean
 		@Primary
@@ -1026,7 +1088,8 @@ class AgentRunWorkerIntegrationTest {
 private data class AgentSourceFixture(val namespaceId: UUID, val scopeId: UUID)
 private data class AdmittedAgent(val source: AgentSourceFixture, val blockId: UUID, val agentRunId: UUID)
 
-class ScriptedAgentDecisionGateway : AgentDecisionGateway {
+class ScriptedAgentRuntime : AgentRuntime {
+	var nativeRuntime: AgentRuntime? = null
 	var reads: List<Pair<UUID, UUID>> = emptyList()
 	var invalidSourceId: UUID? = null
 	var repeatAction: AgentDecisionAction? = null
@@ -1035,7 +1098,13 @@ class ScriptedAgentDecisionGateway : AgentDecisionGateway {
 	var scriptedDecision: ((AgentDecisionRequest) -> AgentDecision)? = null
 	val requests = mutableListOf<AgentDecisionRequest>()
 
-	override fun decide(request: AgentDecisionRequest): AgentDecision {
+	override fun run(host: AgentRuntimeHost) {
+		nativeRuntime?.let { it.run(host); return }
+		host.beforeModel()
+		host.execute(decide(host.context()))
+	}
+
+	private fun decide(request: AgentDecisionRequest): AgentDecision {
 		requests += request
 		if (recoverableFailure) {
 			throw AgentDecisionException("PROVIDER_UNAVAILABLE", true, "Temporary provider failure")
@@ -1069,6 +1138,7 @@ class ScriptedAgentDecisionGateway : AgentDecisionGateway {
 	}
 
 	fun reset() {
+		nativeRuntime = null
 		reads = emptyList()
 		invalidSourceId = null
 		repeatAction = null
@@ -1081,8 +1151,10 @@ class ScriptedAgentDecisionGateway : AgentDecisionGateway {
 
 class AgentArtifactWorkflowModelGateway : ArtifactWorkflowModelGateway {
 	var calls = 0
+	val writerRequests = mutableListOf<WriterModelRequest>()
 
 	override fun write(request: WriterModelRequest): ModelCallResult<WriterOutput> {
+		writerRequests += request
 		calls++
 		return result(WriterOutput(listOf(WriterSentence("A source-backed update is ready."))))
 	}
@@ -1100,6 +1172,7 @@ class AgentArtifactWorkflowModelGateway : ArtifactWorkflowModelGateway {
 		error("Agent artifact workflow should not require a rewrite")
 
 	fun reset() {
+		writerRequests.clear()
 		calls = 0
 	}
 

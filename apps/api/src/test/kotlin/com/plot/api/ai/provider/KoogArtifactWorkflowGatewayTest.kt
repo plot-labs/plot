@@ -19,10 +19,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
-import kotlin.test.assertNotSame
 import kotlin.test.assertTrue
-import org.springframework.ai.chat.client.ChatClient
-import org.springframework.ai.openai.OpenAiChatOptions
 import org.springframework.boot.autoconfigure.AutoConfigurations
 import org.springframework.boot.autoconfigure.context.ConfigurationPropertiesAutoConfiguration
 import org.springframework.boot.context.properties.EnableConfigurationProperties
@@ -31,7 +28,7 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import tools.jackson.databind.ObjectMapper
 
-class SpringAiOpenAiArtifactWorkflowGatewayTest {
+class KoogArtifactWorkflowGatewayTest {
 	private val mapper = ObjectMapper()
 	private val properties = PlotAiProperties(
 		enabled = true,
@@ -71,37 +68,12 @@ class SpringAiOpenAiArtifactWorkflowGatewayTest {
 		).forEach { values ->
 			ApplicationContextRunner()
 				.withConfiguration(AutoConfigurations.of(ConfigurationPropertiesAutoConfiguration::class.java))
-				.withUserConfiguration(GatewayTestConfiguration::class.java, ArtifactWorkflowModelGatewayConfiguration::class.java)
+				.withUserConfiguration(GatewayTestConfiguration::class.java, ArtifactWorkflowModelGatewayConfiguration::class.java, KoogModelTransport::class.java)
 				.withPropertyValues(*values)
 				.run { context ->
 					assertTrue(context.startupFailure == null)
 					assertTrue(context.getBean(ArtifactWorkflowModelGateway::class.java) is DisabledArtifactWorkflowModelGateway)
 				}
-		}
-	}
-
-	@Test
-	fun `effective Spring AI base URL and content logging fail closed before resolving a client`() {
-		listOf(
-			arrayOf("spring.ai.openai.base-url=https://api.openai.com/v1"),
-			arrayOf("spring.ai.openai.max-retries=1"),
-			arrayOf("spring.ai.openai.chat.max-retries=1"),
-			arrayOf("spring.ai.chat.observations.log-prompt=true"),
-			arrayOf("spring.ai.chat.observations.log-completion=true"),
-			arrayOf("spring.ai.chat.client.observations.log-prompt=true"),
-			arrayOf("spring.ai.chat.client.observations.log-completion=true"),
-		).forEach { unsafe ->
-			ApplicationContextRunner()
-				.withConfiguration(AutoConfigurations.of(ConfigurationPropertiesAutoConfiguration::class.java))
-				.withUserConfiguration(GatewayTestConfiguration::class.java, ArtifactWorkflowModelGatewayConfiguration::class.java)
-				.withPropertyValues(
-					"plot.ai.enabled=true",
-					"plot.ai.model=openai/gpt-5.4-nano",
-					"plot.ai.routing-provider=openai",
-					"spring.ai.openai.base-url=https://openrouter.ai/api/v1",
-					*unsafe,
-				)
-				.run { context -> assertTrue(context.startupFailure != null) }
 		}
 	}
 
@@ -260,7 +232,7 @@ class SpringAiOpenAiArtifactWorkflowGatewayTest {
 	@Test
 	fun `launch prompt version routes writer and reviewer through launch-announcement-v3 factory`() {
 		val launchLookup = FrozenPromptVersionLookup { ContentTypeRegistry.LAUNCH_PROMPT_VERSION }
-		val launchGateway = SpringAiOpenAiArtifactWorkflowGateway(
+		val launchGateway = KoogArtifactWorkflowGateway(
 			transport = FixtureTransport(),
 			properties = properties,
 			contentTypeRegistry = contentTypeRegistry,
@@ -286,21 +258,7 @@ class SpringAiOpenAiArtifactWorkflowGatewayTest {
 		assertEquals("Shipped citations.", result.value.sentences.single().body)
 	}
 
-	@Test
-	fun `production transport builds distinct writer and reviewer clients with native schemas`() {
-		val builder = ChatClient.builder { throw UnsupportedOperationException("model call is not expected") }
-		val transport = SpringAiStructuredChatTransport(builder, properties)
-
-		assertNotSame(transport.writerClient, transport.reviewerClient)
-		val writerOptions = transport.optionsFor(ModelRole.WRITER) as OpenAiChatOptions
-		val reviewerOptions = transport.optionsFor(ModelRole.REVIEWER) as OpenAiChatOptions
-		assertEquals(mapper.readTree(ModelSchemas.WRITER), mapper.readTree(writerOptions.outputSchema))
-		assertEquals(mapper.readTree(ModelSchemas.REVIEWER), mapper.readTree(reviewerOptions.outputSchema))
-		assertTrue(writerOptions.toolCallbacks.orEmpty().isEmpty())
-		assertTrue(reviewerOptions.toolCallbacks.orEmpty().isEmpty())
-	}
-
-	private fun gateway(transport: StructuredChatTransport) = SpringAiOpenAiArtifactWorkflowGateway(
+	private fun gateway(transport: StructuredChatTransport) = KoogArtifactWorkflowGateway(
 		transport = transport,
 		properties = properties,
 		contentTypeRegistry = contentTypeRegistry,

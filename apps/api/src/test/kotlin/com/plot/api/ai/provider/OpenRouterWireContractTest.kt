@@ -1,158 +1,123 @@
 package com.plot.api.ai.provider
 
-import com.openai.client.OpenAIClientImpl
-import com.openai.client.OpenAIClientAsyncImpl
-import com.openai.core.ClientOptions
+import ai.koog.prompt.executor.clients.openrouter.OpenRouterClientSettings
+import ai.koog.http.client.java.JavaKoogHttpClient
 import com.plot.api.ai.prompt.ChangelogPrompt
 import com.plot.api.config.PlotAiProperties
 import com.plot.api.artifact.workflow.model.WriterOutput
 import com.sun.net.httpserver.HttpServer
 import java.net.InetSocketAddress
-import java.nio.charset.StandardCharsets
-import java.util.concurrent.atomic.AtomicReference
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
-import org.springframework.ai.chat.client.ChatClient
-import org.springframework.ai.openai.OpenAiChatModel
-import org.springframework.ai.openai.OpenAiChatOptions
-import org.springframework.ai.openai.http.okhttp.SpringAiOpenAiHttpClient
-import tools.jackson.databind.ObjectMapper
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.test.*
+import org.junit.jupiter.api.Test
+import tools.jackson.module.kotlin.jacksonObjectMapper
 
 class OpenRouterWireContractTest {
-	private val mapper = ObjectMapper()
+    private val mapper = jacksonObjectMapper()
+    private val properties = PlotAiProperties(enabled = true, model = PlotAiProperties.GPT_5_4_NANO_MODEL, routingProvider = "openai")
 
-	@Test
-	fun `Spring AI serializes the OpenRouter route and safe headers on the wire`() {
-		val requestBody = AtomicReference<String>()
-		val metadataHeader = AtomicReference<String>()
-		val titleHeader = AtomicReference<String>()
-		val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
-		server.createContext("/api/v1/chat/completions") { exchange ->
-			requestBody.set(exchange.requestBody.readAllBytes().toString(StandardCharsets.UTF_8))
-			metadataHeader.set(exchange.requestHeaders.getFirst("X-OpenRouter-Metadata"))
-			titleHeader.set(exchange.requestHeaders.getFirst("X-OpenRouter-Title"))
-			val response = """
-				{"id":"gen-wire","object":"chat.completion","created":1784160000,"model":"openai/gpt-5.4-nano-2026-06-01","choices":[{"index":0,"message":{"role":"assistant","content":"{\"sentences\":[{\"body\":\"Wire contract passed.\"}]}"},"finish_reason":"stop"}],"usage":{"prompt_tokens":11,"completion_tokens":7,"total_tokens":18},"openrouter_metadata":{"requested":"openai/gpt-5.4-nano","unknown_content":"must not escape"}}
-			""".trimIndent().toByteArray()
-			exchange.responseHeaders.add("Content-Type", "application/json")
-			exchange.sendResponseHeaders(200, response.size.toLong())
-			exchange.responseBody.use { it.write(response) }
-		}
-		server.start()
-		val baseUrl = "http://127.0.0.1:${server.address.port}/api/v1"
-		val testProperties = properties(baseUrl = baseUrl, enabled = false)
-		val httpClient = SpringAiOpenAiHttpClient.builder().timeout(testProperties.timeout).build()
-		val clientOptions = ClientOptions.builder()
-			.httpClient(httpClient)
-			.apiKey("test-key")
-			.baseUrl(baseUrl)
-			.maxRetries(0)
-			.build()
-		val client = OpenAIClientImpl(clientOptions)
-		val asyncClient = OpenAIClientAsyncImpl(clientOptions)
+    @Test fun `Koog sends strict schema and pinned private route without tools`() {
+        withServer { server, bodies, _ ->
+            transport(server).useTransport { transport ->
+                val result = transport.exchange(StructuredChatRequest(ModelRole.WRITER, ChangelogPrompt("System", "User")), WriterOutput::class.java)
+                val body = mapper.readTree(bodies.single())
+                assertEquals(properties.model, body["model"].stringValue())
+                assertEquals(mapper.readTree(mapper.writeValueAsString(properties.openRouterProviderPolicy)), body["provider"])
+                assertFalse(body.has("temperature"))
+                assertFalse(body.has("tools") && body["tools"].size() > 0)
+                assertEquals(ModelSchemas.WRITER.let(mapper::readTree), body["response_format"]["json_schema"]["schema"])
+                assertTrue(body["response_format"]["json_schema"]["strict"].booleanValue())
+                assertEquals(4000, (body.get("max_tokens") ?: body["max_completion_tokens"]).intValue())
+                assertEquals("Wire contract passed.", result.value.sentences.single().body)
+                assertEquals("gen-wire", result.responseId)
+                assertEquals("openai/served-model", result.actualModel)
+                assertEquals(18, result.totalTokens)
+            }
+        }
+    }
 
-		try {
-			val model = OpenAiChatModel.builder().openAiClient(client).openAiClientAsync(asyncClient).build()
-			val response = SpringAiStructuredChatTransport(ChatClient.builder(model), testProperties).exchange(
-				StructuredChatRequest(ModelRole.WRITER, ChangelogPrompt("System", "User")),
-				WriterOutput::class.java,
-			)
-			val body = mapper.readTree(requestBody.get())
-			assertEquals("openai/gpt-5.4-nano", body["model"].stringValue())
-			assertEquals(listOf("openai"), body["provider"]["order"].asArray().values().map { it.stringValue() })
-			assertEquals(listOf("openai"), body["provider"]["only"].asArray().values().map { it.stringValue() })
-			assertFalse(body["provider"]["allow_fallbacks"].booleanValue())
-			assertFalse(body["provider"]["require_parameters"].booleanValue())
-			assertEquals("deny", body["provider"]["data_collection"].stringValue())
-			assertFalse(body["provider"]["zdr"].booleanValue())
-			assertFalse(body.has("temperature"))
-			assertEquals(4_000, body["max_completion_tokens"].intValue())
-			assertEquals("enabled", metadataHeader.get())
-			assertEquals("Plot", titleHeader.get())
-			assertEquals("gen-wire", response.responseId)
-			assertEquals("openai/gpt-5.4-nano-2026-06-01", response.actualModel)
-			assertEquals("Wire contract passed.", response.value.sentences.single().body)
-		} finally {
-			client.close()
-			asyncClient.close()
-			server.stop(0)
-		}
-	}
+    @Test fun `provider failures make one call and never retain private bodies`() {
+        for (status in listOf(400, 401, 429, 503)) {
+            withServer(status) { server, _, calls ->
+                transport(server).useTransport { transport ->
+                    val failure = assertFailsWith<RuntimeException> {
+                        transport.exchange(StructuredChatRequest(ModelRole.WRITER, ChangelogPrompt("System", "User")), WriterOutput::class.java)
+                    }
+                    assertEquals(status >= 500 || status == 429, failure is TransientModelTransportException)
+                    assertEquals(1, calls.get())
+                    assertNull(failure.cause)
+                    assertFalse(failure.message.orEmpty().contains("private-source"))
+                }
+            }
+        }
+    }
 
-	@Test
-	fun `nano profile sends one pinned route without temperature`() {
-		val transport = transport(properties(model = "openai/gpt-5.4-nano"))
+    @Test fun `truncated and malformed output fail safely`() {
+        for (response in listOf(success("length"), success().replace("Wire contract passed.", "bad\\\"json"))) {
+            withServer(response = response) { server, _, _ ->
+                transport(server).useTransport { transport ->
+                    assertFailsWith<MalformedModelOutputException> {
+                        transport.exchange(StructuredChatRequest(ModelRole.WRITER, ChangelogPrompt("System", "User")), WriterOutput::class.java)
+                    }
+                }
+            }
+        }
+    }
 
-		ModelRole.entries.forEach { role ->
-			val options = transport.optionsFor(role) as OpenAiChatOptions
-			assertEquals("https://openrouter.ai/api/v1", options.baseUrl)
-			assertEquals("openai/gpt-5.4-nano", options.model)
-			assertNull(options.temperature)
-			assertEquals(4_000, options.maxCompletionTokens)
-			assertEquals(0, options.maxRetries)
-			assertEquals(mapOf("X-OpenRouter-Metadata" to "enabled", "X-OpenRouter-Title" to "Plot"), options.customHeaders)
-			val extraBody = requireNotNull(options.extraBody)
-			assertEquals(
-				mapOf(
-					"order" to listOf("openai"),
-					"only" to listOf("openai"),
-					"allow_fallbacks" to false,
-					"require_parameters" to false,
-					"data_collection" to "deny",
-					"zdr" to false,
-				),
-				extraBody["provider"],
-			)
-			assertFalse(extraBody.containsKey("models"))
-			assertEquals(ModelSchemas.forRole(role), options.outputSchema)
-			assertTrue(options.toolCallbacks.orEmpty().isEmpty())
-		}
-	}
+    @Test fun `unsafe configuration is rejected`() {
+        assertFailsWith<IllegalArgumentException> { properties.copy(allowFallbacks = true) }
+        assertFailsWith<IllegalArgumentException> { properties.copy(routingProvider = null) }
+        assertFailsWith<IllegalArgumentException> { properties.copy(baseUrl = "https://api.openai.com") }
+        assertFailsWith<IllegalArgumentException> { properties.copy(contentLoggingEnabled = true) }
+    }
 
-	@Test
-	fun `pinned GPT-4o Mini profile retains role temperatures`() {
-		val transport = transport(properties(model = "openai/gpt-4o-mini-2024-07-18"))
+    @Test fun `runtime sends native tools and accepts OpenRouter tool calls`() {
+        val inputId = java.util.UUID.randomUUID()
+        val response = """{"id":"gen-native","object":"chat.completion","created":1784160000,"model":"openai/served-model","choices":[{"index":0,"message":{"role":"assistant","content":null,"tool_calls":[{"id":"call-1","type":"function","function":{"name":"CREATE_ARTIFACT","arguments":"{\"selectedInputIds\":[\"$inputId\"]}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":11,"completion_tokens":7,"total_tokens":18}}"""
+        withServer(response = response) { server, bodies, calls ->
+            transport(server).useTransport { transport ->
+                var handedOff = false
+                val host = object : AgentRuntimeHost {
+                    override val finished get() = handedOff
+                    override fun beforeModel() = Unit
+                    override fun context() = AgentDecisionRequest(java.util.UUID.randomUUID(), "Create draft", emptyList(), emptyList(), emptyList(), 8, 8)
+                    override fun execute(decision: AgentDecision): String {
+                        assertEquals(listOf(inputId), decision.selectedInputIds)
+                        handedOff = true
+                        return "Created"
+                    }
+                }
+                KoogAgentRuntime(transport, mapper).run(host)
+                assertTrue(handedOff)
+                assertEquals(1, calls.get())
+                val body = mapper.readTree(bodies.single())
+                assertEquals(6, body["tools"].size())
+                assertFalse(body.has("response_format"))
+                assertEquals(mapper.readTree(mapper.writeValueAsString(properties.openRouterProviderPolicy)), body["provider"])
+            }
+        }
+    }
 
-		assertEquals(0.2, (transport.optionsFor(ModelRole.WRITER) as OpenAiChatOptions).temperature)
-		assertEquals(0.0, (transport.optionsFor(ModelRole.REVIEWER) as OpenAiChatOptions).temperature)
-		assertEquals(0.2, (transport.optionsFor(ModelRole.REWRITER) as OpenAiChatOptions).temperature)
-	}
+    private fun transport(server: HttpServer) = KoogModelTransport(properties, mapper, JavaKoogHttpClient.Factory().create(
+        clientName = "test", baseUrl = "http://127.0.0.1:${server.address.port}"))
 
-	@Test
-	fun `unsafe OpenRouter configuration fails before a model call`() {
-		listOf(
-			{ properties(routingProvider = null) },
-			{ properties(allowFallbacks = true) },
-			{ properties(baseUrl = "https://api.openai.com/v1") },
-			{ properties(contentLoggingEnabled = true) },
-			{ properties(provider = "openai") },
-		).forEach { unsafe -> assertFailsWith<IllegalArgumentException> { unsafe() } }
-	}
+    private fun KoogModelTransport.useTransport(block: (KoogModelTransport) -> Unit) { try { block(this) } finally { close() } }
 
-	private fun transport(properties: PlotAiProperties) = SpringAiStructuredChatTransport(
-		ChatClient.builder { throw UnsupportedOperationException("wire call is not expected") },
-		properties,
-	)
+    private fun withServer(status: Int = 200, response: String = success(), block: (HttpServer, MutableList<String>, AtomicInteger) -> Unit) {
+        val bodies = java.util.Collections.synchronizedList(mutableListOf<String>())
+        val calls = AtomicInteger()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/api/v1/chat/completions") { exchange ->
+            calls.incrementAndGet()
+            bodies.add(exchange.requestBody.readAllBytes().decodeToString())
+            val bytes = (if (status == 200) response else """{"error":{"message":"private-source","code":$status}}""").toByteArray()
+            exchange.responseHeaders.add("Content-Type", "application/json")
+            exchange.sendResponseHeaders(status, bytes.size.toLong())
+            exchange.responseBody.use { it.write(bytes) }
+        }
+        server.start()
+        try { block(server, bodies, calls) } finally { server.stop(0) }
+    }
 
-	private fun properties(
-		enabled: Boolean = true,
-		provider: String = "openrouter",
-		model: String = "openai/gpt-5.4-nano",
-		baseUrl: String = "https://openrouter.ai/api/v1",
-		routingProvider: String? = "openai",
-		allowFallbacks: Boolean = false,
-		contentLoggingEnabled: Boolean = false,
-	) = PlotAiProperties(
-		enabled = enabled,
-		provider = provider,
-		model = model,
-		baseUrl = baseUrl,
-		routingProvider = routingProvider,
-		allowFallbacks = allowFallbacks,
-		contentLoggingEnabled = contentLoggingEnabled,
-	)
+    private fun success(finish: String = "stop") = """{"id":"gen-wire","object":"chat.completion","created":1784160000,"model":"openai/served-model","choices":[{"index":0,"message":{"role":"assistant","content":"{\"sentences\":[{\"body\":\"Wire contract passed.\",\"intent\":\"FACTUAL\",\"conflictEvidenceIds\":[]}],\"layout\":[]}"},"finish_reason":"$finish"}],"usage":{"prompt_tokens":11,"completion_tokens":7,"total_tokens":18}}"""
 }
