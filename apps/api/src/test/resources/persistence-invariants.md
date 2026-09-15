@@ -85,10 +85,11 @@ The following 23 files are the production JDBC migration surface. The named owne
 | `artifact/workflow/ArtifactWorkflowExecutionPersistence.kt` | workflow transition mutations retained as SQL-shaped operations | U7 |
 | `artifact/ArtifactRevisionService.kt` | revision and sentence mutation | U7 |
 | `artifact/ArtifactExportService.kt` | export idempotency, warnings, citations, and public-source policy | U7 |
-| `artifact/workflow/ArtifactWorkflowConfiguration.kt` | transaction wiring | U7 |
+| `artifact/workflow/ArtifactWorkflowConfiguration.kt` | worker/lease/executor wiring | U7 |
 | `routine/AgentRunExecutionPersistence.kt` | typed AgentRun transition mutations | U7/U10 |
 | `routine/RoutineAgentPersistence.kt` | agent idempotency/fencing | U7 |
-| `routine/ChatAgentAdmissionService.kt` | admission/idempotency | U7 |
+| `chat/ChatRunService.kt` | admission/retry/idempotency | U7 |
+| `chat/ChatQueryService.kt` | chat projection, legacy turn repair, and frozen-envelope reads | U7 |
 | `routine/GitHubChangeRoutineService.kt` | transaction-template routine dispatch | U7 |
 | `routine/GitHubRoutineRefreshService.kt` | refresh state and retry | U7 |
 | `routine/ReadOnlyAgentTools.kt` | read-only agent queries | U4/U7 |
