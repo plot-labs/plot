@@ -4,8 +4,8 @@ import com.plot.api.artifact.workflow.ArtifactWorkflowRunDispatcher
 import com.plot.api.config.PlotAiProperties
 import com.plot.api.github.GitHubProperties
 import com.plot.api.github.GitHubReleaseDraftDispatcher
-import com.plot.api.routine.AgentRunDispatcher
-import com.plot.api.routine.RoutineAgentProperties
+import com.plot.api.agent.AgentRunDispatcher
+import com.plot.api.agent.AgentProperties
 import com.plot.api.routine.RoutineRunDispatcher
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Tag
@@ -44,7 +44,7 @@ class RecoveryCoordinator @org.springframework.beans.factory.annotation.Autowire
 	private val agentRunDispatcher: AgentRunDispatcher,
 	private val artifactWorkflowDispatcher: ArtifactWorkflowRunDispatcher,
 	private val gitHubProperties: GitHubProperties,
-	private val routineAgentProperties: RoutineAgentProperties,
+	private val routineAgentProperties: AgentProperties,
 	private val plotAiProperties: PlotAiProperties,
 	private val clock: Clock = Clock.systemUTC(),
 	private val meterRegistry: MeterRegistry = SimpleMeterRegistry(),
@@ -64,7 +64,7 @@ class RecoveryCoordinator @org.springframework.beans.factory.annotation.Autowire
 		agentRunDispatcher: AgentRunDispatcher,
 		artifactWorkflowDispatcher: ArtifactWorkflowRunDispatcher,
 		gitHubProperties: GitHubProperties,
-		routineAgentProperties: RoutineAgentProperties,
+		routineAgentProperties: AgentProperties,
 		plotAiProperties: PlotAiProperties,
 		clock: Clock = Clock.systemUTC(),
 		meterRegistry: MeterRegistry = SimpleMeterRegistry(),

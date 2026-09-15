@@ -6,9 +6,9 @@ import com.plot.api.config.PlotAiProperties
 import com.plot.api.content.ContentBrief
 import com.plot.api.artifact.workflow.model.EvidenceSnapshot
 import com.plot.api.artifact.workflow.model.SourceProvider
-import com.plot.api.routine.AgentBudgetSnapshot
-import com.plot.api.routine.AgentRunInputRecord
-import com.plot.api.routine.AgentRunRecord
+import com.plot.api.agent.AgentBudgetSnapshot
+import com.plot.api.agent.AgentRunInputRecord
+import com.plot.api.agent.AgentRunRecord
 import java.security.MessageDigest
 import java.time.Instant
 import java.util.HexFormat

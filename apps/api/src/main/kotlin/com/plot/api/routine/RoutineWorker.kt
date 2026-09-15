@@ -1,5 +1,13 @@
 package com.plot.api.routine
 
+import com.plot.api.agent.AgentBudgetSnapshot
+import com.plot.api.agent.AgentProperties
+import com.plot.api.agent.AgentRunDispatcher
+import com.plot.api.agent.AgentRunInputKind
+import com.plot.api.agent.AgentRunInputRequest
+import com.plot.api.agent.AgentRunSourceRequest
+import com.plot.api.agent.AgentRunSourceRole
+
 import com.plot.api.common.ApiException
 import com.plot.api.entitlement.WorkspaceAccessService
 import com.plot.api.writingblock.WritingBlock
@@ -23,11 +31,11 @@ import tools.jackson.databind.ObjectMapper
 class RoutineWorker(
 	private val persistence: RoutinePersistence,
 	private val agentPersistence: RoutineAgentPersistence,
-	private val agentRunAdmissionPersistence: AgentRunAdmissionPersistence,
+	private val agentRunAdmissionPersistence: RoutineAgentAdmissionPersistence,
 	private val writingBlockRepository: WritingBlockRepository,
 	private val evidenceBudget: RoutineEvidenceBudget,
 	private val transactionExecutor: JooqTransactionExecutor,
-	private val agentProperties: RoutineAgentProperties,
+	private val agentProperties: AgentProperties,
 	private val workspaceAccessService: WorkspaceAccessService,
 	private val refreshService: GitHubRoutineRefreshService,
 	private val objectMapper: ObjectMapper,
@@ -229,7 +237,7 @@ class RoutineWorker(
 		agentRunAdmissionPersistence.dispatch(
 			workspaceId = execution.workspaceId,
 			executionId = execution.id,
-			request = AgentRunDispatchRequest(
+			request = RoutineAgentDispatchRequest(
 				instructionSnapshot = routine.instruction,
 				promptVersion = PROMPT_VERSION,
 				toolPolicyVersion = TOOL_POLICY_VERSION,

@@ -1,5 +1,9 @@
 package com.plot.api.routine
 
+import com.plot.api.agent.AgentProperties
+import com.plot.api.agent.AgentRunDispatcher
+import com.plot.api.agent.AgentRunWorker
+
 import com.plot.api.TestcontainersConfiguration
 import com.plot.api.dev.DevBootstrapService
 import com.plot.api.dev.DevContext
@@ -562,7 +566,7 @@ class GitHubChangeRoutineIntegrationTest {
 		fun noOpRoutineRunDispatcher(
 			@org.springframework.beans.factory.annotation.Qualifier("routineTaskExecutor") taskExecutor: org.springframework.core.task.TaskExecutor,
 			@Lazy worker: RoutineWorker,
-			agentProperties: RoutineAgentProperties,
+			agentProperties: AgentProperties,
 			@org.springframework.beans.factory.annotation.Qualifier("routineRetryExecutor") retryExecutor: java.util.concurrent.ScheduledExecutorService,
 		): RoutineRunDispatcher = object : RoutineRunDispatcher(taskExecutor, worker, agentProperties, retryExecutor, java.time.Clock.systemUTC()) {
 			override fun dispatch() {}
@@ -574,7 +578,7 @@ class GitHubChangeRoutineIntegrationTest {
 		fun noOpAgentRunDispatcher(
 			@org.springframework.beans.factory.annotation.Qualifier("agentRunTaskExecutor") taskExecutor: org.springframework.core.task.TaskExecutor,
 			@Lazy worker: AgentRunWorker,
-			properties: RoutineAgentProperties,
+			properties: AgentProperties,
 			@org.springframework.beans.factory.annotation.Qualifier("agentRunRetryExecutor") retryExecutor: java.util.concurrent.ScheduledExecutorService,
 		): AgentRunDispatcher = object : AgentRunDispatcher(taskExecutor, worker, properties, retryExecutor, java.time.Clock.systemUTC()) {
 			override fun dispatch() {}

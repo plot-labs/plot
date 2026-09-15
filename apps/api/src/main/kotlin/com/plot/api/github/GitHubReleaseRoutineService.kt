@@ -1,17 +1,17 @@
 package com.plot.api.github
 
 import com.plot.api.entitlement.WorkspaceAccessService
-import com.plot.api.routine.AgentBudgetSnapshot
-import com.plot.api.routine.AgentRunAdmissionPersistence
-import com.plot.api.routine.AgentRunDispatchRequest
-import com.plot.api.routine.AgentRunDispatcher
-import com.plot.api.routine.AgentRunInputKind
-import com.plot.api.routine.AgentRunInputRequest
-import com.plot.api.routine.AgentRunRecord
-import com.plot.api.routine.AgentRunSourceRequest
-import com.plot.api.routine.AgentRunSourceRole
+import com.plot.api.agent.AgentBudgetSnapshot
+import com.plot.api.routine.RoutineAgentAdmissionPersistence
+import com.plot.api.routine.RoutineAgentDispatchRequest
+import com.plot.api.agent.AgentRunDispatcher
+import com.plot.api.agent.AgentRunInputKind
+import com.plot.api.agent.AgentRunInputRequest
+import com.plot.api.agent.AgentRunRecord
+import com.plot.api.agent.AgentRunSourceRequest
+import com.plot.api.agent.AgentRunSourceRole
 import com.plot.api.routine.RoutineAgentPersistence
-import com.plot.api.routine.RoutineAgentProperties
+import com.plot.api.agent.AgentProperties
 import com.plot.api.routine.RoutineEvidenceBudget
 import com.plot.api.routine.RoutineExecutionRecord
 import com.plot.api.routine.RoutineExecutionRequest
@@ -32,10 +32,10 @@ import tools.jackson.databind.ObjectMapper
 class GitHubReleaseRoutineService(
 	private val routines: RoutinePersistence,
 	private val executions: RoutineAgentPersistence,
-	private val admission: AgentRunAdmissionPersistence,
+	private val admission: RoutineAgentAdmissionPersistence,
 	private val blocks: WritingBlockRepository,
 	private val budget: RoutineEvidenceBudget,
-	private val properties: RoutineAgentProperties,
+	private val properties: AgentProperties,
 	private val workspaceAccess: WorkspaceAccessService,
 	private val objectMapper: ObjectMapper,
 	@Lazy private val dispatcher: AgentRunDispatcher,
@@ -113,7 +113,7 @@ class GitHubReleaseRoutineService(
 		val run = admission.dispatch(
 			request.workspaceId,
 			execution.id,
-			AgentRunDispatchRequest(
+			RoutineAgentDispatchRequest(
 				instructionSnapshot = "${routine.instruction}\n\nRelease ${request.tagName}: use only the verified release seed evidence for shipped changes. Context sources are background, not additional release activity.",
 				promptVersion = "routine-agent-v1",
 				toolPolicyVersion = "read-only-v1",

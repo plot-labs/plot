@@ -1,5 +1,9 @@
 package com.plot.api.routine
 
+import com.plot.api.agent.AgentProperties
+import com.plot.api.agent.AgentRunDispatcher
+import com.plot.api.agent.AgentRunWorker
+
 import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
@@ -70,12 +74,12 @@ class RoutineBackgroundAccessIntegrationTest {
 	@Autowired private lateinit var routinePersistence: RoutinePersistence
 	@Autowired private lateinit var agentPersistence: RoutineAgentPersistence
 	@Autowired private lateinit var worker: RoutineWorker
-	@Autowired private lateinit var agentRunAdmissionPersistence: AgentRunAdmissionPersistence
+	@Autowired private lateinit var agentRunAdmissionPersistence: RoutineAgentAdmissionPersistence
 	@Autowired private lateinit var githubClient: RoutineRefreshGitHubClient
 	@Autowired private lateinit var writingBlockRepository: WritingBlockRepository
 	@Autowired private lateinit var evidenceBudget: RoutineEvidenceBudget
 	@Autowired private lateinit var transactionExecutor: JooqTransactionExecutor
-	@Autowired private lateinit var agentProperties: RoutineAgentProperties
+	@Autowired private lateinit var agentProperties: AgentProperties
 	@Autowired private lateinit var workspaceAccessService: WorkspaceAccessService
 	@Autowired private lateinit var refreshService: GitHubRoutineRefreshService
 	@Autowired private lateinit var objectMapper: ObjectMapper
@@ -611,7 +615,7 @@ class RoutineBackgroundTestConfig {
 	fun noOpRoutineRunDispatcher(
 		@org.springframework.beans.factory.annotation.Qualifier("routineTaskExecutor") taskExecutor: org.springframework.core.task.TaskExecutor,
 		@Lazy worker: RoutineWorker,
-		agentProperties: RoutineAgentProperties,
+		agentProperties: AgentProperties,
 		@org.springframework.beans.factory.annotation.Qualifier("routineRetryExecutor") retryExecutor: java.util.concurrent.ScheduledExecutorService,
 	): RoutineRunDispatcher = object : RoutineRunDispatcher(taskExecutor, worker, agentProperties, retryExecutor, java.time.Clock.systemUTC()) {
 		override fun dispatch() {}

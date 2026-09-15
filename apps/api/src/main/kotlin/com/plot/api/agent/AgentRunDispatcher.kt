@@ -1,4 +1,4 @@
-package com.plot.api.routine
+package com.plot.api.agent
 
 import com.plot.api.common.WorkerTurnRecovery
 import java.time.Clock
@@ -16,7 +16,7 @@ open class AgentRunDispatcher(
 	@Qualifier("agentRunTaskExecutor")
 	private val taskExecutor: TaskExecutor,
 	@Lazy private val worker: AgentRunWorker,
-	private val properties: RoutineAgentProperties,
+	private val properties: AgentProperties,
 	@Qualifier("agentRunRetryExecutor")
 	private val retryExecutor: ScheduledExecutorService,
 	private val clock: Clock = Clock.systemUTC(),

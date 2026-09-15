@@ -1,5 +1,7 @@
 package com.plot.api.recovery
 
+import com.plot.api.agent.AgentRunWorker
+
 import com.plot.api.TestcontainersConfiguration
 import com.plot.api.artifact.workflow.ArtifactWorkflowRunDispatcher
 import com.plot.api.config.PlotAiProperties
@@ -9,8 +11,8 @@ import com.plot.api.github.GitHubProperties
 import com.plot.api.github.GitHubReleaseDraftDispatcher
 import com.plot.api.github.GitHubReleaseDraftStatus
 import com.plot.api.github.GitHubReleaseLeasePersistence
-import com.plot.api.routine.AgentRunDispatcher
-import com.plot.api.routine.RoutineAgentProperties
+import com.plot.api.agent.AgentRunDispatcher
+import com.plot.api.agent.AgentProperties
 import com.plot.api.routine.RoutineRunDispatcher
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import java.sql.Timestamp
@@ -285,7 +287,7 @@ class RecoveryCoordinatorIntegrationTest {
 			agentRunDispatcher = makeMockAgentDispatcher { },
 			artifactWorkflowDispatcher = makeMockArtifactDispatcher { },
 			gitHubProperties = GitHubProperties(releaseAutomationEnabled = true),
-			routineAgentProperties = RoutineAgentProperties(workersEnabled = true),
+			routineAgentProperties = AgentProperties(workersEnabled = true),
 			plotAiProperties = PlotAiProperties(workerEnabled = true),
 			clock = clock,
 			meterRegistry = SimpleMeterRegistry(),
@@ -366,7 +368,7 @@ class RecoveryCoordinatorIntegrationTest {
 		return object : RoutineRunDispatcher(
 			taskExecutor = org.springframework.core.task.SyncTaskExecutor(),
 			worker = org.mockito.Mockito.mock(com.plot.api.routine.RoutineWorker::class.java),
-			agentProperties = RoutineAgentProperties(),
+			agentProperties = AgentProperties(),
 			retryExecutor = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(),
 		) {
 			override fun dispatch() {
@@ -378,8 +380,8 @@ class RecoveryCoordinatorIntegrationTest {
 	private fun makeMockAgentDispatcher(onDispatch: () -> Unit): AgentRunDispatcher {
 		return object : AgentRunDispatcher(
 			taskExecutor = org.springframework.core.task.SyncTaskExecutor(),
-			worker = org.mockito.Mockito.mock(com.plot.api.routine.AgentRunWorker::class.java),
-			properties = RoutineAgentProperties(),
+			worker = org.mockito.Mockito.mock(com.plot.api.agent.AgentRunWorker::class.java),
+			properties = AgentProperties(),
 			retryExecutor = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(),
 		) {
 			override fun dispatch() {

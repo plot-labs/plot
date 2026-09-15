@@ -1,5 +1,7 @@
 package com.plot.api.routine
 
+import com.plot.api.agent.AgentProperties
+
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 
@@ -7,7 +9,7 @@ import org.springframework.stereotype.Component
 class RoutineScheduleScanner(
 	private val worker: RoutineWorker,
 	private val dispatcher: RoutineRunDispatcher,
-	private val agentProperties: RoutineAgentProperties,
+	private val agentProperties: AgentProperties,
 ) {
 	@Scheduled(fixedDelayString = "\${plot.routines.schedule-scan-delay:PT1H}")
 	fun scan() {

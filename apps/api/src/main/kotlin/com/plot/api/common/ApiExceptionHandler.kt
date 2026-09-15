@@ -3,7 +3,7 @@ package com.plot.api.common
 import com.plot.api.artifact.workflow.ArtifactWorkflowIdempotencyConflictException
 import com.plot.api.artifact.workflow.ArtifactWorkflowSourceAccessException
 import com.plot.api.routine.RoutineExecutionIdempotencyConflictException
-import com.plot.api.routine.AgentRunIdempotencyConflictException
+import com.plot.api.agent.AgentRunIdempotencyConflictException
 import com.plot.api.artifact.ExportConfirmationRequiredException
 import com.plot.api.artifact.PublishConfirmationRequiredException
 import org.springframework.http.CacheControl

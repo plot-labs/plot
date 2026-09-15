@@ -8,7 +8,7 @@ import com.plot.api.common.WorkspacePrincipal
 import com.plot.api.content.FrozenContentContextLookup
 import com.plot.api.dev.DevBootstrapService
 import com.plot.api.dev.DevContext
-import com.plot.api.routine.AgentRunQueryPersistence
+import com.plot.api.agent.AgentRunQueryPersistence
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals

@@ -1,4 +1,6 @@
-package com.plot.api.routine
+package com.plot.api.agent
+
+import com.plot.api.routine.RoutineExecutionStateException
 
 import com.plot.api.artifact.run.ArtifactRunPersistence
 import com.plot.api.artifact.run.ArtifactRunStatus

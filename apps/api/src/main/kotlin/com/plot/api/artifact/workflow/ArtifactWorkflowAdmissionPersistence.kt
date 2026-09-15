@@ -8,7 +8,7 @@ import com.plot.api.content.ContentTypeRegistry
 import com.plot.api.entitlement.TrialPolicy
 import com.plot.api.persistence.JooqSqlExecutor
 import com.plot.api.persistence.JooqTransactionExecutor
-import com.plot.api.routine.AgentToolAccessException
+import com.plot.api.agent.AgentToolAccessException
 import java.sql.Timestamp
 import java.time.Clock
 import java.util.UUID

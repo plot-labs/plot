@@ -1,10 +1,10 @@
-package com.plot.api.routine
+package com.plot.api.agent
 
 import java.time.Duration
 import org.springframework.boot.context.properties.ConfigurationProperties
 
 @ConfigurationProperties("plot.routine-agent")
-data class RoutineAgentProperties(
+data class AgentProperties(
 	val workersEnabled: Boolean = true,
 	val autoDispatchEnabled: Boolean = true,
 	val claimTimeout: Duration = Duration.ofMinutes(2),

@@ -1,4 +1,4 @@
-package com.plot.api.routine
+package com.plot.api.agent
 
 import com.plot.api.ai.provider.AgentSourceView
 import com.plot.api.writingblock.writingBlockContentHash
@@ -27,7 +27,7 @@ data class AgentToolResult(
 @Component
 class ReadOnlyAgentTools(
 	private val sqlExecutor: JooqSqlExecutor,
-	private val properties: RoutineAgentProperties,
+	private val properties: AgentProperties,
 	private val objectMapper: ObjectMapper,
 ) {
 	fun listAllowedSources(workspaceId: UUID, agentRunId: UUID, frozenReplay: Boolean = false): AgentToolResult = AgentToolResult(

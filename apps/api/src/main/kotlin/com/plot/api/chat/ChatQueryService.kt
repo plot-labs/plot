@@ -13,14 +13,14 @@ import com.plot.api.content.ContentBrief
 import com.plot.api.dev.DevContext
 import com.plot.api.entitlement.WorkspaceAccessService
 import com.plot.api.persistence.JooqSqlExecutor
-import com.plot.api.routine.AgentRunOrigin
-import com.plot.api.routine.AgentRunQueryPersistence
-import com.plot.api.routine.AgentRunRecord
-import com.plot.api.routine.AgentRunStatus
-import com.plot.api.routine.ChatExecutionEnvelopeRow
-import com.plot.api.routine.ChatResponseVersionRow
-import com.plot.api.routine.ChatTurnRow
-import com.plot.api.routine.RoutineAgentProperties
+import com.plot.api.agent.AgentRunOrigin
+import com.plot.api.agent.AgentRunQueryPersistence
+import com.plot.api.agent.AgentRunRecord
+import com.plot.api.agent.AgentRunStatus
+import com.plot.api.agent.ChatExecutionEnvelopeRow
+import com.plot.api.agent.ChatResponseVersionRow
+import com.plot.api.agent.ChatTurnRow
+import com.plot.api.agent.AgentProperties
 import java.time.Instant
 import java.util.UUID
 import org.springframework.http.HttpStatus
@@ -34,7 +34,7 @@ class ChatQueryService(
 	private val agentRunQueryPersistence: AgentRunQueryPersistence,
 	private val workspaceAccessService: WorkspaceAccessService,
 	private val objectMapper: ObjectMapper,
-	private val properties: RoutineAgentProperties,
+	private val properties: AgentProperties,
 	private val compatibilityWriter: ChatCompatibilityWriter,
 ) {
 	fun getRun(id: UUID): ChatAgentRunResponse {

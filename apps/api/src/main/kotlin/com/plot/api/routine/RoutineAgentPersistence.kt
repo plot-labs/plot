@@ -1,5 +1,7 @@
 package com.plot.api.routine
 
+import com.plot.api.agent.AgentRunStatus
+
 import com.plot.api.common.UuidGenerator
 import com.plot.api.persistence.JooqSqlExecutor
 import com.plot.api.persistence.JooqTransactionExecutor

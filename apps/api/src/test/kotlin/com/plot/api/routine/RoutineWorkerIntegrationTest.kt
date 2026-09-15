@@ -1,5 +1,9 @@
 package com.plot.api.routine
 
+import com.plot.api.agent.AgentProperties
+import com.plot.api.agent.AgentRunDispatcher
+import com.plot.api.agent.AgentRunWorker
+
 import com.plot.api.TestcontainersConfiguration
 import com.plot.api.dev.DevBootstrapService
 import com.plot.api.dev.DevContext
@@ -36,7 +40,7 @@ class RoutineWorkerIntegrationTest {
 	@Autowired private lateinit var agentPersistence: RoutineAgentPersistence
 	@Autowired private lateinit var worker: RoutineWorker
 	@Autowired private lateinit var evidenceBudget: RoutineEvidenceBudget
-	@Autowired private lateinit var agentProperties: RoutineAgentProperties
+	@Autowired private lateinit var agentProperties: AgentProperties
 	@Autowired private lateinit var jdbcTemplate: JdbcTemplate
 	@Autowired private lateinit var devBootstrapService: DevBootstrapService
 	@Autowired private lateinit var devContext: DevContext
@@ -457,7 +461,7 @@ class RoutineWorkerIntegrationTest {
 		fun noOpAgentRunDispatcher(
 			@org.springframework.beans.factory.annotation.Qualifier("agentRunTaskExecutor") taskExecutor: org.springframework.core.task.TaskExecutor,
 			@org.springframework.context.annotation.Lazy worker: AgentRunWorker,
-			properties: RoutineAgentProperties,
+			properties: AgentProperties,
 			@org.springframework.beans.factory.annotation.Qualifier("agentRunRetryExecutor") retryExecutor: java.util.concurrent.ScheduledExecutorService,
 		): AgentRunDispatcher = object : AgentRunDispatcher(taskExecutor, worker, properties, retryExecutor, java.time.Clock.systemUTC()) {
 			override fun dispatch() {}
