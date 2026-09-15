@@ -27,6 +27,8 @@ import tools.jackson.databind.ObjectMapper
 @Component
 class AgentRunWorker(
 	private val queryPersistence: AgentRunQueryPersistence,
+	private val executionPolicy: AgentRunExecutionPolicy,
+	private val snapshots: AgentExecutionSnapshotPersistence,
 	private val executionPersistence: AgentRunExecutionPersistence,
 	private val decisionGateway: AgentDecisionGateway,
 	private val tools: ReadOnlyAgentTools,
@@ -128,7 +130,7 @@ class AgentRunWorker(
 	private fun processClaim(claim: ClaimedAgentRun) {
 		val run = queryPersistence.findAgentRun(claim.workspaceId, claim.agentRunId)
 			?: throw AgentRunClaimLostException()
-		queryPersistence.releaseRoutineGateFailure(run.workspaceId, run.id)?.let {
+		executionPolicy.releaseRoutineGateFailure(run.workspaceId, run.id)?.let {
 			throw AgentToolAccessException(it)
 		}
 		val budget = frozenBudget(run)
@@ -141,7 +143,7 @@ class AgentRunWorker(
 			executeStep(claim, run, running, budget)
 			return
 		}
-		val frozenReplay = queryPersistence.isFrozenReplay(run.workspaceId, run.id)
+		val frozenReplay = snapshots.isFrozenReplay(run.workspaceId, run.id)
 		if (!frozenReplay && !queryPersistence.allAgentSourcesActive(run.workspaceId, run.id)) {
 			throw AgentToolAccessException("SOURCE_NOT_READY")
 		}
@@ -208,7 +210,7 @@ class AgentRunWorker(
 		run: AgentRunRecord,
 		step: AgentStepRecord,
 		budget: AgentBudgetSnapshot,
-		frozenReplay: Boolean = queryPersistence.isFrozenReplay(run.workspaceId, run.id),
+		frozenReplay: Boolean = snapshots.isFrozenReplay(run.workspaceId, run.id),
 	) {
 		val arguments = objectMapper.readValue(step.argumentsJson, AgentStepArguments::class.java)
 		workspaceAccessService.requireWritable(run.workspaceId)
@@ -282,7 +284,7 @@ class AgentRunWorker(
 
 			AgentDecisionAction.CREATE_ARTIFACT -> {
 				val allInputs = queryPersistence.listAgentRunInputs(run.workspaceId, run.id).associateBy { it.id }
-				val selected = if (queryPersistence.isReleaseRun(run.workspaceId, run.id)) {
+				val selected = if (executionPolicy.isReleaseRun(run.workspaceId, run.id)) {
 					// Model-selected tool results cannot replace or expand a canonical release range.
 					allInputs.values.filter { it.inputKind == AgentRunInputKind.SEED }.sortedBy { it.orderIndex }
 				} else arguments.selectedInputIds.map { id ->

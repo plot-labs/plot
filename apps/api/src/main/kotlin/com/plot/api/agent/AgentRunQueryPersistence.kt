@@ -9,55 +9,12 @@ import org.springframework.stereotype.Component
 class AgentRunQueryPersistence(
 	private val sqlExecutor: JooqSqlExecutor,
 ) {
-	fun isReleaseRun(workspaceId: UUID, agentRunId: UUID): Boolean = sqlExecutor.queryForObject(
-		"select exists(select 1 from github_release_draft_requests where workspace_id = ? and agent_run_id = ?)",
-		Boolean::class.java, workspaceId, agentRunId,
-	) == true
-
-	fun releaseRoutineGateFailure(workspaceId: UUID, agentRunId: UUID): String? = sqlExecutor.query(
-		"""
-		select case when not routine.enabled then 'ROUTINE_DISABLED'
-		  when execution.release_request_id is null then 'GITHUB_RELEASE_RANGE_REQUIRED'
-		  when release.agent_run_id is distinct from agent.id or release.status <> 'GENERATING'
-		    then 'GITHUB_RELEASE_REQUEST_INACTIVE' end as failure
-		from agent_runs agent
-		join routines routine on routine.workspace_id = agent.workspace_id and routine.id = agent.routine_id
-		join routine_executions execution on execution.workspace_id = agent.workspace_id and execution.id = agent.routine_execution_id
-		left join github_release_draft_requests release on release.workspace_id = execution.workspace_id and release.id = execution.release_request_id
-		where agent.workspace_id = ? and agent.id = ? and routine.cadence in ('ON_GIT_TAG', 'ON_GITHUB_RELEASE')
-		""".trimIndent(),
-		{ row, _ -> row.getString("failure") }, workspaceId, agentRunId,
-	).firstOrNull()
-
 	fun findAgentRun(workspaceId: UUID, id: UUID): AgentRunRecord? = sqlExecutor.query(
 		selectAgentRunSql + " where a.workspace_id = ? and a.id = ?",
 		agentRunMapper,
 		workspaceId,
 		id,
 	).firstOrNull()
-	fun sessionExists(workspaceId: UUID, sessionId: UUID): Boolean = sqlExecutor.queryForObject(
-		"select exists(select 1 from work_sessions where workspace_id = ? and id = ?)",
-		Boolean::class.java,
-		workspaceId,
-		sessionId,
-	) ?: false
-	fun listSessionAgentRuns(workspaceId: UUID, sessionId: UUID): List<AgentRunRecord> = sqlExecutor.query(
-		selectAgentRunSql + " where a.workspace_id = ? and a.work_session_id = ? order by a.created_at, a.id",
-		agentRunMapper,
-		workspaceId,
-		sessionId,
-	)
-	fun findChatAgentRunByIdempotencyKey(
-		workspaceId: UUID,
-		idempotencyKey: String,
-		forUpdate: Boolean = false,
-	): AgentRunRecord? = sqlExecutor.query(
-		selectAgentRunSql + " where a.workspace_id = ? and a.origin = 'CHAT' and a.idempotency_key = ?" +
-			if (forUpdate) " for update" else "",
-		agentRunMapper,
-		workspaceId,
-		idempotencyKey,
-	).singleOrNull()
 	fun listAgentRunSources(workspaceId: UUID, agentRunId: UUID): List<AgentRunSourceRecord> = sqlExecutor.query(
 		"""
 		select id, workspace_id, agent_run_id, source_scope_id, source_display_name, source_role, order_index,
@@ -164,8 +121,6 @@ class AgentRunQueryPersistence(
 		return counts.first > 0 && counts.first == counts.second
 	}
 
-	fun isFrozenReplay(workspaceId: UUID, agentRunId: UUID): Boolean =
-		findResponseVersionByRunId(workspaceId, agentRunId)?.lineageParentVersionId != null
 	fun findRunningStep(workspaceId: UUID, agentRunId: UUID, sequence: Int): AgentStepRecord? =
 		findStepBySequence(workspaceId, agentRunId, sequence)?.takeIf { it.status == AgentStepStatus.RUNNING }
 	internal fun requireAgentClaim(claim: ClaimedAgentRun): AgentRunRecord {
@@ -326,142 +281,7 @@ class AgentRunQueryPersistence(
 		{ rs, _ -> rs.getTimestamp("next_attempt_at")?.toInstant() },
 	).firstOrNull()
 
-	fun listTurns(workspaceId: UUID, sessionId: UUID): List<ChatTurnRow> = sqlExecutor.query(
-		"""
-		select id, workspace_id, work_session_id, turn_index, user_message, created_by_user_id, created_at, updated_at
-		from chat_turns
-		where workspace_id = ? and work_session_id = ?
-		order by turn_index asc
-		""".trimIndent(),
-		{ rs, _ ->
-			ChatTurnRow(
-				id = requireNotNull(rs.getObject("id", UUID::class.java)),
-				workspaceId = requireNotNull(rs.getObject("workspace_id", UUID::class.java)),
-				workSessionId = requireNotNull(rs.getObject("work_session_id", UUID::class.java)),
-				turnIndex = rs.getInt("turn_index"),
-				userMessage = requireNotNull(rs.getString("user_message")),
-				createdByUserId = rs.getObject("created_by_user_id", UUID::class.java),
-				createdAt = requireNotNull(rs.getTimestamp("created_at")).toInstant(),
-				updatedAt = requireNotNull(rs.getTimestamp("updated_at")).toInstant(),
-			)
-		},
-		workspaceId,
-		sessionId,
-	)
 
-	fun listResponseVersionsForTurn(workspaceId: UUID, turnId: UUID): List<ChatResponseVersionRow> = sqlExecutor.query(
-		"""
-		select id, workspace_id, turn_id, version_index, agent_run_id, initiator_user_id, lineage_parent_version_id, created_at, updated_at
-		from chat_response_versions
-		where workspace_id = ? and turn_id = ?
-		order by version_index asc
-		""".trimIndent(),
-		{ rs, _ ->
-			ChatResponseVersionRow(
-				id = requireNotNull(rs.getObject("id", UUID::class.java)),
-				workspaceId = requireNotNull(rs.getObject("workspace_id", UUID::class.java)),
-				turnId = requireNotNull(rs.getObject("turn_id", UUID::class.java)),
-				versionIndex = rs.getInt("version_index"),
-				agentRunId = requireNotNull(rs.getObject("agent_run_id", UUID::class.java)),
-				initiatorUserId = rs.getObject("initiator_user_id", UUID::class.java),
-				lineageParentVersionId = rs.getObject("lineage_parent_version_id", UUID::class.java),
-				createdAt = requireNotNull(rs.getTimestamp("created_at")).toInstant(),
-				updatedAt = requireNotNull(rs.getTimestamp("updated_at")).toInstant(),
-			)
-		},
-		workspaceId,
-		turnId,
-	)
-
-	fun findResponseVersion(workspaceId: UUID, versionId: UUID): ChatResponseVersionRow? = sqlExecutor.query(
-		"""
-		select id, workspace_id, turn_id, version_index, agent_run_id, initiator_user_id, lineage_parent_version_id, created_at, updated_at
-		from chat_response_versions
-		where workspace_id = ? and id = ?
-		""".trimIndent(),
-		{ rs, _ ->
-			ChatResponseVersionRow(
-				id = requireNotNull(rs.getObject("id", UUID::class.java)),
-				workspaceId = requireNotNull(rs.getObject("workspace_id", UUID::class.java)),
-				turnId = requireNotNull(rs.getObject("turn_id", UUID::class.java)),
-				versionIndex = rs.getInt("version_index"),
-				agentRunId = requireNotNull(rs.getObject("agent_run_id", UUID::class.java)),
-				initiatorUserId = rs.getObject("initiator_user_id", UUID::class.java),
-				lineageParentVersionId = rs.getObject("lineage_parent_version_id", UUID::class.java),
-				createdAt = requireNotNull(rs.getTimestamp("created_at")).toInstant(),
-				updatedAt = requireNotNull(rs.getTimestamp("updated_at")).toInstant(),
-			)
-		},
-		workspaceId,
-		versionId,
-	).firstOrNull()
-
-	fun findResponseVersionByRunId(workspaceId: UUID, agentRunId: UUID): ChatResponseVersionRow? = sqlExecutor.query(
-		"""
-		select id, workspace_id, turn_id, version_index, agent_run_id, initiator_user_id, lineage_parent_version_id, created_at, updated_at
-		from chat_response_versions
-		where workspace_id = ? and agent_run_id = ?
-		""".trimIndent(),
-		{ rs, _ ->
-			ChatResponseVersionRow(
-				id = requireNotNull(rs.getObject("id", UUID::class.java)),
-				workspaceId = requireNotNull(rs.getObject("workspace_id", UUID::class.java)),
-				turnId = requireNotNull(rs.getObject("turn_id", UUID::class.java)),
-				versionIndex = rs.getInt("version_index"),
-				agentRunId = requireNotNull(rs.getObject("agent_run_id", UUID::class.java)),
-				initiatorUserId = rs.getObject("initiator_user_id", UUID::class.java),
-				lineageParentVersionId = rs.getObject("lineage_parent_version_id", UUID::class.java),
-				createdAt = requireNotNull(rs.getTimestamp("created_at")).toInstant(),
-				updatedAt = requireNotNull(rs.getTimestamp("updated_at")).toInstant(),
-			)
-		},
-		workspaceId,
-		agentRunId,
-	).firstOrNull()
-
-	fun findTurn(workspaceId: UUID, turnId: UUID): ChatTurnRow? = sqlExecutor.query(
-		"""
-		select id, workspace_id, work_session_id, turn_index, user_message, created_by_user_id, created_at, updated_at
-		from chat_turns
-		where workspace_id = ? and id = ?
-		""".trimIndent(),
-		{ rs, _ ->
-			ChatTurnRow(
-				id = requireNotNull(rs.getObject("id", UUID::class.java)),
-				workspaceId = requireNotNull(rs.getObject("workspace_id", UUID::class.java)),
-				workSessionId = requireNotNull(rs.getObject("work_session_id", UUID::class.java)),
-				turnIndex = rs.getInt("turn_index"),
-				userMessage = requireNotNull(rs.getString("user_message")),
-				createdByUserId = rs.getObject("created_by_user_id", UUID::class.java),
-				createdAt = requireNotNull(rs.getTimestamp("created_at")).toInstant(),
-				updatedAt = requireNotNull(rs.getTimestamp("updated_at")).toInstant(),
-			)
-		},
-		workspaceId,
-		turnId,
-	).firstOrNull()
-
-	fun findEnvelopeForAgentRun(workspaceId: UUID, agentRunId: UUID): ChatExecutionEnvelopeRow? = sqlExecutor.query(
-		"""
-		select id, workspace_id, agent_run_id, fingerprint_version, envelope_fingerprint, generation_settings, source_snapshot_id, created_at
-		from chat_execution_envelopes
-		where workspace_id = ? and agent_run_id = ?
-		""".trimIndent(),
-		{ rs, _ ->
-			ChatExecutionEnvelopeRow(
-				id = requireNotNull(rs.getObject("id", UUID::class.java)),
-				workspaceId = requireNotNull(rs.getObject("workspace_id", UUID::class.java)),
-				agentRunId = requireNotNull(rs.getObject("agent_run_id", UUID::class.java)),
-				fingerprintVersion = rs.getInt("fingerprint_version"),
-				envelopeFingerprint = requireNotNull(rs.getString("envelope_fingerprint")),
-				generationSettingsJson = rs.getString("generation_settings") ?: "{}",
-				sourceSnapshotId = rs.getObject("source_snapshot_id", UUID::class.java),
-				createdAt = requireNotNull(rs.getTimestamp("created_at")).toInstant(),
-			)
-		},
-		workspaceId,
-		agentRunId,
-	).firstOrNull()
 }
 
 data class AgentArtifactRecord(
@@ -469,38 +289,4 @@ data class AgentArtifactRecord(
 	val status: String,
 	val title: String?,
 	val updatedAt: Instant,
-)
-
-data class ChatTurnRow(
-	val id: UUID,
-	val workspaceId: UUID,
-	val workSessionId: UUID,
-	val turnIndex: Int,
-	val userMessage: String,
-	val createdByUserId: UUID?,
-	val createdAt: Instant,
-	val updatedAt: Instant,
-)
-
-data class ChatResponseVersionRow(
-	val id: UUID,
-	val workspaceId: UUID,
-	val turnId: UUID,
-	val versionIndex: Int,
-	val agentRunId: UUID,
-	val initiatorUserId: UUID?,
-	val lineageParentVersionId: UUID?,
-	val createdAt: Instant,
-	val updatedAt: Instant,
-)
-
-data class ChatExecutionEnvelopeRow(
-	val id: UUID,
-	val workspaceId: UUID,
-	val agentRunId: UUID,
-	val fingerprintVersion: Int,
-	val envelopeFingerprint: String,
-	val generationSettingsJson: String,
-	val sourceSnapshotId: UUID?,
-	val createdAt: Instant,
 )

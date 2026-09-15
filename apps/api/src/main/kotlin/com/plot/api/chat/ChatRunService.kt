@@ -1,5 +1,6 @@
 package com.plot.api.chat
 
+import com.plot.api.agent.AgentExecutionSnapshotPersistence
 import com.plot.api.artifact.dto.ReplicateContentRequest
 import com.plot.api.chat.dto.ChatAgentRunResponse
 import com.plot.api.chat.dto.ChatResponseVersionDto
@@ -44,6 +45,8 @@ class ChatRunService(
 	private val transactionExecutor: JooqTransactionExecutor,
 	private val uuidGenerator: UuidGenerator,
 	private val agentRunQueryPersistence: AgentRunQueryPersistence,
+	private val chatPersistence: ChatPersistence,
+	private val snapshots: AgentExecutionSnapshotPersistence,
 	private val tools: ReadOnlyAgentTools,
 	private val properties: AgentProperties,
 	private val objectMapper: ObjectMapper,
@@ -513,14 +516,14 @@ class ChatRunService(
 			)
 
 			// 1. Find target version and turn first to identify context
-			val targetVersion = agentRunQueryPersistence.findResponseVersion(workspaceId, targetVersionId)
+			val targetVersion = chatPersistence.findResponseVersion(workspaceId, targetVersionId)
 				?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Target response version not found")
-			val turn = agentRunQueryPersistence.findTurn(workspaceId, targetVersion.turnId)
+			val turn = chatPersistence.findTurn(workspaceId, targetVersion.turnId)
 				?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Turn not found")
 
 			// 2. Check idempotency under lock
 			findExisting(workspaceId, key)?.let { existing ->
-				val existingVersion = agentRunQueryPersistence.findResponseVersionByRunId(workspaceId, existing.id)
+				val existingVersion = chatPersistence.findResponseVersionByRunId(workspaceId, existing.id)
 				if (existingVersion != null && existingVersion.turnId == turn.id) {
 					return@execute queries.getVersion(existingVersion.id)
 				}
@@ -544,12 +547,12 @@ class ChatRunService(
 			)
 
 			// 4. Re-evaluate eligibility under lock
-			val allTurns = agentRunQueryPersistence.listTurns(workspaceId, turn.workSessionId)
+			val allTurns = chatPersistence.listTurns(workspaceId, turn.workSessionId)
 			val maxTurnIndex = allTurns.maxOfOrNull { it.turnIndex } ?: 0
 			if (turn.turnIndex != maxTurnIndex) {
 				throw ApiException(HttpStatus.CONFLICT, "RETRY_INELIGIBLE", "Only the latest turn can be retried")
 			}
-			val versions = agentRunQueryPersistence.listResponseVersionsForTurn(workspaceId, turn.id)
+			val versions = chatPersistence.listResponseVersionsForTurn(workspaceId, turn.id)
 			val maxVersionIndex = versions.maxOfOrNull { it.versionIndex } ?: 0
 			if (targetVersion.versionIndex != maxVersionIndex) {
 				throw ApiException(HttpStatus.CONFLICT, "RETRY_INELIGIBLE", "Only the newest response version can be retried")
@@ -558,9 +561,9 @@ class ChatRunService(
 			if (targetRun.status == AgentRunStatus.QUEUED || targetRun.status == AgentRunStatus.RUNNING) {
 				throw ApiException(HttpStatus.CONFLICT, "RETRY_INELIGIBLE", "Current response is still in progress")
 			}
-			val targetEnvelope = agentRunQueryPersistence.findEnvelopeForAgentRun(workspaceId, targetVersion.agentRunId)
+			val targetEnvelope = snapshots.findEnvelopeForAgentRun(workspaceId, targetVersion.agentRunId)
 				?: throw ApiException(HttpStatus.CONFLICT, "RETRY_INELIGIBLE", "Execution envelope is incomplete")
-			if (!queries.hasCompleteFrozenEnvelope(workspaceId, targetRun.id, targetEnvelope)) {
+			if (!snapshots.hasCompleteFrozenEnvelope(workspaceId, targetRun.id, targetEnvelope)) {
 				throw ApiException(HttpStatus.CONFLICT, "RETRY_INELIGIBLE", "Execution envelope is incomplete")
 			}
 
@@ -605,7 +608,7 @@ class ChatRunService(
 			)
 			if (inserted == 0) {
 				val raced = requireNotNull(findExisting(workspaceId, key))
-				val racedVersion = agentRunQueryPersistence.findResponseVersionByRunId(workspaceId, raced.id)
+				val racedVersion = chatPersistence.findResponseVersionByRunId(workspaceId, raced.id)
 				if (racedVersion != null && racedVersion.turnId == turn.id) {
 					return@execute queries.getVersion(racedVersion.id)
 				}
@@ -640,22 +643,9 @@ class ChatRunService(
 
 			// 7. Insert new chat_execution_envelopes row
 			val newEnvelopeId = uuidGenerator.next()
-			sqlExecutor.update(
-				"""
-				insert into chat_execution_envelopes (
-				  id, workspace_id, agent_run_id, fingerprint_version, envelope_fingerprint,
-				  generation_settings, source_snapshot_id, created_at
-				) values (?, ?, ?, ?, ?, ?::jsonb, ?, ?)
-				on conflict (workspace_id, agent_run_id) do nothing
-				""".trimIndent(),
-				newEnvelopeId,
-				workspaceId,
-				newRunId,
-				targetEnvelope.fingerprintVersion,
-				retryFingerprint,
-				targetEnvelope.generationSettingsJson,
-				targetEnvelope.sourceSnapshotId,
-				Timestamp.from(now),
+			snapshots.insertEnvelope(
+				newEnvelopeId, workspaceId, newRunId, targetEnvelope.fingerprintVersion,
+				retryFingerprint, targetEnvelope.generationSettingsJson, targetEnvelope.sourceSnapshotId, now,
 			)
 
 			// 8. Clone sources from targetRun
@@ -717,20 +707,7 @@ class ChatRunService(
 			}
 
 			// 10. Clone tool transcript entries (if any)
-			sqlExecutor.update(
-				"""
-				insert into chat_execution_transcript_entries (
-				  id, workspace_id, envelope_id, call_index, tool_name, normalized_arguments, bounded_result, adopted_input_hash, created_at
-				)
-				select gen_random_uuid(), workspace_id, ?, call_index, tool_name, normalized_arguments, bounded_result, adopted_input_hash, ?
-				from chat_execution_transcript_entries
-				where workspace_id = ? and envelope_id = ?
-				""".trimIndent(),
-				newEnvelopeId,
-				Timestamp.from(now),
-				workspaceId,
-				targetEnvelope.id,
-			)
+			snapshots.copyTranscript(workspaceId, targetEnvelope.id, newEnvelopeId, now)
 
 			// 11. Dispatch
 			scheduleAgentRunDispatchAfterCommit()
@@ -866,7 +843,7 @@ class ChatRunService(
 	}
 
 	private fun findExisting(workspaceId: UUID, key: String): AgentRunRecord? =
-		agentRunQueryPersistence.findChatAgentRunByIdempotencyKey(workspaceId, key, forUpdate = true)
+		chatPersistence.findChatAgentRunByIdempotencyKey(workspaceId, key, forUpdate = true)
 
 	private fun fingerprint(request: CreateChatAgentRunRequest, brief: ContentBrief?): String {
 		val canonical = buildString {

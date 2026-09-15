@@ -1,10 +1,8 @@
 package com.plot.api.agent
 
-import com.plot.api.routine.RoutineExecutionStateException
 
 import com.plot.api.artifact.run.ArtifactRunPersistence
 import com.plot.api.artifact.run.ArtifactRunStatus
-import com.plot.api.chat.ChatCompatibilityWriter
 import com.plot.api.common.UuidGenerator
 import com.plot.api.github.GitHubReleaseReconciliationTrigger
 import com.plot.api.persistence.JooqSqlExecutor
@@ -35,7 +33,8 @@ class AgentRunExecutionPersistence(
 	@Lazy private val releaseReconciliation: GitHubReleaseReconciliationTrigger? = null,
 	dslContext: DSLContext,
 	private val clock: Clock? = null,
-	private val compatibilityWriter: ChatCompatibilityWriter,
+	private val snapshots: AgentExecutionSnapshotPersistence,
+	private val completionProjection: AgentRunCompletionProjection,
 ) {
 	private val dsl: DSLContext = dslContext.configuration()
 		.derive(dslContext.settings().withRenderSchema(false))
@@ -224,7 +223,7 @@ class AgentRunExecutionPersistence(
 		queryPersistence.requireAllAgentSourcesActiveForUpdate(
 			claim.workspaceId,
 			claim.agentRunId,
-			allowDisconnectedConnection = queryPersistence.isFrozenReplay(claim.workspaceId, claim.agentRunId),
+			allowDisconnectedConnection = snapshots.isFrozenReplay(claim.workspaceId, claim.agentRunId),
 		)
 		if (run.modelCallCount >= maxModelCalls) {
 			throw AgentRunBudgetExceededException("AGENT_MODEL_CALL_LIMIT")
@@ -253,14 +252,14 @@ class AgentRunExecutionPersistence(
 		queryPersistence.requireAllAgentSourcesActiveForUpdate(
 			claim.workspaceId,
 			claim.agentRunId,
-			allowDisconnectedConnection = queryPersistence.isFrozenReplay(claim.workspaceId, claim.agentRunId),
+			allowDisconnectedConnection = snapshots.isFrozenReplay(claim.workspaceId, claim.agentRunId),
 		)
 		require(request.agentRunId == claim.agentRunId) { "Agent step belongs to another run" }
 		require(request.sequence == run.currentStep) { "Agent step sequence is stale" }
 		require(request.status == AgentStepStatus.RUNNING) { "Reserved Agent step must be running" }
 		queryPersistence.findStepBySequence(claim.workspaceId, claim.agentRunId, request.sequence)?.let { existing ->
 			if (existing.idempotencyKey != request.idempotencyKey || existing.kind != request.kind) {
-				throw RoutineExecutionStateException("Agent step idempotency conflict")
+				throw AgentRunStateException("Agent step idempotency conflict")
 			}
 			return@execute existing
 		}
@@ -312,7 +311,7 @@ class AgentRunExecutionPersistence(
 	): AgentStepRecord = transactionExecutor.execute {
 		val run = queryPersistence.requireAgentClaim(claim)
 		val step = findStepForUpdate(claim.workspaceId, claim.agentRunId, stepId)
-			?: throw RoutineExecutionStateException("Agent step was not found")
+			?: throw AgentRunStateException("Agent step was not found")
 		require(step.sequence == run.currentStep && step.kind == AgentStepKind.READ_TOOL) {
 			"Agent read step is stale"
 		}
@@ -320,7 +319,7 @@ class AgentRunExecutionPersistence(
 		queryPersistence.requireAllAgentSourcesActiveForUpdate(
 			claim.workspaceId,
 			claim.agentRunId,
-			allowDisconnectedConnection = queryPersistence.isFrozenReplay(claim.workspaceId, claim.agentRunId),
+			allowDisconnectedConnection = snapshots.isFrozenReplay(claim.workspaceId, claim.agentRunId),
 		)
 		if (sourceScopeId != null && sourceStatusChangedAt != null) {
 			requireSourceVersion(claim.workspaceId, claim.agentRunId, sourceScopeId, sourceStatusChangedAt)
@@ -356,7 +355,7 @@ class AgentRunExecutionPersistence(
 				AGENT_STEPS.STATUS.eq(AgentStepStatus.RUNNING.name),
 			)
 			.execute()
-		compatibilityWriter.recordTranscriptEntry(
+		snapshots.recordTranscriptEntry(
 			workspaceId = claim.workspaceId,
 			agentRunId = claim.agentRunId,
 			callIndex = step.sequence,
@@ -378,7 +377,7 @@ class AgentRunExecutionPersistence(
 	): AgentStepRecord = transactionExecutor.execute {
 		val run = queryPersistence.requireAgentClaim(claim)
 		val step = findStepForUpdate(claim.workspaceId, claim.agentRunId, stepId)
-			?: throw RoutineExecutionStateException("Agent step was not found")
+			?: throw AgentRunStateException("Agent step was not found")
 		require(step.sequence == run.currentStep) { "Agent step is stale" }
 		require(step.status == AgentStepStatus.RUNNING) { "Agent step is not running" }
 		val stepUpdated = dsl.update(AGENT_STEPS)
@@ -394,7 +393,7 @@ class AgentRunExecutionPersistence(
 			)
 			.execute()
 		if (stepUpdated != 1) throw AgentRunClaimLostException()
-		compatibilityWriter.recordTranscriptEntry(
+		snapshots.recordTranscriptEntry(
 			workspaceId = claim.workspaceId,
 			agentRunId = claim.agentRunId,
 			callIndex = step.sequence,
@@ -417,7 +416,7 @@ class AgentRunExecutionPersistence(
 	): AgentStepRecord = transactionExecutor.execute {
 		val run = queryPersistence.requireAgentClaim(claim)
 		val step = findStepForUpdate(claim.workspaceId, claim.agentRunId, stepId)
-			?: throw RoutineExecutionStateException("Agent step was not found")
+			?: throw AgentRunStateException("Agent step was not found")
 		require(step.sequence == run.currentStep && step.kind == AgentStepKind.ARTIFACT_HANDOFF) {
 			"Agent handoff step is stale"
 		}
@@ -429,7 +428,7 @@ class AgentRunExecutionPersistence(
 			claim.agentRunId,
 			requireNotNull(run.workSessionId),
 		) == 1
-		if (!artifactWorkflowBelongsToAgent) throw RoutineExecutionStateException("ArtifactWorkflow handoff belongs to another Agent run")
+		if (!artifactWorkflowBelongsToAgent) throw AgentRunStateException("ArtifactWorkflow handoff belongs to another Agent run")
 		val stepUpdated = dsl.update(AGENT_STEPS)
 			.set(AGENT_STEPS.STATUS, AgentStepStatus.SUCCEEDED.name)
 			.set(AGENT_STEPS.GENERATION_RUN_ID, artifactWorkflowRunId)
@@ -495,31 +494,10 @@ class AgentRunExecutionPersistence(
 			claim.workspaceId,
 			claim.agentRunId,
 		) == 1
-		if (!materialized) throw RoutineExecutionStateException("Agent artifact workflow is not materialized")
+		if (!materialized) throw AgentRunStateException("Agent artifact workflow is not materialized")
 		val completed = terminalizeAgentRun(claim, AgentRunStatus.SUCCEEDED, null, now)
-		commitRoutineCursor(run, now)
+		completionProjection.commitSuccessfulInput(run, now)
 		completed
-	}
-
-	private fun commitRoutineCursor(run: AgentRunRecord, now: Instant) {
-		if (run.origin != AgentRunOrigin.ROUTINE || run.routineExecutionId == null || run.routineId == null) return
-		sqlExecutor.update(
-			"""
-			update routines routine
-			set activity_cursor_sequence = greatest(coalesce(routine.activity_cursor_sequence, 0), execution.activity_cursor_after),
-			    updated_at = ?
-			from routine_executions execution
-			where routine.workspace_id = ? and routine.id = ?
-			  and execution.workspace_id = routine.workspace_id and execution.id = ?
-			  and execution.routine_id = routine.id
-			  and execution.trigger_kind <> 'GITHUB'
-			  and execution.activity_cursor_after is not null
-			""".trimIndent(),
-			Timestamp.from(now),
-			run.workspaceId,
-			run.routineId,
-			run.routineExecutionId,
-		)
 	}
 
 	private fun findStepForUpdate(workspaceId: UUID, agentRunId: UUID, stepId: UUID): AgentStepRecord? =
@@ -623,7 +601,7 @@ class AgentRunExecutionPersistence(
 				.execute()
 		}
 		return queryPersistence.findAdoptedInput(workspaceId, agentRunId, input)
-			?: throw RoutineExecutionStateException("Agent read result could not be adopted")
+			?: throw AgentRunStateException("Agent read result could not be adopted")
 	}
 	private fun claimRunningAgentRun(run: AgentRunRecord, workerId: String, now: Instant): ClaimedAgentRun? {
 		val updated = dsl.update(AGENT_RUNS)
@@ -727,12 +705,8 @@ class AgentRunExecutionPersistence(
 			)
 			.execute()
 		if (updated != 1) throw AgentRunClaimLostException()
-		sqlExecutor.update(
-			"update chat_response_versions set is_active = false, updated_at = now() where workspace_id = ? and agent_run_id = ?",
-			claim.workspaceId,
-			claim.agentRunId,
-		)
-		projectRoutineTerminal(run, status, errorCode, now)
+		completionProjection.deactivateResponse(claim.workspaceId, claim.agentRunId)
+		completionProjection.projectTerminal(run, status, errorCode, now)
 		val terminal = requireNotNull(queryPersistence.findAgentRun(claim.workspaceId, claim.agentRunId))
 		notifyReleaseReconciliationAfterCommit(terminal.workspaceId, terminal.id)
 		terminal
@@ -751,109 +725,6 @@ class AgentRunExecutionPersistence(
 		} else {
 			releaseReconciliation?.afterAgentRunTerminal(workspaceId, agentRunId)
 		}
-	}
-
-	private fun projectRoutineTerminal(
-		run: AgentRunRecord,
-		status: AgentRunStatus,
-		errorCode: String?,
-		now: Instant,
-	) {
-		if (run.origin != AgentRunOrigin.ROUTINE) return
-		val executionId = run.routineExecutionId ?: return
-		val routineId = run.routineId ?: return
-		if (status == AgentRunStatus.FAILED) {
-			val code = requireNotNull(errorCode)
-			sqlExecutor.update(
-				"""
-				update routine_executions
-				set status = 'FAILED', error_code = ?, finished_at = coalesce(finished_at, ?),
-				    transition_version = transition_version + 1, updated_at = ?
-				where workspace_id = ? and id = ? and status = 'DISPATCHED'
-				""".trimIndent(),
-				code,
-				Timestamp.from(now),
-				Timestamp.from(now),
-				run.workspaceId,
-				executionId,
-			)
-			projectRoutineRow(run, executionId, routineId, "FAILED", code, null, now)
-			return
-		}
-		val generationRunId = sqlExecutor.queryForObject(
-			"""
-			select generation_run_id
-			from agent_steps
-			where workspace_id = ? and agent_run_id = ? and generation_run_id is not null
-			order by sequence desc, id desc
-			limit 1
-			""".trimIndent(),
-			UUID::class.java,
-			run.workspaceId,
-			run.id,
-		)
-		val artifactStatus = sqlExecutor.queryForObject(
-			"""
-			select status
-			from artifact_runs
-			where workspace_id = ? and agent_run_id = ?
-			order by created_at desc, id desc
-			limit 1
-			""".trimIndent(),
-			String::class.java,
-			run.workspaceId,
-			run.id,
-		) ?: "READY"
-		projectRoutineRow(run, executionId, routineId, artifactStatus, null, generationRunId, now)
-	}
-
-	private fun projectRoutineRow(
-		run: AgentRunRecord,
-		executionId: UUID,
-		routineId: UUID,
-		status: String,
-		errorCode: String?,
-		generationRunId: UUID?,
-		now: Instant,
-	) {
-		sqlExecutor.update(
-			"""
-			update routines
-			set last_run_at = ?, last_execution_id = ?, last_generation_run_id = ?,
-			    last_run_status = ?, last_error_code = ?,
-			    active_execution_id = case when active_execution_id = ? then null else active_execution_id end,
-			    claimed_by = case when active_execution_id = ? then null else claimed_by end,
-			    claimed_at = case when active_execution_id = ? then null else claimed_at end,
-			    transition_version = transition_version + 1, updated_at = ?
-			where workspace_id = ? and id = ?
-			  and (active_execution_id is null or active_execution_id = ?)
-			  and (
-			    last_execution_id = ?
-			    or last_run_at is null
-			    or last_run_at < ?
-			    or (last_run_at = ? and (last_execution_id is null or last_execution_id < ?))
-			  )
-			""".trimIndent(),
-			Timestamp.from(now),
-			executionId,
-			generationRunId,
-			status,
-			errorCode,
-			executionId,
-			executionId,
-			executionId,
-			Timestamp.from(now),
-			run.workspaceId,
-			routineId,
-			executionId,
-			executionId,
-			Timestamp.from(now),
-			Timestamp.from(now),
-			executionId,
-		)
-		// A newer execution may already own the public Routine projection. The
-		// terminal agent run remains authoritative; preserving the newer
-		// projection is the intended result, not a claim failure.
 	}
 
 	private fun failExhaustedStaleAgentRuns(staleBefore: Instant, now: Instant) {
@@ -898,13 +769,9 @@ class AgentRunExecutionPersistence(
 					AGENT_RUNS.STATUS.eq(AgentRunStatus.RUNNING.name),
 				)
 				.execute()
-			sqlExecutor.update(
-				"update chat_response_versions set is_active = false, updated_at = now() where workspace_id = ? and agent_run_id = ?",
-				workspaceId,
-				agentRunId,
-			)
+			completionProjection.deactivateResponse(requireNotNull(workspaceId), requireNotNull(agentRunId))
 			queryPersistence.findAgentRun(requireNotNull(workspaceId), requireNotNull(agentRunId))?.let { run ->
-				projectRoutineTerminal(run, AgentRunStatus.FAILED, "AGENT_RETRY_EXHAUSTED", now)
+				completionProjection.projectTerminal(run, AgentRunStatus.FAILED, "AGENT_RETRY_EXHAUSTED", now)
 			}
 		}
 	}

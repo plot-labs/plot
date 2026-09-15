@@ -1,7 +1,7 @@
 package com.plot.api.artifact.workflow
 
 import com.plot.api.artifact.run.ArtifactRunPersistence
-import com.plot.api.chat.ChatCompatibilityWriter
+import com.plot.api.agent.AgentExecutionSnapshotPersistence
 import com.plot.api.common.ApiException
 import com.plot.api.content.ContentType
 import com.plot.api.content.ContentTypeRegistry
@@ -26,7 +26,7 @@ class ArtifactWorkflowAdmissionPersistence(
 	private val materializationPersistence: ArtifactWorkflowMaterializationPersistence,
 	private val contentTypeRegistry: ContentTypeRegistry,
 	private val clock: Clock = Clock.systemUTC(),
-	private val compatibilityWriter: ChatCompatibilityWriter,
+	private val snapshots: AgentExecutionSnapshotPersistence,
 ) {
 	fun findIdempotentRun(
 		workspaceId: UUID,
@@ -170,7 +170,7 @@ class ArtifactWorkflowAdmissionPersistence(
 				agentRunId,
 			)
 			if (snapshotId != null) {
-				compatibilityWriter.linkSourceSnapshot(reservation.workspaceId, agentRunId, snapshotId)
+				snapshots.linkSourceSnapshot(reservation.workspaceId, agentRunId, snapshotId)
 			}
 		}
 		reservation.state.evidence.forEach { materializationPersistence.insertEvidence(reservation.workspaceId, it) }
