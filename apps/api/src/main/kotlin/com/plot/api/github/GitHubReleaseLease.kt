@@ -3,7 +3,6 @@ package com.plot.api.github
 import java.time.Clock
 import java.time.Duration
 import java.util.concurrent.ScheduledExecutorService
-import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong

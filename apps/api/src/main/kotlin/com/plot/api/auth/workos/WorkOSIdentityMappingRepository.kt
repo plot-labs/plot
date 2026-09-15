@@ -30,19 +30,6 @@ class WorkOSIdentityMappingRepository(
 		workOSUserId,
 	)
 
-	fun findByPlotUserId(plotUserId: UUID): WorkOSIdentityMapping? = sql.queryForObject(
-		SELECT_BY_PLOT_USER,
-		{ row, _ ->
-			WorkOSIdentityMapping(
-				workOSUserId = requireNotNull(row.getString("workos_user_id")),
-				plotUserId = requireNotNull(row.getObject("plot_user_id", UUID::class.java)),
-				email = requireNotNull(row.getString("email")),
-				emailVerified = row.getBoolean("email_verified"),
-			)
-		},
-		plotUserId,
-	)
-
 	fun save(mapping: WorkOSIdentityMapping, now: Instant) {
 		sql.update(
 			"""
@@ -69,11 +56,6 @@ class WorkOSIdentityMappingRepository(
 			select workos_user_id, plot_user_id, email, email_verified
 			from workos_identity_mappings
 			where workos_user_id = ?
-			"""
-		const val SELECT_BY_PLOT_USER = """
-			select workos_user_id, plot_user_id, email, email_verified
-			from workos_identity_mappings
-			where plot_user_id = ?
 			"""
 	}
 }

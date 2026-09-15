@@ -11,8 +11,5 @@ enum class ContentType {
 			return entries.firstOrNull { it.name.equals(raw.trim(), ignoreCase = true) }
 				?: throw IllegalArgumentException("Unsupported content type: $raw")
 		}
-
-		fun parseOrNull(raw: String?): ContentType? =
-			runCatching { parse(raw) }.getOrNull()
 	}
 }

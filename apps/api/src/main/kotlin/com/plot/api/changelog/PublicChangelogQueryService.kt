@@ -1,7 +1,6 @@
 package com.plot.api.changelog
 
 import com.plot.api.changelog.dto.PublicChangelogEntryDetailResponse
-import com.plot.api.changelog.dto.PublicChangelogEntrySummaryResponse
 import com.plot.api.changelog.dto.PublicChangelogResponse
 import com.plot.api.common.ApiException
 import com.plot.api.workspace.WorkspaceRepository

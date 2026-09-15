@@ -7,7 +7,6 @@ import com.plot.api.github.GitHubWebhookCommit
 import com.plot.api.github.GitHubWebhookService
 import com.plot.api.github.ParsedGitHubWebhook
 import java.sql.Timestamp
-import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 import kotlin.test.assertEquals
@@ -512,12 +511,6 @@ class GitHubChangeRoutineIntegrationTest {
 		UUID::class.java,
 		devContext.devWorkspaceId,
 		routineId,
-		deliveryId,
-	)!!
-
-	private fun deliveryUuid(deliveryId: String): UUID = jdbcTemplate.queryForObject(
-		"select id from github_webhook_deliveries where external_delivery_id = ?",
-		UUID::class.java,
 		deliveryId,
 	)!!
 

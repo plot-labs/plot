@@ -39,29 +39,6 @@ class SourceScopeRepository(
 		.fetchOne()
 		?.toModel()
 
-	fun findAllByWorkspaceIdOrderByCreatedAtDesc(workspaceId: UUID): List<SourceScope> = dsl
-		.select(
-			SOURCE_SCOPES.ID,
-			SOURCE_SCOPES.WORKSPACE_ID,
-			SOURCE_SCOPES.SOURCE_NAMESPACE_ID,
-			SOURCE_SCOPES.PROVIDER,
-			SOURCE_SCOPES.SCOPE_SEMANTICS,
-			SOURCE_SCOPES.SCOPE_KIND,
-			SOURCE_SCOPES.EXTERNAL_SCOPE_KEY,
-			SOURCE_SCOPES.EXTERNAL_KEY,
-			SOURCE_SCOPES.DISPLAY_NAME,
-			SOURCE_SCOPES.URL,
-			SOURCE_SCOPES.METADATA,
-			SOURCE_SCOPES.STATUS,
-			SOURCE_SCOPES.CREATED_AT,
-			SOURCE_SCOPES.UPDATED_AT,
-		)
-		.from(SOURCE_SCOPES)
-		.where(SOURCE_SCOPES.WORKSPACE_ID.eq(workspaceId))
-		.orderBy(SOURCE_SCOPES.CREATED_AT.desc())
-		.fetch()
-		.map { it.toModel() }
-
 	private fun Record.toModel() = SourceScope(
 		id = requireNotNull(get(SOURCE_SCOPES.ID)),
 		workspaceId = requireNotNull(get(SOURCE_SCOPES.WORKSPACE_ID)),

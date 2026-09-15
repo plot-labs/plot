@@ -1,6 +1,5 @@
 package com.plot.api.auth.workos
 
-import com.plot.api.auth.WorkOSAuthProperties
 import com.workos.common.exceptions.NotFoundException
 import com.workos.common.exceptions.WorkOSException
 import com.workos.types.OrganizationMembershipStatus

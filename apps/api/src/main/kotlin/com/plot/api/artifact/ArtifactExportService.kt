@@ -1,6 +1,5 @@
 package com.plot.api.artifact
 
-import com.plot.api.common.ApiException
 import com.plot.api.common.UuidGenerator
 import com.plot.api.artifact.dto.ContentExportResponse
 import com.plot.api.artifact.dto.ExportDisposition
@@ -15,7 +14,6 @@ import java.sql.Timestamp
 import java.time.Clock
 import java.util.HexFormat
 import java.util.UUID
-import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import tools.jackson.databind.ObjectMapper
 

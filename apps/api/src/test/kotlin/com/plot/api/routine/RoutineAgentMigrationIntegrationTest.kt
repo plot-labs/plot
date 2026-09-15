@@ -15,7 +15,6 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import org.flywaydb.core.Flyway
-import org.flywaydb.core.api.MigrationVersion
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -590,33 +589,6 @@ class RoutineAgentMigrationIntegrationTest {
 		contentHash = "activity-hash",
 		capturedAt = fixture.createdAt,
 	)
-
-	private fun insertSeedInput(fixture: Fixture, agentRunId: UUID, orderIndex: Int, activitySequence: Long) {
-		schemaJdbcTemplate.update(
-			"""
-			insert into $schema.agent_run_inputs (
-			  id, workspace_id, agent_run_id, routine_id, source_scope_id, writing_block_id,
-			  source_provider, source_kind, source_label,
-			  input_kind, order_index, activity_sequence, snapshot_title, snapshot_body,
-			  snapshot_excerpt, original_url, source_created_at, source_updated_at,
-			  content_hash, captured_at
-			) values (?, ?, ?, ?, ?, ?, 'GITHUB', 'COMMIT', 'Activity', 'SEED', ?, ?, 'Activity', 'A bounded activity snapshot',
-			          'A bounded activity snapshot', 'https://github.com/acme/plot/commit/activity', ?, ?,
-			          'activity-hash', ?)
-			""".trimIndent(),
-			UUID.randomUUID(),
-			fixture.workspaceId,
-			agentRunId,
-			fixture.routineId,
-			fixture.sourceScopeId,
-			fixture.blockId,
-			orderIndex,
-			activitySequence,
-			Timestamp.from(fixture.createdAt),
-			Timestamp.from(fixture.createdAt),
-			Timestamp.from(fixture.createdAt),
-		)
-	}
 
 	private fun insertArtifactWorkflowRun(fixture: Fixture, agentRunId: UUID, status: String, idempotencyKey: String): UUID {
 		val id = UUID.randomUUID()

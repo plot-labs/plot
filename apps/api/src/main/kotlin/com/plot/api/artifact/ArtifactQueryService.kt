@@ -1,20 +1,15 @@
 package com.plot.api.artifact
 import com.plot.api.common.ApiException
-import com.plot.api.common.UuidGenerator
 import com.plot.api.artifact.dto.ContentCitationResponse
-import com.plot.api.artifact.dto.ContentExportResponse
 import com.plot.api.artifact.dto.ArtifactPageResponse
 import com.plot.api.artifact.dto.ArtifactPublicationResponse
 import com.plot.api.artifact.dto.ArtifactResponse
 import com.plot.api.artifact.dto.ArtifactSummaryResponse
 import com.plot.api.artifact.dto.ContentSentenceResponse
 import com.plot.api.artifact.dto.ContentSourceResponse
-import com.plot.api.artifact.dto.ContentStatementInput
 import com.plot.api.artifact.dto.ContentVariantResponse
 import com.plot.api.artifact.dto.ContentVariantHistoryItemResponse
 import com.plot.api.artifact.dto.ContentVariantHistoryDetailResponse
-import com.plot.api.artifact.dto.ExportDisposition
-import com.plot.api.artifact.dto.ExportWarningResponse
 import com.plot.api.dev.DevContext
 import com.plot.api.artifact.workflow.model.CitationStatus
 import com.plot.api.artifact.workflow.model.EvidenceSnapshot
@@ -22,19 +17,12 @@ import com.plot.api.artifact.workflow.model.ExportSentence
 import com.plot.api.artifact.workflow.model.ExportSentenceStatus
 import com.plot.api.artifact.workflow.model.SentenceCitation
 import com.plot.api.artifact.workflow.model.SourceProvider
-import com.plot.api.artifact.workflow.model.ExportSource
 import java.net.URI
-import java.security.MessageDigest
-import java.sql.Timestamp
-import java.time.Clock
-import java.util.HexFormat
 import java.util.UUID
 import org.springframework.http.HttpStatus
 import com.plot.api.persistence.JooqSqlExecutor
-import com.plot.api.persistence.JooqTransactionExecutor
 import com.plot.api.content.ContentSourceSnapshotService
 import com.plot.api.content.ContentBrief
-import com.plot.api.persistence.SqlRow
 import org.springframework.stereotype.Service
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.ObjectMapper
@@ -135,11 +123,6 @@ class ArtifactQueryService(
 		).firstOrNull() ?: notFound()
 		val cause = historyCause(row.revisionNumber, row.createdByUserId)
 		return ContentVariantHistoryDetailResponse(row.createdAt, cause, true, loadPackForRevision("cv.id = ?", variantId, row.revisionId))
-	}
-	fun findByRun(runId: UUID): ArtifactResponse? = try {
-		loadPack("cp.generation_run_id = ?", runId)
-	} catch (_: ApiException) {
-		null
 	}
 	private fun loadPack(predicate: String, id: UUID): ArtifactResponse = loadPackForRevision(predicate, id, null)
 	internal fun artifactWorkflowRunIdForVariant(variantId: UUID): UUID = sqlExecutor.queryForObject(
@@ -455,9 +438,6 @@ class ArtifactQueryService(
 		false
 	}
 	private fun notFound(): Nothing = throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Content pack not found")
-	private fun sha256(value: String): String = HexFormat.of().formatHex(
-		MessageDigest.getInstance("SHA-256").digest(value.toByteArray(Charsets.UTF_8)),
-	)
 }
 private data class HistoryRevisionRow(
     val revisionId: UUID,

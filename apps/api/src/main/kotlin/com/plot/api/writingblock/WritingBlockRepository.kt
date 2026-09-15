@@ -5,7 +5,6 @@ import com.plot.api.persistence.generated.tables.AgentRuns.Companion.AGENT_RUNS
 import com.plot.api.persistence.generated.tables.SourceScopes.Companion.SOURCE_SCOPES
 import com.plot.api.persistence.generated.tables.WritingBlockScopes.Companion.WRITING_BLOCK_SCOPES
 import com.plot.api.persistence.generated.tables.WritingBlocks.Companion.WRITING_BLOCKS
-import java.time.OffsetDateTime
 import java.util.UUID
 import org.jooq.Condition
 import org.jooq.DSLContext

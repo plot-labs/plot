@@ -30,7 +30,6 @@ import org.springframework.transaction.support.TransactionSynchronization
 import org.springframework.transaction.support.TransactionSynchronizationManager
 import com.plot.api.persistence.JooqSqlExecutor
 import com.plot.api.persistence.JooqTransactionExecutor
-import com.plot.api.persistence.SqlRow
 import org.springframework.stereotype.Service
 import tools.jackson.databind.ObjectMapper
 

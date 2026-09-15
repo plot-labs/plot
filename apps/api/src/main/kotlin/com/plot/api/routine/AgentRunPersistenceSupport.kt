@@ -2,7 +2,6 @@ package com.plot.api.routine
 
 import com.plot.api.content.ContentType
 import com.plot.api.persistence.SqlRow
-import java.time.Instant
 import java.util.UUID
 
 internal val executionMapper = { rs: SqlRow, _: Int -> rs.toRoutineExecution() }

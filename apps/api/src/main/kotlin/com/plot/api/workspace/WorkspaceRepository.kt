@@ -47,15 +47,6 @@ class WorkspaceRepository(
 		.fetchOne()
 		?.toModel()
 
-	fun existsBySlugAndIdNot(slug: String, id: UUID): Boolean = dsl.fetchExists(
-		dsl.selectOne()
-			.from(WORKSPACES)
-			.where(
-				WORKSPACES.SLUG.eq(slug),
-				WORKSPACES.ID.ne(id),
-			),
-	)
-
 	fun save(workspace: Workspace): Workspace {
 		val updated = dsl.update(WORKSPACES)
 			.set(WORKSPACES.NAME, workspace.name)
