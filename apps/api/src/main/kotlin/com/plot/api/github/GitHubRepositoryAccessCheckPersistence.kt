@@ -1,12 +1,12 @@
 package com.plot.api.github
 
+import com.plot.api.persistence.SqlExecutor
+import com.plot.api.persistence.SqlRow
 import java.sql.Timestamp
 import java.time.Duration
 import java.time.Instant
 import java.time.OffsetDateTime
 import java.util.UUID
-import org.jooq.DSLContext
-import org.jooq.Record
 import org.springframework.dao.DataAccessException
 import org.springframework.stereotype.Repository
 import org.springframework.transaction.annotation.Transactional
@@ -54,7 +54,7 @@ class GitHubAccessCheckClaimLostException : DataAccessException("GitHub access c
 
 @Repository
 class GitHubRepositoryAccessCheckPersistence(
-	private val dsl: DSLContext,
+	private val sqlExecutor: SqlExecutor,
 ) {
 	fun find(workspaceId: UUID, sourceScopeId: UUID): GitHubRepositoryAccessCheckRecord? = fetchRows(
 		"""
@@ -169,7 +169,7 @@ class GitHubRepositoryAccessCheckPersistence(
 		from github_repository_access_checks
 		where status = 'QUEUED' and next_attempt_at is not null
 		""".trimIndent(),
-	).firstOrNull()?.get("next_attempt_at", OffsetDateTime::class.java)?.toInstant()
+	).firstOrNull()?.getObject("next_attempt_at", OffsetDateTime::class.java)?.toInstant()
 
 	fun recoverStaleClaims(
 		now: Instant,
@@ -275,7 +275,7 @@ class GitHubRepositoryAccessCheckPersistence(
 			"select source_namespace_id from source_scopes where workspace_id = ? and id = ?",
 			item.check.workspaceId,
 			item.check.sourceScopeId,
-		).firstOrNull()?.get("source_namespace_id", UUID::class.java)
+		).firstOrNull()?.getObject("source_namespace_id", UUID::class.java)
 			?: throw GitHubAccessCheckClaimLostException()
 		execute(
 			"""
@@ -343,38 +343,38 @@ class GitHubRepositoryAccessCheckPersistence(
 		Timestamp.from(now), workspaceId, sourceScopeId,
 	)
 
-	private fun Record.toAccessCheckCandidate(): GitHubRepositoryAccessCheckWorkItem {
-		val externalKey = get("external_key", String::class.java).orEmpty()
+	private fun SqlRow.toAccessCheckCandidate(): GitHubRepositoryAccessCheckWorkItem {
+		val externalKey = getString("external_key").orEmpty()
 		return GitHubRepositoryAccessCheckWorkItem(
 			check = toAccessCheck(),
-			installationId = get("installation_key", String::class.java).toLongOrNull() ?: 0L,
-			repositoryId = get("repository_key", String::class.java).toLongOrNull() ?: 0L,
+			installationId = getString("installation_key")?.toLongOrNull() ?: 0L,
+			repositoryId = getString("repository_key")?.toLongOrNull() ?: 0L,
 			owner = externalKey.substringBefore('/'),
 			repository = externalKey.substringAfter('/', ""),
 		)
 	}
 
-	private fun Record.toAccessCheck() = GitHubRepositoryAccessCheckRecord(
-		id = requireNotNull(get("id", UUID::class.java)),
-		workspaceId = requireNotNull(get("workspace_id", UUID::class.java)),
-		connectionId = requireNotNull(get("connection_id", UUID::class.java)),
-		sourceScopeId = requireNotNull(get("source_scope_id", UUID::class.java)),
-		trigger = GitHubAccessCheckTrigger.valueOf(requireNotNull(get("trigger", String::class.java))),
-		status = GitHubAccessCheckStatus.valueOf(requireNotNull(get("status", String::class.java))),
-		attemptCount = requireNotNull(get("attempt_count", Int::class.javaObjectType)),
-		transitionVersion = requireNotNull(get("transition_version", Long::class.javaObjectType)),
-		claimedBy = get("claimed_by", String::class.java),
-		claimedAt = get("claimed_at", OffsetDateTime::class.java)?.toInstant(),
-		nextAttemptAt = get("next_attempt_at", OffsetDateTime::class.java)?.toInstant(),
-		errorCode = get("error_code", String::class.java),
-		verifiedAt = get("verified_at", OffsetDateTime::class.java)?.toInstant(),
-		createdAt = requireNotNull(get("created_at", OffsetDateTime::class.java)).toInstant(),
-		updatedAt = requireNotNull(get("updated_at", OffsetDateTime::class.java)).toInstant(),
+	private fun SqlRow.toAccessCheck() = GitHubRepositoryAccessCheckRecord(
+		id = requireNotNull(getObject("id", UUID::class.java)),
+		workspaceId = requireNotNull(getObject("workspace_id", UUID::class.java)),
+		connectionId = requireNotNull(getObject("connection_id", UUID::class.java)),
+		sourceScopeId = requireNotNull(getObject("source_scope_id", UUID::class.java)),
+		trigger = GitHubAccessCheckTrigger.valueOf(requireNotNull(getString("trigger"))),
+		status = GitHubAccessCheckStatus.valueOf(requireNotNull(getString("status"))),
+		attemptCount = getInt("attempt_count"),
+		transitionVersion = getLong("transition_version"),
+		claimedBy = getString("claimed_by"),
+		claimedAt = getObject("claimed_at", OffsetDateTime::class.java)?.toInstant(),
+		nextAttemptAt = getObject("next_attempt_at", OffsetDateTime::class.java)?.toInstant(),
+		errorCode = getString("error_code"),
+		verifiedAt = getObject("verified_at", OffsetDateTime::class.java)?.toInstant(),
+		createdAt = requireNotNull(getObject("created_at", OffsetDateTime::class.java)).toInstant(),
+		updatedAt = requireNotNull(getObject("updated_at", OffsetDateTime::class.java)).toInstant(),
 	)
 
-	private fun fetchRows(sql: String, vararg bindings: Any?): List<Record> = dsl.fetch(sql, *bindings)
+	private fun fetchRows(sql: String, vararg bindings: Any?): List<SqlRow> = sqlExecutor.query(sql, *bindings)
 
-	private fun execute(sql: String, vararg bindings: Any?): Int = dsl.execute(sql, *bindings)
+	private fun execute(sql: String, vararg bindings: Any?): Int = sqlExecutor.update(sql, *bindings)
 
 	private companion object {
 		const val columns = """

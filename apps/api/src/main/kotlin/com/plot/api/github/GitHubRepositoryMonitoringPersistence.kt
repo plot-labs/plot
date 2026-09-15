@@ -1,19 +1,19 @@
 package com.plot.api.github
 
+import com.plot.api.persistence.SqlExecutor
+import com.plot.api.persistence.SqlRow
 import java.sql.Timestamp
 import java.time.Duration
 import java.time.Instant
 import java.time.OffsetDateTime
 import java.util.UUID
-import org.jooq.DSLContext
-import org.jooq.Record
 import org.springframework.dao.InvalidDataAccessApiUsageException
 import org.springframework.stereotype.Repository
 import org.springframework.transaction.annotation.Transactional
 
 @Repository
 class GitHubRepositoryMonitoringPersistence(
-	private val dsl: DSLContext,
+	private val sqlExecutor: SqlExecutor,
 ) {
 	fun activate(
 		workspaceId: UUID,
@@ -113,13 +113,13 @@ class GitHubRepositoryMonitoringPersistence(
 			Timestamp.from(now),
 		).firstOrNull()?.let { row ->
 			val monitoring = row.toMonitoring()
-			val externalKey = row.get("external_key", String::class.java).orEmpty()
+			val externalKey = row.getString("external_key").orEmpty()
 			GitHubRepositoryMonitoringWorkItem(
 				monitoring = monitoring,
-				connectionId = requireNotNull(row.get("connection_id", UUID::class.java)),
-				installationId = row.get("installation_key", String::class.java).toLongOrNull()
+				connectionId = requireNotNull(row.getObject("connection_id", UUID::class.java)),
+				installationId = row.getString("installation_key")?.toLongOrNull()
 					?: return null,
-				repositoryId = row.get("repository_key", String::class.java).toLongOrNull()
+				repositoryId = row.getString("repository_key")?.toLongOrNull()
 					?: return null,
 				owner = externalKey.substringBefore('/'),
 				repository = externalKey.substringAfter('/', ""),
@@ -225,7 +225,7 @@ class GitHubRepositoryMonitoringPersistence(
 		from github_repository_monitoring
 		where monitoring_status = 'ACTIVE' and analysis_status = 'QUEUED' and next_attempt_at is not null
 		""".trimIndent(),
-	).firstOrNull()?.get("next_attempt_at", OffsetDateTime::class.java)?.toInstant()
+	).firstOrNull()?.getObject("next_attempt_at", OffsetDateTime::class.java)?.toInstant()
 
 	fun recoverStaleClaims(now: Instant, leaseTimeout: Duration, maxAttempts: Int): Int = execute(
 		"""
@@ -279,31 +279,31 @@ class GitHubRepositoryMonitoringPersistence(
 			Timestamp.from(now), workspaceId, connectionId,
 		)
 
-	private fun Record.toMonitoring() = GitHubRepositoryMonitoringRecord(
-		id = requireNotNull(get("id", UUID::class.java)),
-		workspaceId = requireNotNull(get("workspace_id", UUID::class.java)),
-		sourceScopeId = requireNotNull(get("source_scope_id", UUID::class.java)),
-		monitoringStatus = GitHubRepositoryMonitoringStatus.valueOf(requireNotNull(get("monitoring_status", String::class.java))),
-		analysisStatus = GitHubRepositoryAnalysisStatus.valueOf(requireNotNull(get("analysis_status", String::class.java))),
-		releaseConvention = get("release_convention", String::class.java)?.let(GitHubReleaseConvention::valueOf),
-		tagPrefix = get("tag_prefix", String::class.java),
-		sampleSource = get("sample_source", String::class.java)?.let(GitHubReleaseSampleSource::valueOf),
-		sampleSize = requireNotNull(get("sample_size", Int::class.javaObjectType)),
-		sampleTruncated = requireNotNull(get("sample_truncated", Boolean::class.javaObjectType)),
-		attemptCount = requireNotNull(get("attempt_count", Int::class.javaObjectType)),
-		transitionVersion = requireNotNull(get("transition_version", Long::class.javaObjectType)),
-		claimedBy = get("claimed_by", String::class.java),
-		claimedAt = get("claimed_at", OffsetDateTime::class.java)?.toInstant(),
-		nextAttemptAt = get("next_attempt_at", OffsetDateTime::class.java)?.toInstant(),
-		lastErrorCode = get("last_error_code", String::class.java),
-		analyzedAt = get("analyzed_at", OffsetDateTime::class.java)?.toInstant(),
-		createdAt = requireNotNull(get("created_at", OffsetDateTime::class.java)).toInstant(),
-		updatedAt = requireNotNull(get("updated_at", OffsetDateTime::class.java)).toInstant(),
+	private fun SqlRow.toMonitoring() = GitHubRepositoryMonitoringRecord(
+		id = requireNotNull(getObject("id", UUID::class.java)),
+		workspaceId = requireNotNull(getObject("workspace_id", UUID::class.java)),
+		sourceScopeId = requireNotNull(getObject("source_scope_id", UUID::class.java)),
+		monitoringStatus = GitHubRepositoryMonitoringStatus.valueOf(requireNotNull(getString("monitoring_status"))),
+		analysisStatus = GitHubRepositoryAnalysisStatus.valueOf(requireNotNull(getString("analysis_status"))),
+		releaseConvention = getString("release_convention")?.let(GitHubReleaseConvention::valueOf),
+		tagPrefix = getString("tag_prefix"),
+		sampleSource = getString("sample_source")?.let(GitHubReleaseSampleSource::valueOf),
+		sampleSize = getInt("sample_size"),
+		sampleTruncated = getBoolean("sample_truncated"),
+		attemptCount = getInt("attempt_count"),
+		transitionVersion = getLong("transition_version"),
+		claimedBy = getString("claimed_by"),
+		claimedAt = getObject("claimed_at", OffsetDateTime::class.java)?.toInstant(),
+		nextAttemptAt = getObject("next_attempt_at", OffsetDateTime::class.java)?.toInstant(),
+		lastErrorCode = getString("last_error_code"),
+		analyzedAt = getObject("analyzed_at", OffsetDateTime::class.java)?.toInstant(),
+		createdAt = requireNotNull(getObject("created_at", OffsetDateTime::class.java)).toInstant(),
+		updatedAt = requireNotNull(getObject("updated_at", OffsetDateTime::class.java)).toInstant(),
 	)
 
-	private fun fetchRows(sql: String, vararg bindings: Any?): List<Record> = dsl.fetch(sql, *bindings)
+	private fun fetchRows(sql: String, vararg bindings: Any?): List<SqlRow> = sqlExecutor.query(sql, *bindings)
 
-	private fun execute(sql: String, vararg bindings: Any?): Int = dsl.execute(sql, *bindings)
+	private fun execute(sql: String, vararg bindings: Any?): Int = sqlExecutor.update(sql, *bindings)
 
 	private fun requireExactlyOne(updated: Int, message: String) {
 		if (updated != 1) throw InvalidDataAccessApiUsageException(message)

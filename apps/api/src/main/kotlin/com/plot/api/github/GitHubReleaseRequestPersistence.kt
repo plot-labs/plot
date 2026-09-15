@@ -2,16 +2,10 @@ package com.plot.api.github
 
 import com.plot.api.persistence.SqlExecutor
 import com.plot.api.persistence.SqlRow
-import com.plot.api.persistence.generated.tables.ContentPacks.Companion.CONTENT_PACKS
-import com.plot.api.persistence.generated.tables.GithubReleaseDraftEvidence.Companion.GITHUB_RELEASE_DRAFT_EVIDENCE
-import com.plot.api.persistence.generated.tables.GithubReleaseDraftRequests.Companion.GITHUB_RELEASE_DRAFT_REQUESTS
 import java.sql.Timestamp
 import java.time.Clock
 import java.time.Instant
-import java.time.OffsetDateTime
-import java.time.ZoneOffset
 import java.util.UUID
-import org.jooq.DSLContext
 import org.springframework.dao.InvalidDataAccessApiUsageException
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
@@ -20,14 +14,9 @@ import org.springframework.transaction.annotation.Transactional
 @Component
 class GitHubReleaseRequestPersistence(
 	private val sqlExecutor: SqlExecutor,
-	dslContext: DSLContext,
 	private val routineProjection: GitHubReleaseRoutineProjection,
 	private val clock: Clock = Clock.systemUTC(),
 ) : GitHubReleaseRequestStore {
-	private val dsl: DSLContext = dslContext.configuration()
-		.derive(dslContext.settings().withRenderSchema(false))
-		.dsl()
-
 	override fun findLatest(sourceScopeId: UUID, workspaceId: UUID): GitHubReleaseDraftRequest? = sqlExecutor.query(
 		"""
 		select ${requestColumns}
@@ -295,103 +284,72 @@ class GitHubReleaseRequestPersistence(
 
 	override fun saveResolvedRange(requestId: UUID, transitionVersion: Long, baseSha: String, headSha: String, boundaryReason: String) {
 		val now = clock.instant()
-		val updated = dsl.update(GITHUB_RELEASE_DRAFT_REQUESTS)
-			.set(GITHUB_RELEASE_DRAFT_REQUESTS.BASE_SHA, baseSha)
-			.set(GITHUB_RELEASE_DRAFT_REQUESTS.HEAD_SHA, headSha)
-			.set(GITHUB_RELEASE_DRAFT_REQUESTS.BOUNDARY_REASON, boundaryReason)
-			.set(GITHUB_RELEASE_DRAFT_REQUESTS.STATUS, GitHubReleaseDraftStatus.GENERATING.name)
-			.set(
-				GITHUB_RELEASE_DRAFT_REQUESTS.TRANSITION_VERSION,
-				GITHUB_RELEASE_DRAFT_REQUESTS.TRANSITION_VERSION.plus(1),
-			)
-			.set(GITHUB_RELEASE_DRAFT_REQUESTS.HEARTBEAT_AT, now.toOffsetDateTime())
-			.set(GITHUB_RELEASE_DRAFT_REQUESTS.UPDATED_AT, now.toOffsetDateTime())
-			.where(
-				GITHUB_RELEASE_DRAFT_REQUESTS.WORKSPACE_ID.eq(requestWorkspaceId(requestId)),
-				GITHUB_RELEASE_DRAFT_REQUESTS.ID.eq(requestId),
-				GITHUB_RELEASE_DRAFT_REQUESTS.TRANSITION_VERSION.eq(transitionVersion),
-			)
-			.execute()
+		val updated = sqlExecutor.update(
+			"""
+			update github_release_draft_requests
+			set base_sha = ?, head_sha = ?, boundary_reason = ?, status = 'GENERATING',
+			    transition_version = transition_version + 1, heartbeat_at = ?, updated_at = ?
+			where workspace_id = ? and id = ? and transition_version = ?
+			""".trimIndent(),
+			baseSha, headSha, boundaryReason, Timestamp.from(now), Timestamp.from(now),
+			requestWorkspaceId(requestId), requestId, transitionVersion,
+		)
 		requireExactlyOne(updated, "Release request transition was lost")
 	}
 
 	@Transactional
 	override fun saveHeadAndFinishNeedsRange(requestId: UUID, transitionVersion: Long, headSha: String) {
 		val now = clock.instant()
-		val updated = dsl.update(GITHUB_RELEASE_DRAFT_REQUESTS)
-			.set(GITHUB_RELEASE_DRAFT_REQUESTS.HEAD_SHA, headSha)
-			.set(GITHUB_RELEASE_DRAFT_REQUESTS.STATUS, GitHubReleaseDraftStatus.NEEDS_RANGE.name)
-			.set(
-				GITHUB_RELEASE_DRAFT_REQUESTS.TRANSITION_VERSION,
-				GITHUB_RELEASE_DRAFT_REQUESTS.TRANSITION_VERSION.plus(1),
-			)
-			.set(GITHUB_RELEASE_DRAFT_REQUESTS.CLAIMED_BY, null as String?)
-			.set(GITHUB_RELEASE_DRAFT_REQUESTS.CLAIMED_AT, null as OffsetDateTime?)
-			.set(GITHUB_RELEASE_DRAFT_REQUESTS.HEARTBEAT_AT, null as OffsetDateTime?)
-			.set(GITHUB_RELEASE_DRAFT_REQUESTS.FINISHED_AT, now.toOffsetDateTime())
-			.set(GITHUB_RELEASE_DRAFT_REQUESTS.UPDATED_AT, now.toOffsetDateTime())
-			.where(
-				GITHUB_RELEASE_DRAFT_REQUESTS.WORKSPACE_ID.eq(requestWorkspaceId(requestId)),
-				GITHUB_RELEASE_DRAFT_REQUESTS.ID.eq(requestId),
-				GITHUB_RELEASE_DRAFT_REQUESTS.TRANSITION_VERSION.eq(transitionVersion),
-			)
-			.execute()
+		val updated = sqlExecutor.update(
+			"""
+			update github_release_draft_requests
+			set head_sha = ?, status = 'NEEDS_RANGE', transition_version = transition_version + 1,
+			    claimed_by = null, claimed_at = null, heartbeat_at = null, finished_at = ?, updated_at = ?
+			where workspace_id = ? and id = ? and transition_version = ?
+			""".trimIndent(),
+			headSha, Timestamp.from(now), Timestamp.from(now), requestWorkspaceId(requestId), requestId, transitionVersion,
+		)
 		requireExactlyOne(updated, "Release request transition was lost")
 		routineProjection.finish(requestId, GitHubReleaseDraftStatus.NEEDS_RANGE)
 	}
 
 	override fun linkAgentRun(requestId: UUID, transitionVersion: Long, observationId: UUID, agentRunId: UUID) {
 		val now = clock.instant()
-		val updated = dsl.update(GITHUB_RELEASE_DRAFT_REQUESTS)
-			.set(GITHUB_RELEASE_DRAFT_REQUESTS.AGENT_RUN_ID, agentRunId)
-			.set(GITHUB_RELEASE_DRAFT_REQUESTS.STATUS, GitHubReleaseDraftStatus.GENERATING.name)
-			.set(
-				GITHUB_RELEASE_DRAFT_REQUESTS.TRANSITION_VERSION,
-				GITHUB_RELEASE_DRAFT_REQUESTS.TRANSITION_VERSION.plus(1),
-			)
-			.set(GITHUB_RELEASE_DRAFT_REQUESTS.CLAIMED_BY, null as String?)
-			.set(GITHUB_RELEASE_DRAFT_REQUESTS.CLAIMED_AT, null as OffsetDateTime?)
-			.set(GITHUB_RELEASE_DRAFT_REQUESTS.HEARTBEAT_AT, null as OffsetDateTime?)
-			.set(GITHUB_RELEASE_DRAFT_REQUESTS.UPDATED_AT, now.toOffsetDateTime())
-			.where(
-				GITHUB_RELEASE_DRAFT_REQUESTS.WORKSPACE_ID.eq(requestWorkspaceId(requestId)),
-				GITHUB_RELEASE_DRAFT_REQUESTS.ID.eq(requestId),
-				GITHUB_RELEASE_DRAFT_REQUESTS.TRANSITION_VERSION.eq(transitionVersion),
-				GITHUB_RELEASE_DRAFT_REQUESTS.OBSERVATION_ID.eq(observationId),
-				GITHUB_RELEASE_DRAFT_REQUESTS.AGENT_RUN_ID.isNull,
-				GITHUB_RELEASE_DRAFT_REQUESTS.GENERATION_RUN_ID.isNull,
-			)
-			.execute()
+		val updated = sqlExecutor.update(
+			"""
+			update github_release_draft_requests
+			set agent_run_id = ?, status = 'GENERATING', transition_version = transition_version + 1,
+			    claimed_by = null, claimed_at = null, heartbeat_at = null, updated_at = ?
+			where workspace_id = ? and id = ? and transition_version = ? and observation_id = ?
+			  and agent_run_id is null and generation_run_id is null
+			""".trimIndent(),
+			agentRunId, Timestamp.from(now), requestWorkspaceId(requestId), requestId, transitionVersion, observationId,
+		)
 		requireExactlyOne(updated, "Release Agent run transition was lost")
 	}
 
 	@Transactional
 	override fun linkAgentArtifact(requestId: UUID, transitionVersion: Long, agentRunId: UUID, artifactWorkflowRunId: UUID) {
 		val now = clock.instant()
-		val updated = dsl.update(GITHUB_RELEASE_DRAFT_REQUESTS)
-			.set(GITHUB_RELEASE_DRAFT_REQUESTS.GENERATION_RUN_ID, artifactWorkflowRunId)
-			.set(
-				GITHUB_RELEASE_DRAFT_REQUESTS.TRANSITION_VERSION,
-				GITHUB_RELEASE_DRAFT_REQUESTS.TRANSITION_VERSION.plus(1),
-			)
-			.set(GITHUB_RELEASE_DRAFT_REQUESTS.UPDATED_AT, now.toOffsetDateTime())
-			.where(
-				GITHUB_RELEASE_DRAFT_REQUESTS.WORKSPACE_ID.eq(requestWorkspaceId(requestId)),
-				GITHUB_RELEASE_DRAFT_REQUESTS.ID.eq(requestId),
-				GITHUB_RELEASE_DRAFT_REQUESTS.TRANSITION_VERSION.eq(transitionVersion),
-				GITHUB_RELEASE_DRAFT_REQUESTS.AGENT_RUN_ID.eq(agentRunId),
-				GITHUB_RELEASE_DRAFT_REQUESTS.GENERATION_RUN_ID.isNull,
-			)
-			.execute()
+		val workspaceId = requestWorkspaceId(requestId)
+		val updated = sqlExecutor.update(
+			"""
+			update github_release_draft_requests
+			set generation_run_id = ?, transition_version = transition_version + 1, updated_at = ?
+			where workspace_id = ? and id = ? and transition_version = ?
+			  and agent_run_id = ? and generation_run_id is null
+			""".trimIndent(),
+			artifactWorkflowRunId, Timestamp.from(now), workspaceId, requestId, transitionVersion, agentRunId,
+		)
 		requireExactlyOne(updated, "Release Artifact workflow transition was lost")
-		val linkedPack = dsl.update(CONTENT_PACKS)
-			.set(CONTENT_PACKS.RELEASE_REQUEST_ID, requestId)
-			.where(
-				CONTENT_PACKS.WORKSPACE_ID.eq(requestWorkspaceId(requestId)),
-				CONTENT_PACKS.GENERATION_RUN_ID.eq(artifactWorkflowRunId),
-				CONTENT_PACKS.RELEASE_REQUEST_ID.isNull.or(CONTENT_PACKS.RELEASE_REQUEST_ID.eq(requestId)),
-			)
-			.execute()
+		val linkedPack = sqlExecutor.update(
+			"""
+			update content_packs set release_request_id = ?
+			where workspace_id = ? and generation_run_id = ?
+			  and (release_request_id is null or release_request_id = ?)
+			""".trimIndent(),
+			requestId, workspaceId, artifactWorkflowRunId, requestId,
+		)
 		requireExactlyOne(linkedPack, "Release Artifact materialization was not found")
 	}
 
@@ -403,32 +361,25 @@ class GitHubReleaseRequestPersistence(
 		}
 		val now = clock.instant()
 		val workspaceId = requestWorkspaceId(requestId)
-		val updated = dsl.update(GITHUB_RELEASE_DRAFT_REQUESTS)
-			.set(GITHUB_RELEASE_DRAFT_REQUESTS.OBSERVATION_ID, evidence.observationId)
-			.set(
-				GITHUB_RELEASE_DRAFT_REQUESTS.TRANSITION_VERSION,
-				GITHUB_RELEASE_DRAFT_REQUESTS.TRANSITION_VERSION.plus(1),
-			)
-			.set(GITHUB_RELEASE_DRAFT_REQUESTS.HEARTBEAT_AT, now.toOffsetDateTime())
-			.set(GITHUB_RELEASE_DRAFT_REQUESTS.UPDATED_AT, now.toOffsetDateTime())
-			.where(
-				GITHUB_RELEASE_DRAFT_REQUESTS.WORKSPACE_ID.eq(workspaceId),
-				GITHUB_RELEASE_DRAFT_REQUESTS.ID.eq(requestId),
-				GITHUB_RELEASE_DRAFT_REQUESTS.TRANSITION_VERSION.eq(transitionVersion),
-				GITHUB_RELEASE_DRAFT_REQUESTS.CLAIMED_BY.isNotNull,
-				GITHUB_RELEASE_DRAFT_REQUESTS.OBSERVATION_ID.isNull,
-				GITHUB_RELEASE_DRAFT_REQUESTS.GENERATION_RUN_ID.isNull,
-			)
-			.execute()
+		val updated = sqlExecutor.update(
+			"""
+			update github_release_draft_requests
+			set observation_id = ?, transition_version = transition_version + 1, heartbeat_at = ?, updated_at = ?
+			where workspace_id = ? and id = ? and transition_version = ? and claimed_by is not null
+			  and observation_id is null and generation_run_id is null
+			""".trimIndent(),
+			evidence.observationId, Timestamp.from(now), Timestamp.from(now), workspaceId, requestId, transitionVersion,
+		)
 		requireExactlyOne(updated, "Release request transition was lost")
 		evidence.writingBlockIds.forEachIndexed { index, writingBlockId ->
-			val inserted = dsl.insertInto(GITHUB_RELEASE_DRAFT_EVIDENCE)
-				.set(GITHUB_RELEASE_DRAFT_EVIDENCE.REQUEST_ID, requestId)
-				.set(GITHUB_RELEASE_DRAFT_EVIDENCE.WORKSPACE_ID, workspaceId)
-				.set(GITHUB_RELEASE_DRAFT_EVIDENCE.OBSERVATION_ID, evidence.observationId)
-				.set(GITHUB_RELEASE_DRAFT_EVIDENCE.WRITING_BLOCK_ID, writingBlockId)
-				.set(GITHUB_RELEASE_DRAFT_EVIDENCE.ORDER_INDEX, index)
-				.execute()
+			val inserted = sqlExecutor.update(
+				"""
+				insert into github_release_draft_evidence
+				(request_id, workspace_id, observation_id, writing_block_id, order_index)
+				values (?, ?, ?, ?, ?)
+				""".trimIndent(),
+				requestId, workspaceId, evidence.observationId, writingBlockId, index,
+			)
 			requireExactlyOne(inserted, "Release evidence binding was not inserted")
 		}
 	}
@@ -494,5 +445,3 @@ internal fun SqlRow.toReleaseActivity(): GitHubReleaseActivityRecord = GitHubRel
 	updatedAt = requireNotNull(getTimestamp("updated_at")).toInstant(),
 	agentRunId = getObject("agent_run_id", UUID::class.java),
 )
-
-private fun Instant.toOffsetDateTime(): OffsetDateTime = atOffset(ZoneOffset.UTC)
