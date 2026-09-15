@@ -35,7 +35,7 @@ export function ChatHome({ references, referencesLoading, referencesError }: Cha
   const canGenerate = entitlement?.capabilities.generate ?? true;
   const trialUntil = trialEndsLabel(entitlement?.trialEndsAt ?? null);
 
-  async function submitHomeRequest(message: string, referenceIds: string[]) {
+  async function submitHomeRequest(message: string, referenceIds: string[], skillIds: string[]) {
     const selected = selectReferences(references, referenceIds);
     const validationError = validateSourceSelection(references, selected, referencesError);
     if (validationError) {
@@ -45,10 +45,11 @@ export function ChatHome({ references, referencesLoading, referencesError }: Cha
 
     setStarting(true);
     setStartError("");
-    const idempotencyKey = pendingAgentRequestKey(pendingRequestRef, message, selected.map((reference) => reference.id));
+    const idempotencyKey = pendingAgentRequestKey(pendingRequestRef, message, selected.map((reference) => reference.id), JSON.stringify({ skillIds, contentType, brief: toContentBrief(briefDraft) }));
     try {
       const run = await plotApiClient.createChatAgentRun({
         instruction: message,
+        skillIds,
         writingBlockIds: selected.map((reference) => reference.id),
         contentType,
         brief: toContentBrief(briefDraft),
@@ -75,7 +76,7 @@ export function ChatHome({ references, referencesLoading, referencesError }: Cha
           key={references.map((reference) => reference.id).join(":") || "no-references"}
           variant="center"
           placeholder={contentType === "LAUNCH_ANNOUNCEMENT" ? "Describe the launch you need..." : "Describe the update you need..."}
-          onSubmit={(message, ids) => void submitHomeRequest(message, ids)}
+          onSubmit={(message, ids, skills) => void submitHomeRequest(message, ids, skills)}
           references={toComposerReferences(references)}
           busy={starting || referencesLoading}
           canGenerate={canGenerate}

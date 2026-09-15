@@ -410,6 +410,7 @@ export interface RoutineAgentRunDetail {
 }
 
 export interface ChatAgentRun {
+  skills?: SkillSnapshot[];
   id: string;
   chatId: string;
   instruction: string;
@@ -506,7 +507,19 @@ export interface CtaDestinationInput {
 	url: string;
 }
 
+export interface Skill {
+  id: string;
+  name: string;
+  description: string;
+  revision: number;
+  isSystem: boolean;
+}
+
+export interface SkillSnapshot extends Omit<Skill, "isSystem"> { content: string }
+export type SkillInput = Pick<SkillSnapshot, "name" | "description" | "content">;
+
 export interface CreateChatAgentRunInput {
+  skillIds?: string[];
   instruction: string;
   workSessionId?: string;
   writingBlockIds?: string[];
@@ -537,6 +550,7 @@ export interface UpdateContentProfileInput {
 }
 
 export interface Routine {
+  skills?: SkillSnapshot[];
   id: string;
   name: string;
   sourceScopeId: string;
@@ -642,9 +656,14 @@ export interface PlotApiClient {
   updateWorkspace(id: string, input: { name?: string; logoUrl?: string; publicCitationsEnabled?: boolean }, options?: RequestOptions): Promise<WorkspaceSummary>;
   getContentProfile(options?: RequestOptions): Promise<ContentProfile>;
   updateContentProfile(input: UpdateContentProfileInput, options?: RequestOptions): Promise<ContentProfile>;
+  listSkills(options?: RequestOptions): Promise<Skill[]>;
+  getSkill(id: string, options?: RequestOptions): Promise<SkillSnapshot>;
+  createSkill(input: SkillInput, options?: RequestOptions): Promise<SkillSnapshot>;
+  updateSkill(id: string, input: SkillInput, options?: RequestOptions): Promise<SkillSnapshot>;
+  deleteSkill(id: string, options?: RequestOptions): Promise<void>;
   listRoutines(options?: RequestOptions): Promise<Routine[]>;
   getRoutine(id: string, options?: RequestOptions): Promise<Routine>;
-  createRoutine(input: { name: string; sourceScopeId: string; contextSourceScopeIds?: string[]; instruction: string; cadence: RoutineCadence }, options?: RequestOptions): Promise<Routine>;
+  createRoutine(input: { skillIds?: string[]; name: string; sourceScopeId: string; contextSourceScopeIds?: string[]; instruction: string; cadence: RoutineCadence }, options?: RequestOptions): Promise<Routine>;
   updateRoutine(id: string, input: { enabled: boolean }, options?: RequestOptions): Promise<Routine>;
   runRoutineNow(id: string, idempotencyKey: string, options?: RequestOptions): Promise<Routine>;
   getRoutineAgentRun(routineId: string, agentRunId: string, options?: RequestOptions): Promise<RoutineAgentRunDetail>;
@@ -793,6 +812,11 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
       body: JSON.stringify(input),
       signal: requestOptions?.signal,
     }),
+    listSkills: (options) => request("/skills", { signal: options?.signal }),
+    getSkill: (id, options) => request(`/skills/${encodeURIComponent(id)}`, { signal: options?.signal }),
+    createSkill: (input, options) => request("/skills", { method: "POST", body: JSON.stringify(input), signal: options?.signal }),
+    updateSkill: (id, input, options) => request(`/skills/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(input), signal: options?.signal }),
+    deleteSkill: (id, options) => request(`/skills/${encodeURIComponent(id)}`, { method: "DELETE", signal: options?.signal }),
     listRoutines: (requestOptions) => request("/routines", { signal: requestOptions?.signal }),
     getRoutine: (id, requestOptions) => request(`/routines/${encodeURIComponent(id)}`, {
       signal: requestOptions?.signal,

@@ -365,7 +365,7 @@ export function useChatAgentActivity({
     }
   }, [chatId, contentType, isPendingRun, onAdmitted, onAgentArtifact, retrying]);
 
-  async function submitMessage(message: string, referenceIds: string[], onRequestStart?: () => void) {
+  async function submitMessage(message: string, referenceIds: string[], onRequestStart?: () => void, skillIds: string[] = []) {
     const selected = selectReferences(references, referenceIds);
     const validationError = validateSourceSelection(references, selected, sourceError);
     if (validationError) {
@@ -376,7 +376,7 @@ export function useChatAgentActivity({
     agentAbortRef.current?.abort();
     const controller = new AbortController();
     agentAbortRef.current = controller;
-    const idempotencyKey = pendingAgentRequestKey(pendingRequestRef, message, selected.map((reference) => reference.id));
+    const idempotencyKey = pendingAgentRequestKey(pendingRequestRef, message, selected.map((reference) => reference.id), JSON.stringify({ skillIds, contentType, brief }));
     setAgentInstruction(message);
     setAgentRun(null);
     setAgentBusy(true);
@@ -385,6 +385,7 @@ export function useChatAgentActivity({
     try {
       const run = await plotApiClient.createChatAgentRun({
         instruction: message,
+        skillIds,
         writingBlockIds: selected.map((reference) => reference.id),
         workSessionId: chatId,
         contentType,

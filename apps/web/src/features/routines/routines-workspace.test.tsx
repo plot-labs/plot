@@ -23,6 +23,7 @@ vi.mock("@/lib/api-client", async () => {
     ...actual,
     getSelectedWorkspaceId: () => mocks.workspaceId,
     plotApiClient: {
+      listSkills: vi.fn().mockResolvedValue([]),
       listRoutines: mocks.listRoutines,
       listGitHubConnections: mocks.listGitHubConnections,
       createRoutine: mocks.createRoutine,
