@@ -62,12 +62,14 @@ class ChatRunService(
 	private val workspaceAccessService: WorkspaceAccessService,
 	private val compatibilityWriter: ChatCompatibilityWriter,
 	private val queries: ChatQueryService,
+	private val skills: com.plot.api.skill.SkillService,
 ) {
 	fun admit(request: CreateChatAgentRunRequest, idempotencyKey: String): ChatAgentRunResponse {
 		sourceManagedAccessGuard.requireReadable()
 		val run = admitInternal(
 			principal = WorkspacePrincipal(devContext.devWorkspaceId, devContext.devUserId),
 			instruction = request.instruction,
+			skillIds = request.skillIds,
 			workSessionId = request.workSessionId,
 			writingBlockIds = request.writingBlockIds,
 			contentType = request.contentType,
@@ -290,6 +292,7 @@ class ChatRunService(
 		brief: ContentBriefRequest?,
 		idempotencyKey: String,
 		chatTitle: String?,
+		skillIds: List<UUID> = emptyList(),
 	): AgentRunRecord {
 		val workspaceId = principal.workspaceId
 		val userId = principal.userId
@@ -309,6 +312,7 @@ class ChatRunService(
 		val fingerprint = fingerprint(
 			CreateChatAgentRunRequest(
 				instruction = normalizedInstruction,
+				skillIds = skillIds,
 				workSessionId = workSessionId,
 				writingBlockIds = writingBlockIds,
 				contentType = contentType,
@@ -330,6 +334,7 @@ class ChatRunService(
 				return@execute existing
 			}
 
+			val skillsJson = skills.freeze(workspaceId, skillIds)
 			val sources = lockActiveSources(workspaceId)
 			if (sources.isEmpty()) {
 				throw ApiException(
@@ -351,6 +356,7 @@ class ChatRunService(
 					idempotencyKey = key,
 					requestFingerprint = fingerprint,
 					instructionSnapshot = normalizedInstruction,
+					skillsSnapshotJson = skillsJson,
 					promptVersion = "chat-agent-v1",
 					toolPolicyVersion = "read-only-v1",
 					budgetSnapshotJson = objectMapper.writeValueAsString(properties.chatBudgetSnapshot()),
@@ -396,6 +402,7 @@ class ChatRunService(
 					"promptVersion" to "chat-agent-v1",
 					"toolPolicyVersion" to "read-only-v1",
 					"budgetSnapshot" to objectMapper.writeValueAsString(properties.chatBudgetSnapshot()),
+					"skillsSnapshot" to skillsJson,
 					"contentType" to contentType.name,
 					"contentProfileRevisionId" to frozenProfileRevisionId,
 					"contentBriefSnapshot" to briefJson,
@@ -525,6 +532,7 @@ class ChatRunService(
 					idempotencyKey = key,
 					requestFingerprint = retryFingerprint,
 					instructionSnapshot = targetRun.instructionSnapshot,
+					skillsSnapshotJson = targetRun.skillsSnapshotJson,
 					promptVersion = targetRun.promptVersion,
 					toolPolicyVersion = targetRun.toolPolicyVersion,
 					budgetSnapshotJson = targetRun.budgetSnapshotJson,
@@ -697,7 +705,10 @@ class ChatRunService(
 			append(request.instruction).append('|')
 			request.writingBlockIds.forEach { append(it).append(',') }
 		}
-		return MessageDigest.getInstance("SHA-256").digest(canonical.toByteArray())
+		val skillAwareCanonical = if (request.skillIds.isEmpty()) canonical else objectMapper.writeValueAsString(
+			mapOf("request" to canonical, "skillIds" to request.skillIds),
+		)
+		return MessageDigest.getInstance("SHA-256").digest(skillAwareCanonical.toByteArray())
 			.joinToString("") { byte -> "%02x".format(byte) }
 	}
 

@@ -33,19 +33,24 @@ class AgentRunRegistrationPersistence(
 			insert into agent_runs (
 			  id, workspace_id, routine_execution_id, routine_id, work_session_id, created_by_user_id,
 			  origin, idempotency_key, request_fingerprint,
-			  instruction_snapshot, prompt_version, tool_policy_version, budget_snapshot, content_type,
+			  instruction_snapshot, skills_snapshot, prompt_version, tool_policy_version, budget_snapshot, content_type,
 			  content_profile_revision_id, content_brief_snapshot, source_snapshot_id,
 			  status, current_step, attempt_count, max_attempts, created_at, updated_at
-			) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?::jsonb, ?, 'QUEUED', 0, 0, ?, ?, ?)
+			) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?::jsonb, ?, ?, ?::jsonb, ?, 'QUEUED', 0, 0, ?, ?, ?)
 			$conflictClause
 			""".trimIndent(),
 			run.id, run.workspaceId, run.routineExecutionId, run.routineId, run.workSessionId, run.createdByUserId,
 			run.origin.name, run.idempotencyKey, run.requestFingerprint,
-			run.instructionSnapshot, run.promptVersion, run.toolPolicyVersion, run.budgetSnapshotJson, run.contentType.name,
+			run.instructionSnapshot, skillsSnapshot(run), run.promptVersion, run.toolPolicyVersion, run.budgetSnapshotJson, run.contentType.name,
 			run.contentProfileRevisionId, run.contentBriefSnapshotJson, run.sourceSnapshotId,
 			run.maxAttempts, Timestamp.from(now), Timestamp.from(now),
 		)
 	}
+
+	private fun skillsSnapshot(run: NewAgentRun): String = run.skillsSnapshotJson ?: run.routineId?.let { routineId ->
+		sqlExecutor.query("select skills_snapshot::text from routines where workspace_id = ? and id = ?", run.workspaceId, routineId)
+			.firstOrNull()?.getString("skills_snapshot")
+	} ?: "[]"
 
 	fun insertSource(
 		workspaceId: UUID,
@@ -161,6 +166,7 @@ data class NewAgentRun(
 	val idempotencyKey: String,
 	val requestFingerprint: String,
 	val instructionSnapshot: String,
+	val skillsSnapshotJson: String? = null,
 	val promptVersion: String,
 	val toolPolicyVersion: String,
 	val budgetSnapshotJson: String,

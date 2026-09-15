@@ -90,7 +90,7 @@ class ArtifactWorkflowRunService(
 		val initialState = workflowService.start(
 			runId = runId,
 			evidence = evidence,
-			instruction = agentRun.instructionSnapshot,
+			instruction = com.plot.api.skill.FrozenSkills.instruction(agentRun.instructionSnapshot, agentRun.skillsSnapshotJson),
 			documentVersion = 2,
 		).copy(
 			agentRunId = agentRun.id,

@@ -13,6 +13,7 @@ import java.util.UUID
 
 data class CreateRoutineRequest(
 	@field:NotBlank @field:Size(max = 80) val name: String,
+	@field:Size(max = 4) val skillIds: List<UUID> = emptyList(),
 	@field:NotNull val sourceScopeId: UUID?,
 	@field:Size(max = 4) val contextSourceScopeIds: List<UUID> = emptyList(),
 	@field:NotBlank @field:Size(max = 2_000) val instruction: String,
@@ -29,6 +30,7 @@ data class RoutineResponse(
 	val sourceScopeId: UUID,
 	val sourceLabel: String,
 	val instruction: String,
+	val skills: List<com.plot.api.skill.SkillSnapshot> = emptyList(),
 	val cadence: RoutineCadence,
 	val enabled: Boolean,
 	val lastRunAt: Instant?,
@@ -88,6 +90,7 @@ fun RoutineRecord.toResponse(
 	sourceScopeId = sourceScopeId,
 	sourceLabel = sourceLabel,
 	instruction = instruction,
+	skills = com.plot.api.skill.FrozenSkills.read(skillsSnapshotJson),
 	cadence = cadence,
 	enabled = enabled,
 	lastRunAt = lastRunAt,

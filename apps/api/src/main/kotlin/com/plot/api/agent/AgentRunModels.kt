@@ -75,6 +75,7 @@ data class AgentRunRecord(
 	val requestFingerprint: String,
 	val createdByUserId: UUID,
 	val instructionSnapshot: String,
+	val skillsSnapshotJson: String = "[]",
 	val promptVersion: String,
 	val toolPolicyVersion: String,
 	val budgetSnapshotJson: String,

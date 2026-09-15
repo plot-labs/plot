@@ -26,6 +26,7 @@ class RoutineService(
 	private val agentRunQueryPersistence: AgentRunQueryPersistence,
 	private val sourceScopeRepository: SourceScopeRepository,
 	private val sourceManagedAccessGuard: SourceManagedAccessGuard,
+	private val skills: com.plot.api.skill.SkillService,
 ) {
 	@Transactional(readOnly = true)
 	fun list(): List<RoutineView> = persistence.list(devContext.devWorkspaceId).map(::view)
@@ -57,6 +58,7 @@ class RoutineService(
 			name = request.name.trim(),
 			sourceScopeId = scope.id,
 			instruction = request.instruction.trim(),
+			skillsSnapshotJson = skills.freeze(devContext.devWorkspaceId, request.skillIds),
 			cadence = cadence,
 		)
 		contextSourceScopeIds.forEachIndexed { index, id ->

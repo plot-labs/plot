@@ -58,14 +58,15 @@ class RoutinePersistence(
 		instruction: String,
 		cadence: RoutineCadence,
 		now: Instant = currentInstant(),
+		skillsSnapshotJson: String = "[]",
 	): RoutineRecord {
 		val id = uuidGenerator.next()
 		execute(
 			"""
 			insert into routines (
-			  id, workspace_id, created_by_user_id, source_scope_id, name, instruction, cadence,
+			  id, workspace_id, created_by_user_id, source_scope_id, name, instruction, skills_snapshot, cadence,
 			  enabled, next_run_at, created_at, updated_at
-			) values (?, ?, ?, ?, ?, ?, ?, true, ?, ?, ?)
+			) values (?, ?, ?, ?, ?, ?, ?::jsonb, ?, true, ?, ?, ?)
 			""".trimIndent(),
 			id,
 			workspaceId,
@@ -73,6 +74,7 @@ class RoutinePersistence(
 			sourceScopeId,
 			name,
 			instruction,
+			skillsSnapshotJson,
 			cadence.name,
 			Timestamp.from(now),
 			Timestamp.from(now),
@@ -274,6 +276,7 @@ class RoutinePersistence(
 		sourceLabel = requireNotNull(getString("source_label")),
 		name = requireNotNull(getString("name")),
 		instruction = requireNotNull(getString("instruction")),
+		skillsSnapshotJson = requireNotNull(getString("skills_snapshot")),
 		cadence = RoutineCadence.valueOf(requireNotNull(getString("cadence"))),
 		enabled = getBoolean("enabled"),
 		activityCursorSequence = getObject("activity_cursor_sequence", Long::class.javaObjectType),
@@ -299,7 +302,7 @@ class RoutinePersistence(
 
 	private val selectSql = """
 		select r.id, r.workspace_id, r.created_by_user_id, r.source_scope_id, s.display_name as source_label,
-		       r.name, r.instruction, r.cadence, r.enabled, r.activity_cursor_sequence,
+		       r.name, r.instruction, r.skills_snapshot::text, r.cadence, r.enabled, r.activity_cursor_sequence,
 		       r.last_run_at, r.next_run_at, r.active_execution_id, r.last_execution_id,
 		       r.last_generation_run_id,
 		       case when r.last_generation_run_id is null then r.last_run_status
@@ -315,7 +318,7 @@ class RoutinePersistence(
 
 	private val claimSelectSql = """
 		select r.id, r.workspace_id, r.created_by_user_id, r.source_scope_id, s.display_name as source_label,
-		       r.name, r.instruction, r.cadence, r.enabled, r.activity_cursor_sequence,
+		       r.name, r.instruction, r.skills_snapshot::text, r.cadence, r.enabled, r.activity_cursor_sequence,
 		       r.last_run_at, r.next_run_at, r.active_execution_id, r.last_execution_id,
 		       r.last_generation_run_id, r.last_run_status as effective_run_status,
 		       r.last_error_code as effective_error_code, r.claimed_by, r.claimed_at,

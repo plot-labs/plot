@@ -126,6 +126,9 @@ class AgentRunWorkerIntegrationTest {
 			sourceScopeId = trigger.scopeId,
 			instruction = "Create a cited update from the relevant sources",
 			cadence = RoutineCadence.DAILY,
+            skillsSnapshotJson = tools.jackson.module.kotlin.jacksonObjectMapper().writeValueAsString(listOf(
+                com.plot.api.skill.SkillSnapshot(UUID.randomUUID(), "benefits", "Customer benefits", "Focus on customer benefits.", 1),
+            )),
 		)
 		agentPersistence.addContextSource(routine.workspaceId, routine.id, context.scopeId, 0)
 		val execution = agentPersistence.createExecution(
@@ -245,6 +248,8 @@ class AgentRunWorkerIntegrationTest {
 		assertEquals(listOf(agentRunId), historyRuns.map { it.id })
 		assertNotNull(historyRuns.single().artifactId)
 		assertEquals(3, agentModel.requests.size)
+        assertTrue(agentModel.requests.all { it.instruction.contains("Focus on customer benefits.") })
+        assertTrue(artifactWorkflowModel.writerRequests.single().instruction.orEmpty().contains("Focus on customer benefits."))
 		assertTrue(agentModel.requests.none { request ->
 			request.toString().contains("MUTATED SECRET") || request.toString().contains("Authorization")
 		})
@@ -1081,8 +1086,10 @@ class ScriptedAgentDecisionGateway : AgentDecisionGateway {
 
 class AgentArtifactWorkflowModelGateway : ArtifactWorkflowModelGateway {
 	var calls = 0
+	val writerRequests = mutableListOf<WriterModelRequest>()
 
 	override fun write(request: WriterModelRequest): ModelCallResult<WriterOutput> {
+		writerRequests += request
 		calls++
 		return result(WriterOutput(listOf(WriterSentence("A source-backed update is ready."))))
 	}
@@ -1100,6 +1107,7 @@ class AgentArtifactWorkflowModelGateway : ArtifactWorkflowModelGateway {
 		error("Agent artifact workflow should not require a rewrite")
 
 	fun reset() {
+		writerRequests.clear()
 		calls = 0
 	}
 

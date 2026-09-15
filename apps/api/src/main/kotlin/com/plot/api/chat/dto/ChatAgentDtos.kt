@@ -16,6 +16,7 @@ import org.springframework.http.HttpStatus
 
 data class CreateChatAgentRunRequest(
 	@field:NotBlank @field:Size(max = 2_000) val instruction: String,
+	@field:Size(max = 4) val skillIds: List<UUID> = emptyList(),
 	val workSessionId: UUID? = null,
 	@field:Size(max = 20) val writingBlockIds: List<UUID> = emptyList(),
 	val contentType: ContentType = ContentType.CHANGELOG,
@@ -81,6 +82,7 @@ data class ChatAgentRunResponse(
 	val id: UUID,
 	val chatId: UUID,
 	val instruction: String,
+	val skills: List<com.plot.api.skill.SkillSnapshot> = emptyList(),
 	val contentType: ContentType,
 	val contentProfileRevisionId: UUID?,
 	val brief: ContentBrief?,
@@ -107,6 +109,7 @@ fun AgentRunRecord.toChatResponse(
 	id = id,
 	chatId = requireNotNull(workSessionId) { "Chat Agent run is missing its Chat" },
 	instruction = instructionSnapshot,
+	skills = com.plot.api.skill.FrozenSkills.read(skillsSnapshotJson),
 	contentType = contentType,
 	contentProfileRevisionId = contentProfileRevisionId,
 	brief = brief,

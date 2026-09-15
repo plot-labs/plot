@@ -158,7 +158,7 @@ class AgentRunWorker(
 		val decision = decisionGateway.decide(
 			AgentDecisionRequest(
 				agentRunId = run.id,
-				instruction = run.instructionSnapshot,
+				instruction = com.plot.api.skill.FrozenSkills.instruction(run.instructionSnapshot, run.skillsSnapshotJson),
 				sources = sources,
 				inputs = inputs.map { input ->
 					AgentInputView(

@@ -65,6 +65,52 @@ class RoutineApiIntegrationTest {
 		jdbcTemplate.update("delete from connections where workspace_id = ?", devContext.devWorkspaceId)
 	}
 
+    @Autowired private lateinit var skillService: com.plot.api.skill.SkillService
+    @Autowired private lateinit var chatRuns: com.plot.api.chat.ChatRunService
+
+    @Test
+    fun `skills stay isolated and chat retry keeps the selected revision after deletion`() {
+        insertSourceScope("acme/skills")
+        val skill = skillService.create(devContext.devWorkspaceId,
+            com.plot.api.skill.SkillRequest("guide-${UUID.randomUUID()}", "A writing guide", "Write concise customer benefits."))
+        kotlin.test.assertFailsWith<com.plot.api.common.ApiException> { skillService.read(UUID.randomUUID(), skill.id) }
+        val request = com.plot.api.chat.dto.CreateChatAgentRunRequest(instruction = "Draft changes", skillIds = listOf(skill.id))
+        val key = "skills-${UUID.randomUUID()}"
+        val run = chatRuns.admit(request, key)
+        assertEquals("Draft changes", run.instruction)
+        assertEquals(skill, run.skills.single())
+        val routine = mockMvc.post("/api/routines") {
+            contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(mapOf("name" to "Skills routine", "sourceScopeId" to
+                jdbcTemplate.queryForObject("select id from source_scopes where workspace_id = ?", UUID::class.java, devContext.devWorkspaceId),
+                "instruction" to "Draft changes", "cadence" to "WEEKLY", "skillIds" to listOf(skill.id)))
+        }.andExpect { status { isCreated() }; jsonPath("$.skills[0].revision") { value(1) } }.andReturn()
+        val routineId = UUID.fromString(objectMapper.readTree(routine.response.contentAsString)["id"].stringValue())
+        skillService.update(devContext.devWorkspaceId, skill.id,
+            com.plot.api.skill.SkillRequest(skill.name, skill.description, "Changed guidance."))
+        skillService.delete(devContext.devWorkspaceId, skill.id)
+        assertEquals(skill, com.plot.api.skill.FrozenSkills.read(routinePersistence.find(devContext.devWorkspaceId, routineId)!!.skillsSnapshotJson).single())
+        // Replaying the original request must work even after the selected skill was deleted.
+        assertEquals(run.id, chatRuns.admit(request, key).id)
+        jdbcTemplate.update("update agent_runs set status = 'FAILED', claimed_by = null, claimed_at = null, finished_at = now() where id = ?", run.id)
+        val versionId = jdbcTemplate.queryForObject("select id from chat_response_versions where agent_run_id = ?", UUID::class.java, run.id)!!
+        val retry = chatRuns.retry(versionId, "retry-${UUID.randomUUID()}")
+        val frozen = jdbcTemplate.queryForObject("select skills_snapshot::text from agent_runs where id = ?", String::class.java, retry.agentRunId)!!
+        assertEquals(skill, com.plot.api.skill.FrozenSkills.read(frozen).single())
+        val instruction = com.plot.api.skill.FrozenSkills.instruction("Draft changes", frozen)
+        assertTrue(instruction.contains("Write concise customer benefits."))
+        assertFalse(instruction.contains("Changed guidance."))
+        kotlin.test.assertFailsWith<com.plot.api.common.ApiException> { skillService.freeze(devContext.devWorkspaceId, List(5) { UUID.randomUUID() }) }
+        val systemId = skillService.list(devContext.devWorkspaceId).first { it.isSystem }.id
+        kotlin.test.assertFailsWith<com.plot.api.common.ApiException> { skillService.delete(devContext.devWorkspaceId, systemId) }
+        mockMvc.post("/api/agent-runs") {
+            contentType = MediaType.APPLICATION_JSON
+            header("Idempotency-Key", "null-skill-${UUID.randomUUID()}")
+            content = """{"instruction":"Draft changes","skillIds":[null]}"""
+        }.andExpect { status { isBadRequest() }; jsonPath("$.error") { value("BAD_REQUEST") } }
+
+    }
+
 	@Test
 	fun `routine create stores distinct active context sources`() {
 		val triggerSourceId = insertSourceScope("acme/plot")
