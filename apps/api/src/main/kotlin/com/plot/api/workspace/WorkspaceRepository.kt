@@ -1,135 +1,108 @@
 package com.plot.api.workspace
 
-import com.plot.api.persistence.generated.tables.Workspaces.Companion.WORKSPACES
-import java.time.Instant
-import java.time.OffsetDateTime
+import com.plot.api.persistence.ExposedSqlExecutor
+import java.time.ZoneOffset
 import java.util.Optional
 import java.util.UUID
-import org.jooq.DSLContext
-import org.jooq.Record
+import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.core.statements.UpdateBuilder
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.update
 import org.springframework.stereotype.Repository
+import org.springframework.transaction.annotation.Transactional
 
 @Repository
 class WorkspaceRepository(
-	private val dsl: DSLContext,
+	private val sql: ExposedSqlExecutor,
 ) {
-	fun findById(id: UUID): Optional<Workspace> = Optional.ofNullable(select()
-		.where(WORKSPACES.ID.eq(id))
-		.fetchOne()
-		?.toModel())
+	@Transactional(readOnly = true)
+	fun findById(id: UUID): Optional<Workspace> = Optional.ofNullable(sql.execute {
+		WorkspaceTable.selectAll().where { WorkspaceTable.id eq id }.singleOrNull()?.toModel()
+	})
 
-	fun findByIdAndStatus(id: UUID, status: String): Workspace? = select()
-		.where(
-			WORKSPACES.ID.eq(id),
-			WORKSPACES.STATUS.eq(status),
-		)
-		.fetchOne()
-		?.toModel()
+	@Transactional(readOnly = true)
+	fun findByIdAndStatus(id: UUID, status: String): Workspace? = sql.execute {
+		WorkspaceTable.selectAll().where {
+			(WorkspaceTable.id eq id) and (WorkspaceTable.status eq status)
+		}.singleOrNull()?.toModel()
+	}
 
+	@Transactional(readOnly = true)
 	fun findAllByIdInAndStatus(ids: Collection<UUID>, status: String): List<Workspace> {
 		if (ids.isEmpty()) return emptyList()
-		return select()
-			.where(
-				WORKSPACES.ID.`in`(ids),
-				WORKSPACES.STATUS.eq(status),
-			)
-			.fetch()
-			.map { it.toModel() }
-	}
-
-	fun findBySlug(slug: String): Workspace? = select()
-		.where(WORKSPACES.SLUG.eq(slug))
-		.fetchOne()
-		?.toModel()
-
-	fun findByPolarSubscriptionId(polarSubscriptionId: String): Workspace? = select()
-		.where(WORKSPACES.POLAR_SUBSCRIPTION_ID.eq(polarSubscriptionId))
-		.fetchOne()
-		?.toModel()
-
-	fun save(workspace: Workspace): Workspace {
-		val updated = dsl.update(WORKSPACES)
-			.set(WORKSPACES.NAME, workspace.name)
-			.set(WORKSPACES.SLUG, workspace.slug)
-			.set(WORKSPACES.CREATED_BY_USER_ID, workspace.createdByUserId)
-			.set(WORKSPACES.STATUS, workspace.status)
-			.set(WORKSPACES.CREATED_AT, workspace.createdAt.toOffsetDateTime())
-			.set(WORKSPACES.UPDATED_AT, workspace.updatedAt.toOffsetDateTime())
-			.set(WORKSPACES.PLAN, workspace.plan)
-			.set(WORKSPACES.POLAR_SUBSCRIPTION_ID, workspace.polarSubscriptionId)
-			.set(WORKSPACES.POLAR_CUSTOMER_ID, workspace.polarCustomerId)
-			.set(WORKSPACES.PLAN_UPDATED_AT, workspace.planUpdatedAt?.toOffsetDateTime())
-			.set(WORKSPACES.ENTITLEMENT_STATUS, workspace.entitlementStatus)
-			.set(WORKSPACES.ACCESS_MODE, workspace.accessMode)
-			.set(WORKSPACES.TRIAL_STARTED_AT, workspace.trialStartedAt.toOffsetDateTime())
-			.set(WORKSPACES.TRIAL_ENDS_AT, workspace.trialEndsAt.toOffsetDateTime())
-			.set(WORKSPACES.LOGO_URL, workspace.logoUrl)
-			.set(WORKSPACES.PUBLIC_CITATIONS_ENABLED, workspace.publicCitationsEnabled)
-			.where(WORKSPACES.ID.eq(workspace.id))
-			.execute()
-		if (updated == 0) {
-			dsl.insertInto(WORKSPACES)
-				.set(WORKSPACES.ID, workspace.id)
-				.set(WORKSPACES.NAME, workspace.name)
-				.set(WORKSPACES.SLUG, workspace.slug)
-				.set(WORKSPACES.CREATED_BY_USER_ID, workspace.createdByUserId)
-				.set(WORKSPACES.STATUS, workspace.status)
-				.set(WORKSPACES.CREATED_AT, workspace.createdAt.toOffsetDateTime())
-				.set(WORKSPACES.UPDATED_AT, workspace.updatedAt.toOffsetDateTime())
-				.set(WORKSPACES.PLAN, workspace.plan)
-				.set(WORKSPACES.POLAR_SUBSCRIPTION_ID, workspace.polarSubscriptionId)
-				.set(WORKSPACES.POLAR_CUSTOMER_ID, workspace.polarCustomerId)
-				.set(WORKSPACES.PLAN_UPDATED_AT, workspace.planUpdatedAt?.toOffsetDateTime())
-				.set(WORKSPACES.ENTITLEMENT_STATUS, workspace.entitlementStatus)
-				.set(WORKSPACES.ACCESS_MODE, workspace.accessMode)
-				.set(WORKSPACES.TRIAL_STARTED_AT, workspace.trialStartedAt.toOffsetDateTime())
-				.set(WORKSPACES.TRIAL_ENDS_AT, workspace.trialEndsAt.toOffsetDateTime())
-				.set(WORKSPACES.LOGO_URL, workspace.logoUrl)
-				.set(WORKSPACES.PUBLIC_CITATIONS_ENABLED, workspace.publicCitationsEnabled)
-				.execute()
+		return sql.execute {
+			WorkspaceTable.selectAll().where {
+				(WorkspaceTable.id inList ids) and (WorkspaceTable.status eq status)
+			}.map { it.toModel() }
 		}
-		return workspace
 	}
 
-	private fun select() = dsl.select(
-		WORKSPACES.ID,
-		WORKSPACES.NAME,
-		WORKSPACES.SLUG,
-		WORKSPACES.CREATED_BY_USER_ID,
-		WORKSPACES.STATUS,
-		WORKSPACES.CREATED_AT,
-		WORKSPACES.UPDATED_AT,
-		WORKSPACES.PLAN,
-		WORKSPACES.POLAR_SUBSCRIPTION_ID,
-		WORKSPACES.POLAR_CUSTOMER_ID,
-		WORKSPACES.PLAN_UPDATED_AT,
-		WORKSPACES.ENTITLEMENT_STATUS,
-		WORKSPACES.ACCESS_MODE,
-		WORKSPACES.TRIAL_STARTED_AT,
-		WORKSPACES.TRIAL_ENDS_AT,
-		WORKSPACES.LOGO_URL,
-		WORKSPACES.PUBLIC_CITATIONS_ENABLED,
-	).from(WORKSPACES)
+	@Transactional(readOnly = true)
+	fun findBySlug(slug: String): Workspace? = sql.execute {
+		WorkspaceTable.selectAll().where { WorkspaceTable.slug eq slug }.singleOrNull()?.toModel()
+	}
 
-	private fun Record.toModel() = Workspace(
-		id = requireNotNull(get(WORKSPACES.ID)),
-		name = requireNotNull(get(WORKSPACES.NAME)),
-		slug = requireNotNull(get(WORKSPACES.SLUG)),
-		createdByUserId = get(WORKSPACES.CREATED_BY_USER_ID),
-		status = requireNotNull(get(WORKSPACES.STATUS)),
-		createdAt = requireNotNull(get(WORKSPACES.CREATED_AT)).toInstant(),
-		updatedAt = requireNotNull(get(WORKSPACES.UPDATED_AT)).toInstant(),
-		logoUrl = get(WORKSPACES.LOGO_URL),
-		plan = requireNotNull(get(WORKSPACES.PLAN)),
-		polarSubscriptionId = get(WORKSPACES.POLAR_SUBSCRIPTION_ID),
-		polarCustomerId = get(WORKSPACES.POLAR_CUSTOMER_ID),
-		planUpdatedAt = get(WORKSPACES.PLAN_UPDATED_AT)?.toInstant(),
-		entitlementStatus = requireNotNull(get(WORKSPACES.ENTITLEMENT_STATUS)),
-		accessMode = requireNotNull(get(WORKSPACES.ACCESS_MODE)),
-		trialStartedAt = requireNotNull(get(WORKSPACES.TRIAL_STARTED_AT)).toInstant(),
-		trialEndsAt = requireNotNull(get(WORKSPACES.TRIAL_ENDS_AT)).toInstant(),
-		publicCitationsEnabled = requireNotNull(get(WORKSPACES.PUBLIC_CITATIONS_ENABLED)),
+	@Transactional(readOnly = true)
+	fun findByPolarSubscriptionId(polarSubscriptionId: String): Workspace? = sql.execute {
+		WorkspaceTable.selectAll().where {
+			WorkspaceTable.polarSubscriptionId eq polarSubscriptionId
+		}.singleOrNull()?.toModel()
+	}
+
+	@Transactional
+	fun save(workspace: Workspace): Workspace = sql.execute {
+		val updated = WorkspaceTable.update({ WorkspaceTable.id eq workspace.id }) {
+			it.copyFrom(workspace)
+		}
+		if (updated == 0) {
+			WorkspaceTable.insert {
+				it[id] = workspace.id
+				it.copyFrom(workspace)
+			}
+		}
+		workspace
+	}
+
+	private fun UpdateBuilder<*>.copyFrom(workspace: Workspace) {
+		this[WorkspaceTable.name] = workspace.name
+		this[WorkspaceTable.slug] = workspace.slug
+		this[WorkspaceTable.createdByUserId] = workspace.createdByUserId
+		this[WorkspaceTable.status] = workspace.status
+		this[WorkspaceTable.createdAt] = workspace.createdAt.atOffset(ZoneOffset.UTC)
+		this[WorkspaceTable.updatedAt] = workspace.updatedAt.atOffset(ZoneOffset.UTC)
+		this[WorkspaceTable.plan] = workspace.plan
+		this[WorkspaceTable.polarSubscriptionId] = workspace.polarSubscriptionId
+		this[WorkspaceTable.polarCustomerId] = workspace.polarCustomerId
+		this[WorkspaceTable.planUpdatedAt] = workspace.planUpdatedAt?.atOffset(ZoneOffset.UTC)
+		this[WorkspaceTable.entitlementStatus] = workspace.entitlementStatus
+		this[WorkspaceTable.accessMode] = workspace.accessMode
+		this[WorkspaceTable.trialStartedAt] = workspace.trialStartedAt.atOffset(ZoneOffset.UTC)
+		this[WorkspaceTable.trialEndsAt] = workspace.trialEndsAt.atOffset(ZoneOffset.UTC)
+		this[WorkspaceTable.logoUrl] = workspace.logoUrl
+		this[WorkspaceTable.publicCitationsEnabled] = workspace.publicCitationsEnabled
+	}
+
+	private fun ResultRow.toModel() = Workspace(
+		id = this[WorkspaceTable.id],
+		name = this[WorkspaceTable.name],
+		slug = this[WorkspaceTable.slug],
+		createdByUserId = this[WorkspaceTable.createdByUserId],
+		status = this[WorkspaceTable.status],
+		createdAt = this[WorkspaceTable.createdAt].toInstant(),
+		updatedAt = this[WorkspaceTable.updatedAt].toInstant(),
+		logoUrl = this[WorkspaceTable.logoUrl],
+		plan = this[WorkspaceTable.plan],
+		polarSubscriptionId = this[WorkspaceTable.polarSubscriptionId],
+		polarCustomerId = this[WorkspaceTable.polarCustomerId],
+		planUpdatedAt = this[WorkspaceTable.planUpdatedAt]?.toInstant(),
+		entitlementStatus = this[WorkspaceTable.entitlementStatus],
+		accessMode = this[WorkspaceTable.accessMode],
+		trialStartedAt = this[WorkspaceTable.trialStartedAt].toInstant(),
+		trialEndsAt = this[WorkspaceTable.trialEndsAt].toInstant(),
+		publicCitationsEnabled = this[WorkspaceTable.publicCitationsEnabled],
 	)
 }
-
-private fun Instant.toOffsetDateTime(): OffsetDateTime = atOffset(java.time.ZoneOffset.UTC)
