@@ -2,38 +2,59 @@
 
 Kotlin / Spring Boot 백엔드입니다. 기능별 코드는 `src/main/kotlin/com/plot/api`에 있습니다.
 
+## 도메인별 책임
+
+| 도메인 | 담당하는 일 | 시작점 |
+| --- | --- | --- |
+| `chat` | 사용자 요청, 대화·응답 버전, 재시도 대상 검증 | `ChatRunService`, `ChatQueryService`, `ChatPersistence` |
+| `routine` | 일정·트리거·조건 검사, 예약 실행 등록, 결과·활동 커서 반영 | `RoutineWorker`, `RoutineAgentAdmissionPersistence`, `RoutineAgentRunProjection` |
+| `agent` | 공통 실행 등록, 고정 입력·도구 기록, 모델 판단, 실행권·재시도·복구 | `AgentRunRegistrationPersistence`, `AgentExecutionSnapshotPersistence`, `AgentRunWorker` |
+| `artifact` | 콘텐츠 생성 작업과 결과물 저장·조회·수정·내보내기 | `workflow/ArtifactWorkflowRunService`, `ArtifactController` |
+
 ## 코드를 읽는 순서
 
-### 채팅 요청과 재시도
+### 실행 등록
 
-```text
-chat/ChatController
-  ├─ POST → ChatRunService → AgentRunQueryPersistence / SQL → AgentRunDispatcher
-  └─ GET  → ChatQueryService → AgentRunQueryPersistence → 응답 DTO
+```mermaid
+flowchart LR
+    Chat[chat/ChatRunService] --> Register[agent/AgentRunRegistrationPersistence]
+    Routine[routine/RoutineAgentAdmissionPersistence] --> Register
+    Register --> Commit[트랜잭션 커밋]
+    Commit --> Dispatch[agent/AgentRunDispatcher]
 ```
 
-- `ChatRunService`: 새 실행, 자동 실행, 다른 콘텐츠로 변환, 재시도를 등록합니다. 저장이 커밋된 뒤 작업자를 깨웁니다.
-- `ChatQueryService`: 실행·대화·응답 버전을 조회하고 응답 DTO를 만듭니다. 재시도 가능 여부를 읽지만, 실제 재시도는 `ChatRunService`가 잠금 안에서 다시 검증합니다.
-- `ChatCompatibilityWriter`: 기존 실행과 채팅의 turn/version/envelope를 연결합니다. 대화 조회 시 기존 데이터의 누락된 연결을 채우는 동작도 유지합니다.
-- `chat/dto`: HTTP 요청·응답 형식입니다. 폴더 이름과 별개로 기존 `/api/agent-runs` 및 `/api/sessions` 주소를 사용합니다.
+- `chat`과 `routine`이 요청 검증, 잠금, 트랜잭션을 담당합니다. `agent` 등록 저장소는 전달받은 실행·출처·입력을 저장합니다.
+- 채팅의 동일 요청 재전송은 `insertChatIfAbsent`, 예약 실행의 새 등록은 `insertRequired`를 사용합니다. 기존 실행과의 충돌 판단은 호출자가 담당합니다.
+- `ChatCompatibilityWriter`는 실행과 대화의 turn/version을 연결하고 실행 설정은 `AgentExecutionSnapshotPersistence`에 저장합니다. 기존 데이터의 누락된 대화 연결을 조회 시 채우는 동작도 유지합니다.
 
-### 백그라운드 실행과 결과물
+### 실행과 완료
 
 ```text
-routine/AgentRunDispatcher → AgentRunWorker
-  → 읽기 도구 또는 artifact/workflow
-  → ArtifactWorkflowRunWorker → 모델 호출 → 결과 저장
-  → artifact/ArtifactController에서 조회·수정·내보내기
+agent/AgentRunDispatcher → AgentRunWorker
+  → ReadOnlyAgentTools 또는 artifact/workflow
+  → AgentRunExecutionPersistence
+  → config/AgentRunCompletionProjectionAdapter
+      ├→ chat/ChatPersistence: 응답의 실행 중 상태 해제
+      └→ routine/RoutineAgentRunProjection: 예약 결과·활동 커서 반영
 ```
 
-`routine`에는 예약 실행과 공통 AgentRun 작업자가 있습니다. 채팅과 예약 실행이 같은 작업자를 사용합니다.
+- 채팅과 예약 실행은 같은 작업자를 사용합니다. `agent`는 `chat`과 `routine`의 구현 클래스를 참조하지 않습니다.
+- 완료 반영은 실행 상태 변경 직후 동기로 호출하며 기존 트랜잭션 경계를 유지합니다. 성공한 실행만 활동 커서를 전진시킵니다. GitHub 릴리스 후속 처리는 커밋 뒤에 요청합니다.
+- GitHub 릴리스 전용 실행 조건은 `GitHubAgentRunExecutionPolicy`가 담당합니다.
+
+### 조회와 재시도
+
+- `ChatQueryService`는 `ChatPersistence`에서 대화·버전을, `AgentRunQueryPersistence`에서 실행·결과를 읽어 응답 DTO를 만듭니다.
+- `ChatRunService`는 재시도 가능 여부를 잠금 안에서 다시 확인하고 새 응답 버전을 연결합니다.
+- 실행 설정과 도구 기록은 `AgentExecutionSnapshotPersistence`, 출처와 입력 복사는 `AgentRunRegistrationPersistence.copySourcesAndInputs`가 담당합니다. 재시도는 저장된 입력을 재사용합니다.
 
 ## 저장소와 설정
 
 - 기능별 `*Repository` / `*Persistence`에서 DB 접근을 찾습니다. `persistence/JooqSqlExecutor`는 공통 SQL 실행과 예외 변환을 담당합니다.
-- `JooqTransactionExecutor` 호출 블록은 여러 SQL 작업을 하나로 묶는 경계입니다. 특히 재시도의 잠금·복사·등록 순서를 함께 읽어야 합니다.
-- 일반 서비스·저장소는 생성자 주입을 사용합니다. `ArtifactWorkflowConfiguration`에는 작업자 옵션, 실행기, 재시도, 종료 정책과 함수 인자 조립만 남겨둡니다.
-- `src/main/resources/db/migration`은 기존 데이터의 스키마 이력입니다. 코드 패키지 이동은 테이블이나 HTTP 계약 변경을 의미하지 않습니다.
+- `JooqTransactionExecutor` 호출 블록은 여러 SQL 작업을 하나로 묶는 경계입니다. 재시도의 잠금·복사·등록 순서를 함께 읽어야 합니다.
+- 일반 서비스·저장소는 생성자 주입을 사용합니다. `AgentConfiguration`, `RoutineConfiguration`, `ArtifactWorkflowConfiguration`은 실행기와 작업자 설정을 조립합니다.
+- 기존 `/api/agent-runs`, `/api/sessions` 주소와 `plot.routine-agent` 설정 키는 유지합니다.
+- `agent`의 실행 설정·도구 기록은 기존 `chat_execution_*` 테이블을 사용합니다. 재시도 여부를 읽는 기존 응답 버전 연결도 유지합니다. 패키지 경계 정리를 위해 DB 마이그레이션을 추가하지 않았습니다.
 
 ## 로컬 검증
 
