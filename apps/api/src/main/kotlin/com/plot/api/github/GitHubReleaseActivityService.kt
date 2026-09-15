@@ -15,7 +15,7 @@ class GitHubReleaseActivityService(
 	private val requestPersistence: GitHubReleaseRequestStore,
 	private val retryService: GitHubReleaseRetryService,
 	private val actorResolver: RequestActorResolver? = null,
-	private val sql: com.plot.api.persistence.JooqSqlExecutor,
+	private val sql: com.plot.api.persistence.SqlExecutor,
 ) {
 	@Transactional(readOnly = true)
 	fun latest(sourceScopeId: UUID): GitHubReleaseActivityResponse? {

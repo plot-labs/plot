@@ -1,6 +1,6 @@
 package com.plot.api.github
 
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import com.plot.api.routine.RoutineAgentPersistence
 import com.plot.api.routine.RoutinePersistence
 import java.time.Instant
@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component
 
 @Component
 class GitHubReleaseRoutineProjection(
-	private val sql: JooqSqlExecutor,
+	private val sql: SqlExecutor,
 	private val executions: RoutineAgentPersistence,
 	private val routines: RoutinePersistence,
 ) {

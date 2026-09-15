@@ -1,6 +1,6 @@
 package com.plot.api.autonomy.signal
 
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import com.plot.api.persistence.SqlRow
 import java.sql.Timestamp
 import java.time.Duration
@@ -10,7 +10,7 @@ import org.springframework.stereotype.Repository
 import org.springframework.transaction.annotation.Transactional
 
 @Repository
-class SignalInbox(private val sql: JooqSqlExecutor) {
+class SignalInbox(private val sql: SqlExecutor) {
 	@Transactional
 	fun accept(envelope: SignalEnvelope, now: Instant): SignalReceipt {
 		val id = UUID.randomUUID()

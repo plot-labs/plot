@@ -7,7 +7,7 @@ import com.plot.api.dev.DevContext
 import com.plot.api.content.ContentBriefDestination
 import java.util.UUID
 import org.springframework.http.HttpStatus
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import org.springframework.stereotype.Service
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.ObjectMapper
@@ -16,7 +16,7 @@ import tools.jackson.databind.ObjectMapper
 
 @Service
 class ArtifactLexicalDocumentValidator(
-    private val sqlExecutor: JooqSqlExecutor,
+    private val sqlExecutor: SqlExecutor,
     private val uuidGenerator: UuidGenerator,
     private val objectMapper: ObjectMapper,
     private val devContext: DevContext,

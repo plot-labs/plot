@@ -1,6 +1,6 @@
 package com.plot.api.recovery
 
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import java.sql.Timestamp
 import java.time.Instant
 import org.springframework.stereotype.Component
@@ -12,7 +12,7 @@ data class QueueRunnableStats(
 
 @Component
 open class RecoveryCoordinatorPersistence(
-	private val sqlExecutor: JooqSqlExecutor,
+	private val sqlExecutor: SqlExecutor,
 ) {
 	open fun findReleaseDraftStats(now: Instant, staleBefore: Instant, batchSize: Int): QueueRunnableStats =
 		sqlExecutor.query(

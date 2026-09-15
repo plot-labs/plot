@@ -4,7 +4,7 @@ import com.plot.api.autonomy.signal.ActivityPage
 import com.plot.api.autonomy.signal.SignalActivityProjectionService
 import com.plot.api.dev.DevContext
 import com.plot.api.entitlement.WorkspaceAccessService
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import java.time.Instant
 import java.util.UUID
 import org.springframework.http.CacheControl
@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController
 class AutonomyHomeController(
     private val context: DevContext,
     private val access: WorkspaceAccessService,
-    private val sql: JooqSqlExecutor,
+    private val sql: SqlExecutor,
     private val activityProjection: SignalActivityProjectionService? = null,
 ) {
     companion object {

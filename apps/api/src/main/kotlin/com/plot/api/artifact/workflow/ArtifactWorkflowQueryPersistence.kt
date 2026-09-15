@@ -3,7 +3,7 @@ package com.plot.api.artifact.workflow
 import com.plot.api.artifact.workflow.dto.ArtifactWorkflowModelTimingResponse
 import com.plot.api.artifact.workflow.dto.ArtifactWorkflowRunTimingResponse
 import com.plot.api.artifact.workflow.dto.ArtifactWorkflowStepTimingResponse
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
@@ -12,7 +12,7 @@ import tools.jackson.databind.ObjectMapper
 
 @Repository
 class ArtifactWorkflowQueryPersistence(
-	private val sqlExecutor: JooqSqlExecutor,
+	private val sqlExecutor: SqlExecutor,
 	private val objectMapper: ObjectMapper,
 ) {
 	fun loadState(workspaceId: UUID, runId: UUID): ArtifactWorkflowState {

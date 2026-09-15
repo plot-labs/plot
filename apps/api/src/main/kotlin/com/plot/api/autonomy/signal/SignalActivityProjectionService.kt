@@ -1,6 +1,6 @@
 package com.plot.api.autonomy.signal
 
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
@@ -30,7 +30,7 @@ data class ActivityPage(
 
 @Service
 class SignalActivityProjectionService(
-	private val sql: JooqSqlExecutor,
+	private val sql: SqlExecutor,
 ) {
 	fun projectActivity(
 		workspaceId: UUID,

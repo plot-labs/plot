@@ -1,7 +1,7 @@
 package com.plot.api.github
 
 import com.plot.api.common.ApiException
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.security.SecureRandom
@@ -30,7 +30,7 @@ data class GitHubProductOAuthStateBinding(
 @Service
 class GitHubProductOAuthStateService(
 	private val properties: GitHubProperties,
-	private val sql: JooqSqlExecutor,
+	private val sql: SqlExecutor,
 	private val clock: Clock = Clock.systemUTC(),
 	private val random: SecureRandom = SecureRandom(),
 ) {

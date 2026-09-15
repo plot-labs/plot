@@ -3,7 +3,7 @@ package com.plot.api.github
 import com.plot.api.common.ApiException
 import com.plot.api.common.UuidGenerator
 import com.plot.api.common.WorkspacePrincipal
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import com.plot.api.source.ImportedWritingBlock
 import com.plot.api.writingblock.WritingBlockImportService
 import java.sql.Timestamp
@@ -30,7 +30,7 @@ interface GitHubReleaseEvidenceService {
 
 @Component
 class GitHubReleaseEvidenceTransactionService(
-	private val sqlExecutor: JooqSqlExecutor,
+	private val sqlExecutor: SqlExecutor,
 	private val uuidGenerator: UuidGenerator,
 	private val writingBlockImportService: WritingBlockImportService,
 ) {

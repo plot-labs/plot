@@ -6,8 +6,8 @@ import com.plot.api.ai.provider.ModelRole
 import com.plot.api.artifact.run.ArtifactRunPersistence
 import com.plot.api.artifact.run.ArtifactRunStatus
 import com.plot.api.common.UuidGenerator
-import com.plot.api.persistence.JooqSqlExecutor
-import com.plot.api.persistence.JooqTransactionExecutor
+import com.plot.api.persistence.SqlExecutor
+import com.plot.api.persistence.TransactionExecutor
 import java.sql.Timestamp
 import java.time.Clock
 import java.time.Duration
@@ -18,9 +18,9 @@ import tools.jackson.databind.ObjectMapper
 
 @Repository
 class ArtifactWorkflowExecutionPersistence(
-	private val sqlExecutor: JooqSqlExecutor,
+	private val sqlExecutor: SqlExecutor,
 	private val objectMapper: ObjectMapper,
-	private val transactionExecutor: JooqTransactionExecutor,
+	private val transactionExecutor: TransactionExecutor,
 	private val uuidGenerator: UuidGenerator,
 	private val artifactRunPersistence: ArtifactRunPersistence,
 	private val materializationPersistence: ArtifactWorkflowMaterializationPersistence,

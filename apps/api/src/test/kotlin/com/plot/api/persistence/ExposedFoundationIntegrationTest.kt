@@ -48,6 +48,9 @@ class ExposedFoundationIntegrationTest {
 	private lateinit var jdbcTemplate: JdbcTemplate
 
 	@Autowired
+	private lateinit var sqlExecutor: SqlExecutor
+
+	@Autowired
 	private lateinit var workSessionPersistence: WorkSessionPersistence
 
 	@Autowired
@@ -84,6 +87,38 @@ class ExposedFoundationIntegrationTest {
 			}
 		} finally {
 			jdbcTemplate.update("delete from work_sessions where id = ?", id)
+		}
+	}
+
+	@Test
+	@Transactional
+	fun sqlExecutorPreservesRawSqlMappingAndSpringExceptionSemantics() {
+		val id = UUID.randomUUID()
+		val instant = Instant.parse("2026-08-14T12:34:56Z")
+		val rows = sqlExecutor.query(
+			"select ?::uuid as id, ?::text as value, ?::timestamptz as happened_at, true as enabled",
+			{ row, index ->
+				assertEquals(0, index)
+				listOf(row.getObject(1, UUID::class.java), row.getString("value"), row.getTimestamp(3)?.toInstant(), row.getBoolean("enabled"))
+			},
+			id,
+			"mapped",
+			java.sql.Timestamp.from(instant),
+		)
+		assertEquals(listOf(listOf(id, "mapped", instant, true)), rows)
+		val detachedRow = sqlExecutor.query("select ?::uuid as id, ?::text as value", id, "detached").single()
+		assertEquals(id, detachedRow.getObject("id", UUID::class.java))
+		assertEquals("detached", detachedRow.getString(2))
+		assertEquals(null, sqlExecutor.queryForObject("select 1 where false", Int::class.javaObjectType))
+
+		val map = sqlExecutor.queryForMap("select ?::uuid as id, ?::timestamptz as happened_at", id, java.sql.Timestamp.from(instant))
+		assertEquals(id, map["id"])
+		assertEquals(instant, (map["happened_at"] as java.sql.Timestamp).toInstant())
+
+		sqlExecutor.update("create temporary table sql_executor_unique_test (id integer primary key)")
+		sqlExecutor.update("insert into sql_executor_unique_test (id) values (?)", 1)
+		assertFailsWith<DuplicateKeyException> {
+			sqlExecutor.update("insert into sql_executor_unique_test (id) values (?)", 1)
 		}
 	}
 

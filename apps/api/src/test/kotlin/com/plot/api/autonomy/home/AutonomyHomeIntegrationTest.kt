@@ -3,7 +3,7 @@ package com.plot.api.autonomy.home
 import com.plot.api.TestcontainersConfiguration
 import com.plot.api.dev.DevContext
 import com.plot.api.entitlement.WorkspaceAccessService
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -21,7 +21,7 @@ import org.springframework.jdbc.core.JdbcTemplate
 @SpringBootTest
 @Import(TestcontainersConfiguration::class)
 class AutonomyHomeIntegrationTest {
-    @Autowired lateinit var sql: JooqSqlExecutor
+    @Autowired lateinit var sql: SqlExecutor
     @Autowired lateinit var jdbc: JdbcTemplate
     private val workspaces = mutableSetOf<UUID>()
 

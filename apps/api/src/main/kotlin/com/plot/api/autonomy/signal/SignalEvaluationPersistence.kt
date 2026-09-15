@@ -1,7 +1,7 @@
 package com.plot.api.autonomy.signal
 
 import com.plot.api.common.UuidGenerator
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import com.plot.api.persistence.SqlRow
 import java.security.MessageDigest
 import java.sql.Timestamp
@@ -31,7 +31,7 @@ data class SignalEvaluationRecord(
 
 @Repository
 class SignalEvaluationPersistence(
-	private val sql: JooqSqlExecutor,
+	private val sql: SqlExecutor,
 	private val uuidGenerator: UuidGenerator,
 	@Value("\${plot.autonomy.signal-evaluator.enabled:false}")
 	val signalEvaluatorEnabled: Boolean = false,

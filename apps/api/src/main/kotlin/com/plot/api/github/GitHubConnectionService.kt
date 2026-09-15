@@ -3,8 +3,8 @@ package com.plot.api.github
 import com.plot.api.auth.RequestActorResolver
 import com.plot.api.common.ApiException
 import com.plot.api.dev.DevContext
-import com.plot.api.persistence.JooqSqlExecutor
-import com.plot.api.persistence.JooqTransactionExecutor
+import com.plot.api.persistence.SqlExecutor
+import com.plot.api.persistence.TransactionExecutor
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.sql.Timestamp
@@ -77,8 +77,8 @@ class GitHubConnectionService(
 	private val stateService: GitHubInstallationStateService,
 	private val githubClient: GitHubClient,
 	private val productCredentialRepository: GitHubProductCredentialRepository,
-	private val sqlExecutor: JooqSqlExecutor,
-	private val transactionExecutor: JooqTransactionExecutor,
+	private val sqlExecutor: SqlExecutor,
+	private val transactionExecutor: TransactionExecutor,
 	private val objectMapper: ObjectMapper,
 	private val statusRecorder: GitHubConnectionStatusRecorder,
 	private val monitoringPersistence: GitHubRepositoryMonitoringPersistence,
@@ -748,7 +748,7 @@ class GitHubConnectionService(
 @Service
 class GitHubConnectionStatusRecorder(
 	private val devContext: DevContext,
-	private val sqlExecutor: JooqSqlExecutor,
+	private val sqlExecutor: SqlExecutor,
 ) {
 	@Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
 	fun markNeedsReauth(connectionId: UUID) {

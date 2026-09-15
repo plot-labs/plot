@@ -16,8 +16,8 @@ import java.time.Instant
 import java.util.UUID
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
-import com.plot.api.persistence.JooqSqlExecutor
-import com.plot.api.persistence.JooqTransactionExecutor
+import com.plot.api.persistence.SqlExecutor
+import com.plot.api.persistence.TransactionExecutor
 import org.springframework.stereotype.Service
 import tools.jackson.databind.ObjectMapper
 
@@ -35,8 +35,8 @@ class GitHubRoutineRefreshService(
 	private val transformer: GitHubWritingBlockTransformer,
 	private val writingBlockImportService: WritingBlockImportService,
 	private val agentPersistence: RoutineAgentPersistence,
-	private val sqlExecutor: JooqSqlExecutor,
-	private val transactionExecutor: JooqTransactionExecutor,
+	private val sqlExecutor: SqlExecutor,
+	private val transactionExecutor: TransactionExecutor,
 	private val objectMapper: ObjectMapper,
 	private val uuidGenerator: UuidGenerator,
 	private val clock: Clock = Clock.systemUTC(),

@@ -5,7 +5,7 @@ import com.plot.api.artifact.workflow.model.EvidenceSnapshot
 import com.plot.api.artifact.workflow.model.ReviewVerdict
 import com.plot.api.artifact.workflow.model.SentenceArtifact
 import com.plot.api.common.UuidGenerator
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
@@ -14,7 +14,7 @@ import tools.jackson.databind.ObjectMapper
 
 @Repository
 class ArtifactWorkflowMaterializationPersistence(
-	private val sqlExecutor: JooqSqlExecutor,
+	private val sqlExecutor: SqlExecutor,
 	private val objectMapper: ObjectMapper,
 	private val uuidGenerator: UuidGenerator,
 ) {

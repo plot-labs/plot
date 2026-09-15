@@ -2,7 +2,7 @@ package com.plot.api.auth.workos
 
 import com.plot.api.auth.WorkOSAuthProperties
 import com.plot.api.common.UuidGenerator
-import com.plot.api.persistence.JooqTransactionExecutor
+import com.plot.api.persistence.TransactionExecutor
 import com.plot.api.workspace.WorkspaceMemberRepository
 import java.time.Instant
 import java.util.UUID
@@ -23,7 +23,7 @@ class WorkOSMembershipProjectionService(
 	private val memberRepository: WorkspaceMemberRepository,
 	private val uuidGenerator: UuidGenerator,
 	private val properties: WorkOSAuthProperties,
-	private val transactionExecutor: JooqTransactionExecutor,
+	private val transactionExecutor: TransactionExecutor,
 ) {
 	fun reconcile(snapshot: WorkOSMembershipSnapshot): WorkOSMembershipProjectionResult? {
 		val identity = identityRepository.findByWorkOSUserId(snapshot.userId) ?: return null

@@ -4,9 +4,7 @@ import com.plot.api.common.ApiException
 import com.plot.api.dev.DevContext
 import com.plot.api.github.GitHubInstallationStateService
 import com.plot.api.github.GitHubProperties
-import com.plot.api.persistence.JooqSqlExecutor
-import org.jooq.SQLDialect
-import org.jooq.impl.DSL
+import com.plot.api.persistence.SqlExecutor
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -16,6 +14,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import org.junit.jupiter.api.Test
+import org.mockito.Mockito.mock
+import org.springframework.jdbc.core.JdbcOperations
 
 class GitHubInstallationStateTest {
 	@Test
@@ -57,7 +57,7 @@ class GitHubInstallationStateTest {
 	}
 }
 
-private class InMemoryInstallationStateSqlExecutor : JooqSqlExecutor(DSL.using(SQLDialect.POSTGRES)) {
+private class InMemoryInstallationStateSqlExecutor : SqlExecutor(mock(JdbcOperations::class.java)) {
 	var nonceHash: String? = null
 	var workspaceId: UUID? = null
 	var userId: UUID? = null

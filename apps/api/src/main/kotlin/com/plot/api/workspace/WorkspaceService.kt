@@ -8,7 +8,7 @@ import com.plot.api.auth.workos.WorkOSOrganizationMappingRepository
 import com.plot.api.auth.workos.WorkOSOrganizationGateway
 import com.plot.api.auth.workos.WorkOSProviderException
 import com.plot.api.auth.workos.WorkOSWorkspaceProvisioningRepository
-import com.plot.api.persistence.JooqTransactionExecutor
+import com.plot.api.persistence.TransactionExecutor
 import com.plot.api.dev.DevContext
 import com.plot.api.entitlement.TrialPolicy
 import com.plot.api.entitlement.WorkspaceEntitlementReader
@@ -34,7 +34,7 @@ class WorkspaceService(
 	private val workOSOrganizationMappingRepository: WorkOSOrganizationMappingRepository,
 	private val workOSOrganizationGateway: WorkOSOrganizationGateway,
 	private val workOSWorkspaceProvisioningRepository: WorkOSWorkspaceProvisioningRepository,
-	private val transactionExecutor: JooqTransactionExecutor,
+	private val transactionExecutor: TransactionExecutor,
 ) {
 
 	fun create(request: CreateWorkspaceRequest, idempotencyKey: String? = null): WorkspaceResponse {

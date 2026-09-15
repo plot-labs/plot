@@ -1,6 +1,6 @@
 package com.plot.api.github
 
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import com.plot.api.persistence.SqlRow
 import com.plot.api.persistence.generated.tables.ContentPacks.Companion.CONTENT_PACKS
 import com.plot.api.persistence.generated.tables.GithubReleaseDraftEvidence.Companion.GITHUB_RELEASE_DRAFT_EVIDENCE
@@ -19,7 +19,7 @@ import org.springframework.transaction.annotation.Transactional
 /** Owns release request admission, range/evidence linkage, and activity projections. */
 @Component
 class GitHubReleaseRequestPersistence(
-	private val sqlExecutor: JooqSqlExecutor,
+	private val sqlExecutor: SqlExecutor,
 	dslContext: DSLContext,
 	private val routineProjection: GitHubReleaseRoutineProjection,
 	private val clock: Clock = Clock.systemUTC(),

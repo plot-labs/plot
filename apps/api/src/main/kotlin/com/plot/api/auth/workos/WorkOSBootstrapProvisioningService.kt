@@ -5,7 +5,7 @@ import com.plot.api.auth.WorkOSAuthProperties
 import com.plot.api.common.ApiException
 import com.plot.api.common.UuidGenerator
 import com.plot.api.entitlement.TrialPolicy
-import com.plot.api.persistence.JooqTransactionExecutor
+import com.plot.api.persistence.TransactionExecutor
 import com.plot.api.workspace.User
 import com.plot.api.workspace.UserRepository
 import com.plot.api.workspace.Workspace
@@ -38,7 +38,7 @@ class WorkOSBootstrapProvisioningService(
 	private val workOSOrganizationGateway: WorkOSOrganizationGateway,
 	private val uuidGenerator: UuidGenerator,
 	private val properties: WorkOSAuthProperties,
-	private val transactionExecutor: JooqTransactionExecutor,
+	private val transactionExecutor: TransactionExecutor,
 ) {
 	fun bootstrap(jwt: Jwt): BootstrapAccountResponse {
 		if (!properties.enabled) {

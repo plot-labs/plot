@@ -1,7 +1,7 @@
 package com.plot.api.agent
 
 import com.plot.api.common.UuidGenerator
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
@@ -11,7 +11,7 @@ import tools.jackson.databind.ObjectMapper
 /** Frozen settings and tool results used to reproduce an execution. Legacy table names are retained. */
 @Repository
 class AgentExecutionSnapshotPersistence(
-	private val sqlExecutor: JooqSqlExecutor,
+	private val sqlExecutor: SqlExecutor,
 	private val uuidGenerator: UuidGenerator,
 	private val objectMapper: ObjectMapper,
 ) {

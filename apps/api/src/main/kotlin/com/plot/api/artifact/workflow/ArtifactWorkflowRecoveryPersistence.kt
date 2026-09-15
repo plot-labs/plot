@@ -1,7 +1,7 @@
 package com.plot.api.artifact.workflow
 
-import com.plot.api.persistence.JooqSqlExecutor
-import com.plot.api.persistence.JooqTransactionExecutor
+import com.plot.api.persistence.SqlExecutor
+import com.plot.api.persistence.TransactionExecutor
 import java.sql.Timestamp
 import java.time.Clock
 import java.time.Instant
@@ -10,8 +10,8 @@ import org.springframework.stereotype.Repository
 
 @Repository
 class ArtifactWorkflowRecoveryPersistence(
-	private val sqlExecutor: JooqSqlExecutor,
-	private val transactionExecutor: JooqTransactionExecutor,
+	private val sqlExecutor: SqlExecutor,
+	private val transactionExecutor: TransactionExecutor,
 	private val clock: Clock = Clock.systemUTC(),
 ) {
 	/** Earliest persisted invocation retry, including rows already due, or null when none is pending. */

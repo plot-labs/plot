@@ -3,8 +3,8 @@ package com.plot.api.routine
 import com.plot.api.agent.AgentRunStatus
 
 import com.plot.api.common.UuidGenerator
-import com.plot.api.persistence.JooqSqlExecutor
-import com.plot.api.persistence.JooqTransactionExecutor
+import com.plot.api.persistence.SqlExecutor
+import com.plot.api.persistence.TransactionExecutor
 import com.plot.api.persistence.SqlRow
 import java.sql.Timestamp
 import java.time.Clock
@@ -14,8 +14,8 @@ import org.springframework.stereotype.Component
 
 @Component
 class RoutineAgentPersistence(
-	private val sqlExecutor: JooqSqlExecutor,
-	private val transactionExecutor: JooqTransactionExecutor,
+	private val sqlExecutor: SqlExecutor,
+	private val transactionExecutor: TransactionExecutor,
 	private val uuidGenerator: UuidGenerator,
 	private val clock: Clock? = null,
 ) {

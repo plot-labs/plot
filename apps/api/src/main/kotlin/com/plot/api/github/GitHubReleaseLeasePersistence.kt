@@ -1,6 +1,6 @@
 package com.plot.api.github
 
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import com.plot.api.persistence.generated.tables.GithubReleaseDraftRequests.Companion.GITHUB_RELEASE_DRAFT_REQUESTS
 import java.sql.Timestamp
 import java.time.Clock
@@ -17,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional
 /** Owns release-request claims, fencing, retries, recovery, and terminal transitions. */
 @Component
 class GitHubReleaseLeasePersistence(
-	private val sqlExecutor: JooqSqlExecutor,
+	private val sqlExecutor: SqlExecutor,
 	dslContext: DSLContext,
 	private val routineProjection: GitHubReleaseRoutineProjection,
 	private val clock: Clock = Clock.systemUTC(),

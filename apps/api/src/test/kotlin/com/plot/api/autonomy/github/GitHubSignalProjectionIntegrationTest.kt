@@ -119,7 +119,7 @@ class GitHubSignalProjectionIntegrationTest {
 		return versionId
 	}
 
-	@Autowired private lateinit var sql: com.plot.api.persistence.JooqSqlExecutor
+	@Autowired private lateinit var sql: com.plot.api.persistence.SqlExecutor
 
 	private data class Fixture(
 		val workspaceId: UUID,

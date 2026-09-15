@@ -6,7 +6,8 @@ import com.plot.api.artifact.run.ArtifactRunStatus
 import com.plot.api.common.UuidGenerator
 import com.plot.api.github.GitHubReleaseReconciliationTrigger
 import com.plot.api.persistence.JooqSqlExecutor
-import com.plot.api.persistence.JooqTransactionExecutor
+import com.plot.api.persistence.SqlExecutor
+import com.plot.api.persistence.TransactionExecutor
 import com.plot.api.persistence.generated.tables.AgentRunInputs.Companion.AGENT_RUN_INPUTS
 import com.plot.api.persistence.generated.tables.AgentRuns.Companion.AGENT_RUNS
 import com.plot.api.persistence.generated.tables.AgentSteps.Companion.AGENT_STEPS
@@ -25,8 +26,9 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 @Component
 class AgentRunExecutionPersistence(
-	private val sqlExecutor: JooqSqlExecutor,
-	private val transactionExecutor: JooqTransactionExecutor,
+	private val sqlExecutor: SqlExecutor,
+	private val jooqSqlExecutor: JooqSqlExecutor,
+	private val transactionExecutor: TransactionExecutor,
 	private val uuidGenerator: UuidGenerator,
 	private val queryPersistence: AgentRunQueryPersistence,
 	private val artifactRunPersistence: ArtifactRunPersistence,
@@ -128,7 +130,7 @@ class AgentRunExecutionPersistence(
 		now: Instant = currentInstant(),
 	): AgentStepRecord = transactionExecutor.execute {
 		val id = uuidGenerator.next()
-		sqlExecutor.executeTyped(dsl) { context ->
+		jooqSqlExecutor.executeTyped(dsl) { context ->
 			context.insertInto(AGENT_STEPS)
 				.set(AGENT_STEPS.ID, id)
 				.set(AGENT_STEPS.WORKSPACE_ID, workspaceId)
@@ -267,7 +269,7 @@ class AgentRunExecutionPersistence(
 			throw AgentRunBudgetExceededException("AGENT_TOOL_CALL_LIMIT")
 		}
 		val id = uuidGenerator.next()
-		sqlExecutor.executeTyped(dsl) { context ->
+		jooqSqlExecutor.executeTyped(dsl) { context ->
 			context.insertInto(AGENT_STEPS)
 				.set(AGENT_STEPS.ID, id)
 				.set(AGENT_STEPS.WORKSPACE_ID, claim.workspaceId)
@@ -564,7 +566,7 @@ class AgentRunExecutionPersistence(
 			agentRunId,
 		) ?: 0
 		val id = uuidGenerator.next()
-		sqlExecutor.executeTyped(dsl) { context ->
+		jooqSqlExecutor.executeTyped(dsl) { context ->
 			context.insertInto(AGENT_RUN_INPUTS)
 				.set(AGENT_RUN_INPUTS.ID, id)
 				.set(AGENT_RUN_INPUTS.WORKSPACE_ID, workspaceId)

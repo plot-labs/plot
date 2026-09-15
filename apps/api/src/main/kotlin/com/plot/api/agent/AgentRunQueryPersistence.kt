@@ -1,13 +1,13 @@
 package com.plot.api.agent
 
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import java.time.Instant
 import java.util.UUID
 import org.springframework.stereotype.Component
 
 @Component
 class AgentRunQueryPersistence(
-	private val sqlExecutor: JooqSqlExecutor,
+	private val sqlExecutor: SqlExecutor,
 ) {
 	fun findAgentRun(workspaceId: UUID, id: UUID): AgentRunRecord? = sqlExecutor.query(
 		selectAgentRunSql + " where a.workspace_id = ? and a.id = ?",

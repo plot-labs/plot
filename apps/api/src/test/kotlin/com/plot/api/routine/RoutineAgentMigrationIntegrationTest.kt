@@ -20,8 +20,9 @@ import com.plot.api.artifact.run.ArtifactRunPersistence
 import com.plot.api.chat.ChatCompatibilityWriter
 import com.plot.api.common.UuidGenerator
 import com.plot.api.contentprofile.ContentProfilePersistence
+import com.plot.api.persistence.SqlExecutor
 import com.plot.api.persistence.JooqSqlExecutor
-import com.plot.api.persistence.JooqTransactionExecutor
+import com.plot.api.persistence.TransactionExecutor
 import java.sql.Connection
 import java.sql.Timestamp
 import java.time.Instant
@@ -62,8 +63,9 @@ class RoutineAgentMigrationIntegrationTest {
 		migrateToLatest()
 		val schemaDataSource = SearchPathDataSource(dataSource, schema)
 		schemaJdbcTemplate = JdbcTemplate(schemaDataSource)
-		val schemaSqlExecutor = JooqSqlExecutor(DSL.using(schemaDataSource, SQLDialect.POSTGRES))
-		val schemaTransactionExecutor = JooqTransactionExecutor()
+		val schemaSqlExecutor = SqlExecutor(schemaJdbcTemplate)
+		val schemaJooqSqlExecutor = JooqSqlExecutor(DSL.using(schemaDataSource, SQLDialect.POSTGRES))
+		val schemaTransactionExecutor = TransactionExecutor()
 		val queryPersistence = AgentRunQueryPersistence(schemaSqlExecutor)
 		val registration = AgentRunRegistrationPersistence(schemaSqlExecutor, uuidGenerator, queryPersistence)
 		val snapshots = AgentExecutionSnapshotPersistence(schemaSqlExecutor, uuidGenerator, ObjectMapper())
@@ -96,6 +98,7 @@ class RoutineAgentMigrationIntegrationTest {
 			queryPersistence = queryPersistence,
 			executionPersistence = AgentRunExecutionPersistence(
 				schemaSqlExecutor,
+				schemaJooqSqlExecutor,
 				schemaTransactionExecutor,
 				uuidGenerator,
 				queryPersistence,

@@ -50,7 +50,7 @@ This manifest is the U1 characterization baseline for the jOOQ migration. It rec
 
 ## Typed transition boundary
 
-`AgentRunExecutionPersistence` and `GitHubReleaseLeasePersistence` use generated jOOQ fields for claim, renewal, retry/release, recovery, fencing, and terminal status mutations. Complex projections, evidence joins, and remaining SQL-shaped reads stay on `JooqSqlExecutor`; affected-row checks and workspace/owner/version predicates remain mandatory.
+`AgentRunExecutionPersistence` and `GitHubReleaseLeasePersistence` use generated jOOQ fields for claim, renewal, retry/release, recovery, fencing, and terminal status mutations. Complex projections, evidence joins, and remaining SQL-shaped reads stay on `SqlExecutor`; affected-row checks and workspace/owner/version predicates remain mandatory.
 
 ## After-commit and transaction boundaries
 

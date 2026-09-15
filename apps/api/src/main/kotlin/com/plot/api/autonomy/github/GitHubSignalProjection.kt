@@ -2,8 +2,8 @@ package com.plot.api.autonomy.github
 
 import com.plot.api.autonomy.signal.SignalEvaluationPersistence
 import com.plot.api.autonomy.signal.SignalInbox
-import com.plot.api.persistence.JooqSqlExecutor
-import com.plot.api.persistence.JooqTransactionExecutor
+import com.plot.api.persistence.SqlExecutor
+import com.plot.api.persistence.TransactionExecutor
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
@@ -14,8 +14,8 @@ import org.springframework.stereotype.Component
 @Component
 class GitHubSignalProjection(
     private val inbox: SignalInbox,
-    private val sql: JooqSqlExecutor,
-    private val transactions: JooqTransactionExecutor,
+    private val sql: SqlExecutor,
+    private val transactions: TransactionExecutor,
     private val signalEvaluationPersistence: SignalEvaluationPersistence? = null,
 ) {
     @Scheduled(fixedDelayString = "\${plot.autonomy.scan-delay:PT30S}", initialDelayString = "\${plot.autonomy.scan-delay:PT30S}")

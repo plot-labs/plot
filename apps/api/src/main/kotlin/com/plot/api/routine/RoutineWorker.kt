@@ -20,7 +20,7 @@ import org.springframework.context.annotation.Lazy
 import org.springframework.stereotype.Component
 import org.springframework.transaction.support.TransactionSynchronization
 import org.springframework.transaction.support.TransactionSynchronizationManager
-import com.plot.api.persistence.JooqTransactionExecutor
+import com.plot.api.persistence.TransactionExecutor
 import tools.jackson.databind.ObjectMapper
 
 /**
@@ -34,7 +34,7 @@ class RoutineWorker(
 	private val agentRunAdmissionPersistence: RoutineAgentAdmissionPersistence,
 	private val writingBlockRepository: WritingBlockRepository,
 	private val evidenceBudget: RoutineEvidenceBudget,
-	private val transactionExecutor: JooqTransactionExecutor,
+	private val transactionExecutor: TransactionExecutor,
 	private val agentProperties: AgentProperties,
 	private val workspaceAccessService: WorkspaceAccessService,
 	private val refreshService: GitHubRoutineRefreshService,

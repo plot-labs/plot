@@ -4,13 +4,13 @@ import com.plot.api.changelog.dto.PublicChangelogEntryDetailResponse
 import com.plot.api.changelog.dto.PublicChangelogEntrySummaryResponse
 import com.plot.api.changelog.dto.PublicChangelogCitationResponse
 import com.plot.api.changelog.dto.PublicChangelogSentenceResponse
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import java.util.UUID
 import org.springframework.stereotype.Repository
 
 @Repository
 class PublicChangelogPersistence(
-	private val sqlExecutor: JooqSqlExecutor,
+	private val sqlExecutor: SqlExecutor,
 ) {
 	fun listEntries(workspaceId: UUID): List<PublicChangelogEntrySummaryResponse> = sqlExecutor.query(
 		"""

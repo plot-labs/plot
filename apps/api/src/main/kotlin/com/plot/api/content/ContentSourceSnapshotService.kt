@@ -2,7 +2,7 @@ package com.plot.api.content
 
 import com.plot.api.artifact.dto.RelatedArtifactSummaryResponse
 import com.plot.api.common.UuidGenerator
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
@@ -11,7 +11,7 @@ import tools.jackson.databind.ObjectMapper
 
 @Service
 class ContentSourceSnapshotService(
-	private val sqlExecutor: JooqSqlExecutor,
+	private val sqlExecutor: SqlExecutor,
 	private val uuidGenerator: UuidGenerator,
 	private val objectMapper: ObjectMapper,
 ) {

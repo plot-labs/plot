@@ -6,7 +6,7 @@ import com.plot.api.auth.RequestActorResolver
 import com.plot.api.common.ApiException
 import com.plot.api.common.UuidGenerator
 import com.plot.api.dev.DevContext
-import com.plot.api.persistence.JooqTransactionExecutor
+import com.plot.api.persistence.TransactionExecutor
 import java.time.Instant
 import java.util.UUID
 import org.springframework.http.HttpHeaders
@@ -155,7 +155,7 @@ class GitHubOAuthService(
 	private val stateService: GitHubProductOAuthStateService,
 	private val oauthClient: GitHubProductOAuthClient,
 	private val credentialRepository: GitHubProductCredentialRepository,
-	private val transactionExecutor: JooqTransactionExecutor,
+	private val transactionExecutor: TransactionExecutor,
 	private val connectionService: GitHubConnectionService,
 	private val uuidGenerator: UuidGenerator,
 ) {

@@ -6,8 +6,8 @@ import com.plot.api.artifact.dto.RecordProductDeliveryEventRequest
 import com.plot.api.common.ApiException
 import com.plot.api.common.UuidGenerator
 import com.plot.api.dev.DevContext
-import com.plot.api.persistence.JooqSqlExecutor
-import com.plot.api.persistence.JooqTransactionExecutor
+import com.plot.api.persistence.SqlExecutor
+import com.plot.api.persistence.TransactionExecutor
 import java.sql.Timestamp
 import java.time.Clock
 import java.util.UUID
@@ -17,8 +17,8 @@ import org.springframework.stereotype.Service
 
 @Service
 class ProductDeliveryEventService(
-	private val sqlExecutor: JooqSqlExecutor,
-	private val transactionExecutor: JooqTransactionExecutor,
+	private val sqlExecutor: SqlExecutor,
+	private val transactionExecutor: TransactionExecutor,
 	private val devContext: DevContext,
 	private val uuidGenerator: UuidGenerator,
 	private val clock: Clock = Clock.systemUTC(),

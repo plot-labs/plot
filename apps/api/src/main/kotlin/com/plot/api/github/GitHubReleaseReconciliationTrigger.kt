@@ -1,6 +1,6 @@
 package com.plot.api.github
 
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import java.util.UUID
 import org.springframework.stereotype.Component
 
@@ -9,7 +9,7 @@ class GitHubReleaseReconciliationTrigger(
 	private val requestPersistence: GitHubReleaseRequestStore,
 	private val releaseDispatcher: GitHubReleaseDraftDispatcher,
 	private val properties: GitHubProperties,
-	private val sqlExecutor: JooqSqlExecutor,
+	private val sqlExecutor: SqlExecutor,
 ) {
 	fun afterAgentRunTerminal(workspaceId: UUID, agentRunId: UUID) {
 		if (!properties.releaseAutomationEnabled) return

@@ -2,8 +2,8 @@ package com.plot.api.waitlist
 
 import com.plot.api.common.ApiException
 import com.plot.api.common.UuidGenerator
-import com.plot.api.persistence.JooqSqlExecutor
-import com.plot.api.persistence.JooqTransactionExecutor
+import com.plot.api.persistence.SqlExecutor
+import com.plot.api.persistence.TransactionExecutor
 import com.plot.api.waitlist.dto.WaitlistSignupRequest
 import com.plot.api.waitlist.dto.WaitlistSignupResponse
 import java.sql.Timestamp
@@ -16,8 +16,8 @@ import org.springframework.stereotype.Service
 
 @Service
 class WaitlistSignupService(
-	private val sqlExecutor: JooqSqlExecutor,
-	private val transactionExecutor: JooqTransactionExecutor,
+	private val sqlExecutor: SqlExecutor,
+	private val transactionExecutor: TransactionExecutor,
 	private val uuidGenerator: UuidGenerator,
 	private val clock: Clock = Clock.systemUTC(),
 ) {

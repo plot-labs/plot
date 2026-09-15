@@ -1,6 +1,6 @@
 package com.plot.api.auth.workos
 
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import java.sql.Timestamp
 import java.time.Instant
 import org.springframework.stereotype.Repository
@@ -25,7 +25,7 @@ data class WorkOSMembershipEventReceipt(
 
 @Repository
 class WorkOSMembershipEventInbox(
-	private val sql: JooqSqlExecutor,
+	private val sql: SqlExecutor,
 ) {
 	fun recordIfNew(
 		eventId: String,
