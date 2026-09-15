@@ -21,7 +21,6 @@ import com.plot.api.chat.ChatCompatibilityWriter
 import com.plot.api.common.UuidGenerator
 import com.plot.api.contentprofile.ContentProfilePersistence
 import com.plot.api.persistence.SqlExecutor
-import com.plot.api.persistence.JooqSqlExecutor
 import com.plot.api.persistence.TransactionExecutor
 import java.sql.Connection
 import java.sql.Timestamp
@@ -32,8 +31,6 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import org.flywaydb.core.Flyway
-import org.jooq.SQLDialect
-import org.jooq.impl.DSL
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -64,14 +61,13 @@ class RoutineAgentMigrationIntegrationTest {
 		val schemaDataSource = SearchPathDataSource(dataSource, schema)
 		schemaJdbcTemplate = JdbcTemplate(schemaDataSource)
 		val schemaSqlExecutor = SqlExecutor(schemaJdbcTemplate)
-		val schemaJooqSqlExecutor = JooqSqlExecutor(DSL.using(schemaDataSource, SQLDialect.POSTGRES))
 		val schemaTransactionExecutor = TransactionExecutor()
 		val queryPersistence = AgentRunQueryPersistence(schemaSqlExecutor)
 		val registration = AgentRunRegistrationPersistence(schemaSqlExecutor, uuidGenerator, queryPersistence)
 		val snapshots = AgentExecutionSnapshotPersistence(schemaSqlExecutor, uuidGenerator, ObjectMapper())
 		val compatibilityWriter = ChatCompatibilityWriter(schemaSqlExecutor, uuidGenerator, snapshots)
 		val artifactRunPersistence = ArtifactRunPersistence(
-			DSL.using(schemaDataSource, SQLDialect.POSTGRES),
+			schemaSqlExecutor,
 			uuidGenerator,
 		)
 		persistence = AgentRunMigrationPersistence(
@@ -98,7 +94,6 @@ class RoutineAgentMigrationIntegrationTest {
 			queryPersistence = queryPersistence,
 			executionPersistence = AgentRunExecutionPersistence(
 				schemaSqlExecutor,
-				schemaJooqSqlExecutor,
 				schemaTransactionExecutor,
 				uuidGenerator,
 				queryPersistence,
@@ -106,7 +101,6 @@ class RoutineAgentMigrationIntegrationTest {
 				snapshots = snapshots,
 				completionProjection = AgentRunCompletionProjectionAdapter(ChatPersistence(schemaSqlExecutor), RoutineAgentRunProjection(schemaSqlExecutor)),
 				releaseReconciliation = null,
-				dslContext = DSL.using(schemaDataSource, SQLDialect.POSTGRES),
 			),
 		)
 	}

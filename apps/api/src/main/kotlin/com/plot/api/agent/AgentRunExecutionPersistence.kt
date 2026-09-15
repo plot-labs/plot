@@ -5,20 +5,12 @@ import com.plot.api.artifact.run.ArtifactRunPersistence
 import com.plot.api.artifact.run.ArtifactRunStatus
 import com.plot.api.common.UuidGenerator
 import com.plot.api.github.GitHubReleaseReconciliationTrigger
-import com.plot.api.persistence.JooqSqlExecutor
 import com.plot.api.persistence.SqlExecutor
 import com.plot.api.persistence.TransactionExecutor
-import com.plot.api.persistence.generated.tables.AgentRunInputs.Companion.AGENT_RUN_INPUTS
-import com.plot.api.persistence.generated.tables.AgentRuns.Companion.AGENT_RUNS
-import com.plot.api.persistence.generated.tables.AgentSteps.Companion.AGENT_STEPS
 import java.sql.Timestamp
 import java.time.Clock
 import java.time.Instant
-import java.time.OffsetDateTime
-import java.time.ZoneOffset
 import java.util.UUID
-import org.jooq.DSLContext
-import org.jooq.JSONB
 import org.springframework.context.annotation.Lazy
 import org.springframework.stereotype.Component
 import org.springframework.transaction.support.TransactionSynchronization
@@ -27,20 +19,15 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @Component
 class AgentRunExecutionPersistence(
 	private val sqlExecutor: SqlExecutor,
-	private val jooqSqlExecutor: JooqSqlExecutor,
 	private val transactionExecutor: TransactionExecutor,
 	private val uuidGenerator: UuidGenerator,
 	private val queryPersistence: AgentRunQueryPersistence,
 	private val artifactRunPersistence: ArtifactRunPersistence,
 	@Lazy private val releaseReconciliation: GitHubReleaseReconciliationTrigger? = null,
-	dslContext: DSLContext,
 	private val clock: Clock? = null,
 	private val snapshots: AgentExecutionSnapshotPersistence,
 	private val completionProjection: AgentRunCompletionProjection,
 ) {
-	private val dsl: DSLContext = dslContext.configuration()
-		.derive(dslContext.settings().withRenderSchema(false))
-		.dsl()
 	private val safeErrorCode = Regex("[A-Z][A-Z0-9_]{0,99}")
 	private fun currentInstant(): Instant = clock?.instant() ?: Instant.now()
 
@@ -130,26 +117,19 @@ class AgentRunExecutionPersistence(
 		now: Instant = currentInstant(),
 	): AgentStepRecord = transactionExecutor.execute {
 		val id = uuidGenerator.next()
-		jooqSqlExecutor.executeTyped(dsl) { context ->
-			context.insertInto(AGENT_STEPS)
-				.set(AGENT_STEPS.ID, id)
-				.set(AGENT_STEPS.WORKSPACE_ID, workspaceId)
-				.set(AGENT_STEPS.AGENT_RUN_ID, request.agentRunId)
-				.set(AGENT_STEPS.SEQUENCE, request.sequence)
-				.set(AGENT_STEPS.STEP_KIND, request.kind.name)
-				.set(AGENT_STEPS.STATUS, request.status.name)
-				.set(AGENT_STEPS.IDEMPOTENCY_KEY, request.idempotencyKey.trim())
-				.set(AGENT_STEPS.TOOL_NAME, request.toolName)
-				.set(AGENT_STEPS.ARGUMENTS, JSONB.valueOf(request.argumentsJson))
-				.set(AGENT_STEPS.RESULT, request.resultJson?.let(JSONB::valueOf))
-				.set(AGENT_STEPS.ADOPTED_INPUT_ID, request.adoptedInputId)
-				.set(AGENT_STEPS.GENERATION_RUN_ID, request.artifactWorkflowRunId)
-				.set(AGENT_STEPS.FAILURE_CODE, request.failureCode)
-				.set(AGENT_STEPS.STARTED_AT, request.startedAt?.toOffsetDateTime())
-				.set(AGENT_STEPS.FINISHED_AT, request.finishedAt?.toOffsetDateTime())
-				.set(AGENT_STEPS.CREATED_AT, now.toOffsetDateTime())
-				.execute()
-		}
+		sqlExecutor.update(
+			"""
+			insert into agent_steps (
+			  id, workspace_id, agent_run_id, sequence, step_kind, status, idempotency_key,
+			  tool_name, arguments, result, adopted_input_id, generation_run_id, failure_code,
+			  started_at, finished_at, created_at
+			) values (?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?, ?, ?, ?, ?, ?)
+			""".trimIndent(),
+			id, workspaceId, request.agentRunId, request.sequence, request.kind.name, request.status.name,
+			request.idempotencyKey.trim(), request.toolName, request.argumentsJson, request.resultJson,
+			request.adoptedInputId, request.artifactWorkflowRunId, request.failureCode,
+			request.startedAt?.let(Timestamp::from), request.finishedAt?.let(Timestamp::from), Timestamp.from(now),
+		)
 		queryPersistence.findStep(workspaceId, request.agentRunId, id)
 	} ?: error("Agent step transaction returned no record")
 	fun claimNextAgentRun(
@@ -178,23 +158,18 @@ class AgentRunExecutionPersistence(
 			Timestamp.from(now),
 			Timestamp.from(staleBefore),
 		).firstOrNull() ?: return@execute null
-		val updated = dsl.update(AGENT_RUNS)
-			.set(AGENT_RUNS.STATUS, AgentRunStatus.RUNNING.name)
-			.set(AGENT_RUNS.CLAIMED_BY, workerId)
-			.set(AGENT_RUNS.CLAIMED_AT, now.toOffsetDateTime())
-			.set(AGENT_RUNS.NEXT_ATTEMPT_AT, null as OffsetDateTime?)
-			.set(AGENT_RUNS.STARTED_AT, AGENT_RUNS.STARTED_AT.coalesce(now.toOffsetDateTime()))
-			.set(AGENT_RUNS.TRANSITION_VERSION, AGENT_RUNS.TRANSITION_VERSION.plus(1))
-			.set(AGENT_RUNS.UPDATED_AT, now.toOffsetDateTime())
-			.where(
-				AGENT_RUNS.WORKSPACE_ID.eq(candidate.first),
-				AGENT_RUNS.ID.eq(candidate.second),
-				AGENT_RUNS.TRANSITION_VERSION.eq(candidate.third),
-				AGENT_RUNS.STATUS.`in`(AgentRunStatus.QUEUED.name, AgentRunStatus.RUNNING.name),
-				AGENT_RUNS.ATTEMPT_COUNT.lt(AGENT_RUNS.MAX_ATTEMPTS),
-				AGENT_RUNS.CLAIMED_BY.isNull.or(AGENT_RUNS.CLAIMED_AT.lt(staleBefore.toOffsetDateTime())),
-			)
-			.execute()
+		val updated = sqlExecutor.update(
+			"""
+			update agent_runs
+			set status = 'RUNNING', claimed_by = ?, claimed_at = ?, next_attempt_at = null,
+			    started_at = coalesce(started_at, ?), transition_version = transition_version + 1, updated_at = ?
+			where workspace_id = ? and id = ? and transition_version = ?
+			  and status in ('QUEUED', 'RUNNING') and attempt_count < max_attempts
+			  and (claimed_by is null or claimed_at < ?)
+			""".trimIndent(),
+			workerId, Timestamp.from(now), Timestamp.from(now), Timestamp.from(now),
+			candidate.first, candidate.second, candidate.third, Timestamp.from(staleBefore),
+		)
 		if (updated == 1) ClaimedAgentRun(candidate.first, candidate.second, candidate.third + 1, workerId) else null
 	}
 	fun recordAgentInfrastructureFailure(
@@ -203,19 +178,15 @@ class AgentRunExecutionPersistence(
 	) {
 		transactionExecutor.executeWithoutResult {
 			queryPersistence.requireAgentClaim(claim)
-			val updated = dsl.update(AGENT_RUNS)
-				.set(AGENT_RUNS.ATTEMPT_COUNT, AGENT_RUNS.ATTEMPT_COUNT.plus(1))
-				.set(AGENT_RUNS.FAILURE_CODE, "AGENT_INFRASTRUCTURE_FAILURE")
-				.set(AGENT_RUNS.UPDATED_AT, now.toOffsetDateTime())
-				.where(
-					AGENT_RUNS.WORKSPACE_ID.eq(claim.workspaceId),
-					AGENT_RUNS.ID.eq(claim.agentRunId),
-					AGENT_RUNS.CLAIMED_BY.eq(claim.workerId),
-					AGENT_RUNS.TRANSITION_VERSION.eq(claim.transitionVersion),
-					AGENT_RUNS.STATUS.eq(AgentRunStatus.RUNNING.name),
-					AGENT_RUNS.ATTEMPT_COUNT.lt(AGENT_RUNS.MAX_ATTEMPTS),
-				)
-				.execute()
+			val updated = sqlExecutor.update(
+				"""
+				update agent_runs
+				set attempt_count = attempt_count + 1, failure_code = 'AGENT_INFRASTRUCTURE_FAILURE', updated_at = ?
+				where workspace_id = ? and id = ? and claimed_by = ? and transition_version = ?
+				  and status = 'RUNNING' and attempt_count < max_attempts
+				""".trimIndent(),
+				Timestamp.from(now), claim.workspaceId, claim.agentRunId, claim.workerId, claim.transitionVersion,
+			)
 			if (updated != 1) throw AgentRunClaimLostException()
 		}
 	}
@@ -230,17 +201,13 @@ class AgentRunExecutionPersistence(
 		if (run.modelCallCount >= maxModelCalls) {
 			throw AgentRunBudgetExceededException("AGENT_MODEL_CALL_LIMIT")
 		}
-		val updated = dsl.update(AGENT_RUNS)
-			.set(AGENT_RUNS.MODEL_CALL_COUNT, AGENT_RUNS.MODEL_CALL_COUNT.plus(1))
-			.set(AGENT_RUNS.UPDATED_AT, currentInstant().toOffsetDateTime())
-			.where(
-				AGENT_RUNS.WORKSPACE_ID.eq(claim.workspaceId),
-				AGENT_RUNS.ID.eq(claim.agentRunId),
-				AGENT_RUNS.CLAIMED_BY.eq(claim.workerId),
-				AGENT_RUNS.TRANSITION_VERSION.eq(claim.transitionVersion),
-				AGENT_RUNS.STATUS.eq(AgentRunStatus.RUNNING.name),
-			)
-			.execute()
+		val updated = sqlExecutor.update(
+			"""
+			update agent_runs set model_call_count = model_call_count + 1, updated_at = ?
+			where workspace_id = ? and id = ? and claimed_by = ? and transition_version = ? and status = 'RUNNING'
+			""".trimIndent(),
+			Timestamp.from(currentInstant()), claim.workspaceId, claim.agentRunId, claim.workerId, claim.transitionVersion,
+		)
 		if (updated != 1) throw AgentRunClaimLostException()
 		requireNotNull(queryPersistence.findAgentRun(claim.workspaceId, claim.agentRunId))
 	}
@@ -269,34 +236,25 @@ class AgentRunExecutionPersistence(
 			throw AgentRunBudgetExceededException("AGENT_TOOL_CALL_LIMIT")
 		}
 		val id = uuidGenerator.next()
-		jooqSqlExecutor.executeTyped(dsl) { context ->
-			context.insertInto(AGENT_STEPS)
-				.set(AGENT_STEPS.ID, id)
-				.set(AGENT_STEPS.WORKSPACE_ID, claim.workspaceId)
-				.set(AGENT_STEPS.AGENT_RUN_ID, claim.agentRunId)
-				.set(AGENT_STEPS.SEQUENCE, request.sequence)
-				.set(AGENT_STEPS.STEP_KIND, request.kind.name)
-				.set(AGENT_STEPS.STATUS, AgentStepStatus.RUNNING.name)
-				.set(AGENT_STEPS.IDEMPOTENCY_KEY, request.idempotencyKey.trim())
-				.set(AGENT_STEPS.TOOL_NAME, request.toolName)
-				.set(AGENT_STEPS.ARGUMENTS, JSONB.valueOf(request.argumentsJson))
-				.set(AGENT_STEPS.STARTED_AT, now.toOffsetDateTime())
-				.set(AGENT_STEPS.CREATED_AT, now.toOffsetDateTime())
-				.execute()
-		}
+		sqlExecutor.update(
+			"""
+			insert into agent_steps (
+			  id, workspace_id, agent_run_id, sequence, step_kind, status, idempotency_key,
+			  tool_name, arguments, started_at, created_at
+			) values (?, ?, ?, ?, ?, 'RUNNING', ?, ?, ?::jsonb, ?, ?)
+			""".trimIndent(),
+			id, claim.workspaceId, claim.agentRunId, request.sequence, request.kind.name,
+			request.idempotencyKey.trim(), request.toolName, request.argumentsJson, Timestamp.from(now), Timestamp.from(now),
+		)
 		if (request.kind == AgentStepKind.READ_TOOL) {
-			val incremented = dsl.update(AGENT_RUNS)
-				.set(AGENT_RUNS.TOOL_CALL_COUNT, AGENT_RUNS.TOOL_CALL_COUNT.plus(1))
-				.set(AGENT_RUNS.UPDATED_AT, now.toOffsetDateTime())
-				.where(
-					AGENT_RUNS.WORKSPACE_ID.eq(claim.workspaceId),
-					AGENT_RUNS.ID.eq(claim.agentRunId),
-					AGENT_RUNS.CLAIMED_BY.eq(claim.workerId),
-					AGENT_RUNS.TRANSITION_VERSION.eq(claim.transitionVersion),
-					AGENT_RUNS.STATUS.eq(AgentRunStatus.RUNNING.name),
-					AGENT_RUNS.TOOL_CALL_COUNT.lt(maxToolCalls),
-				)
-				.execute()
+			val incremented = sqlExecutor.update(
+				"""
+				update agent_runs set tool_call_count = tool_call_count + 1, updated_at = ?
+				where workspace_id = ? and id = ? and claimed_by = ? and transition_version = ?
+				  and status = 'RUNNING' and tool_call_count < ?
+				""".trimIndent(),
+				Timestamp.from(now), claim.workspaceId, claim.agentRunId, claim.workerId, claim.transitionVersion, maxToolCalls,
+			)
 			if (incremented != 1) throw AgentRunClaimLostException()
 		}
 		requireNotNull(queryPersistence.findStep(claim.workspaceId, claim.agentRunId, id))
@@ -345,18 +303,13 @@ class AgentRunExecutionPersistence(
 				?: insertAdoptedInput(claim.workspaceId, claim.agentRunId, input, now)
 		}
 
-		val stepUpdated = dsl.update(AGENT_STEPS)
-			.set(AGENT_STEPS.STATUS, AgentStepStatus.SUCCEEDED.name)
-			.set(AGENT_STEPS.RESULT, JSONB.valueOf(resultJson))
-			.set(AGENT_STEPS.ADOPTED_INPUT_ID, adopted?.id)
-			.set(AGENT_STEPS.FINISHED_AT, now.toOffsetDateTime())
-			.where(
-				AGENT_STEPS.WORKSPACE_ID.eq(claim.workspaceId),
-				AGENT_STEPS.ID.eq(stepId),
-				AGENT_STEPS.AGENT_RUN_ID.eq(claim.agentRunId),
-				AGENT_STEPS.STATUS.eq(AgentStepStatus.RUNNING.name),
-			)
-			.execute()
+		val stepUpdated = sqlExecutor.update(
+			"""
+			update agent_steps set status = 'SUCCEEDED', result = ?::jsonb, adopted_input_id = ?, finished_at = ?
+			where workspace_id = ? and id = ? and agent_run_id = ? and status = 'RUNNING'
+			""".trimIndent(),
+			resultJson, adopted?.id, Timestamp.from(now), claim.workspaceId, stepId, claim.agentRunId,
+		)
 		snapshots.recordTranscriptEntry(
 			workspaceId = claim.workspaceId,
 			agentRunId = claim.agentRunId,
@@ -382,18 +335,13 @@ class AgentRunExecutionPersistence(
 			?: throw AgentRunStateException("Agent step was not found")
 		require(step.sequence == run.currentStep) { "Agent step is stale" }
 		require(step.status == AgentStepStatus.RUNNING) { "Agent step is not running" }
-		val stepUpdated = dsl.update(AGENT_STEPS)
-			.set(AGENT_STEPS.STATUS, AgentStepStatus.FAILED.name)
-			.set(AGENT_STEPS.FAILURE_CODE, code)
-			.set(AGENT_STEPS.RESULT, JSONB.valueOf(resultJson))
-			.set(AGENT_STEPS.FINISHED_AT, now.toOffsetDateTime())
-			.where(
-				AGENT_STEPS.WORKSPACE_ID.eq(claim.workspaceId),
-				AGENT_STEPS.ID.eq(stepId),
-				AGENT_STEPS.AGENT_RUN_ID.eq(claim.agentRunId),
-				AGENT_STEPS.STATUS.eq(AgentStepStatus.RUNNING.name),
-			)
-			.execute()
+		val stepUpdated = sqlExecutor.update(
+			"""
+			update agent_steps set status = 'FAILED', failure_code = ?, result = ?::jsonb, finished_at = ?
+			where workspace_id = ? and id = ? and agent_run_id = ? and status = 'RUNNING'
+			""".trimIndent(),
+			code, resultJson, Timestamp.from(now), claim.workspaceId, stepId, claim.agentRunId,
+		)
 		if (stepUpdated != 1) throw AgentRunClaimLostException()
 		snapshots.recordTranscriptEntry(
 			workspaceId = claim.workspaceId,
@@ -431,18 +379,13 @@ class AgentRunExecutionPersistence(
 			requireNotNull(run.workSessionId),
 		) == 1
 		if (!artifactWorkflowBelongsToAgent) throw AgentRunStateException("ArtifactWorkflow handoff belongs to another Agent run")
-		val stepUpdated = dsl.update(AGENT_STEPS)
-			.set(AGENT_STEPS.STATUS, AgentStepStatus.SUCCEEDED.name)
-			.set(AGENT_STEPS.GENERATION_RUN_ID, artifactWorkflowRunId)
-			.set(AGENT_STEPS.RESULT, JSONB.valueOf(resultJson))
-			.set(AGENT_STEPS.FINISHED_AT, now.toOffsetDateTime())
-			.where(
-				AGENT_STEPS.WORKSPACE_ID.eq(claim.workspaceId),
-				AGENT_STEPS.ID.eq(stepId),
-				AGENT_STEPS.AGENT_RUN_ID.eq(claim.agentRunId),
-				AGENT_STEPS.STATUS.eq(AgentStepStatus.RUNNING.name),
-			)
-			.execute()
+		val stepUpdated = sqlExecutor.update(
+			"""
+			update agent_steps set status = 'SUCCEEDED', generation_run_id = ?, result = ?::jsonb, finished_at = ?
+			where workspace_id = ? and id = ? and agent_run_id = ? and status = 'RUNNING'
+			""".trimIndent(),
+			artifactWorkflowRunId, resultJson, Timestamp.from(now), claim.workspaceId, stepId, claim.agentRunId,
+		)
 		if (stepUpdated != 1) throw AgentRunClaimLostException()
 		advanceAndRelease(claim, run.currentStep + 1, now, nextAttemptAt)
 		requireNotNull(queryPersistence.findStep(claim.workspaceId, claim.agentRunId, stepId))
@@ -457,24 +400,19 @@ class AgentRunExecutionPersistence(
 		val run = queryPersistence.requireAgentClaim(claim)
 		val attempts = run.attemptCount + 1
 		val terminal = attempts >= run.maxAttempts
-		val updated = dsl.update(AGENT_RUNS)
-			.set(AGENT_RUNS.STATUS, if (terminal) AgentRunStatus.FAILED.name else AgentRunStatus.QUEUED.name)
-			.set(AGENT_RUNS.ATTEMPT_COUNT, attempts)
-			.set(AGENT_RUNS.FAILURE_CODE, errorCode)
-			.set(AGENT_RUNS.NEXT_ATTEMPT_AT, if (terminal) null else nextAttemptAt.toOffsetDateTime())
-			.set(AGENT_RUNS.CLAIMED_BY, null as String?)
-			.set(AGENT_RUNS.CLAIMED_AT, null as OffsetDateTime?)
-			.set(AGENT_RUNS.TRANSITION_VERSION, AGENT_RUNS.TRANSITION_VERSION.plus(1))
-			.set(AGENT_RUNS.FINISHED_AT, if (terminal) now.toOffsetDateTime() else null)
-			.set(AGENT_RUNS.UPDATED_AT, now.toOffsetDateTime())
-			.where(
-				AGENT_RUNS.WORKSPACE_ID.eq(claim.workspaceId),
-				AGENT_RUNS.ID.eq(claim.agentRunId),
-				AGENT_RUNS.CLAIMED_BY.eq(claim.workerId),
-				AGENT_RUNS.TRANSITION_VERSION.eq(claim.transitionVersion),
-				AGENT_RUNS.STATUS.eq(AgentRunStatus.RUNNING.name),
-			)
-			.execute()
+		val updated = sqlExecutor.update(
+			"""
+			update agent_runs
+			set status = ?, attempt_count = ?, failure_code = ?, next_attempt_at = ?,
+			    claimed_by = null, claimed_at = null, transition_version = transition_version + 1,
+			    finished_at = ?, updated_at = ?
+			where workspace_id = ? and id = ? and claimed_by = ? and transition_version = ? and status = 'RUNNING'
+			""".trimIndent(),
+			if (terminal) AgentRunStatus.FAILED.name else AgentRunStatus.QUEUED.name,
+			attempts, errorCode, if (terminal) null else Timestamp.from(nextAttemptAt),
+			if (terminal) Timestamp.from(now) else null, Timestamp.from(now),
+			claim.workspaceId, claim.agentRunId, claim.workerId, claim.transitionVersion,
+		)
 		requireNotNull(queryPersistence.findAgentRun(claim.workspaceId, claim.agentRunId))
 	}
 	fun failAgentRun(claim: ClaimedAgentRun, errorCode: String, now: Instant = currentInstant()): AgentRunRecord =
@@ -566,59 +504,36 @@ class AgentRunExecutionPersistence(
 			agentRunId,
 		) ?: 0
 		val id = uuidGenerator.next()
-		jooqSqlExecutor.executeTyped(dsl) { context ->
-			context.insertInto(AGENT_RUN_INPUTS)
-				.set(AGENT_RUN_INPUTS.ID, id)
-				.set(AGENT_RUN_INPUTS.WORKSPACE_ID, workspaceId)
-				.set(AGENT_RUN_INPUTS.AGENT_RUN_ID, agentRunId)
-				.set(AGENT_RUN_INPUTS.ROUTINE_ID, null as UUID?)
-				.set(AGENT_RUN_INPUTS.SOURCE_SCOPE_ID, input.sourceScopeId)
-				.set(AGENT_RUN_INPUTS.WRITING_BLOCK_ID, input.writingBlockId)
-				.set(AGENT_RUN_INPUTS.SOURCE_PROVIDER, input.sourceProvider)
-				.set(AGENT_RUN_INPUTS.SOURCE_KIND, input.sourceKind)
-				.set(AGENT_RUN_INPUTS.SOURCE_LABEL, input.sourceLabel)
-				.set(AGENT_RUN_INPUTS.INPUT_KIND, AgentRunInputKind.TOOL_RESULT.name)
-				.set(AGENT_RUN_INPUTS.ORDER_INDEX, orderIndex)
-				.set(AGENT_RUN_INPUTS.ACTIVITY_SEQUENCE, null as Long?)
-				.set(AGENT_RUN_INPUTS.SNAPSHOT_TITLE, input.snapshotTitle)
-				.set(AGENT_RUN_INPUTS.SNAPSHOT_BODY, input.snapshotBody)
-				.set(AGENT_RUN_INPUTS.SNAPSHOT_EXCERPT, input.snapshotExcerpt)
-				.set(AGENT_RUN_INPUTS.ORIGINAL_URL, input.originalUrl)
-				.set(AGENT_RUN_INPUTS.SOURCE_CREATED_AT, input.sourceCreatedAt?.toOffsetDateTime())
-				.set(AGENT_RUN_INPUTS.SOURCE_UPDATED_AT, input.sourceUpdatedAt?.toOffsetDateTime())
-				.set(AGENT_RUN_INPUTS.CONTENT_HASH, input.contentHash)
-				.set(
-					AGENT_RUN_INPUTS.CAPTURED_AT,
-					input.capturedAt.takeIf { !it.isAfter(now) }?.toOffsetDateTime() ?: now.toOffsetDateTime(),
-				)
-				.onConflict(
-					AGENT_RUN_INPUTS.WORKSPACE_ID,
-					AGENT_RUN_INPUTS.AGENT_RUN_ID,
-					AGENT_RUN_INPUTS.SOURCE_SCOPE_ID,
-					AGENT_RUN_INPUTS.WRITING_BLOCK_ID,
-					AGENT_RUN_INPUTS.CONTENT_HASH,
-				)
-				.where(AGENT_RUN_INPUTS.INPUT_KIND.eq(AgentRunInputKind.TOOL_RESULT.name))
-				.doNothing()
-				.execute()
-		}
+		sqlExecutor.update(
+			"""
+			insert into agent_run_inputs (
+			  id, workspace_id, agent_run_id, routine_id, source_scope_id, writing_block_id,
+			  source_provider, source_kind, source_label, input_kind, order_index, activity_sequence,
+			  snapshot_title, snapshot_body, snapshot_excerpt, original_url, source_created_at,
+			  source_updated_at, content_hash, captured_at
+			) values (?, ?, ?, null, ?, ?, ?, ?, ?, 'TOOL_RESULT', ?, null, ?, ?, ?, ?, ?, ?, ?, ?)
+			on conflict (workspace_id, agent_run_id, source_scope_id, writing_block_id, content_hash)
+			where input_kind = 'TOOL_RESULT' do nothing
+			""".trimIndent(),
+			id, workspaceId, agentRunId, input.sourceScopeId, input.writingBlockId,
+			input.sourceProvider, input.sourceKind, input.sourceLabel, orderIndex,
+			input.snapshotTitle, input.snapshotBody, input.snapshotExcerpt, input.originalUrl,
+			input.sourceCreatedAt?.let(Timestamp::from), input.sourceUpdatedAt?.let(Timestamp::from), input.contentHash,
+			Timestamp.from(input.capturedAt.takeIf { !it.isAfter(now) } ?: now),
+		)
 		return queryPersistence.findAdoptedInput(workspaceId, agentRunId, input)
 			?: throw AgentRunStateException("Agent read result could not be adopted")
 	}
 	private fun claimRunningAgentRun(run: AgentRunRecord, workerId: String, now: Instant): ClaimedAgentRun? {
-		val updated = dsl.update(AGENT_RUNS)
-			.set(AGENT_RUNS.CLAIMED_BY, workerId)
-			.set(AGENT_RUNS.CLAIMED_AT, now.toOffsetDateTime())
-			.set(AGENT_RUNS.TRANSITION_VERSION, AGENT_RUNS.TRANSITION_VERSION.plus(1))
-			.set(AGENT_RUNS.UPDATED_AT, now.toOffsetDateTime())
-			.where(
-				AGENT_RUNS.WORKSPACE_ID.eq(run.workspaceId),
-				AGENT_RUNS.ID.eq(run.id),
-				AGENT_RUNS.STATUS.eq(AgentRunStatus.RUNNING.name),
-				AGENT_RUNS.CLAIMED_BY.isNull,
-				AGENT_RUNS.TRANSITION_VERSION.eq(run.transitionVersion),
-			)
-			.execute()
+		val updated = sqlExecutor.update(
+			"""
+			update agent_runs
+			set claimed_by = ?, claimed_at = ?, transition_version = transition_version + 1, updated_at = ?
+			where workspace_id = ? and id = ? and status = 'RUNNING'
+			  and claimed_by is null and transition_version = ?
+			""".trimIndent(),
+			workerId, Timestamp.from(now), Timestamp.from(now), run.workspaceId, run.id, run.transitionVersion,
+		)
 		if (updated != 1) return null
 		return ClaimedAgentRun(
 			workspaceId = run.workspaceId,
@@ -629,19 +544,14 @@ class AgentRunExecutionPersistence(
 	}
 
 	private fun releaseArtifactHandoffClaim(claim: ClaimedAgentRun, now: Instant) {
-		dsl.update(AGENT_RUNS)
-			.set(AGENT_RUNS.CLAIMED_BY, null as String?)
-			.set(AGENT_RUNS.CLAIMED_AT, null as OffsetDateTime?)
-			.set(AGENT_RUNS.TRANSITION_VERSION, AGENT_RUNS.TRANSITION_VERSION.plus(1))
-			.set(AGENT_RUNS.UPDATED_AT, now.toOffsetDateTime())
-			.where(
-				AGENT_RUNS.WORKSPACE_ID.eq(claim.workspaceId),
-				AGENT_RUNS.ID.eq(claim.agentRunId),
-				AGENT_RUNS.CLAIMED_BY.eq(claim.workerId),
-				AGENT_RUNS.TRANSITION_VERSION.eq(claim.transitionVersion),
-				AGENT_RUNS.STATUS.eq(AgentRunStatus.RUNNING.name),
-			)
-			.execute()
+		sqlExecutor.update(
+			"""
+			update agent_runs
+			set claimed_by = null, claimed_at = null, transition_version = transition_version + 1, updated_at = ?
+			where workspace_id = ? and id = ? and claimed_by = ? and transition_version = ? and status = 'RUNNING'
+			""".trimIndent(),
+			Timestamp.from(now), claim.workspaceId, claim.agentRunId, claim.workerId, claim.transitionVersion,
+		)
 	}
 
 	private fun advanceAndRelease(
@@ -650,22 +560,17 @@ class AgentRunExecutionPersistence(
 		now: Instant,
 		nextAttemptAt: Instant? = null,
 	) {
-		val update = dsl.update(AGENT_RUNS)
-			.set(AGENT_RUNS.CLAIMED_BY, null as String?)
-			.set(AGENT_RUNS.CLAIMED_AT, null as OffsetDateTime?)
-			.set(AGENT_RUNS.NEXT_ATTEMPT_AT, nextAttemptAt?.toOffsetDateTime())
-			.set(AGENT_RUNS.TRANSITION_VERSION, AGENT_RUNS.TRANSITION_VERSION.plus(1))
-			.set(AGENT_RUNS.UPDATED_AT, now.toOffsetDateTime())
-		if (currentStep != null) update.set(AGENT_RUNS.CURRENT_STEP, currentStep)
-		val updated = update
-			.where(
-				AGENT_RUNS.WORKSPACE_ID.eq(claim.workspaceId),
-				AGENT_RUNS.ID.eq(claim.agentRunId),
-				AGENT_RUNS.CLAIMED_BY.eq(claim.workerId),
-				AGENT_RUNS.TRANSITION_VERSION.eq(claim.transitionVersion),
-				AGENT_RUNS.STATUS.eq(AgentRunStatus.RUNNING.name),
-			)
-			.execute()
+		val updated = sqlExecutor.update(
+			"""
+			update agent_runs
+			set claimed_by = null, claimed_at = null, next_attempt_at = ?,
+			    transition_version = transition_version + 1, updated_at = ?,
+			    current_step = coalesce(?, current_step)
+			where workspace_id = ? and id = ? and claimed_by = ? and transition_version = ? and status = 'RUNNING'
+			""".trimIndent(),
+			nextAttemptAt?.let(Timestamp::from), Timestamp.from(now), currentStep,
+			claim.workspaceId, claim.agentRunId, claim.workerId, claim.transitionVersion,
+		)
 		if (updated != 1) throw AgentRunClaimLostException()
 	}
 	private fun terminalizeAgentRun(
@@ -678,34 +583,25 @@ class AgentRunExecutionPersistence(
 		if (errorCode != null) require(errorCode.matches(safeErrorCode)) { "Agent error code is invalid" }
 		val run = queryPersistence.requireAgentClaim(claim)
 		if (status == AgentRunStatus.FAILED) {
-			dsl.update(AGENT_STEPS)
-				.set(AGENT_STEPS.STATUS, AgentStepStatus.FAILED.name)
-				.set(AGENT_STEPS.FAILURE_CODE, requireNotNull(errorCode))
-				.set(AGENT_STEPS.FINISHED_AT, AGENT_STEPS.FINISHED_AT.coalesce(now.toOffsetDateTime()))
-				.where(
-					AGENT_STEPS.WORKSPACE_ID.eq(claim.workspaceId),
-					AGENT_STEPS.AGENT_RUN_ID.eq(claim.agentRunId),
-					AGENT_STEPS.STATUS.eq(AgentStepStatus.RUNNING.name),
-				)
-				.execute()
-		}
-		val updated = dsl.update(AGENT_RUNS)
-			.set(AGENT_RUNS.STATUS, status.name)
-			.set(AGENT_RUNS.FAILURE_CODE, errorCode)
-			.set(AGENT_RUNS.CLAIMED_BY, null as String?)
-			.set(AGENT_RUNS.CLAIMED_AT, null as OffsetDateTime?)
-			.set(AGENT_RUNS.NEXT_ATTEMPT_AT, null as OffsetDateTime?)
-			.set(AGENT_RUNS.FINISHED_AT, now.toOffsetDateTime())
-			.set(AGENT_RUNS.TRANSITION_VERSION, AGENT_RUNS.TRANSITION_VERSION.plus(1))
-			.set(AGENT_RUNS.UPDATED_AT, now.toOffsetDateTime())
-			.where(
-				AGENT_RUNS.WORKSPACE_ID.eq(claim.workspaceId),
-				AGENT_RUNS.ID.eq(claim.agentRunId),
-				AGENT_RUNS.CLAIMED_BY.eq(claim.workerId),
-				AGENT_RUNS.TRANSITION_VERSION.eq(claim.transitionVersion),
-				AGENT_RUNS.STATUS.eq(AgentRunStatus.RUNNING.name),
+			sqlExecutor.update(
+				"""
+				update agent_steps
+				set status = 'FAILED', failure_code = ?, finished_at = coalesce(finished_at, ?)
+				where workspace_id = ? and agent_run_id = ? and status = 'RUNNING'
+				""".trimIndent(),
+				requireNotNull(errorCode), Timestamp.from(now), claim.workspaceId, claim.agentRunId,
 			)
-			.execute()
+		}
+		val updated = sqlExecutor.update(
+			"""
+			update agent_runs
+			set status = ?, failure_code = ?, claimed_by = null, claimed_at = null, next_attempt_at = null,
+			    finished_at = ?, transition_version = transition_version + 1, updated_at = ?
+			where workspace_id = ? and id = ? and claimed_by = ? and transition_version = ? and status = 'RUNNING'
+			""".trimIndent(),
+			status.name, errorCode, Timestamp.from(now), Timestamp.from(now),
+			claim.workspaceId, claim.agentRunId, claim.workerId, claim.transitionVersion,
+		)
 		if (updated != 1) throw AgentRunClaimLostException()
 		completionProjection.deactivateResponse(claim.workspaceId, claim.agentRunId)
 		completionProjection.projectTerminal(run, status, errorCode, now)
@@ -746,31 +642,24 @@ class AgentRunExecutionPersistence(
 			Timestamp.from(staleBefore),
 		)
 		exhausted.forEach { (workspaceId, agentRunId) ->
-			dsl.update(AGENT_STEPS)
-				.set(AGENT_STEPS.STATUS, AgentStepStatus.FAILED.name)
-				.set(AGENT_STEPS.FAILURE_CODE, "AGENT_RETRY_EXHAUSTED")
-				.set(AGENT_STEPS.FINISHED_AT, AGENT_STEPS.FINISHED_AT.coalesce(now.toOffsetDateTime()))
-				.where(
-					AGENT_STEPS.WORKSPACE_ID.eq(workspaceId),
-					AGENT_STEPS.AGENT_RUN_ID.eq(agentRunId),
-					AGENT_STEPS.STATUS.eq(AgentStepStatus.RUNNING.name),
-				)
-				.execute()
-			dsl.update(AGENT_RUNS)
-				.set(AGENT_RUNS.STATUS, AgentRunStatus.FAILED.name)
-				.set(AGENT_RUNS.FAILURE_CODE, "AGENT_RETRY_EXHAUSTED")
-				.set(AGENT_RUNS.CLAIMED_BY, null as String?)
-				.set(AGENT_RUNS.CLAIMED_AT, null as OffsetDateTime?)
-				.set(AGENT_RUNS.NEXT_ATTEMPT_AT, null as OffsetDateTime?)
-				.set(AGENT_RUNS.FINISHED_AT, now.toOffsetDateTime())
-				.set(AGENT_RUNS.TRANSITION_VERSION, AGENT_RUNS.TRANSITION_VERSION.plus(1))
-				.set(AGENT_RUNS.UPDATED_AT, now.toOffsetDateTime())
-				.where(
-					AGENT_RUNS.WORKSPACE_ID.eq(workspaceId),
-					AGENT_RUNS.ID.eq(agentRunId),
-					AGENT_RUNS.STATUS.eq(AgentRunStatus.RUNNING.name),
-				)
-				.execute()
+			sqlExecutor.update(
+				"""
+				update agent_steps
+				set status = 'FAILED', failure_code = 'AGENT_RETRY_EXHAUSTED', finished_at = coalesce(finished_at, ?)
+				where workspace_id = ? and agent_run_id = ? and status = 'RUNNING'
+				""".trimIndent(),
+				Timestamp.from(now), workspaceId, agentRunId,
+			)
+			sqlExecutor.update(
+				"""
+				update agent_runs
+				set status = 'FAILED', failure_code = 'AGENT_RETRY_EXHAUSTED', claimed_by = null,
+				    claimed_at = null, next_attempt_at = null, finished_at = ?,
+				    transition_version = transition_version + 1, updated_at = ?
+				where workspace_id = ? and id = ? and status = 'RUNNING'
+				""".trimIndent(),
+				Timestamp.from(now), Timestamp.from(now), workspaceId, agentRunId,
+			)
 			completionProjection.deactivateResponse(requireNotNull(workspaceId), requireNotNull(agentRunId))
 			queryPersistence.findAgentRun(requireNotNull(workspaceId), requireNotNull(agentRunId))?.let { run ->
 				completionProjection.projectTerminal(run, AgentRunStatus.FAILED, "AGENT_RETRY_EXHAUSTED", now)
@@ -778,5 +667,3 @@ class AgentRunExecutionPersistence(
 		}
 	}
 }
-
-private fun Instant.toOffsetDateTime(): OffsetDateTime = atOffset(ZoneOffset.UTC)
