@@ -15,7 +15,6 @@ import com.plot.api.workspace.WorkspaceRepository
 import java.time.Instant
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.http.HttpStatus
-import org.jooq.exception.DataAccessException as JooqDataAccessException
 import org.slf4j.LoggerFactory
 import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.stereotype.Service
@@ -103,8 +102,6 @@ class WorkOSBootstrapProvisioningService(
 			)
 			createLocalProjection(providerUser, organization, membership, workOSUserId)
 		} catch (failure: DataIntegrityViolationException) {
-			resolveConcurrentProjection(providerUser, workOSUserId, failure)
-		} catch (failure: JooqDataAccessException) {
 			resolveConcurrentProjection(providerUser, workOSUserId, failure)
 		} catch (failure: ApiException) {
 			markFailedSafely(workOSUserId, failure)

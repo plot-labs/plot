@@ -1,10 +1,10 @@
 package com.plot.api.entitlement
 
-import com.plot.api.persistence.generated.tables.ContentPacks.Companion.CONTENT_PACKS
+import com.plot.api.persistence.SqlExecutor
 import com.plot.api.workspace.Workspace
 import java.time.Clock
-import org.jooq.DSLContext
 import org.springframework.stereotype.Component
+import org.springframework.transaction.annotation.Transactional
 
 data class WorkspaceCapabilities(
 	val generate: Boolean,
@@ -52,20 +52,21 @@ data class EffectiveWorkspaceEntitlement(
 
 @Component
 class WorkspaceEntitlementReader(
-	private val dsl: DSLContext,
+	private val sql: SqlExecutor,
 	private val clock: Clock = Clock.systemUTC(),
 ) {
+	@Transactional(readOnly = true)
 	fun resolve(workspace: Workspace): EffectiveWorkspaceEntitlement {
 		if (workspace.entitlementStatus == "revoked") return workspace.currentEntitlement()
 		if (workspace.plan != "trial" && workspace.entitlementStatus != "trialing") {
 			return workspace.currentEntitlement()
 		}
 		if (!workspace.trialEndsAt.isAfter(clock.instant())) return EXPIRED
-		val successfulPackCount = dsl
-			.selectCount()
-			.from(CONTENT_PACKS)
-			.where(CONTENT_PACKS.WORKSPACE_ID.eq(workspace.id))
-			.fetchOne(0, Long::class.java) ?: 0
+		val successfulPackCount = sql.queryForObject(
+			"select count(*) from content_packs where workspace_id = ?",
+			Long::class.java,
+			workspace.id,
+		) ?: 0
 		return if (successfulPackCount >= TrialPolicy.PACK_LIMIT) COMPLETE_ONLY else TRIALING
 	}
 

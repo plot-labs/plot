@@ -1,63 +1,48 @@
 package com.plot.api.source
 
-import com.plot.api.persistence.generated.tables.SourceScopes.Companion.SOURCE_SCOPES
+import com.plot.api.persistence.SqlExecutor
+import com.plot.api.persistence.SqlRow
 import java.util.UUID
-import org.jooq.DSLContext
-import org.jooq.JSONB
-import org.jooq.Record
 import org.springframework.stereotype.Repository
+import org.springframework.transaction.annotation.Transactional
 import tools.jackson.databind.ObjectMapper
 
-/** jOOQ-backed source-scope reads kept behind the feature-local contract. */
+/** Source-scope reads kept behind the feature-local contract. */
 @Repository
 class SourceScopeRepository(
-	private val dsl: DSLContext,
+	private val sql: SqlExecutor,
 	private val objectMapper: ObjectMapper,
 ) {
-	fun findByWorkspaceIdAndId(workspaceId: UUID, id: UUID): SourceScope? = dsl
-		.select(
-			SOURCE_SCOPES.ID,
-			SOURCE_SCOPES.WORKSPACE_ID,
-			SOURCE_SCOPES.SOURCE_NAMESPACE_ID,
-			SOURCE_SCOPES.PROVIDER,
-			SOURCE_SCOPES.SCOPE_SEMANTICS,
-			SOURCE_SCOPES.SCOPE_KIND,
-			SOURCE_SCOPES.EXTERNAL_SCOPE_KEY,
-			SOURCE_SCOPES.EXTERNAL_KEY,
-			SOURCE_SCOPES.DISPLAY_NAME,
-			SOURCE_SCOPES.URL,
-			SOURCE_SCOPES.METADATA,
-			SOURCE_SCOPES.STATUS,
-			SOURCE_SCOPES.CREATED_AT,
-			SOURCE_SCOPES.UPDATED_AT,
-		)
-		.from(SOURCE_SCOPES)
-		.where(
-			SOURCE_SCOPES.WORKSPACE_ID.eq(workspaceId),
-			SOURCE_SCOPES.ID.eq(id),
-		)
-		.fetchOne()
-		?.toModel()
-
-	private fun Record.toModel() = SourceScope(
-		id = requireNotNull(get(SOURCE_SCOPES.ID)),
-		workspaceId = requireNotNull(get(SOURCE_SCOPES.WORKSPACE_ID)),
-		sourceNamespaceId = requireNotNull(get(SOURCE_SCOPES.SOURCE_NAMESPACE_ID)),
-		provider = requireNotNull(get(SOURCE_SCOPES.PROVIDER)),
-		scopeSemantics = requireNotNull(get(SOURCE_SCOPES.SCOPE_SEMANTICS)),
-		scopeKind = requireNotNull(get(SOURCE_SCOPES.SCOPE_KIND)),
-		externalScopeKey = requireNotNull(get(SOURCE_SCOPES.EXTERNAL_SCOPE_KEY)),
-		externalKey = get(SOURCE_SCOPES.EXTERNAL_KEY),
-		displayName = requireNotNull(get(SOURCE_SCOPES.DISPLAY_NAME)),
-		url = get(SOURCE_SCOPES.URL),
-		metadata = get(SOURCE_SCOPES.METADATA).toMap(),
-		status = requireNotNull(get(SOURCE_SCOPES.STATUS)),
-		createdAt = requireNotNull(get(SOURCE_SCOPES.CREATED_AT)).toInstant(),
-		updatedAt = requireNotNull(get(SOURCE_SCOPES.UPDATED_AT)).toInstant(),
+	@Transactional(readOnly = true)
+	fun findByWorkspaceIdAndId(workspaceId: UUID, id: UUID): SourceScope? = sql.queryForObject(
+		"""
+		select id, workspace_id, source_namespace_id, provider, scope_semantics, scope_kind,
+		       external_scope_key, external_key, display_name, url, metadata::text as metadata_json,
+		       status, created_at, updated_at
+		from source_scopes where workspace_id = ? and id = ?
+		""".trimIndent(),
+		{ row, _ -> row.toModel() }, workspaceId, id,
 	)
 
-	private fun JSONB?.toMap(): Map<String, Any?>? = this?.let {
+	private fun SqlRow.toModel() = SourceScope(
+		id = requireNotNull(getObject("id", UUID::class.java)),
+		workspaceId = requireNotNull(getObject("workspace_id", UUID::class.java)),
+		sourceNamespaceId = requireNotNull(getObject("source_namespace_id", UUID::class.java)),
+		provider = requireNotNull(getString("provider")),
+		scopeSemantics = requireNotNull(getString("scope_semantics")),
+		scopeKind = requireNotNull(getString("scope_kind")),
+		externalScopeKey = requireNotNull(getString("external_scope_key")),
+		externalKey = getString("external_key"),
+		displayName = requireNotNull(getString("display_name")),
+		url = getString("url"),
+		metadata = getString("metadata_json").toMap(),
+		status = requireNotNull(getString("status")),
+		createdAt = requireNotNull(getTimestamp("created_at")).toInstant(),
+		updatedAt = requireNotNull(getTimestamp("updated_at")).toInstant(),
+	)
+
+	private fun String?.toMap(): Map<String, Any?>? = this?.let {
 		@Suppress("UNCHECKED_CAST")
-		objectMapper.readValue(it.data(), Map::class.java) as Map<String, Any?>
+		objectMapper.readValue(it, Map::class.java) as Map<String, Any?>
 	}
 }
