@@ -15,7 +15,6 @@ import com.plot.api.github.GitHubPullRequestPage
 import com.plot.api.github.GitHubRepository
 import com.plot.api.writingblock.WritingBlockRepository
 import com.plot.api.persistence.JooqTransactionExecutor
-import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -391,12 +390,6 @@ class RoutineBackgroundAccessIntegrationTest {
 		val id = assertNotNull(routinePersistence.find(devContext.devWorkspaceId, routineId)?.lastExecutionId)
 		return assertNotNull(agentPersistence.findExecution(devContext.devWorkspaceId, id))
 	}
-
-	private fun seedCount(executionId: UUID): Int = jdbcTemplate.queryForObject(
-		"select count(*) from agent_run_inputs input join agent_runs run on run.workspace_id = input.workspace_id and run.id = input.agent_run_id where run.routine_execution_id = ? and input.input_kind = 'SEED'",
-		Int::class.java,
-		executionId,
-	) ?: 0
 
 	private fun count(table: String, column: String, value: Any): Int = jdbcTemplate.queryForObject(
 		"select count(*) from $table where $column = ?",

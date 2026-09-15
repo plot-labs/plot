@@ -19,7 +19,7 @@ interface ContentPromptFactory {
 	fun writer(
 		instruction: String?,
 		evidence: List<EvidenceSnapshot>,
-		style: FrozenContentContext?,
+		style: FrozenContentContext? = null,
 		documentVersion: Int = 1,
 	): ChangelogPrompt
 	fun reviewer(request: ReviewerModelRequest): ChangelogPrompt
@@ -47,18 +47,10 @@ class ContentTypeRegistry(
 			exportSlug = "launch-announcement",
 		)
 	}
-
-	fun specForPromptVersion(promptVersion: String): ContentWriterSpec =
-		when {
-			promptVersion == CHANGELOG_PROMPT_VERSION -> specFor(ContentType.CHANGELOG)
-			isLaunchPromptVersion(promptVersion) -> specFor(ContentType.LAUNCH_ANNOUNCEMENT)
-			else -> specFor(ContentType.CHANGELOG)
-		}
-
 	fun promptFactoryFor(promptVersion: String): ContentPromptFactory =
 		when {
 			isLaunchPromptVersion(promptVersion) -> launchAnnouncementPromptFactory
-			else -> changelogPromptFactory.asContentPromptFactory()
+			else -> changelogPromptFactory
 		}
 
 	companion object {
@@ -76,15 +68,3 @@ class ContentTypeRegistry(
 			if (isLaunchPromptVersion(promptVersion)) LAUNCH_MAX_WRITER_SENTENCES else null
 	}
 }
-
-private fun ChangelogPromptFactory.asContentPromptFactory(): ContentPromptFactory =
-	object : ContentPromptFactory {
-		override fun writer(
-			instruction: String?,
-			evidence: List<EvidenceSnapshot>,
-			style: FrozenContentContext?,
-			documentVersion: Int,
-		) = this@asContentPromptFactory.writer(instruction, evidence, style, documentVersion)
-		override fun reviewer(request: ReviewerModelRequest) = this@asContentPromptFactory.reviewer(request)
-		override fun rewriter(request: RewriteModelRequest) = this@asContentPromptFactory.rewriter(request)
-	}

@@ -13,7 +13,6 @@ import com.plot.api.workspace.WorkspaceMember
 import com.plot.api.workspace.WorkspaceMemberRepository
 import com.plot.api.workspace.WorkspaceRepository
 import java.time.Instant
-import java.util.UUID
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.http.HttpStatus
 import org.jooq.exception.DataAccessException as JooqDataAccessException

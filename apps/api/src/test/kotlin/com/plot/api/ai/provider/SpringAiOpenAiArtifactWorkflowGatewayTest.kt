@@ -42,7 +42,7 @@ class SpringAiOpenAiArtifactWorkflowGatewayTest {
 	private val promptFactory = ChangelogPromptFactory(mapper)
 	private val contentTypeRegistry = ContentTypeRegistry(
 		promptFactory,
-		LaunchAnnouncementPromptFactory(mapper, promptFactory),
+		LaunchAnnouncementPromptFactory(mapper),
 	)
 	private val frozenPromptVersionLookup = FrozenPromptVersionLookup {
 		ContentTypeRegistry.CHANGELOG_PROMPT_VERSION
@@ -371,10 +371,7 @@ class SpringAiOpenAiArtifactWorkflowGatewayTest {
 		fun changelogPromptFactory(objectMapper: ObjectMapper) = ChangelogPromptFactory(objectMapper)
 
 		@Bean
-		fun launchAnnouncementPromptFactory(
-			objectMapper: ObjectMapper,
-			changelogPromptFactory: ChangelogPromptFactory,
-		) = LaunchAnnouncementPromptFactory(objectMapper, changelogPromptFactory)
+		fun launchAnnouncementPromptFactory(objectMapper: ObjectMapper) = LaunchAnnouncementPromptFactory(objectMapper)
 
 		@Bean
 		fun contentTypeRegistry(

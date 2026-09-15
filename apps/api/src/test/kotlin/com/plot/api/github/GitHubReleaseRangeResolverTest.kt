@@ -1,7 +1,5 @@
 package com.plot.api.github
 
-import java.time.Duration
-import java.time.Instant
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith

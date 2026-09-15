@@ -444,12 +444,6 @@ class AgentRunExecutionPersistence(
 		advanceAndRelease(claim, run.currentStep + 1, now, nextAttemptAt)
 		requireNotNull(queryPersistence.findStep(claim.workspaceId, claim.agentRunId, stepId))
 	}
-	fun releaseAgentClaim(claim: ClaimedAgentRun, nextAttemptAt: Instant, now: Instant = currentInstant()) {
-		transactionExecutor.executeWithoutResult {
-			queryPersistence.requireAgentClaim(claim)
-			advanceAndRelease(claim, currentStep = null, now = now, nextAttemptAt = nextAttemptAt)
-		}
-	}
 	fun scheduleAgentRetry(
 		claim: ClaimedAgentRun,
 		errorCode: String,

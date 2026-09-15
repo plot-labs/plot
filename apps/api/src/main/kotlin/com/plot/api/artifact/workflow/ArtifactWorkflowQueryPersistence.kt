@@ -1,7 +1,6 @@
 package com.plot.api.artifact.workflow
 
 import com.plot.api.persistence.JooqSqlExecutor
-import com.plot.api.persistence.SqlRow
 import com.plot.api.artifact.workflow.dto.ArtifactWorkflowModelTimingResponse
 import com.plot.api.artifact.workflow.dto.ArtifactWorkflowRunTimingResponse
 import com.plot.api.artifact.workflow.dto.ArtifactWorkflowStepTimingResponse

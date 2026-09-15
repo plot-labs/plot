@@ -17,7 +17,6 @@ import com.plot.api.artifact.workflow.model.ReviewVerdict
 import com.plot.api.artifact.workflow.model.ReviewerOutput
 import com.plot.api.artifact.workflow.model.SentenceReview
 import com.plot.api.artifact.workflow.model.SourceProvider
-import com.plot.api.artifact.workflow.model.TargetedRewrite
 import com.plot.api.artifact.workflow.model.TargetedRewriteOutput
 import com.plot.api.artifact.workflow.model.WriterOutput
 import com.plot.api.artifact.workflow.model.WriterSentence

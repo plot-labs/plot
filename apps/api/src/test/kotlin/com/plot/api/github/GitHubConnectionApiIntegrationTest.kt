@@ -26,7 +26,6 @@ import org.springframework.test.web.servlet.MockMvc
 import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.delete
-import org.springframework.test.web.servlet.patch
 import org.springframework.test.web.servlet.post
 import org.springframework.test.web.servlet.put
 

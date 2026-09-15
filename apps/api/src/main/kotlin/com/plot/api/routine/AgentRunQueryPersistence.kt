@@ -1,7 +1,6 @@
 package com.plot.api.routine
 
 import com.plot.api.persistence.JooqSqlExecutor
-import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
 import org.springframework.stereotype.Component
@@ -130,24 +129,6 @@ class AgentRunQueryPersistence(
 		workspaceId,
 		agentRunId,
 	).firstOrNull()
-	fun loadArtifactWorkflowState(workspaceId: UUID, artifactWorkflowRunId: UUID): AgentArtifactWorkflowState? = sqlExecutor.query(
-		"""
-		select generation.id, generation.status,
-		       exists (
-		         select 1 from content_packs pack
-		         where pack.workspace_id = generation.workspace_id and pack.generation_run_id = generation.id
-		       ) as materialized
-		from generation_runs generation
-		where generation.workspace_id = ? and generation.id = ?
-		""".trimIndent(),
-		{ rs, _ -> AgentArtifactWorkflowState(
-			requireNotNull(rs.getObject("id", UUID::class.java)),
-			requireNotNull(rs.getString("status")),
-			rs.getBoolean("materialized"),
-		) },
-		workspaceId,
-		artifactWorkflowRunId,
-	).singleOrNull()
 	fun allAgentSourcesActive(workspaceId: UUID, agentRunId: UUID): Boolean {
 		val counts = sqlExecutor.query(
 			"""

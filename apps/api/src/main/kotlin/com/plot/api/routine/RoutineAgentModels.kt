@@ -269,12 +269,6 @@ data class ClaimedAgentRun(
 	val workerId: String,
 )
 
-data class AgentArtifactWorkflowState(
-	val artifactWorkflowRunId: UUID,
-	val status: String,
-	val materialized: Boolean,
-)
-
 data class RoutineExecutionSummaryRecord(
 	val executionId: UUID,
 	val executionStatus: RoutineExecutionStatus,

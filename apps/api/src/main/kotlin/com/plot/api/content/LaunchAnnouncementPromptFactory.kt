@@ -1,7 +1,6 @@
 package com.plot.api.content
 
 import com.plot.api.ai.prompt.ChangelogPrompt
-import com.plot.api.ai.prompt.ChangelogPromptFactory
 import com.plot.api.ai.prompt.STYLE_CONSTRAINT_LINE
 import com.plot.api.ai.prompt.USER_CONFIRMED_REVIEWER_LINE
 import com.plot.api.ai.prompt.appendEvidence
@@ -20,7 +19,6 @@ import tools.jackson.databind.ObjectMapper
 @Component
 class LaunchAnnouncementPromptFactory(
 	private val objectMapper: ObjectMapper,
-	@Suppress("unused") private val changelogPromptFactory: ChangelogPromptFactory,
 ) : ContentPromptFactory {
 	override fun writer(
 		instruction: String?,
