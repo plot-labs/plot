@@ -17,6 +17,15 @@ data class RoutineAgentProperties(
 	val maxEvidenceCharacters: Int = 60_000,
 	val searchResultLimit: Int = 8,
 ) {
+	internal fun chatBudgetSnapshot(): Map<String, Any> = mapOf(
+		"maxModelCalls" to maxModelCalls,
+		"maxToolCalls" to maxToolCalls,
+		"maxRunDurationMillis" to maxRunDuration.toMillis(),
+		"maxInputCharacters" to maxInputCharacters,
+		"maxEvidenceCharacters" to maxEvidenceCharacters,
+		"truncatedSeed" to false,
+	)
+
 	init {
 		require(!claimTimeout.isNegative && !claimTimeout.isZero) { "plot.routine-agent.claim-timeout must be positive" }
 		require(!retryInitialDelay.isNegative) { "plot.routine-agent.retry-initial-delay must not be negative" }

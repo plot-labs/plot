@@ -1,5 +1,7 @@
 package com.plot.api.routine
 
+import com.plot.api.chat.ChatCompatibilityWriter
+
 import com.plot.api.persistence.generated.tables.AgentRuns.Companion.AGENT_RUNS
 import com.plot.api.persistence.generated.tables.AgentRunInputs.Companion.AGENT_RUN_INPUTS
 import com.plot.api.persistence.generated.tables.AgentSteps.Companion.AGENT_STEPS

@@ -2,13 +2,13 @@ package com.plot.api.contentprofile
 
 import com.plot.api.TestcontainersConfiguration
 import com.plot.api.artifact.workflow.ArtifactWorkflowRunService
+import com.plot.api.chat.ChatRunService
+import com.plot.api.chat.dto.CreateChatAgentRunRequest
 import com.plot.api.common.WorkspacePrincipal
 import com.plot.api.content.FrozenContentContextLookup
 import com.plot.api.dev.DevBootstrapService
 import com.plot.api.dev.DevContext
 import com.plot.api.routine.AgentRunQueryPersistence
-import com.plot.api.routine.ChatAgentAdmissionService
-import com.plot.api.routine.dto.CreateChatAgentRunRequest
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
@@ -45,7 +45,7 @@ class ContentProfileApiIntegrationTest {
 	@Autowired private lateinit var devBootstrapService: DevBootstrapService
 	@Autowired private lateinit var devContext: DevContext
 	@Autowired private lateinit var objectMapper: ObjectMapper
-	@Autowired private lateinit var chatAdmission: ChatAgentAdmissionService
+	@Autowired private lateinit var chatAdmission: ChatRunService
 	@Autowired private lateinit var agentRunQuery: AgentRunQueryPersistence
 	@Autowired private lateinit var artifactWorkflowRunService: ArtifactWorkflowRunService
 	@Autowired private lateinit var frozenContentContextLookup: FrozenContentContextLookup

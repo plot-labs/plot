@@ -1,15 +1,15 @@
 package com.plot.api.artifact.dto
 
+import com.plot.api.chat.dto.ContentBriefRequest
+import com.plot.api.content.ContentType
+import jakarta.validation.Valid
+import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
-import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.Size
-import jakarta.validation.Valid
-import tools.jackson.databind.JsonNode
-import java.util.UUID
 import java.time.Instant
-import com.plot.api.content.ContentType
-import com.plot.api.routine.dto.ContentBriefRequest
+import java.util.UUID
+import tools.jackson.databind.JsonNode
 
 data class ContentStatementInput(
 	val id: UUID?,

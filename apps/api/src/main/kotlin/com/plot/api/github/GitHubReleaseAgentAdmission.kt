@@ -1,9 +1,9 @@
 package com.plot.api.github
 
-import com.plot.api.common.WorkspacePrincipal
 import com.plot.api.autonomy.signal.SignalEvaluationPersistence
+import com.plot.api.chat.ChatRunService
+import com.plot.api.common.WorkspacePrincipal
 import com.plot.api.routine.AgentRunRecord
-import com.plot.api.routine.ChatAgentAdmissionService
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
 
@@ -23,7 +23,7 @@ interface GitHubReleaseAgentAdmission {
 @Component
 class DefaultGitHubReleaseAgentAdmission(
 	private val requestPersistence: GitHubReleaseRequestStore,
-	private val chatAgentAdmissionService: ChatAgentAdmissionService,
+	private val chatRuns: ChatRunService,
 	private val routineService: GitHubReleaseRoutineService,
 	private val signalEvaluations: SignalEvaluationPersistence,
 	private val preparationGate: GitHubReleasePreparationGate? = null,
@@ -45,7 +45,7 @@ class DefaultGitHubReleaseAgentAdmission(
 			requestPersistence.bindEvidence(request.id, transitionVersion, evidence)
 			transitionVersion + 1
 		} else transitionVersion
-		val agentRun = if (request.routineId != null) routineService.admit(request, evidence) else chatAgentAdmissionService.admitAutomated(
+		val agentRun = if (request.routineId != null) routineService.admit(request, evidence) else chatRuns.admitAutomated(
 			principal = principal,
 			instruction = instruction,
 			writingBlockIds = evidence.writingBlockIds,

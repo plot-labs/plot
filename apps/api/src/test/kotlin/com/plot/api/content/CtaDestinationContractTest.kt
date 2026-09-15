@@ -1,7 +1,7 @@
 package com.plot.api.content
 
-import com.plot.api.routine.dto.ContentBriefRequest
-import com.plot.api.routine.dto.CtaDestinationRequest
+import com.plot.api.chat.dto.ContentBriefRequest
+import com.plot.api.chat.dto.CtaDestinationRequest
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals

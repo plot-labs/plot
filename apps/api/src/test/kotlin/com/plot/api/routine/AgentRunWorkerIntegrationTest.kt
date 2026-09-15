@@ -12,8 +12,6 @@ import com.plot.api.ai.provider.ModelCallResult
 import com.plot.api.ai.provider.ReviewerModelRequest
 import com.plot.api.ai.provider.RewriteModelRequest
 import com.plot.api.ai.provider.WriterModelRequest
-import com.plot.api.dev.DevBootstrapService
-import com.plot.api.dev.DevContext
 import com.plot.api.artifact.workflow.ArtifactWorkflowRunDispatcher
 import com.plot.api.artifact.workflow.ArtifactWorkflowRunWorker
 import com.plot.api.artifact.workflow.model.ReviewVerdict
@@ -22,7 +20,11 @@ import com.plot.api.artifact.workflow.model.SentenceReview
 import com.plot.api.artifact.workflow.model.TargetedRewriteOutput
 import com.plot.api.artifact.workflow.model.WriterOutput
 import com.plot.api.artifact.workflow.model.WriterSentence
-import com.plot.api.routine.dto.CreateChatAgentRunRequest
+import com.plot.api.chat.ChatQueryService
+import com.plot.api.chat.ChatRunService
+import com.plot.api.chat.dto.CreateChatAgentRunRequest
+import com.plot.api.dev.DevBootstrapService
+import com.plot.api.dev.DevContext
 import java.sql.Timestamp
 import java.time.Duration
 import java.time.Instant
@@ -73,7 +75,8 @@ class AgentRunWorkerIntegrationTest {
 	@Autowired private lateinit var routineWorker: RoutineWorker
 	@Autowired private lateinit var agentWorker: AgentRunWorker
 	@Autowired private lateinit var artifactWorkflowWorker: ArtifactWorkflowRunWorker
-	@Autowired private lateinit var chatAdmission: ChatAgentAdmissionService
+	@Autowired private lateinit var chatAdmission: ChatRunService
+	@Autowired private lateinit var chatQueries: ChatQueryService
 	@Autowired private lateinit var agentModel: ScriptedAgentDecisionGateway
 	@Autowired private lateinit var artifactWorkflowModel: AgentArtifactWorkflowModelGateway
 
@@ -232,7 +235,7 @@ class AgentRunWorkerIntegrationTest {
 			UUID::class.java,
 			agentRunId,
 		)!!
-		val historyRuns = chatAdmission.listForSession(routineChatId)
+		val historyRuns = chatQueries.listForSession(routineChatId)
 		assertEquals(listOf(agentRunId), historyRuns.map { it.id })
 		assertNotNull(historyRuns.single().artifactId)
 		assertEquals(3, agentModel.requests.size)
@@ -276,7 +279,7 @@ class AgentRunWorkerIntegrationTest {
 		assertEquals(2, artifactWorkflowWorker.drain())
 		assertEquals("SUCCEEDED", jdbcTemplate.queryForObject("select status from agent_runs where id = ?", String::class.java, chat.id))
 		assertEquals("READY", jdbcTemplate.queryForObject("select status from artifact_runs where workspace_id = ? and agent_run_id = ?", String::class.java, devContext.devWorkspaceId, chat.id))
-		val artifactId = assertNotNull(chatAdmission.get(chat.id).artifactId)
+		val artifactId = assertNotNull(chatQueries.getRun(chat.id).artifactId)
 		assertEquals(artifactId, jdbcTemplate.queryForObject(
 			"select id from content_packs where generation_run_id = ?",
 			UUID::class.java,
@@ -818,7 +821,7 @@ class AgentRunWorkerIntegrationTest {
 		assertTrue(agentWorker.processOne())
 		assertEquals("FAILED", agentStatus(admitted.id))
 
-		val targetVersionId = chatAdmission.listTurnsForSession(admitted.chatId).single().versions.single().id
+		val targetVersionId = chatQueries.listTurnsForSession(admitted.chatId).single().versions.single().id
 		val retried = chatAdmission.retry(targetVersionId, "frozen-replay-retry-${UUID.randomUUID()}")
 		retrying = true
 		assertTrue(jdbcTemplate.queryForObject(
