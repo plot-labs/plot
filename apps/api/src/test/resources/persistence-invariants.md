@@ -33,10 +33,14 @@ This manifest is the U1 characterization baseline for the jOOQ migration. It rec
 | `artifact/workflow/ArtifactWorkflowMaterializationPersistence.kt` | evidence and final artifact materialization writes | workflow materialization and export tests | U7 |
 | `artifact/workflow/ArtifactWorkflowConfiguration.kt` | current transaction-template boundaries and worker lifecycle wiring | workflow rollback, shutdown, after-commit tests | U7 |
 | `routine/RoutinePersistence.kt` | routine eligibility/order, retry counters, state transitions | `RoutineWorkerIntegrationTest`, routine migration/background tests | U5 |
-| `routine/RoutineAgentPersistence.kt` | agent idempotency, fingerprint conflict, step/run state and affected-row fencing | `RoutineAgentMigrationIntegrationTest`, `AgentRunWorkerIntegrationTest` | U7 |
-| `routine/AgentRunAdmissionPersistence.kt` | routine/Chat AgentRun admission and frozen input seeding | `RoutineAgentMigrationIntegrationTest`, admission tests | U7 |
-| `routine/AgentRunQueryPersistence.kt` | AgentRun, input, source, step, timing, and artifact projections | `AgentRunWorkerIntegrationTest`, read-path tests | U7 |
-| `routine/AgentRunExecutionPersistence.kt` | claim/recovery/transition-version fencing, step/attempt limits, handoff, retry, and terminal transitions | `AgentRunWorkerIntegrationTest`, workflow reliability tests | U7/U10 |
+| `routine/RoutineAgentPersistence.kt` | routine execution admission, claims, status and affected-row fencing | `RoutineAgentMigrationIntegrationTest`, `AgentRunWorkerIntegrationTest` | U7 |
+| `routine/RoutineAgentAdmissionPersistence.kt` | routine eligibility and locking before shared AgentRun registration | `RoutineAgentMigrationIntegrationTest`, admission tests | U7 |
+| `agent/AgentRunRegistrationPersistence.kt` | shared run/source/input insertion, strict routine registration, partial-index Chat idempotency, frozen retry copy order | `RoutineAgentMigrationIntegrationTest`, `ArtifactReplicationIntegrationTest`, `AgentRunWorkerIntegrationTest` | U7 |
+| `agent/AgentExecutionSnapshotPersistence.kt` | execution envelopes, source-snapshot linkage, tool transcript and frozen-replay completeness | `AgentRunWorkerIntegrationTest` | U7 |
+| `chat/ChatPersistence.kt` | sessions, turns, response versions, idempotent Chat lookup and response deactivation | Chat API and response-version tests | U7 |
+| `routine/RoutineAgentRunProjection.kt` | routine terminal projection and success-only cursor advancement at existing transaction boundaries | `RoutineWorkerIntegrationTest`, `AgentRunWorkerIntegrationTest` | U7 |
+| `agent/AgentRunQueryPersistence.kt` | AgentRun, input, source, step, timing, and artifact projections | `AgentRunWorkerIntegrationTest`, read-path tests | U7 |
+| `agent/AgentRunExecutionPersistence.kt` | claim/recovery/transition-version fencing, step/attempt limits, handoff, retry, and terminal transitions | `AgentRunWorkerIntegrationTest`, workflow reliability tests | U7/U10 |
 | `github/GitHubReleaseRequestPersistence.kt` | release request admission, range/evidence linkage, and activity projections | `GitHubReleaseLifecycleIntegrationTest`, range/recovery tests | U6 |
 | `github/GitHubReleaseLeasePersistence.kt` | release queue order, claim/lease recovery, scope serialization, stale-owner rejection, terminal transitions | `GitHubReleaseLifecycleIntegrationTest`, `GitHubReleaseDraftRecoveryIntegrationTest` | U6 |
 | `github/GitHubWebhookDeliveryPersistence.kt` | webhook delivery idempotency and disposition state | `GitHubWebhookAfterCommitIntegrationTest`, `GitHubWebhookApiIntegrationTest` | U6 |
@@ -62,7 +66,7 @@ All five sites must be checked for active-transaction requirements and for any i
 
 ## Production `JdbcTemplate` inventory
 
-The following 23 files are the production JDBC migration surface. The named owner is the unit that must remove the call site; the risk is a sequencing hint, not a claim that a class is protocol-free.
+The following inventory records the production JDBC migration surface with updated owners. The named owner is the unit that must remove the call site; the risk is a sequencing hint, not a claim that a class is protocol-free.
 
 | File | Risk / first treatment | Target |
 | --- | --- | --- |
@@ -86,13 +90,13 @@ The following 23 files are the production JDBC migration surface. The named owne
 | `artifact/ArtifactRevisionService.kt` | revision and sentence mutation | U7 |
 | `artifact/ArtifactExportService.kt` | export idempotency, warnings, citations, and public-source policy | U7 |
 | `artifact/workflow/ArtifactWorkflowConfiguration.kt` | worker/lease/executor wiring | U7 |
-| `routine/AgentRunExecutionPersistence.kt` | typed AgentRun transition mutations | U7/U10 |
-| `routine/RoutineAgentPersistence.kt` | agent idempotency/fencing | U7 |
+| `agent/AgentRunExecutionPersistence.kt` | typed AgentRun transition mutations | U7/U10 |
+| `routine/RoutineAgentPersistence.kt` | routine execution idempotency/fencing | U7 |
 | `chat/ChatRunService.kt` | admission/retry/idempotency | U7 |
 | `chat/ChatQueryService.kt` | chat projection, legacy turn repair, and frozen-envelope reads | U7 |
 | `routine/GitHubChangeRoutineService.kt` | transaction-template routine dispatch | U7 |
 | `routine/GitHubRoutineRefreshService.kt` | refresh state and retry | U7 |
-| `routine/ReadOnlyAgentTools.kt` | read-only agent queries | U4/U7 |
+| `agent/ReadOnlyAgentTools.kt` | read-only agent queries | U4/U7 |
 
 Service SQL without a `JdbcTemplate` import is included in the same inventory when U1's structural scan identifies it; it must be extracted to a feature-local adapter before generated types enter the service layer.
 
