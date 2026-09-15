@@ -21,7 +21,7 @@ import org.springframework.core.env.Environment
 import org.springframework.stereotype.Component
 import tools.jackson.databind.ObjectMapper
 
-/** One provider call per durable worker attempt. Koog retries and content tracing are not installed. */
+/** Shared structured-output and native-tool transport. Koog retries and content tracing are not installed. */
 @Component
 class KoogModelTransport internal constructor(
 	private val properties: PlotAiProperties,
@@ -85,6 +85,30 @@ class KoogModelTransport internal constructor(
 			catch (_: Exception) { throw MalformedModelOutputException("Invalid structured model output") }
 		return StructuredTransportResponse(value, captured.responseId, captured.model, response.finishReason,
 			response.metaInfo.inputTokensCount, response.metaInfo.outputTokensCount, response.metaInfo.totalTokensCount)
+	}
+
+	internal fun agentModel() = LLModel(LLMProvider.OpenRouter, requireNotNull(properties.model),
+		listOf(LLMCapability.Completion, LLMCapability.Tools))
+
+	internal fun agentParams() = OpenRouterParams(maxTokens = properties.maxOutputTokens,
+		additionalProperties = mapOf("provider" to Json.parseToJsonElement(objectMapper.writeValueAsString(properties.openRouterProviderPolicy))))
+
+	internal suspend fun exchangeAgent(prompt: ai.koog.prompt.Prompt, model: LLModel,
+		tools: List<ai.koog.agents.core.tools.ToolDescriptor>): ai.koog.prompt.message.Message.Assistant = try {
+		withTimeout(properties.timeout.toMillis()) {
+			OpenRouterLLMClient(httpClient = ResponseMetadataClient(requireNotNull(client), objectMapper))
+				.execute(prompt, model, tools).also {
+					if (it.finishReason !in listOf("stop", "tool_calls")) {
+						throw MalformedModelOutputException("Agent output did not finish normally")
+					}
+				}
+		}
+	} catch (failure: Exception) {
+		val causes = generateSequence<Throwable>(failure) { it.cause }.toList()
+		val http = causes.filterIsInstance<KoogHttpClientException>().firstOrNull()
+		val transient = http?.statusCode in listOf(408, 429) || (http?.statusCode ?: 0) >= 500 ||
+			causes.any { it is java.io.IOException || it is kotlinx.coroutines.TimeoutCancellationException || it is TransientModelTransportException }
+		throw AgentDecisionException(if (transient) "PROVIDER_UNAVAILABLE" else "PROVIDER_REJECTED", transient, "Agent provider request failed")
 	}
 
 	/** Koog 1.2 drops OpenRouter response ID/model; capture only these allowlisted fields per call. */

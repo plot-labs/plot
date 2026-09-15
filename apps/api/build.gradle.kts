@@ -1,6 +1,7 @@
 plugins {
 	kotlin("jvm") version "2.4.0"
 	kotlin("plugin.spring") version "2.4.0"
+	kotlin("plugin.serialization") version "2.4.0"
 	id("org.springframework.boot") version "4.0.7"
 	id("io.spring.dependency-management") version "1.1.7"
 }
@@ -34,6 +35,7 @@ dependencies {
 	implementation("org.jetbrains.exposed:exposed-spring-boot4-starter:1.5.0")
 	implementation("com.workos:workos:7.1.0")
 	implementation("org.jetbrains.kotlin:kotlin-reflect")
+	implementation("ai.koog:agents-core:${property("koogVersion")}")
 	implementation("ai.koog:prompt-executor-openrouter-client:${property("koogVersion")}")
 	implementation("ai.koog:http-client-java:${property("koogVersion")}")
 	implementation("ai.koog:skills:${property("koogVersion")}-beta")

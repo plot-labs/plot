@@ -71,6 +71,33 @@ class OpenRouterWireContractTest {
         assertFailsWith<IllegalArgumentException> { properties.copy(contentLoggingEnabled = true) }
     }
 
+    @Test fun `runtime sends native tools and accepts OpenRouter tool calls`() {
+        val inputId = java.util.UUID.randomUUID()
+        val response = """{"id":"gen-native","object":"chat.completion","created":1784160000,"model":"openai/served-model","choices":[{"index":0,"message":{"role":"assistant","content":null,"tool_calls":[{"id":"call-1","type":"function","function":{"name":"CREATE_ARTIFACT","arguments":"{\"selectedInputIds\":[\"$inputId\"]}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":11,"completion_tokens":7,"total_tokens":18}}"""
+        withServer(response = response) { server, bodies, calls ->
+            transport(server).useTransport { transport ->
+                var handedOff = false
+                val host = object : AgentRuntimeHost {
+                    override val finished get() = handedOff
+                    override fun beforeModel() = Unit
+                    override fun context() = AgentDecisionRequest(java.util.UUID.randomUUID(), "Create draft", emptyList(), emptyList(), emptyList(), 8, 8)
+                    override fun execute(decision: AgentDecision): String {
+                        assertEquals(listOf(inputId), decision.selectedInputIds)
+                        handedOff = true
+                        return "Created"
+                    }
+                }
+                KoogAgentRuntime(transport, mapper).run(host)
+                assertTrue(handedOff)
+                assertEquals(1, calls.get())
+                val body = mapper.readTree(bodies.single())
+                assertEquals(6, body["tools"].size())
+                assertFalse(body.has("response_format"))
+                assertEquals(mapper.readTree(mapper.writeValueAsString(properties.openRouterProviderPolicy)), body["provider"])
+            }
+        }
+    }
+
     private fun transport(server: HttpServer) = KoogModelTransport(properties, mapper, JavaKoogHttpClient.Factory().create(
         clientName = "test", baseUrl = "http://127.0.0.1:${server.address.port}"))
 
