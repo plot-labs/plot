@@ -2,14 +2,13 @@ package com.plot.api.writingblock
 
 import com.plot.api.common.WorkspacePrincipal
 import com.plot.api.dev.DevContext
+import com.plot.api.persistence.SqlExecutor
+import com.plot.api.persistence.SqlRow
 import com.plot.api.source.ImportedWritingBlock
 import tools.jackson.databind.ObjectMapper
 import java.sql.Timestamp
 import java.time.Instant
-import java.time.OffsetDateTime
 import java.util.UUID
-import org.jooq.DSLContext
-import org.jooq.Record
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -36,7 +35,7 @@ private data class ExistingWritingBlock(
 @Service
 class WritingBlockImportService(
 	private val devContext: DevContext,
-	private val dsl: DSLContext,
+	private val sql: SqlExecutor,
 	private val objectMapper: ObjectMapper,
 ) {
 	@Transactional
@@ -46,15 +45,15 @@ class WritingBlockImportService(
 		now: Instant = Instant.now(),
 	): WritingBlockUpsertResult {
 		// Acquire before row locks; V22 triggers provide the same ordering for older binaries.
-		dsl.fetch(
+		sql.query(
 			"select pg_advisory_xact_lock(hashtextextended(?, 0))",
 			"routine-activity:${principal.workspaceId}",
 		)
-		dsl.fetch(
+		sql.query(
 			"select pg_advisory_xact_lock(hashtextextended(?, 0))",
 			"${principal.workspaceId}:${block.sourceNamespaceId}:${block.sourceKind}:${block.externalObjectKey}",
 		)
-		val existing = dsl.fetch(
+		val existing = sql.query(
 			"""
 			select id, content_hash, title, body, url, canonical_url, author, platform,
 			       metadata::text as metadata_json, source_created_at, source_updated_at
@@ -94,7 +93,7 @@ class WritingBlockImportService(
 				upsertMembership(principal, block, existing.id, now)
 				return WritingBlockUpsertResult(existing.id, created = false, changed = false)
 			}
-			dsl.execute(
+			sql.update(
 				"""
 				update writing_blocks
 				set source_origin = ?, title = ?, body = ?, url = ?, canonical_url = ?, author = ?,
@@ -121,7 +120,7 @@ class WritingBlockImportService(
 			return WritingBlockUpsertResult(existing.id, created = false, changed = true)
 		}
 
-		val result = dsl.fetch(
+		val result = sql.query(
 			"""
 			insert into writing_blocks (
 			  id, workspace_id, source_namespace_id, external_object_key,
@@ -171,7 +170,9 @@ class WritingBlockImportService(
 				Timestamp.from(now),
 				Timestamp.from(now),
 			),
-		).firstOrNull()?.let { it.get("id", UUID::class.java) to it.get("inserted", Boolean::class.java) }
+		).firstOrNull()?.let {
+			requireNotNull(it.getObject("id", UUID::class.java)) to it.getBoolean("inserted")
+		}
 			?: error("Writing block upsert did not return a row")
 
 		upsertMembership(principal, block, result.first, now)
@@ -191,7 +192,7 @@ class WritingBlockImportService(
 		blockId: UUID,
 		now: Instant,
 	) {
-		dsl.execute(
+		sql.update(
 			"""
 			insert into writing_block_scopes (
 			  id, workspace_id, source_namespace_id, writing_block_id, source_scope_id,
@@ -214,18 +215,18 @@ class WritingBlockImportService(
 
 	private fun normalizeJson(value: String?): Any? = value?.let { objectMapper.readTree(it) }
 
-	private fun Record.toExistingWritingBlock() = ExistingWritingBlock(
-		id = requireNotNull(get("id", UUID::class.java)),
-		contentHash = get("content_hash", String::class.java),
-		title = get("title", String::class.java),
-		body = get("body", String::class.java),
-		url = get("url", String::class.java),
-		canonicalUrl = get("canonical_url", String::class.java),
-		author = get("author", String::class.java),
-		platform = get("platform", String::class.java),
-		metadataJson = get("metadata_json", String::class.java),
-		sourceCreatedAt = get("source_created_at", OffsetDateTime::class.java)?.toInstant(),
-		sourceUpdatedAt = get("source_updated_at", OffsetDateTime::class.java)?.toInstant(),
+	private fun SqlRow.toExistingWritingBlock() = ExistingWritingBlock(
+		id = requireNotNull(getObject("id", UUID::class.java)),
+		contentHash = getString("content_hash"),
+		title = getString("title"),
+		body = getString("body"),
+		url = getString("url"),
+		canonicalUrl = getString("canonical_url"),
+		author = getString("author"),
+		platform = getString("platform"),
+		metadataJson = getString("metadata_json"),
+		sourceCreatedAt = getTimestamp("source_created_at")?.toInstant(),
+		sourceUpdatedAt = getTimestamp("source_updated_at")?.toInstant(),
 	)
 
 }

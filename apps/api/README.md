@@ -50,8 +50,8 @@ agent/AgentRunDispatcher → AgentRunWorker
 
 ## 저장소와 설정
 
-- 기능별 `*Repository` / `*Persistence`에서 DB 접근을 찾습니다. `persistence/JooqSqlExecutor`는 공통 SQL 실행과 예외 변환을 담당합니다.
-- `JooqTransactionExecutor` 호출 블록은 여러 SQL 작업을 하나로 묶는 경계입니다. 재시도의 잠금·복사·등록 순서를 함께 읽어야 합니다.
+- 기능별 `*Repository` / `*Persistence`에서 DB 접근을 찾습니다. 일반 CRUD는 기능별 Exposed 테이블과 DSL을 사용하고, PostgreSQL 상태 전이는 파라미터 SQL로 그대로 표현합니다.
+- `persistence/SqlExecutor`는 파라미터 SQL 실행과 Spring 예외 변환을, `TransactionExecutor`는 여러 저장 작업을 묶는 트랜잭션 경계를 담당합니다.
 - 일반 서비스·저장소는 생성자 주입을 사용합니다. `AgentConfiguration`, `RoutineConfiguration`, `ArtifactWorkflowConfiguration`은 실행기와 작업자 설정을 조립합니다.
 - 기존 `/api/agent-runs`, `/api/sessions` 주소와 `plot.routine-agent` 설정 키는 유지합니다.
 - `agent`의 실행 설정·도구 기록은 기존 `chat_execution_*` 테이블을 사용합니다. 재시도 여부를 읽는 기존 응답 버전 연결도 유지합니다. 패키지 경계 정리를 위해 DB 마이그레이션을 추가하지 않았습니다.

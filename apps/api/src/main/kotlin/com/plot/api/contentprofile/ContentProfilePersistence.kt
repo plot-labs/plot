@@ -2,8 +2,8 @@ package com.plot.api.contentprofile
 
 import com.plot.api.common.UuidGenerator
 import com.plot.api.content.ContentProfileRevision
-import com.plot.api.persistence.JooqSqlExecutor
-import com.plot.api.persistence.JooqTransactionExecutor
+import com.plot.api.persistence.SqlExecutor
+import com.plot.api.persistence.TransactionExecutor
 import java.sql.Timestamp
 import java.time.Clock
 import java.util.UUID
@@ -13,8 +13,8 @@ import tools.jackson.core.type.TypeReference
 
 @Repository
 class ContentProfilePersistence(
-	private val sqlExecutor: JooqSqlExecutor,
-	private val transactionExecutor: JooqTransactionExecutor,
+	private val sqlExecutor: SqlExecutor,
+	private val transactionExecutor: TransactionExecutor,
 	private val uuidGenerator: UuidGenerator,
 	private val objectMapper: ObjectMapper,
 	private val clock: Clock = Clock.systemUTC(),

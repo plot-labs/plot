@@ -2,7 +2,7 @@ package com.plot.api.github
 
 import com.plot.api.common.ApiException
 import com.plot.api.auth.RequestActorResolver
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import java.sql.Timestamp
 import com.plot.api.dev.DevContext
 import com.plot.api.writingblock.WritingBlockImportService
@@ -43,7 +43,7 @@ class GitHubImportService(
 	private val devContext: DevContext,
 	private val connectionService: GitHubConnectionService,
 	private val githubClient: GitHubClient,
-	private val sqlExecutor: JooqSqlExecutor,
+	private val sqlExecutor: SqlExecutor,
 	private val reservationService: GitHubImportReservationService,
 	private val persistence: GitHubImportPersistenceService,
 	private val failureRecorder: GitHubImportFailureRecorder,
@@ -144,7 +144,7 @@ class GitHubImportService(
 @Service
 class GitHubImportReservationService(
 	private val devContext: DevContext,
-	private val sqlExecutor: JooqSqlExecutor,
+	private val sqlExecutor: SqlExecutor,
 ) {
 	@Transactional
 	fun reserve(scope: GitHubScopeRecord, request: GitHubImportRequest): ReservedImport {
@@ -204,7 +204,7 @@ data class ReservedImport(val id: UUID, val observationId: UUID, val startedAt: 
 @Service
 class GitHubImportPersistenceService(
 	private val devContext: DevContext,
-	private val sqlExecutor: JooqSqlExecutor,
+	private val sqlExecutor: SqlExecutor,
 	private val connectionService: GitHubConnectionService,
 	private val transformer: GitHubWritingBlockTransformer,
 	private val writingBlockImportService: WritingBlockImportService,
@@ -280,7 +280,7 @@ class GitHubImportPersistenceService(
 @Service
 class GitHubImportFailureRecorder(
 	private val devContext: DevContext,
-	private val sqlExecutor: JooqSqlExecutor,
+	private val sqlExecutor: SqlExecutor,
 ) {
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	fun markFailed(importId: UUID, code: String, message: String, connectionId: UUID? = null) {

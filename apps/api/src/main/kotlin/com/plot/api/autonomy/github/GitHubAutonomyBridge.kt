@@ -3,7 +3,7 @@ package com.plot.api.autonomy.github
 import com.plot.api.autonomy.signal.SignalEnvelope
 import com.plot.api.autonomy.signal.SignalInbox
 import com.plot.api.github.*
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import java.util.UUID
 import org.springframework.stereotype.Component
 import tools.jackson.databind.ObjectMapper
@@ -11,7 +11,7 @@ import tools.jackson.databind.ObjectMapper
 @Component
 class GitHubAutonomyBridge(
     private val inbox: SignalInbox,
-    private val sql: JooqSqlExecutor,
+    private val sql: SqlExecutor,
     private val mapper: ObjectMapper,
 ) {
     fun bootstrap(workspaceId: UUID, sourceScopeId: UUID) {

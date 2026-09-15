@@ -220,7 +220,7 @@ class RecoveryCoordinatorTest {
 	}
 
 	private open class FakeRecoveryPersistence : RecoveryCoordinatorPersistence(
-		sqlExecutor = org.mockito.Mockito.mock(com.plot.api.persistence.JooqSqlExecutor::class.java),
+		sqlExecutor = org.mockito.Mockito.mock(com.plot.api.persistence.SqlExecutor::class.java),
 	)
 
 	private fun makeMockRoutineDispatcher(onDispatch: () -> Unit): RoutineRunDispatcher {

@@ -5,7 +5,7 @@ import com.plot.api.auth.WorkOSAuthProperties
 import com.plot.api.common.ApiException
 import com.plot.api.common.UuidGenerator
 import com.plot.api.entitlement.TrialPolicy
-import com.plot.api.persistence.JooqTransactionExecutor
+import com.plot.api.persistence.TransactionExecutor
 import com.plot.api.workspace.User
 import com.plot.api.workspace.UserRepository
 import com.plot.api.workspace.Workspace
@@ -15,7 +15,6 @@ import com.plot.api.workspace.WorkspaceRepository
 import java.time.Instant
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.http.HttpStatus
-import org.jooq.exception.DataAccessException as JooqDataAccessException
 import org.slf4j.LoggerFactory
 import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.stereotype.Service
@@ -38,7 +37,7 @@ class WorkOSBootstrapProvisioningService(
 	private val workOSOrganizationGateway: WorkOSOrganizationGateway,
 	private val uuidGenerator: UuidGenerator,
 	private val properties: WorkOSAuthProperties,
-	private val transactionExecutor: JooqTransactionExecutor,
+	private val transactionExecutor: TransactionExecutor,
 ) {
 	fun bootstrap(jwt: Jwt): BootstrapAccountResponse {
 		if (!properties.enabled) {
@@ -103,8 +102,6 @@ class WorkOSBootstrapProvisioningService(
 			)
 			createLocalProjection(providerUser, organization, membership, workOSUserId)
 		} catch (failure: DataIntegrityViolationException) {
-			resolveConcurrentProjection(providerUser, workOSUserId, failure)
-		} catch (failure: JooqDataAccessException) {
 			resolveConcurrentProjection(providerUser, workOSUserId, failure)
 		} catch (failure: ApiException) {
 			markFailedSafely(workOSUserId, failure)

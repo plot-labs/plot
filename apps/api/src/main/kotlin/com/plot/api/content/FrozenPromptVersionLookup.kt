@@ -1,6 +1,6 @@
 package com.plot.api.content
 
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import java.util.UUID
 import org.springframework.stereotype.Component
 
@@ -10,7 +10,7 @@ fun interface FrozenPromptVersionLookup {
 
 @Component
 class GenerationRunFrozenPromptVersionLookup(
-	private val sqlExecutor: JooqSqlExecutor,
+	private val sqlExecutor: SqlExecutor,
 ) : FrozenPromptVersionLookup {
 	override fun promptVersionFor(artifactWorkflowRunId: UUID): String =
 		sqlExecutor.query(

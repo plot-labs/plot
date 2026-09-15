@@ -19,8 +19,8 @@ import com.plot.api.content.ContentType
 import com.plot.api.contentprofile.ContentProfileService
 import com.plot.api.dev.DevContext
 import com.plot.api.entitlement.WorkspaceAccessService
-import com.plot.api.persistence.JooqSqlExecutor
-import com.plot.api.persistence.JooqTransactionExecutor
+import com.plot.api.persistence.SqlExecutor
+import com.plot.api.persistence.TransactionExecutor
 import com.plot.api.agent.AgentRunDispatcher
 import com.plot.api.agent.AgentRunIdempotencyConflictException
 import com.plot.api.agent.AgentRunInputKind
@@ -45,8 +45,8 @@ import tools.jackson.databind.ObjectMapper
 @Service
 class ChatRunService(
 	private val devContext: DevContext,
-	private val sqlExecutor: JooqSqlExecutor,
-	private val transactionExecutor: JooqTransactionExecutor,
+	private val sqlExecutor: SqlExecutor,
+	private val transactionExecutor: TransactionExecutor,
 	private val uuidGenerator: UuidGenerator,
 	private val agentRunQueryPersistence: AgentRunQueryPersistence,
 	private val registration: AgentRunRegistrationPersistence,

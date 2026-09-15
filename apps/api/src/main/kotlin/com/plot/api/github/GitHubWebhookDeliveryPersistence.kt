@@ -1,6 +1,6 @@
 package com.plot.api.github
 
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import com.plot.api.persistence.SqlRow
 import java.sql.Timestamp
 import java.time.Clock
@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component
 /** Owns webhook delivery idempotency and disposition state. */
 @Component
 class GitHubWebhookDeliveryPersistence(
-	private val sqlExecutor: JooqSqlExecutor,
+	private val sqlExecutor: SqlExecutor,
 	private val clock: Clock = Clock.systemUTC(),
 ) : GitHubWebhookDeliveryStore {
 	override fun insertDelivery(delivery: GitHubWebhookDelivery): GitHubWebhookDelivery {

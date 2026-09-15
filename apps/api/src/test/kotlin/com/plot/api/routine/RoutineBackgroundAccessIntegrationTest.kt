@@ -18,7 +18,7 @@ import com.plot.api.github.GitHubPullRequest
 import com.plot.api.github.GitHubPullRequestPage
 import com.plot.api.github.GitHubRepository
 import com.plot.api.writingblock.WritingBlockRepository
-import com.plot.api.persistence.JooqTransactionExecutor
+import com.plot.api.persistence.TransactionExecutor
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -78,7 +78,7 @@ class RoutineBackgroundAccessIntegrationTest {
 	@Autowired private lateinit var githubClient: RoutineRefreshGitHubClient
 	@Autowired private lateinit var writingBlockRepository: WritingBlockRepository
 	@Autowired private lateinit var evidenceBudget: RoutineEvidenceBudget
-	@Autowired private lateinit var transactionExecutor: JooqTransactionExecutor
+	@Autowired private lateinit var transactionExecutor: TransactionExecutor
 	@Autowired private lateinit var agentProperties: AgentProperties
 	@Autowired private lateinit var workspaceAccessService: WorkspaceAccessService
 	@Autowired private lateinit var refreshService: GitHubRoutineRefreshService

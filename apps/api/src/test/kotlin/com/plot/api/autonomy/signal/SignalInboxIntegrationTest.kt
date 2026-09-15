@@ -1,7 +1,7 @@
 package com.plot.api.autonomy.signal
 
 import com.plot.api.TestcontainersConfiguration
-import com.plot.api.persistence.JooqTransactionExecutor
+import com.plot.api.persistence.TransactionExecutor
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
@@ -26,7 +26,7 @@ import org.springframework.jdbc.core.JdbcTemplate
 class SignalInboxIntegrationTest {
 	@Autowired private lateinit var inbox: SignalInbox
 	@Autowired private lateinit var jdbc: JdbcTemplate
-	@Autowired private lateinit var transactions: JooqTransactionExecutor
+	@Autowired private lateinit var transactions: TransactionExecutor
 	private val workspaces = mutableListOf<UUID>()
 	private val now = Instant.parse("2026-09-09T00:00:00Z")
 	private val lease = Duration.ofSeconds(30)

@@ -14,8 +14,8 @@ import com.plot.api.writingblock.WritingBlockImportService
 import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
-import com.plot.api.persistence.JooqSqlExecutor
-import com.plot.api.persistence.JooqTransactionExecutor
+import com.plot.api.persistence.SqlExecutor
+import com.plot.api.persistence.TransactionExecutor
 import org.springframework.stereotype.Service
 
 @Service
@@ -23,11 +23,11 @@ class GitHubChangeRoutineService(
 	private val persistence: RoutinePersistence,
 	private val agentPersistence: RoutineAgentPersistence,
 	private val writingBlockImportService: WritingBlockImportService,
-	private val sqlExecutor: JooqSqlExecutor,
+	private val sqlExecutor: SqlExecutor,
 	private val uuidGenerator: UuidGenerator,
 	private val properties: GitHubProperties,
 	private val evidenceBudget: RoutineEvidenceBudget,
-	private val transactionExecutor: JooqTransactionExecutor,
+	private val transactionExecutor: TransactionExecutor,
 	private val releaseRequests: GitHubReleaseRequestStore,
 	private val releaseRoutines: GitHubReleaseRoutineService,
 ) {

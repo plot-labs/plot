@@ -13,7 +13,7 @@ import com.plot.api.common.ApiException
 import com.plot.api.content.ContentBrief
 import com.plot.api.dev.DevContext
 import com.plot.api.entitlement.WorkspaceAccessService
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import com.plot.api.agent.AgentRunOrigin
 import com.plot.api.agent.AgentRunQueryPersistence
 import com.plot.api.agent.AgentRunRecord
@@ -29,7 +29,7 @@ import tools.jackson.databind.ObjectMapper
 @Service
 class ChatQueryService(
 	private val devContext: DevContext,
-	private val sqlExecutor: JooqSqlExecutor,
+	private val sqlExecutor: SqlExecutor,
 	private val agentRunQueryPersistence: AgentRunQueryPersistence,
 	private val chatPersistence: ChatPersistence,
 	private val snapshots: AgentExecutionSnapshotPersistence,

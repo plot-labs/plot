@@ -3,14 +3,14 @@ package com.plot.api.routine
 import com.plot.api.agent.AgentRunRecord
 import com.plot.api.agent.AgentRunOrigin
 import com.plot.api.agent.AgentRunStatus
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
 import org.springframework.stereotype.Component
 
 @Component
-class RoutineAgentRunProjection(private val sqlExecutor: JooqSqlExecutor) {
+class RoutineAgentRunProjection(private val sqlExecutor: SqlExecutor) {
 	fun commitSuccessfulInput(run: AgentRunRecord, now: Instant) {
 		if (run.origin != AgentRunOrigin.ROUTINE || run.routineExecutionId == null || run.routineId == null) return
 		sqlExecutor.update(

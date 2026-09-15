@@ -6,8 +6,8 @@ import com.plot.api.common.ApiException
 import com.plot.api.content.ContentType
 import com.plot.api.content.ContentTypeRegistry
 import com.plot.api.entitlement.TrialPolicy
-import com.plot.api.persistence.JooqSqlExecutor
-import com.plot.api.persistence.JooqTransactionExecutor
+import com.plot.api.persistence.SqlExecutor
+import com.plot.api.persistence.TransactionExecutor
 import com.plot.api.agent.AgentToolAccessException
 import java.sql.Timestamp
 import java.time.Clock
@@ -18,9 +18,9 @@ import tools.jackson.databind.ObjectMapper
 
 @Repository
 class ArtifactWorkflowAdmissionPersistence(
-	private val sqlExecutor: JooqSqlExecutor,
+	private val sqlExecutor: SqlExecutor,
 	private val objectMapper: ObjectMapper,
-	private val transactionExecutor: JooqTransactionExecutor,
+	private val transactionExecutor: TransactionExecutor,
 	private val artifactRunPersistence: ArtifactRunPersistence,
 	private val queryPersistence: ArtifactWorkflowQueryPersistence,
 	private val materializationPersistence: ArtifactWorkflowMaterializationPersistence,

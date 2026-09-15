@@ -4,7 +4,7 @@ import com.plot.api.common.ApiException
 import com.plot.api.artifact.dto.ExportWarningResponse
 import com.plot.api.artifact.workflow.model.ExportSource
 import com.plot.api.dev.DevContext
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import java.security.MessageDigest
 import java.util.HexFormat
 import java.util.UUID
@@ -13,7 +13,7 @@ import org.springframework.stereotype.Service
 
 @Service
 class ArtifactDeliveryGate(
-	private val sqlExecutor: JooqSqlExecutor,
+	private val sqlExecutor: SqlExecutor,
 	private val devContext: DevContext,
 	private val query: ArtifactQueryService,
 	private val materializer: ArtifactRevisionMaterializer,

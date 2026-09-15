@@ -3,13 +3,13 @@ package com.plot.api.chat
 import com.plot.api.agent.AgentRunRecord
 import com.plot.api.agent.agentRunMapper
 import com.plot.api.agent.selectAgentRunSql
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import java.time.Instant
 import java.util.UUID
 import org.springframework.stereotype.Repository
 
 @Repository
-class ChatPersistence(private val sqlExecutor: JooqSqlExecutor) {
+class ChatPersistence(private val sqlExecutor: SqlExecutor) {
 	fun sessionExists(workspaceId: UUID, sessionId: UUID): Boolean = sqlExecutor.queryForObject(
 		"select exists(select 1 from work_sessions where workspace_id = ? and id = ?)",
 		Boolean::class.java,

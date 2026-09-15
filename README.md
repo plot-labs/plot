@@ -71,7 +71,7 @@ contracts/
   plot-api/    versioned API contract manifest and fixtures
 ```
 
-PostgreSQL stores signals, decisions, executions, and content. Flyway migrations under `apps/api/src/main/resources/db/migration` define the schema. The backend uses Kotlin, Spring Boot, Spring AI, and jOOQ.
+PostgreSQL stores signals, decisions, executions, and content. Flyway migrations under `apps/api/src/main/resources/db/migration` define the schema. The backend uses Kotlin, Spring Boot, Spring AI, Exposed DSL, and parameterized SQL.
 
 ## Development
 

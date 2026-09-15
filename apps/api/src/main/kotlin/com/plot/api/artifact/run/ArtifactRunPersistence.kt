@@ -1,18 +1,17 @@
 package com.plot.api.artifact.run
 
 import com.plot.api.common.UuidGenerator
+import com.plot.api.persistence.SqlExecutor
+import com.plot.api.persistence.SqlRow
 import java.sql.Timestamp
 import java.time.Clock
 import java.time.Instant
-import java.time.OffsetDateTime
 import java.util.UUID
-import org.jooq.DSLContext
-import org.jooq.Record
 import org.springframework.stereotype.Component
 
 @Component
 class ArtifactRunPersistence(
-	private val dsl: DSLContext,
+	private val sql: SqlExecutor,
 	private val uuidGenerator: UuidGenerator,
 	private val clock: Clock = Clock.systemUTC(),
 ) {
@@ -131,34 +130,34 @@ class ArtifactRunPersistence(
 		)
 	}
 
-	private fun Record.toArtifactRun() = ArtifactRunRecord(
-		id = requireNotNull(get("id", UUID::class.java)),
-		workspaceId = requireNotNull(get("workspace_id", UUID::class.java)),
-		agentRunId = requireNotNull(get("agent_run_id", UUID::class.java)),
-		createdByUserId = requireNotNull(get("created_by_user_id", UUID::class.java)),
-		idempotencyKey = requireNotNull(get("idempotency_key", String::class.java)),
-		requestFingerprint = requireNotNull(get("request_fingerprint", String::class.java)),
-		status = ArtifactRunStatus.valueOf(requireNotNull(get("status", String::class.java))),
-		errorCode = get("error_code", String::class.java),
-		transitionVersion = requireNotNull(get("transition_version", Long::class.javaObjectType)),
-		startedAt = get("started_at", OffsetDateTime::class.java)?.toInstant(),
-		finishedAt = get("finished_at", OffsetDateTime::class.java)?.toInstant(),
-		createdAt = requireNotNull(get("created_at", OffsetDateTime::class.java)).toInstant(),
-		updatedAt = requireNotNull(get("updated_at", OffsetDateTime::class.java)).toInstant(),
+	private fun SqlRow.toArtifactRun() = ArtifactRunRecord(
+		id = requireNotNull(getObject("id", UUID::class.java)),
+		workspaceId = requireNotNull(getObject("workspace_id", UUID::class.java)),
+		agentRunId = requireNotNull(getObject("agent_run_id", UUID::class.java)),
+		createdByUserId = requireNotNull(getObject("created_by_user_id", UUID::class.java)),
+		idempotencyKey = requireNotNull(getString("idempotency_key")),
+		requestFingerprint = requireNotNull(getString("request_fingerprint")),
+		status = ArtifactRunStatus.valueOf(requireNotNull(getString("status"))),
+		errorCode = getString("error_code"),
+		transitionVersion = getLong("transition_version"),
+		startedAt = getTimestamp("started_at")?.toInstant(),
+		finishedAt = getTimestamp("finished_at")?.toInstant(),
+		createdAt = requireNotNull(getTimestamp("created_at")).toInstant(),
+		updatedAt = requireNotNull(getTimestamp("updated_at")).toInstant(),
 	)
 
-	private fun Record.toWorkflowState() = ArtifactRunWorkflowState(
-		artifactRunId = requireNotNull(get("artifact_run_id", UUID::class.java)),
-		agentRunId = requireNotNull(get("agent_run_id", UUID::class.java)),
-		workflowRunId = get("workflow_run_id", UUID::class.java),
-		status = ArtifactRunStatus.valueOf(requireNotNull(get("artifact_status", String::class.java))),
-		errorCode = get("artifact_error_code", String::class.java),
-		materialized = requireNotNull(get("materialized", Boolean::class.java)),
+	private fun SqlRow.toWorkflowState() = ArtifactRunWorkflowState(
+		artifactRunId = requireNotNull(getObject("artifact_run_id", UUID::class.java)),
+		agentRunId = requireNotNull(getObject("agent_run_id", UUID::class.java)),
+		workflowRunId = getObject("workflow_run_id", UUID::class.java),
+		status = ArtifactRunStatus.valueOf(requireNotNull(getString("artifact_status"))),
+		errorCode = getString("artifact_error_code"),
+		materialized = getBoolean("materialized"),
 	)
 
-	private fun fetchRows(sql: String, vararg bindings: Any?): List<Record> = dsl.fetch(sql, *bindings)
+	private fun fetchRows(statement: String, vararg bindings: Any?): List<SqlRow> = sql.query(statement, *bindings)
 
-	private fun execute(sql: String, vararg bindings: Any?): Int = dsl.execute(sql, *bindings)
+	private fun execute(statement: String, vararg bindings: Any?): Int = sql.update(statement, *bindings)
 
 	private val selectSql = """
 		select id, workspace_id, agent_run_id, created_by_user_id, idempotency_key,

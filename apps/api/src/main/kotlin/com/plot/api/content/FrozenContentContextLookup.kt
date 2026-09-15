@@ -1,7 +1,7 @@
 package com.plot.api.content
 
 import com.plot.api.contentprofile.ContentProfilePersistence
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import java.util.UUID
 import org.springframework.stereotype.Component
 import tools.jackson.databind.ObjectMapper
@@ -12,7 +12,7 @@ fun interface FrozenContentContextLookup {
 
 @Component
 class GenerationRunFrozenContentContextLookup(
-	private val sqlExecutor: JooqSqlExecutor,
+	private val sqlExecutor: SqlExecutor,
 	private val contentProfilePersistence: ContentProfilePersistence,
 	private val objectMapper: ObjectMapper,
 ) : FrozenContentContextLookup {

@@ -1,19 +1,18 @@
 package com.plot.api.routine
 
 import com.plot.api.common.UuidGenerator
+import com.plot.api.persistence.SqlExecutor
+import com.plot.api.persistence.SqlRow
 import java.sql.Timestamp
 import java.time.Clock
 import java.time.Instant
-import java.time.OffsetDateTime
 import java.util.UUID
-import org.jooq.DSLContext
-import org.jooq.Record
 import org.springframework.stereotype.Repository
 import org.springframework.transaction.annotation.Transactional
 
 @Repository
 class RoutinePersistence(
-	private val dsl: DSLContext,
+	private val sql: SqlExecutor,
 	private val uuidGenerator: UuidGenerator,
 	private val clock: Clock? = null,
 ) {
@@ -49,7 +48,7 @@ class RoutinePersistence(
 		"select exists(select 1 from routines where workspace_id = ? and source_scope_id = ? and cadence in ('ON_GITHUB_RELEASE', 'ON_GIT_TAG'))",
 		workspaceId,
 		sourceScopeId,
-	).firstOrNull()?.get("exists", Boolean::class.java) == true
+	).firstOrNull()?.getBoolean("exists") == true
 
 	fun insert(
 		workspaceId: UUID,
@@ -154,7 +153,7 @@ class RoutinePersistence(
 		""".trimIndent(),
 		workspaceId,
 		sourceScopeId,
-	).firstOrNull()?.get("exists", Boolean::class.java) == true
+	).firstOrNull()?.getBoolean("exists") == true
 
 	fun lockWorkspaceActivity(workspaceId: UUID) {
 		fetchRows(
@@ -267,34 +266,34 @@ class RoutinePersistence(
 		return if (updated != 1) null else find(row.workspaceId, row.id)
 	}
 
-	private fun Record.toRoutine(): RoutineRecord = RoutineRecord(
-		id = requireNotNull(get("id", UUID::class.java)),
-		workspaceId = requireNotNull(get("workspace_id", UUID::class.java)),
-		createdByUserId = requireNotNull(get("created_by_user_id", UUID::class.java)),
-		sourceScopeId = requireNotNull(get("source_scope_id", UUID::class.java)),
-		sourceLabel = get("source_label", String::class.java),
-		name = requireNotNull(get("name", String::class.java)),
-		instruction = requireNotNull(get("instruction", String::class.java)),
-		cadence = RoutineCadence.valueOf(requireNotNull(get("cadence", String::class.java))),
-		enabled = requireNotNull(get("enabled", Boolean::class.java)),
-		activityCursorSequence = get("activity_cursor_sequence", Long::class.javaObjectType),
-		lastRunAt = get("last_run_at", OffsetDateTime::class.java)?.toInstant(),
-		nextRunAt = requireNotNull(get("next_run_at", OffsetDateTime::class.java)).toInstant(),
-		activeExecutionId = get("active_execution_id", UUID::class.java),
-		lastExecutionId = get("last_execution_id", UUID::class.java),
-		lastArtifactWorkflowRunId = get("last_generation_run_id", UUID::class.java),
-		lastRunStatus = get("effective_run_status", String::class.java),
-		lastErrorCode = get("effective_error_code", String::class.java),
-		claimedBy = get("claimed_by", String::class.java),
-		claimedAt = get("claimed_at", OffsetDateTime::class.java)?.toInstant(),
-		transitionVersion = requireNotNull(get("transition_version", Long::class.javaObjectType)),
-		createdAt = requireNotNull(get("created_at", OffsetDateTime::class.java)).toInstant(),
-		updatedAt = requireNotNull(get("updated_at", OffsetDateTime::class.java)).toInstant(),
+	private fun SqlRow.toRoutine(): RoutineRecord = RoutineRecord(
+		id = requireNotNull(getObject("id", UUID::class.java)),
+		workspaceId = requireNotNull(getObject("workspace_id", UUID::class.java)),
+		createdByUserId = requireNotNull(getObject("created_by_user_id", UUID::class.java)),
+		sourceScopeId = requireNotNull(getObject("source_scope_id", UUID::class.java)),
+		sourceLabel = requireNotNull(getString("source_label")),
+		name = requireNotNull(getString("name")),
+		instruction = requireNotNull(getString("instruction")),
+		cadence = RoutineCadence.valueOf(requireNotNull(getString("cadence"))),
+		enabled = getBoolean("enabled"),
+		activityCursorSequence = getObject("activity_cursor_sequence", Long::class.javaObjectType),
+		lastRunAt = getTimestamp("last_run_at")?.toInstant(),
+		nextRunAt = requireNotNull(getTimestamp("next_run_at")).toInstant(),
+		activeExecutionId = getObject("active_execution_id", UUID::class.java),
+		lastExecutionId = getObject("last_execution_id", UUID::class.java),
+		lastArtifactWorkflowRunId = getObject("last_generation_run_id", UUID::class.java),
+		lastRunStatus = getString("effective_run_status"),
+		lastErrorCode = getString("effective_error_code"),
+		claimedBy = getString("claimed_by"),
+		claimedAt = getTimestamp("claimed_at")?.toInstant(),
+		transitionVersion = getLong("transition_version"),
+		createdAt = requireNotNull(getTimestamp("created_at")).toInstant(),
+		updatedAt = requireNotNull(getTimestamp("updated_at")).toInstant(),
 	)
 
-	private fun fetchRows(sql: String, vararg bindings: Any?): List<Record> = dsl.fetch(sql, *bindings)
+	private fun fetchRows(statement: String, vararg bindings: Any?): List<SqlRow> = sql.query(statement, *bindings)
 
-	private fun execute(sql: String, vararg bindings: Any?): Int = dsl.execute(sql, *bindings)
+	private fun execute(statement: String, vararg bindings: Any?): Int = sql.update(statement, *bindings)
 
 	private fun currentInstant(): Instant = clock?.instant() ?: Instant.now()
 

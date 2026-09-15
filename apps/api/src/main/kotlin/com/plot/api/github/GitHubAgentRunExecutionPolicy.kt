@@ -1,12 +1,12 @@
 package com.plot.api.github
 
 import com.plot.api.agent.AgentRunExecutionPolicy
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import java.util.UUID
 import org.springframework.stereotype.Component
 
 @Component
-class GitHubAgentRunExecutionPolicy(private val sqlExecutor: JooqSqlExecutor) : AgentRunExecutionPolicy {
+class GitHubAgentRunExecutionPolicy(private val sqlExecutor: SqlExecutor) : AgentRunExecutionPolicy {
 	override fun isReleaseRun(workspaceId: UUID, agentRunId: UUID): Boolean = sqlExecutor.queryForObject(
 		"select exists(select 1 from github_release_draft_requests where workspace_id = ? and agent_run_id = ?)",
 		Boolean::class.java, workspaceId, agentRunId,

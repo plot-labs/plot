@@ -1,6 +1,6 @@
 package com.plot.api.auth.workos
 
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
@@ -15,7 +15,7 @@ data class WorkOSIdentityMapping(
 
 @Repository
 class WorkOSIdentityMappingRepository(
-	private val sql: JooqSqlExecutor,
+	private val sql: SqlExecutor,
 ) {
 	fun findByWorkOSUserId(workOSUserId: String): WorkOSIdentityMapping? = sql.queryForObject(
 		SELECT,

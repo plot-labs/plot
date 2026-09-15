@@ -1,24 +1,24 @@
 # Persistence Migration Invariant Manifest
 
-This manifest is the U1 characterization baseline for the jOOQ migration. It records the current production owner, the database protocol that must remain observable, and the regression evidence required before that owner is cut over. A `verify` entry is an execution-time gap, not permission to infer a new behavior.
+This manifest records the persistence protocols that must remain observable across implementation changes and the regression evidence required for each owner. A `verify` entry is an execution-time gap, not permission to infer a new behavior.
 
 ## Ownership and acceptance rules
 
-- A slice cannot cut over until its row has a passing characterization or parity test and its generated-type boundary is checked.
+- A slice cannot cut over until its row has a passing characterization or parity test and its persistence boundary is checked.
 - A durable workflow row must preserve eligibility predicate, queue order, lock scope/order, stale threshold, retry counter, idempotency/fingerprint rule, transition guard, and affected-row outcome.
 - Tests use direct SQL/JDBC only as an independent oracle. Production `src/main` cleanup does not remove these test fixtures.
 - Concurrency evidence uses two real PostgreSQL connections coordinated by barriers/latches; timing sleeps are not evidence.
 - PostgreSQL-managed columns (`activity_sequence`, defaults, trigger values, and sequence-backed values) are read-only to application writes.
 
-## JPA slices
+## CRUD persistence slices
 
 | Current owner | Tables / contract | Implicit behavior to characterize | Required evidence | Target |
 | --- | --- | --- | --- | --- |
-| `worksession/WorkSessionRepository.kt` | `work_sessions`; recent list ordered by `coalesce(last_activity_at, created_at) desc, created_at desc` | dirty checking on PATCH, generated timestamps, not-found mapping, no final ID tie-breaker | `WorkSessionApiIntegrationTest.createListAndUpdateSession`, separate SQL read after PATCH, list ordering fixture | U2 |
+| `worksession/WorkSessionPersistence.kt` | `work_sessions`; recent list ordered by `coalesce(last_activity_at, created_at) desc, created_at desc` | explicit PATCH update, timestamp mapping, not-found mapping, no final ID tie-breaker | `WorkSessionApiIntegrationTest.createListAndUpdateSession`, separate SQL read after PATCH, list ordering fixture | U2 |
 | `source/SourceScopeRepository.kt` | `source_scopes`; scope lookup and membership state | entity mapping/nullability, source scope ownership, not-found behavior | Source scope API/import tests; direct state assertions | U3 |
-| `writingblock/WritingBlockRepository.kt` | `writing_blocks`, `writing_block_scopes`; page/count/order and `activity_sequence` | `Page`/`Pageable` contract, `NULLS LAST`, four-key order, trigger-managed sequence, JPQL `exists` | `WritingBlockApiIntegrationTest`, `RoutineWorkerIntegrationTest`, cursor and direct SQL assertions | U3/U5 |
+| `writingblock/WritingBlockRepository.kt` | `writing_blocks`, `writing_block_scopes`; page/count/order and `activity_sequence` | `Page`/`Pageable` contract, `NULLS LAST`, four-key order, trigger-managed sequence, correlated `exists` | `WritingBlockApiIntegrationTest`, `RoutineWorkerIntegrationTest`, cursor and direct SQL assertions | U3/U5 |
 | `workspace/UserRepository.kt` | `users`; account identity and bootstrap lookup | uniqueness/error taxonomy, generated timestamps, bootstrap race | account/bootstrap integration tests and direct SQL | U3 |
-| `workspace/WorkspaceRepository.kt` | `workspaces`; create/update/read | `saveAndFlush`, dirty checking, owner creation atomicity, authorization | `WorkspaceApiIntegrationTest`, account/bootstrap, separate SQL read after PATCH | U3 |
+| `workspace/WorkspaceRepository.kt` | `workspaces`; create/update/read | explicit save, owner creation atomicity, authorization | `WorkspaceApiIntegrationTest`, account/bootstrap, separate SQL read after PATCH | U3 |
 | `workspace/WorkspaceMemberRepository.kt` | `workspace_members`; active membership/role | uniqueness, owner membership atomicity, role/status predicates | workspace/auth/entitlement integration tests and direct SQL | U3 |
 
 ## Durable persistence protocols
@@ -50,7 +50,7 @@ This manifest is the U1 characterization baseline for the jOOQ migration. It rec
 
 ## Typed transition boundary
 
-`AgentRunExecutionPersistence` and `GitHubReleaseLeasePersistence` use generated jOOQ fields for claim, renewal, retry/release, recovery, fencing, and terminal status mutations. Complex projections, evidence joins, and remaining SQL-shaped reads stay on `JooqSqlExecutor`; affected-row checks and workspace/owner/version predicates remain mandatory.
+`AgentRunExecutionPersistence` and `GitHubReleaseLeasePersistence` use parameterized PostgreSQL SQL for claim, renewal, retry/release, recovery, fencing, and terminal status mutations. Complex projections, evidence joins, and SQL-shaped reads stay on `SqlExecutor`; affected-row checks and workspace/owner/version predicates remain mandatory.
 
 ## After-commit and transaction boundaries
 
@@ -90,7 +90,7 @@ The following inventory records the production JDBC migration surface with updat
 | `artifact/ArtifactRevisionService.kt` | revision and sentence mutation | U7 |
 | `artifact/ArtifactExportService.kt` | export idempotency, warnings, citations, and public-source policy | U7 |
 | `artifact/workflow/ArtifactWorkflowConfiguration.kt` | worker/lease/executor wiring | U7 |
-| `agent/AgentRunExecutionPersistence.kt` | typed AgentRun transition mutations | U7/U10 |
+| `agent/AgentRunExecutionPersistence.kt` | fenced AgentRun transition mutations | U7/U10 |
 | `routine/RoutineAgentPersistence.kt` | routine execution idempotency/fencing | U7 |
 | `chat/ChatRunService.kt` | admission/retry/idempotency | U7 |
 | `chat/ChatQueryService.kt` | chat projection, legacy turn repair, and frozen-envelope reads | U7 |
@@ -98,12 +98,12 @@ The following inventory records the production JDBC migration surface with updat
 | `routine/GitHubRoutineRefreshService.kt` | refresh state and retry | U7 |
 | `agent/ReadOnlyAgentTools.kt` | read-only agent queries | U4/U7 |
 
-Service SQL without a `JdbcTemplate` import is included in the same inventory when U1's structural scan identifies it; it must be extracted to a feature-local adapter before generated types enter the service layer.
+Service SQL without a `JdbcTemplate` import is included in the same inventory when U1's structural scan identifies it; keep stateful SQL in a feature-local persistence boundary rather than spreading it across service logic.
 
 ## Implementation closure notes
 
 - WorkSession and Workspace PATCH tests read the committed row through an independent JDBC connection after the API call; the response body is not the only persistence assertion.
-- The JPA-only `saveAndFlush` boundary no longer exists after the final entity/repository removal. jOOQ statements execute immediately, while owner/workspace multi-write atomicity is covered by the rollback fixture and DevBootstrap membership tests.
-- `SourceScopePersistenceIntegrationTest` covers SQL `NULL` versus JSON `null`, nested JSON values, and PostgreSQL `timestamptz` microsecond precision at the jOOQ mapping boundary.
+- Exposed DSL and `SqlExecutor` statements execute immediately inside the shared Spring transaction manager. Owner/workspace multi-write atomicity is covered by the rollback fixture and DevBootstrap membership tests.
+- `SourceScopePersistenceIntegrationTest` covers SQL `NULL` versus JSON `null`, nested JSON values, and PostgreSQL `timestamptz` microsecond precision at the JDBC mapping boundary.
 - Worker claim/transition operations use proxy-visible Spring transactions and complete before external GitHub/model I/O; the named worker and background integration suites remain the regression evidence.
 - Keep this manifest in sync with structural scans; an unlisted production persistence owner is a U1 failure.

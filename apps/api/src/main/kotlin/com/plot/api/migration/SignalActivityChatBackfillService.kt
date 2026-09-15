@@ -1,8 +1,8 @@
 package com.plot.api.migration
 
 import com.plot.api.common.UuidGenerator
-import com.plot.api.persistence.JooqSqlExecutor
-import com.plot.api.persistence.JooqTransactionExecutor
+import com.plot.api.persistence.SqlExecutor
+import com.plot.api.persistence.TransactionExecutor
 import java.sql.Timestamp
 import java.time.Duration
 import java.time.Instant
@@ -17,8 +17,8 @@ import tools.jackson.databind.ObjectMapper
  */
 @Service
 class SignalActivityChatBackfillService(
-	private val sql: JooqSqlExecutor,
-	private val transactions: JooqTransactionExecutor,
+	private val sql: SqlExecutor,
+	private val transactions: TransactionExecutor,
 	private val uuidGenerator: UuidGenerator,
 	private val objectMapper: ObjectMapper,
 ) {

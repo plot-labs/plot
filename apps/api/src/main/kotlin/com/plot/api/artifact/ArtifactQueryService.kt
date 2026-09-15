@@ -20,7 +20,7 @@ import com.plot.api.artifact.workflow.model.SourceProvider
 import java.net.URI
 import java.util.UUID
 import org.springframework.http.HttpStatus
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import com.plot.api.content.ContentSourceSnapshotService
 import com.plot.api.content.ContentBrief
 import org.springframework.stereotype.Service
@@ -28,7 +28,7 @@ import tools.jackson.databind.JsonNode
 import tools.jackson.databind.ObjectMapper
 @Service
 class ArtifactQueryService(
-    private val sqlExecutor: JooqSqlExecutor,
+    private val sqlExecutor: SqlExecutor,
     private val devContext: DevContext,
     private val materializer: ArtifactRevisionMaterializer,
     private val objectMapper: ObjectMapper,

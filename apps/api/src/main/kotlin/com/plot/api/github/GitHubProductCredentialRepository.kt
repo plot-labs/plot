@@ -1,6 +1,6 @@
 package com.plot.api.github
 
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
@@ -8,7 +8,7 @@ import org.springframework.stereotype.Repository
 
 @Repository
 class GitHubProductCredentialRepository(
-	private val sql: JooqSqlExecutor,
+	private val sql: SqlExecutor,
 	private val cipher: GitHubProductCredentialCipher,
 ) {
 	fun findActiveByUserId(userId: UUID): GitHubProductCredential? = sql.queryForObject(

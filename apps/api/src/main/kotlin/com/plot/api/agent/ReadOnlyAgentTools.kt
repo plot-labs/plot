@@ -3,7 +3,7 @@ package com.plot.api.agent
 import com.plot.api.ai.provider.AgentSourceView
 import com.plot.api.writingblock.writingBlockContentHash
 import java.net.URI
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import com.plot.api.persistence.SqlRow
 import java.time.Instant
 import java.util.UUID
@@ -26,7 +26,7 @@ data class AgentToolResult(
 
 @Component
 class ReadOnlyAgentTools(
-	private val sqlExecutor: JooqSqlExecutor,
+	private val sqlExecutor: SqlExecutor,
 	private val properties: AgentProperties,
 	private val objectMapper: ObjectMapper,
 	private val snapshots: AgentExecutionSnapshotPersistence,

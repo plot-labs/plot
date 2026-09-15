@@ -20,7 +20,7 @@ import org.springframework.context.annotation.Lazy
 import org.springframework.stereotype.Component
 import org.springframework.transaction.support.TransactionSynchronization
 import org.springframework.transaction.support.TransactionSynchronizationManager
-import com.plot.api.persistence.JooqTransactionExecutor
+import com.plot.api.persistence.TransactionExecutor
 import tools.jackson.databind.ObjectMapper
 
 /**
@@ -34,7 +34,7 @@ class RoutineWorker(
 	private val agentRunAdmissionPersistence: RoutineAgentAdmissionPersistence,
 	private val writingBlockRepository: WritingBlockRepository,
 	private val evidenceBudget: RoutineEvidenceBudget,
-	private val transactionExecutor: JooqTransactionExecutor,
+	private val transactionExecutor: TransactionExecutor,
 	private val agentProperties: AgentProperties,
 	private val workspaceAccessService: WorkspaceAccessService,
 	private val refreshService: GitHubRoutineRefreshService,
@@ -108,7 +108,7 @@ class RoutineWorker(
 			val routine = persistence.find(execution.workspaceId, execution.routineId)
 				?: throw RoutineExecutionStateException("Routine was not found")
             if (execution.triggerKind != RoutineExecutionTriggerKind.MANUAL) {
-                transactionExecutor.executeWithoutResult {
+                transactionExecutor.execute {
                     persistence.lockWorkspaceActivity(execution.workspaceId)
                     val now=currentInstant()
                     agentPersistence.deferForAutonomy(execution.workspaceId,execution.id,workerId,now)
@@ -121,7 +121,7 @@ class RoutineWorker(
 				return
 			}
 			workspaceAccessService.requireWritable(execution.workspaceId)
-			transactionExecutor.executeWithoutResult {
+			transactionExecutor.execute {
 				persistence.lockWorkspaceActivity(readyExecution.workspaceId)
 				processLocked(readyExecution, claimedRoutine)
 			}
@@ -499,7 +499,7 @@ class RoutineWorker(
 	) {
 		val now = currentInstant()
 		try {
-			transactionExecutor.executeWithoutResult {
+			transactionExecutor.execute {
 				val current = agentPersistence.findExecution(execution.workspaceId, execution.id)
 				if (current?.status == RoutineExecutionStatus.PROBING) {
 					if (current.refreshCompletedAt == null) refreshService.fail(current, workerId, now)

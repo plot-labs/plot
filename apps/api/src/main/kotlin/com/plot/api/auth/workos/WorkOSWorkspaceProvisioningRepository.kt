@@ -1,6 +1,6 @@
 package com.plot.api.auth.workos
 
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
@@ -16,7 +16,7 @@ data class WorkOSWorkspaceProvisioningRecord(
 
 @Repository
 class WorkOSWorkspaceProvisioningRepository(
-	private val sql: JooqSqlExecutor,
+	private val sql: SqlExecutor,
 ) {
 	fun startOrResume(
 		workOSOrganizationId: String,

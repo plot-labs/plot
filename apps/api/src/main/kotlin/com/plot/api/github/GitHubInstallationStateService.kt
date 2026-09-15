@@ -2,7 +2,7 @@ package com.plot.api.github
 
 import com.plot.api.common.ApiException
 import com.plot.api.dev.DevContext
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import java.sql.Timestamp
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
@@ -32,7 +32,7 @@ data class GitHubInstallationStateBinding(
 class GitHubInstallationStateService(
 	private val properties: GitHubProperties,
 	private val devContext: DevContext,
-	private val sqlExecutor: JooqSqlExecutor,
+	private val sqlExecutor: SqlExecutor,
 	private val clock: Clock = Clock.systemUTC(),
 	private val random: SecureRandom = SecureRandom(),
 ) {

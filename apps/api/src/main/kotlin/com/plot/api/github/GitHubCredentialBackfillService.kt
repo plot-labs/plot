@@ -1,7 +1,7 @@
 package com.plot.api.github
 
-import com.plot.api.persistence.JooqSqlExecutor
-import com.plot.api.persistence.JooqTransactionExecutor
+import com.plot.api.persistence.SqlExecutor
+import com.plot.api.persistence.TransactionExecutor
 import com.plot.api.common.UuidGenerator
 import java.sql.Timestamp
 import java.time.Instant
@@ -24,8 +24,8 @@ data class GitHubCredentialBackfillReport(
 @Service
 class GitHubCredentialBackfillService(
 	private val properties: GitHubProperties,
-	private val sql: JooqSqlExecutor,
-	private val transactionExecutor: JooqTransactionExecutor,
+	private val sql: SqlExecutor,
+	private val transactionExecutor: TransactionExecutor,
 	private val credentialRepository: GitHubProductCredentialRepository,
 	private val uuidGenerator: UuidGenerator,
 ) {

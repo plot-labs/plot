@@ -3,7 +3,7 @@ package com.plot.api.agent
 import com.plot.api.common.UuidGenerator
 import com.plot.api.content.ContentType
 import com.plot.api.content.ContentSourceSnapshotInput
-import com.plot.api.persistence.JooqSqlExecutor
+import com.plot.api.persistence.SqlExecutor
 import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
@@ -12,7 +12,7 @@ import org.springframework.stereotype.Repository
 /** Writes accepted execution data. Callers own validation, locks, transactions and dispatch. */
 @Repository
 class AgentRunRegistrationPersistence(
-	private val sqlExecutor: JooqSqlExecutor,
+	private val sqlExecutor: SqlExecutor,
 	private val uuidGenerator: UuidGenerator,
 	private val queries: AgentRunQueryPersistence,
 ) {
