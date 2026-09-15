@@ -1,4 +1,4 @@
-package com.plot.api.routine
+package com.plot.api.chat
 
 import com.plot.api.common.UuidGenerator
 import com.plot.api.persistence.JooqSqlExecutor

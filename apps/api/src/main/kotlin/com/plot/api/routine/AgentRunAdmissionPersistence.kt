@@ -1,5 +1,7 @@
 package com.plot.api.routine
 
+import com.plot.api.chat.ChatCompatibilityWriter
+
 import com.plot.api.common.UuidGenerator
 import com.plot.api.contentprofile.ContentProfilePersistence
 import com.plot.api.persistence.JooqSqlExecutor

@@ -1,10 +1,10 @@
-package com.plot.api.routine.dto
+package com.plot.api.chat.dto
 
+import com.plot.api.common.ApiException
 import com.plot.api.content.ConfirmedFact
 import com.plot.api.content.ContentBrief
 import com.plot.api.content.ContentBriefDestination
 import com.plot.api.content.ContentType
-import com.plot.api.common.ApiException
 import com.plot.api.routine.AgentRunRecord
 import com.plot.api.routine.AgentRunStatus
 import jakarta.validation.Valid

@@ -1,8 +1,9 @@
 package com.plot.api.routine
 
 import com.plot.api.TestcontainersConfiguration
+import com.plot.api.chat.ChatRunService
+import com.plot.api.chat.dto.CreateChatAgentRunRequest
 import com.plot.api.dev.DevContext
-import com.plot.api.routine.dto.CreateChatAgentRunRequest
 import java.util.UUID
 import kotlin.test.assertEquals
 import org.junit.jupiter.api.Test
@@ -27,7 +28,7 @@ class AgentExecutionContractIntegrationTest {
 	private lateinit var mockMvc: MockMvc
 
 	@Autowired
-	private lateinit var chatAdmission: ChatAgentAdmissionService
+	private lateinit var chatAdmission: ChatRunService
 
 	@Autowired
 	private lateinit var jdbcTemplate: JdbcTemplate

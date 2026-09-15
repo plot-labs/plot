@@ -1,10 +1,10 @@
-package com.plot.api.routine
+package com.plot.api.chat
 
-import com.plot.api.routine.dto.ChatAgentRunResponse
-import com.plot.api.routine.dto.ChatResponseVersionDto
-import com.plot.api.routine.dto.ChatTurnDto
-import com.plot.api.routine.dto.CreateChatAgentRunRequest
-import com.plot.api.routine.dto.RetryEligibilityDto
+import com.plot.api.chat.dto.ChatAgentRunResponse
+import com.plot.api.chat.dto.ChatResponseVersionDto
+import com.plot.api.chat.dto.ChatTurnDto
+import com.plot.api.chat.dto.CreateChatAgentRunRequest
+import com.plot.api.chat.dto.RetryEligibilityDto
 import jakarta.validation.Valid
 import java.net.URI
 import java.util.UUID
@@ -21,15 +21,16 @@ import org.springframework.web.bind.annotation.RestController
 
 @RestController
 @RequestMapping("/api/agent-runs")
-class ChatAgentController(
-	private val service: ChatAgentAdmissionService,
+class ChatController(
+	private val runs: ChatRunService,
+	private val queries: ChatQueryService,
 ) {
 	@PostMapping
 	fun create(
 		@RequestHeader("Idempotency-Key") idempotencyKey: String,
 		@Valid @RequestBody request: CreateChatAgentRunRequest,
 	): ResponseEntity<ChatAgentRunResponse> {
-		val response = service.admit(request, idempotencyKey)
+		val response = runs.admit(request, idempotencyKey)
 		return ResponseEntity.accepted()
 			.location(URI.create("/api/agent-runs/${response.id}"))
 			.cacheControl(CacheControl.noStore())
@@ -39,17 +40,17 @@ class ChatAgentController(
 	@GetMapping("/{id}")
 	fun get(@PathVariable id: UUID): ResponseEntity<ChatAgentRunResponse> = ResponseEntity.ok()
 		.cacheControl(CacheControl.noStore())
-		.body(service.get(id))
+		.body(queries.getRun(id))
 
 	@GetMapping("/versions/{versionId}")
 	fun getResponseVersion(@PathVariable versionId: UUID): ResponseEntity<ChatResponseVersionDto> = ResponseEntity.ok()
 		.cacheControl(CacheControl.noStore())
-		.body(service.getResponseVersion(versionId))
+		.body(queries.getVersion(versionId))
 
 	@GetMapping("/versions/{versionId}/eligibility")
 	fun getRetryEligibility(@PathVariable versionId: UUID): ResponseEntity<RetryEligibilityDto> = ResponseEntity.ok()
 		.cacheControl(CacheControl.noStore())
-		.body(service.getResponseVersion(versionId).retryEligibility)
+		.body(queries.getVersion(versionId).retryEligibility)
 
 	@GetMapping("/sessions/{sessionId}/turns")
 	fun listTurns(
@@ -57,14 +58,14 @@ class ChatAgentController(
 		@RequestParam(required = false) selectedVersionId: UUID? = null,
 	): ResponseEntity<List<ChatTurnDto>> = ResponseEntity.ok()
 		.cacheControl(CacheControl.noStore())
-		.body(service.listTurnsForSession(sessionId, selectedVersionId))
+		.body(queries.listTurnsForSession(sessionId, selectedVersionId))
 
 	@PostMapping("/versions/{versionId}/retry")
 	fun retry(
 		@PathVariable versionId: UUID,
 		@RequestHeader("Idempotency-Key") idempotencyKey: String,
 	): ResponseEntity<ChatResponseVersionDto> {
-		val response = service.retry(versionId, idempotencyKey)
+		val response = runs.retry(versionId, idempotencyKey)
 		return ResponseEntity.accepted()
 			.location(URI.create("/api/agent-runs/versions/${response.id}"))
 			.cacheControl(CacheControl.noStore())
