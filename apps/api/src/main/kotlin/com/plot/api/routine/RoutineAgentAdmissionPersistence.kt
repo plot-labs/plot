@@ -1,7 +1,8 @@
 package com.plot.api.routine
 
+import com.plot.api.agent.NewAgentRun
+import com.plot.api.agent.AgentRunRegistrationPersistence
 import com.plot.api.agent.AgentRunInputKind
-import com.plot.api.agent.AgentRunInputRecord
 import com.plot.api.agent.AgentRunInputRequest
 import com.plot.api.agent.AgentRunQueryPersistence
 import com.plot.api.agent.AgentRunRecord
@@ -25,6 +26,7 @@ class RoutineAgentAdmissionPersistence(
 	private val transactionExecutor: JooqTransactionExecutor,
 	private val uuidGenerator: UuidGenerator,
 	private val queryPersistence: AgentRunQueryPersistence,
+	private val registration: AgentRunRegistrationPersistence,
 	private val contentProfilePersistence: ContentProfilePersistence,
 	private val clock: Clock? = null,
 	private val compatibilityWriter: ChatCompatibilityWriter,
@@ -103,92 +105,38 @@ class RoutineAgentAdmissionPersistence(
 		val agentRunId = uuidGenerator.next()
 		val profileRevisionId = request.contentProfileRevisionId
 			?: contentProfilePersistence.findCurrentRevision(workspaceId)?.id
-		sqlExecutor.update(
-			"""
-			insert into agent_runs (
-			  id, workspace_id, routine_execution_id, routine_id, work_session_id, created_by_user_id,
-			  origin, idempotency_key, request_fingerprint,
-			  instruction_snapshot, prompt_version, tool_policy_version, budget_snapshot, content_type,
-			  content_profile_revision_id, content_brief_snapshot,
-			  status, current_step, attempt_count, max_attempts, created_at, updated_at
-			) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?::jsonb, 'QUEUED', 0, 0, ?, ?, ?)
-			""".trimIndent(),
-			agentRunId,
-			workspaceId,
-			executionId,
-			execution.routineId,
-			workSessionId,
-			execution.createdByUserId,
-			request.origin.name,
-			request.idempotencyKey ?: "routine:$executionId",
-			request.requestFingerprint ?: "routine:$executionId",
-			request.instructionSnapshot.trim(),
-			request.promptVersion.trim(),
-			request.toolPolicyVersion.trim(),
-			request.budgetSnapshotJson,
-			request.contentType.name,
-			profileRevisionId,
-			request.contentBriefSnapshotJson,
-			request.maxAttempts,
-			Timestamp.from(now),
-			Timestamp.from(now),
+		registration.insertRequired(
+			NewAgentRun(
+				id = agentRunId,
+				workspaceId = workspaceId,
+				workSessionId = workSessionId,
+				createdByUserId = execution.createdByUserId,
+				origin = request.origin,
+				idempotencyKey = request.idempotencyKey ?: "routine:$executionId",
+				requestFingerprint = request.requestFingerprint ?: "routine:$executionId",
+				instructionSnapshot = request.instructionSnapshot.trim(),
+				promptVersion = request.promptVersion.trim(),
+				toolPolicyVersion = request.toolPolicyVersion.trim(),
+				budgetSnapshotJson = request.budgetSnapshotJson,
+				contentType = request.contentType,
+				contentProfileRevisionId = profileRevisionId,
+				contentBriefSnapshotJson = request.contentBriefSnapshotJson,
+				maxAttempts = request.maxAttempts,
+				routineExecutionId = executionId,
+				routineId = execution.routineId,
+			),
+			now,
 		)
 
 		request.sourceScopes.forEachIndexed { index, source ->
 			val captured = lockedSources[source.sourceScopeId]
-			sqlExecutor.update(
-				"""
-					insert into agent_run_sources (
-					  id, workspace_id, agent_run_id, source_scope_id, source_display_name, source_role, order_index,
-					  captured_status, captured_status_changed_at, captured_at
-					) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-				""".trimIndent(),
-				uuidGenerator.next(),
-					workspaceId,
-					agentRunId,
-					source.sourceScopeId,
-					captured?.displayName,
-					source.role.name,
-				index,
+			registration.insertSource(
+				workspaceId, agentRunId, source.sourceScopeId, captured?.displayName, source.role, index,
 				captured?.status ?: source.capturedStatus,
-				Timestamp.from(captured?.statusChangedAt ?: source.capturedStatusChangedAt),
-				Timestamp.from(now),
+				captured?.statusChangedAt ?: source.capturedStatusChangedAt, now,
 			)
 		}
-
-		request.inputs.forEach { input ->
-			sqlExecutor.update(
-				"""
-				insert into agent_run_inputs (
-				  id, workspace_id, agent_run_id, routine_id, source_scope_id, writing_block_id,
-				  source_provider, source_kind, source_label,
-				  input_kind, order_index, activity_sequence, snapshot_title, snapshot_body,
-				  snapshot_excerpt, original_url, source_created_at, source_updated_at,
-				  content_hash, captured_at
-				) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-				""".trimIndent(),
-				uuidGenerator.next(),
-				workspaceId,
-				agentRunId,
-				input.routineId,
-				input.sourceScopeId,
-				input.writingBlockId,
-				input.sourceProvider,
-				input.sourceKind,
-				input.sourceLabel,
-				input.inputKind.name,
-				input.orderIndex,
-				input.activitySequence,
-				input.snapshotTitle,
-				input.snapshotBody,
-				input.snapshotExcerpt,
-				input.originalUrl,
-				input.sourceCreatedAt?.let(Timestamp::from),
-				input.sourceUpdatedAt?.let(Timestamp::from),
-				input.contentHash,
-				Timestamp.from(input.capturedAt),
-			)
-		}
+		request.inputs.forEach { input -> registration.insertInput(workspaceId, agentRunId, input) }
 
 		val settingsJson = objectMapper.writeValueAsString(
 			mapOf(
@@ -274,51 +222,6 @@ class RoutineAgentAdmissionPersistence(
 		) == true
 	}
 
-	fun appendInput(
-		workspaceId: UUID,
-		agentRunId: UUID,
-		input: AgentRunInputRequest,
-		now: Instant = currentInstant(),
-	): AgentRunInputRecord = transactionExecutor.execute {
-		require(input.orderIndex >= 0) { "Agent input order must be non-negative" }
-		require(input.inputKind == AgentRunInputKind.TOOL_RESULT) {
-			"Only tool-result inputs may be appended after dispatch"
-		}
-		require(input.routineId == null) { "Tool-result inputs must not claim seed ownership" }
-		val id = uuidGenerator.next()
-		sqlExecutor.update(
-			"""
-			insert into agent_run_inputs (
-			  id, workspace_id, agent_run_id, routine_id, source_scope_id, writing_block_id,
-			  source_provider, source_kind, source_label,
-			  input_kind, order_index, activity_sequence, snapshot_title, snapshot_body,
-			  snapshot_excerpt, original_url, source_created_at, source_updated_at,
-			  content_hash, captured_at
-			) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-			""".trimIndent(),
-			id,
-			workspaceId,
-			agentRunId,
-			input.routineId,
-			input.sourceScopeId,
-			input.writingBlockId,
-			input.sourceProvider,
-			input.sourceKind,
-			input.sourceLabel,
-			input.inputKind.name,
-			input.orderIndex,
-			input.activitySequence,
-			input.snapshotTitle,
-			input.snapshotBody,
-			input.snapshotExcerpt,
-			input.originalUrl,
-			input.sourceCreatedAt?.let(Timestamp::from),
-			input.sourceUpdatedAt?.let(Timestamp::from),
-			input.contentHash,
-			Timestamp.from(input.capturedAt),
-		)
-		requireNotNull(queryPersistence.findInput(workspaceId, agentRunId, id))
-	}
 	private fun findExecutionForUpdate(workspaceId: UUID, id: UUID): RoutineExecutionRecord? = sqlExecutor.query(
 		selectExecutionSql + " where e.workspace_id = ? and e.id = ? for update",
 		executionMapper,
