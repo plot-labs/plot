@@ -1,16 +1,18 @@
 package com.plot.api.artifact.workflow
 
-import com.plot.api.persistence.JooqSqlExecutor
-import com.plot.api.common.UuidGenerator
-import com.plot.api.artifact.workflow.model.EvidenceSnapshot
 import com.plot.api.artifact.workflow.model.ArtifactLayoutNode
+import com.plot.api.artifact.workflow.model.EvidenceSnapshot
 import com.plot.api.artifact.workflow.model.ReviewVerdict
 import com.plot.api.artifact.workflow.model.SentenceArtifact
+import com.plot.api.common.UuidGenerator
+import com.plot.api.persistence.JooqSqlExecutor
 import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
+import org.springframework.stereotype.Repository
 import tools.jackson.databind.ObjectMapper
 
+@Repository
 class ArtifactWorkflowMaterializationPersistence(
 	private val sqlExecutor: JooqSqlExecutor,
 	private val objectMapper: ObjectMapper,

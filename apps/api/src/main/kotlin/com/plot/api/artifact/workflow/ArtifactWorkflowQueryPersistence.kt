@@ -1,14 +1,16 @@
 package com.plot.api.artifact.workflow
 
-import com.plot.api.persistence.JooqSqlExecutor
 import com.plot.api.artifact.workflow.dto.ArtifactWorkflowModelTimingResponse
 import com.plot.api.artifact.workflow.dto.ArtifactWorkflowRunTimingResponse
 import com.plot.api.artifact.workflow.dto.ArtifactWorkflowStepTimingResponse
+import com.plot.api.persistence.JooqSqlExecutor
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
+import org.springframework.stereotype.Repository
 import tools.jackson.databind.ObjectMapper
 
+@Repository
 class ArtifactWorkflowQueryPersistence(
 	private val sqlExecutor: JooqSqlExecutor,
 	private val objectMapper: ObjectMapper,

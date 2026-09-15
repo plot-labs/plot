@@ -1,15 +1,15 @@
 package com.plot.api.routine
 
-import com.plot.api.chat.ChatCompatibilityWriter
-
-import com.plot.api.persistence.generated.tables.AgentRuns.Companion.AGENT_RUNS
-import com.plot.api.persistence.generated.tables.AgentRunInputs.Companion.AGENT_RUN_INPUTS
-import com.plot.api.persistence.generated.tables.AgentSteps.Companion.AGENT_STEPS
-import com.plot.api.common.UuidGenerator
 import com.plot.api.artifact.run.ArtifactRunPersistence
 import com.plot.api.artifact.run.ArtifactRunStatus
+import com.plot.api.chat.ChatCompatibilityWriter
+import com.plot.api.common.UuidGenerator
+import com.plot.api.github.GitHubReleaseReconciliationTrigger
 import com.plot.api.persistence.JooqSqlExecutor
 import com.plot.api.persistence.JooqTransactionExecutor
+import com.plot.api.persistence.generated.tables.AgentRunInputs.Companion.AGENT_RUN_INPUTS
+import com.plot.api.persistence.generated.tables.AgentRuns.Companion.AGENT_RUNS
+import com.plot.api.persistence.generated.tables.AgentSteps.Companion.AGENT_STEPS
 import java.sql.Timestamp
 import java.time.Clock
 import java.time.Instant
@@ -22,7 +22,6 @@ import org.springframework.context.annotation.Lazy
 import org.springframework.stereotype.Component
 import org.springframework.transaction.support.TransactionSynchronization
 import org.springframework.transaction.support.TransactionSynchronizationManager
-import com.plot.api.github.GitHubReleaseReconciliationTrigger
 
 @Component
 class AgentRunExecutionPersistence(
@@ -34,9 +33,8 @@ class AgentRunExecutionPersistence(
 	@Lazy private val releaseReconciliation: GitHubReleaseReconciliationTrigger? = null,
 	dslContext: DSLContext,
 	private val clock: Clock? = null,
-	private val compatibilityWriter: ChatCompatibilityWriter? = null,
+	private val compatibilityWriter: ChatCompatibilityWriter,
 ) {
-	private fun writer(): ChatCompatibilityWriter = compatibilityWriter ?: ChatCompatibilityWriter(sqlExecutor, uuidGenerator)
 	private val dsl: DSLContext = dslContext.configuration()
 		.derive(dslContext.settings().withRenderSchema(false))
 		.dsl()
@@ -356,7 +354,7 @@ class AgentRunExecutionPersistence(
 				AGENT_STEPS.STATUS.eq(AgentStepStatus.RUNNING.name),
 			)
 			.execute()
-		writer().recordTranscriptEntry(
+		compatibilityWriter.recordTranscriptEntry(
 			workspaceId = claim.workspaceId,
 			agentRunId = claim.agentRunId,
 			callIndex = step.sequence,
@@ -394,7 +392,7 @@ class AgentRunExecutionPersistence(
 			)
 			.execute()
 		if (stepUpdated != 1) throw AgentRunClaimLostException()
-		writer().recordTranscriptEntry(
+		compatibilityWriter.recordTranscriptEntry(
 			workspaceId = claim.workspaceId,
 			agentRunId = claim.agentRunId,
 			callIndex = step.sequence,

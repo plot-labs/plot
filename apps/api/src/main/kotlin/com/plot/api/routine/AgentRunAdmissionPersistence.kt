@@ -1,7 +1,6 @@
 package com.plot.api.routine
 
 import com.plot.api.chat.ChatCompatibilityWriter
-
 import com.plot.api.common.UuidGenerator
 import com.plot.api.contentprofile.ContentProfilePersistence
 import com.plot.api.persistence.JooqSqlExecutor
@@ -11,7 +10,6 @@ import java.time.Clock
 import java.time.Instant
 import java.util.UUID
 import org.springframework.stereotype.Component
-
 import tools.jackson.databind.ObjectMapper
 
 @Component
@@ -22,10 +20,9 @@ class AgentRunAdmissionPersistence(
 	private val queryPersistence: AgentRunQueryPersistence,
 	private val contentProfilePersistence: ContentProfilePersistence,
 	private val clock: Clock? = null,
-	private val compatibilityWriter: ChatCompatibilityWriter? = null,
+	private val compatibilityWriter: ChatCompatibilityWriter,
 	private val objectMapper: ObjectMapper = ObjectMapper(),
 ) {
-	private fun writer(): ChatCompatibilityWriter = compatibilityWriter ?: ChatCompatibilityWriter(sqlExecutor, uuidGenerator)
 	private fun currentInstant(): Instant = clock?.instant() ?: Instant.now()
 
 	private data class RoutineCursor(val value: Long?, val enabled: Boolean, val releaseCadence: Boolean)
@@ -196,7 +193,7 @@ class AgentRunAdmissionPersistence(
 				"contentBriefSnapshot" to request.contentBriefSnapshotJson,
 			),
 		)
-		writer().recordRoutineRun(
+		compatibilityWriter.recordRoutineRun(
 			workspaceId = workspaceId,
 			userId = execution.createdByUserId,
 			workSessionId = workSessionId,

@@ -1,37 +1,29 @@
 package com.plot.api.artifact.workflow
 
 import com.plot.api.ai.provider.ArtifactWorkflowModelGateway
-import com.plot.api.artifact.run.ArtifactRunPersistence
 import com.plot.api.common.UuidGenerator
 import com.plot.api.config.PlotAiProperties
-import com.plot.api.content.ContentTypeRegistry
 import com.plot.api.content.FrozenPromptVersionLookup
 import com.plot.api.entitlement.WorkspaceAccessService
-import com.plot.api.persistence.JooqSqlExecutor
-import com.plot.api.persistence.JooqTransactionExecutor
-import com.plot.api.routine.RoutineAgentProperties
-import com.plot.api.routine.ArtifactWorkflowAgentRunCompletionHandler
 import com.plot.api.routine.AgentRunExecutionPersistence
+import com.plot.api.routine.ArtifactWorkflowAgentRunCompletionHandler
+import com.plot.api.routine.RoutineAgentProperties
 import io.micrometer.observation.ObservationRegistry
+import java.time.Clock
+import java.time.Duration
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.task.TaskExecutor
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
-import tools.jackson.databind.ObjectMapper
-import java.time.Clock
-import java.time.Duration
-import java.util.concurrent.Executors
-import java.util.concurrent.ScheduledExecutorService
 
 @Configuration(proxyBeanMethods = false)
 class ArtifactWorkflowConfiguration {
 	@Bean
 	fun evidenceSnapshotService(uuidGenerator: UuidGenerator): EvidenceSnapshotService =
 		EvidenceSnapshotService(uuidGenerator::next)
-
-	@Bean
-	fun modelOutputValidator(): ModelOutputValidator = ModelOutputValidator()
 
 	@Bean
 	fun artifactWorkflowService(
@@ -42,73 +34,6 @@ class ArtifactWorkflowConfiguration {
 		validator = validator,
 		idGenerator = uuidGenerator::next,
 		frozenPromptVersionLookup = frozenPromptVersionLookup,
-	)
-
-	@Bean
-	fun artifactWorkflowQueryPersistence(
-		sqlExecutor: JooqSqlExecutor,
-		objectMapper: ObjectMapper,
-	): ArtifactWorkflowQueryPersistence = ArtifactWorkflowQueryPersistence(
-		sqlExecutor = sqlExecutor,
-		objectMapper = objectMapper,
-	)
-
-	@Bean
-	fun artifactWorkflowMaterializationPersistence(
-		sqlExecutor: JooqSqlExecutor,
-		objectMapper: ObjectMapper,
-		uuidGenerator: UuidGenerator,
-	): ArtifactWorkflowMaterializationPersistence = ArtifactWorkflowMaterializationPersistence(
-		sqlExecutor = sqlExecutor,
-		objectMapper = objectMapper,
-		uuidGenerator = uuidGenerator,
-	)
-
-	@Bean
-	fun artifactWorkflowAdmissionPersistence(
-		sqlExecutor: JooqSqlExecutor,
-		objectMapper: ObjectMapper,
-		transactionExecutor: JooqTransactionExecutor,
-		uuidGenerator: UuidGenerator,
-		artifactRunPersistence: ArtifactRunPersistence,
-		queryPersistence: ArtifactWorkflowQueryPersistence,
-		materializationPersistence: ArtifactWorkflowMaterializationPersistence,
-		contentTypeRegistry: ContentTypeRegistry,
-	): ArtifactWorkflowAdmissionPersistence = ArtifactWorkflowAdmissionPersistence(
-		sqlExecutor = sqlExecutor,
-		objectMapper = objectMapper,
-		transactionExecutor = transactionExecutor,
-		uuidGenerator = uuidGenerator,
-		artifactRunPersistence = artifactRunPersistence,
-		queryPersistence = queryPersistence,
-		materializationPersistence = materializationPersistence,
-		contentTypeRegistry = contentTypeRegistry,
-	)
-
-	@Bean
-	fun artifactWorkflowExecutionPersistence(
-		sqlExecutor: JooqSqlExecutor,
-		objectMapper: ObjectMapper,
-		transactionExecutor: JooqTransactionExecutor,
-		uuidGenerator: UuidGenerator,
-		artifactRunPersistence: ArtifactRunPersistence,
-		materializationPersistence: ArtifactWorkflowMaterializationPersistence,
-	): ArtifactWorkflowExecutionPersistence = ArtifactWorkflowExecutionPersistence(
-		sqlExecutor = sqlExecutor,
-		objectMapper = objectMapper,
-		transactionExecutor = transactionExecutor,
-		uuidGenerator = uuidGenerator,
-		artifactRunPersistence = artifactRunPersistence,
-		materializationPersistence = materializationPersistence,
-	)
-
-	@Bean
-	fun artifactWorkflowRecoveryPersistence(
-		sqlExecutor: JooqSqlExecutor,
-		transactionExecutor: JooqTransactionExecutor,
-	): ArtifactWorkflowRecoveryPersistence = ArtifactWorkflowRecoveryPersistence(
-		sqlExecutor = sqlExecutor,
-		transactionExecutor = transactionExecutor,
 	)
 
 	@Bean

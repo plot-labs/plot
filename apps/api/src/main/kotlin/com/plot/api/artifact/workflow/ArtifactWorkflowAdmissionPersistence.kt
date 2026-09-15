@@ -1,34 +1,33 @@
 package com.plot.api.artifact.workflow
-import com.plot.api.common.ApiException
 
 import com.plot.api.artifact.run.ArtifactRunPersistence
-import com.plot.api.common.UuidGenerator
+import com.plot.api.chat.ChatCompatibilityWriter
+import com.plot.api.common.ApiException
 import com.plot.api.content.ContentType
 import com.plot.api.content.ContentTypeRegistry
 import com.plot.api.entitlement.TrialPolicy
 import com.plot.api.persistence.JooqSqlExecutor
 import com.plot.api.persistence.JooqTransactionExecutor
 import com.plot.api.routine.AgentToolAccessException
-import com.plot.api.chat.ChatCompatibilityWriter
 import java.sql.Timestamp
 import java.time.Clock
 import java.util.UUID
 import org.springframework.http.HttpStatus
+import org.springframework.stereotype.Repository
 import tools.jackson.databind.ObjectMapper
 
+@Repository
 class ArtifactWorkflowAdmissionPersistence(
 	private val sqlExecutor: JooqSqlExecutor,
 	private val objectMapper: ObjectMapper,
 	private val transactionExecutor: JooqTransactionExecutor,
-	private val uuidGenerator: UuidGenerator,
 	private val artifactRunPersistence: ArtifactRunPersistence,
 	private val queryPersistence: ArtifactWorkflowQueryPersistence,
 	private val materializationPersistence: ArtifactWorkflowMaterializationPersistence,
 	private val contentTypeRegistry: ContentTypeRegistry,
 	private val clock: Clock = Clock.systemUTC(),
-	private val compatibilityWriter: ChatCompatibilityWriter? = null,
+	private val compatibilityWriter: ChatCompatibilityWriter,
 ) {
-	private fun writer(): ChatCompatibilityWriter = compatibilityWriter ?: ChatCompatibilityWriter(sqlExecutor, uuidGenerator)
 	fun findIdempotentRun(
 		workspaceId: UUID,
 		createdByUserId: UUID,
@@ -171,7 +170,7 @@ class ArtifactWorkflowAdmissionPersistence(
 				agentRunId,
 			)
 			if (snapshotId != null) {
-				writer().linkSourceSnapshot(reservation.workspaceId, agentRunId, snapshotId)
+				compatibilityWriter.linkSourceSnapshot(reservation.workspaceId, agentRunId, snapshotId)
 			}
 		}
 		reservation.state.evidence.forEach { materializationPersistence.insertEvidence(reservation.workspaceId, it) }
