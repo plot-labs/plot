@@ -84,7 +84,7 @@ class AgentRunWorkerIntegrationTest {
 	@Autowired private lateinit var artifactWorkflowWorker: ArtifactWorkflowRunWorker
 	@Autowired private lateinit var chatAdmission: ChatRunService
 	@Autowired private lateinit var chatQueries: ChatQueryService
-	@Autowired private lateinit var agentModel: ScriptedAgentDecisionGateway
+	@Autowired private lateinit var agentModel: ScriptedAgentRuntime
 	@Autowired private lateinit var artifactWorkflowModel: AgentArtifactWorkflowModelGateway
 
 	@BeforeEach
@@ -1072,7 +1072,7 @@ class AgentRunWorkerIntegrationTest {
 	class Config {
 		@Bean
 		@Primary
-		fun scriptedAgentDecisionGateway() = ScriptedAgentDecisionGateway()
+		fun scriptedAgentRuntime() = ScriptedAgentRuntime()
 
 		@Bean
 		@Primary
@@ -1088,7 +1088,7 @@ class AgentRunWorkerIntegrationTest {
 private data class AgentSourceFixture(val namespaceId: UUID, val scopeId: UUID)
 private data class AdmittedAgent(val source: AgentSourceFixture, val blockId: UUID, val agentRunId: UUID)
 
-class ScriptedAgentDecisionGateway : AgentRuntime {
+class ScriptedAgentRuntime : AgentRuntime {
 	var nativeRuntime: AgentRuntime? = null
 	var reads: List<Pair<UUID, UUID>> = emptyList()
 	var invalidSourceId: UUID? = null
