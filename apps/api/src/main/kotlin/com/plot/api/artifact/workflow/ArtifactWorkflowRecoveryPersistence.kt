@@ -6,7 +6,9 @@ import java.sql.Timestamp
 import java.time.Clock
 import java.time.Instant
 import java.util.UUID
+import org.springframework.stereotype.Repository
 
+@Repository
 class ArtifactWorkflowRecoveryPersistence(
 	private val sqlExecutor: JooqSqlExecutor,
 	private val transactionExecutor: JooqTransactionExecutor,

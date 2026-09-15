@@ -1,8 +1,9 @@
 package com.plot.api.routine
 
 import com.plot.api.TestcontainersConfiguration
-import com.plot.api.common.UuidGenerator
 import com.plot.api.artifact.run.ArtifactRunPersistence
+import com.plot.api.chat.ChatCompatibilityWriter
+import com.plot.api.common.UuidGenerator
 import com.plot.api.contentprofile.ContentProfilePersistence
 import com.plot.api.persistence.JooqSqlExecutor
 import com.plot.api.persistence.JooqTransactionExecutor
@@ -15,11 +16,11 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import org.flywaydb.core.Flyway
+import org.jooq.SQLDialect
+import org.jooq.impl.DSL
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.jooq.SQLDialect
-import org.jooq.impl.DSL
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
@@ -49,6 +50,7 @@ class RoutineAgentMigrationIntegrationTest {
 		val schemaSqlExecutor = JooqSqlExecutor(DSL.using(schemaDataSource, SQLDialect.POSTGRES))
 		val schemaTransactionExecutor = JooqTransactionExecutor()
 		val queryPersistence = AgentRunQueryPersistence(schemaSqlExecutor)
+		val compatibilityWriter = ChatCompatibilityWriter(schemaSqlExecutor, uuidGenerator)
 		val artifactRunPersistence = ArtifactRunPersistence(
 			DSL.using(schemaDataSource, SQLDialect.POSTGRES),
 			uuidGenerator,
@@ -70,6 +72,7 @@ class RoutineAgentMigrationIntegrationTest {
 					uuidGenerator,
 					ObjectMapper(),
 				),
+				compatibilityWriter = compatibilityWriter,
 			),
 			queryPersistence = queryPersistence,
 			executionPersistence = AgentRunExecutionPersistence(
@@ -78,6 +81,7 @@ class RoutineAgentMigrationIntegrationTest {
 				uuidGenerator,
 				queryPersistence,
 				artifactRunPersistence,
+				compatibilityWriter = compatibilityWriter,
 				releaseReconciliation = null,
 				dslContext = DSL.using(schemaDataSource, SQLDialect.POSTGRES),
 			),

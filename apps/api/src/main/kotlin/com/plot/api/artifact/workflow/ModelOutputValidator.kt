@@ -1,7 +1,7 @@
 package com.plot.api.artifact.workflow
 
-import com.plot.api.artifact.workflow.model.EvidenceSnapshot
 import com.plot.api.artifact.workflow.model.ArtifactLayoutNode
+import com.plot.api.artifact.workflow.model.EvidenceSnapshot
 import com.plot.api.artifact.workflow.model.ReviewVerdict
 import com.plot.api.artifact.workflow.model.ReviewerOutput
 import com.plot.api.artifact.workflow.model.SentenceArtifact
@@ -9,12 +9,14 @@ import com.plot.api.artifact.workflow.model.SentenceIntent
 import com.plot.api.artifact.workflow.model.SentenceOrigin
 import com.plot.api.artifact.workflow.model.TargetedRewriteOutput
 import com.plot.api.artifact.workflow.model.ValidatedSentenceReview
-import com.plot.api.artifact.workflow.model.WriterOutput
 import com.plot.api.artifact.workflow.model.WriterLayoutNode
+import com.plot.api.artifact.workflow.model.WriterOutput
 import java.util.UUID
+import org.springframework.stereotype.Component
 
 class InvalidModelOutputException(message: String) : IllegalArgumentException(message)
 
+@Component
 class ModelOutputValidator {
 	fun assignSentenceIds(
 		runId: UUID,

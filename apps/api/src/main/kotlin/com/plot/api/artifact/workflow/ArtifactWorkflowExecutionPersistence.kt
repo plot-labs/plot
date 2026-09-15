@@ -13,8 +13,10 @@ import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
+import org.springframework.stereotype.Repository
 import tools.jackson.databind.ObjectMapper
 
+@Repository
 class ArtifactWorkflowExecutionPersistence(
 	private val sqlExecutor: JooqSqlExecutor,
 	private val objectMapper: ObjectMapper,
