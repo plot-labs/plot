@@ -1,12 +1,7 @@
 package com.plot.api.ai.provider
 
-import com.openai.errors.OpenAIRetryableException
-import com.openai.errors.OpenAIServiceException
 import com.plot.api.config.PlotAiProperties
 import java.util.UUID
-import org.springframework.ai.chat.client.ChatClient
-import org.springframework.ai.openai.OpenAiChatOptions
-import org.springframework.beans.factory.ObjectProvider
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import tools.jackson.databind.ObjectMapper
@@ -74,43 +69,19 @@ private class DisabledAgentDecisionGateway : AgentDecisionGateway {
 	)
 }
 
-private class SpringAiAgentDecisionGateway(
-	builder: ChatClient.Builder,
-	private val properties: PlotAiProperties,
+internal class KoogAgentDecisionGateway(
+	private val transport: KoogModelTransport,
 	private val objectMapper: ObjectMapper,
 ) : AgentDecisionGateway {
-	private val client = builder.clone().build()
-	private val options = OpenAiChatOptions.builder()
-		.baseUrl(properties.baseUrl)
-		.model(requireNotNull(properties.model))
-		.maxCompletionTokens(minOf(properties.maxOutputTokens, 2_000))
-		.timeout(properties.timeout)
-		.maxRetries(0)
-		.customHeaders(mapOf(
-			"X-OpenRouter-Metadata" to "enabled",
-			"X-OpenRouter-Title" to "Plot",
-		))
-		.extraBody(mapOf("provider" to properties.openRouterProviderPolicy))
-		.outputSchema(DECISION_SCHEMA)
-		.build()
-
 	override fun decide(request: AgentDecisionRequest): AgentDecision = try {
-		client.prompt()
-			.system(SYSTEM_PROMPT)
-			.user(objectMapper.writeValueAsString(request))
-			.options(options.mutate())
-			.call()
-			.responseEntity(AgentDecision::class.java)
-			.entity
-			?: throw AgentDecisionException("MALFORMED_OUTPUT", false, "The agent returned no decision")
-	} catch (failure: AgentDecisionException) {
-		throw failure
-	} catch (failure: OpenAIRetryableException) {
-		throw AgentDecisionException("PROVIDER_UNAVAILABLE", true, "The agent provider is temporarily unavailable", failure)
-	} catch (failure: OpenAIServiceException) {
-		throw AgentDecisionException("PROVIDER_REJECTED", false, "The agent provider rejected the request", failure)
-	} catch (failure: RuntimeException) {
-		throw AgentDecisionException("MALFORMED_OUTPUT", false, "The agent returned an invalid decision", failure)
+		transport.exchange(SYSTEM_PROMPT, objectMapper.writeValueAsString(request), DECISION_SCHEMA,
+			AgentDecision::class.java, 2_000, null).value
+	} catch (failure: TransientModelTransportException) {
+		throw AgentDecisionException("PROVIDER_UNAVAILABLE", true, "The agent provider is temporarily unavailable")
+	} catch (failure: NonTransientModelTransportException) {
+		throw AgentDecisionException("PROVIDER_REJECTED", false, "The agent provider rejected the request")
+	} catch (failure: MalformedModelOutputException) {
+		throw AgentDecisionException("MALFORMED_OUTPUT", false, "The agent returned an invalid decision")
 	}
 
 	private companion object {
@@ -134,15 +105,9 @@ private class SpringAiAgentDecisionGateway(
 class AgentDecisionGatewayConfiguration {
 	@Bean
 	fun agentDecisionGateway(
-		builderProvider: ObjectProvider<ChatClient.Builder>,
+		transport: KoogModelTransport,
 		properties: PlotAiProperties,
 		objectMapper: ObjectMapper,
-	): AgentDecisionGateway {
-		val builder = if (properties.configured) builderProvider.ifAvailable else null
-		return if (properties.configured && builder != null) {
-			SpringAiAgentDecisionGateway(builder, properties, objectMapper)
-		} else {
-			DisabledAgentDecisionGateway()
-		}
-	}
+	): AgentDecisionGateway = if (properties.configured) KoogAgentDecisionGateway(transport, objectMapper)
+		else DisabledAgentDecisionGateway()
 }

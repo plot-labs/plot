@@ -1,6 +1,5 @@
 package com.plot.api.artifact.workflow
 
-import com.openai.errors.OpenAIServiceException
 import com.plot.api.ai.provider.ModelCallMetadata
 import com.plot.api.ai.provider.ModelRole
 import com.plot.api.artifact.run.ArtifactRunPersistence
@@ -475,10 +474,6 @@ class ArtifactWorkflowExecutionPersistence(
 				buildMap {
 					put("type", f::class.simpleName.orEmpty())
 					put("message", f.message.orEmpty().take(500))
-					if (f is OpenAIServiceException) {
-						put("statusCode", f.statusCode().toString())
-						put("body", runCatching { f.body().toString() }.getOrDefault("").take(2_000))
-					}
 				}
 			}
 			.toList()

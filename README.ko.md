@@ -71,7 +71,7 @@ contracts/
   plot-api/    버전 관리되는 API contract manifest와 fixtures
 ```
 
-PostgreSQL에 시그널, 판단, 실행, 콘텐츠를 저장합니다. `apps/api/src/main/resources/db/migration`의 Flyway migration이 스키마를 정의합니다. 백엔드는 Kotlin, Spring Boot, Spring AI, Exposed DSL, 파라미터 SQL을 사용합니다.
+PostgreSQL에 시그널, 판단, 실행, 콘텐츠를 저장합니다. `apps/api/src/main/resources/db/migration`의 Flyway migration이 스키마를 정의합니다. 백엔드는 Kotlin, Spring Boot, Koog, Exposed DSL, 파라미터 SQL을 사용합니다.
 
 ## 개발
 

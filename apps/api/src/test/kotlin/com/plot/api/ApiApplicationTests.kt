@@ -113,12 +113,7 @@ class ApiApplicationTests {
 	fun testRuntimeDisablesExternalObservabilityAndSensitiveAiLogging() {
 		assertEquals("false", environment.getProperty("management.opentelemetry.enabled"))
 		assertEquals("false", environment.getProperty("management.otlp.metrics.export.enabled"))
-		assertEquals("false", environment.getProperty("spring.ai.chat.observations.log-prompt"))
-		assertEquals("false", environment.getProperty("spring.ai.chat.observations.log-completion"))
-		assertEquals("false", environment.getProperty("spring.ai.chat.observations.include-error-logging"))
-		assertEquals("false", environment.getProperty("spring.ai.chat.client.observations.log-prompt"))
-		assertEquals("false", environment.getProperty("spring.ai.chat.client.observations.log-completion"))
-		assertEquals("false", environment.getProperty("spring.ai.chat.client.observations.include-error-logging"))
+		assertEquals("WARN", environment.getProperty("logging.level.ai.koog"))
 	}
 
 	@Test
