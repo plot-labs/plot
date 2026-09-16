@@ -16,9 +16,7 @@ class SensitiveObservationErrorHandler : ObservationHandler<Observation.Context>
 	override fun onError(context: Observation.Context) {
 		if (context.error != null) {
 			context.addLowCardinalityKeyValue(KeyValue.of("plot.error_code", "OBSERVATION_ERROR"))
-			context.setError(SafeObservationException())
+			context.setError(IllegalStateException("OBSERVATION_ERROR").apply { stackTrace = emptyArray() })
 		}
 	}
 }
-
-private class SafeObservationException : RuntimeException("OBSERVATION_ERROR", null, false, false)
