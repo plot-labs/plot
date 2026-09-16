@@ -178,6 +178,7 @@ export default function PromptBar({
   models = DEMO_MODELS,
   selectedModelId,
   onSelectedModelIdChange,
+  modelPlacement = tall ? "auto" : "top",
 }: {
   variant?: string;
   /** the self-running walkthrough; turn off when embedding in a real surface */
@@ -197,12 +198,16 @@ export default function PromptBar({
   models?: readonly PromptModelOption[];
   selectedModelId?: string;
   onSelectedModelIdChange?: (id: string) => void;
+  modelPlacement?: "top" | "bottom" | "auto";
 }) {
   const pill = variant === "Pill";
   const [draft, setDraft] = useState("");
   const [dismissed, setDismissed] = useState(false);
   const [plusOpen, setPlusOpen] = useState(false);
   const [modelOpen, setModelOpen] = useState(false);
+  const [modelMenuPlacement, setModelMenuPlacement] = useState<"top" | "bottom">(
+    modelPlacement === "top" || !tall ? "top" : "bottom"
+  );
   const [internalModelId, setInternalModelId] = useState(DEMO_MODELS[1].id);
   const [modelQuery, setModelQuery] = useState("");
   const [attachments, setAttachments] = useState<string[]>([]);
@@ -293,13 +298,25 @@ export default function PromptBar({
   }, [modelOpen, modelHovered, modelIndex, filteredModels.length]);
 
   /* The menu is outside the clipped composer. Align it horizontally to the
-   * model trigger, then open below the composer so it never covers the draft. */
+   * model trigger, and open above or below depending on available space and placement. */
   useLayoutEffect(() => {
     if (!modelOpen || !composerAnchorRef.current || !modelRef.current) return;
     const anchorRect = composerAnchorRef.current.getBoundingClientRect();
     const triggerRect = modelRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - triggerRect.bottom;
+    const spaceAbove = triggerRect.top;
+    const menuHeight = 360;
+
+    const shouldOpenAbove =
+      modelPlacement === "top"
+        ? true
+        : modelPlacement === "bottom"
+          ? false
+          : !tall || spaceBelow < menuHeight || spaceBelow < spaceAbove;
+
+    setModelMenuPlacement(shouldOpenAbove ? "top" : "bottom");
     setModelMenuLeft(Math.max(0, Math.min(triggerRect.left - anchorRect.left, anchorRect.width - 288)));
-  }, [modelOpen, wide, model.label]);
+  }, [modelOpen, wide, model.label, tall, modelPlacement]);
 
   const [prevModelOpen, setPrevModelOpen] = useState(modelOpen);
   if (prevModelOpen !== modelOpen) {
@@ -601,7 +618,13 @@ export default function PromptBar({
         <div
           onMouseLeave={() => setModelHovered(null)}
           className="absolute z-30 w-72 overflow-hidden rounded-[12px] border border-line bg-surface shadow-overlay backdrop-blur-md"
-          style={{ left: modelMenuLeft, top: "calc(100% - 6px)", animation: "pop-in 180ms cubic-bezier(0.23,1,0.32,1) both", transformOrigin: "top left" }}
+          style={{
+            left: modelMenuLeft,
+            ...(modelMenuPlacement === "top"
+              ? { bottom: "calc(100% + 8px)", transformOrigin: "bottom right" }
+              : { top: "calc(100% - 6px)", transformOrigin: "top right" }),
+            animation: "pop-in 180ms cubic-bezier(0.23,1,0.32,1) both",
+          }}
         >
           <div className="border-b border-line p-2">
             <div className="flex h-8 items-center gap-2 rounded-[7px] bg-field px-2.5 text-ink-3">

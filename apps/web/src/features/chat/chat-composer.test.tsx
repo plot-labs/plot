@@ -132,14 +132,14 @@ describe("ChatComposer", () => {
     expect(onSubmit).toHaveBeenCalledWith("Write release notes", ["source-1"], [], "auto");
   });
 
-  it("opens the model picker below the composer and remembers the selected model", async () => {
+  it("opens the model picker above the composer and remembers the selected model", async () => {
     const onSubmit = vi.fn();
     render(<ChatComposer references={references} onSubmit={onSubmit} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Choose model" }));
     expect(screen.getByRole("listbox", { name: "Available models" }).parentElement).toHaveStyle({
-      top: "calc(100% - 6px)",
-      transformOrigin: "top left",
+      bottom: "calc(100% + 8px)",
+      transformOrigin: "bottom right",
     });
     fireEvent.click(screen.getByRole("option", { name: /Gemini 3\.8 Flash/ }));
     inputText(screen.getByRole("textbox", { name: "Chat message" }), "Answer quickly");
@@ -153,4 +153,15 @@ describe("ChatComposer", () => {
     );
     await waitFor(() => expect(window.localStorage.getItem("plot.chat.model")).toBe("google/gemini-3.8-flash"));
   });
+
+  it("opens the model picker below the composer in center variant", () => {
+    render(<ChatComposer variant="center" references={references} onSubmit={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Choose model" }));
+    expect(screen.getByRole("listbox", { name: "Available models" }).parentElement).toHaveStyle({
+      top: "calc(100% - 6px)",
+      transformOrigin: "top right",
+    });
+  });
 });
+

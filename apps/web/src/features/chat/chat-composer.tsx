@@ -111,6 +111,7 @@ export function ChatComposer({
             demo={false}
             tall
             variant="Rounded"
+            modelPlacement="bottom"
             placeholder={placeholder || "Describe the update you need..."}
             ariaLabel="Chat message"
             sendLabel="Send message"
@@ -142,6 +143,7 @@ export function ChatComposer({
           demo={false}
           tall={false}
           variant="Pill"
+          modelPlacement="top"
           placeholder={placeholder || "Ask Plot anything..."}
           ariaLabel="Chat message"
           sendLabel="Send message"
