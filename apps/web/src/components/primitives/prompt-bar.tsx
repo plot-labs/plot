@@ -218,7 +218,6 @@ export default function PromptBar({
   const [modelBox, setModelBox] = useState<{ top: number; height: number } | null>(null);
   const [modelHovered, setModelHovered] = useState<number | null>(null);
   const [modelMenuLeft, setModelMenuLeft] = useState(0);
-  const [modelMenuBottom, setModelMenuBottom] = useState(0);
   const composerAnchorRef = useRef<HTMLDivElement>(null);
   const controlsRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -293,14 +292,13 @@ export default function PromptBar({
     if (target) setModelBox({ top: target.offsetTop, height: target.offsetHeight });
   }, [modelOpen, modelHovered, modelIndex, filteredModels.length]);
 
-  /* The menu is outside the clipped composer, so align it to the model
-   * trigger by measurement instead of pinning it to the far-right edge. */
+  /* The menu is outside the clipped composer. Align it horizontally to the
+   * model trigger, then open below the composer so it never covers the draft. */
   useLayoutEffect(() => {
     if (!modelOpen || !composerAnchorRef.current || !modelRef.current) return;
     const anchorRect = composerAnchorRef.current.getBoundingClientRect();
     const triggerRect = modelRef.current.getBoundingClientRect();
     setModelMenuLeft(Math.max(0, Math.min(triggerRect.left - anchorRect.left, anchorRect.width - 288)));
-    setModelMenuBottom(anchorRect.bottom - triggerRect.top + 8);
   }, [modelOpen, wide, model.label]);
 
   const [prevModelOpen, setPrevModelOpen] = useState(modelOpen);
@@ -511,7 +509,7 @@ export default function PromptBar({
       onPointerDownCapture={takeOver}
       onKeyDownCapture={takeOver}
     >
-      {/* composer is the anchor — menus grow up from its top edge */}
+      {/* composer is the anchor for the menus */}
       <div ref={composerAnchorRef} className="relative">
       {/* ── @ / slash menu ─────────────────────────────── */}
       {menu && (
@@ -603,7 +601,7 @@ export default function PromptBar({
         <div
           onMouseLeave={() => setModelHovered(null)}
           className="absolute z-30 w-72 overflow-hidden rounded-[12px] border border-line bg-surface shadow-overlay backdrop-blur-md"
-          style={{ left: modelMenuLeft, bottom: modelMenuBottom, animation: "pop-in 180ms cubic-bezier(0.23,1,0.32,1) both", transformOrigin: "bottom left" }}
+          style={{ left: modelMenuLeft, top: "calc(100% - 6px)", animation: "pop-in 180ms cubic-bezier(0.23,1,0.32,1) both", transformOrigin: "top left" }}
         >
           <div className="border-b border-line p-2">
             <div className="flex h-8 items-center gap-2 rounded-[7px] bg-field px-2.5 text-ink-3">
@@ -629,7 +627,7 @@ export default function PromptBar({
               />
             </div>
           </div>
-          <div className="relative max-h-[360px] overflow-y-auto p-1.5" role="listbox" aria-label="Available models">
+          <div className="relative max-h-[280px] overflow-y-auto p-1.5" role="listbox" aria-label="Available models">
           {/* single gliding highlight — floats to the hovered / selected row */}
           <span
             aria-hidden
