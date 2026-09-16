@@ -109,25 +109,35 @@ describe("ChatWorkspace", () => {
     expect(window.sessionStorage.length).toBe(0);
   });
 
-  it("admits a launch announcement request with contentType and brief fields", async () => {
+  it("admits a launch announcement request with contentType and brief fields in active workspace", async () => {
+    mocks.search = "chat=chat-1&agent=agent-1";
+    mocks.listSessions.mockResolvedValue([chat]);
+    const succeeded = agentRun({ status: "SUCCEEDED", artifactId: "artifact-1", artifact: artifactSummary });
+    mocks.listSessionAgentRuns.mockResolvedValue([succeeded]);
+    mocks.getChatAgentRun.mockResolvedValue(succeeded);
     mocks.createChatAgentRun.mockResolvedValue(agentRun({
       id: "agent-launch",
-      chatId: "chat-launch",
+      chatId: "chat-1",
       contentType: "LAUNCH_ANNOUNCEMENT",
     }));
     render(<ChatWorkspace />);
+    await screen.findByText("Open artifact");
     await waitFor(() => expect(screen.queryByText("Loading sources…")).not.toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Launch announcement" }));
     fireEvent.change(await screen.findByLabelText("Purpose (recommended)"), { target: { value: "Open the waitlist" } });
     fireEvent.change(screen.getByLabelText("Audience (recommended)"), { target: { value: "Founders" } });
-    fireEvent.click(await screen.findByRole("button", { name: "Start request" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Generate again" }));
 
-    await waitFor(() => expect(mocks.createChatAgentRun).toHaveBeenCalledWith({
-      writingBlockIds: ["block-1"],
-      instruction: "Write release notes",
-      contentType: "LAUNCH_ANNOUNCEMENT",
-      brief: expect.objectContaining({ purpose: "Open the waitlist", audience: "Founders" }),
-    }, expect.any(String)));
+    await waitFor(() => expect(mocks.createChatAgentRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workSessionId: "chat-1",
+        writingBlockIds: ["block-1"],
+        contentType: "LAUNCH_ANNOUNCEMENT",
+        brief: expect.objectContaining({ purpose: "Open the waitlist", audience: "Founders" }),
+      }),
+      expect.any(String),
+      expect.any(Object),
+    ));
   });
 
   it("reuses the pending idempotency key after an admission response is lost", async () => {

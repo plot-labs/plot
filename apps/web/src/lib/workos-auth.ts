@@ -104,4 +104,15 @@ export function safeWorkOSReturnPath(value: string | null | undefined): string {
   }
 }
 
+export function requestBaseUrl(request: Request): string {
+  try {
+    const requestUrl = new URL(request.url);
+    const host = (request.headers.get("x-forwarded-host") || request.headers.get("host") || requestUrl.host).toLowerCase();
+    const proto = request.headers.get("x-forwarded-proto") || requestUrl.protocol.replace(":", "");
+    return `${proto}://${host}`;
+  } catch {
+    return request.url;
+  }
+}
+
 export { DEFAULT_RETURN_PATH };

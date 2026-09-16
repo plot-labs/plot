@@ -88,7 +88,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse | Respon
     request.nextUrl.pathname === "/auth/complete" ||
     request.nextUrl.pathname === "/auth/callback" ||
     request.nextUrl.pathname === "/auth/verify-email" ||
-    request.nextUrl.pathname.startsWith("/api/auth") ||
+    request.nextUrl.pathname.startsWith("/api/") ||
     isPublicChangelogPath(request.nextUrl.pathname);
   if (host && isGatedHost(host) && !isPublicPath && !request.cookies.has(workOSSessionCookieName())) {
     return NextResponse.redirect(new URL("/sign-in", request.url));

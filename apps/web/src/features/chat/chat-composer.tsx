@@ -1,18 +1,9 @@
 "use client";
 
-import {
-  ChatComposer as AstryxChatComposer,
-  ChatComposerDrawer,
-  ChatComposerInput,
-  ChatSendButton,
-} from "@astryxdesign/core/Chat";
-import { Citation } from "@astryxdesign/core/Citation";
-import { ArrowUp, Folder, Plus } from "lucide-react";
-import type { CSSProperties, KeyboardEvent } from "react";
-import { useId, useRef, useState } from "react";
-
-import { SkillSelector } from "@/features/skills/skill-selector";
-
+import { useEffect, useRef, useState } from "react";
+import type { Skill } from "@plot/api-client";
+import { plotApiClient } from "@/lib/api-client";
+import PromptBar from "@/components/primitives/prompt-bar";
 import { resolveComposerReferenceIds } from "./chat-workspace-utils";
 
 type ChatComposerProps = {
@@ -29,92 +20,76 @@ export function ChatComposer({
   onSubmit,
   variant = "dock",
   id,
-  placeholder = "Ask Plot to create another source-backed artifact...",
+  placeholder,
   references = [],
   busy = false,
   canGenerate = true,
 }: ChatComposerProps) {
+  const isCenter = variant === "center";
   const submittingRef = useRef(false);
+  const [skills, setSkills] = useState<Skill[]>([]);
   const [skillIds, setSkillIds] = useState<string[]>([]);
-  const [centerPrompt, setCenterPrompt] = useState("");
   const hasConnectedSource = references.some((reference) => reference.available);
+  const isSendDisabled = busy || !canGenerate || !hasConnectedSource;
 
-  function submit(value: string) {
-    if (submittingRef.current) return;
-    const trimmed = value.trim();
+  useEffect(() => {
+    const controller = new AbortController();
+    plotApiClient
+      .listSkills({ signal: controller.signal })
+      .then((items) => {
+        if (!controller.signal.aborted) {
+          setSkills(items);
+        }
+      })
+      .catch(() => {});
+
+    function workspaceChanged() {
+      controller.abort();
+      setSkillIds([]);
+      plotApiClient.listSkills().then(setSkills).catch(() => {});
+    }
+
+    window.addEventListener("plot:workspace-changed", workspaceChanged);
+    return () => {
+      controller.abort();
+      window.removeEventListener("plot:workspace-changed", workspaceChanged);
+    };
+  }, []);
+
+  function handleSend(text: string) {
+    if (submittingRef.current || isSendDisabled) return;
+    const trimmed = text.trim();
     if (!trimmed) return;
 
     submittingRef.current = true;
     onSubmit(trimmed, resolveComposerReferenceIds(references, []), skillIds);
+    setSkillIds([]);
     queueMicrotask(() => {
       submittingRef.current = false;
     });
   }
 
-  if (variant === "center") {
-    const isSendDisabled = busy || !canGenerate || !hasConnectedSource || !centerPrompt.trim();
+  const sendBtnClass =
+    "bg-primary text-primary-foreground dark:bg-[#f4f4f5] dark:text-[#18181b] dark:hover:bg-white dark:active:bg-white disabled:opacity-30 dark:disabled:opacity-20";
 
-    function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-      if (event.key === "Enter" && !event.shiftKey) {
-        event.preventDefault();
-        if (!isSendDisabled) {
-          submit(centerPrompt);
-        }
-      }
-    }
-
+  if (isCenter) {
     return (
       <div id={id} className="w-full">
-        <div className="w-full rounded-[22px] border border-black/[0.08] bg-white shadow-[0_4px_24px_rgba(0,0,0,0.05)] transition focus-within:border-black/20 focus-within:shadow-[0_8px_32px_rgba(0,0,0,0.08)] dark:border-white/10 dark:bg-[#1e1f23] dark:shadow-[0_4px_24px_rgba(0,0,0,0.2)]">
-          {/* Top section: input and actions */}
-          <div className="p-4 pb-2.5 sm:px-5 sm:pt-4.5">
-            <textarea
-              role="textbox"
-              aria-label="Chat message"
-              rows={2}
-              value={centerPrompt}
-              onChange={(e) => setCenterPrompt(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={placeholder || "Describe the update you need..."}
-              className="w-full resize-none border-none bg-transparent text-[15px] leading-6 text-black/88 outline-none placeholder:text-black/35 focus:ring-0 dark:text-white/90 dark:placeholder:text-white/35"
-            />
-            <div className="flex items-center justify-between pt-3 pb-1">
-              <div className="flex items-center gap-1.5">
-                <SkillSelector value={skillIds} onChange={setSkillIds} disabled={busy} />
-                <button
-                  type="button"
-                  aria-label="Add attachment"
-                  className="inline-flex size-7.5 items-center justify-center rounded-full text-black/50 transition hover:bg-black/5 hover:text-black/80 dark:text-white/50 dark:hover:bg-white/10 dark:hover:text-white"
-                >
-                  <Plus className="size-4" />
-                </button>
-              </div>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  aria-label="Send message"
-                  disabled={isSendDisabled}
-                  onClick={() => submit(centerPrompt)}
-                  className="inline-flex size-8 items-center justify-center rounded-full bg-primary text-primary-foreground transition hover:bg-[#303036] active:bg-black disabled:pointer-events-none disabled:opacity-30 dark:bg-[#f4f4f5] dark:text-[#18181b] dark:hover:bg-white dark:active:bg-white dark:disabled:opacity-20"
-                >
-                  <ArrowUp className="size-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Bottom attached tray */}
-          <div className="flex items-center justify-between border-t border-black/[0.05] bg-[#f8f9fa] px-4 py-2.5 text-xs text-black/60 dark:border-white/[0.06] dark:bg-[#16171a] dark:text-white/60 rounded-b-[22px]">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                className="inline-flex items-center gap-1.5 font-medium text-black/70 transition hover:text-black/90 dark:text-white/70 dark:hover:text-white"
-              >
-                <Folder className="size-3.5 text-black/50 dark:text-white/50" />
-                <span>{references.length ? `${references.length} Connected Sources` : "Connect sources"}</span>
-              </button>
-            </div>
-          </div>
+        <div className="w-full">
+          <PromptBar
+            demo={false}
+            tall
+            variant="Rounded"
+            placeholder={placeholder || "Describe the update you need..."}
+            ariaLabel="Chat message"
+            sendLabel="Send message"
+            disabled={isSendDisabled}
+            sendButtonClassName={sendBtnClass}
+            skills={skills}
+            selectedSkillIds={skillIds}
+            onSelectedSkillIdsChange={setSkillIds}
+            onSend={handleSend}
+          />
         </div>
       </div>
     );
@@ -125,62 +100,25 @@ export function ChatComposer({
       id={id}
       className="w-full bg-[#fbfbf8]/95 px-4 pb-4 pt-3 backdrop-blur-xl dark:bg-[#111113]/95 sm:px-6"
     >
-      <AstryxChatComposer
-        onSubmit={submit}
-        placeholder={placeholder}
-        isDisabled={busy || !canGenerate || !hasConnectedSource}
-        density="balanced"
-        elevation="none"
-        drawer={references.length ? <ComposerSources references={references} /> : undefined}
-        input={<ChatComposerInput label="Chat message" maxRows={7} />}
-        footerActions={<SkillSelector value={skillIds} onChange={setSkillIds} disabled={busy} />}
-        sendButton={<ComposerSendButton />}
-        className="mx-auto max-w-[720px]"
-        style={{
-          "--_chat-composer-radius": "12px",
-          "--_chat-composer-padding": "10px",
-        } as CSSProperties}
-      />
+      <div className="mx-auto max-w-[720px]">
+        <PromptBar
+          demo={false}
+          tall={false}
+          variant="Pill"
+          placeholder={placeholder || "Ask Plot to create another source-backed artifact..."}
+          ariaLabel="Chat message"
+          sendLabel="Send message"
+          disabled={isSendDisabled}
+          sendButtonClassName={sendBtnClass}
+          skills={skills}
+          selectedSkillIds={skillIds}
+          onSelectedSkillIdsChange={setSkillIds}
+          onSend={handleSend}
+        />
+      </div>
     </div>
   );
 }
 
-function ComposerSources({
-  references,
-}: {
-  references: NonNullable<ChatComposerProps["references"]>;
-}) {
-  const visibleReferences = references.slice(0, 3);
-  const remainingCount = references.length - visibleReferences.length;
-
-  return (
-    <ChatComposerDrawer count={references.length} label="Sources" defaultIsCollapsed>
-      <div className="flex min-w-0 flex-wrap items-center gap-2" aria-label="Connected sources">
-        {visibleReferences.map((reference, index) => (
-          <Citation
-            key={reference.id}
-            source={{ title: reference.label, url: reference.url }}
-            number={index + 1}
-            variant="label"
-          />
-        ))}
-        {remainingCount > 0 ? <span className="text-xs text-black/42 dark:text-white/45">{remainingCount} more</span> : null}
-      </div>
-    </ChatComposerDrawer>
-  );
-}
-
-function ComposerSendButton() {
-  const labelId = useId();
-
-  return (
-    <>
-      <span id={labelId} className="sr-only">Send message</span>
-      <ChatSendButton
-        aria-labelledby={labelId}
-        size="sm"
-        className="!rounded-full rounded-full bg-primary text-primary-foreground hover:bg-[#303036] active:bg-black disabled:bg-black/25 dark:bg-[#f4f4f5] dark:text-[#18181b] dark:hover:bg-white dark:active:bg-white dark:disabled:bg-white/20"
-      />
-    </>
-  );
-}
+export { PromptBar };
+export default PromptBar;

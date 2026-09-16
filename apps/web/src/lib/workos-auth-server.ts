@@ -4,7 +4,7 @@ import {
   saveSession,
 } from "@workos-inc/authkit-nextjs";
 
-import { isAllowedWorkOSOrigin } from "./workos-auth";
+import { isAllowedWorkOSOrigin, requestBaseUrl } from "./workos-auth";
 
 const PENDING_AUTH_COOKIE = "plot.workos.pending_auth";
 const PENDING_AUTH_MAX_AGE_SECONDS = 10 * 60;
@@ -277,8 +277,15 @@ function decodeSocialAuthState(value: string): WorkOSSocialAuthState | null {
 }
 
 function workOSSocialCallbackUrl(request: Request): string {
+  const origin = requestBaseUrl(request);
   const configuredOrigin = process.env.PLOT_APP_ORIGIN?.trim();
-  const appOrigin = configuredOrigin || new URL(request.url).origin;
+  const configuredAllowed = (process.env.PLOT_WORKOS_ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const appOrigin = configuredAllowed.includes(origin)
+    ? origin
+    : configuredOrigin || origin;
   return new URL(
     SOCIAL_AUTH_CALLBACK_PATH,
     appOrigin.endsWith("/") ? appOrigin : `${appOrigin}/`,

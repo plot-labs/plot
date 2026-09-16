@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { safeWorkOSReturnPath } from "@/lib/workos-auth";
+import { requestBaseUrl, safeWorkOSReturnPath } from "@/lib/workos-auth";
 import {
   consumeWorkOSSocialAuthState,
   saveWorkOSSession,
@@ -18,7 +18,8 @@ function errorRedirect(
   entryPath: "/sign-in" | "/sign-up",
   error: "provider_cancelled" | "callback_failed",
 ): Response {
-  const destination = new URL(entryPath, request.url);
+  const base = requestBaseUrl(request);
+  const destination = new URL(entryPath, base);
   destination.searchParams.set("error", error);
   return NextResponse.redirect(destination);
 }
@@ -50,7 +51,8 @@ export async function GET(request: NextRequest): Promise<Response> {
       code,
     });
     await saveWorkOSSession(authenticationResponse, request);
-    return NextResponse.redirect(new URL(safeWorkOSReturnPath(pendingState.returnTo), request.url));
+    const base = requestBaseUrl(request);
+    return NextResponse.redirect(new URL(safeWorkOSReturnPath(pendingState.returnTo), base));
   } catch (error) {
     const failure = workOSAuthFailure(error);
     if (failure.code === "email_verification_required" && failure.pendingAuthenticationToken && failure.email) {
@@ -59,7 +61,8 @@ export async function GET(request: NextRequest): Promise<Response> {
         email: failure.email,
         pendingAuthenticationToken: failure.pendingAuthenticationToken,
       }, request);
-      const destination = new URL("/auth/verify-email", request.url);
+      const base = requestBaseUrl(request);
+      const destination = new URL("/auth/verify-email", base);
       destination.searchParams.set("email", failure.email);
       return NextResponse.redirect(destination);
     }

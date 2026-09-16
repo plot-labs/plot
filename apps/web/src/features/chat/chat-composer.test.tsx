@@ -20,11 +20,24 @@ describe("ChatComposer", () => {
   it("submits the selected writing skill with the original prompt", async () => {
     const onSubmit = vi.fn();
     render(<ChatComposer variant="center" references={references} onSubmit={onSubmit} />);
-    fireEvent.click(screen.getByText("Skills · Optional"));
-    fireEvent.click(await screen.findByRole("checkbox", { name: /humanizer/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Choose skill (/)" }));
+    fireEvent.click(await screen.findByRole("button", { name: /\/humanizer/ }));
     fireEvent.change(screen.getByRole("textbox", { name: "Chat message" }), { target: { value: "Draft an update" } });
     fireEvent.click(screen.getByRole("button", { name: "Send message" }));
     expect(onSubmit).toHaveBeenCalledWith("Draft an update", ["source-1"], ["skill-1"]);
+  });
+
+  it("opens skills menu when typing slash, shows skill chip, and allows removing it", async () => {
+    const onSubmit = vi.fn();
+    render(<ChatComposer variant="center" references={references} onSubmit={onSubmit} />);
+    const prompt = screen.getByRole("textbox", { name: "Chat message" });
+    fireEvent.change(prompt, { target: { value: "/" } });
+    fireEvent.click(await screen.findByRole("button", { name: /\/humanizer/ }));
+    expect(screen.getByText("humanizer")).toBeInTheDocument();
+
+    const removeBtn = screen.getByRole("button", { name: "Remove skill humanizer" });
+    fireEvent.click(removeBtn);
+    expect(screen.queryByText("humanizer")).not.toBeInTheDocument();
   });
 
   it("enables send only for a trimmed prompt with a connected source", () => {
