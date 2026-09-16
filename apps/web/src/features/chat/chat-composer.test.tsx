@@ -74,10 +74,14 @@ describe("ChatComposer", () => {
     expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
   });
 
-  it("stays disabled without a selected source or while busy", () => {
-    const { unmount } = render(<ChatComposer references={[]} onSubmit={vi.fn()} />);
-    inputText(screen.getByRole("textbox"), "Write release notes");
-    expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
+	it("submits a general question without a connected source but stays disabled while busy", () => {
+		const onSubmit = vi.fn();
+		const { unmount } = render(<ChatComposer references={[]} onSubmit={onSubmit} />);
+		inputText(screen.getByRole("textbox"), "Write release notes");
+		const send = screen.getByRole("button", { name: "Send message" });
+		expect(send).toBeEnabled();
+		fireEvent.click(send);
+		expect(onSubmit).toHaveBeenCalledWith("Write release notes", [], []);
 
     unmount();
     render(<ChatComposer references={references} onSubmit={vi.fn()} busy />);

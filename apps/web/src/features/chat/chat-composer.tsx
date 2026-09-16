@@ -29,8 +29,7 @@ export function ChatComposer({
   const submittingRef = useRef(false);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [skillIds, setSkillIds] = useState<string[]>([]);
-  const hasConnectedSource = references.some((reference) => reference.available);
-  const isSendDisabled = busy || !canGenerate || !hasConnectedSource;
+  const isSendDisabled = busy || !canGenerate;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -105,7 +104,7 @@ export function ChatComposer({
           demo={false}
           tall={false}
           variant="Pill"
-          placeholder={placeholder || "Ask Plot to create another source-backed artifact..."}
+          placeholder={placeholder || "Ask Plot anything..."}
           ariaLabel="Chat message"
           sendLabel="Send message"
           disabled={isSendDisabled}

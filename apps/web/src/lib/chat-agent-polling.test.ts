@@ -11,6 +11,7 @@ const queued: ChatAgentRun = {
   chatId: "chat-1",
   status: "QUEUED",
   failureCode: null,
+  responseText: null,
   artifactId: null,
   instruction: "Read the connected sources",
   artifact: null,

@@ -82,6 +82,7 @@ export function useChatAgentActivity({
           status: act.status,
           instruction: act.instruction || "",
           failureCode: act.failureCode,
+          responseText: act.responseText,
           artifactId: act.artifactId,
           artifact: act.artifact ? {
             id: act.artifact.id,
@@ -109,6 +110,7 @@ export function useChatAgentActivity({
           instruction: version.instruction || turn.userMessage,
           status: version.status,
           failureCode: version.failureCode,
+          responseText: version.responseText,
           artifactId: version.artifactId,
           artifact: version.artifactId
             ? {
@@ -224,6 +226,11 @@ export function useChatAgentActivity({
         if (agentAbortRef.current !== controller) return;
         setAgentRun(restored);
         if (restored.artifactId) onAgentArtifact(restored);
+        if (typeof plotApiClient.listChatTurns === "function") {
+          const refreshedTurns = await plotApiClient.listChatTurns(chatId, { signal: controller.signal });
+          if (agentAbortRef.current !== controller) return;
+          setTurns(refreshedTurns);
+        }
       } catch (error) {
         if (agentAbortRef.current === controller && !(error instanceof DOMException && error.name === "AbortError")) {
           setAgentError(messageFor(error, "The Agent request could not be loaded."));
@@ -257,6 +264,7 @@ export function useChatAgentActivity({
         instruction: ver.instruction,
         status: ver.status,
         failureCode: ver.failureCode,
+        responseText: ver.responseText,
         artifactId: ver.artifactId,
         artifact: {
           id: ver.artifactId,
@@ -305,6 +313,7 @@ export function useChatAgentActivity({
         instruction: newVersion.instruction,
         status: newVersion.status,
         failureCode: null,
+        responseText: null,
         artifactId: null,
         artifact: null,
         createdAt: newVersion.createdAt,
@@ -349,7 +358,7 @@ export function useChatAgentActivity({
 
   async function submitMessage(message: string, referenceIds: string[], onRequestStart?: () => void, skillIds: string[] = []) {
     const selected = selectReferences(references, referenceIds);
-    const validationError = validateSourceSelection(references, selected, sourceError);
+    const validationError = validateSourceSelection(selected, sourceError);
     if (validationError) {
       setAgentError(validationError);
       return;

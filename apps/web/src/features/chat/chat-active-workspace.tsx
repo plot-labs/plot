@@ -16,7 +16,7 @@ import { ArtifactEditorStatus, ArtifactSaveDraftButton, artifactSaveStateLabel }
 import { ArtifactHistoryPanel } from "@/features/citations/artifact-history-panel";
 import { ExportDialog } from "@/features/citations/export-dialog";
 import { ChatComposer } from "@/features/chat/chat-composer";
-import { AgentActivityDetail, ChatActivityPanel, EmptyArtifactState, ErrorNotice } from "@/features/chat/chat-activity";
+import { AgentActivityDetail, ChatActivityPanel, ErrorNotice } from "@/features/chat/chat-activity";
 import { chatHref, toComposerReferences } from "@/features/chat/chat-workspace-utils";
 import { useChatAgentActivity } from "@/features/chat/use-chat-agent-activity";
 import { useChatArtifactDocument } from "@/features/chat/use-chat-artifact-document";
@@ -168,6 +168,7 @@ export function ChatActiveWorkspace({
                     instruction: selectedVersion.instruction || turn.userMessage,
                     status: selectedVersion.status,
                     failureCode: selectedVersion.failureCode,
+                    responseText: selectedVersion.responseText,
                     artifactId: selectedVersion.artifactId,
                     artifact: selectedVersion.artifactId ? {
                       id: selectedVersion.artifactId,
@@ -193,6 +194,7 @@ export function ChatActiveWorkspace({
                           error={isLatestTurn ? agent.agentError : ""}
                           instruction={selectedVersion.instruction || turn.userMessage}
                           references={references}
+                          citations={selectedVersion.citations ?? []}
                           versions={turn.versions}
                           selectedVersionId={selectedVersion.id}
                           onSelectVersion={(versionId) => {
@@ -269,12 +271,6 @@ export function ChatActiveWorkspace({
             </ChatMessageList>
 
             {document.artifactError ? <ErrorNotice message={document.artifactError} /> : null}
-            {!document.currentArtifact && !agent.activitiesLoading && !agent.agentBusy && !agent.agentRun ? (
-              <div className="mt-5">
-                <EmptyArtifactState hasSelection={Boolean(agent.selectedActivity)} />
-              </div>
-            ) : null}
-
             <div className="mt-5 lg:hidden">
               <div role="tablist" aria-label="Chat workspace panels" className="flex gap-2">
                 <button
@@ -333,7 +329,7 @@ export function ChatActiveWorkspace({
           id="chat-composer"
           key={references.map((reference) => reference.id).join(":") || "no-references"}
           variant="dock"
-          placeholder={agent.isPendingRun ? "Response in progress. Wait for it to finish..." : "Ask Plot to create another source-backed artifact..."}
+          placeholder={agent.isPendingRun ? "Response in progress. Wait for it to finish..." : "Ask a follow-up..."}
           onSubmit={(message, ids, skills) => {
             setArtifactPanelOpen(false);
             void agent.submitMessage(message, ids, document.clearArtifactSelection, skills);

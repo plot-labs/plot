@@ -416,6 +416,7 @@ export interface ChatAgentRun {
   instruction: string;
   status: RoutineAgentRunStatus;
   failureCode: string | null;
+  responseText: string | null;
   artifactId: string | null;
   artifact: {
     id: string;
@@ -453,6 +454,7 @@ export interface ChatResponseVersion {
   status: RoutineAgentRunStatus;
   failureCode: string | null;
   instruction: string;
+  responseText: string | null;
   artifactId: string | null;
   artifact: {
     id: string;

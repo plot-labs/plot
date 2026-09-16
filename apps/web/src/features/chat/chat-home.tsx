@@ -33,7 +33,7 @@ export function ChatHome({ references, referencesLoading, referencesError }: Cha
 
   async function submitHomeRequest(message: string, referenceIds: string[], skillIds: string[] = []) {
     const selected = selectReferences(references, referenceIds);
-    const validationError = validateSourceSelection(references, selected, referencesError);
+    const validationError = validateSourceSelection(selected, referencesError);
     if (validationError) {
       setStartError(validationError);
       return;
@@ -66,12 +66,12 @@ export function ChatHome({ references, referencesLoading, referencesError }: Cha
     <div className="flex min-h-dvh flex-col items-center justify-center bg-white px-4 pb-20 pt-8 dark:bg-[#111113]">
       <div className="w-full max-w-[660px]">
         <h1 className="mb-7 text-center text-[26px] font-semibold tracking-tight text-black/90 dark:text-white/92 sm:text-[28px]">
-          What should Plot create?
+          What can Plot help with?
         </h1>
         <ChatComposer
           key={references.map((reference) => reference.id).join(":") || "no-references"}
           variant="center"
-          placeholder="Describe the update you need..."
+          placeholder="Ask a question or create content..."
           onSubmit={(message, ids, skills) => void submitHomeRequest(message, ids, skills)}
           references={toComposerReferences(references)}
           busy={starting || referencesLoading}
@@ -84,8 +84,8 @@ export function ChatHome({ references, referencesLoading, referencesError }: Cha
         {!canGenerate ? (
           <p className="mt-3 text-center text-xs text-black/50 dark:text-white/50">
             {entitlement?.accessMode === "complete_only"
-              ? `New drafts are paused after three trial results${trialUntil ? ` until ${trialUntil}` : ""}. Open an existing artifact to edit, export, or publish.`
-              : "This workspace cannot start new drafts. You can still export existing artifacts."}
+              ? `New responses are paused after three trial results${trialUntil ? ` until ${trialUntil}` : ""}. Open an existing artifact to edit, export, or publish.`
+              : "This workspace cannot start new responses. You can still export existing artifacts."}
           </p>
         ) : null}
       </div>
@@ -94,7 +94,7 @@ export function ChatHome({ references, referencesLoading, referencesError }: Cha
 }
 
 function SourceEmptyState() {
-  return <p className="mt-4 text-center text-xs text-black/50 dark:text-white/50">Connect and import a source in <Link href="/settings/integrations" className="text-[#2563eb] hover:underline dark:text-[#93c5fd]">Integrations</Link> before starting a chat.</p>;
+  return <p className="mt-4 text-center text-xs text-black/50 dark:text-white/50">You can chat now. Connect a source in <Link href="/settings/integrations" className="text-[#2563eb] hover:underline dark:text-[#93c5fd]">Integrations</Link> when you want Plot to use workspace evidence.</p>;
 }
 
 function ErrorNotice({ message }: { message: string }) {

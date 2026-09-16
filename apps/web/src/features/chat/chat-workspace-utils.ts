@@ -39,9 +39,8 @@ export function resolveComposerReferenceIds(
   return references.filter((reference) => reference.available).map((reference) => reference.id);
 }
 
-export function validateSourceSelection(all: SourceReference[], _selected: SourceReference[], sourceError: string) {
-  if (sourceError) return sourceError;
-  if (!all.length) return "Connect and import a source before starting a Chat.";
+export function validateSourceSelection(selected: SourceReference[], sourceError: string) {
+  if (sourceError && selected.length > 0) return sourceError;
   return "";
 }
 
@@ -84,10 +83,10 @@ export function agentStatusLabel(status: ChatAgentRun["status"]) {
 }
 
 export function agentProgressLabel(status: ChatAgentRun["status"]) {
-  if (status === "QUEUED") return "Queued to explore the connected sources…";
-  if (status === "RUNNING") return "Reading the connected sources…";
-  if (status === "SUCCEEDED") return "Source exploration is complete. Preparing the artifact…";
-  return "Source exploration stopped before an artifact was produced.";
+  if (status === "QUEUED") return "Queued…";
+  if (status === "RUNNING") return "Plot is working on a response…";
+  if (status === "SUCCEEDED") return "Response complete.";
+  return "Plot could not complete the response.";
 }
 
 export function upsertActivity(setActivities: Dispatch<SetStateAction<ChatAgentRun[]>>, next: ChatAgentRun) {
@@ -102,6 +101,7 @@ export function upsertActivity(setActivities: Dispatch<SetStateAction<ChatAgentR
       createdAt: existing.createdAt || next.createdAt,
       updatedAt: next.updatedAt || existing.updatedAt,
       failureCode: next.failureCode ?? existing.failureCode,
+      responseText: next.responseText ?? existing.responseText,
       artifact: next.artifact ?? existing.artifact,
       instruction: next.instruction || existing.instruction,
     };
