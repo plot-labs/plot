@@ -12,7 +12,7 @@ import org.springframework.stereotype.Repository
 @Repository
 class ChatPersistence(private val sqlExecutor: SqlExecutor) {
 	fun sessionExists(workspaceId: UUID, sessionId: UUID): Boolean = sqlExecutor.queryForObject(
-		"select exists(select 1 from work_sessions where workspace_id = ? and id = ?)",
+		"select exists(select 1 from work_sessions where workspace_id = ? and id = ? and session_kind <> 'AUTOMATION')",
 		Boolean::class.java,
 		workspaceId,
 		sessionId,

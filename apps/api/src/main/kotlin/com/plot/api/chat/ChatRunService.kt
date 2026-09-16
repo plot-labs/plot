@@ -78,21 +78,6 @@ class ChatRunService(
 		return queries.toRunResponse(run)
 	}
 
-	fun admitAutomated(
-		principal: WorkspacePrincipal,
-		instruction: String,
-		writingBlockIds: List<UUID>,
-		idempotencyKey: String,
-		chatTitle: String,
-	): AgentRunRecord = admitInternal(
-		principal = principal,
-		instruction = instruction,
-		workSessionId = null,
-		writingBlockIds = writingBlockIds,
-		idempotencyKey = idempotencyKey,
-		chatTitle = chatTitle,
-	)
-
 	fun admitReplication(
 		principal: WorkspacePrincipal,
 		artifactId: UUID,
@@ -587,8 +572,8 @@ class ChatRunService(
 				"""
 				insert into work_sessions (
 				  id, workspace_id, title, status, created_by_user_id, latest_generation_run_id,
-				  last_activity_at, created_at, updated_at
-				) values (?, ?, ?, 'OPEN', ?, null, ?, ?, ?)
+				  last_activity_at, created_at, updated_at, session_kind
+				) values (?, ?, ?, 'OPEN', ?, null, ?, ?, ?, 'CHAT')
 				""".trimIndent(),
 				id,
 				workspaceId,

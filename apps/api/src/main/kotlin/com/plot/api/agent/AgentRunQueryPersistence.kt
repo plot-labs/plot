@@ -15,6 +15,19 @@ class AgentRunQueryPersistence(
 		workspaceId,
 		id,
 	).firstOrNull()
+	fun findAgentRunByIdempotencyKey(
+		workspaceId: UUID,
+		origin: AgentRunOrigin,
+		idempotencyKey: String,
+		forUpdate: Boolean = false,
+	): AgentRunRecord? = sqlExecutor.query(
+		selectAgentRunSql + " where a.workspace_id = ? and a.origin = ? and a.idempotency_key = ?" +
+			if (forUpdate) " for update" else "",
+		agentRunMapper,
+		workspaceId,
+		origin.name,
+		idempotencyKey,
+	).singleOrNull()
 	fun listAgentRunSources(workspaceId: UUID, agentRunId: UUID): List<AgentRunSourceRecord> = sqlExecutor.query(
 		"""
 		select id, workspace_id, agent_run_id, source_scope_id, source_display_name, source_role, order_index,

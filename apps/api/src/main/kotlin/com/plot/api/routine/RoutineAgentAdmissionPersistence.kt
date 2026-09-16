@@ -89,8 +89,8 @@ class RoutineAgentAdmissionPersistence(
 			"""
 			insert into work_sessions (
 			  id, workspace_id, title, status, created_by_user_id, latest_generation_run_id,
-			  last_activity_at, created_at, updated_at, routine_execution_id
-			) values (?, ?, ?, 'OPEN', ?, null, ?, ?, ?, ?)
+			  last_activity_at, created_at, updated_at, routine_execution_id, session_kind
+			) values (?, ?, ?, 'OPEN', ?, null, ?, ?, ?, ?, 'ROUTINE')
 			""".trimIndent(),
 			workSessionId,
 			workspaceId,

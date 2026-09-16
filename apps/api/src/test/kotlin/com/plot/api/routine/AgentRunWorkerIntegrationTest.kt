@@ -1,6 +1,7 @@
 package com.plot.api.routine
 
 import com.plot.api.agent.AgentRunExecutionPersistence
+import com.plot.api.agent.ArtifactAutomationAdmissionService
 import com.plot.api.agent.AgentRunWorker
 import com.plot.api.agent.AgentStepKind
 import com.plot.api.agent.AgentStepRequest
@@ -13,6 +14,7 @@ import com.plot.api.ai.provider.AgentDecisionException
 import com.plot.api.ai.provider.AgentRuntime
 import com.plot.api.ai.provider.AgentRuntimeHost
 import com.plot.api.ai.provider.AgentDecisionRequest
+import com.plot.api.ai.provider.AgentResponseMode
 import com.plot.api.ai.provider.ArtifactWorkflowModelGateway
 import com.plot.api.ai.provider.ModelCallMetadata
 import com.plot.api.ai.provider.ModelCallResult
@@ -30,8 +32,11 @@ import com.plot.api.artifact.workflow.model.WriterSentence
 import com.plot.api.chat.ChatQueryService
 import com.plot.api.chat.ChatRunService
 import com.plot.api.chat.dto.CreateChatAgentRunRequest
+import com.plot.api.common.ApiException
+import com.plot.api.common.WorkspacePrincipal
 import com.plot.api.dev.DevBootstrapService
 import com.plot.api.dev.DevContext
+import com.plot.api.worksession.WorkSessionService
 import java.sql.Timestamp
 import java.time.Duration
 import java.time.Instant
@@ -83,7 +88,9 @@ class AgentRunWorkerIntegrationTest {
 	@Autowired private lateinit var agentWorker: AgentRunWorker
 	@Autowired private lateinit var artifactWorkflowWorker: ArtifactWorkflowRunWorker
 	@Autowired private lateinit var chatAdmission: ChatRunService
+	@Autowired private lateinit var automationAdmission: ArtifactAutomationAdmissionService
 	@Autowired private lateinit var chatQueries: ChatQueryService
+	@Autowired private lateinit var workSessions: WorkSessionService
 	@Autowired private lateinit var agentModel: ScriptedAgentRuntime
 	@Autowired private lateinit var artifactWorkflowModel: AgentArtifactWorkflowModelGateway
 
@@ -355,6 +362,37 @@ class AgentRunWorkerIntegrationTest {
 		assertEquals(2, turns.size)
 		assertEquals("I remember the earlier answer.", turns.last().versions.single().responseText)
 		assertEquals("SUCCEEDED", agentStatus(followUp.id))
+	}
+
+	@Test
+	fun `automated Artifact admission stays outside Chat`() {
+		val run = automationAdmission.admit(
+			principal = WorkspacePrincipal(devContext.devWorkspaceId, devContext.devUserId),
+			instruction = "Create release notes",
+			writingBlockIds = emptyList(),
+			idempotencyKey = "automated-chat-${UUID.randomUUID()}",
+			title = "Automated release notes",
+		)
+
+		assertEquals(com.plot.api.agent.AgentRunOrigin.AUTOMATION, run.origin)
+		assertEquals(0, count("select count(*) from chat_response_versions where workspace_id = ? and agent_run_id = ?", devContext.devWorkspaceId, run.id))
+		assertEquals("AUTOMATION", jdbcTemplate.queryForObject(
+			"select session_kind from work_sessions where workspace_id = ? and id = ?",
+			String::class.java,
+			devContext.devWorkspaceId,
+			run.workSessionId,
+		))
+		assertFalse(workSessions.list().any { it.id == run.workSessionId })
+		assertFailsWith<ApiException> { chatQueries.listForSession(requireNotNull(run.workSessionId)) }
+		assertEquals(
+			AgentResponseMode.ARTIFACT_REQUIRED.name,
+			jdbcTemplate.queryForObject(
+				"select generation_settings ->> 'responseMode' from chat_execution_envelopes where workspace_id = ? and agent_run_id = ?",
+				String::class.java,
+				devContext.devWorkspaceId,
+				run.id,
+			),
+		)
 	}
 
 	@Test

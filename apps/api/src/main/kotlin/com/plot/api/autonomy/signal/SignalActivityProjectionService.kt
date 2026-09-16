@@ -75,7 +75,7 @@ class SignalActivityProjectionService(
 				e.source_scope_id,
 				e.signal_id,
 				e.admitted_response_version_id,
-				v.agent_run_id,
+				coalesce(e.admitted_agent_run_id, v.agent_run_id) as agent_run_id,
 				t.work_session_id as chat_id,
 				r.status as run_status,
 				a.id as artifact_id,
@@ -89,7 +89,9 @@ class SignalActivityProjectionService(
 			join autonomy_signals s on s.workspace_id = e.workspace_id and s.id = e.signal_id
 			left join chat_response_versions v on v.workspace_id = e.workspace_id and v.id = e.admitted_response_version_id
 			left join chat_turns t on t.workspace_id = v.workspace_id and t.id = v.turn_id
-			left join agent_runs r on r.workspace_id = e.workspace_id and r.id = v.agent_run_id
+			left join agent_runs r
+			  on r.workspace_id = e.workspace_id
+			 and r.id = coalesce(e.admitted_agent_run_id, v.agent_run_id)
 			left join artifact_runs ar on ar.workspace_id = e.workspace_id and ar.agent_run_id = r.id
 			left join generation_runs g on g.workspace_id = e.workspace_id and g.artifact_run_id = ar.id
 			left join content_packs a on a.workspace_id = e.workspace_id and a.generation_run_id = g.id

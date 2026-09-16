@@ -9,6 +9,7 @@ import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.neq
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
@@ -23,7 +24,10 @@ class WorkSessionPersistence(
 	fun findRecentByWorkspaceId(workspaceId: UUID): List<WorkSession> = sql.execute {
 		WorkSessionTable
 			.selectAll()
-			.where { WorkSessionTable.workspaceId eq workspaceId }
+			.where {
+				(WorkSessionTable.workspaceId eq workspaceId) and
+					(WorkSessionTable.sessionKind neq "AUTOMATION")
+			}
 			.orderBy(
 				Coalesce(WorkSessionTable.lastActivityAt, WorkSessionTable.createdAt) to SortOrder.DESC,
 				WorkSessionTable.createdAt to SortOrder.DESC,
@@ -51,6 +55,7 @@ class WorkSessionPersistence(
 			it[status] = workSession.status
 			it[createdByUserId] = workSession.createdByUserId
 			it[latestArtifactWorkflowRunId] = workSession.latestArtifactWorkflowRunId
+			it[sessionKind] = "CHAT"
 			it[lastActivityAt] = workSession.lastActivityAt?.atOffset(ZoneOffset.UTC)
 			it[createdAt] = workSession.createdAt.atOffset(ZoneOffset.UTC)
 			it[updatedAt] = workSession.updatedAt.atOffset(ZoneOffset.UTC)

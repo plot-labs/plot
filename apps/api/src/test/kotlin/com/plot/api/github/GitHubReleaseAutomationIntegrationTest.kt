@@ -180,7 +180,7 @@ class GitHubReleaseAutomationIntegrationTest {
 		activityService.selectRange(fixture.scopeId, unresolved.id, GitHubReleaseRangeRequest(base, head))
 		assertEquals(1, releaseWorker.drain())
 		val generating = release("v1", fixture)
-		assertEquals(GitHubReleaseDraftStatus.GENERATING, generating.status)
+			assertEquals(GitHubReleaseDraftStatus.GENERATING, generating.status)
 		assertEquals(base, generating.baseSha)
 		assertEquals(head, generating.headSha)
 		assertEquals("EXPLICIT_RANGE", generating.boundaryReason)

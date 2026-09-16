@@ -9,7 +9,7 @@ enum class AgentRunStatus {
 }
 
 enum class AgentRunOrigin {
-	ROUTINE, CHAT,
+	ROUTINE, CHAT, AUTOMATION,
 }
 
 enum class AgentRunSourceRole {
