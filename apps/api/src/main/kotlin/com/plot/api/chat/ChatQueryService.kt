@@ -10,7 +10,6 @@ import com.plot.api.chat.dto.ChatTurnDto
 import com.plot.api.chat.dto.RetryEligibilityDto
 import com.plot.api.chat.dto.toChatResponse
 import com.plot.api.common.ApiException
-import com.plot.api.content.ContentBrief
 import com.plot.api.dev.DevContext
 import com.plot.api.entitlement.WorkspaceAccessService
 import com.plot.api.persistence.SqlExecutor
@@ -120,7 +119,7 @@ class ChatQueryService(
 	): ChatResponseVersionDto {
 		val run = requireNotNull(agentRunQueryPersistence.findAgentRun(workspaceId, v.agentRunId))
 		val artifact = agentRunQueryPersistence.findArtifactForAgentRun(workspaceId, v.agentRunId)?.let {
-			ChatAgentArtifactSummaryResponse(it.id, it.status, it.title, run.contentType, it.updatedAt)
+			ChatAgentArtifactSummaryResponse(it.id, it.status, it.title, it.updatedAt)
 		}
 		val envelope = snapshots.findEnvelopeForAgentRun(workspaceId, v.agentRunId)
 		val eligibility = computeEligibility(
@@ -269,12 +268,10 @@ class ChatQueryService(
 	}
 
 	internal fun toRunResponse(run: AgentRunRecord): ChatAgentRunResponse = with(run) {
-		val brief = contentBriefSnapshotJson?.let { objectMapper.readValue(it, ContentBrief::class.java) }
 		toChatResponse(
 			artifact = agentRunQueryPersistence.findArtifactForAgentRun(workspaceId, id)?.let {
-				ChatAgentArtifactSummaryResponse(it.id, it.status, it.title, contentType, it.updatedAt)
+				ChatAgentArtifactSummaryResponse(it.id, it.status, it.title, it.updatedAt)
 			},
-			brief = brief,
 		)
 	}
 

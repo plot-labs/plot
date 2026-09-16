@@ -4,7 +4,6 @@ import com.plot.api.common.ApiException
 import com.plot.api.content.ConfirmedFact
 import com.plot.api.content.ContentBrief
 import com.plot.api.content.ContentBriefDestination
-import com.plot.api.content.ContentType
 import com.plot.api.agent.AgentRunRecord
 import com.plot.api.agent.AgentRunStatus
 import jakarta.validation.Valid
@@ -19,9 +18,6 @@ data class CreateChatAgentRunRequest(
 	@field:Size(max = 4) val skillIds: List<UUID> = emptyList(),
 	val workSessionId: UUID? = null,
 	@field:Size(max = 20) val writingBlockIds: List<UUID> = emptyList(),
-	val contentType: ContentType = ContentType.CHANGELOG,
-	val contentProfileRevisionId: UUID? = null,
-	@field:Valid val brief: ContentBriefRequest? = null,
 )
 
 data class ContentBriefRequest(
@@ -83,9 +79,6 @@ data class ChatAgentRunResponse(
 	val chatId: UUID,
 	val instruction: String,
 	val skills: List<com.plot.api.skill.SkillSnapshot> = emptyList(),
-	val contentType: ContentType,
-	val contentProfileRevisionId: UUID?,
-	val brief: ContentBrief?,
 	val status: AgentRunStatus,
 	val failureCode: String?,
 	val artifactId: UUID?,
@@ -98,21 +91,16 @@ data class ChatAgentArtifactSummaryResponse(
 	val id: UUID,
 	val status: String,
 	val title: String?,
-	val contentType: ContentType,
 	val updatedAt: Instant,
 )
 
 fun AgentRunRecord.toChatResponse(
 	artifact: ChatAgentArtifactSummaryResponse? = null,
-	brief: ContentBrief? = null,
 ) = ChatAgentRunResponse(
 	id = id,
 	chatId = requireNotNull(workSessionId) { "Chat Agent run is missing its Chat" },
 	instruction = instructionSnapshot,
 	skills = com.plot.api.skill.FrozenSkills.read(skillsSnapshotJson),
-	contentType = contentType,
-	contentProfileRevisionId = contentProfileRevisionId,
-	brief = brief,
 	status = status,
 	failureCode = failureCode,
 	artifactId = artifact?.id,

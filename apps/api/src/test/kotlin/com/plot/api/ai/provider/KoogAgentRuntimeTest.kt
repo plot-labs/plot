@@ -21,7 +21,7 @@ class KoogAgentRuntimeTest {
 	private val mapper = jacksonObjectMapper()
 
 	@Test
-	fun `native Koog loop discovers skills loads content then hands off without another model call`() {
+	fun `native Koog loop discovers skills loads content then creates an artifact without another model call`() {
 		val prompts = mutableListOf<Prompt>()
 		val host = Host()
 		val calls = ArrayDeque(listOf(

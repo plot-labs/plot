@@ -8,7 +8,6 @@ import com.plot.api.agent.AgentExecutionSnapshotPersistence
 import com.plot.api.artifact.dto.ReplicateContentRequest
 import com.plot.api.chat.dto.ChatAgentRunResponse
 import com.plot.api.chat.dto.ChatResponseVersionDto
-import com.plot.api.chat.dto.ContentBriefRequest
 import com.plot.api.chat.dto.CreateChatAgentRunRequest
 import com.plot.api.common.ApiException
 import com.plot.api.common.UuidGenerator
@@ -72,9 +71,6 @@ class ChatRunService(
 			skillIds = request.skillIds,
 			workSessionId = request.workSessionId,
 			writingBlockIds = request.writingBlockIds,
-			contentType = request.contentType,
-			contentProfileRevisionId = request.contentProfileRevisionId,
-			brief = request.brief,
 			idempotencyKey = idempotencyKey,
 			chatTitle = null,
 		)
@@ -92,9 +88,6 @@ class ChatRunService(
 		instruction = instruction,
 		workSessionId = null,
 		writingBlockIds = writingBlockIds,
-		contentType = ContentType.CHANGELOG,
-		contentProfileRevisionId = null,
-		brief = null,
 		idempotencyKey = idempotencyKey,
 		chatTitle = chatTitle,
 	)
@@ -278,6 +271,7 @@ class ChatRunService(
 	}
 
 	private fun defaultInstructionFor(contentType: ContentType, title: String?): String = when (contentType) {
+		ContentType.ARTIFACT -> "Create an artifact from the available source evidence."
 		ContentType.LAUNCH_ANNOUNCEMENT -> "Write a concise launch announcement highlighting who this helps and how to get started."
 		ContentType.CHANGELOG -> "Generate release notes summarizing the key changes."
 	}
@@ -287,9 +281,6 @@ class ChatRunService(
 		instruction: String,
 		workSessionId: UUID?,
 		writingBlockIds: List<UUID>,
-		contentType: ContentType,
-		contentProfileRevisionId: UUID?,
-		brief: ContentBriefRequest?,
 		idempotencyKey: String,
 		chatTitle: String?,
 		skillIds: List<UUID> = emptyList(),
@@ -304,22 +295,14 @@ class ChatRunService(
 		if (writingBlockIds.distinct().size != writingBlockIds.size) {
 			throw ApiException(HttpStatus.BAD_REQUEST, "DUPLICATE_SOURCE_ITEMS", "Writing Block IDs must be unique")
 		}
-		val frozenProfileRevisionId = contentProfileRevisionId?.let {
-			contentProfileService.requireRevisionInWorkspace(workspaceId, it).id
-		} ?: contentProfileService.currentRevisionId(workspaceId)
-		val domainBrief = brief?.toDomain()
-		val briefJson = domainBrief?.takeUnless { it.isBlank() }?.let(objectMapper::writeValueAsString)
+		val frozenProfileRevisionId = contentProfileService.currentRevisionId(workspaceId)
 		val fingerprint = fingerprint(
 			CreateChatAgentRunRequest(
 				instruction = normalizedInstruction,
 				skillIds = skillIds,
 				workSessionId = workSessionId,
 				writingBlockIds = writingBlockIds,
-				contentType = contentType,
-				contentProfileRevisionId = frozenProfileRevisionId,
-				brief = brief,
 			),
-			domainBrief,
 		)
 		return transactionExecutor.execute {
 			// A transaction-scoped advisory lock prevents two identical requests from
@@ -360,9 +343,9 @@ class ChatRunService(
 					promptVersion = "chat-agent-v1",
 					toolPolicyVersion = "read-only-v1",
 					budgetSnapshotJson = objectMapper.writeValueAsString(properties.chatBudgetSnapshot()),
-					contentType = contentType,
+					contentType = ContentType.ARTIFACT,
 					contentProfileRevisionId = frozenProfileRevisionId,
-					contentBriefSnapshotJson = briefJson,
+					contentBriefSnapshotJson = null,
 					maxAttempts = properties.maxAttempts,
 				),
 				now,
@@ -403,9 +386,9 @@ class ChatRunService(
 					"toolPolicyVersion" to "read-only-v1",
 					"budgetSnapshot" to objectMapper.writeValueAsString(properties.chatBudgetSnapshot()),
 					"skillsSnapshot" to skillsJson,
-					"contentType" to contentType.name,
+					"contentType" to ContentType.ARTIFACT.name,
 					"contentProfileRevisionId" to frozenProfileRevisionId,
-					"contentBriefSnapshot" to briefJson,
+					"contentBriefSnapshot" to null,
 				),
 			)
 			val sourceSnapshot = contentSourceSnapshotService.findOrCreateSnapshotForAgentRun(workspaceId, runId)
@@ -697,12 +680,9 @@ class ChatRunService(
 	private fun findExisting(workspaceId: UUID, key: String): AgentRunRecord? =
 		chatPersistence.findChatAgentRunByIdempotencyKey(workspaceId, key, forUpdate = true)
 
-	private fun fingerprint(request: CreateChatAgentRunRequest, brief: ContentBrief?): String {
+	private fun fingerprint(request: CreateChatAgentRunRequest): String {
 		val canonical = buildString {
 			append(request.workSessionId ?: "new").append('|')
-			append(request.contentType.name).append('|')
-			append(request.contentProfileRevisionId ?: "none").append('|')
-			append(brief?.canonicalFingerprint().orEmpty()).append('|')
 			append(request.instruction).append('|')
 			request.writingBlockIds.forEach { append(it).append(',') }
 		}

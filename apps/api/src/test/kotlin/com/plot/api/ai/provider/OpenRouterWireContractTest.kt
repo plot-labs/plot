@@ -2,7 +2,7 @@ package com.plot.api.ai.provider
 
 import ai.koog.prompt.executor.clients.openrouter.OpenRouterClientSettings
 import ai.koog.http.client.java.JavaKoogHttpClient
-import com.plot.api.ai.prompt.ChangelogPrompt
+import com.plot.api.ai.prompt.ArtifactPrompt
 import com.plot.api.config.PlotAiProperties
 import com.plot.api.artifact.workflow.model.WriterOutput
 import com.sun.net.httpserver.HttpServer
@@ -19,7 +19,7 @@ class OpenRouterWireContractTest {
     @Test fun `Koog sends strict schema and pinned private route without tools`() {
         withServer { server, bodies, _ ->
             transport(server).useTransport { transport ->
-                val result = transport.exchange(StructuredChatRequest(ModelRole.WRITER, ChangelogPrompt("System", "User")), WriterOutput::class.java)
+                val result = transport.exchange(StructuredChatRequest(ModelRole.WRITER, ArtifactPrompt("System", "User")), WriterOutput::class.java)
                 val body = mapper.readTree(bodies.single())
                 assertEquals(properties.model, body["model"].stringValue())
                 assertEquals(mapper.readTree(mapper.writeValueAsString(properties.openRouterProviderPolicy)), body["provider"])
@@ -41,7 +41,7 @@ class OpenRouterWireContractTest {
             withServer(status) { server, _, calls ->
                 transport(server).useTransport { transport ->
                     val failure = assertFailsWith<RuntimeException> {
-                        transport.exchange(StructuredChatRequest(ModelRole.WRITER, ChangelogPrompt("System", "User")), WriterOutput::class.java)
+                        transport.exchange(StructuredChatRequest(ModelRole.WRITER, ArtifactPrompt("System", "User")), WriterOutput::class.java)
                     }
                     assertEquals(status >= 500 || status == 429, failure is TransientModelTransportException)
                     assertEquals(1, calls.get())
@@ -57,7 +57,7 @@ class OpenRouterWireContractTest {
             withServer(response = response) { server, _, _ ->
                 transport(server).useTransport { transport ->
                     assertFailsWith<MalformedModelOutputException> {
-                        transport.exchange(StructuredChatRequest(ModelRole.WRITER, ChangelogPrompt("System", "User")), WriterOutput::class.java)
+                        transport.exchange(StructuredChatRequest(ModelRole.WRITER, ArtifactPrompt("System", "User")), WriterOutput::class.java)
                     }
                 }
             }

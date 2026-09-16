@@ -196,16 +196,17 @@ class AgentRunWorker(
 					rejectInvalidDecision(claim, current, decision, failure, budget, retainClaim = true)
 					return objectMapper.writeValueAsString(mapOf("error" to failure.message))
 				}
+				val creationAction = decision.action == AgentDecisionAction.CREATE_ARTIFACT
 				val step = executionPersistence.reserveStep(claim, AgentStepRequest(
 					agentRunId = run.id, sequence = current.currentStep,
-					kind = if (decision.action == AgentDecisionAction.CREATE_ARTIFACT) AgentStepKind.ARTIFACT_HANDOFF else AgentStepKind.READ_TOOL,
+					kind = if (creationAction) AgentStepKind.ARTIFACT_HANDOFF else AgentStepKind.READ_TOOL,
 					status = AgentStepStatus.RUNNING,
 					idempotencyKey = "agent:${run.id}:step:${current.currentStep}",
 					toolName = decision.action.takeUnless { it == AgentDecisionAction.CREATE_ARTIFACT }?.name,
 					argumentsJson = objectMapper.writeValueAsString(arguments), startedAt = clock.instant(),
 				), budget.maxToolCalls, clock.instant())
 				executeStep(claim, current, step, budget, frozenReplay, retainClaim = true)
-				finished = decision.action == AgentDecisionAction.CREATE_ARTIFACT
+				finished = creationAction
 				if (finished) return "Artifact workflow started"
 				return objectMapper.writeValueAsString(mapOf(
 					"result" to queryPersistence.findStep(run.workspaceId, run.id, step.id)?.resultJson,

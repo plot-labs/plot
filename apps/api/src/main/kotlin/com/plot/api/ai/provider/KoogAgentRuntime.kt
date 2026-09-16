@@ -125,7 +125,7 @@ internal class KoogAgentRuntime(
 		AgentDecisionAction.LIST_ALLOWED_SOURCES -> "List sources authorized for this run."
 		AgentDecisionAction.SEARCH_WRITING_BLOCKS -> "Search sourceScopeId for query. Returns writingBlockIds to read."
 		AgentDecisionAction.READ_WRITING_BLOCKS -> "Read exactly one writingBlockId from sourceScopeId and adopt an immutable input."
-		AgentDecisionAction.CREATE_ARTIFACT -> "Create an evidence-grounded draft from selectedInputIds. Ends the agent run and starts the durable writing/review workflow."
+		AgentDecisionAction.CREATE_ARTIFACT -> "Create an evidence-grounded artifact from selectedInputIds. The user's prompt and loaded skills determine its purpose, structure, and writing style. Ends the agent run and starts the durable writing/review workflow."
 	}
 
 	private companion object {
@@ -137,7 +137,9 @@ internal class KoogAgentRuntime(
 			Research using only allowed source IDs. Search before reading. writingBlockIds identify source items;
 			selectedInputIds must be immutable input IDs returned by the server. Tool results include updated inputs.
 			Completed steps are durable history from earlier attempts. Reuse their evidence and loaded skill instructions.
-			Finish with CREATE_ARTIFACT. It creates a draft for review, never publishes. Do not end with plain text.
+			The user's instruction and loaded skills determine the artifact's purpose, structure, and writing style.
+			Finish with CREATE_ARTIFACT. It creates a draft for review, never publishes.
+			Do not ask the caller to classify the artifact and do not end with plain text.
 		""".trimIndent()
 	}
 }
