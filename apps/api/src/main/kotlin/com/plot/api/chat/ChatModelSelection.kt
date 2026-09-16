@@ -21,6 +21,12 @@ object ChatModels {
 		PlotAiProperties.CLAUDE_HAIKU_4_5_MODEL to "anthropic",
 		PlotAiProperties.GPT_5_4_MODEL to "openai",
 		PlotAiProperties.GPT_5_5_MODEL to "openai",
+		PlotAiProperties.GPT_5_6_SOL_MODEL to "openai",
+		PlotAiProperties.GPT_5_6_LUNA_MODEL to "openai",
+		PlotAiProperties.GEMINI_3_8_FLASH_MODEL to "google-ai-studio",
+		PlotAiProperties.DEEPSEEK_V4_1_FLASH_MODEL to "deepinfra",
+		PlotAiProperties.GROK_4_6_MODEL to "xai",
+		PlotAiProperties.QWEN_3_8_MAX_MODEL to "alibaba",
 	)
 
 	fun resolve(requestedModel: String, properties: PlotAiProperties): ChatModelSelection {

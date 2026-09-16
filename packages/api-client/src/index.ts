@@ -531,7 +531,13 @@ export type ChatModel =
   | "anthropic/claude-sonnet-4.6"
   | "anthropic/claude-haiku-4.5"
   | "openai/gpt-5.4"
-  | "openai/gpt-5.5";
+  | "openai/gpt-5.5"
+  | "openai/gpt-5.6-sol"
+  | "openai/gpt-5.6-luna"
+  | "google/gemini-3.8-flash"
+  | "deepseek/deepseek-v4.1-flash"
+  | "x-ai/grok-4.6"
+  | "qwen/qwen3.8-max-0902";
 
 export interface ContentProfile {
   revisionId: string | null;

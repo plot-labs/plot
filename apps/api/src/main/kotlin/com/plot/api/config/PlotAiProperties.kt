@@ -70,8 +70,14 @@ data class PlotAiProperties(
 		const val OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 		const val GPT_5_4_NANO_MODEL = "openai/gpt-5.4-nano"
 		const val GPT_5_6_LUNA_PRO_MODEL = "openai/gpt-5.6-luna-pro"
+		const val GPT_5_6_LUNA_MODEL = "openai/gpt-5.6-luna"
+		const val GPT_5_6_SOL_MODEL = "openai/gpt-5.6-sol"
 		const val GPT_4O_MINI_MODEL = "openai/gpt-4o-mini-2024-07-18"
 		const val DEEPSEEK_V4_FLASH_MODEL = "deepseek/deepseek-v4-flash-0731"
+		const val DEEPSEEK_V4_1_FLASH_MODEL = "deepseek/deepseek-v4.1-flash"
+		const val GEMINI_3_8_FLASH_MODEL = "google/gemini-3.8-flash"
+		const val GROK_4_6_MODEL = "x-ai/grok-4.6"
+		const val QWEN_3_8_MAX_MODEL = "qwen/qwen3.8-max-0902"
 		const val CLAUDE_OPUS_5_MODEL = "anthropic/claude-opus-5"
 		const val CLAUDE_OPUS_4_8_MODEL = "anthropic/claude-opus-4.8"
 		const val CLAUDE_SONNET_5_MODEL = "anthropic/claude-sonnet-5"
@@ -82,8 +88,14 @@ data class PlotAiProperties(
 		val SUPPORTED_MODELS = setOf(
 			GPT_5_4_NANO_MODEL,
 			GPT_5_6_LUNA_PRO_MODEL,
+			GPT_5_6_LUNA_MODEL,
+			GPT_5_6_SOL_MODEL,
 			GPT_4O_MINI_MODEL,
 			DEEPSEEK_V4_FLASH_MODEL,
+			DEEPSEEK_V4_1_FLASH_MODEL,
+			GEMINI_3_8_FLASH_MODEL,
+			GROK_4_6_MODEL,
+			QWEN_3_8_MAX_MODEL,
 			CLAUDE_OPUS_5_MODEL,
 			CLAUDE_OPUS_4_8_MODEL,
 			CLAUDE_SONNET_5_MODEL,

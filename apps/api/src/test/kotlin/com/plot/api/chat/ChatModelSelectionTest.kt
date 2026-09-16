@@ -23,10 +23,19 @@ class ChatModelSelectionTest {
 
 	@Test
 	fun `explicit model selects its matching provider`() {
-		assertEquals(
-			ChatModelSelection(PlotAiProperties.GPT_5_4_MODEL, PlotAiProperties.GPT_5_4_MODEL, "openai"),
-			ChatModels.resolve(PlotAiProperties.GPT_5_4_MODEL, PlotAiProperties()),
-		)
+		mapOf(
+			PlotAiProperties.GPT_5_4_MODEL to "openai",
+			PlotAiProperties.GPT_5_6_SOL_MODEL to "openai",
+			PlotAiProperties.GEMINI_3_8_FLASH_MODEL to "google-ai-studio",
+			PlotAiProperties.DEEPSEEK_V4_1_FLASH_MODEL to "deepinfra",
+			PlotAiProperties.GROK_4_6_MODEL to "xai",
+			PlotAiProperties.QWEN_3_8_MAX_MODEL to "alibaba",
+		).forEach { (model, provider) ->
+			assertEquals(
+				ChatModelSelection(model, model, provider),
+				ChatModels.resolve(model, PlotAiProperties()),
+			)
+		}
 	}
 
 	@Test
