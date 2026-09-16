@@ -48,8 +48,9 @@ class ChatQueryService(
 		if (!chatPersistence.sessionExists(devContext.devWorkspaceId, sessionId)) {
 			throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Chat not found")
 		}
-		return chatPersistence.listSessionAgentRuns(devContext.devWorkspaceId, sessionId)
-			.map { toRunResponse(it) }
+		val runs = chatPersistence.listSessionAgentRuns(devContext.devWorkspaceId, sessionId)
+		val responseTexts = chatPersistence.listResponseTextsByRunId(devContext.devWorkspaceId, runs.map { it.id })
+		return runs.map { toRunResponse(it, responseTexts[it.id]) }
 	}
 
 	fun listTurnsForSession(sessionId: UUID, selectedVersionId: UUID? = null): List<ChatTurnDto> {
@@ -154,6 +155,7 @@ class ChatQueryService(
 			status = run.status,
 			failureCode = run.failureCode,
 			instruction = run.instructionSnapshot,
+			responseText = v.responseText,
 			artifactId = artifact?.id,
 			artifact = artifact,
 			retryEligibility = eligibility,
@@ -267,11 +269,15 @@ class ChatQueryService(
 		}
 	}
 
-	internal fun toRunResponse(run: AgentRunRecord): ChatAgentRunResponse = with(run) {
+	internal fun toRunResponse(
+		run: AgentRunRecord,
+		responseText: String? = chatPersistence.findResponseVersionByRunId(run.workspaceId, run.id)?.responseText,
+	): ChatAgentRunResponse = with(run) {
 		toChatResponse(
 			artifact = agentRunQueryPersistence.findArtifactForAgentRun(workspaceId, id)?.let {
 				ChatAgentArtifactSummaryResponse(it.id, it.status, it.title, it.updatedAt)
 			},
+			responseText = responseText,
 		)
 	}
 

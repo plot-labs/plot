@@ -118,7 +118,7 @@ class AgentRunQueryPersistence(
 			workspaceId,
 			agentRunId,
 		).single()
-		return counts.first > 0 && counts.first == counts.second
+		return counts.first == counts.second
 	}
 
 	fun findRunningStep(workspaceId: UUID, agentRunId: UUID, sequence: Int): AgentStepRecord? =
@@ -214,6 +214,7 @@ class AgentRunQueryPersistence(
 			workspaceId,
 			agentRunId,
 		) ?: 0
+		if (expected == 0) return
 		val statuses = sqlExecutor.query(
 			"""
 			select scope.id, scope.status, namespace.status as namespace_status
@@ -263,8 +264,7 @@ class AgentRunQueryPersistence(
 			).toSet()
 		}
 		if (
-			expected == 0 ||
-			statuses.size != expected ||
+				statuses.size != expected ||
 			statuses.any { it.second != "ACTIVE" || it.third != "ACTIVE" } ||
 			connectedScopeIds != statuses.map { it.first }.toSet()
 		) {

@@ -81,6 +81,7 @@ data class ChatAgentRunResponse(
 	val skills: List<com.plot.api.skill.SkillSnapshot> = emptyList(),
 	val status: AgentRunStatus,
 	val failureCode: String?,
+	val responseText: String?,
 	val artifactId: UUID?,
 	val artifact: ChatAgentArtifactSummaryResponse?,
 	val createdAt: Instant,
@@ -96,6 +97,7 @@ data class ChatAgentArtifactSummaryResponse(
 
 fun AgentRunRecord.toChatResponse(
 	artifact: ChatAgentArtifactSummaryResponse? = null,
+	responseText: String? = null,
 ) = ChatAgentRunResponse(
 	id = id,
 	chatId = requireNotNull(workSessionId) { "Chat Agent run is missing its Chat" },
@@ -103,6 +105,7 @@ fun AgentRunRecord.toChatResponse(
 	skills = com.plot.api.skill.FrozenSkills.read(skillsSnapshotJson),
 	status = status,
 	failureCode = failureCode,
+	responseText = responseText,
 	artifactId = artifact?.id,
 	artifact = artifact,
 	createdAt = createdAt,
@@ -136,6 +139,7 @@ data class ChatResponseVersionDto(
 	val status: AgentRunStatus,
 	val failureCode: String?,
 	val instruction: String,
+	val responseText: String?,
 	val artifactId: UUID?,
 	val artifact: ChatAgentArtifactSummaryResponse?,
 	val retryEligibility: RetryEligibilityDto,

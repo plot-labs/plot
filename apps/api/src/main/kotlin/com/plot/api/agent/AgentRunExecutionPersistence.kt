@@ -444,6 +444,19 @@ class AgentRunExecutionPersistence(
 		completed
 	}
 
+	fun succeedChatResponse(
+		claim: ClaimedAgentRun,
+		responseText: String,
+		now: Instant = currentInstant(),
+	): AgentRunRecord = transactionExecutor.execute {
+		val run = queryPersistence.requireAgentClaim(claim)
+		require(run.origin == AgentRunOrigin.CHAT) { "Only Chat runs can complete with a text response" }
+		val normalized = responseText.trim()
+		require(normalized.isNotBlank() && normalized.length <= 40_000) { "Chat response is invalid" }
+		completionProjection.commitChatResponse(run, normalized, now)
+		terminalizeAgentRun(claim, AgentRunStatus.SUCCEEDED, null, now)
+	}
+
 	private fun findStepForUpdate(workspaceId: UUID, agentRunId: UUID, stepId: UUID): AgentStepRecord? =
 		sqlExecutor.query(
 			"""

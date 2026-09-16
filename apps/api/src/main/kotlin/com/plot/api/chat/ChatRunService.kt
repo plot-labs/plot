@@ -30,6 +30,7 @@ import com.plot.api.agent.AgentRunStatus
 import com.plot.api.agent.AgentToolAccessException
 import com.plot.api.agent.ReadOnlyAgentTools
 import com.plot.api.agent.AgentProperties
+import com.plot.api.ai.provider.AgentResponseMode
 import com.plot.api.source.SourceManagedAccessGuard
 import java.security.MessageDigest
 import java.sql.Timestamp
@@ -319,14 +320,8 @@ class ChatRunService(
 
 			val skillsJson = skills.freeze(workspaceId, skillIds)
 			val sources = lockActiveSources(workspaceId)
-			if (sources.isEmpty()) {
-				throw ApiException(
-					HttpStatus.CONFLICT,
-					"SOURCE_NOT_READY",
-					"Connect an active source before starting a Chat",
-				)
-			}
 			val chatId = resolveChat(workSessionId, workspaceId, userId, chatTitle ?: normalizedInstruction)
+			val conversation = chatPersistence.listConversation(workspaceId, chatId, properties.maxInputCharacters)
 			val runId = uuidGenerator.next()
 			val now = Instant.now()
 			val inserted = registration.insertChatIfAbsent(
@@ -389,6 +384,8 @@ class ChatRunService(
 					"contentType" to ContentType.ARTIFACT.name,
 					"contentProfileRevisionId" to frozenProfileRevisionId,
 					"contentBriefSnapshot" to null,
+					"responseMode" to AgentResponseMode.FLEXIBLE.name,
+					"conversation" to conversation,
 				),
 			)
 			val sourceSnapshot = contentSourceSnapshotService.findOrCreateSnapshotForAgentRun(workspaceId, runId)

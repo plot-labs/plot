@@ -305,6 +305,56 @@ class AgentRunWorkerIntegrationTest {
 		assertEquals(1, count("select count(*) from content_packs where generation_run_id = ?", artifactWorkflowRunId))
 		assertEquals(2, count("select count(distinct source_scope_id) from generation_inputs where generation_run_id = ?", artifactWorkflowRunId))
 		assertOwnershipAuditClear()
+
+		agentModel.responseText = "I can continue from that artifact."
+		val followUp = chatAdmission.admit(
+			CreateChatAgentRunRequest(
+				instruction = "What did you create?",
+				workSessionId = chat.chatId,
+			),
+			"chat-artifact-follow-up-${UUID.randomUUID()}",
+		)
+		assertTrue(agentWorker.processOne())
+		assertEquals("SUCCEEDED", agentStatus(followUp.id))
+		assertTrue(agentModel.requests.last().conversation.any {
+			it.role == "assistant" && it.content.contains("A source-backed update is ready.")
+		})
+	}
+
+	@Test
+	fun `Chat Agent answers without a source and carries the conversation into the next turn`() {
+		agentModel.responseText = "Plot can answer directly without creating an artifact."
+		val first = chatAdmission.admit(
+			CreateChatAgentRunRequest("What can you help me with?"),
+			"chat-answer-${UUID.randomUUID()}",
+		)
+
+		assertTrue(agentWorker.processOne())
+		assertEquals("SUCCEEDED", agentStatus(first.id))
+		assertEquals("Plot can answer directly without creating an artifact.", chatQueries.getRun(first.id).responseText)
+		assertEquals(null, chatQueries.getRun(first.id).artifactId)
+
+		agentModel.responseText = "I remember the earlier answer."
+		val followUp = chatAdmission.admit(
+			CreateChatAgentRunRequest(
+				instruction = "What did you just say?",
+				workSessionId = first.chatId,
+			),
+			"chat-follow-up-${UUID.randomUUID()}",
+		)
+
+		assertTrue(agentWorker.processOne())
+		assertEquals(
+			listOf(
+				"user" to "What can you help me with?",
+				"assistant" to "Plot can answer directly without creating an artifact.",
+			),
+			agentModel.requests.last().conversation.map { it.role to it.content },
+		)
+		val turns = chatQueries.listTurnsForSession(first.chatId)
+		assertEquals(2, turns.size)
+		assertEquals("I remember the earlier answer.", turns.last().versions.single().responseText)
+		assertEquals("SUCCEEDED", agentStatus(followUp.id))
 	}
 
 	@Test
@@ -1096,12 +1146,18 @@ class ScriptedAgentRuntime : AgentRuntime {
 	var recoverableFailure = false
 	var infrastructureFailure = false
 	var scriptedDecision: ((AgentDecisionRequest) -> AgentDecision)? = null
+	var responseText: String? = null
 	val requests = mutableListOf<AgentDecisionRequest>()
 
-	override fun run(host: AgentRuntimeHost) {
-		nativeRuntime?.let { it.run(host); return }
+	override fun run(host: AgentRuntimeHost): com.plot.api.ai.provider.AgentRuntimeResult {
+		nativeRuntime?.let { return it.run(host) }
 		host.beforeModel()
+		responseText?.let {
+			requests += host.context()
+			return com.plot.api.ai.provider.AgentRuntimeResult(responseText = it)
+		}
 		host.execute(decide(host.context()))
+		return com.plot.api.ai.provider.AgentRuntimeResult(completed = host.finished)
 	}
 
 	private fun decide(request: AgentDecisionRequest): AgentDecision {
@@ -1145,6 +1201,7 @@ class ScriptedAgentRuntime : AgentRuntime {
 		recoverableFailure = false
 		infrastructureFailure = false
 		scriptedDecision = null
+		responseText = null
 		requests.clear()
 	}
 }

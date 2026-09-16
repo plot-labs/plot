@@ -690,17 +690,21 @@ class RoutineApiIntegrationTest {
 	}
 
 	@Test
-	fun `chat agent admission requires at least one active source`() {
+	fun `chat agent admission allows a general request without sources`() {
 		mockMvc.post("/api/agent-runs") {
 			header("Idempotency-Key", "chat-without-source")
 			contentType = MediaType.APPLICATION_JSON
 			content = """{"instruction":"Explore the workspace"}"""
 		}.andExpect {
-			status { isConflict() }
-			jsonPath("$.error") { value("SOURCE_NOT_READY") }
+			status { isAccepted() }
 		}
-		assertEquals(0, jdbcTemplate.queryForObject(
+		assertEquals(1, jdbcTemplate.queryForObject(
 			"select count(*) from agent_runs where workspace_id = ? and origin = 'CHAT'",
+			Int::class.java,
+			devContext.devWorkspaceId,
+		))
+		assertEquals(0, jdbcTemplate.queryForObject(
+			"select count(*) from agent_run_sources where workspace_id = ?",
 			Int::class.java,
 			devContext.devWorkspaceId,
 		))

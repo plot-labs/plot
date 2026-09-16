@@ -221,14 +221,14 @@ class ContentProfileApiIntegrationTest {
 	}
 
 	@Test
-	fun `agent admission without sources is rejected`() {
+	fun `agent admission without sources is accepted for general chat`() {
 		mockMvc.post("/api/agent-runs") {
 			header("Idempotency-Key", "launch-no-source")
 			contentType = MediaType.APPLICATION_JSON
-			content = """{"instruction":"Create the requested artifact"}"""
+			content = """{"instruction":"What makes a launch announcement effective?"}"""
 		}.andExpect {
-			status { isConflict() }
-			jsonPath("$.error") { value("SOURCE_NOT_READY") }
+			status { isAccepted() }
+			jsonPath("$.chatId") { isNotEmpty() }
 		}
 	}
 

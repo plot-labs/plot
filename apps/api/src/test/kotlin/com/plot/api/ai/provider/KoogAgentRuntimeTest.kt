@@ -69,11 +69,10 @@ class KoogAgentRuntimeTest {
 	}
 
 	@Test
-	fun `plain text cannot silently succeed without artifact`() {
-		val failure = assertFailsWith<AgentDecisionException> {
-			runtime { Message.Assistant("Done", ResponseMetaInfo.Empty) }.run(Host())
-		}
-		assertEquals("AGENT_NO_ARTIFACT", failure.code)
+	fun `plain text becomes a first class assistant response`() {
+		val result = runtime { Message.Assistant("Here is the answer.", ResponseMetaInfo.Empty) }.run(Host())
+
+		assertEquals("Here is the answer.", result.responseText)
 	}
 
 	@Test
