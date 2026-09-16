@@ -56,6 +56,16 @@ with violations as (
     on artifact.workspace_id = agent.workspace_id
    and artifact.agent_run_id = agent.id
   where agent.status = 'SUCCEEDED'
+    and not (
+      agent.origin = 'CHAT'
+      and exists (
+        select 1
+        from chat_response_versions response
+        where response.workspace_id = agent.workspace_id
+          and response.agent_run_id = agent.id
+          and nullif(trim(response.response_text), '') is not null
+      )
+    )
     and (
       artifact.id is null
       or artifact.status not in ('READY', 'NEEDS_REVIEW')

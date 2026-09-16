@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { Skill } from "@plot/api-client";
+import type { ChatModel, Skill } from "@plot/api-client";
 import { plotApiClient } from "@/lib/api-client";
 import PromptBar from "@/components/primitives/prompt-bar";
+import { CHAT_MODELS, CHAT_MODEL_STORAGE_KEY, parseChatModel } from "./chat-models";
 import { resolveComposerReferenceIds } from "./chat-workspace-utils";
 
 type ChatComposerProps = {
-  onSubmit: (message: string, referenceIds: string[], skillIds: string[]) => void;
+  onSubmit: (message: string, referenceIds: string[], skillIds: string[], model: ChatModel) => void;
   variant?: "center" | "dock";
   id?: string;
   placeholder?: string;
@@ -29,8 +30,10 @@ export function ChatComposer({
   const submittingRef = useRef(false);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [skillIds, setSkillIds] = useState<string[]>([]);
-  const hasConnectedSource = references.some((reference) => reference.available);
-  const isSendDisabled = busy || !canGenerate || !hasConnectedSource;
+  const [model, setModel] = useState<ChatModel>("auto");
+  const [modelPreferenceLoaded, setModelPreferenceLoaded] = useState(false);
+  const modelChangedRef = useRef(false);
+  const isSendDisabled = busy || !canGenerate;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -56,13 +59,41 @@ export function ChatComposer({
     };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      try {
+        if (!modelChangedRef.current) {
+          setModel(parseChatModel(window.localStorage.getItem(CHAT_MODEL_STORAGE_KEY)) ?? "auto");
+        }
+      } catch {
+        if (!modelChangedRef.current) setModel("auto");
+      } finally {
+        setModelPreferenceLoaded(true);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!modelPreferenceLoaded) return;
+    try {
+      window.localStorage.setItem(CHAT_MODEL_STORAGE_KEY, model);
+    } catch {
+      // Storage can be unavailable in private browsing; the in-memory selection still works.
+    }
+  }, [model, modelPreferenceLoaded]);
+
   function handleSend(text: string) {
     if (submittingRef.current || isSendDisabled) return;
     const trimmed = text.trim();
     if (!trimmed) return;
 
     submittingRef.current = true;
-    onSubmit(trimmed, resolveComposerReferenceIds(references, []), skillIds);
+    onSubmit(trimmed, resolveComposerReferenceIds(references, []), skillIds, model);
     setSkillIds([]);
     queueMicrotask(() => {
       submittingRef.current = false;
@@ -80,6 +111,7 @@ export function ChatComposer({
             demo={false}
             tall
             variant="Rounded"
+            modelPlacement="bottom"
             placeholder={placeholder || "Describe the update you need..."}
             ariaLabel="Chat message"
             sendLabel="Send message"
@@ -88,6 +120,12 @@ export function ChatComposer({
             skills={skills}
             selectedSkillIds={skillIds}
             onSelectedSkillIdsChange={setSkillIds}
+            models={CHAT_MODELS}
+            selectedModelId={model}
+            onSelectedModelIdChange={(value) => {
+              modelChangedRef.current = true;
+              setModel(parseChatModel(value) ?? "auto");
+            }}
             onSend={handleSend}
           />
         </div>
@@ -105,7 +143,8 @@ export function ChatComposer({
           demo={false}
           tall={false}
           variant="Pill"
-          placeholder={placeholder || "Ask Plot to create another source-backed artifact..."}
+          modelPlacement="top"
+          placeholder={placeholder || "Ask Plot anything..."}
           ariaLabel="Chat message"
           sendLabel="Send message"
           disabled={isSendDisabled}
@@ -113,6 +152,12 @@ export function ChatComposer({
           skills={skills}
           selectedSkillIds={skillIds}
           onSelectedSkillIdsChange={setSkillIds}
+          models={CHAT_MODELS}
+          selectedModelId={model}
+          onSelectedModelIdChange={(value) => {
+            modelChangedRef.current = true;
+            setModel(parseChatModel(value) ?? "auto");
+          }}
           onSend={handleSend}
         />
       </div>

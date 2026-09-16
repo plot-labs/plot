@@ -4,14 +4,13 @@ import {
   ChatMessage,
   ChatMessageBubble,
   ChatMessageMetadata,
-  ChatSystemMessage,
   ChatToolCalls,
 } from "@astryxdesign/core/Chat";
 import { Text } from "@astryxdesign/core/Text";
 import { ChevronLeft, ChevronRight, LoaderCircle, RotateCcw } from "lucide-react";
 import type { ReactNode } from "react";
 
-import type { ChatAgentRun, ChatResponseVersion, RetryEligibility, SourceReference } from "@plot/api-client";
+import type { ChatAgentRun, ChatCitation, ChatResponseVersion, RetryEligibility, SourceReference } from "@plot/api-client";
 
 function formatChatTime(value: string | number | Date): string {
   const date = new Date(value);
@@ -28,6 +27,7 @@ import {
   agentStatusLabel,
   CONNECTION_ERROR_CODES,
   formatActivity,
+  toComposerReferences,
 } from "@/features/chat/chat-workspace-utils";
 import { ChatSourceCitations } from "@/features/chat/chat-source-citations";
 
@@ -51,13 +51,13 @@ export function ChatActivityPanel({
         <div>
           <div className="text-xs font-semibold uppercase tracking-[0.08em] text-black/42 dark:text-white/45">Assistant</div>
           <h2 className="mt-1 text-sm font-semibold text-black/82 dark:text-white/88">Chat activity</h2>
-          <p className="mt-1 text-xs leading-5 text-black/48 dark:text-white/52">Agent requests stay here while they work, fail, or produce an artifact.</p>
+          <p className="mt-1 text-xs leading-5 text-black/48 dark:text-white/52">Responses stay here while Plot works, answers, or creates an artifact.</p>
         </div>
         {artifacts.length ? <span className="text-xs text-black/42 dark:text-white/45">{artifacts.length} artifact{artifacts.length === 1 ? "" : "s"}</span> : null}
       </div>
       {loading ? <p className="mt-4 text-sm text-black/45 dark:text-white/48">Loading chat activity…</p> : null}
       {error ? <ErrorNotice message={error} /> : null}
-      {!loading && !activities.length && !error ? <p className="mt-4 text-sm text-black/48 dark:text-white/48">No Agent requests yet. Start with a source-backed request below.</p> : null}
+      {!loading && !activities.length && !error ? <p className="mt-4 text-sm text-black/48 dark:text-white/48">No responses yet. Start a conversation below.</p> : null}
       {artifacts.length ? (
         <div className="mt-4" aria-label="Artifact selector">
           <div className="mb-2 text-xs font-semibold text-black/55 dark:text-white/58">Artifacts in this chat</div>
@@ -97,7 +97,7 @@ export function ChatActivityPanel({
                   </span>
                   <span className="mt-1 block truncate text-sm font-medium text-black/78 dark:text-white/82">{activity.artifact?.title || activity.instruction || "Agent request"}</span>
                   <span className="mt-1 block text-xs text-black/42 dark:text-white/45">
-                    {activity.artifact ? "Artifact available" : activity.status === "FAILED" ? "No artifact produced" : "Working; no artifact yet"} · {formatActivity(activity.createdAt)}
+                    {activity.artifact ? "Artifact available" : activity.responseText ? "Response available" : activity.status === "FAILED" ? "Response failed" : "Working"} · {formatActivity(activity.createdAt)}
                   </span>
                 </button>
               </li>
@@ -116,6 +116,7 @@ export function AgentActivityDetail({
   error,
   instruction,
   references,
+  citations,
   artifactAction,
   versions = [],
   selectedVersionId = null,
@@ -129,6 +130,7 @@ export function AgentActivityDetail({
   error: string;
   instruction: string;
   references: SourceReference[];
+  citations?: ChatCitation[];
   artifactAction?: ReactNode;
   versions?: ChatResponseVersion[];
   selectedVersionId?: string | null;
@@ -140,9 +142,22 @@ export function AgentActivityDetail({
   if (!run && !busy && !error) return null;
   const status = run?.status ?? "QUEUED";
   const linkedArtifact = Boolean(run?.artifactId);
+  const responseText = run?.responseText?.trim() || "";
   const isFailed = run?.status === "FAILED";
   const isNeedsConnection = Boolean(run?.failureCode && CONNECTION_ERROR_CODES.has(run.failureCode));
   const isComplete = Boolean(linkedArtifact || run?.status === "SUCCEEDED");
+  const citationCount = citations?.length ?? references.length;
+  const citationSources = citations === undefined
+    ? toComposerReferences(references.slice(0, 2)).map((reference) => ({
+        id: reference.id,
+        title: reference.label,
+        url: reference.url,
+      }))
+    : citations.slice(0, 2).map((citation) => ({
+        id: citation.id,
+        title: citation.title || "Source",
+        url: citation.url,
+      }));
   const toolStatus = error || isFailed || isNeedsConnection
     ? "error"
     : isComplete
@@ -166,7 +181,7 @@ export function AgentActivityDetail({
               footer={
                 <div className="flex items-center gap-1.5 whitespace-nowrap text-black/50 dark:text-white/50">
                   <Text type="supporting" color="secondary" className="mr-1">
-                    Source agent
+                    Plot
                   </Text>
                     {retryEligibility?.eligible && (
                       <button
@@ -217,36 +232,30 @@ export function AgentActivityDetail({
             />
           }
         >
-          <p className="text-sm leading-6 text-black/65 dark:text-white/68">
-            {linkedArtifact ? "The source review is complete. The artifact is ready below." : instruction ? agentProgressLabel(status) : "Plot is preparing the request…"}
+          <p className="whitespace-pre-wrap text-sm leading-6 text-black/75 dark:text-white/78">
+            {responseText || (linkedArtifact ? "The artifact is ready below." : instruction ? agentProgressLabel(status) : "Plot is preparing the request…")}
           </p>
 
 
-          <ChatToolCalls
-            calls={[{
-              name: "Read connected sources",
-              status: toolStatus,
-              errorMessage: error || (isNeedsConnection ? "Repository connection required." : isFailed ? "Agent stopped before an artifact was produced." : undefined),
-            }]}
-            defaultIsExpanded={false}
-          />
-          <ChatSourceCitations references={references} />
+          {(linkedArtifact || busy || isFailed || isNeedsConnection) ? (
+            <ChatToolCalls
+              calls={[{
+                name: linkedArtifact ? "Create artifact" : "Process request",
+                status: toolStatus,
+                errorMessage: error || (isNeedsConnection ? "Repository connection required." : isFailed ? "The response could not be completed." : undefined),
+              }]}
+              defaultIsExpanded={false}
+            />
+          ) : null}
+          <ChatSourceCitations sources={citationSources} totalCount={citationCount} />
           {artifactAction ? <div className="mt-4">{artifactAction}</div> : null}
         </ChatMessageBubble>
       </ChatMessage>
       {error ? <ErrorNotice message={error} /> : null}
       {(isFailed || isNeedsConnection) && !error ? (
-        <ErrorNotice message={isNeedsConnection ? `Repository connection required. Reconnect repository access to proceed.` : "Agent stopped before an artifact was produced. It remains available as chat activity."} />
+        <ErrorNotice message={isNeedsConnection ? `Repository connection required. Reconnect repository access to proceed.` : "Plot could not complete this response. It remains available in chat history."} />
       ) : null}
     </section>
-  );
-}
-
-export function EmptyArtifactState({ hasSelection }: { hasSelection: boolean }) {
-  return (
-    <ChatSystemMessage>
-      {hasSelection ? "This Agent request is still working or did not produce an artifact. Review its activity above." : "Select an Agent request to inspect its artifact."}
-    </ChatSystemMessage>
   );
 }
 

@@ -21,7 +21,7 @@ class KoogAgentRuntimeTest {
 	private val mapper = jacksonObjectMapper()
 
 	@Test
-	fun `native Koog loop discovers skills loads content then hands off without another model call`() {
+	fun `native Koog loop discovers skills loads content then creates an artifact without another model call`() {
 		val prompts = mutableListOf<Prompt>()
 		val host = Host()
 		val calls = ArrayDeque(listOf(
@@ -69,11 +69,10 @@ class KoogAgentRuntimeTest {
 	}
 
 	@Test
-	fun `plain text cannot silently succeed without artifact`() {
-		val failure = assertFailsWith<AgentDecisionException> {
-			runtime { Message.Assistant("Done", ResponseMetaInfo.Empty) }.run(Host())
-		}
-		assertEquals("AGENT_NO_ARTIFACT", failure.code)
+	fun `plain text becomes a first class assistant response`() {
+		val result = runtime { Message.Assistant("Here is the answer.", ResponseMetaInfo.Empty) }.run(Host())
+
+		assertEquals("Here is the answer.", result.responseText)
 	}
 
 	@Test

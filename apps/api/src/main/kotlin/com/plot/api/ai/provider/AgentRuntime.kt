@@ -33,6 +33,20 @@ data class AgentDecisionRequest(
 	val remainingModelCalls: Int,
 	val remainingToolCalls: Int,
 	val selectedSkillIds: List<UUID> = emptyList(),
+	val conversation: List<AgentConversationMessage> = emptyList(),
+	val responseMode: AgentResponseMode = AgentResponseMode.ARTIFACT_REQUIRED,
+	val model: String? = null,
+	val routingProvider: String? = null,
+)
+
+enum class AgentResponseMode {
+	FLEXIBLE,
+	ARTIFACT_REQUIRED,
+}
+
+data class AgentConversationMessage(
+	val role: String,
+	val content: String,
 )
 
 data class AgentSourceView(
@@ -56,8 +70,13 @@ data class AgentStepView(
 
 /** Plot owns durable state and authorization; the runtime owns the model/tool loop. */
 interface AgentRuntime {
-	fun run(host: AgentRuntimeHost)
+	fun run(host: AgentRuntimeHost): AgentRuntimeResult
 }
+
+data class AgentRuntimeResult(
+	val responseText: String? = null,
+	val completed: Boolean = true,
+)
 
 interface AgentRuntimeHost {
 	fun context(): AgentDecisionRequest
@@ -80,7 +99,7 @@ class AgentRuntimeConfiguration {
 	fun agentRuntime(transport: KoogModelTransport, properties: PlotAiProperties, objectMapper: ObjectMapper): AgentRuntime =
 		if (properties.configured) KoogAgentRuntime(transport, objectMapper)
 		else object : AgentRuntime {
-			override fun run(host: AgentRuntimeHost) {
+			override fun run(host: AgentRuntimeHost): AgentRuntimeResult {
 				throw AgentDecisionException("MODEL_NOT_CONFIGURED", false, "The agent model is not configured")
 			}
 		}

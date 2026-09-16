@@ -6,6 +6,8 @@ import com.plot.api.ai.provider.AgentDecisionException
 import com.plot.api.ai.provider.AgentRuntime
 import com.plot.api.ai.provider.AgentRuntimeHost
 import com.plot.api.ai.provider.AgentDecisionRequest
+import com.plot.api.ai.provider.AgentConversationMessage
+import com.plot.api.ai.provider.AgentResponseMode
 import com.plot.api.ai.provider.AgentInputView
 import com.plot.api.ai.provider.AgentStepView
 import com.plot.api.artifact.run.ArtifactRunPersistence
@@ -150,6 +152,19 @@ class AgentRunWorker(
 		}
 
 		var finished = false
+		val settings = executionSettings(run)
+		val responseMode = if (run.origin == AgentRunOrigin.CHAT && settings.path("responseMode").stringValue() == AgentResponseMode.FLEXIBLE.name) {
+			AgentResponseMode.FLEXIBLE
+		} else {
+			AgentResponseMode.ARTIFACT_REQUIRED
+		}
+		val conversation = settings.path("conversation").takeIf { it.isArray }?.mapNotNull { message ->
+			val role = message.path("role").stringValue().orEmpty()
+			val content = message.path("content").stringValue().orEmpty().trim()
+			if (role in setOf("user", "assistant") && content.isNotBlank()) AgentConversationMessage(role, content) else null
+		}.orEmpty()
+		val selectedModel = settings.path("model").takeIf { it.isTextual }?.stringValue()
+		val routingProvider = settings.path("routingProvider").takeIf { it.isTextual }?.stringValue()
 		val host = object : AgentRuntimeHost {
 			override val finished: Boolean get() = finished
 			override val modelTimeoutMillis: Long get() = minOf(
@@ -183,6 +198,10 @@ class AgentRunWorker(
 					remainingModelCalls = (budget.maxModelCalls - current.modelCallCount).coerceAtLeast(0),
 					remainingToolCalls = (budget.maxToolCalls - current.toolCallCount).coerceAtLeast(0),
 					selectedSkillIds = FrozenSkills.read(run.skillsSnapshotJson).map { it.id },
+					conversation = conversation,
+					responseMode = responseMode,
+					model = selectedModel,
+					routingProvider = routingProvider,
 				)
 			}
 			override fun execute(decision: AgentDecision): String {
@@ -196,16 +215,17 @@ class AgentRunWorker(
 					rejectInvalidDecision(claim, current, decision, failure, budget, retainClaim = true)
 					return objectMapper.writeValueAsString(mapOf("error" to failure.message))
 				}
+				val creationAction = decision.action == AgentDecisionAction.CREATE_ARTIFACT
 				val step = executionPersistence.reserveStep(claim, AgentStepRequest(
 					agentRunId = run.id, sequence = current.currentStep,
-					kind = if (decision.action == AgentDecisionAction.CREATE_ARTIFACT) AgentStepKind.ARTIFACT_HANDOFF else AgentStepKind.READ_TOOL,
+					kind = if (creationAction) AgentStepKind.ARTIFACT_HANDOFF else AgentStepKind.READ_TOOL,
 					status = AgentStepStatus.RUNNING,
 					idempotencyKey = "agent:${run.id}:step:${current.currentStep}",
 					toolName = decision.action.takeUnless { it == AgentDecisionAction.CREATE_ARTIFACT }?.name,
 					argumentsJson = objectMapper.writeValueAsString(arguments), startedAt = clock.instant(),
 				), budget.maxToolCalls, clock.instant())
 				executeStep(claim, current, step, budget, frozenReplay, retainClaim = true)
-				finished = decision.action == AgentDecisionAction.CREATE_ARTIFACT
+				finished = creationAction
 				if (finished) return "Artifact workflow started"
 				return objectMapper.writeValueAsString(mapOf(
 					"result" to queryPersistence.findStep(run.workspaceId, run.id, step.id)?.resultJson,
@@ -213,9 +233,27 @@ class AgentRunWorker(
 				))
 			}
 		}
-		runtime.run(host)
-		if (!finished) executionPersistence.releaseRuntime(claim)
+		val result = runtime.run(host)
+		if (!finished) {
+			if (!result.completed) {
+				executionPersistence.releaseRuntime(claim)
+				return
+			}
+			if (responseMode == AgentResponseMode.ARTIFACT_REQUIRED) {
+				throw AgentDecisionException("AGENT_NO_ARTIFACT", false, "Agent ended without creating an artifact")
+			}
+			executionPersistence.succeedChatResponse(
+				claim,
+				result.responseText ?: throw AgentDecisionException("AGENT_EMPTY_RESPONSE", false, "Agent ended without a response"),
+				clock.instant(),
+			)
+		}
 	}
+
+	private fun executionSettings(run: AgentRunRecord) = snapshots.findEnvelopeForAgentRun(run.workspaceId, run.id)
+		?.generationSettingsJson
+		?.let { runCatching { objectMapper.readTree(it) }.getOrNull() }
+		?: objectMapper.createObjectNode()
 
 	private fun executeStep(
 		claim: ClaimedAgentRun,

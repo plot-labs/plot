@@ -115,9 +115,12 @@ class ContentProfileApiIntegrationTest {
 			content = """{"instruction":"Draft","writingBlockIds":["$blockId"]}"""
 		}.andExpect {
 			status { isAccepted() }
-			jsonPath("$.contentProfileRevisionId") { value(revisionId) }
 		}.andReturn().response.contentAsString
 		val runId = UUID.fromString(objectMapper.readTree(admitted).path("id").asText())
+		assertEquals(
+			"ARTIFACT",
+			jdbcTemplate.queryForObject("select content_type from agent_runs where id = ?", String::class.java, runId),
+		)
 
 		mockMvc.put("/api/content-profile") {
 			contentType = MediaType.APPLICATION_JSON
@@ -136,12 +139,17 @@ class ContentProfileApiIntegrationTest {
 			contentType = MediaType.APPLICATION_JSON
 			content = """{"instruction":"Draft again","writingBlockIds":["$blockId"]}"""
 		}.andExpect { status { isAccepted() } }.andReturn().response.contentAsString
-		val nextRevision = objectMapper.readTree(nextAdmit).path("contentProfileRevisionId").asText()
+		val nextRunId = UUID.fromString(objectMapper.readTree(nextAdmit).path("id").asText())
+		val nextRevision = jdbcTemplate.queryForObject(
+			"select content_profile_revision_id from agent_runs where id = ?",
+			UUID::class.java,
+			nextRunId,
+		).toString()
 		assertNotEquals(revisionId, nextRevision)
 	}
 
 	@Test
-	fun `foreign content profile revision is rejected on chat admit`() {
+	fun `chat admission ignores caller supplied profile revision and freezes workspace current profile`() {
 		val foreignWorkspace = UUID.randomUUID()
 		jdbcTemplate.update(
 			"insert into workspaces (id, name, slug, created_by_user_id, status, plan, entitlement_status, access_mode, created_at, updated_at) values (?, 'Foreign', ?, ?, 'ACTIVE', 'founding', 'active', 'full', now(), now())",
@@ -169,10 +177,13 @@ class ContentProfileApiIntegrationTest {
 			content = """
 				{"instruction":"Draft","writingBlockIds":["$blockId"],"contentProfileRevisionId":"$foreignRevision"}
 			""".trimIndent()
-		}.andExpect {
-			status { isNotFound() }
-			jsonPath("$.error") { value("CONTENT_PROFILE_REVISION_NOT_FOUND") }
-		}
+		}.andExpect { status { isAccepted() } }
+		assertEquals(0, jdbcTemplate.queryForObject(
+			"select count(*) from agent_runs where workspace_id = ? and content_profile_revision_id = ?",
+			Int::class.java,
+			devContext.devWorkspaceId,
+			foreignRevision,
+		))
 	}
 
 	@Test
@@ -196,6 +207,10 @@ class ContentProfileApiIntegrationTest {
 			inputs,
 			"artifact-${record.id}",
 		)
+		assertEquals(
+			"artifact-v1",
+			jdbcTemplate.queryForObject("select prompt_version from generation_runs where id = ?", String::class.java, state.runId),
+		)
 		val providers = jdbcTemplate.query(
 			"select source_provider from generation_inputs where generation_run_id = ?",
 			{ rs, _ -> rs.getString(1) },
@@ -206,142 +221,34 @@ class ContentProfileApiIntegrationTest {
 	}
 
 	@Test
-	fun `confirmed facts materialize as USER_CONFIRMED evidence and freeze style lookup`() {
-		val profile = mockMvc.put("/api/content-profile") {
-			contentType = MediaType.APPLICATION_JSON
-			content = """{"productSummary":"Plot","tone":"calm"}"""
-		}.andExpect { status { isOk() } }.andReturn().response.contentAsString
-		val revisionId = objectMapper.readTree(profile).path("revisionId").asText()
-
-		val sourceScopeId = insertSourceScope()
-		val blockId = insertWritingBlock(sourceScopeId)
-		val admitted = mockMvc.post("/api/agent-runs") {
-			header("Idempotency-Key", "brief-facts-1")
-			contentType = MediaType.APPLICATION_JSON
-			content = """
-				{"instruction":"Announce beta","writingBlockIds":["$blockId"],
-				 "brief":{"availability":"Public Monday","pricing":"Free",
-				  "confirmedFacts":[{"body":"Public beta starts Monday","kind":"AVAILABILITY"}]}}
-			""".trimIndent()
-		}.andExpect {
-			status { isAccepted() }
-			jsonPath("$.contentProfileRevisionId") { value(revisionId) }
-			jsonPath("$.brief.confirmedFacts[0].body") { value("Public beta starts Monday") }
-		}.andReturn().response.contentAsString
-		val runId = UUID.fromString(objectMapper.readTree(admitted).path("id").asText())
-		val agentRun = requireNotNull(agentRunQuery.findAgentRun(devContext.devWorkspaceId, runId))
-		val inputs = agentRunQuery.listAgentRunInputs(agentRun.workspaceId, agentRun.id)
-		val state = artifactWorkflowRunService.createForAgent(
-			WorkspacePrincipal(devContext.devWorkspaceId, devContext.devUserId),
-			agentRun,
-			inputs,
-			"artifact-brief-${runId}",
-		)
-		val confirmed = jdbcTemplate.query(
-			"""
-			select source_provider, original_url, writing_block_id, source_label, snapshot_body
-			from generation_inputs where generation_run_id = ? and source_provider = 'USER_CONFIRMED'
-			""".trimIndent(),
-			{ rs, _ ->
-				mapOf(
-					"provider" to rs.getString(1),
-					"url" to rs.getString(2),
-					"block" to rs.getObject(3),
-					"label" to rs.getString(4),
-					"body" to rs.getString(5),
-				)
-			},
-			state.runId,
-		)
-		assertEquals(1, confirmed.size)
-		assertNull(confirmed[0]["url"])
-		assertNull(confirmed[0]["block"])
-		assertEquals("Public beta starts Monday", confirmed[0]["body"])
-
-		mockMvc.put("/api/content-profile") {
-			contentType = MediaType.APPLICATION_JSON
-			content = """{"tone":"loud"}"""
-		}.andExpect { status { isOk() } }
-
-		val frozen = frozenContentContextLookup.forRun(state.runId)
-		assertNotNull(frozen.profile)
-		assertEquals(UUID.fromString(revisionId), frozen.profile!!.id)
-		assertEquals("calm", frozen.profile!!.tone)
-		assertEquals("Public Monday", frozen.brief?.availability)
-	}
-
-	@Test
-	fun `launch admission freezes launch-announcement-v3 on the artifact workflow`() {
-		mockMvc.put("/api/content-profile") {
-			contentType = MediaType.APPLICATION_JSON
-			content = """{"productSummary":"Plot","primaryAudience":"founders","tone":"direct"}"""
-		}.andExpect { status { isOk() } }
-
-		val sourceScopeId = insertSourceScope()
-		val blockId = insertWritingBlock(sourceScopeId)
-		val admitted = mockMvc.post("/api/agent-runs") {
-			header("Idempotency-Key", "launch-e2e-1")
-			contentType = MediaType.APPLICATION_JSON
-			content = """
-				{"instruction":"Announce the waitlist","writingBlockIds":["$blockId"],
-				 "contentType":"LAUNCH_ANNOUNCEMENT",
-				 "brief":{"purpose":"Open waitlist","audience":"early customers",
-				  "confirmedFacts":[{"body":"Waitlist opens Monday","kind":"AVAILABILITY"}]}}
-			""".trimIndent()
-		}.andExpect {
-			status { isAccepted() }
-			jsonPath("$.contentType") { value("LAUNCH_ANNOUNCEMENT") }
-		}.andReturn().response.contentAsString
-		val runId = UUID.fromString(objectMapper.readTree(admitted).path("id").asText())
-		val agentRun = requireNotNull(agentRunQuery.findAgentRun(devContext.devWorkspaceId, runId))
-		assertEquals(com.plot.api.content.ContentType.LAUNCH_ANNOUNCEMENT, agentRun.contentType)
-		val inputs = agentRunQuery.listAgentRunInputs(agentRun.workspaceId, agentRun.id)
-		val state = artifactWorkflowRunService.createForAgent(
-			WorkspacePrincipal(devContext.devWorkspaceId, devContext.devUserId),
-			agentRun,
-			inputs,
-			"artifact-launch-${runId}",
-		)
-		val promptVersion = jdbcTemplate.queryForObject(
-			"select prompt_version from generation_runs where id = ?",
-			String::class.java,
-			state.runId,
-		)
-		assertEquals(com.plot.api.content.ContentTypeRegistry.LAUNCH_PROMPT_VERSION, promptVersion)
-		assertEquals("launch-announcement-v3", promptVersion)
-	}
-
-	@Test
-	fun `launch admission without sources is rejected like changelog`() {
+	fun `agent admission without sources is accepted for general chat`() {
 		mockMvc.post("/api/agent-runs") {
 			header("Idempotency-Key", "launch-no-source")
 			contentType = MediaType.APPLICATION_JSON
-			content = """{"instruction":"Announce","contentType":"LAUNCH_ANNOUNCEMENT"}"""
+			content = """{"instruction":"What makes a launch announcement effective?"}"""
 		}.andExpect {
-			status { isConflict() }
-			jsonPath("$.error") { value("SOURCE_NOT_READY") }
+			status { isAccepted() }
+			jsonPath("$.chatId") { isNotEmpty() }
 		}
 	}
 
 	@Test
-	fun `idempotency rejects brief or profile mismatch`() {
+	fun `legacy brief fields do not classify an agent request or change idempotency`() {
 		val sourceScopeId = insertSourceScope()
 		val blockId = insertWritingBlock(sourceScopeId)
 		val base = """{"instruction":"Draft","writingBlockIds":["$blockId"],"brief":{"pricing":"Free"}}"""
-		mockMvc.post("/api/agent-runs") {
+		val first = mockMvc.post("/api/agent-runs") {
 			header("Idempotency-Key", "brief-idem")
 			contentType = MediaType.APPLICATION_JSON
 			content = base
-		}.andExpect { status { isAccepted() } }
+		}.andExpect { status { isAccepted() } }.andReturn().response.contentAsString
 
-		mockMvc.post("/api/agent-runs") {
+		val replay = mockMvc.post("/api/agent-runs") {
 			header("Idempotency-Key", "brief-idem")
 			contentType = MediaType.APPLICATION_JSON
 			content = """{"instruction":"Draft","writingBlockIds":["$blockId"],"brief":{"pricing":"Paid"}}"""
-		}.andExpect {
-			status { isConflict() }
-			jsonPath("$.error") { value("IDEMPOTENCY_KEY_REUSED") }
-		}
+		}.andExpect { status { isAccepted() } }.andReturn().response.contentAsString
+		assertEquals(objectMapper.readTree(first).path("id"), objectMapper.readTree(replay).path("id"))
 	}
 
 	private fun insertSourceScope(): UUID {

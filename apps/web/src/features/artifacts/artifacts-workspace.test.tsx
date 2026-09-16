@@ -41,7 +41,7 @@ describe("ArtifactsWorkspace", () => {
           status: "READY",
           published: false,
           title: "Local preview artifact · Chat workspace",
-          contentType: "CHANGELOG",
+          contentType: "ARTIFACT",
           updatedAt: "2026-08-08T10:00:00Z",
         },
         {
@@ -71,6 +71,7 @@ describe("ArtifactsWorkspace", () => {
     const firstArtifact = await screen.findByRole("option", { name: /Local preview artifact/ });
     expect(screen.getByText("Updated 2 hours ago")).toBeVisible();
     expect(screen.getByText("Updated 2 days ago")).toBeVisible();
+    expect(screen.getByText("Artifact")).toBeVisible();
     expect(screen.queryByText("Select an artifact to inspect its draft and citations.")).not.toBeInTheDocument();
 
     fireEvent.click(firstArtifact);

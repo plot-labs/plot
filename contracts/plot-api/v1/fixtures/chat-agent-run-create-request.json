@@ -1,17 +1,4 @@
 {
   "instruction": "Explore the connected source",
-  "writingBlockIds": ["018fd000-0000-7000-8000-000000000040"],
-  "brief": {
-    "purpose": "Tell customers what shipped",
-    "audience": "Product managers",
-    "availability": "Generally available",
-    "pricing": null,
-    "userAction": "Upgrade in settings",
-    "confirmedFacts": [
-      {
-        "body": "The feature is generally available.",
-        "kind": "AVAILABILITY"
-      }
-    ]
-  }
+  "writingBlockIds": ["018fd000-0000-7000-8000-000000000040"]
 }

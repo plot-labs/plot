@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ChatComposer } from "./chat-composer";
 
@@ -17,6 +17,8 @@ function inputText(element: HTMLElement, value: string) {
 }
 
 describe("ChatComposer", () => {
+  beforeEach(() => window.localStorage.clear());
+
   it("submits the selected writing skill with the original prompt", async () => {
     const onSubmit = vi.fn();
     render(<ChatComposer variant="center" references={references} onSubmit={onSubmit} />);
@@ -24,7 +26,7 @@ describe("ChatComposer", () => {
     fireEvent.click(await screen.findByRole("button", { name: /\/humanizer/ }));
     fireEvent.change(screen.getByRole("textbox", { name: "Chat message" }), { target: { value: "Draft an update" } });
     fireEvent.click(screen.getByRole("button", { name: "Send message" }));
-    expect(onSubmit).toHaveBeenCalledWith("Draft an update", ["source-1"], ["skill-1"]);
+    expect(onSubmit).toHaveBeenCalledWith("Draft an update", ["source-1"], ["skill-1"], "auto");
   });
 
   it("opens skills menu when typing slash, shows skill chip, and allows removing it", async () => {
@@ -59,7 +61,7 @@ describe("ChatComposer", () => {
     fireEvent.click(send);
 
     expect(onSubmit).toHaveBeenCalledTimes(1);
-    expect(onSubmit).toHaveBeenCalledWith("Write release notes", ["source-1"], []);
+    expect(onSubmit).toHaveBeenCalledWith("Write release notes", ["source-1"], [], "auto");
     expect(send).toBeDisabled();
   });
   it("does not render a voice input control", () => {
@@ -74,10 +76,14 @@ describe("ChatComposer", () => {
     expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
   });
 
-  it("stays disabled without a selected source or while busy", () => {
-    const { unmount } = render(<ChatComposer references={[]} onSubmit={vi.fn()} />);
-    inputText(screen.getByRole("textbox"), "Write release notes");
-    expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
+	it("submits a general question without a connected source but stays disabled while busy", () => {
+		const onSubmit = vi.fn();
+		const { unmount } = render(<ChatComposer references={[]} onSubmit={onSubmit} />);
+		inputText(screen.getByRole("textbox"), "Write release notes");
+		const send = screen.getByRole("button", { name: "Send message" });
+		expect(send).toBeEnabled();
+		fireEvent.click(send);
+		expect(onSubmit).toHaveBeenCalledWith("Write release notes", [], [], "auto");
 
     unmount();
     render(<ChatComposer references={references} onSubmit={vi.fn()} busy />);
@@ -95,7 +101,7 @@ describe("ChatComposer", () => {
     fireEvent.click(send);
 
     expect(onSubmit).toHaveBeenCalledTimes(1);
-    expect(onSubmit).toHaveBeenCalledWith("Write release notes", ["source-1"], []);
+    expect(onSubmit).toHaveBeenCalledWith("Write release notes", ["source-1"], [], "auto");
   });
 
   it("passes all available reference ids on submit", () => {
@@ -109,7 +115,7 @@ describe("ChatComposer", () => {
     inputText(screen.getByRole("textbox", { name: "Chat message" }), "Write release notes");
     fireEvent.click(screen.getByRole("button", { name: "Send message" }));
 
-    expect(onSubmit).toHaveBeenCalledWith("Write release notes", ["source-1", "source-2"], []);
+    expect(onSubmit).toHaveBeenCalledWith("Write release notes", ["source-1", "source-2"], [], "auto");
   });
 
   it("excludes unavailable references from the default set", () => {
@@ -123,6 +129,39 @@ describe("ChatComposer", () => {
     inputText(screen.getByRole("textbox", { name: "Chat message" }), "Write release notes");
     fireEvent.click(screen.getByRole("button", { name: "Send message" }));
 
-    expect(onSubmit).toHaveBeenCalledWith("Write release notes", ["source-1"], []);
+    expect(onSubmit).toHaveBeenCalledWith("Write release notes", ["source-1"], [], "auto");
+  });
+
+  it("opens the model picker above the composer and remembers the selected model", async () => {
+    const onSubmit = vi.fn();
+    render(<ChatComposer references={references} onSubmit={onSubmit} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Choose model" }));
+    expect(screen.getByRole("listbox", { name: "Available models" }).parentElement).toHaveStyle({
+      bottom: "calc(100% + 8px)",
+      transformOrigin: "bottom right",
+    });
+    fireEvent.click(screen.getByRole("option", { name: /Gemini 3\.8 Flash/ }));
+    inputText(screen.getByRole("textbox", { name: "Chat message" }), "Answer quickly");
+    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      "Answer quickly",
+      ["source-1"],
+      [],
+      "google/gemini-3.8-flash",
+    );
+    await waitFor(() => expect(window.localStorage.getItem("plot.chat.model")).toBe("google/gemini-3.8-flash"));
+  });
+
+  it("opens the model picker below the composer in center variant", () => {
+    render(<ChatComposer variant="center" references={references} onSubmit={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Choose model" }));
+    expect(screen.getByRole("listbox", { name: "Available models" }).parentElement).toHaveStyle({
+      top: "calc(100% - 6px)",
+      transformOrigin: "top right",
+    });
   });
 });
+

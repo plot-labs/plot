@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createShader, playSweep, accentChain, ACCENTS } from "glimm";
+import { ChatModelIcon, type ChatModelProvider } from "@/features/chat/chat-model-icon";
 
 /* The built-in "prism" palette is only cyan→indigo→magenta, so a sweep
  * reads as blue/purple. Build a true full-spectrum rainbow instead. */
@@ -36,6 +37,14 @@ const GLYPHS: Record<string, React.ReactNode> = {
   chart: <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />,
   layers: <g><path d="M12 2 2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5M2 12l10 5 10-5" /></g>,
   globe: <g><circle cx="12" cy="12" r="10" /><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></g>,
+};
+
+export type PromptModelOption = {
+  id: string;
+  label: string;
+  description: string;
+  pricing: string;
+  provider: ChatModelProvider;
 };
 
 /* real product marks, inline so the file stays self-contained */
@@ -96,10 +105,10 @@ const COMMANDS = [
   { key: "summarize", name: "/summarize", desc: "Digest the thread so far" },
 ];
 
-const MODELS = [
-  { key: "sprinkles-5", name: "Sprinkles 5", tag: "Flagship" },
-  { key: "vanilla-1", name: "Vanilla 1", tag: "Basic" },
-  { key: "freezer-burn", name: "Freezer Burn 0.4", tag: "Stale" },
+const DEMO_MODELS: readonly PromptModelOption[] = [
+  { id: "sprinkles-5", label: "Sprinkles 5", description: "Flagship demo model", pricing: "Demo", provider: "auto" },
+  { id: "vanilla-1", label: "Vanilla 1", description: "Fast demo model", pricing: "Demo", provider: "auto" },
+  { id: "freezer-burn", label: "Freezer Burn 0.4", description: "Legacy demo model", pricing: "Demo", provider: "auto" },
 ];
 
 const FILES = ["flavor-chart.png", "summer-menu.pdf", "pos-export.csv"];
@@ -166,6 +175,10 @@ export default function PromptBar({
   skills,
   selectedSkillIds = [],
   onSelectedSkillIdsChange,
+  models = DEMO_MODELS,
+  selectedModelId,
+  onSelectedModelIdChange,
+  modelPlacement = tall ? "auto" : "top",
 }: {
   variant?: string;
   /** the self-running walkthrough; turn off when embedding in a real surface */
@@ -182,13 +195,21 @@ export default function PromptBar({
   skills?: PromptSkill[];
   selectedSkillIds?: string[];
   onSelectedSkillIdsChange?: (ids: string[]) => void;
+  models?: readonly PromptModelOption[];
+  selectedModelId?: string;
+  onSelectedModelIdChange?: (id: string) => void;
+  modelPlacement?: "top" | "bottom" | "auto";
 }) {
   const pill = variant === "Pill";
   const [draft, setDraft] = useState("");
   const [dismissed, setDismissed] = useState(false);
   const [plusOpen, setPlusOpen] = useState(false);
   const [modelOpen, setModelOpen] = useState(false);
-  const [model, setModel] = useState(MODELS[1]);
+  const [modelMenuPlacement, setModelMenuPlacement] = useState<"top" | "bottom">(
+    modelPlacement === "top" || !tall ? "top" : "bottom"
+  );
+  const [internalModelId, setInternalModelId] = useState(DEMO_MODELS[1].id);
+  const [modelQuery, setModelQuery] = useState("");
   const [attachments, setAttachments] = useState<string[]>([]);
   const [connected, setConnected] = useState(false);
   const [active, setActive] = useState(0);
@@ -202,7 +223,6 @@ export default function PromptBar({
   const [modelBox, setModelBox] = useState<{ top: number; height: number } | null>(null);
   const [modelHovered, setModelHovered] = useState<number | null>(null);
   const [modelMenuLeft, setModelMenuLeft] = useState(0);
-  const [modelMenuBottom, setModelMenuBottom] = useState(0);
   const composerAnchorRef = useRef<HTMLDivElement>(null);
   const controlsRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -213,6 +233,13 @@ export default function PromptBar({
   const glimmRef = useRef<HTMLCanvasElement>(null);
   const shaderRef = useRef<ReturnType<typeof createShader> | null>(null);
   const sweepingRef = useRef(false);
+  const model = models.find((item) => item.id === selectedModelId)
+    ?? models.find((item) => item.id === internalModelId)
+    ?? models[0]
+    ?? DEMO_MODELS[0];
+  const filteredModels = models.filter((item) =>
+    `${item.label} ${item.provider} ${item.description}`.toLowerCase().includes(modelQuery.trim().toLowerCase())
+  );
 
   /* hand control to the user: stop the demo loop, and when they aim at
    * the input itself, clear the demo's leftover draft for a clean start */
@@ -263,22 +290,33 @@ export default function PromptBar({
 
   /* same gliding highlight in the model menu — floats to the hovered
    * row, falling back to the currently-selected model */
-  const modelIndex = MODELS.findIndex((m) => m.key === model.key);
+  const modelIndex = filteredModels.findIndex((item) => item.id === model.id);
   useLayoutEffect(() => {
     if (!modelOpen) return;
     const target = modelRowRefs.current[modelHovered ?? modelIndex];
     if (target) setModelBox({ top: target.offsetTop, height: target.offsetHeight });
-  }, [modelOpen, modelHovered, modelIndex]);
+  }, [modelOpen, modelHovered, modelIndex, filteredModels.length]);
 
-  /* The menu is outside the clipped composer, so align it to the model
-   * trigger by measurement instead of pinning it to the far-right edge. */
+  /* The menu is outside the clipped composer. Align it horizontally to the
+   * model trigger, and open above or below depending on available space and placement. */
   useLayoutEffect(() => {
     if (!modelOpen || !composerAnchorRef.current || !modelRef.current) return;
     const anchorRect = composerAnchorRef.current.getBoundingClientRect();
     const triggerRect = modelRef.current.getBoundingClientRect();
-    setModelMenuLeft(Math.max(0, Math.min(triggerRect.left - anchorRect.left, anchorRect.width - 176)));
-    setModelMenuBottom(anchorRect.bottom - triggerRect.top + 8);
-  }, [modelOpen, wide, model.name]);
+    const spaceBelow = window.innerHeight - triggerRect.bottom;
+    const spaceAbove = triggerRect.top;
+    const menuHeight = 360;
+
+    const shouldOpenAbove =
+      modelPlacement === "top"
+        ? true
+        : modelPlacement === "bottom"
+          ? false
+          : !tall || spaceBelow < menuHeight || spaceBelow < spaceAbove;
+
+    setModelMenuPlacement(shouldOpenAbove ? "top" : "bottom");
+    setModelMenuLeft(Math.max(0, Math.min(triggerRect.left - anchorRect.left, anchorRect.width - 288)));
+  }, [modelOpen, wide, model.label, tall, modelPlacement]);
 
   const [prevModelOpen, setPrevModelOpen] = useState(modelOpen);
   if (prevModelOpen !== modelOpen) {
@@ -346,11 +384,13 @@ export default function PromptBar({
     });
   }, [makeShader]);
 
-  const selectModel = useCallback((next: (typeof MODELS)[number]) => {
-    setModel(next);
+  const selectModel = useCallback((next: PromptModelOption) => {
+    setInternalModelId(next.id);
+    onSelectedModelIdChange?.(next.id);
     setModelOpen(false);
-    if (next.key === "sprinkles-5") celebrate();
-  }, [celebrate]);
+    setModelQuery("");
+    if (next.id === "sprinkles-5") celebrate();
+  }, [celebrate, onSelectedModelIdChange]);
 
   /* autoplay: apply the current step, then advance after its hold */
   useEffect(() => {
@@ -362,13 +402,13 @@ export default function PromptBar({
       if (step.connect !== undefined) setConnected(step.connect);
       if (step.modelOpen !== undefined) setModelOpen(step.modelOpen);
       if (step.model) {
-        const next = MODELS.find((m) => m.key === step.model);
+        const next = models.find((item) => item.id === step.model);
         if (next) selectModel(next);
       }
       setAutoStep((s) => s + 1);
     }, step.hold);
     return () => clearTimeout(t);
-  }, [auto, autoStep, selectModel]);
+  }, [auto, autoStep, models, selectModel]);
 
   /* dictation resolves after a beat, like a real transcript landing */
   useEffect(() => {
@@ -486,7 +526,7 @@ export default function PromptBar({
       onPointerDownCapture={takeOver}
       onKeyDownCapture={takeOver}
     >
-      {/* composer is the anchor — menus grow up from its top edge */}
+      {/* composer is the anchor for the menus */}
       <div ref={composerAnchorRef} className="relative">
       {/* ── @ / slash menu ─────────────────────────────── */}
       {menu && (
@@ -577,9 +617,40 @@ export default function PromptBar({
       {modelOpen && (
         <div
           onMouseLeave={() => setModelHovered(null)}
-          className="absolute z-10 w-44 rounded-[10px] bg-surface p-1 shadow-raised"
-          style={{ left: modelMenuLeft, bottom: modelMenuBottom, animation: "pop-in 180ms cubic-bezier(0.23,1,0.32,1) both", transformOrigin: "bottom left" }}
+          className="absolute z-30 w-72 overflow-hidden rounded-[12px] border border-line bg-surface shadow-overlay backdrop-blur-md"
+          style={{
+            left: modelMenuLeft,
+            ...(modelMenuPlacement === "top"
+              ? { bottom: "calc(100% + 8px)", transformOrigin: "bottom right" }
+              : { top: "calc(100% - 6px)", transformOrigin: "top right" }),
+            animation: "pop-in 180ms cubic-bezier(0.23,1,0.32,1) both",
+          }}
         >
+          <div className="border-b border-line p-2">
+            <div className="flex h-8 items-center gap-2 rounded-[7px] bg-field px-2.5 text-ink-3">
+              <Icon size={14}><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></Icon>
+              <input
+                autoFocus
+                value={modelQuery}
+                onChange={(event) => {
+                  setModelQuery(event.target.value);
+                  setModelHovered(null);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    setModelOpen(false);
+                    setModelQuery("");
+                    inputRef.current?.focus();
+                  }
+                }}
+                placeholder="Search models..."
+                aria-label="Search models"
+                className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-3"
+              />
+            </div>
+          </div>
+          <div className="relative max-h-[280px] overflow-y-auto p-1.5" role="listbox" aria-label="Available models">
           {/* single gliding highlight — floats to the hovered / selected row */}
           <span
             aria-hidden
@@ -592,28 +663,40 @@ export default function PromptBar({
                 "top 220ms cubic-bezier(0.23,1,0.32,1), height 220ms cubic-bezier(0.23,1,0.32,1), opacity 150ms ease",
             }}
           />
-          {MODELS.map((m, i) => (
+          {filteredModels.map((item, i) => (
             <button
-              key={m.key}
+              key={item.id}
               type="button"
+              role="option"
+              aria-selected={item.id === model.id}
               ref={(el) => {
                 modelRowRefs.current[i] = el;
               }}
               onMouseDown={(event) => event.preventDefault()}
               onMouseEnter={() => setModelHovered(i)}
               onClick={() => {
-                selectModel(m);
+                selectModel(item);
                 inputRef.current?.focus();
               }}
-              className="relative z-10 flex h-7.5 w-full items-center gap-2 rounded-[6px] px-2 text-left"
+              className="relative z-10 flex w-full items-start gap-2.5 rounded-[8px] px-2.5 py-2 text-left"
             >
-              <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-ink">{m.name}</span>
-              <span className="shrink-0 text-[11px] text-ink-3">{m.tag}</span>
-              <span className={`shrink-0 text-ink ${m.key === model.key ? "" : "invisible"}`}>
+              <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center text-ink">
+                <ChatModelIcon className="size-4" provider={item.provider} />
+              </span>
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="text-[13px] font-medium text-ink">{item.label}</span>
+                <span className="text-[11.5px] leading-4 text-ink-3">{item.description}</span>
+                <span className="text-[10px] leading-4 text-ink-3/75">{item.pricing}</span>
+              </span>
+              <span className={`mt-1 shrink-0 text-ink ${item.id === model.id ? "" : "invisible"}`}>
                 <Icon size={13} strokeWidth={2.5}><path d="M20 6L9 17l-5-5" /></Icon>
               </span>
             </button>
           ))}
+          {filteredModels.length === 0 ? (
+            <div className="px-3 py-6 text-center text-[12px] text-ink-3">No models found.</div>
+          ) : null}
+          </div>
         </div>
       )}
 
@@ -805,13 +888,17 @@ export default function PromptBar({
             aria-label="Choose model"
             onClick={() => {
               setPlusOpen(false);
-              setModelOpen((current) => !current);
+              setModelOpen((current) => {
+                if (current) setModelQuery("");
+                return !current;
+              });
             }}
             className={`flex h-7 shrink-0 items-center gap-1 px-1.5 text-[12px] font-medium text-ink-2 transition-colors duration-150 hover:bg-hover hover:text-ink ${
               pill ? "rounded-full" : "rounded-[8px]"
             } ${wide ? "col-start-4 row-start-2 justify-self-end" : "col-start-4 row-start-1"}`}
           >
-            {model.name}
+            <ChatModelIcon className="size-3.5" provider={model.provider} />
+            {model.label}
             <span className="text-ink-3">
               <Icon size={11} strokeWidth={2.4}><path d="M6 9l6 6 6-6" /></Icon>
             </span>

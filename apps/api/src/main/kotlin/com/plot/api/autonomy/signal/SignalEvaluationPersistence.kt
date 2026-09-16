@@ -21,6 +21,7 @@ data class SignalEvaluationRecord(
 	val reason: String,
 	val semanticTime: Instant,
 	val admittedResponseVersionId: UUID?,
+	val admittedAgentRunId: UUID?,
 	val claimToken: UUID?,
 	val leaseUntil: Instant?,
 	val attempts: Int,
@@ -59,6 +60,7 @@ class SignalEvaluationPersistence(
 		reason: String,
 		semanticTime: Instant,
 		admittedResponseVersionId: UUID? = null,
+		admittedAgentRunId: UUID? = null,
 		now: Instant = Instant.now(),
 	): UUID {
 		val id = uuidGenerator.next()
@@ -66,14 +68,15 @@ class SignalEvaluationPersistence(
 			"""
 			insert into signal_evaluations (
 				id, workspace_id, signal_id, source_namespace_id, source_scope_id, input_fingerprint,
-				outcome, reason, semantic_time, admitted_response_version_id, created_at, updated_at
-			) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				outcome, reason, semantic_time, admitted_response_version_id, admitted_agent_run_id, created_at, updated_at
+			) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			on conflict (workspace_id, signal_id) do update
 			set input_fingerprint = excluded.input_fingerprint,
 			    outcome = excluded.outcome,
 			    reason = excluded.reason,
 			    semantic_time = excluded.semantic_time,
 			    admitted_response_version_id = coalesce(excluded.admitted_response_version_id, signal_evaluations.admitted_response_version_id),
+			    admitted_agent_run_id = coalesce(excluded.admitted_agent_run_id, signal_evaluations.admitted_agent_run_id),
 			    updated_at = excluded.updated_at
 			""".trimIndent(),
 			id,
@@ -86,6 +89,7 @@ class SignalEvaluationPersistence(
 			reason,
 			Timestamp.from(semanticTime),
 			admittedResponseVersionId,
+			admittedAgentRunId,
 			Timestamp.from(now),
 			Timestamp.from(now),
 		)
@@ -109,12 +113,18 @@ class SignalEvaluationPersistence(
 		agentRunId: UUID,
 		now: Instant = Instant.now(),
 	): Int {
-		val responseVersionId = requireNotNull(sql.queryForObject(
+		val responseVersionId = sql.queryForObject(
 			"select id from chat_response_versions where workspace_id = ? and agent_run_id = ?",
 			UUID::class.java,
 			workspaceId,
 			agentRunId,
-		)) { "Admitted release AgentRun must have a Chat response version" }
+		)
+		require(sql.queryForObject(
+			"select exists(select 1 from agent_runs where workspace_id = ? and id = ?)",
+			Boolean::class.java,
+			workspaceId,
+			agentRunId,
+		) == true) { "Admitted release AgentRun must exist" }
 		val signals = sql.query(
 			"""
 			select id, source_namespace_id, source_version, received_at
@@ -146,6 +156,7 @@ class SignalEvaluationPersistence(
 				reason = "Release draft admitted: $tagName",
 				semanticTime = signal.semanticTime,
 				admittedResponseVersionId = responseVersionId,
+				admittedAgentRunId = agentRunId,
 				now = now,
 			)
 		}
@@ -183,6 +194,7 @@ class SignalEvaluationPersistence(
 		reason = requireNotNull(row.getString("reason")),
 		semanticTime = requireNotNull(row.getTimestamp("semantic_time")).toInstant(),
 		admittedResponseVersionId = row.getObject("admitted_response_version_id", UUID::class.java),
+		admittedAgentRunId = row.getObject("admitted_agent_run_id", UUID::class.java),
 		claimToken = row.getObject("claim_token", UUID::class.java),
 		leaseUntil = row.getTimestamp("lease_until")?.toInstant(),
 		attempts = row.getInt("attempts"),

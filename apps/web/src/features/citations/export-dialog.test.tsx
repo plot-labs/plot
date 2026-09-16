@@ -130,6 +130,13 @@ describe("ExportDialog", () => {
     expect(screen.getByRole("button", { name: "Download launch announcement" })).toBeInTheDocument();
   });
 
+  it("uses neutral labels for prompt-driven artifacts", () => {
+    render(<ExportDialog pack={{ ...pack, contentType: "ARTIFACT" }} client={{} as PlotApiClient} />);
+
+    expect(screen.getByRole("button", { name: "Copy artifact" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Download artifact" })).toBeInTheDocument();
+  });
+
   it("offers a dropdown menu with Download .md option in copy presentation mode", async () => {
     const exportArtifactVariant = vi.fn().mockResolvedValue({ exportId: "export-download", disposition: "DOWNLOAD", filename: "changelog.md", mediaType: "text/markdown", text: "Markdown content", unresolvedCount: 0, warningAcknowledged: false, includeSources: false });
     const createObjectURL = vi.fn().mockReturnValue("blob:export-md");

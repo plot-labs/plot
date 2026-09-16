@@ -1,6 +1,7 @@
 package com.plot.api.content
 
 enum class ContentType {
+	ARTIFACT,
 	CHANGELOG,
 	LAUNCH_ANNOUNCEMENT,
 	;

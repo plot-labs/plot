@@ -41,8 +41,8 @@ vi.mock("@/lib/chat-agent-polling", () => ({
   isTerminalChatAgentStatus: (status: string) => ["SUCCEEDED", "FAILED"].includes(status),
 }));
 vi.mock("@/features/chat/chat-composer", () => ({
-  ChatComposer: ({ onSubmit, variant }: { onSubmit: (message: string, ids: string[]) => void; variant?: string }) => (
-    <button type="button" onClick={() => onSubmit("Write release notes", ["block-1"])}>
+  ChatComposer: ({ onSubmit, variant, busy }: { onSubmit: (message: string, ids: string[], skillIds: string[], model: "openai/gpt-5.4") => void; variant?: string; busy?: boolean }) => (
+	<button type="button" disabled={busy} onClick={() => onSubmit("Write release notes", ["block-1"], ["skill-1"], "openai/gpt-5.4")}>
       {variant === "center" ? "Start request" : "Generate again"}
     </button>
   ),
@@ -55,17 +55,16 @@ import { ChatWorkspace } from "./chat-workspace";
 
 const chat = { id: "chat-1", title: "Release", status: "OPEN", lastActivityAt: "2026-07-01T00:00:00Z", createdAt: "2026-07-01T00:00:00Z", updatedAt: "2026-07-01T00:00:00Z" };
 const reference = { id: "block-1", sourceScopeId: "scope-1", provider: "GITHUB", sourceKind: "PULL_REQUEST", sourceLabel: "PR #1", repositoryLabel: "acme/plot", title: "Ship", body: "Evidence", originalUrl: "https://github.test/1", sourceCreatedAt: null };
-const artifactSummary = { id: "artifact-1", status: "READY", title: "Release", contentType: "CHANGELOG", updatedAt: "2026-07-01T00:02:00Z" };
+const artifactSummary = { id: "artifact-1", status: "READY", title: "Release", updatedAt: "2026-07-01T00:02:00Z" };
 const artifact = {
-  id: "artifact-1", status: "READY", title: "Release", contentType: "CHANGELOG",
+  id: "artifact-1", status: "READY", title: "Release", contentType: "ARTIFACT",
   variant: { id: "variant-1", status: "READY", revisionId: "artifact-revision-1", revisionNumber: 1, lexicalContent: { root: { children: [], type: "root", version: 1 } }, sentences: [], sources: [] },
 };
 
 function agentRun(overrides: Record<string, unknown> = {}) {
   return {
-    id: "agent-1", chatId: "chat-1", instruction: "Release notes", contentType: "CHANGELOG",
-    contentProfileRevisionId: null, brief: null,
-    status: "QUEUED", failureCode: null,
+    id: "agent-1", chatId: "chat-1", instruction: "Release notes",
+    status: "QUEUED", failureCode: null, responseText: null,
     artifactId: null, artifact: null, createdAt: "2026-07-01T00:01:00Z", updatedAt: "2026-07-01T00:01:00Z", ...overrides,
   };
 }
@@ -102,39 +101,35 @@ describe("ChatWorkspace", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Start request" }));
 
     await waitFor(() => expect(mocks.createChatAgentRun).toHaveBeenCalledWith({
-      writingBlockIds: ["block-1"], instruction: "Write release notes", contentType: "CHANGELOG", brief: undefined,
+      writingBlockIds: ["block-1"], instruction: "Write release notes", skillIds: ["skill-1"], model: "openai/gpt-5.4",
     }, expect.any(String)));
     expect(mocks.createChatAgentRun).toHaveBeenCalledTimes(1);
     expect(mocks.locationAssign).toHaveBeenCalledWith("/chat?chat=chat-new&agent=agent-new");
     expect(window.sessionStorage.length).toBe(0);
   });
 
-  it("admits a launch announcement request with contentType and brief fields in active workspace", async () => {
+  it("uses the prompt and selected skills without fixed classification controls", async () => {
     mocks.search = "chat=chat-1&agent=agent-1";
     mocks.listSessions.mockResolvedValue([chat]);
     const succeeded = agentRun({ status: "SUCCEEDED", artifactId: "artifact-1", artifact: artifactSummary });
     mocks.listSessionAgentRuns.mockResolvedValue([succeeded]);
     mocks.getChatAgentRun.mockResolvedValue(succeeded);
-    mocks.createChatAgentRun.mockResolvedValue(agentRun({
-      id: "agent-launch",
-      chatId: "chat-1",
-      contentType: "LAUNCH_ANNOUNCEMENT",
-    }));
+    mocks.createChatAgentRun.mockResolvedValue(agentRun({ id: "agent-followup", chatId: "chat-1" }));
     render(<ChatWorkspace />);
-    await screen.findByText("Open artifact");
     await waitFor(() => expect(screen.queryByText("Loading sources…")).not.toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "Launch announcement" }));
-    fireEvent.change(await screen.findByLabelText("Purpose (recommended)"), { target: { value: "Open the waitlist" } });
-    fireEvent.change(screen.getByLabelText("Audience (recommended)"), { target: { value: "Founders" } });
+    expect(screen.queryByLabelText("Purpose (recommended)")).not.toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Content type" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Launch announcement" })).not.toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: "Generate again" }));
 
     await waitFor(() => expect(mocks.createChatAgentRun).toHaveBeenCalledWith(
-      expect.objectContaining({
+      {
+        instruction: "Write release notes",
         workSessionId: "chat-1",
         writingBlockIds: ["block-1"],
-        contentType: "LAUNCH_ANNOUNCEMENT",
-        brief: expect.objectContaining({ purpose: "Open the waitlist", audience: "Founders" }),
-      }),
+        skillIds: ["skill-1"],
+        model: "openai/gpt-5.4",
+      },
       expect.any(String),
       expect.any(Object),
     ));
@@ -165,7 +160,7 @@ describe("ChatWorkspace", () => {
     expect(screen.getByText("Reviewed artifact")).toBeVisible();
   });
 
-  it("loads Chat Agent activity and renders its Artifact", async () => {
+	it("loads Chat Agent activity and renders its Artifact", async () => {
     mocks.search = "chat=chat-1&agent=agent-1";
     mocks.listSessions.mockResolvedValue([chat]);
     const succeeded = agentRun({ status: "SUCCEEDED", artifactId: "artifact-1", artifact: artifactSummary });
@@ -196,8 +191,96 @@ describe("ChatWorkspace", () => {
     expect(screen.queryByRole("complementary", { name: "Artifact history drawer" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tabpanel", { name: "Assistant panel" })).not.toBeInTheDocument();
     await waitFor(() => expect(document.querySelectorAll("time")).toHaveLength(1));
-    expect(screen.getByText("Source agent")).toBeVisible();
-  });
+		expect(screen.getByText("Plot")).toBeVisible();
+	});
+
+	it("renders a completed assistant text response without an artifact", async () => {
+		mocks.search = "chat=chat-1";
+		mocks.listSessions.mockResolvedValue([chat]);
+		mocks.listChatTurns.mockResolvedValue([{
+			id: "turn-1",
+			workSessionId: "chat-1",
+			turnIndex: 0,
+			userMessage: "Summarize what Plot does",
+			selectedVersionId: "ver-1",
+			createdAt: "2026-07-01T00:00:00Z",
+			updatedAt: "2026-07-01T00:01:00Z",
+			versions: [{
+				id: "ver-1",
+				turnId: "turn-1",
+				versionIndex: 0,
+				agentRunId: "agent-1",
+				status: "SUCCEEDED",
+				failureCode: null,
+				instruction: "Summarize what Plot does",
+				responseText: "Plot turns connected product evidence into useful content and can also answer questions directly.",
+				artifactId: null,
+				artifact: null,
+				lineageParentVersionId: null,
+				retryEligibility: { eligible: true, reason: null },
+				createdAt: "2026-07-01T00:01:00Z",
+				updatedAt: "2026-07-01T00:01:00Z",
+			}],
+		}]);
+
+		render(<ChatWorkspace />);
+
+		expect(await screen.findByText("Plot turns connected product evidence into useful content and can also answer questions directly.")).toBeVisible();
+		expect(screen.queryByText("Open artifact")).not.toBeInTheDocument();
+	});
+
+	it("unlocks follow-up input after a restored Agent run finishes", async () => {
+		mocks.search = "chat=chat-1&agent=agent-1";
+		mocks.listSessions.mockResolvedValue([chat]);
+		const queued = agentRun();
+		const succeeded = agentRun({
+			status: "SUCCEEDED",
+			responseText: "The restored response is ready.",
+		});
+		const queuedTurn = {
+			id: "turn-1",
+			workSessionId: "chat-1",
+			turnIndex: 0,
+			userMessage: "Help me plan this",
+			selectedVersionId: "version-1",
+			createdAt: queued.createdAt,
+			updatedAt: queued.updatedAt,
+			versions: [{
+				id: "version-1",
+				turnId: "turn-1",
+				versionIndex: 0,
+				agentRunId: queued.id,
+				status: queued.status,
+				instruction: queued.instruction,
+				failureCode: null,
+				responseText: null,
+				artifactId: null,
+				artifact: null,
+				lineageParentVersionId: null,
+				retryEligibility: { eligible: false, reason: "RUN_NOT_TERMINAL" },
+				createdAt: queued.createdAt,
+				updatedAt: queued.updatedAt,
+			}],
+		};
+		mocks.listChatTurns
+			.mockResolvedValueOnce([queuedTurn])
+			.mockResolvedValueOnce([{
+				...queuedTurn,
+				versions: [{
+					...queuedTurn.versions[0],
+					status: "SUCCEEDED",
+					responseText: "The restored response is ready.",
+					retryEligibility: { eligible: true, reason: null },
+				}],
+			}]);
+		mocks.getChatAgentRun.mockResolvedValueOnce(queued).mockResolvedValueOnce(succeeded);
+
+		render(<ChatWorkspace />);
+
+		expect(await screen.findByText("The restored response is ready.")).toBeVisible();
+		await waitFor(() => expect(mocks.listChatTurns).toHaveBeenCalledTimes(2));
+		expect(screen.getByRole("button", { name: "Generate again" })).toBeEnabled();
+	});
 
   it("restores generated activity when History opens a session without an Agent query", async () => {
     mocks.search = "chat=chat-1";
@@ -209,7 +292,7 @@ describe("ChatWorkspace", () => {
     render(<ChatWorkspace />);
     expect(await screen.findByText("Open artifact")).toBeVisible();
     expect(screen.queryByText("Reviewed artifact")).not.toBeInTheDocument();
-    expect(screen.getByText("Source agent")).toBeVisible();
+		expect(screen.getByText("Plot")).toBeVisible();
     expect(mocks.getChatAgentRun).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "Retry response" })).not.toBeInTheDocument();
   });

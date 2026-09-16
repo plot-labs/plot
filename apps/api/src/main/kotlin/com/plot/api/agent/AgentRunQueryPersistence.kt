@@ -15,6 +15,19 @@ class AgentRunQueryPersistence(
 		workspaceId,
 		id,
 	).firstOrNull()
+	fun findAgentRunByIdempotencyKey(
+		workspaceId: UUID,
+		origin: AgentRunOrigin,
+		idempotencyKey: String,
+		forUpdate: Boolean = false,
+	): AgentRunRecord? = sqlExecutor.query(
+		selectAgentRunSql + " where a.workspace_id = ? and a.origin = ? and a.idempotency_key = ?" +
+			if (forUpdate) " for update" else "",
+		agentRunMapper,
+		workspaceId,
+		origin.name,
+		idempotencyKey,
+	).singleOrNull()
 	fun listAgentRunSources(workspaceId: UUID, agentRunId: UUID): List<AgentRunSourceRecord> = sqlExecutor.query(
 		"""
 		select id, workspace_id, agent_run_id, source_scope_id, source_display_name, source_role, order_index,
@@ -118,7 +131,7 @@ class AgentRunQueryPersistence(
 			workspaceId,
 			agentRunId,
 		).single()
-		return counts.first > 0 && counts.first == counts.second
+		return counts.first == counts.second
 	}
 
 	fun findRunningStep(workspaceId: UUID, agentRunId: UUID, sequence: Int): AgentStepRecord? =
@@ -214,6 +227,7 @@ class AgentRunQueryPersistence(
 			workspaceId,
 			agentRunId,
 		) ?: 0
+		if (expected == 0) return
 		val statuses = sqlExecutor.query(
 			"""
 			select scope.id, scope.status, namespace.status as namespace_status
@@ -263,8 +277,7 @@ class AgentRunQueryPersistence(
 			).toSet()
 		}
 		if (
-			expected == 0 ||
-			statuses.size != expected ||
+				statuses.size != expected ||
 			statuses.any { it.second != "ACTIVE" || it.third != "ACTIVE" } ||
 			connectedScopeIds != statuses.map { it.first }.toSet()
 		) {

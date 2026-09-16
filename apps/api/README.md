@@ -23,9 +23,9 @@ flowchart LR
     Commit --> Dispatch[agent/AgentRunDispatcher]
 ```
 
-- `chat`과 `routine`이 요청 검증, 잠금, 트랜잭션을 담당합니다. `agent` 등록 저장소는 전달받은 실행·출처·입력을 저장합니다.
+- `chat`, `routine`, `agent.ArtifactAutomationAdmissionService`가 각 진입점의 요청 검증, 잠금, 트랜잭션을 담당합니다. `agent` 등록 저장소는 전달받은 실행·출처·입력을 저장합니다.
 - 채팅의 동일 요청 재전송은 `insertChatIfAbsent`, 예약 실행의 새 등록은 `insertRequired`를 사용합니다. 기존 실행과의 충돌 판단은 호출자가 담당합니다.
-- `ChatCompatibilityWriter`는 실행과 대화의 turn/version을 연결하고 실행 설정은 `AgentExecutionSnapshotPersistence`에 저장합니다. 기존 데이터의 누락된 대화 연결을 조회 시 채우는 동작도 유지합니다.
+- `ChatCompatibilityWriter`는 실행과 대화의 turn/version을 연결하고 실행 설정은 `AgentExecutionSnapshotPersistence`에 저장합니다. 일반 Chat은 최근 user/assistant 대화도 실행 설정에 고정해 다음 턴과 재시도에서 같은 맥락을 사용합니다.
 
 ### 실행과 완료
 
@@ -38,7 +38,7 @@ agent/AgentRunDispatcher → AgentRunWorker
       └→ routine/RoutineAgentRunProjection: 예약 결과·활동 커서 반영
 ```
 
-- 채팅과 예약 실행은 같은 작업자를 사용합니다. `agent`는 `chat`과 `routine`의 구현 클래스를 참조하지 않습니다.
+- 모든 실행은 같은 작업자를 사용하지만 제품 경계는 분리합니다. 일반 Chat은 평문 응답 또는 명시적인 Artifact handoff로 완료할 수 있습니다. GitHub 릴리스 자동화는 Chat turn을 만들지 않는 `AUTOMATION` 실행이고, Routine·Automation·복제 실행은 Artifact handoff가 필수입니다.
 - 완료 반영은 실행 상태 변경 직후 동기로 호출하며 기존 트랜잭션 경계를 유지합니다. 성공한 실행만 활동 커서를 전진시킵니다. GitHub 릴리스 후속 처리는 커밋 뒤에 요청합니다.
 - GitHub 릴리스 전용 실행 조건은 `GitHubAgentRunExecutionPolicy`가 담당합니다.
 

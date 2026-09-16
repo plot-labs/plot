@@ -2,17 +2,14 @@
   "id": "018fd000-0000-7000-8000-000000000050",
   "chatId": "018fd000-0000-7000-8000-000000000051",
   "instruction": "Explore the connected source",
-  "contentType": "CHANGELOG",
-  "contentProfileRevisionId": null,
-  "brief": null,
   "status": "SUCCEEDED",
   "failureCode": null,
+  "responseText": null,
   "artifactId": "018fd000-0000-7000-8000-000000000060",
   "artifact": {
     "id": "018fd000-0000-7000-8000-000000000060",
     "status": "READY",
     "title": "Release note",
-    "contentType": "CHANGELOG",
     "updatedAt": "2026-08-17T00:00:00Z"
   },
   "createdAt": "2026-08-17T00:00:00Z",

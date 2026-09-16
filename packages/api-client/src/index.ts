@@ -54,7 +54,7 @@ export interface ArtifactPublication {
   publishedAt: string;
 }
 
-export type ContentType = "CHANGELOG" | "LAUNCH_ANNOUNCEMENT";
+export type ContentType = "ARTIFACT" | "CHANGELOG" | "LAUNCH_ANNOUNCEMENT";
 
 export interface RelatedArtifactSummary {
   id: string;
@@ -414,17 +414,14 @@ export interface ChatAgentRun {
   id: string;
   chatId: string;
   instruction: string;
-  contentType: ContentType;
-  contentProfileRevisionId: string | null;
-  brief: ContentBrief | null;
   status: RoutineAgentRunStatus;
   failureCode: string | null;
+  responseText: string | null;
   artifactId: string | null;
   artifact: {
     id: string;
     status: string;
     title: string | null;
-    contentType: ContentType;
     updatedAt: string;
   } | null;
   createdAt: string;
@@ -457,12 +454,12 @@ export interface ChatResponseVersion {
   status: RoutineAgentRunStatus;
   failureCode: string | null;
   instruction: string;
+  responseText: string | null;
   artifactId: string | null;
   artifact: {
     id: string;
     status: string;
     title: string | null;
-    contentType: ContentType;
     updatedAt: string;
   } | null;
   retryEligibility: RetryEligibility;
@@ -521,12 +518,26 @@ export type SkillInput = Pick<SkillSnapshot, "name" | "description" | "content">
 export interface CreateChatAgentRunInput {
   skillIds?: string[];
   instruction: string;
+  model?: ChatModel;
   workSessionId?: string;
   writingBlockIds?: string[];
-  contentType?: ContentType;
-  contentProfileRevisionId?: string;
-  brief?: ContentBrief;
 }
+
+export type ChatModel =
+  | "auto"
+  | "anthropic/claude-opus-5"
+  | "anthropic/claude-opus-4.8"
+  | "anthropic/claude-sonnet-5"
+  | "anthropic/claude-sonnet-4.6"
+  | "anthropic/claude-haiku-4.5"
+  | "openai/gpt-5.4"
+  | "openai/gpt-5.5"
+  | "openai/gpt-5.6-sol"
+  | "openai/gpt-5.6-luna"
+  | "google/gemini-3.8-flash"
+  | "deepseek/deepseek-v4.1-flash"
+  | "x-ai/grok-4.6"
+  | "qwen/qwen3.8-max-0902";
 
 export interface ContentProfile {
   revisionId: string | null;

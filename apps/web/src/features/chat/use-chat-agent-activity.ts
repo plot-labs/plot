@@ -3,11 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type {
+  ChatModel,
   ChatAgentRun,
   ChatResponseVersion,
   ChatTurn,
-  ContentBrief,
-  ContentType,
   SourceReference,
 } from "@plot/api-client";
 import { isTerminalChatAgentStatus, pollChatAgentRun } from "@/lib/chat-agent-polling";
@@ -30,8 +29,6 @@ type UseChatAgentActivityProps = {
   requestedVersionId?: string | null;
   references: SourceReference[];
   sourceError: string;
-  brief?: ContentBrief;
-  contentType?: ContentType;
   onAgentArtifact: (run: ChatAgentRun) => void;
   onAdmitted: (run: ChatAgentRun) => void;
 };
@@ -47,8 +44,6 @@ export function useChatAgentActivity({
   requestedVersionId = null,
   references,
   sourceError,
-  brief,
-  contentType = "CHANGELOG",
   onAgentArtifact,
   onAdmitted,
 }: UseChatAgentActivityProps) {
@@ -88,12 +83,12 @@ export function useChatAgentActivity({
           status: act.status,
           instruction: act.instruction || "",
           failureCode: act.failureCode,
+          responseText: act.responseText,
           artifactId: act.artifactId,
           artifact: act.artifact ? {
             id: act.artifact.id,
             status: act.artifact.status,
             title: act.artifact.title,
-            contentType: act.contentType,
             updatedAt: act.artifact.updatedAt,
           } : null,
           createdAt: act.createdAt,
@@ -114,18 +109,15 @@ export function useChatAgentActivity({
           id: version.agentRunId,
           chatId,
           instruction: version.instruction || turn.userMessage,
-          contentType: "CHANGELOG" as ContentType,
-          contentProfileRevisionId: null,
-          brief: null,
           status: version.status,
           failureCode: version.failureCode,
+          responseText: version.responseText,
           artifactId: version.artifactId,
           artifact: version.artifactId
             ? {
                 id: version.artifactId,
                 status: version.status === "SUCCEEDED" ? "READY" : "DRAFT",
                 title: version.artifact?.title || "Generated artifact",
-                contentType: "CHANGELOG" as ContentType,
                 updatedAt: version.updatedAt,
               }
             : null,
@@ -235,6 +227,11 @@ export function useChatAgentActivity({
         if (agentAbortRef.current !== controller) return;
         setAgentRun(restored);
         if (restored.artifactId) onAgentArtifact(restored);
+        if (typeof plotApiClient.listChatTurns === "function") {
+          const refreshedTurns = await plotApiClient.listChatTurns(chatId, { signal: controller.signal });
+          if (agentAbortRef.current !== controller) return;
+          setTurns(refreshedTurns);
+        }
       } catch (error) {
         if (agentAbortRef.current === controller && !(error instanceof DOMException && error.name === "AbortError")) {
           setAgentError(messageFor(error, "The Agent request could not be loaded."));
@@ -266,24 +263,21 @@ export function useChatAgentActivity({
         id: ver.agentRunId,
         chatId,
         instruction: ver.instruction,
-        contentType,
-        contentProfileRevisionId: null,
-        brief: null,
         status: ver.status,
         failureCode: ver.failureCode,
+        responseText: ver.responseText,
         artifactId: ver.artifactId,
         artifact: {
           id: ver.artifactId,
           status: ver.status === "SUCCEEDED" ? "READY" : "DRAFT",
           title: ver.artifact?.title || "Generated artifact",
-          contentType,
           updatedAt: ver.updatedAt,
         },
         createdAt: ver.createdAt,
         updatedAt: ver.updatedAt,
       });
     }
-  }, [chatId, contentType, effectiveTurns, onAgentArtifact]);
+  }, [chatId, effectiveTurns, onAgentArtifact]);
 
   const retryResponse = useCallback(async (versionId: string) => {
     if (retrying || isPendingRun) return;
@@ -318,11 +312,9 @@ export function useChatAgentActivity({
         id: newVersion.agentRunId,
         chatId,
         instruction: newVersion.instruction,
-        contentType,
-        contentProfileRevisionId: null,
-        brief: null,
         status: newVersion.status,
         failureCode: null,
+        responseText: null,
         artifactId: null,
         artifact: null,
         createdAt: newVersion.createdAt,
@@ -363,11 +355,11 @@ export function useChatAgentActivity({
     } finally {
       setRetrying(false);
     }
-  }, [chatId, contentType, isPendingRun, onAdmitted, onAgentArtifact, retrying]);
+  }, [chatId, isPendingRun, onAdmitted, onAgentArtifact, retrying]);
 
-  async function submitMessage(message: string, referenceIds: string[], onRequestStart?: () => void, skillIds: string[] = []) {
+  async function submitMessage(message: string, referenceIds: string[], onRequestStart?: () => void, skillIds: string[] = [], model: ChatModel = "auto") {
     const selected = selectReferences(references, referenceIds);
-    const validationError = validateSourceSelection(references, selected, sourceError);
+    const validationError = validateSourceSelection(selected, sourceError);
     if (validationError) {
       setAgentError(validationError);
       return;
@@ -376,7 +368,7 @@ export function useChatAgentActivity({
     agentAbortRef.current?.abort();
     const controller = new AbortController();
     agentAbortRef.current = controller;
-    const idempotencyKey = pendingAgentRequestKey(pendingRequestRef, message, selected.map((reference) => reference.id), JSON.stringify({ skillIds, contentType, brief }));
+    const idempotencyKey = pendingAgentRequestKey(pendingRequestRef, message, selected.map((reference) => reference.id), JSON.stringify({ skillIds, model }));
     setAgentInstruction(message);
     setAgentRun(null);
     setAgentBusy(true);
@@ -385,11 +377,10 @@ export function useChatAgentActivity({
     try {
       const run = await plotApiClient.createChatAgentRun({
         instruction: message,
-        skillIds,
         writingBlockIds: selected.map((reference) => reference.id),
         workSessionId: chatId,
-        contentType,
-        brief,
+        skillIds,
+        model,
       }, idempotencyKey, { signal: controller.signal });
       if (agentAbortRef.current !== controller || controller.signal.aborted) return;
       admitted = true;

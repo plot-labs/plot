@@ -10,7 +10,6 @@ import com.plot.api.chat.dto.ChatTurnDto
 import com.plot.api.chat.dto.RetryEligibilityDto
 import com.plot.api.chat.dto.toChatResponse
 import com.plot.api.common.ApiException
-import com.plot.api.content.ContentBrief
 import com.plot.api.dev.DevContext
 import com.plot.api.entitlement.WorkspaceAccessService
 import com.plot.api.persistence.SqlExecutor
@@ -49,8 +48,9 @@ class ChatQueryService(
 		if (!chatPersistence.sessionExists(devContext.devWorkspaceId, sessionId)) {
 			throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Chat not found")
 		}
-		return chatPersistence.listSessionAgentRuns(devContext.devWorkspaceId, sessionId)
-			.map { toRunResponse(it) }
+		val runs = chatPersistence.listSessionAgentRuns(devContext.devWorkspaceId, sessionId)
+		val responseTexts = chatPersistence.listResponseTextsByRunId(devContext.devWorkspaceId, runs.map { it.id })
+		return runs.map { toRunResponse(it, responseTexts[it.id]) }
 	}
 
 	fun listTurnsForSession(sessionId: UUID, selectedVersionId: UUID? = null): List<ChatTurnDto> {
@@ -120,7 +120,7 @@ class ChatQueryService(
 	): ChatResponseVersionDto {
 		val run = requireNotNull(agentRunQueryPersistence.findAgentRun(workspaceId, v.agentRunId))
 		val artifact = agentRunQueryPersistence.findArtifactForAgentRun(workspaceId, v.agentRunId)?.let {
-			ChatAgentArtifactSummaryResponse(it.id, it.status, it.title, run.contentType, it.updatedAt)
+			ChatAgentArtifactSummaryResponse(it.id, it.status, it.title, it.updatedAt)
 		}
 		val envelope = snapshots.findEnvelopeForAgentRun(workspaceId, v.agentRunId)
 		val eligibility = computeEligibility(
@@ -155,6 +155,7 @@ class ChatQueryService(
 			status = run.status,
 			failureCode = run.failureCode,
 			instruction = run.instructionSnapshot,
+			responseText = v.responseText,
 			artifactId = artifact?.id,
 			artifact = artifact,
 			retryEligibility = eligibility,
@@ -268,13 +269,15 @@ class ChatQueryService(
 		}
 	}
 
-	internal fun toRunResponse(run: AgentRunRecord): ChatAgentRunResponse = with(run) {
-		val brief = contentBriefSnapshotJson?.let { objectMapper.readValue(it, ContentBrief::class.java) }
+	internal fun toRunResponse(
+		run: AgentRunRecord,
+		responseText: String? = chatPersistence.findResponseVersionByRunId(run.workspaceId, run.id)?.responseText,
+	): ChatAgentRunResponse = with(run) {
 		toChatResponse(
 			artifact = agentRunQueryPersistence.findArtifactForAgentRun(workspaceId, id)?.let {
-				ChatAgentArtifactSummaryResponse(it.id, it.status, it.title, contentType, it.updatedAt)
+				ChatAgentArtifactSummaryResponse(it.id, it.status, it.title, it.updatedAt)
 			},
-			brief = brief,
+			responseText = responseText,
 		)
 	}
 

@@ -76,7 +76,7 @@ export function ArtifactDocumentSurface({
           <p className="mt-1 text-sm text-black/52 dark:text-white/55">
             {historical ? `${historical.cause} · historical preview` : shownPack.status}
             {" · "}
-            {shownPack.contentType === "LAUNCH_ANNOUNCEMENT" ? "Launch announcement" : "Changelog"}
+            {contentTypeLabel(shownPack.contentType)}
           </p>
         </div>
         <div className="flex min-w-0 flex-col items-end gap-2">
@@ -109,4 +109,10 @@ export function ArtifactDocumentSurface({
 
 function saveStateLabel(state: "saved" | "saving" | "dirty" | "error", readOnly: boolean) {
   return artifactSaveStateLabel(state, readOnly);
+}
+
+function contentTypeLabel(contentType: Artifact["contentType"]) {
+  if (contentType === "LAUNCH_ANNOUNCEMENT") return "Launch announcement";
+  if (contentType === "CHANGELOG") return "Changelog";
+  return "Artifact";
 }

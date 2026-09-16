@@ -16,7 +16,11 @@ export function ExportDialog({ pack, client, presentation = "buttons" }: { pack:
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const dropdownTriggerRef = useRef<HTMLButtonElement>(null);
-  const contentNoun = pack.contentType === "LAUNCH_ANNOUNCEMENT" ? "launch announcement" : "changelog";
+  const contentNoun = pack.contentType === "LAUNCH_ANNOUNCEMENT"
+    ? "launch announcement"
+    : pack.contentType === "CHANGELOG"
+      ? "changelog"
+      : "artifact";
   const copyLabel = `Copy ${contentNoun}`;
   const downloadLabel = `Download ${contentNoun}`;
 

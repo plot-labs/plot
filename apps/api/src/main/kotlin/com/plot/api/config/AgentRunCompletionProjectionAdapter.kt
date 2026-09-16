@@ -14,6 +14,8 @@ class AgentRunCompletionProjectionAdapter(
 	private val chat: ChatPersistence,
 	private val routine: RoutineAgentRunProjection,
 ) : AgentRunCompletionProjection {
+	override fun commitChatResponse(run: AgentRunRecord, responseText: String, now: Instant) =
+		chat.commitResponse(run.workspaceId, run.id, responseText, now)
 	override fun deactivateResponse(workspaceId: UUID, agentRunId: UUID) = chat.deactivateResponse(workspaceId, agentRunId)
 	override fun projectTerminal(run: AgentRunRecord, status: AgentRunStatus, errorCode: String?, now: Instant) =
 		routine.projectTerminal(run, status, errorCode, now)

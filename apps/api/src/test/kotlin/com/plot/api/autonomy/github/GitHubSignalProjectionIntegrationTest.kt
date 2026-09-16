@@ -75,6 +75,42 @@ class GitHubSignalProjectionIntegrationTest {
 		assertEquals(versionId, activity.items.single().responseVersionId)
 	}
 
+	@Test
+	fun `release automation admission projects Activity without creating a Chat response`() {
+		val fixture = fixture()
+		val receivedAt = Instant.parse("2026-09-14T00:00:00Z")
+		val signalId = inbox.accept(
+			SignalEnvelope(
+				fixture.workspaceId, fixture.namespaceId, fixture.scopeId, "GITHUB", "release-automation-${fixture.workspaceId}",
+				"release:v2.0.0", "release", null, "{}",
+			),
+			receivedAt,
+		).id
+		insertQueuedRelease(fixture, "v2.0.0")
+		jdbc.update("update agent_runs set origin = 'AUTOMATION' where workspace_id = ? and id = ?", fixture.workspaceId, fixture.agentRunId)
+		jdbc.update("update work_sessions set session_kind = 'AUTOMATION' where workspace_id = ? and id = ?", fixture.workspaceId, fixture.workSessionId)
+
+		assertEquals(1, evaluations.recordReleaseAdmission(
+			fixture.workspaceId,
+			fixture.scopeId,
+			"v2.0.0",
+			fixture.agentRunId,
+			receivedAt.plusSeconds(1),
+		))
+
+		val evaluation = requireNotNull(evaluations.findBySignalId(fixture.workspaceId, signalId))
+		assertEquals(fixture.agentRunId, evaluation.admittedAgentRunId)
+		assertNull(evaluation.admittedResponseVersionId)
+		val activity = SignalActivityProjectionService(sql).projectActivity(
+			fixture.workspaceId,
+			setOf(fixture.scopeId),
+			highWaterMark = receivedAt.plusSeconds(2),
+		).items.single()
+		assertEquals(fixture.agentRunId, activity.agentRunId)
+		assertNull(activity.chatId)
+		assertNull(activity.responseVersionId)
+	}
+
 	private fun fixture(): Fixture {
 		val workspaceId = UUID.randomUUID()
 		val userId = UUID.randomUUID()

@@ -70,7 +70,7 @@ class ArtifactReplicationIntegrationTest {
 			status { isAccepted() }
 			header { exists("Location") }
 			jsonPath("$.status") { value("QUEUED") }
-			jsonPath("$.contentType") { value("LAUNCH_ANNOUNCEMENT") }
+			jsonPath("$.contentType") { doesNotExist() }
 		}.andReturn()
 
 		val responseNode = objectMapper.readTree(result.response.contentAsString)

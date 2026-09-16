@@ -1,6 +1,7 @@
 package com.plot.api.routine
 
 import com.plot.api.agent.AgentRunExecutionPersistence
+import com.plot.api.agent.ArtifactAutomationAdmissionService
 import com.plot.api.agent.AgentRunWorker
 import com.plot.api.agent.AgentStepKind
 import com.plot.api.agent.AgentStepRequest
@@ -13,6 +14,7 @@ import com.plot.api.ai.provider.AgentDecisionException
 import com.plot.api.ai.provider.AgentRuntime
 import com.plot.api.ai.provider.AgentRuntimeHost
 import com.plot.api.ai.provider.AgentDecisionRequest
+import com.plot.api.ai.provider.AgentResponseMode
 import com.plot.api.ai.provider.ArtifactWorkflowModelGateway
 import com.plot.api.ai.provider.ModelCallMetadata
 import com.plot.api.ai.provider.ModelCallResult
@@ -30,8 +32,11 @@ import com.plot.api.artifact.workflow.model.WriterSentence
 import com.plot.api.chat.ChatQueryService
 import com.plot.api.chat.ChatRunService
 import com.plot.api.chat.dto.CreateChatAgentRunRequest
+import com.plot.api.common.ApiException
+import com.plot.api.common.WorkspacePrincipal
 import com.plot.api.dev.DevBootstrapService
 import com.plot.api.dev.DevContext
+import com.plot.api.worksession.WorkSessionService
 import java.sql.Timestamp
 import java.time.Duration
 import java.time.Instant
@@ -83,7 +88,9 @@ class AgentRunWorkerIntegrationTest {
 	@Autowired private lateinit var agentWorker: AgentRunWorker
 	@Autowired private lateinit var artifactWorkflowWorker: ArtifactWorkflowRunWorker
 	@Autowired private lateinit var chatAdmission: ChatRunService
+	@Autowired private lateinit var automationAdmission: ArtifactAutomationAdmissionService
 	@Autowired private lateinit var chatQueries: ChatQueryService
+	@Autowired private lateinit var workSessions: WorkSessionService
 	@Autowired private lateinit var agentModel: ScriptedAgentRuntime
 	@Autowired private lateinit var artifactWorkflowModel: AgentArtifactWorkflowModelGateway
 
@@ -305,6 +312,121 @@ class AgentRunWorkerIntegrationTest {
 		assertEquals(1, count("select count(*) from content_packs where generation_run_id = ?", artifactWorkflowRunId))
 		assertEquals(2, count("select count(distinct source_scope_id) from generation_inputs where generation_run_id = ?", artifactWorkflowRunId))
 		assertOwnershipAuditClear()
+
+		agentModel.responseText = "I can continue from that artifact."
+		val followUp = chatAdmission.admit(
+			CreateChatAgentRunRequest(
+				instruction = "What did you create?",
+				workSessionId = chat.chatId,
+			),
+			"chat-artifact-follow-up-${UUID.randomUUID()}",
+		)
+		assertTrue(agentWorker.processOne())
+		assertEquals("SUCCEEDED", agentStatus(followUp.id))
+		assertTrue(agentModel.requests.last().conversation.any {
+			it.role == "assistant" && it.content.contains("A source-backed update is ready.")
+		})
+	}
+
+	@Test
+	fun `Chat Agent answers without a source and carries the conversation into the next turn`() {
+		agentModel.responseText = "Plot can answer directly without creating an artifact."
+		val first = chatAdmission.admit(
+			CreateChatAgentRunRequest("What can you help me with?"),
+			"chat-answer-${UUID.randomUUID()}",
+		)
+
+		assertTrue(agentWorker.processOne())
+		assertEquals("SUCCEEDED", agentStatus(first.id))
+		assertEquals("Plot can answer directly without creating an artifact.", chatQueries.getRun(first.id).responseText)
+		assertEquals(null, chatQueries.getRun(first.id).artifactId)
+
+		agentModel.responseText = "I remember the earlier answer."
+		val followUp = chatAdmission.admit(
+			CreateChatAgentRunRequest(
+				instruction = "What did you just say?",
+				workSessionId = first.chatId,
+			),
+			"chat-follow-up-${UUID.randomUUID()}",
+		)
+
+		assertTrue(agentWorker.processOne())
+		assertEquals(
+			listOf(
+				"user" to "What can you help me with?",
+				"assistant" to "Plot can answer directly without creating an artifact.",
+			),
+			agentModel.requests.last().conversation.map { it.role to it.content },
+		)
+		val turns = chatQueries.listTurnsForSession(first.chatId)
+		assertEquals(2, turns.size)
+		assertEquals("I remember the earlier answer.", turns.last().versions.single().responseText)
+		assertEquals("SUCCEEDED", agentStatus(followUp.id))
+	}
+
+	@Test
+	fun `Chat Agent freezes the selected model and routing provider`() {
+		agentModel.responseText = "Selected model response."
+		val admitted = chatAdmission.admit(
+			CreateChatAgentRunRequest(
+				instruction = "Use the selected model",
+				model = "anthropic/claude-haiku-4.5",
+			),
+			"chat-model-${UUID.randomUUID()}",
+		)
+
+		assertEquals(
+			"anthropic/claude-haiku-4.5",
+			jdbcTemplate.queryForObject(
+				"select generation_settings ->> 'model' from chat_execution_envelopes where workspace_id = ? and agent_run_id = ?",
+				String::class.java,
+				devContext.devWorkspaceId,
+				admitted.id,
+			),
+		)
+		assertEquals(
+			"anthropic",
+			jdbcTemplate.queryForObject(
+				"select generation_settings ->> 'routingProvider' from chat_execution_envelopes where workspace_id = ? and agent_run_id = ?",
+				String::class.java,
+				devContext.devWorkspaceId,
+				admitted.id,
+			),
+		)
+		assertTrue(agentWorker.processOne())
+		assertEquals("anthropic/claude-haiku-4.5", agentModel.requests.single().model)
+		assertEquals("anthropic", agentModel.requests.single().routingProvider)
+	}
+
+	@Test
+	fun `automated Artifact admission stays outside Chat`() {
+		val run = automationAdmission.admit(
+			principal = WorkspacePrincipal(devContext.devWorkspaceId, devContext.devUserId),
+			instruction = "Create release notes",
+			writingBlockIds = emptyList(),
+			idempotencyKey = "automated-chat-${UUID.randomUUID()}",
+			title = "Automated release notes",
+		)
+
+		assertEquals(com.plot.api.agent.AgentRunOrigin.AUTOMATION, run.origin)
+		assertEquals(0, count("select count(*) from chat_response_versions where workspace_id = ? and agent_run_id = ?", devContext.devWorkspaceId, run.id))
+		assertEquals("AUTOMATION", jdbcTemplate.queryForObject(
+			"select session_kind from work_sessions where workspace_id = ? and id = ?",
+			String::class.java,
+			devContext.devWorkspaceId,
+			run.workSessionId,
+		))
+		assertFalse(workSessions.list().any { it.id == run.workSessionId })
+		assertFailsWith<ApiException> { chatQueries.listForSession(requireNotNull(run.workSessionId)) }
+		assertEquals(
+			AgentResponseMode.ARTIFACT_REQUIRED.name,
+			jdbcTemplate.queryForObject(
+				"select generation_settings ->> 'responseMode' from chat_execution_envelopes where workspace_id = ? and agent_run_id = ?",
+				String::class.java,
+				devContext.devWorkspaceId,
+				run.id,
+			),
+		)
 	}
 
 	@Test
@@ -1096,12 +1218,18 @@ class ScriptedAgentRuntime : AgentRuntime {
 	var recoverableFailure = false
 	var infrastructureFailure = false
 	var scriptedDecision: ((AgentDecisionRequest) -> AgentDecision)? = null
+	var responseText: String? = null
 	val requests = mutableListOf<AgentDecisionRequest>()
 
-	override fun run(host: AgentRuntimeHost) {
-		nativeRuntime?.let { it.run(host); return }
+	override fun run(host: AgentRuntimeHost): com.plot.api.ai.provider.AgentRuntimeResult {
+		nativeRuntime?.let { return it.run(host) }
 		host.beforeModel()
+		responseText?.let {
+			requests += host.context()
+			return com.plot.api.ai.provider.AgentRuntimeResult(responseText = it)
+		}
 		host.execute(decide(host.context()))
+		return com.plot.api.ai.provider.AgentRuntimeResult(completed = host.finished)
 	}
 
 	private fun decide(request: AgentDecisionRequest): AgentDecision {
@@ -1145,6 +1273,7 @@ class ScriptedAgentRuntime : AgentRuntime {
 		recoverableFailure = false
 		infrastructureFailure = false
 		scriptedDecision = null
+		responseText = null
 		requests.clear()
 	}
 }

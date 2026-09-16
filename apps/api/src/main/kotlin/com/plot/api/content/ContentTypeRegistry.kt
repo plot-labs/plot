@@ -1,7 +1,7 @@
 package com.plot.api.content
 
-import com.plot.api.ai.prompt.ChangelogPrompt
-import com.plot.api.ai.prompt.ChangelogPromptFactory
+import com.plot.api.ai.prompt.ArtifactPrompt
+import com.plot.api.ai.prompt.ArtifactPromptFactory
 import com.plot.api.ai.provider.ReviewerModelRequest
 import com.plot.api.ai.provider.RewriteModelRequest
 import com.plot.api.artifact.workflow.model.EvidenceSnapshot
@@ -21,17 +21,24 @@ interface ContentPromptFactory {
 		evidence: List<EvidenceSnapshot>,
 		style: FrozenContentContext? = null,
 		documentVersion: Int = 1,
-	): ChangelogPrompt
-	fun reviewer(request: ReviewerModelRequest): ChangelogPrompt
-	fun rewriter(request: RewriteModelRequest): ChangelogPrompt
+	): ArtifactPrompt
+	fun reviewer(request: ReviewerModelRequest): ArtifactPrompt
+	fun rewriter(request: RewriteModelRequest): ArtifactPrompt
 }
 
 @Component
 class ContentTypeRegistry(
-	private val changelogPromptFactory: ChangelogPromptFactory,
+	private val artifactPromptFactory: ArtifactPromptFactory,
 	private val launchAnnouncementPromptFactory: LaunchAnnouncementPromptFactory,
 ) {
 	fun specFor(contentType: ContentType): ContentWriterSpec = when (contentType) {
+		ContentType.ARTIFACT -> ContentWriterSpec(
+			contentType = ContentType.ARTIFACT,
+			promptVersion = ARTIFACT_PROMPT_VERSION,
+			outputSchemaVersion = ARTIFACT_SCHEMA_VERSION,
+			budgetVersion = BUDGET_VERSION,
+			exportSlug = "artifact",
+		)
 		ContentType.CHANGELOG -> ContentWriterSpec(
 			contentType = ContentType.CHANGELOG,
 			promptVersion = CHANGELOG_PROMPT_VERSION,
@@ -50,10 +57,12 @@ class ContentTypeRegistry(
 	fun promptFactoryFor(promptVersion: String): ContentPromptFactory =
 		when {
 			isLaunchPromptVersion(promptVersion) -> launchAnnouncementPromptFactory
-			else -> changelogPromptFactory
+			else -> artifactPromptFactory
 		}
 
 	companion object {
+		const val ARTIFACT_PROMPT_VERSION = "artifact-v1"
+		const val ARTIFACT_SCHEMA_VERSION = "artifact-workflow-v5"
 		const val CHANGELOG_PROMPT_VERSION = "changelog-v9"
 		const val CHANGELOG_SCHEMA_VERSION = "artifact-workflow-v5"
 		const val LAUNCH_PROMPT_VERSION = "launch-announcement-v3"

@@ -14,6 +14,7 @@ internal object WorkSessionTable : Table("work_sessions") {
 	val createdAt = timestampWithTimeZone("created_at")
 	val updatedAt = timestampWithTimeZone("updated_at")
 	val latestArtifactWorkflowRunId = javaUUID("latest_generation_run_id").nullable()
+	val sessionKind = varchar("session_kind", 32)
 
 	override val primaryKey = PrimaryKey(id)
 }

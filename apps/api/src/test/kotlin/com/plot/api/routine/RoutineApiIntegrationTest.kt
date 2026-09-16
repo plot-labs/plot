@@ -92,7 +92,7 @@ class RoutineApiIntegrationTest {
         assertEquals(skill, com.plot.api.skill.FrozenSkills.read(routinePersistence.find(devContext.devWorkspaceId, routineId)!!.skillsSnapshotJson).single())
         // Replaying the original request must work even after the selected skill was deleted.
         assertEquals(run.id, chatRuns.admit(request, key).id)
-        jdbcTemplate.update("update agent_runs set status = 'FAILED', claimed_by = null, claimed_at = null, finished_at = now() where id = ?", run.id)
+        jdbcTemplate.update("update agent_runs set status = 'FAILED', claimed_by = null, claimed_at = null, finished_at = greatest(now(), started_at) where id = ?", run.id)
         val versionId = jdbcTemplate.queryForObject("select id from chat_response_versions where agent_run_id = ?", UUID::class.java, run.id)!!
         val retry = chatRuns.retry(versionId, "retry-${UUID.randomUUID()}")
         val frozen = jdbcTemplate.queryForObject("select skills_snapshot::text from agent_runs where id = ?", String::class.java, retry.agentRunId)!!
@@ -649,19 +649,19 @@ class RoutineApiIntegrationTest {
 			jsonPath("$.error") { value("IDEMPOTENCY_KEY_REUSED") }
 		}
 
-		mockMvc.post("/api/agent-runs") {
+		val replayWithIgnoredLegacyType = mockMvc.post("/api/agent-runs") {
 			header("Idempotency-Key", "chat-request-1")
 			contentType = MediaType.APPLICATION_JSON
 			content = """{"instruction":"Draft an update","writingBlockIds":["$blockId"],"contentType":"LAUNCH_ANNOUNCEMENT"}"""
 		}.andExpect {
-			status { isConflict() }
-			jsonPath("$.error") { value("IDEMPOTENCY_KEY_REUSED") }
-		}
+			status { isAccepted() }
+		}.andReturn().response.contentAsString
+		assertEquals(firstRunId, objectMapper.readTree(replayWithIgnoredLegacyType).get("id").asText())
 
 		val chatId = UUID.fromString(firstJson.get("chatId").asText())
 		mockMvc.get("/api/agent-runs/$firstRunId").andExpect {
 			status { isOk() }
-			jsonPath("$.contentType") { value("CHANGELOG") }
+			jsonPath("$.contentType") { doesNotExist() }
 		}
 
 		jdbcTemplate.update("update agent_runs set status = 'SUCCEEDED' where id = ?", UUID.fromString(firstRunId))
@@ -690,17 +690,21 @@ class RoutineApiIntegrationTest {
 	}
 
 	@Test
-	fun `chat agent admission requires at least one active source`() {
+	fun `chat agent admission allows a general request without sources`() {
 		mockMvc.post("/api/agent-runs") {
 			header("Idempotency-Key", "chat-without-source")
 			contentType = MediaType.APPLICATION_JSON
 			content = """{"instruction":"Explore the workspace"}"""
 		}.andExpect {
-			status { isConflict() }
-			jsonPath("$.error") { value("SOURCE_NOT_READY") }
+			status { isAccepted() }
 		}
-		assertEquals(0, jdbcTemplate.queryForObject(
+		assertEquals(1, jdbcTemplate.queryForObject(
 			"select count(*) from agent_runs where workspace_id = ? and origin = 'CHAT'",
+			Int::class.java,
+			devContext.devWorkspaceId,
+		))
+		assertEquals(0, jdbcTemplate.queryForObject(
+			"select count(*) from agent_run_sources where workspace_id = ?",
 			Int::class.java,
 			devContext.devWorkspaceId,
 		))
