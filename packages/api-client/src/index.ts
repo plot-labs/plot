@@ -518,9 +518,20 @@ export type SkillInput = Pick<SkillSnapshot, "name" | "description" | "content">
 export interface CreateChatAgentRunInput {
   skillIds?: string[];
   instruction: string;
+  model?: ChatModel;
   workSessionId?: string;
   writingBlockIds?: string[];
 }
+
+export type ChatModel =
+  | "auto"
+  | "anthropic/claude-opus-5"
+  | "anthropic/claude-opus-4.8"
+  | "anthropic/claude-sonnet-5"
+  | "anthropic/claude-sonnet-4.6"
+  | "anthropic/claude-haiku-4.5"
+  | "openai/gpt-5.4"
+  | "openai/gpt-5.5";
 
 export interface ContentProfile {
   revisionId: string | null;

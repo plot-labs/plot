@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ChatComposer } from "./chat-composer";
 
@@ -17,6 +17,8 @@ function inputText(element: HTMLElement, value: string) {
 }
 
 describe("ChatComposer", () => {
+  beforeEach(() => window.localStorage.clear());
+
   it("submits the selected writing skill with the original prompt", async () => {
     const onSubmit = vi.fn();
     render(<ChatComposer variant="center" references={references} onSubmit={onSubmit} />);
@@ -24,7 +26,7 @@ describe("ChatComposer", () => {
     fireEvent.click(await screen.findByRole("button", { name: /\/humanizer/ }));
     fireEvent.change(screen.getByRole("textbox", { name: "Chat message" }), { target: { value: "Draft an update" } });
     fireEvent.click(screen.getByRole("button", { name: "Send message" }));
-    expect(onSubmit).toHaveBeenCalledWith("Draft an update", ["source-1"], ["skill-1"]);
+    expect(onSubmit).toHaveBeenCalledWith("Draft an update", ["source-1"], ["skill-1"], "auto");
   });
 
   it("opens skills menu when typing slash, shows skill chip, and allows removing it", async () => {
@@ -59,7 +61,7 @@ describe("ChatComposer", () => {
     fireEvent.click(send);
 
     expect(onSubmit).toHaveBeenCalledTimes(1);
-    expect(onSubmit).toHaveBeenCalledWith("Write release notes", ["source-1"], []);
+    expect(onSubmit).toHaveBeenCalledWith("Write release notes", ["source-1"], [], "auto");
     expect(send).toBeDisabled();
   });
   it("does not render a voice input control", () => {
@@ -81,7 +83,7 @@ describe("ChatComposer", () => {
 		const send = screen.getByRole("button", { name: "Send message" });
 		expect(send).toBeEnabled();
 		fireEvent.click(send);
-		expect(onSubmit).toHaveBeenCalledWith("Write release notes", [], []);
+		expect(onSubmit).toHaveBeenCalledWith("Write release notes", [], [], "auto");
 
     unmount();
     render(<ChatComposer references={references} onSubmit={vi.fn()} busy />);
@@ -99,7 +101,7 @@ describe("ChatComposer", () => {
     fireEvent.click(send);
 
     expect(onSubmit).toHaveBeenCalledTimes(1);
-    expect(onSubmit).toHaveBeenCalledWith("Write release notes", ["source-1"], []);
+    expect(onSubmit).toHaveBeenCalledWith("Write release notes", ["source-1"], [], "auto");
   });
 
   it("passes all available reference ids on submit", () => {
@@ -113,7 +115,7 @@ describe("ChatComposer", () => {
     inputText(screen.getByRole("textbox", { name: "Chat message" }), "Write release notes");
     fireEvent.click(screen.getByRole("button", { name: "Send message" }));
 
-    expect(onSubmit).toHaveBeenCalledWith("Write release notes", ["source-1", "source-2"], []);
+    expect(onSubmit).toHaveBeenCalledWith("Write release notes", ["source-1", "source-2"], [], "auto");
   });
 
   it("excludes unavailable references from the default set", () => {
@@ -127,6 +129,24 @@ describe("ChatComposer", () => {
     inputText(screen.getByRole("textbox", { name: "Chat message" }), "Write release notes");
     fireEvent.click(screen.getByRole("button", { name: "Send message" }));
 
-    expect(onSubmit).toHaveBeenCalledWith("Write release notes", ["source-1"], []);
+    expect(onSubmit).toHaveBeenCalledWith("Write release notes", ["source-1"], [], "auto");
+  });
+
+  it("submits and remembers the model selected from the Notra-style picker", () => {
+    const onSubmit = vi.fn();
+    render(<ChatComposer references={references} onSubmit={onSubmit} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Choose model" }));
+    fireEvent.click(screen.getByRole("option", { name: /Haiku 4\.5/ }));
+    inputText(screen.getByRole("textbox", { name: "Chat message" }), "Answer quickly");
+    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      "Answer quickly",
+      ["source-1"],
+      [],
+      "anthropic/claude-haiku-4.5",
+    );
+    expect(window.localStorage.getItem("plot.chat.model")).toBe("anthropic/claude-haiku-4.5");
   });
 });

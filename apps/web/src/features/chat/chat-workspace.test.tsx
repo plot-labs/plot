@@ -41,8 +41,8 @@ vi.mock("@/lib/chat-agent-polling", () => ({
   isTerminalChatAgentStatus: (status: string) => ["SUCCEEDED", "FAILED"].includes(status),
 }));
 vi.mock("@/features/chat/chat-composer", () => ({
-  ChatComposer: ({ onSubmit, variant, busy }: { onSubmit: (message: string, ids: string[], skillIds: string[]) => void; variant?: string; busy?: boolean }) => (
-	<button type="button" disabled={busy} onClick={() => onSubmit("Write release notes", ["block-1"], ["skill-1"])}>
+  ChatComposer: ({ onSubmit, variant, busy }: { onSubmit: (message: string, ids: string[], skillIds: string[], model: "openai/gpt-5.4") => void; variant?: string; busy?: boolean }) => (
+	<button type="button" disabled={busy} onClick={() => onSubmit("Write release notes", ["block-1"], ["skill-1"], "openai/gpt-5.4")}>
       {variant === "center" ? "Start request" : "Generate again"}
     </button>
   ),
@@ -101,7 +101,7 @@ describe("ChatWorkspace", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Start request" }));
 
     await waitFor(() => expect(mocks.createChatAgentRun).toHaveBeenCalledWith({
-      writingBlockIds: ["block-1"], instruction: "Write release notes", skillIds: ["skill-1"],
+      writingBlockIds: ["block-1"], instruction: "Write release notes", skillIds: ["skill-1"], model: "openai/gpt-5.4",
     }, expect.any(String)));
     expect(mocks.createChatAgentRun).toHaveBeenCalledTimes(1);
     expect(mocks.locationAssign).toHaveBeenCalledWith("/chat?chat=chat-new&agent=agent-new");
@@ -128,6 +128,7 @@ describe("ChatWorkspace", () => {
         workSessionId: "chat-1",
         writingBlockIds: ["block-1"],
         skillIds: ["skill-1"],
+        model: "openai/gpt-5.4",
       },
       expect.any(String),
       expect.any(Object),

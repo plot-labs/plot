@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type {
+  ChatModel,
   ChatAgentRun,
   ChatResponseVersion,
   ChatTurn,
@@ -356,7 +357,7 @@ export function useChatAgentActivity({
     }
   }, [chatId, isPendingRun, onAdmitted, onAgentArtifact, retrying]);
 
-  async function submitMessage(message: string, referenceIds: string[], onRequestStart?: () => void, skillIds: string[] = []) {
+  async function submitMessage(message: string, referenceIds: string[], onRequestStart?: () => void, skillIds: string[] = [], model: ChatModel = "auto") {
     const selected = selectReferences(references, referenceIds);
     const validationError = validateSourceSelection(selected, sourceError);
     if (validationError) {
@@ -367,7 +368,7 @@ export function useChatAgentActivity({
     agentAbortRef.current?.abort();
     const controller = new AbortController();
     agentAbortRef.current = controller;
-    const idempotencyKey = pendingAgentRequestKey(pendingRequestRef, message, selected.map((reference) => reference.id), JSON.stringify({ skillIds }));
+    const idempotencyKey = pendingAgentRequestKey(pendingRequestRef, message, selected.map((reference) => reference.id), JSON.stringify({ skillIds, model }));
     setAgentInstruction(message);
     setAgentRun(null);
     setAgentBusy(true);
@@ -379,6 +380,7 @@ export function useChatAgentActivity({
         writingBlockIds: selected.map((reference) => reference.id),
         workSessionId: chatId,
         skillIds,
+        model,
       }, idempotencyKey, { signal: controller.signal });
       if (agentAbortRef.current !== controller || controller.signal.aborted) return;
       admitted = true;

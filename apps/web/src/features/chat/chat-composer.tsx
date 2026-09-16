@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { Skill } from "@plot/api-client";
+import type { ChatModel, Skill } from "@plot/api-client";
 import { plotApiClient } from "@/lib/api-client";
 import PromptBar from "@/components/primitives/prompt-bar";
+import { CHAT_MODELS, CHAT_MODEL_STORAGE_KEY, parseChatModel } from "./chat-models";
 import { resolveComposerReferenceIds } from "./chat-workspace-utils";
 
 type ChatComposerProps = {
-  onSubmit: (message: string, referenceIds: string[], skillIds: string[]) => void;
+  onSubmit: (message: string, referenceIds: string[], skillIds: string[], model: ChatModel) => void;
   variant?: "center" | "dock";
   id?: string;
   placeholder?: string;
@@ -29,6 +30,8 @@ export function ChatComposer({
   const submittingRef = useRef(false);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [skillIds, setSkillIds] = useState<string[]>([]);
+  const [model, setModel] = useState<ChatModel>("auto");
+  const [modelPreferenceLoaded, setModelPreferenceLoaded] = useState(false);
   const isSendDisabled = busy || !canGenerate;
 
   useEffect(() => {
@@ -55,13 +58,32 @@ export function ChatComposer({
     };
   }, []);
 
+  useEffect(() => {
+    try {
+      setModel(parseChatModel(window.localStorage.getItem(CHAT_MODEL_STORAGE_KEY)) ?? "auto");
+    } catch {
+      setModel("auto");
+    } finally {
+      setModelPreferenceLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!modelPreferenceLoaded) return;
+    try {
+      window.localStorage.setItem(CHAT_MODEL_STORAGE_KEY, model);
+    } catch {
+      // Storage can be unavailable in private browsing; the in-memory selection still works.
+    }
+  }, [model, modelPreferenceLoaded]);
+
   function handleSend(text: string) {
     if (submittingRef.current || isSendDisabled) return;
     const trimmed = text.trim();
     if (!trimmed) return;
 
     submittingRef.current = true;
-    onSubmit(trimmed, resolveComposerReferenceIds(references, []), skillIds);
+    onSubmit(trimmed, resolveComposerReferenceIds(references, []), skillIds, model);
     setSkillIds([]);
     queueMicrotask(() => {
       submittingRef.current = false;
@@ -87,6 +109,9 @@ export function ChatComposer({
             skills={skills}
             selectedSkillIds={skillIds}
             onSelectedSkillIdsChange={setSkillIds}
+            models={CHAT_MODELS}
+            selectedModelId={model}
+            onSelectedModelIdChange={(value) => setModel(parseChatModel(value) ?? "auto")}
             onSend={handleSend}
           />
         </div>
@@ -112,6 +137,9 @@ export function ChatComposer({
           skills={skills}
           selectedSkillIds={skillIds}
           onSelectedSkillIdsChange={setSkillIds}
+          models={CHAT_MODELS}
+          selectedModelId={model}
+          onSelectedModelIdChange={(value) => setModel(parseChatModel(value) ?? "auto")}
           onSend={handleSend}
         />
       </div>

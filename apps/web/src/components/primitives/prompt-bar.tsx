@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createShader, playSweep, accentChain, ACCENTS } from "glimm";
+import Image from "next/image";
 
 /* The built-in "prism" palette is only cyan→indigo→magenta, so a sweep
  * reads as blue/purple. Build a true full-spectrum rainbow instead. */
@@ -37,6 +38,32 @@ const GLYPHS: Record<string, React.ReactNode> = {
   layers: <g><path d="M12 2 2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5M2 12l10 5 10-5" /></g>,
   globe: <g><circle cx="12" cy="12" r="10" /><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></g>,
 };
+
+export type PromptModelOption = {
+  id: string;
+  label: string;
+  description: string;
+  pricing: string;
+  provider: "auto" | "anthropic" | "openai";
+};
+
+function ModelIcon({ provider }: { provider: PromptModelOption["provider"] }) {
+  if (provider === "auto") {
+    return <Image src="/plot-icon.svg" alt="" width={16} height={16} className="size-4 object-contain dark:invert" />;
+  }
+  if (provider === "anthropic") {
+    return (
+      <svg className="size-4" viewBox="0 0 256 257" aria-hidden="true">
+        <path fill="#D97757" d="m50.228 170.321 50.357-28.257.843-2.463-.843-1.361h-2.462l-8.426-.518-28.775-.778-24.952-1.037-24.175-1.296-6.092-1.297L0 125.796l.583-3.759 5.12-3.434 7.324.648 84.253 6.546h4.148l.583-1.685-2.527-2.074-77.514-52.22-7.713-5.25-3.888-4.925-1.685-10.758 7-7.713 9.397.649 68.291 52.429 1.555-1.102-31.433-56.607-6.87-11.018-1.814-6.61L59.042 12.24l7.972-10.823L71.42 0l10.63 1.426 4.472 3.888 34.862 79.698 7.459 12.722h1.685l3.888-42.127 2.463-28.776.843-8.1 4.018-9.722 7.971-5.25 6.222 2.981 5.12 7.324-11.731 74.117h2.268l48.405-60.977 9.073-9.657 5.833-4.601h11.018l8.1 12.055-3.628 12.443-33.22 44.719-8.426 14.518.778 1.166 46.922-9.463 19.637-3.37 8.88 4.148.971 4.213-3.5 8.62-82.308 18.795-.454.324.519.648 23.591 1.944h17.304l32.21 2.398 8.426 5.574 5.055 6.805-.843 5.184-12.962 6.611-74.83-17.221h-1.944v1.167l59.82 55.607 1.36 6.157-3.434 4.86-3.63-.518-53.144-46.969h-1.36v1.814l29.747 44.525 1.296 11.536-1.814 3.76-6.481 2.268-7.13-1.297-48.332-74.421-1.49.843-7.194 77.448-3.37 3.953-7.778 2.981-6.48-4.925-3.436-7.972 16.369-82.037-.13-.454-1.49.194-56.968 72.431-18.406 19.702-4.407 1.75-7.648-3.954.713-7.064 4.277-6.286 50.747-64.097-.065-1.686h-.583L44.07 198.125l-12.055 1.555-5.185-4.86.648-7.972 2.463-2.593 20.35-13.999-.064.065Z" />
+      </svg>
+    );
+  }
+  return (
+    <svg className="size-4 fill-current" viewBox="0 0 256 260" aria-hidden="true">
+      <path d="M239.184 106.203a64.716 64.716 0 0 0-5.576-53.103C219.452 28.459 191 15.784 163.213 21.74A65.586 65.586 0 0 0 52.096 45.22a64.716 64.716 0 0 0-43.23 31.36c-14.31 24.602-11.061 55.634 8.033 76.74a64.665 64.665 0 0 0 5.525 53.102c14.174 24.65 42.644 37.324 70.446 31.36a64.72 64.72 0 0 0 48.754 21.744c28.481.025 53.714-18.361 62.414-45.481a64.767 64.767 0 0 0 43.229-31.36c14.137-24.558 10.875-55.423-8.083-76.483Zm-97.56 136.338a48.397 48.397 0 0 1-31.105-11.255l53.205-30.695a8.595 8.595 0 0 0 4.247-7.367v-72.85l21.845 12.636c.218.111.37.32.409.563v60.367c-.056 26.818-21.783 48.545-48.601 48.601Zm-104.466-44.61a48.345 48.345 0 0 1-5.781-32.589l53.256 30.747a8.339 8.339 0 0 0 8.441 0l63.181-36.425v25.221a.87.87 0 0 1-.358.665l-52.335 30.184c-23.257 13.398-52.97 5.431-66.404-17.803ZM23.549 85.38a48.499 48.499 0 0 1 25.58-21.333v61.39a8.288 8.288 0 0 0 4.195 7.316l62.874 36.272-21.845 12.636a.819.819 0 0 1-.767 0L41.353 151.53c-23.211-13.454-31.171-43.144-17.804-66.405Zm179.466 41.695-63.08-36.63L161.73 77.86a.819.819 0 0 1 .768 0l52.233 30.184a48.6 48.6 0 0 1-7.316 87.635v-61.391a8.544 8.544 0 0 0-4.4-7.213Zm21.742-32.69-53.154-31.003a8.39 8.39 0 0 0-8.492 0L99.98 99.808V74.587a.716.716 0 0 1 .307-.665l52.233-30.133a48.652 48.652 0 0 1 72.236 50.391ZM88.061 139.097l-21.845-12.585a.87.87 0 0 1-.41-.614V65.685a48.652 48.652 0 0 1 79.757-37.346l-53.205 30.695a8.595 8.595 0 0 0-4.246 7.367l-.051 72.697Zm11.868-25.58 28.138-16.217 28.188 16.218v32.434l-28.086 16.218-28.188-16.218-.052-32.434Z" />
+    </svg>
+  );
+}
 
 /* real product marks, inline so the file stays self-contained */
 const BRANDS: Record<string, React.ReactNode> = {
@@ -96,10 +123,10 @@ const COMMANDS = [
   { key: "summarize", name: "/summarize", desc: "Digest the thread so far" },
 ];
 
-const MODELS = [
-  { key: "sprinkles-5", name: "Sprinkles 5", tag: "Flagship" },
-  { key: "vanilla-1", name: "Vanilla 1", tag: "Basic" },
-  { key: "freezer-burn", name: "Freezer Burn 0.4", tag: "Stale" },
+const DEMO_MODELS: readonly PromptModelOption[] = [
+  { id: "sprinkles-5", label: "Sprinkles 5", description: "Flagship demo model", pricing: "Demo", provider: "auto" },
+  { id: "vanilla-1", label: "Vanilla 1", description: "Fast demo model", pricing: "Demo", provider: "auto" },
+  { id: "freezer-burn", label: "Freezer Burn 0.4", description: "Legacy demo model", pricing: "Demo", provider: "auto" },
 ];
 
 const FILES = ["flavor-chart.png", "summer-menu.pdf", "pos-export.csv"];
@@ -166,6 +193,9 @@ export default function PromptBar({
   skills,
   selectedSkillIds = [],
   onSelectedSkillIdsChange,
+  models = DEMO_MODELS,
+  selectedModelId,
+  onSelectedModelIdChange,
 }: {
   variant?: string;
   /** the self-running walkthrough; turn off when embedding in a real surface */
@@ -182,13 +212,17 @@ export default function PromptBar({
   skills?: PromptSkill[];
   selectedSkillIds?: string[];
   onSelectedSkillIdsChange?: (ids: string[]) => void;
+  models?: readonly PromptModelOption[];
+  selectedModelId?: string;
+  onSelectedModelIdChange?: (id: string) => void;
 }) {
   const pill = variant === "Pill";
   const [draft, setDraft] = useState("");
   const [dismissed, setDismissed] = useState(false);
   const [plusOpen, setPlusOpen] = useState(false);
   const [modelOpen, setModelOpen] = useState(false);
-  const [model, setModel] = useState(MODELS[1]);
+  const [internalModelId, setInternalModelId] = useState(DEMO_MODELS[1].id);
+  const [modelQuery, setModelQuery] = useState("");
   const [attachments, setAttachments] = useState<string[]>([]);
   const [connected, setConnected] = useState(false);
   const [active, setActive] = useState(0);
@@ -213,6 +247,13 @@ export default function PromptBar({
   const glimmRef = useRef<HTMLCanvasElement>(null);
   const shaderRef = useRef<ReturnType<typeof createShader> | null>(null);
   const sweepingRef = useRef(false);
+  const model = models.find((item) => item.id === selectedModelId)
+    ?? models.find((item) => item.id === internalModelId)
+    ?? models[0]
+    ?? DEMO_MODELS[0];
+  const filteredModels = models.filter((item) =>
+    `${item.label} ${item.provider} ${item.description}`.toLowerCase().includes(modelQuery.trim().toLowerCase())
+  );
 
   /* hand control to the user: stop the demo loop, and when they aim at
    * the input itself, clear the demo's leftover draft for a clean start */
@@ -263,12 +304,12 @@ export default function PromptBar({
 
   /* same gliding highlight in the model menu — floats to the hovered
    * row, falling back to the currently-selected model */
-  const modelIndex = MODELS.findIndex((m) => m.key === model.key);
+  const modelIndex = filteredModels.findIndex((item) => item.id === model.id);
   useLayoutEffect(() => {
     if (!modelOpen) return;
     const target = modelRowRefs.current[modelHovered ?? modelIndex];
     if (target) setModelBox({ top: target.offsetTop, height: target.offsetHeight });
-  }, [modelOpen, modelHovered, modelIndex]);
+  }, [modelOpen, modelHovered, modelIndex, filteredModels.length]);
 
   /* The menu is outside the clipped composer, so align it to the model
    * trigger by measurement instead of pinning it to the far-right edge. */
@@ -276,9 +317,9 @@ export default function PromptBar({
     if (!modelOpen || !composerAnchorRef.current || !modelRef.current) return;
     const anchorRect = composerAnchorRef.current.getBoundingClientRect();
     const triggerRect = modelRef.current.getBoundingClientRect();
-    setModelMenuLeft(Math.max(0, Math.min(triggerRect.left - anchorRect.left, anchorRect.width - 176)));
+    setModelMenuLeft(Math.max(0, Math.min(triggerRect.left - anchorRect.left, anchorRect.width - 288)));
     setModelMenuBottom(anchorRect.bottom - triggerRect.top + 8);
-  }, [modelOpen, wide, model.name]);
+  }, [modelOpen, wide, model.label]);
 
   const [prevModelOpen, setPrevModelOpen] = useState(modelOpen);
   if (prevModelOpen !== modelOpen) {
@@ -346,11 +387,13 @@ export default function PromptBar({
     });
   }, [makeShader]);
 
-  const selectModel = useCallback((next: (typeof MODELS)[number]) => {
-    setModel(next);
+  const selectModel = useCallback((next: PromptModelOption) => {
+    setInternalModelId(next.id);
+    onSelectedModelIdChange?.(next.id);
     setModelOpen(false);
-    if (next.key === "sprinkles-5") celebrate();
-  }, [celebrate]);
+    setModelQuery("");
+    if (next.id === "sprinkles-5") celebrate();
+  }, [celebrate, onSelectedModelIdChange]);
 
   /* autoplay: apply the current step, then advance after its hold */
   useEffect(() => {
@@ -362,13 +405,13 @@ export default function PromptBar({
       if (step.connect !== undefined) setConnected(step.connect);
       if (step.modelOpen !== undefined) setModelOpen(step.modelOpen);
       if (step.model) {
-        const next = MODELS.find((m) => m.key === step.model);
+        const next = models.find((item) => item.id === step.model);
         if (next) selectModel(next);
       }
       setAutoStep((s) => s + 1);
     }, step.hold);
     return () => clearTimeout(t);
-  }, [auto, autoStep, selectModel]);
+  }, [auto, autoStep, models, selectModel]);
 
   /* dictation resolves after a beat, like a real transcript landing */
   useEffect(() => {
@@ -577,9 +620,34 @@ export default function PromptBar({
       {modelOpen && (
         <div
           onMouseLeave={() => setModelHovered(null)}
-          className="absolute z-10 w-44 rounded-[10px] bg-surface p-1 shadow-raised"
+          className="absolute z-30 w-72 overflow-hidden rounded-[12px] border border-line bg-surface shadow-overlay backdrop-blur-md"
           style={{ left: modelMenuLeft, bottom: modelMenuBottom, animation: "pop-in 180ms cubic-bezier(0.23,1,0.32,1) both", transformOrigin: "bottom left" }}
         >
+          <div className="border-b border-line p-2">
+            <div className="flex h-8 items-center gap-2 rounded-[7px] bg-field px-2.5 text-ink-3">
+              <Icon size={14}><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></Icon>
+              <input
+                autoFocus
+                value={modelQuery}
+                onChange={(event) => {
+                  setModelQuery(event.target.value);
+                  setModelHovered(null);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    setModelOpen(false);
+                    setModelQuery("");
+                    inputRef.current?.focus();
+                  }
+                }}
+                placeholder="Search models..."
+                aria-label="Search models"
+                className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-3"
+              />
+            </div>
+          </div>
+          <div className="relative max-h-[360px] overflow-y-auto p-1.5" role="listbox" aria-label="Available models">
           {/* single gliding highlight — floats to the hovered / selected row */}
           <span
             aria-hidden
@@ -592,28 +660,40 @@ export default function PromptBar({
                 "top 220ms cubic-bezier(0.23,1,0.32,1), height 220ms cubic-bezier(0.23,1,0.32,1), opacity 150ms ease",
             }}
           />
-          {MODELS.map((m, i) => (
+          {filteredModels.map((item, i) => (
             <button
-              key={m.key}
+              key={item.id}
               type="button"
+              role="option"
+              aria-selected={item.id === model.id}
               ref={(el) => {
                 modelRowRefs.current[i] = el;
               }}
               onMouseDown={(event) => event.preventDefault()}
               onMouseEnter={() => setModelHovered(i)}
               onClick={() => {
-                selectModel(m);
+                selectModel(item);
                 inputRef.current?.focus();
               }}
-              className="relative z-10 flex h-7.5 w-full items-center gap-2 rounded-[6px] px-2 text-left"
+              className="relative z-10 flex w-full items-start gap-2.5 rounded-[8px] px-2.5 py-2 text-left"
             >
-              <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-ink">{m.name}</span>
-              <span className="shrink-0 text-[11px] text-ink-3">{m.tag}</span>
-              <span className={`shrink-0 text-ink ${m.key === model.key ? "" : "invisible"}`}>
+              <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center text-ink">
+                <ModelIcon provider={item.provider} />
+              </span>
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="text-[13px] font-medium text-ink">{item.label}</span>
+                <span className="text-[11.5px] leading-4 text-ink-3">{item.description}</span>
+                <span className="text-[10px] leading-4 text-ink-3/75">{item.pricing}</span>
+              </span>
+              <span className={`mt-1 shrink-0 text-ink ${item.id === model.id ? "" : "invisible"}`}>
                 <Icon size={13} strokeWidth={2.5}><path d="M20 6L9 17l-5-5" /></Icon>
               </span>
             </button>
           ))}
+          {filteredModels.length === 0 ? (
+            <div className="px-3 py-6 text-center text-[12px] text-ink-3">No models found.</div>
+          ) : null}
+          </div>
         </div>
       )}
 
@@ -805,13 +885,17 @@ export default function PromptBar({
             aria-label="Choose model"
             onClick={() => {
               setPlusOpen(false);
-              setModelOpen((current) => !current);
+              setModelOpen((current) => {
+                if (current) setModelQuery("");
+                return !current;
+              });
             }}
             className={`flex h-7 shrink-0 items-center gap-1 px-1.5 text-[12px] font-medium text-ink-2 transition-colors duration-150 hover:bg-hover hover:text-ink ${
               pill ? "rounded-full" : "rounded-[8px]"
             } ${wide ? "col-start-4 row-start-2 justify-self-end" : "col-start-4 row-start-1"}`}
           >
-            {model.name}
+            <ModelIcon provider={model.provider} />
+            {model.label}
             <span className="text-ink-3">
               <Icon size={11} strokeWidth={2.4}><path d="M6 9l6 6 6-6" /></Icon>
             </span>
