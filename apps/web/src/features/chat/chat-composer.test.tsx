@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ChatComposer } from "./chat-composer";
@@ -132,7 +132,7 @@ describe("ChatComposer", () => {
     expect(onSubmit).toHaveBeenCalledWith("Write release notes", ["source-1"], [], "auto");
   });
 
-  it("submits and remembers the model selected from the Notra-style picker", () => {
+  it("submits and remembers the model selected from the Notra-style picker", async () => {
     const onSubmit = vi.fn();
     render(<ChatComposer references={references} onSubmit={onSubmit} />);
 
@@ -147,6 +147,6 @@ describe("ChatComposer", () => {
       [],
       "anthropic/claude-haiku-4.5",
     );
-    expect(window.localStorage.getItem("plot.chat.model")).toBe("anthropic/claude-haiku-4.5");
+    await waitFor(() => expect(window.localStorage.getItem("plot.chat.model")).toBe("anthropic/claude-haiku-4.5"));
   });
 });

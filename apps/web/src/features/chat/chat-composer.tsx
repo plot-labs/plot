@@ -32,6 +32,7 @@ export function ChatComposer({
   const [skillIds, setSkillIds] = useState<string[]>([]);
   const [model, setModel] = useState<ChatModel>("auto");
   const [modelPreferenceLoaded, setModelPreferenceLoaded] = useState(false);
+  const modelChangedRef = useRef(false);
   const isSendDisabled = busy || !canGenerate;
 
   useEffect(() => {
@@ -59,13 +60,22 @@ export function ChatComposer({
   }, []);
 
   useEffect(() => {
-    try {
-      setModel(parseChatModel(window.localStorage.getItem(CHAT_MODEL_STORAGE_KEY)) ?? "auto");
-    } catch {
-      setModel("auto");
-    } finally {
-      setModelPreferenceLoaded(true);
-    }
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      try {
+        if (!modelChangedRef.current) {
+          setModel(parseChatModel(window.localStorage.getItem(CHAT_MODEL_STORAGE_KEY)) ?? "auto");
+        }
+      } catch {
+        if (!modelChangedRef.current) setModel("auto");
+      } finally {
+        setModelPreferenceLoaded(true);
+      }
+    });
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -111,7 +121,10 @@ export function ChatComposer({
             onSelectedSkillIdsChange={setSkillIds}
             models={CHAT_MODELS}
             selectedModelId={model}
-            onSelectedModelIdChange={(value) => setModel(parseChatModel(value) ?? "auto")}
+            onSelectedModelIdChange={(value) => {
+              modelChangedRef.current = true;
+              setModel(parseChatModel(value) ?? "auto");
+            }}
             onSend={handleSend}
           />
         </div>
@@ -139,7 +152,10 @@ export function ChatComposer({
           onSelectedSkillIdsChange={setSkillIds}
           models={CHAT_MODELS}
           selectedModelId={model}
-          onSelectedModelIdChange={(value) => setModel(parseChatModel(value) ?? "auto")}
+          onSelectedModelIdChange={(value) => {
+            modelChangedRef.current = true;
+            setModel(parseChatModel(value) ?? "auto");
+          }}
           onSend={handleSend}
         />
       </div>
