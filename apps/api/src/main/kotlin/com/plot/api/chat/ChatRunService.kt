@@ -31,6 +31,7 @@ import com.plot.api.agent.AgentToolAccessException
 import com.plot.api.agent.ReadOnlyAgentTools
 import com.plot.api.agent.AgentProperties
 import com.plot.api.ai.provider.AgentResponseMode
+import com.plot.api.config.PlotAiProperties
 import com.plot.api.source.SourceManagedAccessGuard
 import java.security.MessageDigest
 import java.sql.Timestamp
@@ -54,6 +55,7 @@ class ChatRunService(
 	private val snapshots: AgentExecutionSnapshotPersistence,
 	private val tools: ReadOnlyAgentTools,
 	private val properties: AgentProperties,
+	private val aiProperties: PlotAiProperties,
 	private val objectMapper: ObjectMapper,
 	private val sourceManagedAccessGuard: SourceManagedAccessGuard,
 	private val agentRunDispatcher: AgentRunDispatcher,
@@ -72,6 +74,7 @@ class ChatRunService(
 			skillIds = request.skillIds,
 			workSessionId = request.workSessionId,
 			writingBlockIds = request.writingBlockIds,
+			requestedModel = request.model,
 			idempotencyKey = idempotencyKey,
 			chatTitle = null,
 		)
@@ -270,6 +273,7 @@ class ChatRunService(
 		idempotencyKey: String,
 		chatTitle: String?,
 		skillIds: List<UUID> = emptyList(),
+		requestedModel: String = ChatModels.AUTO,
 	): AgentRunRecord {
 		val workspaceId = principal.workspaceId
 		val userId = principal.userId
@@ -278,6 +282,7 @@ class ChatRunService(
 			throw ApiException(HttpStatus.BAD_REQUEST, "IDEMPOTENCY_KEY_REQUIRED", "Idempotency-Key is required")
 		}
 		val normalizedInstruction = instruction.trim()
+		val modelSelection = ChatModels.resolve(requestedModel, aiProperties)
 		if (writingBlockIds.distinct().size != writingBlockIds.size) {
 			throw ApiException(HttpStatus.BAD_REQUEST, "DUPLICATE_SOURCE_ITEMS", "Writing Block IDs must be unique")
 		}
@@ -288,6 +293,7 @@ class ChatRunService(
 				skillIds = skillIds,
 				workSessionId = workSessionId,
 				writingBlockIds = writingBlockIds,
+				model = modelSelection.requestedModel,
 			),
 		)
 		return transactionExecutor.execute {
@@ -371,6 +377,9 @@ class ChatRunService(
 					"contentBriefSnapshot" to null,
 					"responseMode" to AgentResponseMode.FLEXIBLE.name,
 					"conversation" to conversation,
+					"requestedModel" to modelSelection.requestedModel,
+					"model" to modelSelection.model,
+					"routingProvider" to modelSelection.routingProvider,
 				),
 			)
 			val sourceSnapshot = contentSourceSnapshotService.findOrCreateSnapshotForAgentRun(workspaceId, runId)
@@ -667,6 +676,7 @@ class ChatRunService(
 			append(request.workSessionId ?: "new").append('|')
 			append(request.instruction).append('|')
 			request.writingBlockIds.forEach { append(it).append(',') }
+			append('|').append(request.model)
 		}
 		val skillAwareCanonical = if (request.skillIds.isEmpty()) canonical else objectMapper.writeValueAsString(
 			mapOf("request" to canonical, "skillIds" to request.skillIds),

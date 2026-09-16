@@ -35,6 +35,8 @@ data class AgentDecisionRequest(
 	val selectedSkillIds: List<UUID> = emptyList(),
 	val conversation: List<AgentConversationMessage> = emptyList(),
 	val responseMode: AgentResponseMode = AgentResponseMode.ARTIFACT_REQUIRED,
+	val model: String? = null,
+	val routingProvider: String? = null,
 )
 
 enum class AgentResponseMode {

@@ -365,6 +365,40 @@ class AgentRunWorkerIntegrationTest {
 	}
 
 	@Test
+	fun `Chat Agent freezes the selected model and routing provider`() {
+		agentModel.responseText = "Selected model response."
+		val admitted = chatAdmission.admit(
+			CreateChatAgentRunRequest(
+				instruction = "Use the selected model",
+				model = "anthropic/claude-haiku-4.5",
+			),
+			"chat-model-${UUID.randomUUID()}",
+		)
+
+		assertEquals(
+			"anthropic/claude-haiku-4.5",
+			jdbcTemplate.queryForObject(
+				"select generation_settings ->> 'model' from chat_execution_envelopes where workspace_id = ? and agent_run_id = ?",
+				String::class.java,
+				devContext.devWorkspaceId,
+				admitted.id,
+			),
+		)
+		assertEquals(
+			"anthropic",
+			jdbcTemplate.queryForObject(
+				"select generation_settings ->> 'routingProvider' from chat_execution_envelopes where workspace_id = ? and agent_run_id = ?",
+				String::class.java,
+				devContext.devWorkspaceId,
+				admitted.id,
+			),
+		)
+		assertTrue(agentWorker.processOne())
+		assertEquals("anthropic/claude-haiku-4.5", agentModel.requests.single().model)
+		assertEquals("anthropic", agentModel.requests.single().routingProvider)
+	}
+
+	@Test
 	fun `automated Artifact admission stays outside Chat`() {
 		val run = automationAdmission.admit(
 			principal = WorkspacePrincipal(devContext.devWorkspaceId, devContext.devUserId),

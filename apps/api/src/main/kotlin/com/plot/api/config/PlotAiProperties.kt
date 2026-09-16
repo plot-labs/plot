@@ -33,8 +33,9 @@ data class PlotAiProperties(
 		get() = model == GPT_4O_MINI_MODEL || model == DEEPSEEK_V4_FLASH_MODEL
 
 	val openRouterProviderPolicy: Map<String, Any>
-		get() {
-			val pinnedProvider = requireNotNull(routingProvider)
+		get() = openRouterProviderPolicyFor(requireNotNull(routingProvider))
+
+	fun openRouterProviderPolicyFor(pinnedProvider: String): Map<String, Any> {
 			return mapOf(
 				"order" to listOf(pinnedProvider),
 				"only" to listOf(pinnedProvider),
@@ -43,7 +44,7 @@ data class PlotAiProperties(
 				"data_collection" to "deny",
 				"zdr" to zeroDataRetention,
 			)
-		}
+	}
 
 	init {
 		require(!timeout.isNegative && !timeout.isZero) { "plot.ai.timeout must be positive" }
@@ -71,7 +72,26 @@ data class PlotAiProperties(
 		const val GPT_5_6_LUNA_PRO_MODEL = "openai/gpt-5.6-luna-pro"
 		const val GPT_4O_MINI_MODEL = "openai/gpt-4o-mini-2024-07-18"
 		const val DEEPSEEK_V4_FLASH_MODEL = "deepseek/deepseek-v4-flash-0731"
-		val SUPPORTED_MODELS = setOf(GPT_5_4_NANO_MODEL, GPT_5_6_LUNA_PRO_MODEL, GPT_4O_MINI_MODEL, DEEPSEEK_V4_FLASH_MODEL)
+		const val CLAUDE_OPUS_5_MODEL = "anthropic/claude-opus-5"
+		const val CLAUDE_OPUS_4_8_MODEL = "anthropic/claude-opus-4.8"
+		const val CLAUDE_SONNET_5_MODEL = "anthropic/claude-sonnet-5"
+		const val CLAUDE_SONNET_4_6_MODEL = "anthropic/claude-sonnet-4.6"
+		const val CLAUDE_HAIKU_4_5_MODEL = "anthropic/claude-haiku-4.5"
+		const val GPT_5_4_MODEL = "openai/gpt-5.4"
+		const val GPT_5_5_MODEL = "openai/gpt-5.5"
+		val SUPPORTED_MODELS = setOf(
+			GPT_5_4_NANO_MODEL,
+			GPT_5_6_LUNA_PRO_MODEL,
+			GPT_4O_MINI_MODEL,
+			DEEPSEEK_V4_FLASH_MODEL,
+			CLAUDE_OPUS_5_MODEL,
+			CLAUDE_OPUS_4_8_MODEL,
+			CLAUDE_SONNET_5_MODEL,
+			CLAUDE_SONNET_4_6_MODEL,
+			CLAUDE_HAIKU_4_5_MODEL,
+			GPT_5_4_MODEL,
+			GPT_5_5_MODEL,
+		)
 		private val ROUTING_PROVIDER_SLUG = Regex("[a-z0-9][a-z0-9._-]*(?:/[a-z0-9][a-z0-9._-]*)*")
 	}
 }

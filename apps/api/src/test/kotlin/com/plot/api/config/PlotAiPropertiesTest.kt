@@ -39,4 +39,20 @@ class PlotAiPropertiesTest {
 			)
 		}
 	}
+
+	@Test
+	fun notraChatModelsAreSupportedOpenRouterProfiles() {
+		val models = setOf(
+			PlotAiProperties.CLAUDE_OPUS_5_MODEL,
+			PlotAiProperties.CLAUDE_OPUS_4_8_MODEL,
+			PlotAiProperties.CLAUDE_SONNET_5_MODEL,
+			PlotAiProperties.CLAUDE_SONNET_4_6_MODEL,
+			PlotAiProperties.CLAUDE_HAIKU_4_5_MODEL,
+			PlotAiProperties.GPT_5_4_MODEL,
+			PlotAiProperties.GPT_5_5_MODEL,
+		)
+
+		assertTrue(PlotAiProperties.SUPPORTED_MODELS.containsAll(models))
+		assertEquals(listOf("anthropic"), PlotAiProperties().openRouterProviderPolicyFor("anthropic")["only"])
+	}
 }

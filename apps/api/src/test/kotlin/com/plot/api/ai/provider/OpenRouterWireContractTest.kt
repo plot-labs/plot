@@ -80,7 +80,11 @@ class OpenRouterWireContractTest {
                 val host = object : AgentRuntimeHost {
                     override val finished get() = handedOff
                     override fun beforeModel() = Unit
-                    override fun context() = AgentDecisionRequest(java.util.UUID.randomUUID(), "Create draft", emptyList(), emptyList(), emptyList(), 8, 8)
+                    override fun context() = AgentDecisionRequest(
+                        java.util.UUID.randomUUID(), "Create draft", emptyList(), emptyList(), emptyList(), 8, 8,
+                        model = PlotAiProperties.CLAUDE_HAIKU_4_5_MODEL,
+                        routingProvider = "anthropic",
+                    )
                     override fun execute(decision: AgentDecision): String {
                         assertEquals(listOf(inputId), decision.selectedInputIds)
                         handedOff = true
@@ -93,7 +97,11 @@ class OpenRouterWireContractTest {
                 val body = mapper.readTree(bodies.single())
                 assertEquals(6, body["tools"].size())
                 assertFalse(body.has("response_format"))
-                assertEquals(mapper.readTree(mapper.writeValueAsString(properties.openRouterProviderPolicy)), body["provider"])
+                assertEquals(PlotAiProperties.CLAUDE_HAIKU_4_5_MODEL, body["model"].stringValue())
+                assertEquals(
+                    mapper.readTree(mapper.writeValueAsString(properties.openRouterProviderPolicyFor("anthropic"))),
+                    body["provider"],
+                )
             }
         }
     }

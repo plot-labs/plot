@@ -163,6 +163,8 @@ class AgentRunWorker(
 			val content = message.path("content").stringValue().orEmpty().trim()
 			if (role in setOf("user", "assistant") && content.isNotBlank()) AgentConversationMessage(role, content) else null
 		}.orEmpty()
+		val selectedModel = settings.path("model").stringValue()
+		val routingProvider = settings.path("routingProvider").stringValue()
 		val host = object : AgentRuntimeHost {
 			override val finished: Boolean get() = finished
 			override val modelTimeoutMillis: Long get() = minOf(
@@ -198,6 +200,8 @@ class AgentRunWorker(
 					selectedSkillIds = FrozenSkills.read(run.skillsSnapshotJson).map { it.id },
 					conversation = conversation,
 					responseMode = responseMode,
+					model = selectedModel,
+					routingProvider = routingProvider,
 				)
 			}
 			override fun execute(decision: AgentDecision): String {

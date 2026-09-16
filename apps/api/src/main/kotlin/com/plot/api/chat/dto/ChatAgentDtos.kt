@@ -18,6 +18,7 @@ data class CreateChatAgentRunRequest(
 	@field:Size(max = 4) val skillIds: List<UUID> = emptyList(),
 	val workSessionId: UUID? = null,
 	@field:Size(max = 20) val writingBlockIds: List<UUID> = emptyList(),
+	@field:NotBlank @field:Size(max = 100) val model: String = "auto",
 )
 
 data class ContentBriefRequest(

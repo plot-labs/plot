@@ -27,18 +27,30 @@ import tools.jackson.databind.ObjectMapper
 
 /** Native Koog graph: request -> execute registered tools -> send results -> repeat. */
 internal class KoogAgentRuntime(
-	private val model: LLModel,
-	private val params: LLMParams,
+	private val resolveModel: (AgentDecisionRequest) -> LLModel,
+	private val resolveParams: (AgentDecisionRequest) -> LLMParams,
 	private val mapper: ObjectMapper,
 	private val exchange: suspend (Prompt, LLModel, List<ToolDescriptor>) -> Message.Assistant,
 ) : AgentRuntime {
 	constructor(transport: KoogModelTransport, mapper: ObjectMapper) : this(
-		transport.agentModel(), transport.agentParams(), mapper, transport::exchangeAgent,
+		{ request -> transport.agentModel(request.model) },
+		{ request -> transport.agentParams(request.routingProvider) },
+		mapper,
+		transport::exchangeAgent,
 	)
+
+	internal constructor(
+		model: LLModel,
+		params: LLMParams,
+		mapper: ObjectMapper,
+		exchange: suspend (Prompt, LLModel, List<ToolDescriptor>) -> Message.Assistant,
+	) : this({ model }, { params }, mapper, exchange)
 
 	override fun run(host: AgentRuntimeHost): AgentRuntimeResult {
 		var fatal: Exception? = null
 		val initial = host.context()
+		val model = resolveModel(initial)
+		val params = resolveParams(initial)
 		val loaded = initial.completedSteps.filter { it.toolName == "GET_SKILL" }.mapNotNull {
 			runCatching { UUID.fromString(mapper.readTree(it.result).get("id")?.stringValue()) }.getOrNull()
 		}.toMutableSet()
