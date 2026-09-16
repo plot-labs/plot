@@ -10,13 +10,11 @@ import {
   ChatMessageList,
 } from "@astryxdesign/core/Chat";
 import { ResizeHandle, useResizable } from "@astryxdesign/core/Resizable";
-import type { ChatAgentRun, ContentType, SourceReference, WorkSessionSummary as ChatSummary } from "@plot/api-client";
+import type { ChatAgentRun, SourceReference, WorkSessionSummary as ChatSummary } from "@plot/api-client";
 import { ArtifactDocumentSurface } from "@/features/artifacts/artifact-document-surface";
 import { ArtifactEditorStatus, ArtifactSaveDraftButton, artifactSaveStateLabel } from "@/features/artifacts/artifact-editor-chrome";
 import { ArtifactHistoryPanel } from "@/features/citations/artifact-history-panel";
 import { ExportDialog } from "@/features/citations/export-dialog";
-import { ChatBriefPanel, emptyChatBriefDraft, toContentBrief } from "@/features/chat/chat-brief-panel";
-import { ChatContentTypeSelector } from "@/features/chat/chat-content-type-selector";
 import { ChatComposer } from "@/features/chat/chat-composer";
 import { AgentActivityDetail, ChatActivityPanel, EmptyArtifactState, ErrorNotice } from "@/features/chat/chat-activity";
 import { chatHref, toComposerReferences } from "@/features/chat/chat-workspace-utils";
@@ -59,9 +57,6 @@ export function ChatActiveWorkspace({
   const [artifactPanelOpen, setArtifactPanelOpen] = useState(false);
   const [artifactHistoryOpen, setArtifactHistoryOpen] = useState(false);
   const [artifactSaveRequestToken, setArtifactSaveRequestToken] = useState(0);
-  const [contentType, setContentType] = useState<ContentType>("CHANGELOG");
-  const [briefDraft, setBriefDraft] = useState(emptyChatBriefDraft);
-  const brief = useMemo(() => toContentBrief(briefDraft), [briefDraft]);
   const artifactPanel = useResizable({ defaultSize: 720, minSizePx: 420, maxSizePx: 1200 });
   const resizeArtifactPanel = artifactPanel.resize;
   const mobileAssistantTriggerRef = useRef<HTMLButtonElement>(null);
@@ -86,8 +81,6 @@ export function ChatActiveWorkspace({
     requestedVersionId,
     references,
     sourceError,
-    brief,
-    contentType,
     onAgentArtifact,
     onAdmitted,
   });
@@ -173,9 +166,6 @@ export function ChatActiveWorkspace({
                     id: selectedVersion.agentRunId,
                     chatId: activeChat.id,
                     instruction: selectedVersion.instruction || turn.userMessage,
-                    contentType,
-                    contentProfileRevisionId: null,
-                    brief: null,
                     status: selectedVersion.status,
                     failureCode: selectedVersion.failureCode,
                     artifactId: selectedVersion.artifactId,
@@ -183,7 +173,6 @@ export function ChatActiveWorkspace({
                       id: selectedVersion.artifactId,
                       status: selectedVersion.status === "SUCCEEDED" ? "READY" : "DRAFT",
                       title: selectedVersion.artifact?.title || "Generated artifact",
-                      contentType,
                       updatedAt: selectedVersion.updatedAt,
                     } : null,
                     createdAt: selectedVersion.createdAt,
@@ -358,16 +347,6 @@ export function ChatActiveWorkspace({
             Response in progress. Wait for it to finish before sending a follow-up.
           </p>
         )}
-        <div className="mx-auto w-full max-w-[720px] px-4 pb-3 sm:px-6">
-          <div className="mb-2">
-            <ChatContentTypeSelector
-              value={contentType}
-              onChange={setContentType}
-              disabled={document.artifactLoading || agent.agentBusy}
-            />
-          </div>
-          <ChatBriefPanel value={briefDraft} onChange={setBriefDraft} contentType={contentType} />
-        </div>
       </div>
       {artifactPanelOpen && document.currentArtifact ? (
         <ResizeHandle
@@ -501,4 +480,3 @@ export function ChatActiveWorkspace({
     </div>
   );
 }
-

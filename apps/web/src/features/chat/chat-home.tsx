@@ -31,7 +31,7 @@ export function ChatHome({ references, referencesLoading, referencesError }: Cha
   const canGenerate = entitlement?.capabilities.generate ?? true;
   const trialUntil = trialEndsLabel(entitlement?.trialEndsAt ?? null);
 
-  async function submitHomeRequest(message: string, referenceIds: string[], skillIds: string[]) {
+  async function submitHomeRequest(message: string, referenceIds: string[], skillIds: string[] = []) {
     const selected = selectReferences(references, referenceIds);
     const validationError = validateSourceSelection(references, selected, referencesError);
     if (validationError) {
@@ -45,15 +45,13 @@ export function ChatHome({ references, referencesLoading, referencesError }: Cha
       pendingRequestRef,
       message,
       selected.map((reference) => reference.id),
-      JSON.stringify({ skillIds, contentType: "CHANGELOG" }),
+      JSON.stringify({ skillIds }),
     );
     try {
       const run = await plotApiClient.createChatAgentRun({
         instruction: message,
-        skillIds,
         writingBlockIds: selected.map((reference) => reference.id),
-        contentType: "CHANGELOG",
-        brief: undefined,
+        skillIds,
       }, idempotencyKey);
       pendingRequestRef.current = null;
       window.location.assign(`/chat?chat=${encodeURIComponent(run.chatId)}&agent=${encodeURIComponent(run.id)}`);

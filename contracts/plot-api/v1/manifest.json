@@ -331,20 +331,7 @@
           "instruction": "Explore the connected source",
           "writingBlockIds": [
             "018fd000-0000-7000-8000-000000000040"
-          ],
-          "brief": {
-            "purpose": "Tell customers what shipped",
-            "audience": "Product managers",
-            "availability": "Generally available",
-            "pricing": null,
-            "userAction": "Upgrade in settings",
-            "confirmedFacts": [
-              {
-                "body": "The feature is generally available.",
-                "kind": "AVAILABILITY"
-              }
-            ]
-          }
+          ]
         },
         "chat-contract-1"
       ],
@@ -368,64 +355,6 @@
           "RUNNING",
           "SUCCEEDED",
           "FAILED"
-        ],
-        "contentType": [
-          "CHANGELOG",
-          "LAUNCH_ANNOUNCEMENT"
-        ]
-      }
-    },
-    {
-      "id": "chat-agent-run.create-launch",
-      "surface": "chat",
-      "clientMethod": "createChatAgentRun",
-      "args": [
-        {
-          "instruction": "Announce the waitlist opening",
-          "writingBlockIds": [
-            "018fd000-0000-7000-8000-000000000040"
-          ],
-          "contentType": "LAUNCH_ANNOUNCEMENT",
-          "brief": {
-            "purpose": "Open early access",
-            "audience": "Founders evaluating Plot",
-            "availability": "Waitlist opens Monday",
-            "pricing": null,
-            "userAction": "Join the waitlist",
-            "confirmedFacts": [
-              {
-                "body": "The waitlist opens Monday.",
-                "kind": "AVAILABILITY"
-              }
-            ]
-          }
-        },
-        "chat-contract-launch-1"
-      ],
-      "method": "POST",
-      "routeTemplate": "/agent-runs",
-      "route": "/agent-runs",
-      "successStatus": 202,
-      "authContext": "workspace-member",
-      "requiredHeaders": [
-        "accept",
-        "content-type",
-        "idempotency-key",
-        "x-plot-workspace-id"
-      ],
-      "requestFixture": "fixtures/chat-agent-run-create-request-launch.json",
-      "successFixture": "fixtures/chat-agent-run-launch.json",
-      "errorFixture": null,
-      "enumDomains": {
-        "status": [
-          "QUEUED",
-          "RUNNING",
-          "SUCCEEDED",
-          "FAILED"
-        ],
-        "contentType": [
-          "CHANGELOG",
-          "LAUNCH_ANNOUNCEMENT"
         ]
       }
     },
@@ -454,10 +383,6 @@
           "RUNNING",
           "SUCCEEDED",
           "FAILED"
-        ],
-        "contentType": [
-          "CHANGELOG",
-          "LAUNCH_ANNOUNCEMENT"
         ]
       }
     },
@@ -491,6 +416,7 @@
           "DOWNLOAD"
         ],
         "contentType": [
+          "ARTIFACT",
           "CHANGELOG",
           "LAUNCH_ANNOUNCEMENT"
         ],
@@ -546,6 +472,7 @@
           "FAILED"
         ],
         "contentType": [
+          "ARTIFACT",
           "CHANGELOG",
           "LAUNCH_ANNOUNCEMENT"
         ]

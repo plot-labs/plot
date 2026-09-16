@@ -337,7 +337,11 @@ function ArtifactSources({
                       {related.title || "Untitled artifact"}
                     </p>
                     <span className="mt-0.5 inline-block text-[10px] text-black/50 dark:text-white/50">
-                      {related.contentType === "LAUNCH_ANNOUNCEMENT" ? "Launch announcement" : "Changelog"}
+                      {related.contentType === "LAUNCH_ANNOUNCEMENT"
+                        ? "Launch announcement"
+                        : related.contentType === "CHANGELOG"
+                          ? "Changelog"
+                          : "Artifact"}
                     </span>
                   </div>
                   <span className="shrink-0 rounded bg-black/5 px-1.5 py-0.5 text-[10px] font-medium text-black/60 dark:bg-white/10 dark:text-white/60">

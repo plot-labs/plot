@@ -41,8 +41,8 @@ vi.mock("@/lib/chat-agent-polling", () => ({
   isTerminalChatAgentStatus: (status: string) => ["SUCCEEDED", "FAILED"].includes(status),
 }));
 vi.mock("@/features/chat/chat-composer", () => ({
-  ChatComposer: ({ onSubmit, variant }: { onSubmit: (message: string, ids: string[]) => void; variant?: string }) => (
-    <button type="button" onClick={() => onSubmit("Write release notes", ["block-1"])}>
+  ChatComposer: ({ onSubmit, variant }: { onSubmit: (message: string, ids: string[], skillIds: string[]) => void; variant?: string }) => (
+    <button type="button" onClick={() => onSubmit("Write release notes", ["block-1"], ["skill-1"])}>
       {variant === "center" ? "Start request" : "Generate again"}
     </button>
   ),
@@ -55,16 +55,15 @@ import { ChatWorkspace } from "./chat-workspace";
 
 const chat = { id: "chat-1", title: "Release", status: "OPEN", lastActivityAt: "2026-07-01T00:00:00Z", createdAt: "2026-07-01T00:00:00Z", updatedAt: "2026-07-01T00:00:00Z" };
 const reference = { id: "block-1", sourceScopeId: "scope-1", provider: "GITHUB", sourceKind: "PULL_REQUEST", sourceLabel: "PR #1", repositoryLabel: "acme/plot", title: "Ship", body: "Evidence", originalUrl: "https://github.test/1", sourceCreatedAt: null };
-const artifactSummary = { id: "artifact-1", status: "READY", title: "Release", contentType: "CHANGELOG", updatedAt: "2026-07-01T00:02:00Z" };
+const artifactSummary = { id: "artifact-1", status: "READY", title: "Release", updatedAt: "2026-07-01T00:02:00Z" };
 const artifact = {
-  id: "artifact-1", status: "READY", title: "Release", contentType: "CHANGELOG",
+  id: "artifact-1", status: "READY", title: "Release", contentType: "ARTIFACT",
   variant: { id: "variant-1", status: "READY", revisionId: "artifact-revision-1", revisionNumber: 1, lexicalContent: { root: { children: [], type: "root", version: 1 } }, sentences: [], sources: [] },
 };
 
 function agentRun(overrides: Record<string, unknown> = {}) {
   return {
-    id: "agent-1", chatId: "chat-1", instruction: "Release notes", contentType: "CHANGELOG",
-    contentProfileRevisionId: null, brief: null,
+    id: "agent-1", chatId: "chat-1", instruction: "Release notes",
     status: "QUEUED", failureCode: null,
     artifactId: null, artifact: null, createdAt: "2026-07-01T00:01:00Z", updatedAt: "2026-07-01T00:01:00Z", ...overrides,
   };
@@ -102,39 +101,34 @@ describe("ChatWorkspace", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Start request" }));
 
     await waitFor(() => expect(mocks.createChatAgentRun).toHaveBeenCalledWith({
-      writingBlockIds: ["block-1"], instruction: "Write release notes", contentType: "CHANGELOG", brief: undefined,
+      writingBlockIds: ["block-1"], instruction: "Write release notes", skillIds: ["skill-1"],
     }, expect.any(String)));
     expect(mocks.createChatAgentRun).toHaveBeenCalledTimes(1);
     expect(mocks.locationAssign).toHaveBeenCalledWith("/chat?chat=chat-new&agent=agent-new");
     expect(window.sessionStorage.length).toBe(0);
   });
 
-  it("admits a launch announcement request with contentType and brief fields in active workspace", async () => {
+  it("uses the prompt and selected skills without fixed classification controls", async () => {
     mocks.search = "chat=chat-1&agent=agent-1";
     mocks.listSessions.mockResolvedValue([chat]);
     const succeeded = agentRun({ status: "SUCCEEDED", artifactId: "artifact-1", artifact: artifactSummary });
     mocks.listSessionAgentRuns.mockResolvedValue([succeeded]);
     mocks.getChatAgentRun.mockResolvedValue(succeeded);
-    mocks.createChatAgentRun.mockResolvedValue(agentRun({
-      id: "agent-launch",
-      chatId: "chat-1",
-      contentType: "LAUNCH_ANNOUNCEMENT",
-    }));
+    mocks.createChatAgentRun.mockResolvedValue(agentRun({ id: "agent-followup", chatId: "chat-1" }));
     render(<ChatWorkspace />);
-    await screen.findByText("Open artifact");
     await waitFor(() => expect(screen.queryByText("Loading sources…")).not.toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "Launch announcement" }));
-    fireEvent.change(await screen.findByLabelText("Purpose (recommended)"), { target: { value: "Open the waitlist" } });
-    fireEvent.change(screen.getByLabelText("Audience (recommended)"), { target: { value: "Founders" } });
+    expect(screen.queryByLabelText("Purpose (recommended)")).not.toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Content type" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Launch announcement" })).not.toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: "Generate again" }));
 
     await waitFor(() => expect(mocks.createChatAgentRun).toHaveBeenCalledWith(
-      expect.objectContaining({
+      {
+        instruction: "Write release notes",
         workSessionId: "chat-1",
         writingBlockIds: ["block-1"],
-        contentType: "LAUNCH_ANNOUNCEMENT",
-        brief: expect.objectContaining({ purpose: "Open the waitlist", audience: "Founders" }),
-      }),
+        skillIds: ["skill-1"],
+      },
       expect.any(String),
       expect.any(Object),
     ));

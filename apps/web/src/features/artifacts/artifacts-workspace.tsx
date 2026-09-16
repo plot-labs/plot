@@ -185,7 +185,9 @@ function formatAbsoluteTime(value: string) {
 }
 
 function contentTypeLabel(contentType: ArtifactSummary["contentType"]) {
-  return contentType === "LAUNCH_ANNOUNCEMENT" ? "Launch announcement" : "Changelog";
+  if (contentType === "LAUNCH_ANNOUNCEMENT") return "Launch announcement";
+  if (contentType === "CHANGELOG") return "Changelog";
+  return "Artifact";
 }
 
 function GeneratedArtifactDetail({ artifact }: { artifact: Artifact }) {

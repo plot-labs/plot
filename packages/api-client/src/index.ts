@@ -54,7 +54,7 @@ export interface ArtifactPublication {
   publishedAt: string;
 }
 
-export type ContentType = "CHANGELOG" | "LAUNCH_ANNOUNCEMENT";
+export type ContentType = "ARTIFACT" | "CHANGELOG" | "LAUNCH_ANNOUNCEMENT";
 
 export interface RelatedArtifactSummary {
   id: string;
@@ -414,9 +414,6 @@ export interface ChatAgentRun {
   id: string;
   chatId: string;
   instruction: string;
-  contentType: ContentType;
-  contentProfileRevisionId: string | null;
-  brief: ContentBrief | null;
   status: RoutineAgentRunStatus;
   failureCode: string | null;
   artifactId: string | null;
@@ -424,7 +421,6 @@ export interface ChatAgentRun {
     id: string;
     status: string;
     title: string | null;
-    contentType: ContentType;
     updatedAt: string;
   } | null;
   createdAt: string;
@@ -462,7 +458,6 @@ export interface ChatResponseVersion {
     id: string;
     status: string;
     title: string | null;
-    contentType: ContentType;
     updatedAt: string;
   } | null;
   retryEligibility: RetryEligibility;
@@ -523,9 +518,6 @@ export interface CreateChatAgentRunInput {
   instruction: string;
   workSessionId?: string;
   writingBlockIds?: string[];
-  contentType?: ContentType;
-  contentProfileRevisionId?: string;
-  brief?: ContentBrief;
 }
 
 export interface ContentProfile {
