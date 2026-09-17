@@ -1,5 +1,6 @@
 package com.plot.api.routine
 
+import com.plot.api.chat.ChatModels
 import com.plot.api.common.UuidGenerator
 import com.plot.api.persistence.SqlExecutor
 import com.plot.api.persistence.SqlRow
@@ -59,14 +60,16 @@ class RoutinePersistence(
 		cadence: RoutineCadence,
 		now: Instant = currentInstant(),
 		skillsSnapshotJson: String = "[]",
+		model: String = ChatModels.AUTO,
+		reasoningEffort: String? = null,
 	): RoutineRecord {
 		val id = uuidGenerator.next()
 		execute(
 			"""
 			insert into routines (
-			  id, workspace_id, created_by_user_id, source_scope_id, name, instruction, skills_snapshot, cadence,
+			  id, workspace_id, created_by_user_id, source_scope_id, name, instruction, model, reasoning_effort, skills_snapshot, cadence,
 			  enabled, next_run_at, created_at, updated_at
-			) values (?, ?, ?, ?, ?, ?, ?::jsonb, ?, true, ?, ?, ?)
+			) values (?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, true, ?, ?, ?)
 			""".trimIndent(),
 			id,
 			workspaceId,
@@ -74,6 +77,8 @@ class RoutinePersistence(
 			sourceScopeId,
 			name,
 			instruction,
+			model,
+			reasoningEffort,
 			skillsSnapshotJson,
 			cadence.name,
 			Timestamp.from(now),
@@ -276,6 +281,8 @@ class RoutinePersistence(
 		sourceLabel = requireNotNull(getString("source_label")),
 		name = requireNotNull(getString("name")),
 		instruction = requireNotNull(getString("instruction")),
+		model = requireNotNull(getString("model")),
+		reasoningEffort = getString("reasoning_effort"),
 		skillsSnapshotJson = requireNotNull(getString("skills_snapshot")),
 		cadence = RoutineCadence.valueOf(requireNotNull(getString("cadence"))),
 		enabled = getBoolean("enabled"),
@@ -302,7 +309,7 @@ class RoutinePersistence(
 
 	private val selectSql = """
 		select r.id, r.workspace_id, r.created_by_user_id, r.source_scope_id, s.display_name as source_label,
-		       r.name, r.instruction, r.skills_snapshot::text, r.cadence, r.enabled, r.activity_cursor_sequence,
+		       r.name, r.instruction, r.model, r.reasoning_effort, r.skills_snapshot::text, r.cadence, r.enabled, r.activity_cursor_sequence,
 		       r.last_run_at, r.next_run_at, r.active_execution_id, r.last_execution_id,
 		       r.last_generation_run_id,
 		       case when r.last_generation_run_id is null then r.last_run_status
@@ -318,7 +325,7 @@ class RoutinePersistence(
 
 	private val claimSelectSql = """
 		select r.id, r.workspace_id, r.created_by_user_id, r.source_scope_id, s.display_name as source_label,
-		       r.name, r.instruction, r.skills_snapshot::text, r.cadence, r.enabled, r.activity_cursor_sequence,
+		       r.name, r.instruction, r.model, r.reasoning_effort, r.skills_snapshot::text, r.cadence, r.enabled, r.activity_cursor_sequence,
 		       r.last_run_at, r.next_run_at, r.active_execution_id, r.last_execution_id,
 		       r.last_generation_run_id, r.last_run_status as effective_run_status,
 		       r.last_error_code as effective_error_code, r.claimed_by, r.claimed_at,

@@ -2,6 +2,8 @@ package com.plot.api.routine.dto
 
 import com.plot.api.agent.AgentRunRecord
 import com.plot.api.agent.AgentStepRecord
+import com.plot.api.chat.ChatModels
+import com.plot.api.chat.ChatReasoningEfforts
 import com.plot.api.routine.RoutineCadence
 import com.plot.api.routine.RoutineExecutionSummaryRecord
 import com.plot.api.routine.RoutineRecord
@@ -18,6 +20,8 @@ data class CreateRoutineRequest(
 	@field:Size(max = 4) val contextSourceScopeIds: List<UUID> = emptyList(),
 	@field:NotBlank @field:Size(max = 2_000) val instruction: String,
 	@field:NotNull val cadence: RoutineCadence?,
+	@field:NotBlank @field:Size(max = 100) val model: String = ChatModels.AUTO,
+	@field:Size(max = 16) val reasoningEffort: String? = ChatReasoningEfforts.DEFAULT,
 )
 
 data class UpdateRoutineRequest(
@@ -30,6 +34,8 @@ data class RoutineResponse(
 	val sourceScopeId: UUID,
 	val sourceLabel: String,
 	val instruction: String,
+	val model: String,
+	val reasoningEffort: String?,
 	val skills: List<com.plot.api.skill.SkillSnapshot> = emptyList(),
 	val cadence: RoutineCadence,
 	val enabled: Boolean,
@@ -90,6 +96,8 @@ fun RoutineRecord.toResponse(
 	sourceScopeId = sourceScopeId,
 	sourceLabel = sourceLabel,
 	instruction = instruction,
+	model = model,
+	reasoningEffort = reasoningEffort,
 	skills = com.plot.api.skill.FrozenSkills.read(skillsSnapshotJson),
 	cadence = cadence,
 	enabled = enabled,
