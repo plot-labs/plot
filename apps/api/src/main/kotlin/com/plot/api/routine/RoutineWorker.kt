@@ -246,6 +246,8 @@ class RoutineWorker(
 				sourceScopes = sourceScopes(execution, routine, now),
 				inputs = seedInputs,
 				activityCursorAfter = consumedThrough,
+				requestedModel = routine.model,
+				requestedReasoningEffort = routine.reasoningEffort,
 			),
 			now = now,
 			workerId = workerId,

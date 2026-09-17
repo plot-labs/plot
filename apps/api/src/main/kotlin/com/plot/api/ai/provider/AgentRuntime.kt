@@ -37,6 +37,7 @@ data class AgentDecisionRequest(
 	val responseMode: AgentResponseMode = AgentResponseMode.ARTIFACT_REQUIRED,
 	val model: String? = null,
 	val routingProvider: String? = null,
+	val reasoningEffort: String? = null,
 )
 
 enum class AgentResponseMode {

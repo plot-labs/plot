@@ -678,6 +678,19 @@ it("queries chat turns, response versions, and retry eligibility", async () => {
   }
 });
 
+it("loads model-specific Chat reasoning capabilities", async () => {
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json([
+    { model: "google/gemini-3.8-flash", reasoningEfforts: ["low", "medium", "high"], reasoningDefault: "medium" },
+  ]));
+  const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
+
+  await expect(client.listChatModelCapabilities()).resolves.toEqual([
+    { model: "google/gemini-3.8-flash", reasoningEfforts: ["low", "medium", "high"], reasoningDefault: "medium" },
+  ]);
+  expect(fetcher.mock.calls[0]?.[0]).toBe("/api/plot/agent-runs/models");
+  expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
+});
+
 it("models response-version lineage and response-local source summaries", () => {
   const version = {
     id: "ver-2",

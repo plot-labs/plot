@@ -4,6 +4,7 @@ import com.plot.api.agent.AgentRunInputRequest
 import com.plot.api.agent.AgentRunOrigin
 import com.plot.api.agent.AgentRunSourceRequest
 import com.plot.api.agent.AgentRunStatus
+import com.plot.api.chat.ChatModels
 
 import com.plot.api.content.ContentType
 import java.time.Instant
@@ -99,6 +100,8 @@ data class RoutineAgentDispatchRequest(
 	val contentProfileRevisionId: UUID? = null,
 	val contentBriefSnapshotJson: String? = null,
 	val sourceSnapshotId: UUID? = null,
+	val requestedModel: String = ChatModels.AUTO,
+	val requestedReasoningEffort: String? = null,
 )
 
 data class RoutineExecutionSummaryRecord(

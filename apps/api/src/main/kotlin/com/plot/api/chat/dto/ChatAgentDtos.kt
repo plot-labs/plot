@@ -1,6 +1,7 @@
 package com.plot.api.chat.dto
 
 import com.plot.api.common.ApiException
+import com.plot.api.chat.ChatReasoningEfforts
 import com.plot.api.content.ConfirmedFact
 import com.plot.api.content.ContentBrief
 import com.plot.api.content.ContentBriefDestination
@@ -19,6 +20,7 @@ data class CreateChatAgentRunRequest(
 	val workSessionId: UUID? = null,
 	@field:Size(max = 20) val writingBlockIds: List<UUID> = emptyList(),
 	@field:NotBlank @field:Size(max = 100) val model: String = "auto",
+	@field:Size(max = 16) val reasoningEffort: String? = ChatReasoningEfforts.DEFAULT,
 )
 
 data class ContentBriefRequest(

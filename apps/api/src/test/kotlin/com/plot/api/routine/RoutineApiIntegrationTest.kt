@@ -168,6 +168,41 @@ class RoutineApiIntegrationTest {
 	}
 
 	@Test
+	fun `routine create stores the selected model and supported reasoning effort`() {
+		val sourceScopeId = insertSourceScope()
+
+		mockMvc.post("/api/routines") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """
+				{"name":"Gemini update","sourceScopeId":"$sourceScopeId","instruction":"Draft with Gemini","cadence":"WEEKLY","model":"google/gemini-3.8-flash","reasoningEffort":"high"}
+			""".trimIndent()
+		}.andExpect {
+			status { isCreated() }
+			jsonPath("$.model") { value("google/gemini-3.8-flash") }
+			jsonPath("$.reasoningEffort") { value("high") }
+		}
+
+		assertEquals(
+			"google/gemini-3.8-flash",
+			jdbcTemplate.queryForObject("select model from routines where source_scope_id = ?", String::class.java, sourceScopeId),
+		)
+		assertEquals(
+			"high",
+			jdbcTemplate.queryForObject("select reasoning_effort from routines where source_scope_id = ?", String::class.java, sourceScopeId),
+		)
+
+		mockMvc.post("/api/routines") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """
+				{"name":"Invalid effort","sourceScopeId":"$sourceScopeId","instruction":"Draft","cadence":"WEEKLY","model":"google/gemini-3.8-flash","reasoningEffort":"max"}
+			""".trimIndent()
+		}.andExpect {
+			status { isBadRequest() }
+			jsonPath("$.error") { value("INVALID_REASONING_EFFORT") }
+		}
+	}
+
+	@Test
 	fun `routine lifecycle stays scoped to the dev workspace`() {
 		val sourceScopeId = insertSourceScope()
 

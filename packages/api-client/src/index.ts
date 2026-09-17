@@ -519,8 +519,17 @@ export interface CreateChatAgentRunInput {
   skillIds?: string[];
   instruction: string;
   model?: ChatModel;
+  reasoningEffort?: ChatReasoningEffort;
   workSessionId?: string;
   writingBlockIds?: string[];
+}
+
+export type ChatReasoningEffort = "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+
+export interface ChatModelCapability {
+  model: ChatModel;
+  reasoningEfforts: ChatReasoningEffort[];
+  reasoningDefault: ChatReasoningEffort | null;
 }
 
 export type ChatModel =
@@ -561,13 +570,15 @@ export interface UpdateContentProfileInput {
 }
 
 export interface Routine {
-  skills?: SkillSnapshot[];
-  id: string;
-  name: string;
-  sourceScopeId: string;
-  sourceLabel: string;
-  instruction: string;
-  cadence: RoutineCadence;
+	skills?: SkillSnapshot[];
+	id: string;
+	name: string;
+	sourceScopeId: string;
+	sourceLabel: string;
+	instruction: string;
+	model: ChatModel;
+	reasoningEffort: ChatReasoningEffort | null;
+	cadence: RoutineCadence;
   enabled: boolean;
   lastRunAt: string | null;
   nextRunAt: string;
@@ -674,10 +685,11 @@ export interface PlotApiClient {
   deleteSkill(id: string, options?: RequestOptions): Promise<void>;
   listRoutines(options?: RequestOptions): Promise<Routine[]>;
   getRoutine(id: string, options?: RequestOptions): Promise<Routine>;
-  createRoutine(input: { skillIds?: string[]; name: string; sourceScopeId: string; contextSourceScopeIds?: string[]; instruction: string; cadence: RoutineCadence }, options?: RequestOptions): Promise<Routine>;
+	createRoutine(input: { skillIds?: string[]; name: string; sourceScopeId: string; contextSourceScopeIds?: string[]; instruction: string; cadence: RoutineCadence; model?: ChatModel; reasoningEffort?: ChatReasoningEffort | null }, options?: RequestOptions): Promise<Routine>;
   updateRoutine(id: string, input: { enabled: boolean }, options?: RequestOptions): Promise<Routine>;
   runRoutineNow(id: string, idempotencyKey: string, options?: RequestOptions): Promise<Routine>;
   getRoutineAgentRun(routineId: string, agentRunId: string, options?: RequestOptions): Promise<RoutineAgentRunDetail>;
+  listChatModelCapabilities(options?: RequestOptions): Promise<ChatModelCapability[]>;
   createChatAgentRun(input: CreateChatAgentRunInput, idempotencyKey: string, options?: RequestOptions): Promise<ChatAgentRun>;
   getChatAgentRun(id: string, options?: RequestOptions): Promise<ChatAgentRun>;
   listSessionAgentRuns(id: string, options?: RequestOptions): Promise<ChatAgentRun[]>;
@@ -851,6 +863,9 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
       `/routines/${encodeURIComponent(routineId)}/agent-runs/${encodeURIComponent(agentRunId)}`,
       { signal: requestOptions?.signal },
     ),
+    listChatModelCapabilities: (requestOptions) => request("/agent-runs/models", {
+      signal: requestOptions?.signal,
+    }),
     createChatAgentRun: (input, idempotencyKey, requestOptions) => request("/agent-runs", {
       method: "POST",
       body: JSON.stringify(input),

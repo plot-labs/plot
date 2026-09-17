@@ -165,6 +165,7 @@ class AgentRunWorker(
 		}.orEmpty()
 		val selectedModel = settings.path("model").takeIf { it.isTextual }?.stringValue()
 		val routingProvider = settings.path("routingProvider").takeIf { it.isTextual }?.stringValue()
+		val reasoningEffort = settings.path("reasoningEffort").takeIf { it.isTextual }?.stringValue()
 		val host = object : AgentRuntimeHost {
 			override val finished: Boolean get() = finished
 			override val modelTimeoutMillis: Long get() = minOf(
@@ -202,6 +203,7 @@ class AgentRunWorker(
 					responseMode = responseMode,
 					model = selectedModel,
 					routingProvider = routingProvider,
+					reasoningEffort = reasoningEffort,
 				)
 			}
 			override fun execute(decision: AgentDecision): String {

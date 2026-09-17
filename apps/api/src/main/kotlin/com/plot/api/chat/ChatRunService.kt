@@ -75,6 +75,7 @@ class ChatRunService(
 			workSessionId = request.workSessionId,
 			writingBlockIds = request.writingBlockIds,
 			requestedModel = request.model,
+			requestedReasoningEffort = request.reasoningEffort ?: ChatReasoningEfforts.DEFAULT,
 			idempotencyKey = idempotencyKey,
 			chatTitle = null,
 		)
@@ -274,6 +275,7 @@ class ChatRunService(
 		chatTitle: String?,
 		skillIds: List<UUID> = emptyList(),
 		requestedModel: String = ChatModels.AUTO,
+		requestedReasoningEffort: String = ChatReasoningEfforts.DEFAULT,
 	): AgentRunRecord {
 		val workspaceId = principal.workspaceId
 		val userId = principal.userId
@@ -282,7 +284,7 @@ class ChatRunService(
 			throw ApiException(HttpStatus.BAD_REQUEST, "IDEMPOTENCY_KEY_REQUIRED", "Idempotency-Key is required")
 		}
 		val normalizedInstruction = instruction.trim()
-		val modelSelection = ChatModels.resolve(requestedModel, aiProperties)
+		val modelSelection = ChatModels.resolve(requestedModel, aiProperties, requestedReasoningEffort)
 		if (writingBlockIds.distinct().size != writingBlockIds.size) {
 			throw ApiException(HttpStatus.BAD_REQUEST, "DUPLICATE_SOURCE_ITEMS", "Writing Block IDs must be unique")
 		}
@@ -294,6 +296,7 @@ class ChatRunService(
 				workSessionId = workSessionId,
 				writingBlockIds = writingBlockIds,
 				model = modelSelection.requestedModel,
+				reasoningEffort = modelSelection.reasoningEffort,
 			),
 		)
 		return transactionExecutor.execute {
@@ -380,6 +383,7 @@ class ChatRunService(
 					"requestedModel" to modelSelection.requestedModel,
 					"model" to modelSelection.model,
 					"routingProvider" to modelSelection.routingProvider,
+					"reasoningEffort" to modelSelection.reasoningEffort,
 				),
 			)
 			val sourceSnapshot = contentSourceSnapshotService.findOrCreateSnapshotForAgentRun(workspaceId, runId)
@@ -677,6 +681,7 @@ class ChatRunService(
 			append(request.instruction).append('|')
 			request.writingBlockIds.forEach { append(it).append(',') }
 			append('|').append(request.model)
+			append('|').append(request.reasoningEffort)
 		}
 		val skillAwareCanonical = if (request.skillIds.isEmpty()) canonical else objectMapper.writeValueAsString(
 			mapOf("request" to canonical, "skillIds" to request.skillIds),

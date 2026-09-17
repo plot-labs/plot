@@ -34,6 +34,7 @@ import com.plot.api.chat.ChatRunService
 import com.plot.api.chat.dto.CreateChatAgentRunRequest
 import com.plot.api.common.ApiException
 import com.plot.api.common.WorkspacePrincipal
+import com.plot.api.config.PlotAiProperties
 import com.plot.api.dev.DevBootstrapService
 import com.plot.api.dev.DevContext
 import com.plot.api.worksession.WorkSessionService
@@ -262,6 +263,69 @@ class AgentRunWorkerIntegrationTest {
 			request.toString().contains("MUTATED SECRET") || request.toString().contains("Authorization")
 		})
 		assertOwnershipAuditClear()
+	}
+
+	@Test
+	fun `routine freezes the selected model and reasoning effort for its Agent run`() {
+		val source = insertSource("acme/model-selection")
+		val blockId = insertBlock(source, "Activity", "Selected model evidence")
+		val routine = routinePersistence.insert(
+			workspaceId = devContext.devWorkspaceId,
+			createdByUserId = devContext.devUserId,
+			name = "Selected model routine",
+			sourceScopeId = source.scopeId,
+			instruction = "Create an update with the selected model",
+			cadence = RoutineCadence.DAILY,
+			model = PlotAiProperties.GEMINI_3_8_FLASH_MODEL,
+			reasoningEffort = "high",
+		)
+		val execution = agentPersistence.createExecution(
+			RoutineExecutionRequest(
+				workspaceId = routine.workspaceId,
+				routineId = routine.id,
+				createdByUserId = routine.createdByUserId,
+				triggerSourceScopeId = routine.sourceScopeId,
+				triggerKind = RoutineExecutionTriggerKind.MANUAL,
+				triggerKey = "manual:${routine.id}:selected-model",
+				requestFingerprint = "selected-model:${routine.id}",
+				activityCursorBefore = routine.activityCursorSequence,
+			),
+		)
+
+		routineWorker.runNow(routine.workspaceId, routine.id, execution.id)
+		val agentRunId = jdbcTemplate.queryForObject(
+			"select id from agent_runs where workspace_id = ? and routine_execution_id = ?",
+			UUID::class.java,
+			routine.workspaceId,
+			execution.id,
+		)!!
+		assertEquals(
+			PlotAiProperties.GEMINI_3_8_FLASH_MODEL,
+			jdbcTemplate.queryForObject(
+				"select generation_settings ->> 'model' from chat_execution_envelopes where workspace_id = ? and agent_run_id = ?",
+				String::class.java,
+				devContext.devWorkspaceId,
+				agentRunId,
+			),
+		)
+		assertEquals("google-ai-studio", jdbcTemplate.queryForObject(
+			"select generation_settings ->> 'routingProvider' from chat_execution_envelopes where workspace_id = ? and agent_run_id = ?",
+			String::class.java,
+			devContext.devWorkspaceId,
+			agentRunId,
+		))
+		assertEquals("high", jdbcTemplate.queryForObject(
+			"select generation_settings ->> 'reasoningEffort' from chat_execution_envelopes where workspace_id = ? and agent_run_id = ?",
+			String::class.java,
+			devContext.devWorkspaceId,
+			agentRunId,
+		))
+
+		agentModel.reads = listOf(source.scopeId to blockId)
+		assertTrue(agentWorker.processOne())
+		assertEquals(PlotAiProperties.GEMINI_3_8_FLASH_MODEL, agentModel.requests.single().model)
+		assertEquals("google-ai-studio", agentModel.requests.single().routingProvider)
+		assertEquals("high", agentModel.requests.single().reasoningEffort)
 	}
 
 	@Test

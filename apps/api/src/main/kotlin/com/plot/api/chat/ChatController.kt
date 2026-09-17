@@ -5,6 +5,7 @@ import com.plot.api.chat.dto.ChatResponseVersionDto
 import com.plot.api.chat.dto.ChatTurnDto
 import com.plot.api.chat.dto.CreateChatAgentRunRequest
 import com.plot.api.chat.dto.RetryEligibilityDto
+import com.plot.api.config.PlotAiProperties
 import jakarta.validation.Valid
 import java.net.URI
 import java.util.UUID
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.RestController
 class ChatController(
 	private val runs: ChatRunService,
 	private val queries: ChatQueryService,
+	private val aiProperties: PlotAiProperties,
 ) {
 	@PostMapping
 	fun create(
@@ -36,6 +38,11 @@ class ChatController(
 			.cacheControl(CacheControl.noStore())
 			.body(response)
 	}
+
+	@GetMapping("/models")
+	fun listModelCapabilities(): ResponseEntity<List<ChatModelCapability>> = ResponseEntity.ok()
+		.cacheControl(CacheControl.noStore())
+		.body(ChatModels.capabilities(aiProperties))
 
 	@GetMapping("/{id}")
 	fun get(@PathVariable id: UUID): ResponseEntity<ChatAgentRunResponse> = ResponseEntity.ok()

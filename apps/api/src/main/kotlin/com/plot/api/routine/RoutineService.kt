@@ -4,8 +4,11 @@ import com.plot.api.agent.AgentRunQueryPersistence
 import com.plot.api.agent.AgentRunRecord
 import com.plot.api.agent.AgentStepRecord
 
+import com.plot.api.chat.ChatModels
+import com.plot.api.chat.ChatReasoningEfforts
 import com.plot.api.common.ApiException
 import com.plot.api.common.UuidGenerator
+import com.plot.api.config.PlotAiProperties
 import com.plot.api.dev.DevContext
 import com.plot.api.source.SourceManagedAccessGuard
 import com.plot.api.source.SourceScope
@@ -27,6 +30,7 @@ class RoutineService(
 	private val sourceScopeRepository: SourceScopeRepository,
 	private val sourceManagedAccessGuard: SourceManagedAccessGuard,
 	private val skills: com.plot.api.skill.SkillService,
+	private val aiProperties: PlotAiProperties,
 ) {
 	@Transactional(readOnly = true)
 	fun list(): List<RoutineView> = persistence.list(devContext.devWorkspaceId).map(::view)
@@ -39,6 +43,11 @@ class RoutineService(
 		sourceManagedAccessGuard.requireReadable()
 		val sourceScopeId = requireNotNull(request.sourceScopeId)
 		val cadence = requireNotNull(request.cadence)
+		val modelSelection = ChatModels.resolve(
+			requestedModel = request.model,
+			properties = aiProperties,
+			requestedReasoningEffort = request.reasoningEffort ?: ChatReasoningEfforts.DEFAULT,
+		)
 		val scope = requireGitHubScope(sourceScopeId)
 		val contextSourceScopeIds = request.contextSourceScopeIds
 		if (
@@ -60,6 +69,8 @@ class RoutineService(
 			instruction = request.instruction.trim(),
 			skillsSnapshotJson = skills.freeze(devContext.devWorkspaceId, request.skillIds),
 			cadence = cadence,
+			model = modelSelection.requestedModel,
+			reasoningEffort = modelSelection.reasoningEffort,
 		)
 		contextSourceScopeIds.forEachIndexed { index, id ->
 			agentPersistence.addContextSource(routine.workspaceId, routine.id, id, index)

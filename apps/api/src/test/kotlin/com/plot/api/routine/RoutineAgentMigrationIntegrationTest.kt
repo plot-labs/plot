@@ -16,6 +16,7 @@ import com.plot.api.agent.AgentStepRequest
 import com.plot.api.agent.AgentStepStatus
 
 import com.plot.api.TestcontainersConfiguration
+import com.plot.api.config.PlotAiProperties
 import com.plot.api.artifact.run.ArtifactRunPersistence
 import com.plot.api.chat.ChatCompatibilityWriter
 import com.plot.api.common.UuidGenerator
@@ -84,13 +85,14 @@ class RoutineAgentMigrationIntegrationTest {
 				uuidGenerator,
 				queryPersistence,
 				registration,
-				ContentProfilePersistence(
-					schemaSqlExecutor,
-					schemaTransactionExecutor,
-					uuidGenerator,
-					ObjectMapper(),
-				),
-				compatibilityWriter = compatibilityWriter,
+					ContentProfilePersistence(
+						schemaSqlExecutor,
+						schemaTransactionExecutor,
+						uuidGenerator,
+						ObjectMapper(),
+					),
+					aiProperties = PlotAiProperties(),
+					compatibilityWriter = compatibilityWriter,
 			),
 			queryPersistence = queryPersistence,
 			executionPersistence = AgentRunExecutionPersistence(

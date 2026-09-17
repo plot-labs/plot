@@ -9,7 +9,10 @@ import com.plot.api.agent.AgentRunRecord
 import com.plot.api.agent.AgentRunSourceRole
 
 import com.plot.api.chat.ChatCompatibilityWriter
+import com.plot.api.chat.ChatModels
+import com.plot.api.chat.ChatReasoningEfforts
 import com.plot.api.common.UuidGenerator
+import com.plot.api.config.PlotAiProperties
 import com.plot.api.contentprofile.ContentProfilePersistence
 import com.plot.api.persistence.SqlExecutor
 import com.plot.api.persistence.TransactionExecutor
@@ -28,13 +31,20 @@ class RoutineAgentAdmissionPersistence(
 	private val queryPersistence: AgentRunQueryPersistence,
 	private val registration: AgentRunRegistrationPersistence,
 	private val contentProfilePersistence: ContentProfilePersistence,
+	private val aiProperties: PlotAiProperties,
 	private val clock: Clock? = null,
 	private val compatibilityWriter: ChatCompatibilityWriter,
 	private val objectMapper: ObjectMapper = ObjectMapper(),
 ) {
 	private fun currentInstant(): Instant = clock?.instant() ?: Instant.now()
 
-	private data class RoutineCursor(val value: Long?, val enabled: Boolean, val releaseCadence: Boolean)
+	private data class RoutineCursor(
+		val value: Long?,
+		val enabled: Boolean,
+		val releaseCadence: Boolean,
+		val requestedModel: String,
+		val requestedReasoningEffort: String?,
+	)
 	private data class LockedSource(val id: UUID, val displayName: String, val status: String, val statusChangedAt: Instant)
 
 	fun dispatch(
@@ -56,6 +66,11 @@ class RoutineAgentAdmissionPersistence(
 		val ownershipArgs: Array<Any> = workerId?.let { arrayOf<Any>(it) } ?: emptyArray()
 		val currentRoutineCursor = findRoutineCursorForUpdate(workspaceId, execution.routineId)
 			?: throw RoutineExecutionStateException("Routine was not found")
+		val modelSelection = ChatModels.resolve(
+			requestedModel = currentRoutineCursor.requestedModel,
+			properties = aiProperties,
+			requestedReasoningEffort = currentRoutineCursor.requestedReasoningEffort ?: ChatReasoningEfforts.DEFAULT,
+		)
 		if (!currentRoutineCursor.enabled && execution.triggerKind != RoutineExecutionTriggerKind.MANUAL) {
 			throw RoutineExecutionStateException("Routine is disabled")
 		}
@@ -146,6 +161,10 @@ class RoutineAgentAdmissionPersistence(
 				"contentType" to request.contentType.name,
 				"contentProfileRevisionId" to profileRevisionId,
 				"contentBriefSnapshot" to request.contentBriefSnapshotJson,
+				"requestedModel" to modelSelection.requestedModel,
+				"model" to modelSelection.model,
+				"routingProvider" to modelSelection.routingProvider,
+				"reasoningEffort" to modelSelection.reasoningEffort,
 			),
 		)
 		compatibilityWriter.recordRoutineRun(
@@ -229,10 +248,11 @@ class RoutineAgentAdmissionPersistence(
 		id,
 	).firstOrNull()
 	private fun findRoutineCursorForUpdate(workspaceId: UUID, routineId: UUID): RoutineCursor? = sqlExecutor.query(
-		"select activity_cursor_sequence, enabled, cadence from routines where workspace_id = ? and id = ? for update",
+		"select activity_cursor_sequence, enabled, cadence, model, reasoning_effort from routines where workspace_id = ? and id = ? for update",
 		{ rs, _ -> RoutineCursor(
 			rs.getObject(1, Long::class.javaObjectType), rs.getBoolean("enabled"),
 			rs.getString("cadence") in setOf("ON_GIT_TAG", "ON_GITHUB_RELEASE"),
+			requireNotNull(rs.getString("model")), rs.getString("reasoning_effort"),
 		) },
 		workspaceId,
 		routineId,
