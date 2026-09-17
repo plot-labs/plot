@@ -62,6 +62,7 @@ class ChatModelSelectionTest {
 		assertEquals("none", ChatModels.resolve(PlotAiProperties.GPT_5_4_MODEL, PlotAiProperties(), "none").reasoningEffort)
 		assertEquals("xhigh", ChatModels.resolve(PlotAiProperties.QWEN_3_8_MAX_MODEL, PlotAiProperties(), "xhigh").reasoningEffort)
 		assertEquals(null, ChatModels.resolve(PlotAiProperties.CLAUDE_HAIKU_4_5_MODEL, PlotAiProperties(), "medium").reasoningEffort)
+		assertEquals(null, ChatReasoningEfforts.capabilityFor(PlotAiProperties.CLAUDE_HAIKU_4_5_MODEL).reasoningDefault)
 
 		assertFailsWith<ApiException> {
 			ChatModels.resolve(PlotAiProperties.GEMINI_3_8_FLASH_MODEL, PlotAiProperties(), "max")

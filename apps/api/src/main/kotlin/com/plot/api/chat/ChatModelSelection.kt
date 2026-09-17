@@ -76,7 +76,7 @@ object ChatReasoningEfforts {
 		return ChatModelCapability(
 			model = model ?: "auto",
 			reasoningEfforts = capability?.supported ?: SUPPORTED,
-			reasoningDefault = capability?.default ?: DEFAULT,
+			reasoningDefault = if (capability == null) DEFAULT else capability.default,
 		)
 	}
 }
