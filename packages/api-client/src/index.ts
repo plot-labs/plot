@@ -570,13 +570,15 @@ export interface UpdateContentProfileInput {
 }
 
 export interface Routine {
-  skills?: SkillSnapshot[];
-  id: string;
-  name: string;
-  sourceScopeId: string;
-  sourceLabel: string;
-  instruction: string;
-  cadence: RoutineCadence;
+	skills?: SkillSnapshot[];
+	id: string;
+	name: string;
+	sourceScopeId: string;
+	sourceLabel: string;
+	instruction: string;
+	model: ChatModel;
+	reasoningEffort: ChatReasoningEffort | null;
+	cadence: RoutineCadence;
   enabled: boolean;
   lastRunAt: string | null;
   nextRunAt: string;
@@ -683,7 +685,7 @@ export interface PlotApiClient {
   deleteSkill(id: string, options?: RequestOptions): Promise<void>;
   listRoutines(options?: RequestOptions): Promise<Routine[]>;
   getRoutine(id: string, options?: RequestOptions): Promise<Routine>;
-  createRoutine(input: { skillIds?: string[]; name: string; sourceScopeId: string; contextSourceScopeIds?: string[]; instruction: string; cadence: RoutineCadence }, options?: RequestOptions): Promise<Routine>;
+	createRoutine(input: { skillIds?: string[]; name: string; sourceScopeId: string; contextSourceScopeIds?: string[]; instruction: string; cadence: RoutineCadence; model?: ChatModel; reasoningEffort?: ChatReasoningEffort | null }, options?: RequestOptions): Promise<Routine>;
   updateRoutine(id: string, input: { enabled: boolean }, options?: RequestOptions): Promise<Routine>;
   runRoutineNow(id: string, idempotencyKey: string, options?: RequestOptions): Promise<Routine>;
   getRoutineAgentRun(routineId: string, agentRunId: string, options?: RequestOptions): Promise<RoutineAgentRunDetail>;
