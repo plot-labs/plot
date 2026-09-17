@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRef, useState } from "react";
 
-import type { ChatModel, SourceReference } from "@plot/api-client";
+import type { ChatModel, ChatReasoningEffort, SourceReference } from "@plot/api-client";
 import { ChatComposer } from "@/features/chat/chat-composer";
 import {
   isNonRetryableRequestError,
@@ -31,7 +31,13 @@ export function ChatHome({ references, referencesLoading, referencesError }: Cha
   const canGenerate = entitlement?.capabilities.generate ?? true;
   const trialUntil = trialEndsLabel(entitlement?.trialEndsAt ?? null);
 
-  async function submitHomeRequest(message: string, referenceIds: string[], skillIds: string[] = [], model: ChatModel = "auto") {
+  async function submitHomeRequest(
+    message: string,
+    referenceIds: string[],
+    skillIds: string[] = [],
+    model: ChatModel = "auto",
+    reasoningEffort: ChatReasoningEffort = "medium",
+  ) {
     const selected = selectReferences(references, referenceIds);
     const validationError = validateSourceSelection(selected, referencesError);
     if (validationError) {
@@ -45,7 +51,7 @@ export function ChatHome({ references, referencesLoading, referencesError }: Cha
       pendingRequestRef,
       message,
       selected.map((reference) => reference.id),
-      JSON.stringify({ skillIds, model }),
+      JSON.stringify({ skillIds, model, reasoningEffort }),
     );
     try {
       const run = await plotApiClient.createChatAgentRun({
@@ -53,6 +59,7 @@ export function ChatHome({ references, referencesLoading, referencesError }: Cha
         writingBlockIds: selected.map((reference) => reference.id),
         skillIds,
         model,
+        reasoningEffort,
       }, idempotencyKey);
       pendingRequestRef.current = null;
       window.location.assign(`/chat?chat=${encodeURIComponent(run.chatId)}&agent=${encodeURIComponent(run.id)}`);
@@ -73,7 +80,7 @@ export function ChatHome({ references, referencesLoading, referencesError }: Cha
           key={references.map((reference) => reference.id).join(":") || "no-references"}
           variant="center"
           placeholder="Ask a question or create content..."
-          onSubmit={(message, ids, skills, model) => void submitHomeRequest(message, ids, skills, model)}
+          onSubmit={(message, ids, skills, model, effort) => void submitHomeRequest(message, ids, skills, model, effort)}
           references={toComposerReferences(references)}
           busy={starting || referencesLoading}
           canGenerate={canGenerate}

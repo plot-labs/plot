@@ -1,14 +1,26 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { ChatModel, Skill } from "@plot/api-client";
+import type { ChatModel, ChatReasoningEffort, Skill } from "@plot/api-client";
 import { plotApiClient } from "@/lib/api-client";
-import PromptBar from "@/components/primitives/prompt-bar";
-import { CHAT_MODELS, CHAT_MODEL_STORAGE_KEY, parseChatModel } from "./chat-models";
+import PromptBar, { type PromptModelOption } from "@/components/primitives/prompt-bar";
+import {
+  CHAT_MODELS,
+  CHAT_MODEL_STORAGE_KEY,
+  CHAT_REASONING_EFFORT_STORAGE_KEY,
+  parseChatModel,
+  parseChatReasoningEffort,
+} from "./chat-models";
 import { resolveComposerReferenceIds } from "./chat-workspace-utils";
 
 type ChatComposerProps = {
-  onSubmit: (message: string, referenceIds: string[], skillIds: string[], model: ChatModel) => void;
+  onSubmit: (
+    message: string,
+    referenceIds: string[],
+    skillIds: string[],
+    model: ChatModel,
+    reasoningEffort: ChatReasoningEffort,
+  ) => void;
   variant?: "center" | "dock";
   id?: string;
   placeholder?: string;
@@ -30,10 +42,35 @@ export function ChatComposer({
   const submittingRef = useRef(false);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [skillIds, setSkillIds] = useState<string[]>([]);
+  const [chatModels, setChatModels] = useState<readonly PromptModelOption[]>(CHAT_MODELS);
   const [model, setModel] = useState<ChatModel>("auto");
+  const [reasoningEffort, setReasoningEffort] = useState<ChatReasoningEffort>("medium");
   const [modelPreferenceLoaded, setModelPreferenceLoaded] = useState(false);
+  const [reasoningPreferenceLoaded, setReasoningPreferenceLoaded] = useState(false);
   const modelChangedRef = useRef(false);
+  const reasoningChangedRef = useRef(false);
   const isSendDisabled = busy || !canGenerate;
+
+  useEffect(() => {
+    if (typeof plotApiClient.listChatModelCapabilities !== "function") return;
+    const controller = new AbortController();
+    plotApiClient
+      .listChatModelCapabilities({ signal: controller.signal })
+      .then((capabilities) => {
+        if (controller.signal.aborted) return;
+        const autoCapability = capabilities.find((capability) => capability.model === "auto");
+        if (!autoCapability) return;
+        setChatModels(CHAT_MODELS.map((item) => item.id === "auto"
+          ? {
+              ...item,
+              reasoningEfforts: autoCapability.reasoningEfforts,
+              reasoningDefault: autoCapability.reasoningDefault ?? undefined,
+            }
+          : item));
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -67,10 +104,17 @@ export function ChatComposer({
         if (!modelChangedRef.current) {
           setModel(parseChatModel(window.localStorage.getItem(CHAT_MODEL_STORAGE_KEY)) ?? "auto");
         }
+        if (!reasoningChangedRef.current) {
+          setReasoningEffort(
+            parseChatReasoningEffort(window.localStorage.getItem(CHAT_REASONING_EFFORT_STORAGE_KEY)) ?? "medium",
+          );
+        }
       } catch {
         if (!modelChangedRef.current) setModel("auto");
+        if (!reasoningChangedRef.current) setReasoningEffort("medium");
       } finally {
         setModelPreferenceLoaded(true);
+        setReasoningPreferenceLoaded(true);
       }
     });
     return () => {
@@ -87,13 +131,33 @@ export function ChatComposer({
     }
   }, [model, modelPreferenceLoaded]);
 
+  useEffect(() => {
+    if (!reasoningPreferenceLoaded) return;
+    try {
+      window.localStorage.setItem(CHAT_REASONING_EFFORT_STORAGE_KEY, reasoningEffort);
+    } catch {
+      // Storage can be unavailable in private browsing; the in-memory selection still works.
+    }
+  }, [reasoningEffort, reasoningPreferenceLoaded]);
+
   function handleSend(text: string) {
     if (submittingRef.current || isSendDisabled) return;
     const trimmed = text.trim();
     if (!trimmed) return;
 
+    const selectedModel = chatModels.find((item) => item.id === model);
+    const supportedReasoningEfforts = selectedModel?.reasoningEfforts;
+    const effectiveReasoningEffort = supportedReasoningEfforts && supportedReasoningEfforts.length > 0 &&
+      !supportedReasoningEfforts.includes(reasoningEffort)
+      ? selectedModel.reasoningDefault ?? supportedReasoningEfforts[0] ?? reasoningEffort
+      : reasoningEffort;
+    if (effectiveReasoningEffort !== reasoningEffort) {
+      reasoningChangedRef.current = true;
+      setReasoningEffort(effectiveReasoningEffort);
+    }
+
     submittingRef.current = true;
-    onSubmit(trimmed, resolveComposerReferenceIds(references, []), skillIds, model);
+    onSubmit(trimmed, resolveComposerReferenceIds(references, []), skillIds, model, effectiveReasoningEffort);
     setSkillIds([]);
     queueMicrotask(() => {
       submittingRef.current = false;
@@ -120,11 +184,16 @@ export function ChatComposer({
             skills={skills}
             selectedSkillIds={skillIds}
             onSelectedSkillIdsChange={setSkillIds}
-            models={CHAT_MODELS}
+            models={chatModels}
             selectedModelId={model}
             onSelectedModelIdChange={(value) => {
               modelChangedRef.current = true;
               setModel(parseChatModel(value) ?? "auto");
+            }}
+            reasoningEffort={reasoningEffort}
+            onReasoningEffortChange={(value) => {
+              reasoningChangedRef.current = true;
+              setReasoningEffort(value);
             }}
             onSend={handleSend}
           />
@@ -152,11 +221,16 @@ export function ChatComposer({
           skills={skills}
           selectedSkillIds={skillIds}
           onSelectedSkillIdsChange={setSkillIds}
-          models={CHAT_MODELS}
+          models={chatModels}
           selectedModelId={model}
           onSelectedModelIdChange={(value) => {
             modelChangedRef.current = true;
             setModel(parseChatModel(value) ?? "auto");
+          }}
+          reasoningEffort={reasoningEffort}
+          onReasoningEffortChange={(value) => {
+            reasoningChangedRef.current = true;
+            setReasoningEffort(value);
           }}
           onSend={handleSend}
         />
