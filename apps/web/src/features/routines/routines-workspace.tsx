@@ -10,6 +10,9 @@ import {
   getSelectedWorkspaceId,
   plotApiClient,
   PlotApiError,
+  type ChatModel,
+  type ChatModelCapability,
+  type ChatReasoningEffort,
   type GitHubRepository,
   type Routine,
   type RoutineAgentRunDetail,
@@ -24,10 +27,17 @@ import {
 
 import { isReleaseCadence } from "./release-activity-utils";
 import { RoutineReleaseActivity } from "./routine-release-activity";
+import {
+  preferredReasoningEffortForRoutineModel,
+  reasoningEffortsForRoutineModel,
+  RoutineModelPicker,
+  type RoutineModelOption,
+} from "./routine-model-picker";
 import { RoutineTriggerPicker } from "./routine-trigger-picker";
 import { SourceRepositoryPicker, type SourceOption } from "./source-repository-picker";
 
 import { SkillSelector } from "@/features/skills/skill-selector";
+import { CHAT_MODELS } from "@/features/chat/chat-models";
 
 const defaultInstruction = "Create a concise update from the latest changes.";
 
@@ -40,6 +50,9 @@ export function RoutinesWorkspace() {
   const [skillIds, setSkillIds] = useState<string[]>([]);
   const [instruction, setInstruction] = useState(defaultInstruction);
   const [cadence, setCadence] = useState<RoutineCadence>("WEEKLY");
+  const [automationModel, setAutomationModel] = useState<ChatModel>("auto");
+  const [automationReasoningEffort, setAutomationReasoningEffort] = useState<ChatReasoningEffort | null>("medium");
+  const [automationModels, setAutomationModels] = useState<readonly RoutineModelOption[]>(CHAT_MODELS);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [busyRoutineId, setBusyRoutineId] = useState<string | null>(null);
@@ -77,6 +90,9 @@ export function RoutinesWorkspace() {
       setSources([]);
       setSourceScopeId("");
       setContextSourceScopeIds([]);
+      setAutomationModel("auto");
+      setAutomationReasoningEffort("medium");
+      setAutomationModels(CHAT_MODELS);
       setError(null);
       setLoadError(null);
       setIsLoading(true);
@@ -154,6 +170,37 @@ export function RoutinesWorkspace() {
   }, [reloadNonce]);
 
   useEffect(() => {
+    const controller = new AbortController();
+    const workspaceRevision = workspaceRevisionRef.current;
+    const workspaceId = getSelectedWorkspaceId();
+    if (!workspaceId || typeof plotApiClient.listChatModelCapabilities !== "function") {
+      return () => controller.abort();
+    }
+
+    plotApiClient.listChatModelCapabilities({ signal: controller.signal })
+      .then((capabilities) => {
+        if (!requestIsCurrent(controller, workspaceRevision, workspaceId)) return;
+        setAutomationModels((current) => mergeRoutineModelCapabilities(current, capabilities));
+      })
+      .catch(() => {
+        // Static Chat model capabilities remain available when the catalog endpoint is unavailable.
+      });
+
+    return () => controller.abort();
+  }, [reloadNonce]);
+
+  useEffect(() => {
+    const selectedModel = automationModels.find((item) => item.id === automationModel);
+    if (!selectedModel) return;
+    const supported = reasoningEffortsForRoutineModel(selectedModel);
+    setAutomationReasoningEffort((current) => {
+      if (!supported.length) return null;
+      if (current && supported.includes(current)) return current;
+      return preferredReasoningEffortForRoutineModel(selectedModel, supported);
+    });
+  }, [automationModel, automationModels]);
+
+  useEffect(() => {
     if (createOpen) {
       createPanelRef.current?.scrollIntoView?.({ block: "start" });
       nameInputRef.current?.focus({ preventScroll: true });
@@ -203,6 +250,8 @@ export function RoutinesWorkspace() {
         instruction: instruction.trim(),
         skillIds,
         cadence,
+        model: automationModel,
+        reasoningEffort: automationReasoningEffort,
       }, { signal: controller.signal });
       if (!requestIsCurrent(controller, workspaceRevision, workspaceId)) return;
       setRoutines((current) => [routine, ...current]);
@@ -210,6 +259,8 @@ export function RoutinesWorkspace() {
       setInstruction(defaultInstruction);
       setSkillIds([]);
       setContextSourceScopeIds([]);
+      setAutomationModel("auto");
+      setAutomationReasoningEffort("medium");
       restoreCreateFocusRef.current = true;
       setCreateOpen(false);
     } catch {
@@ -326,6 +377,16 @@ export function RoutinesWorkspace() {
     setContextSourceScopeIds((current) => current.filter((id) => id !== nextSourceScopeId));
   }
 
+  function changeAutomationModel(nextModel: ChatModel) {
+    setAutomationModel(nextModel);
+    const selectedModel = automationModels.find((item) => item.id === nextModel);
+    if (!selectedModel) return;
+    const supported = reasoningEffortsForRoutineModel(selectedModel);
+    setAutomationReasoningEffort((current) => !supported.length || !current || !supported.includes(current)
+      ? preferredReasoningEffortForRoutineModel(selectedModel, supported)
+      : current);
+  }
+
   function toggleContextSource(id: string) {
     setContextSourceScopeIds((current) => current.includes(id)
       ? current.filter((sourceId) => sourceId !== id)
@@ -433,6 +494,7 @@ export function RoutinesWorkspace() {
                           <div className="min-w-0">
                             <h2 className="truncate text-[14px] font-semibold text-black/82 dark:text-white/86">{routine.name}</h2>
                             {routine.skills?.length ? <p className="mt-1 text-xs text-black/45 dark:text-white/45">Skills: {routine.skills.map((skill) => skill.name).join(", ")}</p> : null}
+                            <p className="mt-1 text-xs text-black/45 dark:text-white/45">{formatRoutineModel(routine.model)}{routine.reasoningEffort ? ` · Effort ${formatReasoningEffort(routine.reasoningEffort)}` : ""}</p>
                             <p className="mt-1 text-[12px] leading-5 text-black/45 dark:text-white/45">{formatCadence(routine.cadence)}</p>
                           </div>
                           <span className="shrink-0 text-[11px] font-medium text-black/38 dark:text-white/40">{routine.enabled ? "On" : "Paused"}</span>
@@ -513,6 +575,17 @@ export function RoutinesWorkspace() {
                   <span>Draft instruction</span>
                   <textarea value={instruction} onChange={(event) => setInstruction(event.target.value)} maxLength={2_000} rows={4} className="w-full resize-y rounded-[9px] border border-black/10 bg-white px-3 py-2.5 text-sm font-normal leading-5 text-black/80 outline-none placeholder:text-black/35 focus:border-black/25 focus:ring-2 focus:ring-black/[0.05] dark:border-white/12 dark:bg-white/[0.06] dark:text-white/85 dark:placeholder:text-white/35" />
                 </label>
+                <div className="flex flex-col gap-2.5 text-[12px] font-medium text-black/62 dark:text-white/65">
+                  <span>Model</span>
+                  <RoutineModelPicker
+                    models={automationModels}
+                    value={automationModel}
+                    reasoningEffort={automationReasoningEffort}
+                    onModelChange={changeAutomationModel}
+                    onReasoningEffortChange={setAutomationReasoningEffort}
+                    disabled={isSaving}
+                  />
+                </div>
                 <SkillSelector value={skillIds} onChange={setSkillIds} disabled={isSaving} />
                 <div className="flex flex-col gap-2.5 text-[12px] font-medium text-black/62 dark:text-white/65">
                   <span>Trigger</span>
@@ -543,6 +616,31 @@ export function RoutinesWorkspace() {
       </div>
     </div>
   );
+}
+
+function mergeRoutineModelCapabilities(
+  models: readonly RoutineModelOption[],
+  capabilities: readonly ChatModelCapability[],
+): readonly RoutineModelOption[] {
+  const byModel = new Map(capabilities.map((capability) => [capability.model, capability]));
+  return models.map((model) => {
+    const capability = byModel.get(model.id);
+    return capability
+      ? {
+          ...model,
+          reasoningEfforts: capability.reasoningEfforts,
+          reasoningDefault: capability.reasoningDefault ?? undefined,
+        }
+      : model;
+  });
+}
+
+function formatRoutineModel(model: ChatModel) {
+  return CHAT_MODELS.find((option) => option.id === model)?.label ?? model;
+}
+
+function formatReasoningEffort(effort: ChatReasoningEffort) {
+  return effort === "xhigh" ? "Extra high" : effort.charAt(0).toUpperCase() + effort.slice(1);
 }
 
 function formatDate(value: string) {

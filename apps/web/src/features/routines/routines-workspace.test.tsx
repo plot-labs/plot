@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   workspaceId: "workspace-1" as string | null,
   listRoutines: vi.fn(),
   listGitHubConnections: vi.fn(),
+  listChatModelCapabilities: vi.fn(),
   createRoutine: vi.fn(),
   updateRoutine: vi.fn(),
   runRoutineNow: vi.fn(),
@@ -26,6 +27,7 @@ vi.mock("@/lib/api-client", async () => {
       listSkills: vi.fn().mockResolvedValue([]),
       listRoutines: mocks.listRoutines,
       listGitHubConnections: mocks.listGitHubConnections,
+      listChatModelCapabilities: mocks.listChatModelCapabilities,
       createRoutine: mocks.createRoutine,
       updateRoutine: mocks.updateRoutine,
       runRoutineNow: mocks.runRoutineNow,
@@ -62,6 +64,7 @@ describe("RoutinesWorkspace", () => {
     mocks.workspaceId = "workspace-1";
     mocks.listRoutines.mockReset().mockResolvedValue([]);
     mocks.listGitHubConnections.mockReset().mockResolvedValue([activeConnection]);
+    mocks.listChatModelCapabilities.mockReset().mockResolvedValue([]);
     mocks.createRoutine.mockReset();
     mocks.updateRoutine.mockReset();
     mocks.runRoutineNow.mockReset();
@@ -292,6 +295,40 @@ describe("RoutinesWorkspace", () => {
     }), expect.anything()));
   });
 
+  it("creates a routine with the selected model and reasoning effort", async () => {
+    mocks.createRoutine.mockImplementation(async (input) => routine({
+      id: "routine-created",
+      model: input.model,
+      reasoningEffort: input.reasoningEffort,
+    }));
+    render(<RoutinesWorkspace />);
+
+    await screen.findByText("No routines yet");
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+    fireEvent.click(screen.getByRole("button", { name: "Automation model: Auto" }));
+    fireEvent.click(within(screen.getByRole("listbox", { name: "Automation model" })).getByRole("option", { name: "Claude Sonnet 4.6" }));
+    fireEvent.click(screen.getByRole("button", { name: "Automation reasoning effort: Medium" }));
+    fireEvent.click(within(screen.getByRole("listbox", { name: "Automation reasoning effort" })).getByRole("option", { name: "High" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Routine name" }), { target: { value: "Reasoned update" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create routine" }));
+
+    await waitFor(() => expect(mocks.createRoutine).toHaveBeenCalledWith(expect.objectContaining({
+      model: "anthropic/claude-sonnet-4.6",
+      reasoningEffort: "high",
+    }), expect.anything()));
+  });
+
+  it("hides effort selection for models without reasoning support", async () => {
+    render(<RoutinesWorkspace />);
+
+    await screen.findByText("No routines yet");
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+    fireEvent.click(screen.getByRole("button", { name: "Automation model: Auto" }));
+    fireEvent.click(within(screen.getByRole("listbox", { name: "Automation model" })).getByRole("option", { name: "Claude Haiku 4.5" }));
+
+    expect(screen.queryByRole("button", { name: /Automation reasoning effort:/ })).not.toBeInTheDocument();
+  });
+
   it("shows no artifact or Chat for no activity and links successful work to one Chat and Artifact", async () => {
     mocks.listRoutines.mockResolvedValue([
       routine({ id: "routine-empty", name: "No activity routine", latestExecution: execution({ status: "NO_ACTIVITY", chatId: null, agentRunId: null, agentRunStatus: null }) }),
@@ -432,6 +469,8 @@ function routine(overrides: Partial<Routine> = {}): Routine {
     sourceScopeId: "source-1",
     sourceLabel: "acme/plot",
     instruction: "Summarize the latest changes.",
+    model: "auto",
+    reasoningEffort: null,
     cadence: "WEEKLY",
     enabled: true,
     lastRunAt: null,
