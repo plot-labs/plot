@@ -190,17 +190,6 @@ export function RoutinesWorkspace() {
   }, [reloadNonce]);
 
   useEffect(() => {
-    const selectedModel = automationModels.find((item) => item.id === automationModel);
-    if (!selectedModel) return;
-    const supported = reasoningEffortsForRoutineModel(selectedModel);
-    setAutomationReasoningEffort((current) => {
-      if (!supported.length) return null;
-      if (current && supported.includes(current)) return current;
-      return preferredReasoningEffortForRoutineModel(selectedModel, supported);
-    });
-  }, [automationModel, automationModels]);
-
-  useEffect(() => {
     if (createOpen) {
       createPanelRef.current?.scrollIntoView?.({ block: "start" });
       nameInputRef.current?.focus({ preventScroll: true });
@@ -251,7 +240,11 @@ export function RoutinesWorkspace() {
         skillIds,
         cadence,
         model: automationModel,
-        reasoningEffort: automationReasoningEffort,
+        reasoningEffort: normalizeRoutineReasoningEffort(
+          automationModels,
+          automationModel,
+          automationReasoningEffort,
+        ),
       }, { signal: controller.signal });
       if (!requestIsCurrent(controller, workspaceRevision, workspaceId)) return;
       setRoutines((current) => [routine, ...current]);
@@ -379,12 +372,7 @@ export function RoutinesWorkspace() {
 
   function changeAutomationModel(nextModel: ChatModel) {
     setAutomationModel(nextModel);
-    const selectedModel = automationModels.find((item) => item.id === nextModel);
-    if (!selectedModel) return;
-    const supported = reasoningEffortsForRoutineModel(selectedModel);
-    setAutomationReasoningEffort((current) => !supported.length || !current || !supported.includes(current)
-      ? preferredReasoningEffortForRoutineModel(selectedModel, supported)
-      : current);
+    setAutomationReasoningEffort((current) => normalizeRoutineReasoningEffort(automationModels, nextModel, current));
   }
 
   function toggleContextSource(id: string) {
@@ -633,6 +621,20 @@ function mergeRoutineModelCapabilities(
         }
       : model;
   });
+}
+
+function normalizeRoutineReasoningEffort(
+  models: readonly RoutineModelOption[],
+  modelId: ChatModel,
+  current: ChatReasoningEffort | null,
+) {
+  const model = models.find((option) => option.id === modelId);
+  if (!model) return current;
+  const supported = reasoningEffortsForRoutineModel(model);
+  if (!supported.length) return null;
+  return current && supported.includes(current)
+    ? current
+    : preferredReasoningEffortForRoutineModel(model, supported);
 }
 
 function formatRoutineModel(model: ChatModel) {
