@@ -113,13 +113,16 @@ export function RoutineModelPicker({
     const trigger = openPicker === "model" ? modelTriggerRef.current : effortTriggerRef.current;
     const menu = openPicker === "model" ? modelListRef.current : effortListRef.current;
     if (!row || !trigger || !menu) return;
+    const positioningRow = row;
+    const positioningTrigger = trigger;
+    const positioningMenu = menu;
 
     const viewportPadding = 8;
 
     function updateMenuPosition() {
-      const nextRowRect = row.getBoundingClientRect();
-      const nextTriggerRect = trigger.getBoundingClientRect();
-      const menuRect = menu.getBoundingClientRect();
+      const nextRowRect = positioningRow.getBoundingClientRect();
+      const nextTriggerRect = positioningTrigger.getBoundingClientRect();
+      const menuRect = positioningMenu.getBoundingClientRect();
       const menuWidth = menuRect.width;
       const menuHeight = menuRect.height;
       const nextCanOpenBelow = window.innerHeight - nextRowRect.bottom >= menuHeight + viewportPadding;
@@ -140,8 +143,8 @@ export function RoutineModelPicker({
         viewportPadding,
         Math.min(nextPreferredLeft, window.innerWidth - menuWidth - viewportPadding),
       );
-      menu.style.top = `${nextTop}px`;
-      menu.style.left = `${nextLeft}px`;
+      positioningMenu.style.top = `${nextTop}px`;
+      positioningMenu.style.left = `${nextLeft}px`;
     }
 
     updateMenuPosition();
