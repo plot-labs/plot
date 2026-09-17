@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createShader, playSweep, accentChain, ACCENTS } from "glimm";
+import type { ChatReasoningEffort } from "@plot/api-client";
 import { ChatModelIcon, type ChatModelProvider } from "@/features/chat/chat-model-icon";
 
 /* The built-in "prism" palette is only cyan→indigo→magenta, so a sweep
@@ -45,6 +46,8 @@ export type PromptModelOption = {
   description: string;
   pricing: string;
   provider: ChatModelProvider;
+  reasoningEfforts?: readonly ChatReasoningEffort[];
+  reasoningDefault?: ChatReasoningEffort;
 };
 
 /* real product marks, inline so the file stays self-contained */
@@ -110,6 +113,41 @@ const DEMO_MODELS: readonly PromptModelOption[] = [
   { id: "vanilla-1", label: "Vanilla 1", description: "Fast demo model", pricing: "Demo", provider: "auto" },
   { id: "freezer-burn", label: "Freezer Burn 0.4", description: "Legacy demo model", pricing: "Demo", provider: "auto" },
 ];
+
+export const REASONING_EFFORT_OPTIONS: readonly {
+  value: ChatReasoningEffort;
+  label: string;
+}[] = [
+  { value: "none", label: "None" },
+  { value: "minimal", label: "Minimal" },
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+  { value: "xhigh", label: "Extra high" },
+  { value: "max", label: "Max" },
+];
+
+const DEFAULT_REASONING_EFFORTS = REASONING_EFFORT_OPTIONS.map((option) => option.value);
+
+function reasoningEffortsFor(model: PromptModelOption): readonly ChatReasoningEffort[] {
+  return model.reasoningEfforts ?? DEFAULT_REASONING_EFFORTS;
+}
+
+function preferredReasoningEffort(model: PromptModelOption, supported: readonly ChatReasoningEffort[]): ChatReasoningEffort {
+  const preferred: (ChatReasoningEffort | undefined)[] = [
+    model.reasoningDefault,
+    "medium",
+    "high",
+    "low",
+    "minimal",
+    "none",
+    "xhigh",
+    "max",
+  ];
+  return (preferred.find((effort): effort is ChatReasoningEffort => effort !== undefined && supported.includes(effort))
+    ?? supported[0]
+    ?? "medium");
+}
 
 const FILES = ["flavor-chart.png", "summer-menu.pdf", "pos-export.csv"];
 const DICTATION = "Compare pistachio weekends to last summer";
@@ -178,6 +216,8 @@ export default function PromptBar({
   models = DEMO_MODELS,
   selectedModelId,
   onSelectedModelIdChange,
+  reasoningEffort,
+  onReasoningEffortChange,
   modelPlacement = tall ? "auto" : "top",
 }: {
   variant?: string;
@@ -198,6 +238,8 @@ export default function PromptBar({
   models?: readonly PromptModelOption[];
   selectedModelId?: string;
   onSelectedModelIdChange?: (id: string) => void;
+  reasoningEffort?: ChatReasoningEffort;
+  onReasoningEffortChange?: (effort: ChatReasoningEffort) => void;
   modelPlacement?: "top" | "bottom" | "auto";
 }) {
   const pill = variant === "Pill";
@@ -209,6 +251,7 @@ export default function PromptBar({
     modelPlacement === "top" || !tall ? "top" : "bottom"
   );
   const [internalModelId, setInternalModelId] = useState(DEMO_MODELS[1].id);
+  const [internalReasoningEffort, setInternalReasoningEffort] = useState<ChatReasoningEffort>("medium");
   const [modelQuery, setModelQuery] = useState("");
   const [attachments, setAttachments] = useState<string[]>([]);
   const [connected, setConnected] = useState(false);
@@ -218,16 +261,19 @@ export default function PromptBar({
   const [autoStep, setAutoStep] = useState(0);
   const [expanded, setExpanded] = useState(false);
   const wide = expanded || tall;
+  const [effortOpen, setEffortOpen] = useState(false);
   const [rowBox, setRowBox] = useState<{ top: number; height: number } | null>(null);
   const [engaged, setEngaged] = useState(false);
   const [modelBox, setModelBox] = useState<{ top: number; height: number } | null>(null);
   const [modelHovered, setModelHovered] = useState<number | null>(null);
   const [modelMenuLeft, setModelMenuLeft] = useState(0);
+  const [effortMenuSide, setEffortMenuSide] = useState<"left" | "right">("right");
   const composerAnchorRef = useRef<HTMLDivElement>(null);
   const controlsRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const measureRef = useRef<HTMLSpanElement>(null);
   const modelRef = useRef<HTMLButtonElement>(null);
+  const modelMenuRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const modelRowRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const glimmRef = useRef<HTMLCanvasElement>(null);
@@ -237,6 +283,17 @@ export default function PromptBar({
     ?? models.find((item) => item.id === internalModelId)
     ?? models[0]
     ?? DEMO_MODELS[0];
+  const modelReasoningEfforts = reasoningEffortsFor(model);
+  const availableReasoningEffortOptions = REASONING_EFFORT_OPTIONS.filter((option) => modelReasoningEfforts.includes(option.value));
+  const reasoningEnabled =
+    (reasoningEffort !== undefined || onReasoningEffortChange !== undefined) &&
+    availableReasoningEffortOptions.length > 0;
+  const selectedReasoningEffort = availableReasoningEffortOptions.find(
+    (option) => option.value === (reasoningEffort ?? internalReasoningEffort),
+  )
+    ?? availableReasoningEffortOptions.find((option) => option.value === model.reasoningDefault)
+    ?? availableReasoningEffortOptions[0]
+    ?? REASONING_EFFORT_OPTIONS[3];
   const filteredModels = models.filter((item) =>
     `${item.label} ${item.provider} ${item.description}`.toLowerCase().includes(modelQuery.trim().toLowerCase())
   );
@@ -305,7 +362,7 @@ export default function PromptBar({
     const triggerRect = modelRef.current.getBoundingClientRect();
     const spaceBelow = window.innerHeight - triggerRect.bottom;
     const spaceAbove = triggerRect.top;
-    const menuHeight = 360;
+    const menuHeight = reasoningEnabled ? 460 : 360;
 
     const shouldOpenAbove =
       modelPlacement === "top"
@@ -316,7 +373,14 @@ export default function PromptBar({
 
     setModelMenuPlacement(shouldOpenAbove ? "top" : "bottom");
     setModelMenuLeft(Math.max(0, Math.min(triggerRect.left - anchorRect.left, anchorRect.width - 288)));
-  }, [modelOpen, wide, model.label, tall, modelPlacement]);
+  }, [modelOpen, wide, model.label, tall, modelPlacement, reasoningEnabled]);
+
+  useLayoutEffect(() => {
+    if (!effortOpen || !modelMenuRef.current) return;
+    const menuRect = modelMenuRef.current.getBoundingClientRect();
+    const effortMenuWidth = 208;
+    setEffortMenuSide(window.innerWidth - menuRect.right >= effortMenuWidth + 8 ? "right" : "left");
+  }, [effortOpen, modelMenuLeft, modelMenuPlacement, modelReasoningEfforts.length]);
 
   const [prevModelOpen, setPrevModelOpen] = useState(modelOpen);
   if (prevModelOpen !== modelOpen) {
@@ -385,12 +449,20 @@ export default function PromptBar({
   }, [makeShader]);
 
   const selectModel = useCallback((next: PromptModelOption) => {
+    const currentReasoningEffort = reasoningEffort ?? internalReasoningEffort;
+    const nextReasoningEfforts = reasoningEffortsFor(next);
+    if (reasoningEnabled && nextReasoningEfforts.length > 0 && !nextReasoningEfforts.includes(currentReasoningEffort)) {
+      const fallback = preferredReasoningEffort(next, nextReasoningEfforts);
+      setInternalReasoningEffort(fallback);
+      onReasoningEffortChange?.(fallback);
+    }
     setInternalModelId(next.id);
     onSelectedModelIdChange?.(next.id);
     setModelOpen(false);
+    setEffortOpen(false);
     setModelQuery("");
     if (next.id === "sprinkles-5") celebrate();
-  }, [celebrate, onSelectedModelIdChange]);
+  }, [celebrate, internalReasoningEffort, onReasoningEffortChange, onSelectedModelIdChange, reasoningEffort, reasoningEnabled]);
 
   /* autoplay: apply the current step, then advance after its hold */
   useEffect(() => {
@@ -400,7 +472,10 @@ export default function PromptBar({
       setDraft(step.draft);
       if (step.active !== undefined) setActive(step.active);
       if (step.connect !== undefined) setConnected(step.connect);
-      if (step.modelOpen !== undefined) setModelOpen(step.modelOpen);
+      if (step.modelOpen !== undefined) {
+        setModelOpen(step.modelOpen);
+        if (!step.modelOpen) setEffortOpen(false);
+      }
       if (step.model) {
         const next = models.find((item) => item.id === step.model);
         if (next) selectModel(next);
@@ -452,6 +527,7 @@ export default function PromptBar({
       if (!(event.target as Element).closest("[data-promptbar]")) {
         setModelOpen(false);
         setPlusOpen(false);
+        setEffortOpen(false);
       }
     };
     document.addEventListener("pointerdown", close);
@@ -461,6 +537,7 @@ export default function PromptBar({
   const closeMenus = () => {
     setPlusOpen(false);
     setModelOpen(false);
+    setEffortOpen(false);
   };
 
   const selectedSkills = (skills ?? []).filter((s) => selectedSkillIds.includes(s.id));
@@ -500,6 +577,7 @@ export default function PromptBar({
 
   const triggerSlash = () => {
     setModelOpen(false);
+    setEffortOpen(false);
     setPlusOpen(false);
     setDismissed(false);
     setDraft((prev) => {
@@ -616,8 +694,9 @@ export default function PromptBar({
       {/* ── model menu ─────────────────────────────────── */}
       {modelOpen && (
         <div
+          ref={modelMenuRef}
           onMouseLeave={() => setModelHovered(null)}
-          className="absolute z-30 w-72 overflow-hidden rounded-[12px] border border-line bg-surface shadow-overlay backdrop-blur-md"
+          className="absolute z-30 w-72 overflow-visible rounded-[12px] border border-line bg-surface shadow-overlay backdrop-blur-md"
           style={{
             left: modelMenuLeft,
             ...(modelMenuPlacement === "top"
@@ -640,6 +719,7 @@ export default function PromptBar({
                   if (event.key === "Escape") {
                     event.preventDefault();
                     setModelOpen(false);
+                    setEffortOpen(false);
                     setModelQuery("");
                     inputRef.current?.focus();
                   }
@@ -697,6 +777,60 @@ export default function PromptBar({
             <div className="px-3 py-6 text-center text-[12px] text-ink-3">No models found.</div>
           ) : null}
           </div>
+          {reasoningEnabled ? (
+            <div className="relative border-t border-line px-2 pb-2 pt-2">
+              <button
+                type="button"
+                aria-expanded={effortOpen}
+                aria-haspopup="menu"
+                aria-label={`Choose reasoning effort (currently ${selectedReasoningEffort.label})`}
+                onClick={() => setEffortOpen((current) => !current)}
+                className="flex w-full items-center justify-between gap-2 rounded-[7px] px-2.5 py-2 text-left transition-colors hover:bg-hover"
+              >
+                <span className="text-[13px] font-medium">
+                  <span className="text-ink-3">Effort</span>{" "}
+                  <span className="text-ink">{selectedReasoningEffort.label}</span>
+                </span>
+                <span className="text-ink-3">
+                  <Icon size={13} strokeWidth={2.2}><path d="m9 18 6-6-6-6" /></Icon>
+                </span>
+              </button>
+              {effortOpen ? (
+                <div
+                  role="menu"
+                  aria-label="Reasoning effort options"
+                  className={`absolute bottom-0 z-40 w-52 rounded-[12px] border border-line bg-surface p-1.5 shadow-overlay backdrop-blur-md ${
+                    effortMenuSide === "right" ? "left-[calc(100%+8px)]" : "right-[calc(100%+8px)]"
+                  }`}
+                >
+                  {availableReasoningEffortOptions.map((option) => {
+                    const isSelected = option.value === selectedReasoningEffort.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={isSelected}
+                        onClick={() => {
+                          setInternalReasoningEffort(option.value);
+                          onReasoningEffortChange?.(option.value);
+                          setEffortOpen(false);
+                        }}
+                        className="flex w-full items-center gap-2 rounded-[8px] px-2.5 py-2 text-left transition-colors hover:bg-hover"
+                      >
+                        <span className="min-w-0 flex-1 text-[13px] font-medium text-ink">{option.label}</span>
+                        {isSelected ? (
+                          <span className="shrink-0 text-ink">
+                            <Icon size={13} strokeWidth={2.5}><path d="M20 6L9 17l-5-5" /></Icon>
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       )}
 
@@ -801,6 +935,7 @@ export default function PromptBar({
             aria-expanded={plusOpen}
             onClick={() => {
               setModelOpen(false);
+              setEffortOpen(false);
               setPlusOpen((current) => !current);
               inputRef.current?.focus();
             }}
@@ -889,7 +1024,10 @@ export default function PromptBar({
             onClick={() => {
               setPlusOpen(false);
               setModelOpen((current) => {
-                if (current) setModelQuery("");
+                if (current) {
+                  setModelQuery("");
+                  setEffortOpen(false);
+                }
                 return !current;
               });
             }}
