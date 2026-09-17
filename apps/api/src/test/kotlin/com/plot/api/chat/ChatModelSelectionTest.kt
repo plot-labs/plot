@@ -16,7 +16,7 @@ class ChatModelSelectionTest {
 		)
 
 		assertEquals(
-			ChatModelSelection("auto", PlotAiProperties.DEEPSEEK_V4_FLASH_MODEL, "deepinfra"),
+			ChatModelSelection("auto", PlotAiProperties.DEEPSEEK_V4_FLASH_MODEL, "deepinfra", "high"),
 			ChatModels.resolve("auto", properties),
 		)
 	}
@@ -27,7 +27,6 @@ class ChatModelSelectionTest {
 			PlotAiProperties.GPT_5_4_MODEL to "openai",
 			PlotAiProperties.GPT_5_6_SOL_MODEL to "openai",
 			PlotAiProperties.GEMINI_3_8_FLASH_MODEL to "google-ai-studio",
-			PlotAiProperties.DEEPSEEK_V4_1_FLASH_MODEL to "deepinfra",
 			PlotAiProperties.GROK_4_6_MODEL to "xai",
 			PlotAiProperties.QWEN_3_8_MAX_MODEL to "alibaba",
 		).forEach { (model, provider) ->
@@ -35,6 +34,40 @@ class ChatModelSelectionTest {
 				ChatModelSelection(model, model, provider),
 				ChatModels.resolve(model, PlotAiProperties()),
 			)
+		}
+		assertEquals(
+			ChatModelSelection(PlotAiProperties.DEEPSEEK_V4_1_FLASH_MODEL, PlotAiProperties.DEEPSEEK_V4_1_FLASH_MODEL, "deepinfra", "high"),
+			ChatModels.resolve(PlotAiProperties.DEEPSEEK_V4_1_FLASH_MODEL, PlotAiProperties()),
+		)
+	}
+
+	@Test
+	fun `reasoning effort is normalized and retained`() {
+		assertEquals(
+			ChatModelSelection("auto", null, null, "high"),
+			ChatModels.resolve("auto", PlotAiProperties(), " HIGH "),
+		)
+	}
+
+	@Test
+	fun `unsupported reasoning effort is rejected before admission`() {
+		assertFailsWith<ApiException> {
+			ChatModels.resolve("auto", PlotAiProperties(), "ultra")
+		}
+	}
+
+	@Test
+	fun `reasoning effort follows each model capability`() {
+		assertEquals("max", ChatModels.resolve(PlotAiProperties.DEEPSEEK_V4_1_FLASH_MODEL, PlotAiProperties(), "max").reasoningEffort)
+		assertEquals("none", ChatModels.resolve(PlotAiProperties.GPT_5_4_MODEL, PlotAiProperties(), "none").reasoningEffort)
+		assertEquals("xhigh", ChatModels.resolve(PlotAiProperties.QWEN_3_8_MAX_MODEL, PlotAiProperties(), "xhigh").reasoningEffort)
+		assertEquals(null, ChatModels.resolve(PlotAiProperties.CLAUDE_HAIKU_4_5_MODEL, PlotAiProperties(), "medium").reasoningEffort)
+
+		assertFailsWith<ApiException> {
+			ChatModels.resolve(PlotAiProperties.GEMINI_3_8_FLASH_MODEL, PlotAiProperties(), "max")
+		}
+		assertFailsWith<ApiException> {
+			ChatModels.resolve(PlotAiProperties.QWEN_3_8_MAX_MODEL, PlotAiProperties(), "max")
 		}
 	}
 
