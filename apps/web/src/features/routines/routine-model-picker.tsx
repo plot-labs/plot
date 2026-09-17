@@ -74,6 +74,7 @@ export function RoutineModelPicker({
   const [activeModelIndex, setActiveModelIndex] = useState(0);
   const [activeEffortIndex, setActiveEffortIndex] = useState(0);
   const [placement, setPlacement] = useState<"top" | "bottom">("bottom");
+  const [effortPlacement, setEffortPlacement] = useState<"top" | "bottom">("bottom");
   const [effortSide, setEffortSide] = useState<"left" | "right">("right");
   const rootRef = useRef<HTMLDivElement>(null);
   const modelRowRef = useRef<HTMLDivElement>(null);
@@ -119,6 +120,7 @@ export function RoutineModelPicker({
     if (openPicker === "effort") {
       const menuWidth = 190;
       setEffortSide(window.innerWidth - triggerRect.right >= menuWidth + 8 ? "right" : "left");
+      setEffortPlacement(spaceBelow >= menuHeight || spaceBelow >= spaceAbove ? "bottom" : "top");
     }
   }, [openPicker, selectedModel.id, effortOptions.length]);
 
@@ -267,7 +269,7 @@ export function RoutineModelPicker({
               aria-label="Automation reasoning effort"
               aria-activedescendant={`${effortListId}-option-${activeEffortIndex}`}
               onKeyDown={(event) => handleListKeyDown(event, "effort")}
-              className={`absolute top-1/2 z-50 min-w-[180px] max-h-[min(300px,60vh)] -translate-y-1/2 overflow-y-auto rounded-[12px] border border-black/10 bg-white p-1.5 shadow-[0_14px_40px_rgb(15_23_42_/_0.14)] dark:border-white/12 dark:bg-[#202125] dark:shadow-black/40 ${effortSide === "right" ? "left-[calc(100%+8px)]" : "right-[calc(100%+8px)]"}`}
+              className={`absolute z-50 min-w-[180px] max-h-[min(300px,60vh)] overflow-y-auto rounded-[12px] border border-black/10 bg-white p-1.5 shadow-[0_14px_40px_rgb(15_23_42_/_0.14)] dark:border-white/12 dark:bg-[#202125] dark:shadow-black/40 ${effortPlacement === "top" ? "bottom-0" : "top-0"} ${effortSide === "right" ? "left-[calc(100%+8px)]" : "right-[calc(100%+8px)]"}`}
             >
               {effortOptions.map((option, index) => {
                 const isSelected = option.value === selectedEffort.value;
