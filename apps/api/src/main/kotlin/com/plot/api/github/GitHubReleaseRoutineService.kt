@@ -130,6 +130,8 @@ class GitHubReleaseRoutineService(
 					},
 				inputs = inputs,
 				activityCursorAfter = inputs.maxOf { requireNotNull(it.activitySequence) },
+				requestedModel = routine.model,
+				requestedReasoningEffort = routine.reasoningEffort,
 			),
 			now,
 		)
