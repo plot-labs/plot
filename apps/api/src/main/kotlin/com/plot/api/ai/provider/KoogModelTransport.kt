@@ -90,10 +90,19 @@ class KoogModelTransport internal constructor(
 	internal fun agentModel(model: String? = null) = LLModel(LLMProvider.OpenRouter, model ?: requireNotNull(properties.model),
 		listOf(LLMCapability.Completion, LLMCapability.Tools))
 
-	internal fun agentParams(routingProvider: String? = null) = OpenRouterParams(maxTokens = properties.maxOutputTokens,
-		additionalProperties = mapOf("provider" to Json.parseToJsonElement(objectMapper.writeValueAsString(
-			routingProvider?.let(properties::openRouterProviderPolicyFor) ?: properties.openRouterProviderPolicy,
-		))))
+	internal fun agentParams(routingProvider: String? = null, reasoningEffort: String? = null): OpenRouterParams {
+		val additionalProperties = mutableMapOf(
+			"provider" to Json.parseToJsonElement(objectMapper.writeValueAsString(
+				routingProvider?.let(properties::openRouterProviderPolicyFor) ?: properties.openRouterProviderPolicy,
+			)),
+		)
+		reasoningEffort?.let { effort ->
+			additionalProperties["reasoning"] = Json.parseToJsonElement(
+				objectMapper.writeValueAsString(mapOf("effort" to effort)),
+			)
+		}
+		return OpenRouterParams(maxTokens = properties.maxOutputTokens, additionalProperties = additionalProperties)
+	}
 
 	internal suspend fun exchangeAgent(prompt: ai.koog.prompt.Prompt, model: LLModel,
 		tools: List<ai.koog.agents.core.tools.ToolDescriptor>): ai.koog.prompt.message.Message.Assistant = try {

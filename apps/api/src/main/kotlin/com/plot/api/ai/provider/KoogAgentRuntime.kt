@@ -34,7 +34,7 @@ internal class KoogAgentRuntime(
 ) : AgentRuntime {
 	constructor(transport: KoogModelTransport, mapper: ObjectMapper) : this(
 		{ request -> transport.agentModel(request.model) },
-		{ request -> transport.agentParams(request.routingProvider) },
+		{ request -> transport.agentParams(request.routingProvider, request.reasoningEffort) },
 		mapper,
 		transport::exchangeAgent,
 	)

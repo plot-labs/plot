@@ -84,6 +84,7 @@ class OpenRouterWireContractTest {
                         java.util.UUID.randomUUID(), "Create draft", emptyList(), emptyList(), emptyList(), 8, 8,
                         model = PlotAiProperties.CLAUDE_HAIKU_4_5_MODEL,
                         routingProvider = "anthropic",
+                        reasoningEffort = "high",
                     )
                     override fun execute(decision: AgentDecision): String {
                         assertEquals(listOf(inputId), decision.selectedInputIds)
@@ -102,6 +103,7 @@ class OpenRouterWireContractTest {
                     mapper.readTree(mapper.writeValueAsString(properties.openRouterProviderPolicyFor("anthropic"))),
                     body["provider"],
                 )
+                assertEquals("high", body["reasoning"]["effort"].stringValue())
             }
         }
     }
