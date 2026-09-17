@@ -2,6 +2,7 @@
 
 import { ArrowDown01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { createPortal } from "react-dom";
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 
 import type { ChatModel, ChatReasoningEffort } from "@/lib/api-client";
@@ -73,9 +74,6 @@ export function RoutineModelPicker({
   const [openPicker, setOpenPicker] = useState<"model" | "effort" | null>(null);
   const [activeModelIndex, setActiveModelIndex] = useState(0);
   const [activeEffortIndex, setActiveEffortIndex] = useState(0);
-  const [placement, setPlacement] = useState<"top" | "bottom">("bottom");
-  const [effortPlacement, setEffortPlacement] = useState<"top" | "bottom">("bottom");
-  const [effortSide, setEffortSide] = useState<"left" | "right">("right");
   const rootRef = useRef<HTMLDivElement>(null);
   const modelRowRef = useRef<HTMLDivElement>(null);
   const effortRowRef = useRef<HTMLDivElement>(null);
@@ -98,7 +96,11 @@ export function RoutineModelPicker({
     listRef.current?.focus();
 
     function dismissIfOutside(event: Event) {
-      if (event.target instanceof Node && !rootRef.current?.contains(event.target)) setOpenPicker(null);
+      if (
+        event.target instanceof Node
+        && !rootRef.current?.contains(event.target)
+        && !listRef.current?.contains(event.target)
+      ) setOpenPicker(null);
     }
 
     document.addEventListener("pointerdown", dismissIfOutside, true);
@@ -109,20 +111,47 @@ export function RoutineModelPicker({
     if (!openPicker) return;
     const row = openPicker === "model" ? modelRowRef.current : effortRowRef.current;
     const trigger = openPicker === "model" ? modelTriggerRef.current : effortTriggerRef.current;
-    if (!row || !trigger) return;
+    const menu = openPicker === "model" ? modelListRef.current : effortListRef.current;
+    if (!row || !trigger || !menu) return;
 
-    const triggerRect = trigger.getBoundingClientRect();
-    const spaceBelow = window.innerHeight - triggerRect.bottom;
-    const spaceAbove = triggerRect.top;
-    const menuHeight = Math.min(360, window.innerHeight * 0.7);
-    setPlacement(spaceBelow < menuHeight && spaceAbove > spaceBelow ? "top" : "bottom");
+    const viewportPadding = 8;
 
-    if (openPicker === "effort") {
-      const menuWidth = 190;
-      setEffortSide(window.innerWidth - triggerRect.right >= menuWidth + 8 ? "right" : "left");
-      setEffortPlacement(spaceBelow >= menuHeight || spaceBelow >= spaceAbove ? "bottom" : "top");
+    function updateMenuPosition() {
+      const nextRowRect = row.getBoundingClientRect();
+      const nextTriggerRect = trigger.getBoundingClientRect();
+      const menuRect = menu.getBoundingClientRect();
+      const menuWidth = menuRect.width;
+      const menuHeight = menuRect.height;
+      const nextCanOpenBelow = window.innerHeight - nextRowRect.bottom >= menuHeight + viewportPadding;
+      const nextCanOpenAbove = nextRowRect.top >= menuHeight + viewportPadding;
+      const nextOpenAbove = !nextCanOpenBelow && nextCanOpenAbove;
+      const nextPreferredTop = nextOpenAbove
+        ? nextRowRect.top - menuHeight - 4
+        : nextRowRect.bottom + 4;
+      const nextTop = Math.max(
+        viewportPadding,
+        Math.min(nextPreferredTop, window.innerHeight - menuHeight - viewportPadding),
+      );
+      const nextCanOpenRight = window.innerWidth - nextTriggerRect.right >= menuWidth + viewportPadding;
+      const nextPreferredLeft = nextCanOpenRight
+        ? nextTriggerRect.right + viewportPadding
+        : nextTriggerRect.left - menuWidth - viewportPadding;
+      const nextLeft = Math.max(
+        viewportPadding,
+        Math.min(nextPreferredLeft, window.innerWidth - menuWidth - viewportPadding),
+      );
+      menu.style.top = `${nextTop}px`;
+      menu.style.left = `${nextLeft}px`;
     }
-  }, [openPicker, selectedModel.id, effortOptions.length]);
+
+    updateMenuPosition();
+    window.addEventListener("resize", updateMenuPosition);
+    window.addEventListener("scroll", updateMenuPosition, true);
+    return () => {
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
+    };
+  }, [effortOptions.length, models.length, openPicker, selectedModel.id]);
 
   function openModelList() {
     setActiveModelIndex(Math.max(models.findIndex((model) => model.id === value), 0));
@@ -176,7 +205,16 @@ export function RoutineModelPicker({
     <div
       ref={rootRef}
       onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) setOpenPicker(null);
+        const nextTarget = event.relatedTarget;
+        if (
+          nextTarget instanceof Node
+          && (
+            event.currentTarget.contains(nextTarget)
+            || modelListRef.current?.contains(nextTarget)
+            || effortListRef.current?.contains(nextTarget)
+          )
+        ) return;
+        setOpenPicker(null);
       }}
       className="relative divide-y divide-black/[0.06] rounded-[12px] border border-black/10 bg-white dark:divide-white/[0.06] dark:border-white/12 dark:bg-white/[0.04]"
     >
@@ -202,7 +240,7 @@ export function RoutineModelPicker({
           <HugeiconsIcon icon={ArrowDown01Icon} size={14} color="currentColor" strokeWidth={1.5} aria-hidden="true" className={`shrink-0 text-black/40 transition dark:text-white/42 ${openPicker === "model" ? "rotate-180" : ""}`} />
         </button>
 
-        {openPicker === "model" ? (
+        {openPicker === "model" && typeof document !== "undefined" ? createPortal(
           <div
             ref={modelListRef}
             id={modelListId}
@@ -211,7 +249,8 @@ export function RoutineModelPicker({
             aria-label="Automation model"
             aria-activedescendant={`${modelListId}-option-${activeModelIndex}`}
             onKeyDown={(event) => handleListKeyDown(event, "model")}
-            className={`absolute right-3 z-50 min-w-[230px] max-h-[min(360px,70vh)] overflow-y-auto rounded-[12px] border border-black/10 bg-white p-1.5 shadow-[0_14px_40px_rgb(15_23_42_/_0.14)] dark:border-white/12 dark:bg-[#202125] dark:shadow-black/40 ${placement === "top" ? "bottom-[calc(100%+4px)]" : "top-[calc(100%+4px)]"}`}
+            style={{ top: 8, left: 8 }}
+            className="fixed z-[100] w-[230px] max-w-[calc(100vw-16px)] max-h-[min(360px,70vh)] overflow-y-auto rounded-[12px] border border-black/10 bg-white p-1.5 shadow-[0_14px_40px_rgb(15_23_42_/_0.14)] dark:border-white/12 dark:bg-[#202125] dark:shadow-black/40"
           >
             {models.map((model, index) => {
               const isSelected = model.id === value;
@@ -233,7 +272,8 @@ export function RoutineModelPicker({
                 </button>
               );
             })}
-          </div>
+          </div>,
+          document.body,
         ) : null}
       </div>
 
@@ -260,7 +300,7 @@ export function RoutineModelPicker({
             <HugeiconsIcon icon={ArrowDown01Icon} size={14} color="currentColor" strokeWidth={1.5} aria-hidden="true" className={`shrink-0 text-black/40 transition dark:text-white/42 ${openPicker === "effort" ? "rotate-180" : ""}`} />
           </button>
 
-          {openPicker === "effort" ? (
+          {openPicker === "effort" && typeof document !== "undefined" ? createPortal(
             <div
               ref={effortListRef}
               id={effortListId}
@@ -269,7 +309,8 @@ export function RoutineModelPicker({
               aria-label="Automation reasoning effort"
               aria-activedescendant={`${effortListId}-option-${activeEffortIndex}`}
               onKeyDown={(event) => handleListKeyDown(event, "effort")}
-              className={`absolute z-50 min-w-[180px] max-h-[min(300px,60vh)] overflow-y-auto rounded-[12px] border border-black/10 bg-white p-1.5 shadow-[0_14px_40px_rgb(15_23_42_/_0.14)] dark:border-white/12 dark:bg-[#202125] dark:shadow-black/40 ${effortPlacement === "top" ? "bottom-0" : "top-0"} ${effortSide === "right" ? "left-[calc(100%+8px)]" : "right-[calc(100%+8px)]"}`}
+              style={{ top: 8, left: 8 }}
+              className="fixed z-[100] w-[190px] max-w-[calc(100vw-16px)] max-h-[min(300px,60vh)] overflow-y-auto rounded-[12px] border border-black/10 bg-white p-1.5 shadow-[0_14px_40px_rgb(15_23_42_/_0.14)] dark:border-white/12 dark:bg-[#202125] dark:shadow-black/40"
             >
               {effortOptions.map((option, index) => {
                 const isSelected = option.value === selectedEffort.value;
@@ -291,7 +332,8 @@ export function RoutineModelPicker({
                   </button>
                 );
               })}
-            </div>
+            </div>,
+            document.body,
           ) : null}
         </div>
       ) : null}
