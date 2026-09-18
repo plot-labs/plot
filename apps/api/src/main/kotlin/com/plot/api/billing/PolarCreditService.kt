@@ -73,7 +73,12 @@ class PolarCreditService(
 		if (!enabled) return
 		try {
 			val context = contexts.requireContext(workspaceId)
-			val customer = provider.ensureCustomer(workspaceId, context.ownerEmail, context.workspaceName)
+			val customer = provider.ensureCustomer(
+				workspaceId,
+				context.ownerEmail,
+				context.workspaceName,
+				context.polarCustomerId,
+			)
 			if (context.polarCustomerId != customer.id) contexts.savePolarCustomerId(workspaceId, customer.id)
 			if (context.trial) provider.grantTrialCredits(workspaceId)
 			if (provider.readCreditBalance(workspaceId) < 1) {

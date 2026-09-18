@@ -183,13 +183,13 @@ export function WorkspaceGeneral() {
               </p>
               {trialUntil ? <p>Trial ends {trialUntil}.</p> : null}
               {workspace.accessMode === "complete_only" ? (
-                <p>New drafts are paused after three trial results. Existing drafts can still be edited, exported, and published until the trial ends. Founding access is provisioned after Polar checkout.</p>
+                <p>New AI work is paused for this workspace. Existing drafts can still be edited, exported, and published until the trial ends. Founding access is provisioned after Polar checkout.</p>
               ) : null}
               {workspace.accessMode === "read_only" ? (
                 <p>This workspace is read-only. You can still export drafts and unpublish live changelog entries. Founding access is provisioned after Polar checkout.</p>
               ) : null}
               {workspace.accessMode === "full" && workspace.plan === "trial" ? (
-                <p>Trial includes three drafts. After that you can finish existing drafts until the trial date, then export and unpublish only unless founding access is restored.</p>
+                <p>Trial AI usage is deducted from workspace credits until the trial ends. Existing drafts remain available to edit, export, and publish.</p>
               ) : null}
             </div>
           </section>

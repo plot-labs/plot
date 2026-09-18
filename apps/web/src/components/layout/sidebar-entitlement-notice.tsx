@@ -11,8 +11,8 @@ export function SidebarEntitlementNotice({ collapsed }: { collapsed: boolean }) 
   const until = trialEndsLabel(entitlement.trialEndsAt);
   const copy = entitlement.accessMode === "complete_only"
     ? until
-      ? `Trial draft limit reached. You can still edit, export, and publish existing drafts until ${until}.`
-      : "Trial draft limit reached. You can still edit, export, and publish existing drafts."
+      ? `New AI work is paused. You can still edit, export, and publish existing drafts until ${until}.`
+      : "New AI work is paused. You can still edit, export, and publish existing drafts."
     : entitlement.entitlementStatus === "revoked"
       ? "This workspace is read-only. You can still export drafts and unpublish live changelog entries."
       : until

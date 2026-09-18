@@ -87,7 +87,7 @@ class KoogModelTransport internal constructor(
 		val value = try { objectMapper.readValue(response.textContent(), responseType) }
 			catch (_: Exception) { throw MalformedModelOutputException("Invalid structured model output", usage = usage) }
 		return StructuredTransportResponse(value, captured.responseId, captured.model, response.finishReason,
-			usage.inputTokens?.toInt(), usage.outputTokens?.toInt(), usage.totalTokens?.toInt(),
+			usage.inputTokens?.toModelMetadataInt(), usage.outputTokens?.toModelMetadataInt(), usage.totalTokens?.toModelMetadataInt(),
 			usage.cacheReadTokens, usage.cacheWriteTokens, usage.reasoningTokens, usage.reportedCostUsd)
 	}
 

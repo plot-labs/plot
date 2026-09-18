@@ -686,7 +686,7 @@ class ArtifactPolarCreditProvider : PolarCreditProvider {
 	var failIngest = false
 	val events = mutableListOf<ArtifactPolarEvent>()
 
-	override fun ensureCustomer(workspaceId: UUID, ownerEmail: String, workspaceName: String) =
+	override fun ensureCustomer(workspaceId: UUID, ownerEmail: String, workspaceName: String, existingCustomerId: String?) =
 		PolarCustomer("cus-$workspaceId", "plot-workspace:$workspaceId")
 
 	override fun readCreditBalance(workspaceId: UUID): Long = balance

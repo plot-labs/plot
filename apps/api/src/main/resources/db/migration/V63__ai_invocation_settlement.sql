@@ -21,6 +21,7 @@ create table agent_model_invocations (
   created_at timestamptz not null,
   usage_recorded_at timestamptz,
   settled_at timestamptz,
+  output_applied_at timestamptz,
   unique (workspace_id, id),
   unique (workspace_id, agent_run_id, sequence_no),
   foreign key (workspace_id, agent_run_id) references agent_runs(workspace_id, id) on delete restrict,

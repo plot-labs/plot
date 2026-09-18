@@ -38,16 +38,22 @@ class AiCreditCalculator internal constructor(private val policy: AiCreditPolicy
 		val cacheRead = nonNegative(usage.cacheReadTokens ?: 0, "cache read tokens")
 		val cacheWrite = nonNegative(usage.cacheWriteTokens ?: 0, "cache write tokens")
 		val reasoning = nonNegative(usage.reasoningTokens ?: 0, "reasoning tokens")
-		if (total != input + output || cacheRead + cacheWrite > input || reasoning > output) {
+		val inputAndOutput = exactSum(input, output)
+		val cacheTokens = exactSum(cacheRead, cacheWrite)
+		if (total != inputAndOutput || cacheTokens > input || reasoning > output) {
 			unknown("Provider usage token details are inconsistent")
 		}
 
 		val cost = usage.reportedCostUsd ?: unknown("Provider usage is missing actual cost")
 		if (cost < BigDecimal.ZERO) unknown("Provider usage cost is invalid")
-		val credits = cost.multiply(policy.debitMultiplier)
-			.divide(policy.creditUnitUsd, 0, RoundingMode.CEILING)
-			.longValueExact()
-			.coerceAtLeast(1)
+		val credits = try {
+			cost.multiply(policy.debitMultiplier)
+				.divide(policy.creditUnitUsd, 0, RoundingMode.CEILING)
+				.longValueExact()
+				.coerceAtLeast(1)
+		} catch (_: ArithmeticException) {
+			unknown("Provider usage cost is outside the supported range")
+		}
 		return AiCreditCharge(cost.stripTrailingZeros(), credits, AiBillingBasis.REPORTED_COST, policy.version)
 	}
 
@@ -67,6 +73,12 @@ class AiCreditCalculator internal constructor(private val policy: AiCreditPolicy
 	private fun nonNegative(value: Long?, label: String): Long {
 		if (value == null || value < 0) unknown("Provider usage is missing valid $label")
 		return value
+	}
+
+	private fun exactSum(left: Long, right: Long): Long = try {
+		Math.addExact(left, right)
+	} catch (_: ArithmeticException) {
+		unknown("Provider usage token details are outside the supported range")
 	}
 
 	private fun unknown(message: String): Nothing = throw AiUsageUnknownException(message)

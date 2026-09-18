@@ -231,6 +231,15 @@ class AgentRunExecutionPersistence(
 		workspaceId,
 	).firstOrNull()
 
+	fun hasSettledUnappliedModelInvocation(workspaceId: UUID, agentRunId: UUID): Boolean =
+		(sqlExecutor.queryForObject(
+			"""select count(*) from agent_model_invocations
+			where workspace_id = ? and agent_run_id = ? and status = 'SETTLED' and output_applied_at is null""",
+			Int::class.java,
+			workspaceId,
+			agentRunId,
+		) ?: 0) > 0
+
 	fun beginBilledModelInvocation(
 		claim: ClaimedAgentRun,
 		maxModelCalls: Int,
@@ -306,6 +315,20 @@ class AgentRunExecutionPersistence(
 			val status = sqlExecutor.queryForObject("select status from agent_model_invocations where id = ?", String::class.java, invocationId)
 			if (status != "SETTLED") throw AgentRunStateException("Agent usage settlement state is stale")
 		}
+	}
+
+	fun markSettledModelInvocationsApplied(
+		workspaceId: UUID,
+		agentRunId: UUID,
+		now: Instant = currentInstant(),
+	) {
+		sqlExecutor.update(
+			"""update agent_model_invocations set output_applied_at = ?
+			where workspace_id = ? and agent_run_id = ? and status = 'SETTLED' and output_applied_at is null""",
+			Timestamp.from(now),
+			workspaceId,
+			agentRunId,
+		)
 	}
 
 	fun markModelInvocationAborted(invocationId: UUID) {
@@ -415,6 +438,7 @@ class AgentRunExecutionPersistence(
 			""".trimIndent(),
 			resultJson, adopted?.id, Timestamp.from(now), claim.workspaceId, stepId, claim.agentRunId,
 		)
+		if (stepUpdated != 1) throw AgentRunClaimLostException()
 		snapshots.recordTranscriptEntry(
 			workspaceId = claim.workspaceId,
 			agentRunId = claim.agentRunId,
@@ -425,6 +449,7 @@ class AgentRunExecutionPersistence(
 			adoptedInputHash = adopted?.contentHash,
 			now = now,
 		)
+		markSettledModelInvocationsApplied(claim.workspaceId, claim.agentRunId, now)
 		if (retainClaim) advanceRuntime(claim, run.currentStep + 1, now)
 		else advanceAndRelease(claim, run.currentStep + 1, now)
 		requireNotNull(queryPersistence.findStep(claim.workspaceId, claim.agentRunId, stepId))
@@ -460,6 +485,7 @@ class AgentRunExecutionPersistence(
 			adoptedInputHash = null,
 			now = now,
 		)
+		markSettledModelInvocationsApplied(claim.workspaceId, claim.agentRunId, now)
 		if (retainClaim) advanceRuntime(claim, run.currentStep + 1, now)
 		else advanceAndRelease(claim, run.currentStep + 1, now)
 		requireNotNull(queryPersistence.findStep(claim.workspaceId, claim.agentRunId, stepId))
@@ -495,6 +521,7 @@ class AgentRunExecutionPersistence(
 			artifactWorkflowRunId, resultJson, Timestamp.from(now), claim.workspaceId, stepId, claim.agentRunId,
 		)
 		if (stepUpdated != 1) throw AgentRunClaimLostException()
+		markSettledModelInvocationsApplied(claim.workspaceId, claim.agentRunId, now)
 		advanceAndRelease(claim, run.currentStep + 1, now, nextAttemptAt)
 		requireNotNull(queryPersistence.findStep(claim.workspaceId, claim.agentRunId, stepId))
 	}
@@ -558,7 +585,9 @@ class AgentRunExecutionPersistence(
 		val normalized = responseText.trim()
 		require(normalized.isNotBlank() && normalized.length <= 40_000) { "Chat response is invalid" }
 		completionProjection.commitChatResponse(run, normalized, now)
-		terminalizeAgentRun(claim, AgentRunStatus.SUCCEEDED, null, now)
+		val completed = terminalizeAgentRun(claim, AgentRunStatus.SUCCEEDED, null, now)
+		markSettledModelInvocationsApplied(claim.workspaceId, claim.agentRunId, now)
+		completed
 	}
 
 	private fun findStepForUpdate(workspaceId: UUID, agentRunId: UUID, stepId: UUID): AgentStepRecord? =

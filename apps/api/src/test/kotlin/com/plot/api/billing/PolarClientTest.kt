@@ -53,6 +53,36 @@ class PolarClientTest {
 		assertEquals("plot-workspace:$workspaceId", create.path("external_id").stringValue())
 		assertEquals(workspaceId.toString(), create.path("metadata").path("workspace_id").stringValue())
 		assertEquals("team", create.path("type").stringValue())
+		assertEquals("owner+plot-11111111111111111111111111111111@example.com", create.path("email").stringValue())
+		assertEquals("owner@example.com", create.path("owner").path("email").stringValue())
+	}
+
+	@Test
+	fun rejectsLegacyCustomerThatIsNotBoundToTheWorkspace() {
+		val client = client { method, uri, _, _ ->
+			assertEquals("GET", method)
+			assertEquals("/v1/customers/cus_legacy", uri.path)
+			PolarHttpResponse(200, """{"id":"cus_legacy","external_id":"legacy-user-id"}""")
+		}
+
+		val failure = assertFailsWith<PolarApiException> {
+			client.ensureCustomer(workspaceId, "owner@example.com", "Acme", "cus_legacy")
+		}
+
+		assertEquals("POLAR_CUSTOMER_MIGRATION_REQUIRED", failure.safeCode)
+	}
+
+	@Test
+	fun rejectsLegacyCustomerWithoutAnExternalWorkspaceIdentity() {
+		val client = client { _, _, _, _ ->
+			PolarHttpResponse(200, """{"id":"cus_legacy","external_id":null}""")
+		}
+
+		val failure = assertFailsWith<PolarApiException> {
+			client.ensureCustomer(workspaceId, "owner@example.com", "Acme", "cus_legacy")
+		}
+
+		assertEquals("POLAR_CUSTOMER_MIGRATION_REQUIRED", failure.safeCode)
 	}
 
 	@Test
@@ -89,7 +119,8 @@ class PolarClientTest {
 		assertEquals(PolarEventResult(1, 0), first)
 		assertEquals(PolarEventResult(0, 1), duplicate)
 		val event = mapper.readTree(bodies.first()).path("events").first()
-		assertEquals("invocation-1", event.path("id").stringValue())
+		assertEquals("invocation-1", event.path("external_id").stringValue())
+		assertEquals("plot-workspace:$workspaceId", event.path("external_customer_id").stringValue())
 		assertEquals("plot_ai_usage", event.path("name").stringValue())
 		assertEquals(6, event.path("metadata").path("credits").intValue())
 	}
@@ -105,7 +136,7 @@ class PolarClientTest {
 		client.grantTrialCredits(workspaceId)
 
 		val event = mapper.readTree(body!!).path("events").first()
-		assertEquals("trial:$workspaceId", event.path("id").stringValue())
+		assertEquals("trial:$workspaceId", event.path("external_id").stringValue())
 		assertEquals(-5_000, event.path("metadata").path("credits").intValue())
 	}
 

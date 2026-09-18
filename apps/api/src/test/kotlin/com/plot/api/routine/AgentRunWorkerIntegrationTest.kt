@@ -414,6 +414,7 @@ class AgentRunWorkerIntegrationTest {
 		assertEquals("Plot can answer directly without creating an artifact.", chatQueries.getRun(first.id).responseText)
 		assertEquals(null, chatQueries.getRun(first.id).artifactId)
 		assertEquals(1, count("select count(*) from agent_model_invocations where agent_run_id = ? and status = 'SETTLED'", first.id))
+		assertEquals(1, count("select count(*) from agent_model_invocations where agent_run_id = ? and output_applied_at is not null", first.id))
 		assertEquals(1, polarCredits.events.count { it.workspaceId == devContext.devWorkspaceId })
 
 		agentModel.responseText = "I remember the earlier answer."
@@ -465,6 +466,7 @@ class AgentRunWorkerIntegrationTest {
 		assertEquals("FAILED", agentStatus(admitted.id))
 		assertEquals("AI_CREDITS_EXHAUSTED", agentFailure(admitted.id))
 		assertEquals(1, count("select count(*) from agent_model_invocations where agent_run_id = ? and status = 'SETTLED'", admitted.id))
+		assertEquals(1, count("select count(*) from agent_model_invocations where agent_run_id = ? and output_applied_at is not null", admitted.id))
 	}
 
 	@Test
@@ -489,6 +491,29 @@ class AgentRunWorkerIntegrationTest {
 		assertEquals("AI_SETTLEMENT_RECOVERED", agentFailure(admitted.id))
 		assertEquals(1, count("select count(*) from agent_model_invocations where agent_run_id = ? and status = 'SETTLED'", admitted.id))
 		assertEquals(1, polarCredits.events.size)
+	}
+
+	@Test
+	fun `settled usage without a durable model output fails recovery without repeating provider work`() {
+		agentModel.responseText = "This response must not be requested again."
+		val admitted = chatAdmission.admit(
+			CreateChatAgentRunRequest("Answer once"),
+			"chat-settled-unapplied-${UUID.randomUUID()}",
+		)
+		jdbcTemplate.update(
+			"""insert into agent_model_invocations
+			(id, workspace_id, agent_run_id, sequence_no, status, created_at, settled_at)
+			values (?, ?, ?, 1, 'SETTLED', now(), now())""",
+			UUID.randomUUID(),
+			devContext.devWorkspaceId,
+			admitted.id,
+		)
+
+		assertTrue(agentWorker.processOne())
+
+		assertEquals(0, agentModel.requests.size)
+		assertEquals("FAILED", agentStatus(admitted.id))
+		assertEquals("AI_SETTLEMENT_RECOVERED", agentFailure(admitted.id))
 	}
 
 	@Test
@@ -1469,7 +1494,7 @@ class AgentPolarCreditProvider : PolarCreditProvider {
 	var ingestAttempts = 0
 	val events = mutableListOf<AgentPolarEvent>()
 
-	override fun ensureCustomer(workspaceId: UUID, ownerEmail: String, workspaceName: String) =
+	override fun ensureCustomer(workspaceId: UUID, ownerEmail: String, workspaceName: String, existingCustomerId: String?) =
 		PolarCustomer("cus-$workspaceId", "plot-workspace:$workspaceId")
 
 	override fun readCreditBalance(workspaceId: UUID): Long = balance

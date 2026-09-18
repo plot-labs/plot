@@ -112,7 +112,12 @@ private class FakePolarCreditProvider : PolarCreditProvider {
 	val grants = mutableListOf<UUID>()
 	val events = mutableListOf<FakePolarEvent>()
 
-	override fun ensureCustomer(workspaceId: UUID, ownerEmail: String, workspaceName: String): PolarCustomer {
+	override fun ensureCustomer(
+		workspaceId: UUID,
+		ownerEmail: String,
+		workspaceName: String,
+		existingCustomerId: String?,
+	): PolarCustomer {
 		ensured += workspaceId
 		return PolarCustomer("cus_workspace", "plot-workspace:$workspaceId")
 	}

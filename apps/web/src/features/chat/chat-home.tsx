@@ -92,7 +92,7 @@ export function ChatHome({ references, referencesLoading, referencesError }: Cha
         {!canGenerate ? (
           <p className="mt-3 text-center text-xs text-black/50 dark:text-white/50">
             {entitlement?.accessMode === "complete_only"
-              ? `New responses are paused after three trial results${trialUntil ? ` until ${trialUntil}` : ""}. Open an existing artifact to edit, export, or publish.`
+              ? `New AI responses are paused for this workspace${trialUntil ? ` until ${trialUntil}` : ""}. Open an existing artifact to edit, export, or publish.`
               : "This workspace cannot start new responses. You can still export existing artifacts."}
           </p>
         ) : null}

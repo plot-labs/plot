@@ -32,7 +32,12 @@ class PolarApiException(
 data class PolarHttpResponse(val status: Int, val body: String)
 
 interface PolarCreditProvider {
-	fun ensureCustomer(workspaceId: UUID, ownerEmail: String, workspaceName: String): PolarCustomer
+	fun ensureCustomer(
+		workspaceId: UUID,
+		ownerEmail: String,
+		workspaceName: String,
+		existingCustomerId: String? = null,
+	): PolarCustomer
 	fun readCreditBalance(workspaceId: UUID): Long
 	fun grantTrialCredits(workspaceId: UUID): PolarEventResult
 	fun ingestCredits(workspaceId: UUID, eventId: String, credits: Long, metadata: Map<String, Any> = emptyMap()): PolarEventResult
@@ -88,15 +93,24 @@ class PolarClient(
 ) : PolarCreditProvider {
 	fun workspaceExternalId(workspaceId: UUID): String = "plot-workspace:$workspaceId"
 
-	override fun ensureCustomer(workspaceId: UUID, ownerEmail: String, workspaceName: String): PolarCustomer {
+	override fun ensureCustomer(
+		workspaceId: UUID,
+		ownerEmail: String,
+		workspaceName: String,
+		existingCustomerId: String?,
+	): PolarCustomer {
 		ensureEnabled()
 		val externalId = workspaceExternalId(workspaceId)
+		existingCustomerId?.let { customerId ->
+			findCustomerById(customerId)?.let { return it.requireWorkspaceIdentity(externalId) }
+		}
 		findCustomer(externalId)?.let { return it }
 		val payload = mapOf(
 			"external_id" to externalId,
-			"email" to ownerEmail,
+			"email" to workspaceCustomerEmail(ownerEmail, workspaceId),
 			"name" to workspaceName,
 			"type" to "team",
+			"owner" to mapOf("email" to ownerEmail),
 			"metadata" to mapOf("workspace_id" to workspaceId.toString()),
 		)
 		val response = execute("POST", "/v1/customers", objectMapper.writeValueAsString(payload), accepted = setOf(201, 409))
@@ -154,7 +168,7 @@ class PolarClient(
 		val payload = mapOf(
 			"events" to listOf(
 				mapOf(
-					"id" to eventId,
+					"external_id" to eventId,
 					"name" to AI_USAGE_EVENT,
 					"external_customer_id" to workspaceExternalId(workspaceId),
 					"timestamp" to Instant.now().toString(),
@@ -182,6 +196,19 @@ class PolarClient(
 		return parseCustomer(response.body, externalId)
 	}
 
+	private fun findCustomerById(customerId: String): PolarCustomer? {
+		val response = execute(
+			"GET",
+			"/v1/customers/${segment(customerId)}",
+			accepted = setOf(200, 404),
+		)
+		if (response.status == 404) return null
+		val root = parse(response.body)
+		val id = root.path("id").stringValue()?.takeIf(String::isNotBlank) ?: invalidResponse()
+		val externalId = root.path("external_id").stringValue().orEmpty()
+		return PolarCustomer(id, externalId)
+	}
+
 	private fun parseCustomer(body: String, expectedExternalId: String): PolarCustomer {
 		val root = parse(body)
 		val id = root.path("id").stringValue()?.takeIf(String::isNotBlank) ?: invalidResponse()
@@ -190,6 +217,26 @@ class PolarClient(
 			throw PolarApiException("POLAR_CUSTOMER_OWNERSHIP_MISMATCH", "Polar customer does not belong to this workspace")
 		}
 		return PolarCustomer(id, externalId)
+	}
+
+	private fun PolarCustomer.requireWorkspaceIdentity(expectedExternalId: String): PolarCustomer {
+		if (externalId != expectedExternalId) {
+			throw PolarApiException(
+				"POLAR_CUSTOMER_MIGRATION_REQUIRED",
+				"Existing Polar customer is not bound to this workspace",
+			)
+		}
+		return this
+	}
+
+	private fun workspaceCustomerEmail(ownerEmail: String, workspaceId: UUID): String {
+		val separator = ownerEmail.lastIndexOf('@')
+		if (separator <= 0 || separator == ownerEmail.lastIndex) {
+			throw PolarApiException("POLAR_CUSTOMER_EMAIL_INVALID", "Workspace owner email is invalid")
+		}
+		val mailbox = ownerEmail.substring(0, separator).substringBefore('+').take(20)
+		val domain = ownerEmail.substring(separator + 1)
+		return "$mailbox+plot-${workspaceId.toString().replace("-", "")}@$domain"
 	}
 
 	private fun execute(

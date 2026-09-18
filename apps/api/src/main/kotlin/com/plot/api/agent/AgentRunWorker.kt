@@ -223,6 +223,13 @@ class AgentRunWorker(
 				activeInvocationId = null
 			}
 			private fun recoverSettlementBeforeModel() {
+				if (executionPersistence.hasSettledUnappliedModelInvocation(run.workspaceId, run.id)) {
+					throw AiCreditControlException(
+						"AI_SETTLEMENT_RECOVERED",
+						false,
+						"Previous model usage was settled without repeating provider work",
+					)
+				}
 				val unresolved = executionPersistence.findUnresolvedModelInvocation(run.workspaceId) ?: return
 				when (unresolved.status) {
 					AgentModelInvocationStatus.PENDING -> {
@@ -242,6 +249,11 @@ class AgentRunWorker(
 								"Previous model usage was settled without repeating provider work",
 							)
 						}
+						throw AiCreditControlException(
+							"AI_CREDIT_SETTLEMENT_PENDING",
+							true,
+							"Previous workspace usage was settled; retry before new provider work",
+						)
 					}
 					AgentModelInvocationStatus.STARTED -> {
 						if (unresolved.agentRunId == run.id) {

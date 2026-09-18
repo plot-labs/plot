@@ -73,6 +73,12 @@ class AiCreditCalculatorTest {
 		assertFailsWith<AiUsageUnknownException> {
 			calculator.calculate(usage(input = 5, cacheRead = 6))
 		}
+		assertFailsWith<AiUsageUnknownException> {
+			calculator.calculate(usage(input = Long.MAX_VALUE, output = 1, total = Long.MAX_VALUE))
+		}
+		assertFailsWith<AiUsageUnknownException> {
+			calculator.calculate(usage(reportedCostUsd = BigDecimal("999999999999999999999999")))
+		}
 	}
 
 	private fun usage(
