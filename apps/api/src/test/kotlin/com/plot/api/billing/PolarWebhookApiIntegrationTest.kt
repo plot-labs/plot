@@ -66,8 +66,8 @@ class PolarWebhookApiIntegrationTest {
 	}
 
 	@Test
-	fun activeReferencePromotesWorkspaceAndExposesPlan() {
-		val body = subscriptionEvent("subscription.active", "sub_active", referenceId = devContext.devUserId)
+	fun workspaceReferencePromotesThatWorkspaceAndExposesPlan() {
+		val body = subscriptionEvent("subscription.active", "sub_active", referenceId = devContext.devWorkspaceId)
 
 		postWebhook("msg_active", body).andExpect { status { isNoContent() } }
 
