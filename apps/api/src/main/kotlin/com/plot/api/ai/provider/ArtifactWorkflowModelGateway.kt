@@ -100,6 +100,7 @@ class ArtifactWorkflowModelException(
 	val code: ModelFailureCode,
 	message: String,
 	cause: Throwable? = null,
+	val metadata: ModelCallMetadata? = null,
 ) : RuntimeException(message, cause)
 
 enum class ModelRole { WRITER, REVIEWER, REWRITER }

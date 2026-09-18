@@ -240,6 +240,13 @@ class AgentRunExecutionPersistence(
 		queryPersistence.requireAgentClaim(claim)
 		sqlExecutor.query("select id from workspaces where id = ? for update", { row, _ -> row.getObject("id", UUID::class.java) }, claim.workspaceId)
 		findUnresolvedModelInvocation(claim.workspaceId)?.let { throw AgentModelInvocationBlockedException(it) }
+		val unresolvedArtifact = sqlExecutor.queryForObject(
+			"""select count(*) from model_invocations
+				where workspace_id = ? and status = 'RUNNING' and (billing_status is null or billing_status = 'PENDING')""",
+			Int::class.java,
+			claim.workspaceId,
+		) ?: 0
+		if (unresolvedArtifact > 0) throw AgentModelInvocationBlockedException()
 		val run = queryPersistence.requireAgentClaim(claim)
 		queryPersistence.requireAllAgentSourcesActiveForUpdate(
 			claim.workspaceId,

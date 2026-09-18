@@ -1,6 +1,9 @@
 package com.plot.api.artifact.workflow
 
 import com.plot.api.ai.provider.ModelRole
+import com.plot.api.ai.provider.ProviderUsage
+import com.plot.api.billing.AiBillingBasis
+import java.math.BigDecimal
 import java.util.UUID
 
 data class ArtifactWorkflowRunReservation(
@@ -32,6 +35,26 @@ data class ModelInvocationLease(
 	val logicalCallIndex: Int,
 	val attemptNo: Int,
 )
+
+data class ArtifactModelInvocationSettlement(
+	val id: UUID,
+	val workspaceId: UUID,
+	val generationRunId: UUID,
+	val workflowStepId: UUID,
+	val role: ModelRole,
+	val logicalCallIndex: Int,
+	val attemptNo: Int,
+	val usage: ProviderUsage,
+	val providerCostUsd: BigDecimal,
+	val credits: Long,
+	val billingBasis: AiBillingBasis,
+	val pricePolicyVersion: String,
+	val failureCode: String?,
+	val latencyMillis: Int?,
+)
+
+class ArtifactModelInvocationBlockedException :
+	IllegalStateException("Workspace already has unresolved AI usage")
 
 class ArtifactWorkflowIdempotencyConflictException : IllegalStateException("Idempotency key was reused with different inputs")
 class ArtifactWorkflowRunNotFoundException(val runId: UUID) : IllegalStateException("ArtifactWorkflow run not found")

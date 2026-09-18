@@ -1535,6 +1535,12 @@ class AgentArtifactWorkflowModelGateway : ArtifactWorkflowModelGateway {
 			totalTokens = 2,
 			latency = Duration.ofMillis(1),
 			observationAttributes = emptyMap(),
+			gateway = "openrouter",
+			requestedModel = "scripted",
+			cacheReadTokens = 0,
+			cacheWriteTokens = 0,
+			reasoningTokens = 0,
+			reportedCostUsd = java.math.BigDecimal("0.000001"),
 		),
 	)
 }

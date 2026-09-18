@@ -8,6 +8,7 @@ import com.plot.api.entitlement.WorkspaceAccessService
 import com.plot.api.agent.AgentRunExecutionPersistence
 import com.plot.api.agent.ArtifactWorkflowAgentRunCompletionHandler
 import com.plot.api.agent.AgentProperties
+import com.plot.api.billing.PolarCreditService
 import io.micrometer.observation.ObservationRegistry
 import java.time.Clock
 import java.time.Duration
@@ -48,6 +49,7 @@ class ArtifactWorkflowConfiguration {
 		workspaceAccessService: WorkspaceAccessService,
 		routineAgentProperties: AgentProperties,
 		agentRunCompletion: ArtifactWorkflowAgentRunCompletionHandler,
+		creditService: PolarCreditService,
 	): ArtifactWorkflowRunWorker = ArtifactWorkflowRunWorker(
 		executionPersistence = executionPersistence,
 		queryPersistence = queryPersistence,
@@ -60,6 +62,7 @@ class ArtifactWorkflowConfiguration {
 		workspaceAccessService = workspaceAccessService,
 		agentRunsEnabled = routineAgentProperties.workersEnabled,
 		agentRunCompletion = agentRunCompletion,
+		creditService = creditService,
 	)
 
 	@Bean(destroyMethod = "shutdown")

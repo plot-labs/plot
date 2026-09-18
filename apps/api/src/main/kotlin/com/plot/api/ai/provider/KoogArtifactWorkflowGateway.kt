@@ -120,6 +120,7 @@ class KoogArtifactWorkflowGateway(
 				ModelFailureCode.MALFORMED_OUTPUT,
 				"The model returned invalid structured output",
 				failure,
+				failure.usage?.toMetadata(Duration.between(startedAt, Instant.now())),
 			)
 		} catch (failure: NonTransientModelTransportException) {
 			throw ArtifactWorkflowModelException(
@@ -129,6 +130,31 @@ class KoogArtifactWorkflowGateway(
 			)
 		}
 	}
+
+	private fun ProviderUsage.toMetadata(latency: Duration) = ModelCallMetadata(
+		responseId = responseId,
+		actualModel = actualModel,
+		finishReason = null,
+		promptTokens = inputTokens?.toMetadataInt(),
+		completionTokens = outputTokens?.toMetadataInt(),
+		totalTokens = totalTokens?.toMetadataInt(),
+		latency = latency,
+		observationAttributes = mapOf(
+			"gateway" to provider.orEmpty(),
+			"requestedModel" to requestedModel.orEmpty(),
+			"servedModel" to actualModel.orEmpty(),
+			"responseId" to responseId.orEmpty(),
+			"finishReason" to "",
+		),
+		gateway = provider,
+		requestedModel = requestedModel,
+		cacheReadTokens = cacheReadTokens,
+		cacheWriteTokens = cacheWriteTokens,
+		reasoningTokens = reasoningTokens,
+		reportedCostUsd = reportedCostUsd,
+	)
+
+	private fun Long.toMetadataInt(): Int? = takeIf { it in 0..Int.MAX_VALUE.toLong() }?.toInt()
 
 	private fun StructuredTransportResponse<*>.toMetadata(latency: Duration) = ModelCallMetadata(
 		responseId = responseId,

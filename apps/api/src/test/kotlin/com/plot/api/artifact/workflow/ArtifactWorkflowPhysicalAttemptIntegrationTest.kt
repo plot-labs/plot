@@ -10,6 +10,11 @@ import com.plot.api.ai.provider.ModelRole
 import com.plot.api.ai.provider.ReviewerModelRequest
 import com.plot.api.ai.provider.RewriteModelRequest
 import com.plot.api.ai.provider.WriterModelRequest
+import com.plot.api.billing.PolarApiException
+import com.plot.api.billing.PolarCreditProvider
+import com.plot.api.billing.PolarCreditService
+import com.plot.api.billing.PolarCustomer
+import com.plot.api.billing.PolarEventResult
 import com.plot.api.dev.DevContext
 import com.plot.api.artifact.workflow.ArtifactWorkflowAdmissionPersistence
 import com.plot.api.artifact.workflow.ArtifactWorkflowExecutionPersistence
@@ -29,6 +34,7 @@ import io.micrometer.observation.tck.TestObservationRegistry
 import com.plot.api.artifact.workflow.model.WriterSentence
 import java.time.Duration
 import java.time.Instant
+import java.math.BigDecimal
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.test.assertEquals
@@ -39,14 +45,22 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.test.context.TestConfiguration
+import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
+import org.springframework.context.annotation.Primary
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.annotation.DirtiesContext
 import org.springframework.test.context.TestPropertySource
 
 @SpringBootTest
-@Import(TestcontainersConfiguration::class)
-@TestPropertySource(properties = ["plot.dev-bootstrap.enabled=true"])
+@Import(TestcontainersConfiguration::class, ArtifactWorkflowPhysicalAttemptIntegrationTest.Config::class)
+@TestPropertySource(properties = [
+	"plot.dev-bootstrap.enabled=true",
+	"plot.polar.credits-enabled=true",
+	"plot.polar.access-token=test-token",
+	"plot.polar.ai-meter-id=test-meter",
+])
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class ArtifactWorkflowPhysicalAttemptIntegrationTest {
 	@Autowired private lateinit var executionPersistence: ArtifactWorkflowExecutionPersistence
@@ -56,9 +70,18 @@ class ArtifactWorkflowPhysicalAttemptIntegrationTest {
 	@Autowired private lateinit var workflow: ArtifactWorkflowService
 	@Autowired private lateinit var jdbcTemplate: JdbcTemplate
 	@Autowired private lateinit var devContext: DevContext
+	@Autowired private lateinit var creditService: PolarCreditService
+	@Autowired private lateinit var polarCredits: ArtifactPolarCreditProvider
 
 	@BeforeEach
 	fun isolateArtifactWorkflowQueue() {
+		polarCredits.reset()
+		jdbcTemplate.update(
+			"""update model_invocations
+				set status = 'FAILED', billing_status = case when billing_status = 'PENDING' then 'USAGE_UNKNOWN' else billing_status end,
+				    failure_code = coalesce(failure_code, 'TEST_ISOLATION'), finished_at = coalesce(finished_at, now())
+				where status = 'RUNNING'""",
+		)
 		jdbcTemplate.update(
 			"""
 			update generation_runs
@@ -68,6 +91,89 @@ class ArtifactWorkflowPhysicalAttemptIntegrationTest {
 			where status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
 			""".trimIndent(),
 		)
+	}
+
+	@Test
+	fun writerAndReviewerEachSettleOneActualUsageEvent() {
+		val state = reserve("billed-writer-reviewer")
+		val gateway = RetryGateway(state.evidence.single().id, transientWriterFailures = 0)
+		val worker = billedWorker(gateway, "billed-writer-reviewer")
+
+		worker.drain()
+
+		assertEquals(2, polarCredits.events.size)
+		assertEquals(2, count("model_invocations", state.runId, "billing_status = 'SETTLED'"))
+		assertEquals(listOf("REVIEWER", "WRITER"), invocationRoles(state.runId).sorted())
+		assertEquals("READY", runStatus(state.runId))
+	}
+
+	@Test
+	fun exhaustedCreditsPreventTheProviderCall() {
+		val state = reserve("no-credit")
+		val gateway = RetryGateway(state.evidence.single().id, transientWriterFailures = 0)
+		polarCredits.balance = 0
+
+		assertEquals(true, billedWorker(gateway, "no-credit").processOne())
+
+		assertEquals(0, gateway.writeCalls)
+		assertEquals("FAILED", runStatus(state.runId))
+		assertEquals("AI_CREDITS_EXHAUSTED", runFailure(state.runId))
+	}
+
+	@Test
+	fun pendingSettlementRecoversWithoutRepeatingProviderWork() {
+		val state = reserve("pending-settlement")
+		val gateway = RetryGateway(state.evidence.single().id, transientWriterFailures = 0)
+		val worker = billedWorker(gateway, "pending-settlement")
+		polarCredits.failIngest = true
+
+		assertEquals(true, worker.processOne())
+		assertEquals(1, gateway.writeCalls)
+		assertEquals(1, count("model_invocations", state.runId, "billing_status = 'PENDING'"))
+		polarCredits.failIngest = false
+		makeRunnable(state.runId)
+
+		assertEquals(true, worker.processOne())
+		assertEquals(1, gateway.writeCalls)
+		assertEquals(1, polarCredits.events.size)
+		assertEquals("FAILED", runStatus(state.runId))
+		assertEquals("AI_SETTLEMENT_RECOVERED", runFailure(state.runId))
+	}
+
+	@Test
+	fun unknownUsageFailsOnlyTheCurrentWorkflow() {
+		val first = reserve("usage-unknown")
+		val missingCost = RetryGateway(
+			first.evidence.single().id,
+			transientWriterFailures = 0,
+			reportedCostUsd = null,
+		)
+
+		assertEquals(true, billedWorker(missingCost, "usage-unknown").processOne())
+		assertEquals("AI_USAGE_UNKNOWN", runFailure(first.runId))
+		assertEquals(0, count("model_invocations", first.runId, "billing_status = 'PENDING'"))
+
+		val second = reserve("usage-known-after-unknown")
+		val valid = RetryGateway(second.evidence.single().id, transientWriterFailures = 0)
+		assertEquals(true, billedWorker(valid, "usage-known-after-unknown").processOne())
+		assertEquals(1, valid.writeCalls)
+	}
+
+	@Test
+	fun malformedOutputWithKnownUsageIsChargedOnceAndFailsTheWorkflow() {
+		val state = reserve("malformed-billed")
+		val gateway = RetryGateway(
+			state.evidence.single().id,
+			transientWriterFailures = 0,
+			malformedWriter = true,
+		)
+
+		assertEquals(true, billedWorker(gateway, "malformed-billed").processOne())
+
+		assertEquals(1, gateway.writeCalls)
+		assertEquals(1, polarCredits.events.size)
+		assertEquals(1, count("model_invocations", state.runId, "billing_status = 'SETTLED'"))
+		assertEquals("MALFORMED_OUTPUT", runFailure(state.runId))
 	}
 
 	@Test
@@ -433,11 +539,32 @@ class ArtifactWorkflowPhysicalAttemptIntegrationTest {
 		jdbcTemplate.update("update generation_runs set next_attempt_at = now() where id = ?", runId)
 	}
 
+	private fun billedWorker(gateway: ArtifactWorkflowModelGateway, workerId: String) = ArtifactWorkflowRunWorker(
+		executionPersistence = executionPersistence,
+		queryPersistence = queryPersistence,
+		workflowService = workflow,
+		modelGateway = gateway,
+		workerId = workerId,
+		creditService = creditService,
+	)
+
 	private fun runStatus(runId: UUID): String = jdbcTemplate.queryForObject(
 		"select status from generation_runs where id = ?",
 		String::class.java,
 		runId,
 	)!!
+
+	private fun runFailure(runId: UUID): String = jdbcTemplate.queryForObject(
+		"select error_code from generation_runs where id = ?",
+		String::class.java,
+		runId,
+	)!!
+
+	private fun invocationRoles(runId: UUID): List<String> = jdbcTemplate.queryForList(
+		"select role from model_invocations where generation_run_id = ? and billing_status = 'SETTLED'",
+		String::class.java,
+		runId,
+	).filterNotNull()
 
 	private fun invocations(runId: UUID): List<InvocationRow> = jdbcTemplate.query(
 		"""
@@ -464,6 +591,13 @@ class ArtifactWorkflowPhysicalAttemptIntegrationTest {
 			Int::class.java,
 			runId,
 		)!!
+
+	@TestConfiguration(proxyBeanMethods = false)
+	class Config {
+		@Bean
+		@Primary
+		fun polarCreditProvider() = ArtifactPolarCreditProvider()
+	}
 }
 
 private data class InvocationRow(
@@ -478,6 +612,8 @@ private class RetryGateway(
 	private val evidenceId: UUID,
 	private var transientWriterFailures: Int,
 	private val beforeWriteResult: () -> Unit = {},
+	private val reportedCostUsd: BigDecimal? = BigDecimal("0.000001"),
+	private val malformedWriter: Boolean = false,
 ) : ArtifactWorkflowModelGateway {
 	var writeCalls: Int = 0
 		private set
@@ -494,6 +630,13 @@ private class RetryGateway(
 			)
 		}
 		beforeWriteResult()
+		if (malformedWriter) {
+			throw ArtifactWorkflowModelException(
+				ModelFailureCode.MALFORMED_OUTPUT,
+				"malformed provider output",
+				metadata = metadata(),
+			)
+		}
 		return result(WriterOutput(listOf(WriterSentence("Search shipped."))))
 	}
 
@@ -517,7 +660,10 @@ private class RetryGateway(
 
 	private fun <T : Any> result(value: T): ModelCallResult<T> = ModelCallResult(
 		value,
-		ModelCallMetadata(
+		metadata(),
+	)
+
+	private fun metadata() = ModelCallMetadata(
 			responseId = "scripted",
 			actualModel = "scripted",
 			finishReason = "stop",
@@ -526,6 +672,47 @@ private class RetryGateway(
 			totalTokens = 2,
 			latency = Duration.ofMillis(1),
 			observationAttributes = emptyMap(),
-		),
+			gateway = "openrouter",
+			requestedModel = "scripted",
+			cacheReadTokens = 0,
+			cacheWriteTokens = 0,
+			reasoningTokens = 0,
+			reportedCostUsd = reportedCostUsd,
 	)
 }
+
+class ArtifactPolarCreditProvider : PolarCreditProvider {
+	var balance = 10_000L
+	var failIngest = false
+	val events = mutableListOf<ArtifactPolarEvent>()
+
+	override fun ensureCustomer(workspaceId: UUID, ownerEmail: String, workspaceName: String) =
+		PolarCustomer("cus-$workspaceId", "plot-workspace:$workspaceId")
+
+	override fun readCreditBalance(workspaceId: UUID): Long = balance
+
+	override fun grantTrialCredits(workspaceId: UUID) = PolarEventResult(0, 1)
+
+	override fun ingestCredits(
+		workspaceId: UUID,
+		eventId: String,
+		credits: Long,
+		metadata: Map<String, Any>,
+	): PolarEventResult {
+		if (failIngest) throw PolarApiException("POLAR_UNAVAILABLE", "Polar unavailable", retryable = true)
+		if (events.none { it.eventId == eventId }) {
+			events += ArtifactPolarEvent(workspaceId, eventId, credits)
+			balance -= credits
+			return PolarEventResult(1, 0)
+		}
+		return PolarEventResult(0, 1)
+	}
+
+	fun reset() {
+		balance = 10_000
+		failIngest = false
+		events.clear()
+	}
+}
+
+data class ArtifactPolarEvent(val workspaceId: UUID, val eventId: String, val credits: Long)

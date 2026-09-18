@@ -197,7 +197,7 @@ data class AgentModelInvocationSettlement(
 	val pricePolicyVersion: String?,
 )
 
-class AgentModelInvocationBlockedException(val unresolved: AgentModelInvocationSettlement) :
+class AgentModelInvocationBlockedException(val unresolved: AgentModelInvocationSettlement? = null) :
 	IllegalStateException("Workspace already has unresolved AI usage")
 
 class AgentRunIdempotencyConflictException : IllegalStateException(

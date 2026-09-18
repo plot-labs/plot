@@ -41,6 +41,7 @@ create unique index agent_model_invocations_workspace_unresolved_uk
 
 alter table model_invocations
   add column billing_status varchar,
+  add column actual_model text,
   add column cache_read_token_count bigint,
   add column cache_write_token_count bigint,
   add column reasoning_token_count bigint,
