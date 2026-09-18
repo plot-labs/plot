@@ -302,7 +302,7 @@ class ArtifactPublishIntegrationTest {
 	}
 
 	@Test
-	fun `trial pack limit still allows edit and first publish`() {
+	fun `trial content packs do not restrict edit publish or configuration`() {
 		val fixture = readyPack()
 		val extraRunIds = mutableListOf<UUID>()
 		val extraPackIds = mutableListOf<UUID>()
@@ -368,10 +368,9 @@ class ArtifactPublishIntegrationTest {
 			}.andExpect { status { isOk() } }
 			mockMvc.patch("/api/workspaces/${devContext.devWorkspaceId}") {
 				contentType = MediaType.APPLICATION_JSON
-				content = """{"name":"Blocked"}"""
+				content = """{"name":"Credit-funded trial"}"""
 			}.andExpect {
-				status { isForbidden() }
-				jsonPath("$.error") { value("WORKSPACE_READ_ONLY") }
+				status { isOk() }
 			}
 		} finally {
 			extraPackIds.forEach { jdbcTemplate.update("delete from content_packs where id = ?", it) }
