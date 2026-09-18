@@ -135,9 +135,9 @@ class KoogArtifactWorkflowGateway(
 		responseId = responseId,
 		actualModel = actualModel,
 		finishReason = null,
-		promptTokens = inputTokens?.toMetadataInt(),
-		completionTokens = outputTokens?.toMetadataInt(),
-		totalTokens = totalTokens?.toMetadataInt(),
+		promptTokens = inputTokens?.toModelMetadataInt(),
+		completionTokens = outputTokens?.toModelMetadataInt(),
+		totalTokens = totalTokens?.toModelMetadataInt(),
 		latency = latency,
 		observationAttributes = mapOf(
 			"gateway" to provider.orEmpty(),
@@ -154,7 +154,6 @@ class KoogArtifactWorkflowGateway(
 		reportedCostUsd = reportedCostUsd,
 	)
 
-	private fun Long.toMetadataInt(): Int? = takeIf { it in 0..Int.MAX_VALUE.toLong() }?.toInt()
 
 	private fun StructuredTransportResponse<*>.toMetadata(latency: Duration) = ModelCallMetadata(
 		responseId = responseId,

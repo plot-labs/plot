@@ -89,6 +89,9 @@ fun ModelCallMetadata.toProviderUsage() = ProviderUsage(
 	reportedCostUsd = reportedCostUsd,
 )
 
+internal fun Long.toModelMetadataInt(): Int? =
+	takeIf { it in 0..Int.MAX_VALUE.toLong() }?.toInt()
+
 enum class ModelFailureCode {
 	MODEL_NOT_CONFIGURED,
 	PROVIDER_UNAVAILABLE,

@@ -334,10 +334,12 @@ class ArtifactWorkflowExecutionPersistence(
 					totalTokens = row.getLong("total_token_count"),
 					reportedCostUsd = requireNotNull(row.getObject("provider_cost_usd", BigDecimal::class.java)),
 				),
-				providerCostUsd = requireNotNull(row.getObject("provider_cost_usd", BigDecimal::class.java)),
-				credits = row.getLong("credits"),
-				billingBasis = AiBillingBasis.valueOf(requireNotNull(row.getString("billing_basis"))),
-				pricePolicyVersion = requireNotNull(row.getString("price_policy_version")),
+				charge = AiCreditCharge(
+					providerCostUsd = requireNotNull(row.getObject("provider_cost_usd", BigDecimal::class.java)),
+					credits = row.getLong("credits"),
+					basis = AiBillingBasis.valueOf(requireNotNull(row.getString("billing_basis"))),
+					policyVersion = requireNotNull(row.getString("price_policy_version")),
+				),
 				failureCode = row.getString("failure_code"),
 				latencyMillis = row.getObject("latency_ms", Int::class.java),
 			)

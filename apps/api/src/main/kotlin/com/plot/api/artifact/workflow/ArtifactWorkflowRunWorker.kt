@@ -7,11 +7,11 @@ import com.plot.api.ai.provider.ModelFailureCode
 import com.plot.api.ai.provider.ModelRole
 import com.plot.api.ai.provider.ModelCallResult
 import com.plot.api.ai.provider.toProviderUsage
+import com.plot.api.ai.provider.toModelMetadataInt
 import com.plot.api.ai.provider.ReviewerModelRequest
 import com.plot.api.ai.provider.RewriteModelRequest
 import com.plot.api.ai.provider.WriterModelRequest
 import com.plot.api.common.ApiException
-import com.plot.api.billing.AiCreditCharge
 import com.plot.api.billing.AiCreditControlException
 import com.plot.api.billing.PolarCreditService
 import com.plot.api.entitlement.WorkspaceAccessService
@@ -245,12 +245,7 @@ class ArtifactWorkflowRunWorker(
 					pending.workspaceId,
 					pending.id,
 					pending.usage,
-					AiCreditCharge(
-						providerCostUsd = pending.providerCostUsd,
-						credits = pending.credits,
-						basis = pending.billingBasis,
-						policyVersion = pending.pricePolicyVersion,
-					),
+					pending.charge,
 				)
 				executionPersistence.markModelInvocationSettled(pending.id)
 			}
@@ -389,9 +384,9 @@ private fun ArtifactModelInvocationSettlement.toMetadata() = ModelCallMetadata(
 	responseId = usage.responseId,
 	actualModel = usage.actualModel,
 	finishReason = null,
-	promptTokens = usage.inputTokens?.toMetadataInt(),
-	completionTokens = usage.outputTokens?.toMetadataInt(),
-	totalTokens = usage.totalTokens?.toMetadataInt(),
+	promptTokens = usage.inputTokens?.toModelMetadataInt(),
+	completionTokens = usage.outputTokens?.toModelMetadataInt(),
+	totalTokens = usage.totalTokens?.toModelMetadataInt(),
 	latency = Duration.ofMillis(latencyMillis?.toLong() ?: 0),
 	observationAttributes = mapOf(
 		"gateway" to usage.provider.orEmpty(),
@@ -406,8 +401,6 @@ private fun ArtifactModelInvocationSettlement.toMetadata() = ModelCallMetadata(
 	reasoningTokens = usage.reasoningTokens,
 	reportedCostUsd = usage.reportedCostUsd,
 )
-
-private fun Long.toMetadataInt(): Int? = takeIf { it in 0..Int.MAX_VALUE.toLong() }?.toInt()
 
 private class RecordingGateway(private val delegate: ArtifactWorkflowModelGateway) : ArtifactWorkflowModelGateway {
 	var metadata: ModelCallMetadata? = null

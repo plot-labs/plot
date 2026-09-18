@@ -2,8 +2,7 @@ package com.plot.api.artifact.workflow
 
 import com.plot.api.ai.provider.ModelRole
 import com.plot.api.ai.provider.ProviderUsage
-import com.plot.api.billing.AiBillingBasis
-import java.math.BigDecimal
+import com.plot.api.billing.AiCreditCharge
 import java.util.UUID
 
 data class ArtifactWorkflowRunReservation(
@@ -45,10 +44,7 @@ data class ArtifactModelInvocationSettlement(
 	val logicalCallIndex: Int,
 	val attemptNo: Int,
 	val usage: ProviderUsage,
-	val providerCostUsd: BigDecimal,
-	val credits: Long,
-	val billingBasis: AiBillingBasis,
-	val pricePolicyVersion: String,
+	val charge: AiCreditCharge,
 	val failureCode: String?,
 	val latencyMillis: Int?,
 )
