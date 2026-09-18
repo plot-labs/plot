@@ -25,12 +25,12 @@ class AiCreditCalculator internal constructor(private val policy: AiCreditPolicy
 	@Autowired
 	constructor(properties: PlotAiProperties) : this(AiCreditPolicy()) {
 		require(properties.creditPolicyVersion == policy.version) {
-			"Configured AI credit policy does not match the deployed price catalog"
+			"Configured AI credit policy does not match the deployed credit policy"
 		}
 	}
 
 	fun calculate(usage: ProviderUsage): AiCreditCharge {
-		val actualModel = usage.actualModel?.takeIf(String::isNotBlank)
+		usage.actualModel?.takeIf(String::isNotBlank)
 			?: unknown("Provider usage did not identify the actual model")
 		val input = nonNegative(usage.inputTokens, "input tokens")
 		val output = nonNegative(usage.outputTokens, "output tokens")

@@ -5,7 +5,6 @@ import com.plot.api.agent.AgentExecutionSnapshotPersistence
 import com.plot.api.common.ApiException
 import com.plot.api.content.ContentType
 import com.plot.api.content.ContentTypeRegistry
-import com.plot.api.entitlement.TrialPolicy
 import com.plot.api.persistence.SqlExecutor
 import com.plot.api.persistence.TransactionExecutor
 import com.plot.api.agent.AgentToolAccessException
@@ -120,7 +119,7 @@ class ArtifactWorkflowAdmissionPersistence(
 			if (existing.second != reservation.requestFingerprint) throw ArtifactWorkflowIdempotencyConflictException()
 			return@execute queryPersistence.loadState(reservation.workspaceId, existing.first)
 		}
-		requireTrialArtifactWorkflowCapacity(reservation.workspaceId)
+		requireWritableWorkspace(reservation.workspaceId)
 		val now = clock.instant()
 		val contentType = resolveContentType(reservation.workspaceId, reservation.agentRunId)
 		val writerSpec = contentTypeRegistry.specFor(contentType)
@@ -189,48 +188,18 @@ class ArtifactWorkflowAdmissionPersistence(
 		reservation.state
 	}
 
-	private fun requireTrialArtifactWorkflowCapacity(workspaceId: UUID) {
+	private fun requireWritableWorkspace(workspaceId: UUID) {
 		val entitlement = sqlExecutor.query(
-			"select plan, entitlement_status, access_mode from workspaces where id = ? for update",
-			{ rs, _ -> Triple(rs.getString(1), rs.getString(2), rs.getString(3)) },
+			"select access_mode from workspaces where id = ? for update",
+			{ rs, _ -> rs.getString(1) },
 			workspaceId,
 		).singleOrNull()
 			?: throw ApiException(HttpStatus.FORBIDDEN, "ACCESS_DENIED", "Access denied")
-		if (entitlement.third == "read_only") {
+		if (entitlement == "read_only") {
 			throw ApiException(
 				HttpStatus.FORBIDDEN,
 				"WORKSPACE_READ_ONLY",
 				"This workspace is read-only. Reactivate a subscription to make changes.",
-			)
-		}
-		if (entitlement.first != "trial" || entitlement.second != "trialing") return
-		val occupiedPackSlotCount = sqlExecutor.queryForObject(
-			"""
-			select
-			  (select count(*) from content_packs where workspace_id = ?)
-			  +
-			  (
-			    select count(*)
-			    from generation_runs run
-			    where run.workspace_id = ?
-			      and run.status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
-			      and not exists (
-			        select 1
-			        from content_packs pack
-			        where pack.workspace_id = run.workspace_id
-			          and pack.generation_run_id = run.id
-			      )
-			  )
-			""".trimIndent(),
-			Long::class.java,
-			workspaceId,
-			workspaceId,
-		) ?: 0
-		if (occupiedPackSlotCount >= TrialPolicy.PACK_LIMIT) {
-			throw ApiException(
-				HttpStatus.FORBIDDEN,
-				"TRIAL_PACK_LIMIT_REACHED",
-				"The trial already has three completed or in-progress artifact drafts. Wait for a failure to release capacity or subscribe.",
 			)
 		}
 	}

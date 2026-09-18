@@ -1,6 +1,5 @@
 package com.plot.api.entitlement
 
-import com.plot.api.persistence.SqlExecutor
 import com.plot.api.workspace.Workspace
 import java.time.Clock
 import org.springframework.stereotype.Component
@@ -52,7 +51,6 @@ data class EffectiveWorkspaceEntitlement(
 
 @Component
 class WorkspaceEntitlementReader(
-	private val sql: SqlExecutor,
 	private val clock: Clock = Clock.systemUTC(),
 ) {
 	@Transactional(readOnly = true)
@@ -62,12 +60,7 @@ class WorkspaceEntitlementReader(
 			return workspace.currentEntitlement()
 		}
 		if (!workspace.trialEndsAt.isAfter(clock.instant())) return EXPIRED
-		val successfulPackCount = sql.queryForObject(
-			"select count(*) from content_packs where workspace_id = ?",
-			Long::class.java,
-			workspace.id,
-		) ?: 0
-		return if (successfulPackCount >= TrialPolicy.PACK_LIMIT) COMPLETE_ONLY else TRIALING
+		return TRIALING
 	}
 
 	private fun Workspace.currentEntitlement() =
@@ -75,7 +68,6 @@ class WorkspaceEntitlementReader(
 
 	private companion object {
 		val TRIALING = EffectiveWorkspaceEntitlement("trialing", "full")
-		val COMPLETE_ONLY = EffectiveWorkspaceEntitlement("trialing", "complete_only")
 		val EXPIRED = EffectiveWorkspaceEntitlement("expired", "read_only")
 	}
 }

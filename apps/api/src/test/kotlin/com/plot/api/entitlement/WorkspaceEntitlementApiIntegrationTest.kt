@@ -124,7 +124,7 @@ class WorkspaceEntitlementApiIntegrationTest {
 	}
 
 	@Test
-	fun thirdSuccessfulPackBlocksGenerationButAllowsExistingDraftCompletion() {
+	fun contentPacksDoNotChangeTrialCapabilities() {
 		val runIds = mutableListOf<UUID>()
 		val packIds = mutableListOf<UUID>()
 		try {
@@ -151,20 +151,19 @@ class WorkspaceEntitlementApiIntegrationTest {
 				status { isOk() }
 				jsonPath("$.plan") { value("trial") }
 				jsonPath("$.entitlementStatus") { value("trialing") }
-				jsonPath("$.accessMode") { value("complete_only") }
-				jsonPath("$.capabilities.generate") { value(false) }
+				jsonPath("$.accessMode") { value("full") }
+				jsonPath("$.capabilities.generate") { value(true) }
 				jsonPath("$.capabilities.edit") { value(true) }
 				jsonPath("$.capabilities.publish") { value(true) }
 				jsonPath("$.capabilities.export") { value(true) }
-				jsonPath("$.capabilities.configure") { value(false) }
+				jsonPath("$.capabilities.configure") { value(true) }
 				jsonPath("$.capabilities.unpublish") { value(true) }
 			}
 			mockMvc.patch("/api/workspaces/${devContext.devWorkspaceId}") {
 				contentType = MediaType.APPLICATION_JSON
-				content = """{"name":"Blocked"}"""
+				content = """{"name":"Credit-funded trial"}"""
 			}.andExpect {
-				status { isForbidden() }
-				jsonPath("$.error") { value("WORKSPACE_READ_ONLY") }
+				status { isOk() }
 			}
 
 			val persisted = jdbcTemplate.queryForMap(
@@ -181,38 +180,38 @@ class WorkspaceEntitlementApiIntegrationTest {
 
 	@Test
 	@Transactional
-	fun generationReservationsCannotRacePastTrialLimit() {
+	fun trialCanReserveMoreThanThreeArtifactWorkflows() {
 		val workspaceId = UUID.randomUUID()
 		insertTrialWorkspace(workspaceId)
-		repeat(3) {
+		repeat(4) {
 			val runId = UUID.randomUUID()
 			persistence.createRun(reservation(workspaceId, runId))
 		}
 
-		val blocked = assertFailsWith<ApiException> {
-			persistence.createRun(reservation(workspaceId, UUID.randomUUID()))
-		}
-		assertEquals("TRIAL_PACK_LIMIT_REACHED", blocked.error)
 		assertEquals(
-			"The trial already has three completed or in-progress artifact drafts. Wait for a failure to release capacity or subscribe.",
-			blocked.message,
+			4,
+			jdbcTemplate.queryForObject(
+				"select count(*) from generation_runs where workspace_id = ?",
+				Int::class.java,
+				workspaceId,
+			),
 		)
 	}
 
 	@Test
 	@Transactional
-	fun failedArtifactWorkflowReleasesReservedTrialCapacity() {
+	fun readOnlyWorkspaceStillCannotReserveArtifactWorkflow() {
 		val workspaceId = UUID.randomUUID()
 		insertTrialWorkspace(workspaceId)
-		val runIds = List(3) {
-			UUID.randomUUID().also { runId -> persistence.createRun(reservation(workspaceId, runId)) }
-		}
-
 		jdbcTemplate.update(
-			"update generation_runs set status = 'FAILED', finished_at = created_at, updated_at = created_at where id = ?",
-			runIds.first(),
+			"update workspaces set entitlement_status = 'expired', access_mode = 'read_only' where id = ?",
+			workspaceId,
 		)
-		persistence.createRun(reservation(workspaceId, UUID.randomUUID()))
+
+		val blocked = assertFailsWith<ApiException> {
+			persistence.createRun(reservation(workspaceId, UUID.randomUUID()))
+		}
+		assertEquals("WORKSPACE_READ_ONLY", blocked.error)
 	}
 
 	private fun setDevEntitlement(plan: String, status: String, accessMode: String, trialEndsAtSql: String) {
