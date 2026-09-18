@@ -23,6 +23,7 @@ class OpenRouterWireContractTest {
                 val body = mapper.readTree(bodies.single())
                 assertEquals(properties.model, body["model"].stringValue())
                 assertEquals(mapper.readTree(mapper.writeValueAsString(properties.openRouterProviderPolicy)), body["provider"])
+				assertTrue(body["usage"]["include"].booleanValue())
                 assertFalse(body.has("temperature"))
                 assertFalse(body.has("tools") && body["tools"].size() > 0)
                 assertEquals(ModelSchemas.WRITER.let(mapper::readTree), body["response_format"]["json_schema"]["schema"])
@@ -129,6 +130,7 @@ class OpenRouterWireContractTest {
                     mapper.readTree(mapper.writeValueAsString(properties.openRouterProviderPolicyFor("anthropic"))),
                     body["provider"],
                 )
+				assertTrue(body["usage"]["include"].booleanValue())
                 assertEquals("high", body["reasoning"]["effort"].stringValue())
             }
         }

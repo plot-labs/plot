@@ -7,7 +7,7 @@ import java.math.RoundingMode
 import org.springframework.stereotype.Component
 import org.springframework.beans.factory.annotation.Autowired
 
-enum class AiBillingBasis { REPORTED_COST, TOKENS }
+enum class AiBillingBasis { REPORTED_COST }
 
 data class AiCreditCharge(
 	val providerCostUsd: BigDecimal,
@@ -21,9 +21,9 @@ class AiUsageUnknownException(message: String) : RuntimeException(message) {
 }
 
 @Component
-class AiCreditCalculator internal constructor(private val policy: AiPricingPolicy) {
+class AiCreditCalculator internal constructor(private val policy: AiCreditPolicy) {
 	@Autowired
-	constructor(properties: PlotAiProperties) : this(AiPricingPolicy.current()) {
+	constructor(properties: PlotAiProperties) : this(AiCreditPolicy()) {
 		require(properties.creditPolicyVersion == policy.version) {
 			"Configured AI credit policy does not match the deployed price catalog"
 		}
@@ -32,7 +32,6 @@ class AiCreditCalculator internal constructor(private val policy: AiPricingPolic
 	fun calculate(usage: ProviderUsage): AiCreditCharge {
 		val actualModel = usage.actualModel?.takeIf(String::isNotBlank)
 			?: unknown("Provider usage did not identify the actual model")
-		val price = policy.models[actualModel] ?: unknown("Provider usage identified an unpriced model")
 		val input = nonNegative(usage.inputTokens, "input tokens")
 		val output = nonNegative(usage.outputTokens, "output tokens")
 		val total = nonNegative(usage.totalTokens, "total tokens")
@@ -43,26 +42,13 @@ class AiCreditCalculator internal constructor(private val policy: AiPricingPolic
 			unknown("Provider usage token details are inconsistent")
 		}
 
-		val reported = usage.reportedCostUsd
-		if (reported != null && reported < BigDecimal.ZERO) unknown("Provider usage cost is invalid")
-		val (cost, basis) = if (reported != null && reported > BigDecimal.ZERO) {
-			reported to AiBillingBasis.REPORTED_COST
-		} else {
-			val uncachedInput = input - cacheRead - cacheWrite
-			val ordinaryOutput = output - reasoning
-			val tokenCost = tokenCost(uncachedInput, price.inputPerMillionUsd) +
-				tokenCost(cacheRead, price.cacheReadPerMillionUsd) +
-				tokenCost(cacheWrite, price.cacheWritePerMillionUsd) +
-				tokenCost(ordinaryOutput, price.outputPerMillionUsd) +
-				tokenCost(reasoning, price.reasoningPerMillionUsd)
-			if (tokenCost <= BigDecimal.ZERO) unknown("Provider usage has no billable cost")
-			tokenCost to AiBillingBasis.TOKENS
-		}
+		val cost = usage.reportedCostUsd ?: unknown("Provider usage is missing actual cost")
+		if (cost < BigDecimal.ZERO) unknown("Provider usage cost is invalid")
 		val credits = cost.multiply(policy.debitMultiplier)
 			.divide(policy.creditUnitUsd, 0, RoundingMode.CEILING)
 			.longValueExact()
 			.coerceAtLeast(1)
-		return AiCreditCharge(cost.stripTrailingZeros(), credits, basis, policy.version)
+		return AiCreditCharge(cost.stripTrailingZeros(), credits, AiBillingBasis.REPORTED_COST, policy.version)
 	}
 
 	fun recurringBenefitCreditCap(planPriceUsd: BigDecimal): Long {
@@ -78,9 +64,6 @@ class AiCreditCalculator internal constructor(private val policy: AiPricingPolic
 
 	val policyVersion: String get() = policy.version
 
-	private fun tokenCost(tokens: Long, perMillionUsd: BigDecimal): BigDecimal =
-		BigDecimal.valueOf(tokens).multiply(perMillionUsd).divide(MILLION)
-
 	private fun nonNegative(value: Long?, label: String): Long {
 		if (value == null || value < 0) unknown("Provider usage is missing valid $label")
 		return value
@@ -88,7 +71,4 @@ class AiCreditCalculator internal constructor(private val policy: AiPricingPolic
 
 	private fun unknown(message: String): Nothing = throw AiUsageUnknownException(message)
 
-	private companion object {
-		val MILLION = BigDecimal("1000000")
-	}
 }

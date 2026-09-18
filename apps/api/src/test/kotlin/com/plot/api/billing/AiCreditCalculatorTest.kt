@@ -7,27 +7,7 @@ import kotlin.test.assertFailsWith
 import org.junit.jupiter.api.Test
 
 class AiCreditCalculatorTest {
-	private val calculator = AiCreditCalculator(
-		AiPricingPolicy(
-			version = "test-v1",
-			models = mapOf(
-				"model/cheap" to AiModelPrice(
-					inputPerMillionUsd = BigDecimal("1"),
-					outputPerMillionUsd = BigDecimal("2"),
-					cacheReadPerMillionUsd = BigDecimal("0.1"),
-					cacheWritePerMillionUsd = BigDecimal("1.25"),
-					reasoningPerMillionUsd = BigDecimal("2"),
-				),
-				"model/expensive" to AiModelPrice(
-					inputPerMillionUsd = BigDecimal("5"),
-					outputPerMillionUsd = BigDecimal("25"),
-					cacheReadPerMillionUsd = BigDecimal("0.5"),
-					cacheWritePerMillionUsd = BigDecimal("6.25"),
-					reasoningPerMillionUsd = BigDecimal("25"),
-				),
-			),
-		),
-	)
+	private val calculator = AiCreditCalculator(AiCreditPolicy(version = "test-openrouter-cost"))
 
 	@Test
 	fun reportedProviderCostWinsAnd00368CostsSixCredits() {
@@ -36,22 +16,23 @@ class AiCreditCalculatorTest {
 		assertEquals(BigDecimal("0.00368"), charge.providerCostUsd)
 		assertEquals(6, charge.credits)
 		assertEquals(AiBillingBasis.REPORTED_COST, charge.basis)
-		assertEquals("test-v1", charge.policyVersion)
+		assertEquals("test-openrouter-cost", charge.policyVersion)
 	}
 
 	@Test
-	fun sameTokensCostDifferentlyByActualModel() {
-		val cheap = calculator.calculate(usage(actualModel = "model/cheap", input = 1_000, output = 1_000))
-		val expensive = calculator.calculate(usage(actualModel = "model/expensive", input = 1_000, output = 1_000))
+	fun providerCostWorksForAnyReportedActualModelWithoutALocalPriceCatalog() {
+		val first = calculator.calculate(usage(actualModel = "provider/model-a", reportedCostUsd = BigDecimal("0.001")))
+		val second = calculator.calculate(usage(actualModel = "provider/model-b", reportedCostUsd = BigDecimal("0.010")))
 
-		assertEquals(5, cheap.credits)
-		assertEquals(45, expensive.credits)
+		assertEquals(2, first.credits)
+		assertEquals(15, second.credits)
 	}
 
 	@Test
-	fun cacheAndReasoningArePricedWithoutDoubleCountingTotals() {
+	fun cacheAndReasoningDetailsAreValidatedButOpenRouterCostIsTheBillingAuthority() {
 		val charge = calculator.calculate(
-			usage(input = 1_000, output = 1_000, cacheRead = 400, cacheWrite = 100, reasoning = 300),
+			usage(input = 1_000, output = 1_000, cacheRead = 400, cacheWrite = 100, reasoning = 300,
+				reportedCostUsd = BigDecimal("0.002665")),
 		)
 
 		assertEquals(BigDecimal("0.002665"), charge.providerCostUsd)
@@ -59,10 +40,12 @@ class AiCreditCalculatorTest {
 	}
 
 	@Test
-	fun positiveUsageAlwaysCostsAtLeastOneCredit() {
-		val charge = calculator.calculate(usage(input = 1, output = 0))
+	fun zeroCostOrSubUnitCallsStillCostAtLeastOneCredit() {
+		val free = calculator.calculate(usage(input = 0, output = 0, reportedCostUsd = BigDecimal.ZERO))
+		val tiny = calculator.calculate(usage(input = 1, output = 0, reportedCostUsd = BigDecimal("0.000001")))
 
-		assertEquals(1, charge.credits)
+		assertEquals(1, free.credits)
+		assertEquals(1, tiny.credits)
 	}
 
 	@Test
@@ -74,10 +57,13 @@ class AiCreditCalculatorTest {
 	}
 
 	@Test
-	fun failsClosedForUnknownModelOrIncompleteUsage() {
+	fun failsClosedForMissingModelCostOrIncompleteUsage() {
 		assertEquals("usage_unknown", assertFailsWith<AiUsageUnknownException> {
-			calculator.calculate(usage(actualModel = "model/unknown"))
+			calculator.calculate(usage(actualModel = ""))
 		}.safeCode)
+		assertFailsWith<AiUsageUnknownException> {
+			calculator.calculate(usage(reportedCostUsd = null))
+		}
 		assertFailsWith<AiUsageUnknownException> {
 			calculator.calculate(usage(total = null))
 		}
@@ -89,25 +75,18 @@ class AiCreditCalculatorTest {
 		}
 	}
 
-	@Test
-	fun zeroReportedCostFallsBackToTokens() {
-		val charge = calculator.calculate(usage(reportedCostUsd = BigDecimal.ZERO))
-
-		assertEquals(AiBillingBasis.TOKENS, charge.basis)
-	}
-
 	private fun usage(
-		actualModel: String = "model/cheap",
+		actualModel: String = "provider/model",
 		input: Long = 1_000,
 		output: Long = 1_000,
 		cacheRead: Long = 0,
 		cacheWrite: Long = 0,
 		reasoning: Long = 0,
 		total: Long? = input + output,
-		reportedCostUsd: BigDecimal? = null,
+		reportedCostUsd: BigDecimal? = BigDecimal("0.00368"),
 	) = ProviderUsage(
 		provider = "openrouter",
-		requestedModel = "model/cheap",
+		requestedModel = "provider/requested-model",
 		actualModel = actualModel,
 		responseId = "response-1",
 		inputTokens = input,

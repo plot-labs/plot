@@ -35,6 +35,10 @@ import com.plot.api.chat.dto.CreateChatAgentRunRequest
 import com.plot.api.common.ApiException
 import com.plot.api.common.WorkspacePrincipal
 import com.plot.api.config.PlotAiProperties
+import com.plot.api.billing.PolarCreditProvider
+import com.plot.api.billing.PolarCustomer
+import com.plot.api.billing.PolarEventResult
+import com.plot.api.ai.provider.ProviderUsage
 import com.plot.api.dev.DevBootstrapService
 import com.plot.api.dev.DevContext
 import com.plot.api.worksession.WorkSessionService
@@ -75,6 +79,9 @@ import org.springframework.test.context.TestPropertySource
 	"plot.routine-agent.max-attempts=2",
 	"plot.routine-agent.max-model-calls=3",
 	"plot.routine-agent.max-tool-calls=2",
+	"plot.polar.credits-enabled=true",
+	"plot.polar.access-token=test-token",
+	"plot.polar.ai-meter-id=test-meter",
 	"server.address=127.0.0.1",
 ])
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
@@ -94,6 +101,7 @@ class AgentRunWorkerIntegrationTest {
 	@Autowired private lateinit var workSessions: WorkSessionService
 	@Autowired private lateinit var agentModel: ScriptedAgentRuntime
 	@Autowired private lateinit var artifactWorkflowModel: AgentArtifactWorkflowModelGateway
+	@Autowired private lateinit var polarCredits: AgentPolarCreditProvider
 
 	@BeforeEach
 	fun isolateScenario() {
@@ -120,6 +128,7 @@ class AgentRunWorkerIntegrationTest {
 		)
 		agentModel.reset()
 		artifactWorkflowModel.reset()
+		polarCredits.reset()
 	}
 
 	@Test
@@ -404,6 +413,8 @@ class AgentRunWorkerIntegrationTest {
 		assertEquals("SUCCEEDED", agentStatus(first.id))
 		assertEquals("Plot can answer directly without creating an artifact.", chatQueries.getRun(first.id).responseText)
 		assertEquals(null, chatQueries.getRun(first.id).artifactId)
+		assertEquals(1, count("select count(*) from agent_model_invocations where agent_run_id = ? and status = 'SETTLED'", first.id))
+		assertEquals(1, polarCredits.events.count { it.workspaceId == devContext.devWorkspaceId })
 
 		agentModel.responseText = "I remember the earlier answer."
 		val followUp = chatAdmission.admit(
@@ -426,6 +437,82 @@ class AgentRunWorkerIntegrationTest {
 		assertEquals(2, turns.size)
 		assertEquals("I remember the earlier answer.", turns.last().versions.single().responseText)
 		assertEquals("SUCCEEDED", agentStatus(followUp.id))
+	}
+
+	@Test
+	fun `Agent stops before the next physical call after the final credit is consumed`() {
+		polarCredits.balance = 1
+		var exchanges = 0
+		agentModel.nativeRuntime = com.plot.api.ai.provider.KoogAgentRuntime(
+			ai.koog.prompt.llm.LLModel(ai.koog.prompt.llm.LLMProvider.OpenRouter, PlotAiProperties.GPT_5_4_NANO_MODEL,
+				listOf(ai.koog.prompt.llm.LLMCapability.Completion, ai.koog.prompt.llm.LLMCapability.Tools)),
+			ai.koog.prompt.params.LLMParams(), tools.jackson.module.kotlin.jacksonObjectMapper(),
+		) { _, _, _ ->
+			exchanges++
+			com.plot.api.ai.provider.AgentModelResponse(
+				nativeCall("LIST_ALLOWED_SOURCES"),
+				billedUsage(),
+			)
+		}
+		val admitted = chatAdmission.admit(
+			CreateChatAgentRunRequest("Inspect sources before answering"),
+			"chat-final-credit-${UUID.randomUUID()}",
+		)
+
+		assertTrue(agentWorker.processOne())
+
+		assertEquals(1, exchanges)
+		assertEquals("FAILED", agentStatus(admitted.id))
+		assertEquals("AI_CREDITS_EXHAUSTED", agentFailure(admitted.id))
+		assertEquals(1, count("select count(*) from agent_model_invocations where agent_run_id = ? and status = 'SETTLED'", admitted.id))
+	}
+
+	@Test
+	fun `pending usage is settled on recovery without repeating provider work`() {
+		agentModel.responseText = "The provider completed this once."
+		polarCredits.failIngest = true
+		val admitted = chatAdmission.admit(
+			CreateChatAgentRunRequest("Answer once"),
+			"chat-pending-settlement-${UUID.randomUUID()}",
+		)
+
+		assertTrue(agentWorker.processOne())
+		assertEquals("QUEUED", agentStatus(admitted.id))
+		assertEquals(1, agentModel.requests.size)
+		assertEquals(1, count("select count(*) from agent_model_invocations where agent_run_id = ? and status = 'PENDING'", admitted.id))
+
+		polarCredits.failIngest = false
+		assertTrue(agentWorker.processOne())
+
+		assertEquals(1, agentModel.requests.size)
+		assertEquals("FAILED", agentStatus(admitted.id))
+		assertEquals("AI_SETTLEMENT_RECOVERED", agentFailure(admitted.id))
+		assertEquals(1, count("select count(*) from agent_model_invocations where agent_run_id = ? and status = 'SETTLED'", admitted.id))
+		assertEquals(1, polarCredits.events.size)
+	}
+
+	@Test
+	fun `usage unknown fails one run without locking the workspace`() {
+		agentModel.responseText = "Unbillable response"
+		agentModel.usage = billedUsage().copy(reportedCostUsd = null)
+		val failed = chatAdmission.admit(
+			CreateChatAgentRunRequest("First request"),
+			"chat-usage-unknown-${UUID.randomUUID()}",
+		)
+
+		assertTrue(agentWorker.processOne())
+		assertEquals("FAILED", agentStatus(failed.id))
+		assertEquals("AI_USAGE_UNKNOWN", agentFailure(failed.id))
+		assertEquals(1, count("select count(*) from agent_model_invocations where agent_run_id = ? and status = 'USAGE_UNKNOWN'", failed.id))
+
+		agentModel.usage = billedUsage()
+		agentModel.responseText = "Next request succeeds"
+		val next = chatAdmission.admit(
+			CreateChatAgentRunRequest("Second request"),
+			"chat-after-usage-unknown-${UUID.randomUUID()}",
+		)
+		assertTrue(agentWorker.processOne())
+		assertEquals("SUCCEEDED", agentStatus(next.id))
 	}
 
 	@Test
@@ -1093,7 +1180,7 @@ class AgentRunWorkerIntegrationTest {
 			ai.koog.prompt.params.LLMParams(), tools.jackson.module.kotlin.jacksonObjectMapper(),
 		) { prompt, _, _ -> com.plot.api.ai.provider.AgentModelResponse(
 			next(prompt.toString()),
-			com.plot.api.ai.provider.ProviderUsage("openrouter", "test", "test", "response", 1, 1, 0, 0, 0, 2, null),
+			billedUsage(),
 		) }
 
 	private fun nativeCall(name: String, arguments: String = "{}") = ai.koog.prompt.message.Message.Assistant(
@@ -1269,6 +1356,10 @@ class AgentRunWorkerIntegrationTest {
 
 		@Bean
 		@Primary
+		fun polarCreditProvider() = AgentPolarCreditProvider()
+
+		@Bean
+		@Primary
 		fun noOpArtifactWorkflowDispatcher(): ArtifactWorkflowRunDispatcher =
 			ArtifactWorkflowRunDispatcher(TaskExecutor { _ -> }) { false }
 	}
@@ -1286,17 +1377,29 @@ class ScriptedAgentRuntime : AgentRuntime {
 	var infrastructureFailure = false
 	var scriptedDecision: ((AgentDecisionRequest) -> AgentDecision)? = null
 	var responseText: String? = null
+	var usage: ProviderUsage = billedUsage()
 	val requests = mutableListOf<AgentDecisionRequest>()
 
 	override fun run(host: AgentRuntimeHost): com.plot.api.ai.provider.AgentRuntimeResult {
 		nativeRuntime?.let { return it.run(host) }
 		host.beforeModel()
-		responseText?.let {
-			requests += host.context()
-			return com.plot.api.ai.provider.AgentRuntimeResult(responseText = it)
+		return try {
+			responseText?.let {
+				requests += host.context()
+				host.afterModel(usage)
+				return com.plot.api.ai.provider.AgentRuntimeResult(responseText = it)
+			}
+			val decision = decide(host.context())
+			host.afterModel(usage)
+			host.execute(decision)
+			com.plot.api.ai.provider.AgentRuntimeResult(completed = host.finished)
+		} catch (failure: AgentDecisionException) {
+			host.modelFailed(failure)
+			throw failure
+		} catch (failure: RuntimeException) {
+			host.modelFailed(AgentDecisionException("PROVIDER_UNAVAILABLE", true, "Scripted provider failed"))
+			throw failure
 		}
-		host.execute(decide(host.context()))
-		return com.plot.api.ai.provider.AgentRuntimeResult(completed = host.finished)
 	}
 
 	private fun decide(request: AgentDecisionRequest): AgentDecision {
@@ -1341,9 +1444,58 @@ class ScriptedAgentRuntime : AgentRuntime {
 		infrastructureFailure = false
 		scriptedDecision = null
 		responseText = null
+		usage = billedUsage()
 		requests.clear()
 	}
 }
+
+private fun billedUsage() = ProviderUsage(
+	provider = "openrouter",
+	requestedModel = PlotAiProperties.GPT_5_4_NANO_MODEL,
+	actualModel = PlotAiProperties.GPT_5_4_NANO_MODEL,
+	responseId = UUID.randomUUID().toString(),
+	inputTokens = 1,
+	outputTokens = 1,
+	cacheReadTokens = 0,
+	cacheWriteTokens = 0,
+	reasoningTokens = 0,
+	totalTokens = 2,
+	reportedCostUsd = java.math.BigDecimal("0.0000005"),
+)
+
+class AgentPolarCreditProvider : PolarCreditProvider {
+	var balance = 10_000L
+	var failIngest = false
+	var ingestAttempts = 0
+	val events = mutableListOf<AgentPolarEvent>()
+
+	override fun ensureCustomer(workspaceId: UUID, ownerEmail: String, workspaceName: String) =
+		PolarCustomer("cus-$workspaceId", "plot-workspace:$workspaceId")
+
+	override fun readCreditBalance(workspaceId: UUID): Long = balance
+
+	override fun grantTrialCredits(workspaceId: UUID) = PolarEventResult(0, 1)
+
+	override fun ingestCredits(workspaceId: UUID, eventId: String, credits: Long, metadata: Map<String, Any>): PolarEventResult {
+		ingestAttempts++
+		if (failIngest) throw com.plot.api.billing.PolarApiException("POLAR_UNAVAILABLE", "Polar unavailable", retryable = true)
+		if (events.none { it.eventId == eventId }) {
+			events += AgentPolarEvent(workspaceId, eventId, credits)
+			balance -= credits
+			return PolarEventResult(1, 0)
+		}
+		return PolarEventResult(0, 1)
+	}
+
+	fun reset() {
+		balance = 10_000
+		failIngest = false
+		ingestAttempts = 0
+		events.clear()
+	}
+}
+
+data class AgentPolarEvent(val workspaceId: UUID, val eventId: String, val credits: Long)
 
 class AgentArtifactWorkflowModelGateway : ArtifactWorkflowModelGateway {
 	var calls = 0

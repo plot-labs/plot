@@ -63,7 +63,12 @@ internal class KoogAgentRuntime(
 						.also { host.afterModel(it.usage) }
 						.message
 				} catch (_: TimeoutCancellationException) {
-					throw AgentDecisionException("PROVIDER_UNAVAILABLE", true, "Agent model request timed out")
+					val failure = AgentDecisionException("PROVIDER_UNAVAILABLE", true, "Agent model request timed out")
+					host.modelFailed(failure)
+					throw failure
+				} catch (failure: AgentDecisionException) {
+					if (failure.usage != null) host.afterModel(failure.usage) else host.modelFailed(failure)
+					throw failure
 				}
 			}
 			override fun executeStreaming(prompt: Prompt, model: LLModel, tools: List<ToolDescriptor>): Flow<StreamFrame> = error("Streaming is not used")

@@ -60,8 +60,10 @@ class KoogModelTransport internal constructor(
 						maxTokens = minOf(maxTokens, properties.maxOutputTokens),
 						temperature = temperature,
 						schema = LLMParams.Schema.JSON.Standard("plot_output", Json.parseToJsonElement(schema).jsonObject),
-						additionalProperties = mapOf("provider" to Json.parseToJsonElement(
-							objectMapper.writeValueAsString(properties.openRouterProviderPolicy))),
+						additionalProperties = mapOf(
+							"provider" to Json.parseToJsonElement(objectMapper.writeValueAsString(properties.openRouterProviderPolicy)),
+							"usage" to Json.parseToJsonElement("""{"include":true}"""),
+						),
 					)) { system(system); user(user) }, LLModel(LLMProvider.OpenRouter, requireNotNull(properties.model),
 						listOf(LLMCapability.Completion, LLMCapability.Schema.JSON.Standard)))
 				}
@@ -97,6 +99,7 @@ class KoogModelTransport internal constructor(
 			"provider" to Json.parseToJsonElement(objectMapper.writeValueAsString(
 				routingProvider?.let(properties::openRouterProviderPolicyFor) ?: properties.openRouterProviderPolicy,
 			)),
+			"usage" to Json.parseToJsonElement("""{"include":true}"""),
 		)
 		reasoningEffort?.let { effort ->
 			additionalProperties["reasoning"] = Json.parseToJsonElement(
@@ -119,6 +122,9 @@ class KoogModelTransport internal constructor(
 		}
 	} catch (failure: Exception) {
 		val causes = generateSequence<Throwable>(failure) { it.cause }.toList()
+		causes.filterIsInstance<MalformedModelOutputException>().firstOrNull()?.let {
+			throw AgentDecisionException("AGENT_INVALID_RESPONSE", false, "Agent provider response was invalid", usage = it.usage)
+		}
 		val http = causes.filterIsInstance<KoogHttpClientException>().firstOrNull()
 		val transient = http?.statusCode in listOf(408, 429) || (http?.statusCode ?: 0) >= 500 ||
 			causes.any { it is java.io.IOException || it is kotlinx.coroutines.TimeoutCancellationException || it is TransientModelTransportException }

@@ -1,7 +1,10 @@
 package com.plot.api.agent
 
 import com.plot.api.content.ContentType
+import com.plot.api.ai.provider.ProviderUsage
+import com.plot.api.billing.AiBillingBasis
 import java.time.Instant
+import java.math.BigDecimal
 import java.util.UUID
 
 enum class AgentRunStatus {
@@ -178,6 +181,24 @@ data class ClaimedAgentRun(
 	val transitionVersion: Long,
 	val workerId: String,
 )
+
+enum class AgentModelInvocationStatus { STARTED, PENDING, SETTLED, ABORTED, USAGE_UNKNOWN }
+
+data class AgentModelInvocationSettlement(
+	val id: UUID,
+	val workspaceId: UUID,
+	val agentRunId: UUID,
+	val sequence: Int,
+	val status: AgentModelInvocationStatus,
+	val usage: ProviderUsage?,
+	val providerCostUsd: BigDecimal?,
+	val credits: Long?,
+	val billingBasis: AiBillingBasis?,
+	val pricePolicyVersion: String?,
+)
+
+class AgentModelInvocationBlockedException(val unresolved: AgentModelInvocationSettlement) :
+	IllegalStateException("Workspace already has unresolved AI usage")
 
 class AgentRunIdempotencyConflictException : IllegalStateException(
 	"Agent run idempotency key was reused with a different fingerprint",

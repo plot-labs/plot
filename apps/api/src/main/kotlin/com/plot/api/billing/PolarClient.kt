@@ -31,6 +31,13 @@ class PolarApiException(
 
 data class PolarHttpResponse(val status: Int, val body: String)
 
+interface PolarCreditProvider {
+	fun ensureCustomer(workspaceId: UUID, ownerEmail: String, workspaceName: String): PolarCustomer
+	fun readCreditBalance(workspaceId: UUID): Long
+	fun grantTrialCredits(workspaceId: UUID): PolarEventResult
+	fun ingestCredits(workspaceId: UUID, eventId: String, credits: Long, metadata: Map<String, Any> = emptyMap()): PolarEventResult
+}
+
 fun interface PolarHttpTransport {
 	fun execute(method: String, uri: URI, headers: Map<String, String>, body: String?): PolarHttpResponse
 }
@@ -78,10 +85,10 @@ class PolarClient(
 	private val properties: PolarProperties,
 	private val objectMapper: ObjectMapper,
 	private val transport: PolarHttpTransport = JavaPolarHttpTransport(properties),
-) {
+) : PolarCreditProvider {
 	fun workspaceExternalId(workspaceId: UUID): String = "plot-workspace:$workspaceId"
 
-	fun ensureCustomer(workspaceId: UUID, ownerEmail: String, workspaceName: String): PolarCustomer {
+	override fun ensureCustomer(workspaceId: UUID, ownerEmail: String, workspaceName: String): PolarCustomer {
 		ensureEnabled()
 		val externalId = workspaceExternalId(workspaceId)
 		findCustomer(externalId)?.let { return it }
@@ -100,7 +107,7 @@ class PolarClient(
 		return parseCustomer(response.body, externalId)
 	}
 
-	fun readCreditBalance(workspaceId: UUID): Long {
+	override fun readCreditBalance(workspaceId: UUID): Long {
 		ensureEnabled()
 		val externalId = workspaceExternalId(workspaceId)
 		val response = execute("GET", "/v1/customers/external/${segment(externalId)}/state")
@@ -116,9 +123,9 @@ class PolarClient(
 		}
 	}
 
-	fun grantTrialCredits(workspaceId: UUID): PolarEventResult = ingest(
+	override fun grantTrialCredits(workspaceId: UUID): PolarEventResult = ingest(
 		workspaceId = workspaceId,
-		eventId = "trial:${properties.trialPolicyVersion}:$workspaceId",
+		eventId = "trial:$workspaceId",
 		credits = -properties.trialCredits,
 		metadata = mapOf(
 			"reason" to "trial_grant",
@@ -126,11 +133,11 @@ class PolarClient(
 		),
 	)
 
-	fun ingestCredits(
+	override fun ingestCredits(
 		workspaceId: UUID,
 		eventId: String,
 		credits: Long,
-		metadata: Map<String, Any> = emptyMap(),
+		metadata: Map<String, Any>,
 	): PolarEventResult {
 		require(credits > 0) { "Usage credits must be positive" }
 		return ingest(workspaceId, eventId, credits, metadata)

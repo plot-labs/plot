@@ -4,8 +4,12 @@ package com.plot.api.agent
 import com.plot.api.artifact.run.ArtifactRunPersistence
 import com.plot.api.artifact.run.ArtifactRunStatus
 import com.plot.api.common.UuidGenerator
+import com.plot.api.ai.provider.ProviderUsage
+import com.plot.api.billing.AiCreditCharge
+import com.plot.api.billing.AiBillingBasis
 import com.plot.api.github.GitHubReleaseReconciliationTrigger
 import com.plot.api.persistence.SqlExecutor
+import com.plot.api.persistence.SqlRow
 import com.plot.api.persistence.TransactionExecutor
 import java.sql.Timestamp
 import java.time.Clock
@@ -210,6 +214,99 @@ class AgentRunExecutionPersistence(
 		)
 		if (updated != 1) throw AgentRunClaimLostException()
 		requireNotNull(queryPersistence.findAgentRun(claim.workspaceId, claim.agentRunId))
+	}
+
+	fun findUnresolvedModelInvocation(workspaceId: UUID): AgentModelInvocationSettlement? = sqlExecutor.query(
+		"""
+		select id, workspace_id, agent_run_id, sequence_no, status, provider, requested_model, actual_model,
+		       provider_response_id, input_token_count, output_token_count, cache_read_token_count,
+		       cache_write_token_count, reasoning_token_count, total_token_count, provider_cost_usd,
+		       credits, billing_basis, price_policy_version
+		from agent_model_invocations
+		where workspace_id = ? and status in ('STARTED', 'PENDING')
+		order by created_at, id
+		limit 1
+		""".trimIndent(),
+		{ row, _ -> row.toAgentModelInvocation() },
+		workspaceId,
+	).firstOrNull()
+
+	fun beginBilledModelInvocation(
+		claim: ClaimedAgentRun,
+		maxModelCalls: Int,
+		now: Instant = currentInstant(),
+	): UUID = transactionExecutor.execute {
+		require(maxModelCalls > 0) { "Agent model-call budget must be positive" }
+		queryPersistence.requireAgentClaim(claim)
+		sqlExecutor.query("select id from workspaces where id = ? for update", { row, _ -> row.getObject("id", UUID::class.java) }, claim.workspaceId)
+		findUnresolvedModelInvocation(claim.workspaceId)?.let { throw AgentModelInvocationBlockedException(it) }
+		val run = queryPersistence.requireAgentClaim(claim)
+		queryPersistence.requireAllAgentSourcesActiveForUpdate(
+			claim.workspaceId,
+			claim.agentRunId,
+			allowDisconnectedConnection = snapshots.isFrozenReplay(claim.workspaceId, claim.agentRunId),
+		)
+		if (run.modelCallCount >= maxModelCalls) throw AgentRunBudgetExceededException("AGENT_MODEL_CALL_LIMIT")
+		val sequence = run.modelCallCount + 1
+		val invocationId = uuidGenerator.next()
+		val updated = sqlExecutor.update(
+			"""update agent_runs set model_call_count = model_call_count + 1, claimed_at = ?, updated_at = ?
+			where workspace_id = ? and id = ? and claimed_by = ? and transition_version = ? and status = 'RUNNING'""",
+			Timestamp.from(now), Timestamp.from(now), claim.workspaceId, claim.agentRunId, claim.workerId, claim.transitionVersion,
+		)
+		if (updated != 1) throw AgentRunClaimLostException()
+		sqlExecutor.update(
+			"""insert into agent_model_invocations
+			(id, workspace_id, agent_run_id, sequence_no, status, created_at)
+			values (?, ?, ?, ?, 'STARTED', ?)""",
+			invocationId, claim.workspaceId, claim.agentRunId, sequence, Timestamp.from(now),
+		)
+		invocationId
+	}
+
+	fun recordModelInvocationUsage(
+		claim: ClaimedAgentRun,
+		invocationId: UUID,
+		usage: ProviderUsage,
+		charge: AiCreditCharge,
+		now: Instant = currentInstant(),
+	) = transactionExecutor.execute {
+		queryPersistence.requireAgentClaim(claim)
+		val updated = sqlExecutor.update(
+			"""
+			update agent_model_invocations
+			set status = 'PENDING', provider = ?, requested_model = ?, actual_model = ?, provider_response_id = ?,
+			    input_token_count = ?, output_token_count = ?, cache_read_token_count = ?, cache_write_token_count = ?,
+			    reasoning_token_count = ?, total_token_count = ?, provider_cost_usd = ?, credits = ?,
+			    billing_basis = ?, price_policy_version = ?, usage_recorded_at = ?
+			where workspace_id = ? and agent_run_id = ? and id = ? and status = 'STARTED'
+			""".trimIndent(),
+			usage.provider, usage.requestedModel, usage.actualModel, usage.responseId,
+			usage.inputTokens, usage.outputTokens, usage.cacheReadTokens ?: 0, usage.cacheWriteTokens ?: 0,
+			usage.reasoningTokens ?: 0, usage.totalTokens, charge.providerCostUsd, charge.credits,
+			charge.basis.name, charge.policyVersion, Timestamp.from(now),
+			claim.workspaceId, claim.agentRunId, invocationId,
+		)
+		if (updated != 1) throw AgentRunClaimLostException()
+	}
+
+	fun markModelInvocationSettled(invocationId: UUID, now: Instant = currentInstant()) {
+		val updated = sqlExecutor.update(
+			"update agent_model_invocations set status = 'SETTLED', settled_at = ? where id = ? and status = 'PENDING'",
+			Timestamp.from(now), invocationId,
+		)
+		if (updated != 1) {
+			val status = sqlExecutor.queryForObject("select status from agent_model_invocations where id = ?", String::class.java, invocationId)
+			if (status != "SETTLED") throw AgentRunStateException("Agent usage settlement state is stale")
+		}
+	}
+
+	fun markModelInvocationAborted(invocationId: UUID) {
+		sqlExecutor.update("update agent_model_invocations set status = 'ABORTED' where id = ? and status = 'STARTED'", invocationId)
+	}
+
+	fun markModelInvocationUsageUnknown(invocationId: UUID) {
+		sqlExecutor.update("update agent_model_invocations set status = 'USAGE_UNKNOWN' where id = ? and status = 'STARTED'", invocationId)
 	}
 	fun reserveStep(
 		claim: ClaimedAgentRun,
@@ -697,4 +794,33 @@ class AgentRunExecutionPersistence(
 			}
 		}
 	}
+}
+
+private fun SqlRow.toAgentModelInvocation(): AgentModelInvocationSettlement {
+	val status = AgentModelInvocationStatus.valueOf(requireNotNull(getString("status")))
+	val usage = if (status == AgentModelInvocationStatus.PENDING) ProviderUsage(
+		provider = getString("provider"),
+		requestedModel = getString("requested_model"),
+		actualModel = getString("actual_model"),
+		responseId = getString("provider_response_id"),
+		inputTokens = getObject("input_token_count", Long::class.javaObjectType),
+		outputTokens = getObject("output_token_count", Long::class.javaObjectType),
+		cacheReadTokens = getObject("cache_read_token_count", Long::class.javaObjectType),
+		cacheWriteTokens = getObject("cache_write_token_count", Long::class.javaObjectType),
+		reasoningTokens = getObject("reasoning_token_count", Long::class.javaObjectType),
+		totalTokens = getObject("total_token_count", Long::class.javaObjectType),
+		reportedCostUsd = getObject("provider_cost_usd", java.math.BigDecimal::class.java),
+	) else null
+	return AgentModelInvocationSettlement(
+		id = requireNotNull(getObject("id", UUID::class.java)),
+		workspaceId = requireNotNull(getObject("workspace_id", UUID::class.java)),
+		agentRunId = requireNotNull(getObject("agent_run_id", UUID::class.java)),
+		sequence = getInt("sequence_no"),
+		status = status,
+		usage = usage,
+		providerCostUsd = getObject("provider_cost_usd", java.math.BigDecimal::class.java),
+		credits = getObject("credits", Long::class.javaObjectType),
+		billingBasis = getString("billing_basis")?.let(AiBillingBasis::valueOf),
+		pricePolicyVersion = getString("price_policy_version"),
+	)
 }

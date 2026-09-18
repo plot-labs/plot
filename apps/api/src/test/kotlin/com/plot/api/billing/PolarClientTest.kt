@@ -105,7 +105,7 @@ class PolarClientTest {
 		client.grantTrialCredits(workspaceId)
 
 		val event = mapper.readTree(body!!).path("events").first()
-		assertEquals("trial:trial-v1:$workspaceId", event.path("id").stringValue())
+		assertEquals("trial:$workspaceId", event.path("id").stringValue())
 		assertEquals(-5_000, event.path("metadata").path("credits").intValue())
 	}
 
