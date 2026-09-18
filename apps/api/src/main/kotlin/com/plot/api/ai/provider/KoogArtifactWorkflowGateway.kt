@@ -41,6 +41,10 @@ data class StructuredTransportResponse<T : Any>(
 	val promptTokens: Int?,
 	val completionTokens: Int?,
 	val totalTokens: Int?,
+	val cacheReadTokens: Long? = null,
+	val cacheWriteTokens: Long? = null,
+	val reasoningTokens: Long? = null,
+	val reportedCostUsd: java.math.BigDecimal? = null,
 )
 
 interface StructuredChatTransport {
@@ -49,7 +53,11 @@ interface StructuredChatTransport {
 
 class TransientModelTransportException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
 class NonTransientModelTransportException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
-class MalformedModelOutputException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
+class MalformedModelOutputException(
+	message: String,
+	cause: Throwable? = null,
+	val usage: ProviderUsage? = null,
+) : RuntimeException(message, cause)
 
 class KoogArtifactWorkflowGateway(
 	private val transport: StructuredChatTransport,
@@ -139,6 +147,10 @@ class KoogArtifactWorkflowGateway(
 		),
 		gateway = PlotAiProperties.OPENROUTER_GATEWAY,
 		requestedModel = properties.model,
+		cacheReadTokens = cacheReadTokens,
+		cacheWriteTokens = cacheWriteTokens,
+		reasoningTokens = reasoningTokens,
+		reportedCostUsd = reportedCostUsd,
 	)
 }
 

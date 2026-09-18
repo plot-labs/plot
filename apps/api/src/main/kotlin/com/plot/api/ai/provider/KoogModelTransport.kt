@@ -80,11 +80,13 @@ class KoogModelTransport internal constructor(
 			// Provider exception bodies can contain private source text; do not attach them to exported errors.
 			throw NonTransientModelTransportException("Model provider rejected the request")
 		}
-		if (response.finishReason != "stop") throw MalformedModelOutputException("Model output did not finish normally")
+		val usage = captured.toUsage(properties.model)
+		if (response.finishReason != "stop") throw MalformedModelOutputException("Model output did not finish normally", usage = usage)
 		val value = try { objectMapper.readValue(response.textContent(), responseType) }
-			catch (_: Exception) { throw MalformedModelOutputException("Invalid structured model output") }
+			catch (_: Exception) { throw MalformedModelOutputException("Invalid structured model output", usage = usage) }
 		return StructuredTransportResponse(value, captured.responseId, captured.model, response.finishReason,
-			response.metaInfo.inputTokensCount, response.metaInfo.outputTokensCount, response.metaInfo.totalTokensCount)
+			usage.inputTokens?.toInt(), usage.outputTokens?.toInt(), usage.totalTokens?.toInt(),
+			usage.cacheReadTokens, usage.cacheWriteTokens, usage.reasoningTokens, usage.reportedCostUsd)
 	}
 
 	internal fun agentModel(model: String? = null) = LLModel(LLMProvider.OpenRouter, model ?: requireNotNull(properties.model),
@@ -105,14 +107,15 @@ class KoogModelTransport internal constructor(
 	}
 
 	internal suspend fun exchangeAgent(prompt: ai.koog.prompt.Prompt, model: LLModel,
-		tools: List<ai.koog.agents.core.tools.ToolDescriptor>): ai.koog.prompt.message.Message.Assistant = try {
+		tools: List<ai.koog.agents.core.tools.ToolDescriptor>): AgentModelResponse = try {
+		val captured = ResponseMetadataClient(requireNotNull(client), objectMapper)
 		withTimeout(properties.timeout.toMillis()) {
-			OpenRouterLLMClient(httpClient = ResponseMetadataClient(requireNotNull(client), objectMapper))
+			OpenRouterLLMClient(httpClient = captured)
 				.execute(prompt, model, tools).also {
 					if (it.finishReason !in listOf("stop", "tool_calls")) {
-						throw MalformedModelOutputException("Agent output did not finish normally")
+						throw MalformedModelOutputException("Agent output did not finish normally", usage = captured.toUsage(model.id))
 					}
-				}
+				}.let { AgentModelResponse(it, captured.toUsage(model.id)) }
 		}
 	} catch (failure: Exception) {
 		val causes = generateSequence<Throwable>(failure) { it.cause }.toList()
@@ -126,6 +129,13 @@ class KoogModelTransport internal constructor(
 	private class ResponseMetadataClient(private val delegate: KoogHttpClient, private val mapper: ObjectMapper) : KoogHttpClient by delegate {
 		var responseId: String? = null
 		var model: String? = null
+		var inputTokens: Long? = null
+		var outputTokens: Long? = null
+		var totalTokens: Long? = null
+		var cacheReadTokens: Long? = null
+		var cacheWriteTokens: Long? = null
+		var reasoningTokens: Long? = null
+		var reportedCostUsd: java.math.BigDecimal? = null
 		override suspend fun <T : Any, R : Any> post(path: String, requestBody: T, requestBodyType: KClass<T>,
 			responseType: KClass<R>, parameters: Map<String, String>, headers: Map<String, String>): R {
 			val response = delegate.post(path, requestBody, requestBodyType, responseType, parameters, headers)
@@ -144,9 +154,37 @@ class KoogModelTransport internal constructor(
 				}
 				responseId = root.get("id")?.stringValue()
 				model = root.get("model")?.stringValue()
+				val usage = root.path("usage")
+				inputTokens = usage.integral("prompt_tokens")
+				outputTokens = usage.integral("completion_tokens")
+				totalTokens = usage.integral("total_tokens")
+				val inputDetails = usage.path("prompt_tokens_details")
+				cacheReadTokens = inputDetails.integral("cached_tokens")
+				cacheWriteTokens = inputDetails.integral("cache_write_tokens")
+				reasoningTokens = usage.path("completion_tokens_details").integral("reasoning_tokens")
+				reportedCostUsd = usage.path("cost").takeUnless { it.isMissingNode || it.isNull }?.let {
+					runCatching { it.decimalValue() }.getOrNull()
+				}
 			}
 			return response
 		}
+
+		fun toUsage(requestedModel: String?) = ProviderUsage(
+			provider = PlotAiProperties.OPENROUTER_GATEWAY,
+			requestedModel = requestedModel,
+			actualModel = model,
+			responseId = responseId,
+			inputTokens = inputTokens,
+			outputTokens = outputTokens,
+			cacheReadTokens = cacheReadTokens,
+			cacheWriteTokens = cacheWriteTokens,
+			reasoningTokens = reasoningTokens,
+			totalTokens = totalTokens,
+			reportedCostUsd = reportedCostUsd,
+		)
+
+		private fun tools.jackson.databind.JsonNode.integral(field: String): Long? =
+			path(field).takeIf { it.isIntegralNumber }?.longValue()
 	}
 
 	@PreDestroy

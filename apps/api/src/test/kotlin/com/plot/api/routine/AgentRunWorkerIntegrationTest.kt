@@ -1091,7 +1091,10 @@ class AgentRunWorkerIntegrationTest {
 		com.plot.api.ai.provider.KoogAgentRuntime(
 			ai.koog.prompt.llm.LLModel(ai.koog.prompt.llm.LLMProvider.OpenRouter, "test", listOf(ai.koog.prompt.llm.LLMCapability.Completion, ai.koog.prompt.llm.LLMCapability.Tools)),
 			ai.koog.prompt.params.LLMParams(), tools.jackson.module.kotlin.jacksonObjectMapper(),
-		) { prompt, _, _ -> next(prompt.toString()) }
+		) { prompt, _, _ -> com.plot.api.ai.provider.AgentModelResponse(
+			next(prompt.toString()),
+			com.plot.api.ai.provider.ProviderUsage("openrouter", "test", "test", "response", 1, 1, 0, 0, 0, 2, null),
+		) }
 
 	private fun nativeCall(name: String, arguments: String = "{}") = ai.koog.prompt.message.Message.Assistant(
 		parts = listOf(ai.koog.prompt.message.MessagePart.Tool.Call(UUID.randomUUID().toString(), name,

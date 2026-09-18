@@ -30,7 +30,7 @@ internal class KoogAgentRuntime(
 	private val resolveModel: (AgentDecisionRequest) -> LLModel,
 	private val resolveParams: (AgentDecisionRequest) -> LLMParams,
 	private val mapper: ObjectMapper,
-	private val exchange: suspend (Prompt, LLModel, List<ToolDescriptor>) -> Message.Assistant,
+	private val exchange: suspend (Prompt, LLModel, List<ToolDescriptor>) -> AgentModelResponse,
 ) : AgentRuntime {
 	constructor(transport: KoogModelTransport, mapper: ObjectMapper) : this(
 		{ request -> transport.agentModel(request.model) },
@@ -43,7 +43,7 @@ internal class KoogAgentRuntime(
 		model: LLModel,
 		params: LLMParams,
 		mapper: ObjectMapper,
-		exchange: suspend (Prompt, LLModel, List<ToolDescriptor>) -> Message.Assistant,
+		exchange: suspend (Prompt, LLModel, List<ToolDescriptor>) -> AgentModelResponse,
 	) : this({ model }, { params }, mapper, exchange)
 
 	override fun run(host: AgentRuntimeHost): AgentRuntimeResult {
@@ -60,6 +60,8 @@ internal class KoogAgentRuntime(
 				host.beforeModel()
 				return try {
 					withTimeout(host.modelTimeoutMillis) { exchange(prompt, model, tools) }
+						.also { host.afterModel(it.usage) }
+						.message
 				} catch (_: TimeoutCancellationException) {
 					throw AgentDecisionException("PROVIDER_UNAVAILABLE", true, "Agent model request timed out")
 				}
