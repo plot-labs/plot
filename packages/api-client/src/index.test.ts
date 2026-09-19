@@ -79,6 +79,21 @@ describe("Plot API client", () => {
     expect(new Headers(fetcher.mock.calls[1]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
   });
 
+  it("reads the workspace credit overview with workspace scoping", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json({
+      balance: 4_998,
+      creditedUnits: 5_000,
+      consumedUnits: 2,
+      usageEvents: [],
+    }));
+    const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
+
+    await client.getCreditOverview();
+
+    expect(fetcher).toHaveBeenCalledWith("/api/plot/billing/credits", expect.objectContaining({ cache: "no-store" }));
+    expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
+  });
+
   it("uses the routine automation contracts with workspace scoping", async () => {
     const routine = {
       id: "routine-1",

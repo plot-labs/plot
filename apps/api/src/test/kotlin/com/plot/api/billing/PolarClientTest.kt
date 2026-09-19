@@ -1,6 +1,7 @@
 package com.plot.api.billing
 
 import java.time.Duration
+import java.time.Instant
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -35,6 +36,44 @@ class PolarClientTest {
 	}
 
 	@Test
+	fun readsCreditOverviewFromMeterStateAndPositiveUsageEvents() {
+		val client = client { method, uri, _, _ ->
+			when {
+				method == "GET" && uri.path.endsWith("/state") -> PolarHttpResponse(
+					200,
+					"""{"active_meters":[{"meter_id":"meter_ai","balance":4998.0,"credited_units":5000,"consumed_units":2.0}]}""",
+				)
+				method == "GET" && uri.path == "/v1/events/" -> {
+					assertEquals(
+						"external_customer_id=plot-workspace:$workspaceId&name=plot_ai_usage&limit=100",
+						uri.query,
+					)
+					PolarHttpResponse(
+						200,
+						"""
+						{"items":[
+							{"id":"event-usage","timestamp":"2026-09-19T12:00:00Z","metadata":{"credits":2,"provider":"openrouter","actual_model":"openai/test"}},
+							{"id":"event-trial","timestamp":"2026-09-19T11:00:00Z","metadata":{"credits":-5000,"reason":"trial_grant"}}
+						]}
+						""".trimIndent(),
+					)
+				}
+				else -> error("unexpected request: $method ${uri.path}")
+			}
+		}
+
+		val overview = client.readCreditOverview(workspaceId)
+
+		assertEquals(4998, overview.balance)
+		assertEquals(5000, overview.creditedUnits)
+		assertEquals(2, overview.consumedUnits)
+		assertEquals(
+			listOf(PolarCreditUsageEvent("event-usage", Instant.parse("2026-09-19T12:00:00Z"), 2, "openrouter", "openai/test")),
+			overview.usageEvents,
+		)
+	}
+
+	@Test
 	fun createsWorkspaceCustomerAfterExternalLookupMiss() {
 		val requests = mutableListOf<Pair<String, String?>>()
 		val client = client { method, uri, _, body ->
@@ -51,6 +90,7 @@ class PolarClientTest {
 		assertEquals("cus_workspace", customer.id)
 		val create = mapper.readTree(requests.single { it.first == "/v1/customers" }.second!!)
 		assertEquals("plot-workspace:$workspaceId", create.path("external_id").stringValue())
+		assertEquals("polar_org", create.path("organization_id").stringValue())
 		assertEquals(workspaceId.toString(), create.path("metadata").path("workspace_id").stringValue())
 		assertEquals("team", create.path("type").stringValue())
 		assertEquals("owner+plot-11111111111111111111111111111111@example.com", create.path("email").stringValue())
@@ -122,6 +162,7 @@ class PolarClientTest {
 		assertEquals("invocation-1", event.path("external_id").stringValue())
 		assertEquals("plot-workspace:$workspaceId", event.path("external_customer_id").stringValue())
 		assertEquals("plot_ai_usage", event.path("name").stringValue())
+		assertEquals("polar_org", event.path("organization_id").stringValue())
 		assertEquals(6, event.path("metadata").path("credits").intValue())
 	}
 
@@ -167,6 +208,7 @@ class PolarClientTest {
 	private fun properties() = PolarProperties(
 		creditsEnabled = true,
 		accessToken = "polar_test_token",
+		organizationId = "polar_org",
 		apiBaseUrl = "https://polar.test",
 		aiMeterId = "meter_ai",
 		trialCredits = 5_000,

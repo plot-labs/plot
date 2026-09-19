@@ -153,7 +153,7 @@ describe("ArtifactCanvasWorkspace", () => {
     fireEvent.click(createButton);
 
     expect(await screen.findByRole("dialog", { name: "Create related content" })).toBeVisible();
-    expect(screen.getByText(/Consumes 1 generation credit/i)).toBeVisible();
+    expect(screen.getByText(/Uses workspace credits based on measured AI usage/i)).toBeVisible();
 
     const instructionInput = screen.getByLabelText("Additional instructions (optional)");
     fireEvent.change(instructionInput, { target: { value: "Please highlight key benefits." } });

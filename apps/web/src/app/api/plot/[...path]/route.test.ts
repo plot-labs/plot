@@ -240,6 +240,7 @@ describe("Plot same-origin proxy", () => {
     ["GET", ["sessions", "018fd000-0000-7000-8000-000000000002", "agent-runs"]],
     ["GET", ["sessions", "018fd000-0000-7000-8000-000000000002", "turns"]],
     ["GET", ["autonomy", "activity"]],
+    ["GET", ["billing", "credits"]],
     ["POST", ["routines"]],
     ["PATCH", ["routines", "018fd000-0000-7000-8000-000000000002"]],
     ["POST", ["routines", "018fd000-0000-7000-8000-000000000002", "run"]],

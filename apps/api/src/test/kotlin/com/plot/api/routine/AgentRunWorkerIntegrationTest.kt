@@ -37,6 +37,7 @@ import com.plot.api.common.WorkspacePrincipal
 import com.plot.api.config.PlotAiProperties
 import com.plot.api.billing.PolarCreditProvider
 import com.plot.api.billing.PolarCustomer
+import com.plot.api.billing.PolarCreditOverview
 import com.plot.api.billing.PolarEventResult
 import com.plot.api.ai.provider.ProviderUsage
 import com.plot.api.dev.DevBootstrapService
@@ -1498,6 +1499,13 @@ class AgentPolarCreditProvider : PolarCreditProvider {
 		PolarCustomer("cus-$workspaceId", "plot-workspace:$workspaceId")
 
 	override fun readCreditBalance(workspaceId: UUID): Long = balance
+
+	override fun readCreditOverview(workspaceId: UUID) = PolarCreditOverview(
+		balance = balance,
+		creditedUnits = balance,
+		consumedUnits = 0,
+		usageEvents = emptyList(),
+	)
 
 	override fun grantTrialCredits(workspaceId: UUID) = PolarEventResult(0, 1)
 

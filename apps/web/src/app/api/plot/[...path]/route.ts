@@ -191,6 +191,7 @@ function isAllowed(method: string, path: string[]): boolean {
   if (method === "PATCH" && /^workspaces\/[0-9a-fA-F-]+$/.test(route)) return true;
   if (method === "GET" && route === "content-profile") return true;
   if (method === "PUT" && route === "content-profile") return true;
+  if (method === "GET" && route === "billing/credits") return true;
   if (method === "GET" && route === "github/connections") return true;
 	if (method === "GET" && /^github\/connections\/[0-9a-fA-F-]+\/repositories$/.test(route)) return true;
   if (method === "POST" && route === "github/installations/requests") return true;

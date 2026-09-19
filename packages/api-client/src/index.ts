@@ -360,6 +360,21 @@ export interface WorkspaceSummary {
   updatedAt: string;
 }
 
+export interface CreditUsageEvent {
+  id: string;
+  timestamp: string;
+  credits: number;
+  provider: string | null;
+  model: string | null;
+}
+
+export interface WorkspaceCreditOverview {
+  balance: number;
+  creditedUnits: number;
+  consumedUnits: number;
+  usageEvents: CreditUsageEvent[];
+}
+
 export type RoutineCadence =
   | "DAILY"
   | "WEEKLY"
@@ -676,6 +691,7 @@ export interface PlotApiClient {
   createWorkspace(input: { name: string }, options?: RequestOptions): Promise<WorkspaceSummary>;
   getWorkspace(id: string, options?: RequestOptions): Promise<WorkspaceSummary>;
   updateWorkspace(id: string, input: { name?: string; logoUrl?: string; publicCitationsEnabled?: boolean }, options?: RequestOptions): Promise<WorkspaceSummary>;
+  getCreditOverview(options?: RequestOptions): Promise<WorkspaceCreditOverview>;
   getContentProfile(options?: RequestOptions): Promise<ContentProfile>;
   updateContentProfile(input: UpdateContentProfileInput, options?: RequestOptions): Promise<ContentProfile>;
   listSkills(options?: RequestOptions): Promise<Skill[]>;
@@ -829,6 +845,7 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
       body: JSON.stringify(input),
       signal: requestOptions?.signal,
     }),
+    getCreditOverview: (requestOptions) => request("/billing/credits", { signal: requestOptions?.signal }),
     getContentProfile: (requestOptions) => request("/content-profile", { signal: requestOptions?.signal }),
     updateContentProfile: (input, requestOptions) => request("/content-profile", {
       method: "PUT",

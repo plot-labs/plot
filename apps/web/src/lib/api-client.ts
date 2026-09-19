@@ -11,6 +11,7 @@ export type {
   ChatReasoningEffort,
   ContentBrief,
   ContentProfile,
+  CreditUsageEvent,
   SourceReference,
   GitHubAccessCheckTrigger,
   GitHubConnection,
@@ -27,6 +28,7 @@ export type {
   UpdateContentProfileInput,
   WorkSessionSummary,
   WorkspaceCapabilities,
+  WorkspaceCreditOverview,
   WorkspaceSummary,
 } from "@plot/api-client";
 

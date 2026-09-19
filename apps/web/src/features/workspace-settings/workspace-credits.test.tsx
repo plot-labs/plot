@@ -1,0 +1,55 @@
+// @vitest-environment jsdom
+
+import { render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({
+  getCreditOverview: vi.fn(),
+}));
+
+vi.mock("@/lib/api-client", () => ({
+  getSelectedWorkspaceId: () => "workspace-1",
+  plotApiClient: mocks,
+}));
+
+import { WorkspaceCredits } from "./workspace-credits";
+
+describe("WorkspaceCredits", () => {
+  beforeEach(() => {
+    mocks.getCreditOverview.mockReset().mockResolvedValue({
+      balance: 4_998,
+      creditedUnits: 5_000,
+      consumedUnits: 2,
+      usageEvents: [{
+        id: "event-1",
+        timestamp: "2026-09-19T12:00:00Z",
+        credits: 2,
+        provider: "openrouter",
+        model: "deepseek/deepseek-v4-flash-0731",
+      }],
+    });
+  });
+
+  it("shows the workspace balance and measured usage events", async () => {
+    render(<WorkspaceCredits />);
+
+    expect(await screen.findByText("4,998 credits")).toBeVisible();
+    expect(screen.getByText("2 credits")).toBeVisible();
+    expect(screen.getByText("0.04%")).toBeVisible();
+    expect(screen.getByText("deepseek/deepseek-v4-flash-0731")).toBeVisible();
+    expect(mocks.getCreditOverview).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows an empty state when there are no usage events", async () => {
+    mocks.getCreditOverview.mockResolvedValueOnce({
+      balance: 5_000,
+      creditedUnits: 5_000,
+      consumedUnits: 0,
+      usageEvents: [],
+    });
+
+    render(<WorkspaceCredits />);
+
+    expect(await screen.findByText("No usage events yet.")).toBeVisible();
+  });
+});

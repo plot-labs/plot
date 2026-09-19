@@ -11,6 +11,7 @@ import com.plot.api.ai.provider.ReviewerModelRequest
 import com.plot.api.ai.provider.RewriteModelRequest
 import com.plot.api.ai.provider.WriterModelRequest
 import com.plot.api.billing.PolarApiException
+import com.plot.api.billing.PolarCreditOverview
 import com.plot.api.billing.PolarCreditProvider
 import com.plot.api.billing.PolarCreditService
 import com.plot.api.billing.PolarCustomer
@@ -690,6 +691,13 @@ class ArtifactPolarCreditProvider : PolarCreditProvider {
 		PolarCustomer("cus-$workspaceId", "plot-workspace:$workspaceId")
 
 	override fun readCreditBalance(workspaceId: UUID): Long = balance
+
+	override fun readCreditOverview(workspaceId: UUID) = PolarCreditOverview(
+		balance = balance,
+		creditedUnits = balance,
+		consumedUnits = 0,
+		usageEvents = emptyList(),
+	)
 
 	override fun grantTrialCredits(workspaceId: UUID) = PolarEventResult(0, 1)
 

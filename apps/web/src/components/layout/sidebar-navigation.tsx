@@ -5,6 +5,7 @@ import {
   PlugSocketIcon,
   Shapes01Icon,
   Settings02Icon,
+  Wallet01Icon,
   ZapIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -29,6 +30,7 @@ const workspaceSettingsNavGroups = [
     items: [
       { href: "/settings/general", label: "General", icon: SettingsIcon },
       { href: "/settings/content", label: "Content", icon: ContentIcon },
+      { href: "/settings/credits", label: "Credits", icon: CreditsIcon },
     ],
   },
 ];
@@ -175,6 +177,10 @@ function IntegrationsIcon() {
 
 function ContentIcon() {
   return <FileText className="size-4 shrink-0" />;
+}
+
+function CreditsIcon() {
+  return <HugeiconsIcon icon={Wallet01Icon} size={16} color="currentColor" strokeWidth={1.5} aria-hidden="true" className="shrink-0" />;
 }
 
 function HomeIcon() {

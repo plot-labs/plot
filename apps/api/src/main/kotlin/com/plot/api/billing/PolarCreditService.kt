@@ -102,6 +102,20 @@ class PolarCreditService(
 		throw AiCreditControlException("AI_USAGE_UNKNOWN", false, "Provider usage is unavailable", failure)
 	}
 
+	fun readOverview(workspaceId: UUID): PolarCreditOverview {
+		if (!enabled) return PolarCreditOverview.empty()
+		return try {
+			provider.readCreditOverview(workspaceId)
+		} catch (failure: PolarApiException) {
+			throw AiCreditControlException(
+				"AI_CREDIT_CHECK_UNAVAILABLE",
+				failure.retryable,
+				"AI credit balance could not be loaded",
+				failure,
+			)
+		}
+	}
+
 	fun publish(workspaceId: UUID, invocationId: UUID, usage: ProviderUsage, charge: AiCreditCharge) {
 		if (!enabled) return
 		val metadata = linkedMapOf<String, Any>(

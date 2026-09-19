@@ -15,6 +15,25 @@ import tools.jackson.databind.ObjectMapper
 
 data class PolarCustomer(val id: String, val externalId: String)
 
+data class PolarCreditUsageEvent(
+	val id: String,
+	val timestamp: Instant,
+	val credits: Long,
+	val provider: String?,
+	val model: String?,
+)
+
+data class PolarCreditOverview(
+	val balance: Long,
+	val creditedUnits: Long,
+	val consumedUnits: Long,
+	val usageEvents: List<PolarCreditUsageEvent>,
+) {
+	companion object {
+		fun empty() = PolarCreditOverview(0, 0, 0, emptyList())
+	}
+}
+
 data class PolarEventResult(val inserted: Int, val duplicates: Int) {
 	init {
 		require(inserted >= 0 && duplicates >= 0)
@@ -39,6 +58,7 @@ interface PolarCreditProvider {
 		existingCustomerId: String? = null,
 	): PolarCustomer
 	fun readCreditBalance(workspaceId: UUID): Long
+	fun readCreditOverview(workspaceId: UUID): PolarCreditOverview
 	fun grantTrialCredits(workspaceId: UUID): PolarEventResult
 	fun ingestCredits(workspaceId: UUID, eventId: String, credits: Long, metadata: Map<String, Any> = emptyMap()): PolarEventResult
 }
@@ -106,6 +126,7 @@ class PolarClient(
 		}
 		findCustomer(externalId)?.let { return it }
 		val payload = mapOf(
+			"organization_id" to requireNotNull(properties.organizationId),
 			"external_id" to externalId,
 			"email" to workspaceCustomerEmail(ownerEmail, workspaceId),
 			"name" to workspaceName,
@@ -122,19 +143,27 @@ class PolarClient(
 	}
 
 	override fun readCreditBalance(workspaceId: UUID): Long {
+		return requireNotNull(readMeterState(workspaceId)).balance
+	}
+
+	override fun readCreditOverview(workspaceId: UUID): PolarCreditOverview {
 		ensureEnabled()
+		val meter = readMeterState(workspaceId, allowMissingCustomer = true) ?: return PolarCreditOverview.empty()
 		val externalId = workspaceExternalId(workspaceId)
-		val response = execute("GET", "/v1/customers/external/${segment(externalId)}/state")
+		val response = execute(
+			"GET",
+			"/v1/events/?external_customer_id=${segment(externalId)}&name=${segment(AI_USAGE_EVENT)}&limit=$EVENT_PAGE_SIZE",
+		)
 		val root = parse(response.body)
-		val meters = root.path("active_meters")
-		if (!meters.isArray) invalidResponse()
-		val meter = meters.firstOrNull { it.path("meter_id").stringValue() == properties.aiMeterId }
-			?: throw PolarApiException("POLAR_AI_METER_MISSING", "Polar AI credit meter is unavailable")
-		return try {
-			meter.path("balance").decimalValue().longValueExact()
-		} catch (_: RuntimeException) {
-			invalidResponse()
-		}
+		val items = root.path("items")
+		if (!items.isArray) invalidResponse()
+		val usageEvents = items.mapNotNull { event -> parseUsageEvent(event) }
+		return PolarCreditOverview(
+			balance = meter.balance,
+			creditedUnits = meter.creditedUnits,
+			consumedUnits = meter.consumedUnits,
+			usageEvents = usageEvents,
+		)
 	}
 
 	override fun grantTrialCredits(workspaceId: UUID): PolarEventResult = ingest(
@@ -168,6 +197,7 @@ class PolarClient(
 		val payload = mapOf(
 			"events" to listOf(
 				mapOf(
+					"organization_id" to requireNotNull(properties.organizationId),
 					"external_id" to eventId,
 					"name" to AI_USAGE_EVENT,
 					"external_customer_id" to workspaceExternalId(workspaceId),
@@ -184,6 +214,48 @@ class PolarClient(
 		} catch (_: IllegalArgumentException) {
 			invalidResponse()
 		}
+	}
+
+	private fun readMeterState(workspaceId: UUID, allowMissingCustomer: Boolean = false): PolarMeterState? {
+		ensureEnabled()
+		val externalId = workspaceExternalId(workspaceId)
+		val response = execute(
+			"GET",
+			"/v1/customers/external/${segment(externalId)}/state",
+			accepted = if (allowMissingCustomer) setOf(200, 404) else setOf(200),
+		)
+		if (response.status == 404) return null
+		val root = parse(response.body)
+		val meters = root.path("active_meters")
+		if (!meters.isArray) invalidResponse()
+		val meter = meters.firstOrNull { it.path("meter_id").stringValue() == properties.aiMeterId }
+			?: throw PolarApiException("POLAR_AI_METER_MISSING", "Polar AI credit meter is unavailable")
+		val balance = meter.path("balance").exactLong()
+		return PolarMeterState(
+			balance = balance,
+			creditedUnits = meter.path("credited_units").exactLongOrNull() ?: balance,
+			consumedUnits = meter.path("consumed_units").exactLongOrNull() ?: 0,
+		)
+	}
+
+	private fun parseUsageEvent(event: JsonNode): PolarCreditUsageEvent? {
+		val metadata = event.path("metadata")
+		val credits = metadata.path("credits").exactLongOrNull() ?: return null
+		if (credits <= 0) return null
+		val id = event.path("id").stringValue()?.takeIf(String::isNotBlank) ?: return null
+		val timestamp = event.path("timestamp").stringValue()?.let { value ->
+			runCatching { Instant.parse(value) }.getOrNull()
+		} ?: return null
+		return PolarCreditUsageEvent(
+			id = id,
+			timestamp = timestamp,
+			credits = credits,
+			provider = metadata.path("provider").stringValue()?.takeIf(String::isNotBlank),
+			model = listOf("actual_model", "requested_model")
+				.asSequence()
+				.mapNotNull { metadata.path(it).stringValue()?.takeIf(String::isNotBlank) }
+				.firstOrNull(),
+		)
 	}
 
 	private fun findCustomer(externalId: String): PolarCustomer? {
@@ -292,9 +364,27 @@ class PolarClient(
 		"Polar returned an invalid response",
 	)
 
+	private fun JsonNode.exactLong(): Long = exactLongOrNull() ?: invalidResponse()
+
+	private fun JsonNode.exactLongOrNull(): Long? {
+		if (isMissingNode || isNull) return null
+		return try {
+			decimalValue().longValueExact()
+		} catch (_: RuntimeException) {
+			invalidResponse()
+		}
+	}
+
 	private fun segment(value: String): String = URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20")
 
 	private companion object {
 		const val AI_USAGE_EVENT = "plot_ai_usage"
+		const val EVENT_PAGE_SIZE = 100
 	}
 }
+
+private data class PolarMeterState(
+	val balance: Long,
+	val creditedUnits: Long,
+	val consumedUnits: Long,
+)

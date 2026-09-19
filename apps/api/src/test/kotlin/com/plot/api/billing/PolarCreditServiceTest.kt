@@ -68,6 +68,7 @@ class PolarCreditServiceTest {
 	private fun properties() = PolarProperties(
 		creditsEnabled = true,
 		accessToken = "test",
+		organizationId = "polar_org",
 		aiMeterId = "meter",
 		trialCredits = 5_000,
 		requestTimeout = Duration.ofSeconds(1),
@@ -126,6 +127,13 @@ private class FakePolarCreditProvider : PolarCreditProvider {
 		balanceReads++
 		return balance
 	}
+
+	override fun readCreditOverview(workspaceId: UUID) = PolarCreditOverview(
+		balance = balance,
+		creditedUnits = balance,
+		consumedUnits = 0,
+		usageEvents = emptyList(),
+	)
 
 	override fun grantTrialCredits(workspaceId: UUID): PolarEventResult {
 		grants += workspaceId
