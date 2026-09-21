@@ -15,6 +15,8 @@ import tools.jackson.databind.ObjectMapper
 
 data class PolarCustomer(val id: String, val externalId: String)
 
+data class PolarCheckoutSession(val id: String, val url: String)
+
 data class PolarCreditUsageEvent(
 	val id: String,
 	val timestamp: Instant,
@@ -61,6 +63,17 @@ interface PolarCreditProvider {
 	fun readCreditOverview(workspaceId: UUID): PolarCreditOverview
 	fun grantTrialCredits(workspaceId: UUID): PolarEventResult
 	fun ingestCredits(workspaceId: UUID, eventId: String, credits: Long, metadata: Map<String, Any> = emptyMap()): PolarEventResult
+}
+
+interface PolarCheckoutProvider {
+	fun createCheckoutSession(
+		workspaceId: UUID,
+		productId: String,
+		customerName: String,
+		customerEmail: String,
+		successUrl: String,
+		returnUrl: String?,
+	): PolarCheckoutSession
 }
 
 fun interface PolarHttpTransport {
@@ -110,7 +123,7 @@ class PolarClient(
 	private val properties: PolarProperties,
 	private val objectMapper: ObjectMapper,
 	private val transport: PolarHttpTransport = JavaPolarHttpTransport(properties),
-) : PolarCreditProvider {
+) : PolarCreditProvider, PolarCheckoutProvider {
 	fun workspaceExternalId(workspaceId: UUID): String = "plot-workspace:$workspaceId"
 
 	override fun ensureCustomer(
@@ -126,7 +139,6 @@ class PolarClient(
 		}
 		findCustomer(externalId)?.let { return it }
 		val payload = mapOf(
-			"organization_id" to requireNotNull(properties.organizationId),
 			"external_id" to externalId,
 			"email" to workspaceCustomerEmail(ownerEmail, workspaceId),
 			"name" to workspaceName,
@@ -157,12 +169,18 @@ class PolarClient(
 		val root = parse(response.body)
 		val items = root.path("items")
 		if (!items.isArray) invalidResponse()
-		val usageEvents = items.mapNotNull { event -> parseUsageEvent(event) }
+		val ledgerEvents = items.mapNotNull { event -> parseUsageEvent(event) }
+		val consumedUnits = sumPositiveCredits(ledgerEvents)
+		val eventCreditedUnits = sumNegativeCredits(ledgerEvents)
 		return PolarCreditOverview(
 			balance = meter.balance,
-			creditedUnits = meter.creditedUnits,
-			consumedUnits = meter.consumedUnits,
-			usageEvents = usageEvents,
+			creditedUnits = maxOf(
+				meter.creditedUnits,
+				eventCreditedUnits,
+				meter.balance.checkedAdd(consumedUnits),
+			),
+			consumedUnits = consumedUnits,
+			usageEvents = ledgerEvents.filter { it.credits > 0 },
 		)
 	}
 
@@ -186,6 +204,40 @@ class PolarClient(
 		return ingest(workspaceId, eventId, credits, metadata)
 	}
 
+	override fun createCheckoutSession(
+		workspaceId: UUID,
+		productId: String,
+		customerName: String,
+		customerEmail: String,
+		successUrl: String,
+		returnUrl: String?,
+	): PolarCheckoutSession {
+		ensureEnabled()
+		val payload = linkedMapOf<String, Any>(
+			"products" to listOf(productId),
+			"external_customer_id" to workspaceExternalId(workspaceId),
+			"customer_name" to customerName,
+			"customer_email" to customerEmail,
+			"success_url" to successUrl,
+			"metadata" to mapOf(
+				"workspace_id" to workspaceId.toString(),
+				"purpose" to "credit_top_up",
+			),
+		).apply {
+			returnUrl?.takeIf(String::isNotBlank)?.let { put("return_url", it) }
+		}
+		val response = execute(
+			"POST",
+			"/v1/checkouts/",
+			objectMapper.writeValueAsString(payload),
+			accepted = setOf(201),
+		)
+		val root = parse(response.body)
+		val id = root.path("id").stringValue()?.takeIf(String::isNotBlank) ?: invalidResponse()
+		val url = root.path("url").stringValue()?.takeIf(String::isNotBlank) ?: invalidResponse()
+		return PolarCheckoutSession(id, url)
+	}
+
 	private fun ingest(
 		workspaceId: UUID,
 		eventId: String,
@@ -197,7 +249,6 @@ class PolarClient(
 		val payload = mapOf(
 			"events" to listOf(
 				mapOf(
-					"organization_id" to requireNotNull(properties.organizationId),
 					"external_id" to eventId,
 					"name" to AI_USAGE_EVENT,
 					"external_customer_id" to workspaceExternalId(workspaceId),
@@ -241,22 +292,31 @@ class PolarClient(
 	private fun parseUsageEvent(event: JsonNode): PolarCreditUsageEvent? {
 		val metadata = event.path("metadata")
 		val credits = metadata.path("credits").exactLongOrNull() ?: return null
-		if (credits <= 0) return null
-		val id = event.path("id").stringValue()?.takeIf(String::isNotBlank) ?: return null
-		val timestamp = event.path("timestamp").stringValue()?.let { value ->
+		val id = event.path("id").textOrNull()?.takeIf(String::isNotBlank) ?: return null
+		val timestamp = event.path("timestamp").textOrNull()?.let { value ->
 			runCatching { Instant.parse(value) }.getOrNull()
 		} ?: return null
 		return PolarCreditUsageEvent(
 			id = id,
 			timestamp = timestamp,
 			credits = credits,
-			provider = metadata.path("provider").stringValue()?.takeIf(String::isNotBlank),
+			provider = metadata.path("provider").textOrNull()?.takeIf(String::isNotBlank),
 			model = listOf("actual_model", "requested_model")
 				.asSequence()
-				.mapNotNull { metadata.path(it).stringValue()?.takeIf(String::isNotBlank) }
+				.mapNotNull { metadata.path(it).textOrNull()?.takeIf(String::isNotBlank) }
 				.firstOrNull(),
 		)
 	}
+
+	private fun sumPositiveCredits(events: List<PolarCreditUsageEvent>): Long = events
+		.asSequence()
+		.filter { it.credits > 0 }
+		.fold(0L) { total, event -> total.checkedAdd(event.credits) }
+
+	private fun sumNegativeCredits(events: List<PolarCreditUsageEvent>): Long = events
+		.asSequence()
+		.filter { it.credits < 0 }
+		.fold(0L) { total, event -> total.checkedAdd(event.credits.checkedNegate()) }
 
 	private fun findCustomer(externalId: String): PolarCustomer? {
 		val response = execute(
@@ -374,6 +434,20 @@ class PolarClient(
 			invalidResponse()
 		}
 	}
+
+	private fun Long.checkedAdd(other: Long): Long = try {
+		Math.addExact(this, other)
+	} catch (_: ArithmeticException) {
+		invalidResponse()
+	}
+
+	private fun Long.checkedNegate(): Long = try {
+		Math.negateExact(this)
+	} catch (_: ArithmeticException) {
+		invalidResponse()
+	}
+
+	private fun JsonNode.textOrNull(): String? = takeIf { it.isTextual }?.stringValue()
 
 	private fun segment(value: String): String = URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20")
 

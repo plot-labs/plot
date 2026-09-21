@@ -18,9 +18,6 @@ class PolarPropertiesTest {
 			configured(trialCredits = 0)
 		}
 		assertFailsWith<IllegalArgumentException> {
-			configured(organizationId = null)
-		}
-		assertFailsWith<IllegalArgumentException> {
 			configured(requestTimeout = Duration.ZERO)
 		}
 	}
@@ -32,12 +29,10 @@ class PolarPropertiesTest {
 
 	private fun configured(
 		trialCredits: Long = 5_000,
-		organizationId: String? = "polar_org",
 		requestTimeout: Duration = Duration.ofSeconds(5),
 	) = PolarProperties(
 		creditsEnabled = true,
 		accessToken = "polar_test_token",
-		organizationId = organizationId,
 		aiMeterId = "meter_ai",
 		trialCredits = trialCredits,
 		trialPolicyVersion = "trial-v1",

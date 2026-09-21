@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   getCreditOverview: vi.fn(),
+  createCreditCheckout: vi.fn(),
 }));
 
 vi.mock("@/lib/api-client", () => ({

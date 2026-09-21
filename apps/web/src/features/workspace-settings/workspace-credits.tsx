@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { LoaderCircle } from "lucide-react";
+import { ExternalLink, LoaderCircle } from "lucide-react";
 
 import {
   getSelectedWorkspaceId,
@@ -18,6 +18,8 @@ export function WorkspaceCredits() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadNonce, setReloadNonce] = useState(0);
+  const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   useEffect(() => {
     const handleWorkspaceChanged = () => {
@@ -65,16 +67,42 @@ export function WorkspaceCredits() {
     ? Math.min(100, Math.max(0, (overview.consumedUnits / overview.creditedUnits) * 100))
     : 0;
 
+  const startCheckout = async () => {
+    if (isCheckoutLoading) return;
+    setIsCheckoutLoading(true);
+    setCheckoutError(null);
+    try {
+      const session = await plotApiClient.createCreditCheckout();
+      window.location.assign(session.url);
+    } catch {
+      setCheckoutError("Credit checkout could not be started.");
+      setIsCheckoutLoading(false);
+    }
+  };
+
   return (
     <div className="h-full overflow-y-auto bg-[#f4f6f8] px-5 py-8 dark:bg-[#101112] sm:px-8 sm:py-10 lg:px-10">
       <div className="mx-auto max-w-[760px] pb-16">
-        <header className="max-w-[620px]">
-          <h1 className="font-display text-[32px] font-normal leading-[1.08] tracking-[-0.025em] text-black/90 dark:text-white/92 sm:text-[36px]">
-            Credits
-          </h1>
-          <p className="mt-2 text-[14px] leading-6 text-black/52 dark:text-white/50">
-            Monitor your AI credit balance and usage.
-          </p>
+        <header className="flex max-w-[760px] items-start justify-between gap-6">
+          <div className="max-w-[620px]">
+            <h1 className="font-display text-[32px] font-normal leading-[1.08] tracking-[-0.025em] text-black/90 dark:text-white/92 sm:text-[36px]">
+              Credits
+            </h1>
+            <p className="mt-2 text-[14px] leading-6 text-black/52 dark:text-white/50">
+              Monitor your AI credit balance and usage.
+            </p>
+          </div>
+          {overview?.checkoutAvailable ? (
+            <button
+              type="button"
+              onClick={startCheckout}
+              disabled={isCheckoutLoading}
+              className="inline-flex shrink-0 items-center gap-2 rounded-[10px] bg-[#ef3f2c] px-3.5 py-2.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-wait disabled:opacity-60"
+            >
+              {isCheckoutLoading ? <LoaderCircle className="size-4 animate-spin" aria-hidden="true" /> : <ExternalLink className="size-4" aria-hidden="true" />}
+              Add credits
+            </button>
+          ) : null}
         </header>
 
         {isLoading ? (
@@ -86,6 +114,7 @@ export function WorkspaceCredits() {
           <p className="mt-8 text-sm text-red-700 dark:text-red-300" role="alert">{error}</p>
         ) : overview ? (
           <>
+            {checkoutError ? <p className="mt-4 text-sm text-red-700 dark:text-red-300" role="alert">{checkoutError}</p> : null}
             <section className="mt-8 grid gap-4 sm:grid-cols-3" aria-label="Credit summary">
               <CreditSummaryCard label="Current Balance" value={`${numberFormat.format(overview.balance)} credits`} />
               <CreditSummaryCard label="Used This Period" value={`${numberFormat.format(overview.consumedUnits)} credits`} />

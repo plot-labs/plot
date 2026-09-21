@@ -7,6 +7,7 @@ import org.springframework.http.CacheControl
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
@@ -23,12 +24,19 @@ data class WorkspaceCreditOverviewResponse(
 	val creditedUnits: Long,
 	val consumedUnits: Long,
 	val usageEvents: List<CreditUsageEventResponse>,
+	val checkoutAvailable: Boolean,
+)
+
+data class WorkspaceCheckoutResponse(
+	val checkoutId: String,
+	val url: String,
 )
 
 @RestController
 @RequestMapping("/api/billing")
 class CreditController(
 	private val credits: PolarCreditService,
+	private val checkout: PolarCheckoutService,
 	private val authorizedWorkspaceContext: AuthorizedWorkspaceContext,
 ) {
 	@GetMapping("/credits")
@@ -45,14 +53,35 @@ class CreditController(
 		}
 		return ResponseEntity.ok()
 			.cacheControl(CacheControl.noStore())
-			.body(overview.toResponse())
+			.body(overview.toResponse(checkout.isConfigured()))
+	}
+
+	@PostMapping("/checkout")
+	fun createCheckout(): ResponseEntity<WorkspaceCheckoutResponse> {
+		val context = authorizedWorkspaceContext.require()
+		if (context.workspace.role != "OWNER") {
+			throw ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Only workspace owners can purchase credits")
+		}
+		val session = try {
+			checkout.create(context.workspace.workspaceId)
+		} catch (failure: PolarApiException) {
+			throw ApiException(
+				if (failure.retryable) HttpStatus.SERVICE_UNAVAILABLE else HttpStatus.BAD_GATEWAY,
+				failure.safeCode,
+				"Credit checkout could not be started",
+			)
+		}
+		return ResponseEntity.status(HttpStatus.CREATED).body(
+			WorkspaceCheckoutResponse(session.id, session.url),
+		)
 	}
 }
 
-private fun PolarCreditOverview.toResponse() = WorkspaceCreditOverviewResponse(
+private fun PolarCreditOverview.toResponse(checkoutAvailable: Boolean) = WorkspaceCreditOverviewResponse(
 	balance = balance,
 	creditedUnits = creditedUnits,
 	consumedUnits = consumedUnits,
+	checkoutAvailable = checkoutAvailable,
 	usageEvents = usageEvents.map { event ->
 		CreditUsageEventResponse(
 			id = event.id,

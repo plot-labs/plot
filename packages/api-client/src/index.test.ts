@@ -79,7 +79,7 @@ describe("Plot API client", () => {
     expect(new Headers(fetcher.mock.calls[1]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
   });
 
-  it("reads the workspace credit overview with workspace scoping", async () => {
+it("reads the workspace credit overview with workspace scoping", async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json({
       balance: 4_998,
       creditedUnits: 5_000,
@@ -703,6 +703,25 @@ it("loads model-specific Chat reasoning capabilities", async () => {
     { model: "google/gemini-3.8-flash", reasoningEfforts: ["low", "medium", "high"], reasoningDefault: "medium" },
   ]);
   expect(fetcher.mock.calls[0]?.[0]).toBe("/api/plot/agent-runs/models");
+  expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
+});
+
+it("starts a workspace-scoped credit checkout", async () => {
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json({
+    checkoutId: "checkout-1",
+    url: "https://sandbox.polar.sh/checkout/checkout-1",
+  }, { status: 201 }));
+  const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
+
+  await expect(client.createCreditCheckout()).resolves.toEqual({
+    checkoutId: "checkout-1",
+    url: "https://sandbox.polar.sh/checkout/checkout-1",
+  });
+
+  expect(fetcher).toHaveBeenCalledWith("/api/plot/billing/checkout", expect.objectContaining({
+    method: "POST",
+    cache: "no-store",
+  }));
   expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
 });
 

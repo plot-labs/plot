@@ -36,12 +36,12 @@ class PolarClientTest {
 	}
 
 	@Test
-	fun readsCreditOverviewFromMeterStateAndPositiveUsageEvents() {
+	fun readsCreditOverviewFromSignedMeterEvents() {
 		val client = client { method, uri, _, _ ->
 			when {
 				method == "GET" && uri.path.endsWith("/state") -> PolarHttpResponse(
 					200,
-					"""{"active_meters":[{"meter_id":"meter_ai","balance":4998.0,"credited_units":5000,"consumed_units":2.0}]}""",
+					"""{"active_meters":[{"meter_id":"meter_ai","balance":4999.0,"credited_units":0,"consumed_units":-4999.0}]}""",
 				)
 				method == "GET" && uri.path == "/v1/events/" -> {
 					assertEquals(
@@ -52,7 +52,7 @@ class PolarClientTest {
 						200,
 						"""
 						{"items":[
-							{"id":"event-usage","timestamp":"2026-09-19T12:00:00Z","metadata":{"credits":2,"provider":"openrouter","actual_model":"openai/test"}},
+							{"id":"event-usage","timestamp":"2026-09-19T12:00:00Z","metadata":{"credits":1,"provider":"openrouter","actual_model":"openai/test"}},
 							{"id":"event-trial","timestamp":"2026-09-19T11:00:00Z","metadata":{"credits":-5000,"reason":"trial_grant"}}
 						]}
 						""".trimIndent(),
@@ -64,11 +64,11 @@ class PolarClientTest {
 
 		val overview = client.readCreditOverview(workspaceId)
 
-		assertEquals(4998, overview.balance)
+		assertEquals(4999, overview.balance)
 		assertEquals(5000, overview.creditedUnits)
-		assertEquals(2, overview.consumedUnits)
+		assertEquals(1, overview.consumedUnits)
 		assertEquals(
-			listOf(PolarCreditUsageEvent("event-usage", Instant.parse("2026-09-19T12:00:00Z"), 2, "openrouter", "openai/test")),
+			listOf(PolarCreditUsageEvent("event-usage", Instant.parse("2026-09-19T12:00:00Z"), 1, "openrouter", "openai/test")),
 			overview.usageEvents,
 		)
 	}
@@ -90,11 +90,43 @@ class PolarClientTest {
 		assertEquals("cus_workspace", customer.id)
 		val create = mapper.readTree(requests.single { it.first == "/v1/customers" }.second!!)
 		assertEquals("plot-workspace:$workspaceId", create.path("external_id").stringValue())
-		assertEquals("polar_org", create.path("organization_id").stringValue())
+		assertTrue(create.path("organization_id").isMissingNode)
 		assertEquals(workspaceId.toString(), create.path("metadata").path("workspace_id").stringValue())
 		assertEquals("team", create.path("type").stringValue())
 		assertEquals("owner+plot-11111111111111111111111111111111@example.com", create.path("email").stringValue())
 		assertEquals("owner@example.com", create.path("owner").path("email").stringValue())
+	}
+
+	@Test
+	fun createsWorkspaceBoundCheckoutSession() {
+		var requestBody: String? = null
+		val client = client { method, uri, _, body ->
+			assertEquals("POST", method)
+			assertEquals("/v1/checkouts/", uri.path)
+			requestBody = body
+			PolarHttpResponse(201, """{"id":"checkout-1","url":"https://sandbox.polar.sh/checkout/checkout-1"}""")
+		}
+
+		val session = client.createCheckoutSession(
+			workspaceId = workspaceId,
+			productId = "product-1",
+			customerName = "Acme",
+			customerEmail = "owner@example.com",
+			successUrl = "http://localhost:3000/settings/credits?checkout_id={CHECKOUT_ID}",
+			returnUrl = "http://localhost:3000/settings/credits",
+		)
+
+		assertEquals(PolarCheckoutSession("checkout-1", "https://sandbox.polar.sh/checkout/checkout-1"), session)
+		val create = mapper.readTree(requestBody!!)
+		assertEquals("[\"product-1\"]", create.path("products").toString())
+		assertEquals("plot-workspace:$workspaceId", create.path("external_customer_id").stringValue())
+		assertEquals("Acme", create.path("customer_name").stringValue())
+		assertEquals("owner@example.com", create.path("customer_email").stringValue())
+		assertEquals("credit_top_up", create.path("metadata").path("purpose").stringValue())
+		assertEquals(workspaceId.toString(), create.path("metadata").path("workspace_id").stringValue())
+		assertEquals("http://localhost:3000/settings/credits?checkout_id={CHECKOUT_ID}", create.path("success_url").stringValue())
+		assertEquals("http://localhost:3000/settings/credits", create.path("return_url").stringValue())
+		assertTrue(create.path("organization_id").isMissingNode)
 	}
 
 	@Test
@@ -162,7 +194,7 @@ class PolarClientTest {
 		assertEquals("invocation-1", event.path("external_id").stringValue())
 		assertEquals("plot-workspace:$workspaceId", event.path("external_customer_id").stringValue())
 		assertEquals("plot_ai_usage", event.path("name").stringValue())
-		assertEquals("polar_org", event.path("organization_id").stringValue())
+		assertTrue(event.path("organization_id").isMissingNode)
 		assertEquals(6, event.path("metadata").path("credits").intValue())
 	}
 
@@ -208,7 +240,6 @@ class PolarClientTest {
 	private fun properties() = PolarProperties(
 		creditsEnabled = true,
 		accessToken = "polar_test_token",
-		organizationId = "polar_org",
 		apiBaseUrl = "https://polar.test",
 		aiMeterId = "meter_ai",
 		trialCredits = 5_000,

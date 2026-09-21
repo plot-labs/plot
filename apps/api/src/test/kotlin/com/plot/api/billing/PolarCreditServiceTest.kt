@@ -68,7 +68,6 @@ class PolarCreditServiceTest {
 	private fun properties() = PolarProperties(
 		creditsEnabled = true,
 		accessToken = "test",
-		organizationId = "polar_org",
 		aiMeterId = "meter",
 		trialCredits = 5_000,
 		requestTimeout = Duration.ofSeconds(1),

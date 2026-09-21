@@ -10,9 +10,11 @@ data class PolarProperties(
 	val timestampToleranceSeconds: Long = 300,
 	val creditsEnabled: Boolean = false,
 	val accessToken: String? = null,
-	val organizationId: String? = null,
 	val apiBaseUrl: String = "https://api.polar.sh",
 	val aiMeterId: String? = null,
+	val creditProductId: String? = null,
+	val checkoutSuccessUrl: String? = null,
+	val checkoutReturnUrl: String? = null,
 	val trialCredits: Long = 5_000,
 	val trialPolicyVersion: String = "trial-v1",
 	val requestTimeout: Duration = Duration.ofSeconds(10),
@@ -30,7 +32,6 @@ data class PolarProperties(
 		require(trialPolicyVersion.isNotBlank()) { "plot.polar.trial-policy-version must not be blank" }
 		if (creditsEnabled) {
 			require(!accessToken.isNullOrBlank()) { "plot.polar.access-token is required when Polar credits are enabled" }
-			require(!organizationId.isNullOrBlank()) { "plot.polar.organization-id is required when Polar credits are enabled" }
 			require(!aiMeterId.isNullOrBlank()) { "plot.polar.ai-meter-id is required when Polar credits are enabled" }
 			require(apiBaseUrl.startsWith("https://")) { "plot.polar.api-base-url must use HTTPS" }
 		}

@@ -373,6 +373,12 @@ export interface WorkspaceCreditOverview {
   creditedUnits: number;
   consumedUnits: number;
   usageEvents: CreditUsageEvent[];
+  checkoutAvailable?: boolean;
+}
+
+export interface WorkspaceCheckout {
+  checkoutId: string;
+  url: string;
 }
 
 export type RoutineCadence =
@@ -692,6 +698,7 @@ export interface PlotApiClient {
   getWorkspace(id: string, options?: RequestOptions): Promise<WorkspaceSummary>;
   updateWorkspace(id: string, input: { name?: string; logoUrl?: string; publicCitationsEnabled?: boolean }, options?: RequestOptions): Promise<WorkspaceSummary>;
   getCreditOverview(options?: RequestOptions): Promise<WorkspaceCreditOverview>;
+  createCreditCheckout(options?: RequestOptions): Promise<WorkspaceCheckout>;
   getContentProfile(options?: RequestOptions): Promise<ContentProfile>;
   updateContentProfile(input: UpdateContentProfileInput, options?: RequestOptions): Promise<ContentProfile>;
   listSkills(options?: RequestOptions): Promise<Skill[]>;
@@ -846,6 +853,10 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
       signal: requestOptions?.signal,
     }),
     getCreditOverview: (requestOptions) => request("/billing/credits", { signal: requestOptions?.signal }),
+    createCreditCheckout: (requestOptions) => request("/billing/checkout", {
+      method: "POST",
+      signal: requestOptions?.signal,
+    }),
     getContentProfile: (requestOptions) => request("/content-profile", { signal: requestOptions?.signal }),
     updateContentProfile: (input, requestOptions) => request("/content-profile", {
       method: "PUT",

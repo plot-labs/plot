@@ -29,6 +29,7 @@ export type {
   WorkSessionSummary,
   WorkspaceCapabilities,
   WorkspaceCreditOverview,
+  WorkspaceCheckout,
   WorkspaceSummary,
 } from "@plot/api-client";
 
