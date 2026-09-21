@@ -24,7 +24,7 @@ import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
 
-private const val POLAR_TEST_WEBHOOK_SECRET = "polar_whs_integration_secret"
+private const val POLAR_TEST_WEBHOOK_SECRET = "whsec_c2VjcmV0"
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -230,7 +230,10 @@ class PolarWebhookApiIntegrationTest {
 
 	private fun sign(webhookId: String, timestamp: String, body: String): String {
 		val mac = Mac.getInstance("HmacSHA256")
-		mac.init(SecretKeySpec(POLAR_TEST_WEBHOOK_SECRET.toByteArray(StandardCharsets.UTF_8), "HmacSHA256"))
+		mac.init(SecretKeySpec(
+			Base64.getDecoder().decode(POLAR_TEST_WEBHOOK_SECRET.removePrefix("whsec_")),
+			"HmacSHA256",
+		))
 		val bytes = mac.doFinal("$webhookId.$timestamp.$body".toByteArray(StandardCharsets.UTF_8))
 		return Base64.getEncoder().encodeToString(bytes)
 	}

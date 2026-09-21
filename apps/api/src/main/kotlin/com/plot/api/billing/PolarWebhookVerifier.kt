@@ -40,7 +40,7 @@ class PolarWebhookVerifier(
 
 		val signedPayload = "$webhookId.$webhookTimestamp.$rawBody"
 		val mac = Mac.getInstance(HMAC_ALGORITHM)
-		mac.init(SecretKeySpec(secret.toByteArray(StandardCharsets.UTF_8), HMAC_ALGORITHM))
+		mac.init(SecretKeySpec(signingKey(secret), HMAC_ALGORITHM))
 		val expected = mac.doFinal(signedPayload.toByteArray(StandardCharsets.UTF_8))
 		val verified = webhookSignature
 			.trim()
@@ -55,6 +55,17 @@ class PolarWebhookVerifier(
 		val parts = value.split(',', limit = 2)
 		if (parts.size != 2 || parts[0] != "v1") return null
 		return runCatching { Base64.getDecoder().decode(parts[1]) }.getOrNull()
+	}
+
+	private fun signingKey(secret: String): ByteArray {
+		val encodedSecret = when {
+			secret.startsWith("whsec_") -> secret.removePrefix("whsec_")
+			secret.startsWith("polar_whs_") -> secret.removePrefix("polar_whs_")
+			else -> null
+		}
+		return encodedSecret?.let {
+			runCatching { Base64.getDecoder().decode(it) }.getOrElse { invalid() }
+		} ?: secret.toByteArray(StandardCharsets.UTF_8)
 	}
 
 	private fun invalid(): Nothing = throw ApiException(
