@@ -102,6 +102,9 @@ class PolarSubscriptionService(
 		resolveReference(referenceId)?.let { return it }
 
 		val externalId = text(data, "customer", "external_id")
+		resolveExternalWorkspace(externalId)?.let { workspace ->
+			return BillingTarget(owner(workspace), workspace)
+		}
 		resolveExternalCustomer(externalId)?.let { return targetForUser(it) }
 
 		val email = text(data, "customer", "email")?.trim()?.lowercase()
@@ -123,6 +126,15 @@ class PolarSubscriptionService(
 		if (plotUserId != null) userRepository.findById(plotUserId).orElse(null)?.let { return it }
 		return workOSIdentityMappingRepository.findByWorkOSUserId(externalId)
 			?.let { mapping -> userRepository.findById(mapping.plotUserId).orElse(null) }
+	}
+
+	private fun resolveExternalWorkspace(externalId: String?): Workspace? {
+		val workspaceId = externalId
+			?.removePrefix("plot-workspace:")
+			?.takeIf { it != externalId }
+			?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+			?: return null
+		return workspaceRepository.findByIdAndStatus(workspaceId, "ACTIVE")
 	}
 
 	private fun targetForUser(user: User): BillingTarget? {

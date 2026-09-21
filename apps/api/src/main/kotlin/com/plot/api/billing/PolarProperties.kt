@@ -13,6 +13,7 @@ data class PolarProperties(
 	val apiBaseUrl: String = "https://api.polar.sh",
 	val aiMeterId: String? = null,
 	val creditProductId: String? = null,
+	val subscriptionProductId: String? = null,
 	val checkoutSuccessUrl: String? = null,
 	val checkoutReturnUrl: String? = null,
 	val trialCredits: Long = 5_000,

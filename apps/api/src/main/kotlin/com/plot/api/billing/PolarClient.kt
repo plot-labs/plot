@@ -73,6 +73,7 @@ interface PolarCheckoutProvider {
 		customerEmail: String,
 		successUrl: String,
 		returnUrl: String?,
+		purpose: String = "credit_top_up",
 	): PolarCheckoutSession
 }
 
@@ -211,6 +212,7 @@ class PolarClient(
 		customerEmail: String,
 		successUrl: String,
 		returnUrl: String?,
+		purpose: String,
 	): PolarCheckoutSession {
 		ensureEnabled()
 		val payload = linkedMapOf<String, Any>(
@@ -221,7 +223,8 @@ class PolarClient(
 			"success_url" to successUrl,
 			"metadata" to mapOf(
 				"workspace_id" to workspaceId.toString(),
-				"purpose" to "credit_top_up",
+				"reference_id" to workspaceId.toString(),
+				"purpose" to purpose,
 			),
 		).apply {
 			returnUrl?.takeIf(String::isNotBlank)?.let { put("return_url", it) }

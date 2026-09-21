@@ -699,6 +699,7 @@ export interface PlotApiClient {
   updateWorkspace(id: string, input: { name?: string; logoUrl?: string; publicCitationsEnabled?: boolean }, options?: RequestOptions): Promise<WorkspaceSummary>;
   getCreditOverview(options?: RequestOptions): Promise<WorkspaceCreditOverview>;
   createCreditCheckout(options?: RequestOptions): Promise<WorkspaceCheckout>;
+  createSubscriptionCheckout(options?: RequestOptions): Promise<WorkspaceCheckout>;
   getContentProfile(options?: RequestOptions): Promise<ContentProfile>;
   updateContentProfile(input: UpdateContentProfileInput, options?: RequestOptions): Promise<ContentProfile>;
   listSkills(options?: RequestOptions): Promise<Skill[]>;
@@ -854,6 +855,10 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
     }),
     getCreditOverview: (requestOptions) => request("/billing/credits", { signal: requestOptions?.signal }),
     createCreditCheckout: (requestOptions) => request("/billing/checkout", {
+      method: "POST",
+      signal: requestOptions?.signal,
+    }),
+    createSubscriptionCheckout: (requestOptions) => request("/billing/subscription-checkout", {
       method: "POST",
       signal: requestOptions?.signal,
     }),

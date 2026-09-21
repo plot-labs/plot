@@ -200,15 +200,31 @@ class PolarWebhookApiIntegrationTest {
 		}
 	}
 
+	@Test
+	fun workspaceExternalCustomerPromotesTheWorkspaceFromPolarCheckout() {
+		val body = subscriptionEvent(
+			"subscription.active",
+			"sub_external_workspace",
+			externalCustomerId = "plot-workspace:${devContext.devWorkspaceId}",
+		)
+
+		postWebhook("msg_external_workspace", body).andExpect { status { isNoContent() } }
+
+		assertWorkspace("founding", "active", "full", "sub_external_workspace", "cus_active")
+		assertEvent("msg_external_workspace", "PROMOTED", devContext.devUserId, devContext.devWorkspaceId)
+	}
+
 	private fun subscriptionEvent(
 		type: String,
 		subscriptionId: String,
 		referenceId: UUID? = null,
+		externalCustomerId: String? = null,
 		email: String = "dev@plot.local",
 	): String {
 		val metadata = referenceId?.let { """"reference_id":"$it"""" }.orEmpty()
+		val externalId = externalCustomerId?.let { """"$it"""" } ?: "null"
 		return """
-			{"type":"$type","data":{"id":"$subscriptionId","metadata":{$metadata},"customer":{"id":"cus_active","external_id":null,"email":"$email"}}}
+			{"type":"$type","data":{"id":"$subscriptionId","metadata":{$metadata},"customer":{"id":"cus_active","external_id":$externalId,"email":"$email"}}}
 		""".trimIndent()
 	}
 

@@ -725,6 +725,25 @@ it("starts a workspace-scoped credit checkout", async () => {
   expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
 });
 
+it("starts a workspace-scoped subscription checkout", async () => {
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json({
+    checkoutId: "subscription-checkout-1",
+    url: "https://sandbox.polar.sh/checkout/subscription-checkout-1",
+  }, { status: 201 }));
+  const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
+
+  await expect(client.createSubscriptionCheckout()).resolves.toEqual({
+    checkoutId: "subscription-checkout-1",
+    url: "https://sandbox.polar.sh/checkout/subscription-checkout-1",
+  });
+
+  expect(fetcher).toHaveBeenCalledWith("/api/plot/billing/subscription-checkout", expect.objectContaining({
+    method: "POST",
+    cache: "no-store",
+  }));
+  expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
+});
+
 it("models response-version lineage and response-local source summaries", () => {
   const version = {
     id: "ver-2",

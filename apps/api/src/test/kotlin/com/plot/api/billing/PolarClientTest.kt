@@ -114,6 +114,7 @@ class PolarClientTest {
 			customerEmail = "owner@example.com",
 			successUrl = "http://localhost:3000/settings/credits?checkout_id={CHECKOUT_ID}",
 			returnUrl = "http://localhost:3000/settings/credits",
+			purpose = "credit_top_up",
 		)
 
 		assertEquals(PolarCheckoutSession("checkout-1", "https://sandbox.polar.sh/checkout/checkout-1"), session)
@@ -122,6 +123,7 @@ class PolarClientTest {
 		assertEquals("plot-workspace:$workspaceId", create.path("external_customer_id").stringValue())
 		assertEquals("Acme", create.path("customer_name").stringValue())
 		assertEquals("owner@example.com", create.path("customer_email").stringValue())
+		assertEquals(workspaceId.toString(), create.path("metadata").path("reference_id").stringValue())
 		assertEquals("credit_top_up", create.path("metadata").path("purpose").stringValue())
 		assertEquals(workspaceId.toString(), create.path("metadata").path("workspace_id").stringValue())
 		assertEquals("http://localhost:3000/settings/credits?checkout_id={CHECKOUT_ID}", create.path("success_url").stringValue())

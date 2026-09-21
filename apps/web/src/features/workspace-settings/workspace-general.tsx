@@ -25,6 +25,8 @@ export function WorkspaceGeneral() {
   const [error, setError] = useState<string | null>(null);
   const [reloadNonce, setReloadNonce] = useState(0);
   const [copyState, setCopyState] = useState<"idle" | "copied">("idle");
+  const [isSubscriptionCheckoutLoading, setIsSubscriptionCheckoutLoading] = useState(false);
+  const [subscriptionCheckoutError, setSubscriptionCheckoutError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -86,6 +88,7 @@ export function WorkspaceGeneral() {
     || publicCitationsEnabled !== savedPublicCitationsEnabled;
   const canConfigure = workspace?.capabilities?.configure !== false;
   const canEdit = workspace?.role === "OWNER" && canConfigure;
+  const canStartSubscription = workspace?.role === "OWNER" && workspace.plan === "trial" && canConfigure;
   const trialUntil = workspace?.trialEndsAt
     ? new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(workspace.trialEndsAt))
     : null;
@@ -155,6 +158,19 @@ export function WorkspaceGeneral() {
     window.setTimeout(() => setCopyState("idle"), 2_000);
   };
 
+  const startSubscriptionCheckout = async () => {
+    if (!canStartSubscription || isSubscriptionCheckoutLoading) return;
+    setIsSubscriptionCheckoutLoading(true);
+    setSubscriptionCheckoutError(null);
+    try {
+      const session = await plotApiClient.createSubscriptionCheckout();
+      window.location.assign(session.url);
+    } catch {
+      setSubscriptionCheckoutError("Subscription checkout could not be started.");
+      setIsSubscriptionCheckoutLoading(false);
+    }
+  };
+
   return (
     <div className="h-full overflow-y-auto bg-[#f4f6f8] px-5 py-8 dark:bg-[#101112] sm:px-8 sm:py-10 lg:px-10">
       <div className="mx-auto max-w-[760px] pb-16">
@@ -190,6 +206,21 @@ export function WorkspaceGeneral() {
               ) : null}
               {workspace.accessMode === "full" && workspace.plan === "trial" ? (
                 <p>Trial AI usage is deducted from workspace credits until the trial ends. Existing drafts remain available to edit, export, and publish.</p>
+              ) : null}
+              {canStartSubscription ? (
+                <div className="border-t border-black/[0.07] pt-4 dark:border-white/[0.08]">
+                  <p>Subscribe to keep full workspace access after the trial and receive recurring AI credits.</p>
+                  <button
+                    type="button"
+                    onClick={startSubscriptionCheckout}
+                    disabled={isSubscriptionCheckoutLoading}
+                    className="mt-3 inline-flex h-9 items-center gap-2 rounded-[9px] bg-black px-3.5 text-[13px] font-medium text-white transition hover:bg-black/82 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:cursor-wait disabled:opacity-60 dark:bg-white dark:text-black dark:hover:bg-white/88 dark:focus-visible:ring-white/30"
+                  >
+                    {isSubscriptionCheckoutLoading ? <LoaderCircle className="size-4 animate-spin" aria-hidden="true" /> : <ExternalLink className="size-4" aria-hidden="true" />}
+                    Subscribe to Founding
+                  </button>
+                  {subscriptionCheckoutError ? <p className="mt-2 text-sm text-red-700 dark:text-red-300" role="alert">{subscriptionCheckoutError}</p> : null}
+                </div>
               ) : null}
             </div>
           </section>

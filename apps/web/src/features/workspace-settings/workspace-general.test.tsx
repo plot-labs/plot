@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   getWorkspace: vi.fn(),
   updateWorkspace: vi.fn(),
+  createSubscriptionCheckout: vi.fn(),
 }));
 
 vi.mock("@/lib/api-client", () => ({
@@ -36,6 +37,7 @@ describe("WorkspaceGeneral", () => {
       publicCitationsEnabled: true,
       role: "OWNER",
     });
+    mocks.createSubscriptionCheckout.mockReset();
   });
 
   it("shows the public changelog URL with copy and view actions", async () => {
@@ -86,5 +88,26 @@ describe("WorkspaceGeneral", () => {
     window.dispatchEvent(new CustomEvent("plot:workspace-changed", { detail: { id: "workspace-2" } }));
 
     await waitFor(() => expect(mocks.getWorkspace).toHaveBeenCalledTimes(2));
+  });
+
+  it("offers a subscription checkout to a trial workspace owner", async () => {
+    mocks.getWorkspace.mockResolvedValueOnce({
+      id: "workspace-1",
+      name: "Personal",
+      slug: "personal",
+      status: "ACTIVE",
+      logoUrl: null,
+      publicCitationsEnabled: true,
+      role: "OWNER",
+      plan: "trial",
+      entitlementStatus: "trialing",
+      accessMode: "full",
+      capabilities: { configure: true, write: true, export: true, publish: true, unpublish: true },
+      trialEndsAt: "2026-10-01T00:00:00Z",
+    });
+
+    render(<WorkspaceGeneral />);
+
+    expect(await screen.findByRole("button", { name: "Subscribe to Founding" })).toBeVisible();
   });
 });

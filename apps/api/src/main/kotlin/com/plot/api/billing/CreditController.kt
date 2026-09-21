@@ -37,6 +37,7 @@ data class WorkspaceCheckoutResponse(
 class CreditController(
 	private val credits: PolarCreditService,
 	private val checkout: PolarCheckoutService,
+	private val subscriptionCheckout: PolarSubscriptionCheckoutService,
 	private val authorizedWorkspaceContext: AuthorizedWorkspaceContext,
 ) {
 	@GetMapping("/credits")
@@ -69,6 +70,26 @@ class CreditController(
 				if (failure.retryable) HttpStatus.SERVICE_UNAVAILABLE else HttpStatus.BAD_GATEWAY,
 				failure.safeCode,
 				"Credit checkout could not be started",
+			)
+		}
+		return ResponseEntity.status(HttpStatus.CREATED).body(
+			WorkspaceCheckoutResponse(session.id, session.url),
+		)
+	}
+
+	@PostMapping("/subscription-checkout")
+	fun createSubscriptionCheckout(): ResponseEntity<WorkspaceCheckoutResponse> {
+		val context = authorizedWorkspaceContext.require()
+		if (context.workspace.role != "OWNER") {
+			throw ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Only workspace owners can start a subscription")
+		}
+		val session = try {
+			subscriptionCheckout.create(context.workspace.workspaceId)
+		} catch (failure: PolarApiException) {
+			throw ApiException(
+				if (failure.retryable) HttpStatus.SERVICE_UNAVAILABLE else HttpStatus.BAD_GATEWAY,
+				failure.safeCode,
+				"Subscription checkout could not be started",
 			)
 		}
 		return ResponseEntity.status(HttpStatus.CREATED).body(
