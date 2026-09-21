@@ -2,6 +2,7 @@ package com.plot.api.billing
 
 import com.plot.api.auth.AuthorizedWorkspaceContext
 import com.plot.api.common.ApiException
+import com.plot.api.entitlement.ReadOnlyAllowed
 import java.time.Instant
 import org.springframework.http.CacheControl
 import org.springframework.http.HttpStatus
@@ -32,12 +33,17 @@ data class WorkspaceCheckoutResponse(
 	val url: String,
 )
 
+data class WorkspaceCustomerPortalResponse(
+	val url: String,
+)
+
 @RestController
 @RequestMapping("/api/billing")
 class CreditController(
 	private val credits: PolarCreditService,
 	private val checkout: PolarCheckoutService,
 	private val subscriptionCheckout: PolarSubscriptionCheckoutService,
+	private val subscriptionPortal: PolarSubscriptionPortalService,
 	private val authorizedWorkspaceContext: AuthorizedWorkspaceContext,
 ) {
 	@GetMapping("/credits")
@@ -78,6 +84,7 @@ class CreditController(
 	}
 
 	@PostMapping("/subscription-checkout")
+	@ReadOnlyAllowed
 	fun createSubscriptionCheckout(): ResponseEntity<WorkspaceCheckoutResponse> {
 		val context = authorizedWorkspaceContext.require()
 		if (context.workspace.role != "OWNER") {
@@ -85,6 +92,12 @@ class CreditController(
 		}
 		val session = try {
 			subscriptionCheckout.create(context.workspace.workspaceId)
+		} catch (_: SubscriptionCheckoutNotAllowedException) {
+			throw ApiException(
+				HttpStatus.CONFLICT,
+				"SUBSCRIPTION_MANAGEMENT_REQUIRED",
+				"Manage the current subscription instead of starting another checkout",
+			)
 		} catch (failure: PolarApiException) {
 			throw ApiException(
 				if (failure.retryable) HttpStatus.SERVICE_UNAVAILABLE else HttpStatus.BAD_GATEWAY,
@@ -95,6 +108,33 @@ class CreditController(
 		return ResponseEntity.status(HttpStatus.CREATED).body(
 			WorkspaceCheckoutResponse(session.id, session.url),
 		)
+	}
+
+	@PostMapping("/subscription-portal")
+	@ReadOnlyAllowed
+	fun createSubscriptionPortal(): ResponseEntity<WorkspaceCustomerPortalResponse> {
+		val context = authorizedWorkspaceContext.require()
+		if (context.workspace.role != "OWNER") {
+			throw ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Only workspace owners can manage a subscription")
+		}
+		val portal = try {
+			subscriptionPortal.create(context.workspace.workspaceId)
+		} catch (_: SubscriptionPortalNotAllowedException) {
+			throw ApiException(
+				HttpStatus.CONFLICT,
+				"SUBSCRIPTION_PORTAL_UNAVAILABLE",
+				"A current subscription is required to manage billing",
+			)
+		} catch (failure: PolarApiException) {
+			throw ApiException(
+				if (failure.retryable) HttpStatus.SERVICE_UNAVAILABLE else HttpStatus.BAD_GATEWAY,
+				failure.safeCode,
+				"Subscription portal could not be started",
+			)
+		}
+		return ResponseEntity.status(HttpStatus.CREATED)
+			.cacheControl(CacheControl.noStore())
+			.body(WorkspaceCustomerPortalResponse(portal.url))
 	}
 }
 

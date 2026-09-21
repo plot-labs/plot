@@ -132,6 +132,30 @@ class PolarClientTest {
 	}
 
 	@Test
+	fun createsWorkspaceBoundCustomerPortalSessionWithoutReturningTheToken() {
+		var requestBody: String? = null
+		val client = client { method, uri, _, body ->
+			assertEquals("POST", method)
+			assertEquals("/v1/customer-sessions", uri.path)
+			requestBody = body
+			PolarHttpResponse(
+				201,
+				"""{"customer_portal_url":"https://sandbox.polar.sh/customer-portal/session-1","token":"secret-session-token"}""",
+			)
+		}
+
+		val portal = client.createCustomerPortalSession(
+			workspaceId,
+			"http://localhost:3000/settings/workspace",
+		)
+
+		assertEquals(PolarCustomerPortal("https://sandbox.polar.sh/customer-portal/session-1"), portal)
+		val request = mapper.readTree(requestBody!!)
+		assertEquals("plot-workspace:$workspaceId", request.path("external_customer_id").stringValue())
+		assertEquals("http://localhost:3000/settings/workspace", request.path("return_url").stringValue())
+	}
+
+	@Test
 	fun rejectsLegacyCustomerThatIsNotBoundToTheWorkspace() {
 		val client = client { method, uri, _, _ ->
 			assertEquals("GET", method)

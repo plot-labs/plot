@@ -16,6 +16,7 @@ data class PolarProperties(
 	val subscriptionProductId: String? = null,
 	val checkoutSuccessUrl: String? = null,
 	val checkoutReturnUrl: String? = null,
+	val customerPortalReturnUrl: String? = null,
 	val trialCredits: Long = 5_000,
 	val trialPolicyVersion: String = "trial-v1",
 	val requestTimeout: Duration = Duration.ofSeconds(10),

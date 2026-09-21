@@ -17,6 +17,8 @@ data class PolarCustomer(val id: String, val externalId: String)
 
 data class PolarCheckoutSession(val id: String, val url: String)
 
+data class PolarCustomerPortal(val url: String)
+
 data class PolarCreditUsageEvent(
 	val id: String,
 	val timestamp: Instant,
@@ -77,6 +79,10 @@ interface PolarCheckoutProvider {
 	): PolarCheckoutSession
 }
 
+interface PolarCustomerPortalProvider {
+	fun createCustomerPortalSession(workspaceId: UUID, returnUrl: String): PolarCustomerPortal
+}
+
 fun interface PolarHttpTransport {
 	fun execute(method: String, uri: URI, headers: Map<String, String>, body: String?): PolarHttpResponse
 }
@@ -124,7 +130,7 @@ class PolarClient(
 	private val properties: PolarProperties,
 	private val objectMapper: ObjectMapper,
 	private val transport: PolarHttpTransport = JavaPolarHttpTransport(properties),
-) : PolarCreditProvider, PolarCheckoutProvider {
+) : PolarCreditProvider, PolarCheckoutProvider, PolarCustomerPortalProvider {
 	fun workspaceExternalId(workspaceId: UUID): String = "plot-workspace:$workspaceId"
 
 	override fun ensureCustomer(
@@ -239,6 +245,25 @@ class PolarClient(
 		val id = root.path("id").stringValue()?.takeIf(String::isNotBlank) ?: invalidResponse()
 		val url = root.path("url").stringValue()?.takeIf(String::isNotBlank) ?: invalidResponse()
 		return PolarCheckoutSession(id, url)
+	}
+
+	override fun createCustomerPortalSession(workspaceId: UUID, returnUrl: String): PolarCustomerPortal {
+		ensureEnabled()
+		val payload = mapOf(
+			"external_customer_id" to workspaceExternalId(workspaceId),
+			"return_url" to returnUrl,
+		)
+		val response = execute(
+			"POST",
+			"/v1/customer-sessions",
+			objectMapper.writeValueAsString(payload),
+			accepted = setOf(201),
+		)
+		val url = parse(response.body).path("customer_portal_url").stringValue()?.takeIf(String::isNotBlank)
+			?: invalidResponse()
+		val portalUri = runCatching { URI.create(url) }.getOrElse { invalidResponse() }
+		if (portalUri.scheme != "https" || portalUri.host.isNullOrBlank()) invalidResponse()
+		return PolarCustomerPortal(url)
 	}
 
 	private fun ingest(

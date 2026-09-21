@@ -353,6 +353,10 @@ export interface WorkspaceSummary {
   plan: string;
   entitlementStatus: string;
   accessMode: "full" | "complete_only" | "read_only";
+  subscriptionStatus: string | null;
+  subscriptionCancelAtPeriodEnd: boolean | null;
+  subscriptionCurrentPeriodEnd: string | null;
+  subscriptionEventAt: string | null;
   capabilities: WorkspaceCapabilities;
   trialEndsAt: string;
   role: string | null;
@@ -377,7 +381,11 @@ export interface WorkspaceCreditOverview {
 }
 
 export interface WorkspaceCheckout {
-  checkoutId: string;
+	checkoutId: string;
+	url: string;
+}
+
+export interface WorkspaceCustomerPortal {
   url: string;
 }
 
@@ -700,6 +708,7 @@ export interface PlotApiClient {
   getCreditOverview(options?: RequestOptions): Promise<WorkspaceCreditOverview>;
   createCreditCheckout(options?: RequestOptions): Promise<WorkspaceCheckout>;
   createSubscriptionCheckout(options?: RequestOptions): Promise<WorkspaceCheckout>;
+  createSubscriptionPortal(options?: RequestOptions): Promise<WorkspaceCustomerPortal>;
   getContentProfile(options?: RequestOptions): Promise<ContentProfile>;
   updateContentProfile(input: UpdateContentProfileInput, options?: RequestOptions): Promise<ContentProfile>;
   listSkills(options?: RequestOptions): Promise<Skill[]>;
@@ -859,6 +868,10 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
       signal: requestOptions?.signal,
     }),
     createSubscriptionCheckout: (requestOptions) => request("/billing/subscription-checkout", {
+      method: "POST",
+      signal: requestOptions?.signal,
+    }),
+    createSubscriptionPortal: (requestOptions) => request("/billing/subscription-portal", {
       method: "POST",
       signal: requestOptions?.signal,
     }),

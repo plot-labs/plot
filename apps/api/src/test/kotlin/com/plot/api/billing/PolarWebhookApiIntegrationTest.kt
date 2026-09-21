@@ -58,6 +58,10 @@ class PolarWebhookApiIntegrationTest {
 			    trial_ends_at = now() + interval '30 days',
 			    polar_subscription_id = null,
 			    polar_customer_id = null,
+			    polar_subscription_status = null,
+			    polar_subscription_cancel_at_period_end = null,
+			    polar_subscription_current_period_end = null,
+			    polar_subscription_event_at = null,
 			    plan_updated_at = null
 			where id = ?
 			""".trimIndent(),
@@ -85,19 +89,62 @@ class PolarWebhookApiIntegrationTest {
 	}
 
 	@Test
+	fun activeWebhookExposesSubscriptionLifecycleSnapshot() {
+		val periodEnd = "2026-10-21T00:00:00Z"
+		val eventAt = "2026-09-21T00:00:00Z"
+		val body = subscriptionEvent(
+			"subscription.active",
+			"sub_snapshot",
+			referenceId = devContext.devWorkspaceId,
+			currentPeriodEnd = periodEnd,
+			eventAt = eventAt,
+		)
+
+		postWebhook("msg_snapshot", body).andExpect { status { isNoContent() } }
+
+		mockMvc.get("/api/workspaces/${devContext.devWorkspaceId}")
+			.andExpect {
+				status { isOk() }
+				jsonPath("$.subscriptionStatus") { value("active") }
+				jsonPath("$.subscriptionCancelAtPeriodEnd") { value(false) }
+				jsonPath("$.subscriptionCurrentPeriodEnd") { value(periodEnd) }
+				jsonPath("$.subscriptionEventAt") { value(eventAt) }
+			}
+	}
+
+	@Test
 	fun revokedMakesWorkspaceReadOnly() {
 		postWebhook(
 			"msg_promote",
-			subscriptionEvent("subscription.active", "sub_revoke", referenceId = devContext.devUserId),
+			subscriptionEvent("subscription.active", "sub_revoke", referenceId = devContext.devUserId, eventAt = "2026-09-21T01:00:00Z"),
 		).andExpect { status { isNoContent() } }
 
 		postWebhook(
 			"msg_revoke",
-			subscriptionEvent("subscription.revoked", "sub_revoke", referenceId = devContext.devUserId),
+			subscriptionEvent("subscription.revoked", "sub_revoke", referenceId = devContext.devUserId, eventAt = "2026-09-21T02:00:00Z"),
 		).andExpect { status { isNoContent() } }
 
 		assertWorkspace("founding", "revoked", "read_only", "sub_revoke", "cus_active")
 		assertEvent("msg_revoke", "DEMOTED", devContext.devUserId, devContext.devWorkspaceId)
+	}
+
+	@Test
+	fun newActiveSubscriptionRestoresARevokedWorkspace() {
+		postWebhook(
+			"msg_restore_active",
+			subscriptionEvent("subscription.active", "sub_before_restore", referenceId = devContext.devWorkspaceId, eventAt = "2026-09-21T01:00:00Z"),
+		).andExpect { status { isNoContent() } }
+		postWebhook(
+			"msg_restore_revoke",
+			subscriptionEvent("subscription.revoked", "sub_before_restore", referenceId = devContext.devWorkspaceId, eventAt = "2026-09-21T02:00:00Z"),
+		).andExpect { status { isNoContent() } }
+		postWebhook(
+			"msg_restore_new_active",
+			subscriptionEvent("subscription.active", "sub_after_restore", referenceId = devContext.devWorkspaceId, eventAt = "2026-09-21T03:00:00Z"),
+		).andExpect { status { isNoContent() } }
+
+		assertWorkspace("founding", "active", "full", "sub_after_restore", "cus_active")
+		assertLifecycle("active", false, "2026-10-21T00:00:00Z", "2026-09-21T03:00:00Z")
 	}
 
 	@Test
@@ -110,7 +157,110 @@ class PolarWebhookApiIntegrationTest {
 		).andExpect { status { isNoContent() } }
 
 		assertWorkspace("founding", "active", "full", "sub_canceled", "cus_existing")
-		assertEvent("msg_canceled", "IGNORED", null, null)
+		assertLifecycle("canceled", false, null, "2026-09-21T00:00:00Z")
+		assertEvent("msg_canceled", "SNAPSHOT_UPDATED", devContext.devUserId, devContext.devWorkspaceId)
+	}
+
+	@Test
+	fun periodEndCancellationKeepsFullAccessAndRecordsTheSchedule() {
+		postWebhook(
+			"msg_period_active",
+			subscriptionEvent("subscription.active", "sub_period", referenceId = devContext.devWorkspaceId, eventAt = "2026-09-21T01:00:00Z"),
+		).andExpect { status { isNoContent() } }
+
+		postWebhook(
+			"msg_period_cancel",
+			subscriptionEvent(
+				"subscription.canceled",
+				"sub_period",
+				referenceId = devContext.devWorkspaceId,
+				cancelAtPeriodEnd = true,
+				currentPeriodEnd = "2026-10-31T00:00:00Z",
+				eventAt = "2026-09-21T02:00:00Z",
+			),
+		).andExpect { status { isNoContent() } }
+
+		assertWorkspace("founding", "active", "full", "sub_period", "cus_active")
+		assertLifecycle("canceled", true, "2026-10-31T00:00:00Z", "2026-09-21T02:00:00Z")
+
+		postWebhook(
+			"msg_period_uncancel",
+			subscriptionEvent("subscription.uncanceled", "sub_period", referenceId = devContext.devWorkspaceId, eventAt = "2026-09-21T03:00:00Z"),
+		).andExpect { status { isNoContent() } }
+		assertLifecycle("active", false, "2026-10-21T00:00:00Z", "2026-09-21T03:00:00Z")
+	}
+
+	@Test
+	fun pastDueAndUncanceledEventsKeepAccessAndActiveClearsBillingState() {
+		postWebhook(
+			"msg_recovery_active",
+			subscriptionEvent("subscription.active", "sub_recovery", referenceId = devContext.devWorkspaceId, eventAt = "2026-09-21T01:00:00Z"),
+		).andExpect { status { isNoContent() } }
+		postWebhook(
+			"msg_past_due",
+			subscriptionEvent("subscription.past_due", "sub_recovery", referenceId = devContext.devWorkspaceId, eventAt = "2026-09-21T02:00:00Z"),
+		).andExpect { status { isNoContent() } }
+
+		assertWorkspace("founding", "active", "full", "sub_recovery", "cus_active")
+		assertLifecycle("past_due", false, "2026-10-21T00:00:00Z", "2026-09-21T02:00:00Z")
+
+		postWebhook(
+			"msg_recovered",
+			subscriptionEvent("subscription.active", "sub_recovery", referenceId = devContext.devWorkspaceId, eventAt = "2026-09-21T03:00:00Z"),
+		).andExpect { status { isNoContent() } }
+
+		assertLifecycle("active", false, "2026-10-21T00:00:00Z", "2026-09-21T03:00:00Z")
+	}
+
+	@Test
+	fun updatedOnlyRefreshesTheCurrentSubscriptionSnapshot() {
+		postWebhook(
+			"msg_updated_active",
+			subscriptionEvent("subscription.active", "sub_updated", referenceId = devContext.devWorkspaceId, eventAt = "2026-09-21T01:00:00Z"),
+		).andExpect { status { isNoContent() } }
+
+		postWebhook(
+			"msg_updated",
+			subscriptionEvent(
+				"subscription.updated",
+				"sub_updated",
+				referenceId = devContext.devWorkspaceId,
+				status = "active",
+				cancelAtPeriodEnd = true,
+				currentPeriodEnd = "2026-11-21T00:00:00Z",
+				eventAt = "2026-09-21T02:00:00Z",
+			),
+		).andExpect { status { isNoContent() } }
+
+		assertWorkspace("founding", "active", "full", "sub_updated", "cus_active")
+		assertLifecycle("active", true, "2026-11-21T00:00:00Z", "2026-09-21T02:00:00Z")
+	}
+
+	@Test
+	fun staleLifecycleEventAndInvalidTimestampCannotOverwriteSnapshot() {
+		postWebhook(
+			"msg_latest_active",
+			subscriptionEvent("subscription.active", "sub_ordered", referenceId = devContext.devWorkspaceId, eventAt = "2026-09-21T02:00:00Z"),
+		).andExpect { status { isNoContent() } }
+
+		postWebhook(
+			"msg_stale_cancel",
+			subscriptionEvent(
+				"subscription.canceled",
+				"sub_ordered",
+				referenceId = devContext.devWorkspaceId,
+				cancelAtPeriodEnd = true,
+				eventAt = "2026-09-21T01:00:00Z",
+			),
+		).andExpect { status { isNoContent() } }
+		assertEvent("msg_stale_cancel", "STALE_EVENT", devContext.devUserId, devContext.devWorkspaceId)
+
+		postWebhook(
+			"msg_invalid_time",
+			subscriptionEvent("subscription.past_due", "sub_ordered", referenceId = devContext.devWorkspaceId, eventAt = "invalid"),
+		).andExpect { status { isNoContent() } }
+		assertEvent("msg_invalid_time", "INVALID_TIMESTAMP", devContext.devUserId, devContext.devWorkspaceId)
+		assertLifecycle("active", false, "2026-10-21T00:00:00Z", "2026-09-21T02:00:00Z")
 	}
 
 	@Test
@@ -220,11 +370,17 @@ class PolarWebhookApiIntegrationTest {
 		referenceId: UUID? = null,
 		externalCustomerId: String? = null,
 		email: String = "dev@plot.local",
+		currentPeriodEnd: String = "2026-10-21T00:00:00Z",
+		eventAt: String = "2026-09-21T00:00:00Z",
+		status: String? = null,
+		cancelAtPeriodEnd: Boolean? = null,
 	): String {
 		val metadata = referenceId?.let { """"reference_id":"$it"""" }.orEmpty()
 		val externalId = externalCustomerId?.let { """"$it"""" } ?: "null"
+		val subscriptionStatus = status?.let { ",\"status\":\"$it\"" }.orEmpty()
+		val cancellation = cancelAtPeriodEnd?.let { ",\"cancel_at_period_end\":$it" }.orEmpty()
 		return """
-			{"type":"$type","data":{"id":"$subscriptionId","metadata":{$metadata},"customer":{"id":"cus_active","external_id":$externalId,"email":"$email"}}}
+			{"type":"$type","timestamp":"$eventAt","data":{"id":"$subscriptionId","current_period_end":"$currentPeriodEnd"$subscriptionStatus$cancellation,"metadata":{$metadata},"customer":{"id":"cus_active","external_id":$externalId,"email":"$email"}}}
 		""".trimIndent()
 	}
 
@@ -277,6 +433,27 @@ class PolarWebhookApiIntegrationTest {
 		assertEquals(subscriptionId, row["polar_subscription_id"])
 		assertEquals(customerId, row["polar_customer_id"])
 		if (plan == "founding" || subscriptionId != null) assertNotNull(row["plan_updated_at"])
+	}
+
+	private fun assertLifecycle(
+		status: String?,
+		cancelAtPeriodEnd: Boolean?,
+		currentPeriodEnd: String?,
+		eventAt: String,
+	) {
+		val row = jdbcTemplate.queryForMap(
+			"""
+			select polar_subscription_status, polar_subscription_cancel_at_period_end,
+			       polar_subscription_current_period_end, polar_subscription_event_at
+			from workspaces
+			where id = ?
+			""".trimIndent(),
+			devContext.devWorkspaceId,
+		)
+		assertEquals(status, row["polar_subscription_status"])
+		assertEquals(cancelAtPeriodEnd, row["polar_subscription_cancel_at_period_end"])
+		assertEquals(currentPeriodEnd?.let(Instant::parse), (row["polar_subscription_current_period_end"] as? java.sql.Timestamp)?.toInstant())
+		assertEquals(Instant.parse(eventAt), (row["polar_subscription_event_at"] as? java.sql.Timestamp)?.toInstant())
 	}
 
 	private fun assertEvent(

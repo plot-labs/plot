@@ -17,6 +17,10 @@ function workspaceSummary(overrides: Partial<WorkspaceSummary> = {}): WorkspaceS
     plan: "founding",
     entitlementStatus: "active",
     accessMode: "full",
+    subscriptionStatus: "active",
+    subscriptionCancelAtPeriodEnd: false,
+    subscriptionCurrentPeriodEnd: "2026-10-01T00:00:00Z",
+    subscriptionEventAt: "2026-09-01T00:00:00Z",
     capabilities: {
       generate: true,
       edit: true,
@@ -738,6 +742,23 @@ it("starts a workspace-scoped subscription checkout", async () => {
   });
 
   expect(fetcher).toHaveBeenCalledWith("/api/plot/billing/subscription-checkout", expect.objectContaining({
+    method: "POST",
+    cache: "no-store",
+  }));
+  expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
+});
+
+it("opens a workspace-scoped subscription portal", async () => {
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json({
+    url: "https://sandbox.polar.sh/customer-portal/session-1",
+  }, { status: 201 }));
+  const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
+
+  await expect(client.createSubscriptionPortal()).resolves.toEqual({
+    url: "https://sandbox.polar.sh/customer-portal/session-1",
+  });
+
+  expect(fetcher).toHaveBeenCalledWith("/api/plot/billing/subscription-portal", expect.objectContaining({
     method: "POST",
     cache: "no-store",
   }));

@@ -243,6 +243,7 @@ describe("Plot same-origin proxy", () => {
     ["GET", ["billing", "credits"]],
     ["POST", ["billing", "checkout"]],
     ["POST", ["billing", "subscription-checkout"]],
+	["POST", ["billing", "subscription-portal"]],
     ["POST", ["routines"]],
     ["PATCH", ["routines", "018fd000-0000-7000-8000-000000000002"]],
     ["POST", ["routines", "018fd000-0000-7000-8000-000000000002", "run"]],

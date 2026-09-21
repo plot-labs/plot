@@ -12,6 +12,7 @@ data class WorkspaceBillingContext(
 	val workspaceName: String,
 	val ownerEmail: String,
 	val trial: Boolean,
+	val entitlementStatus: String,
 	val polarCustomerId: String?,
 )
 
@@ -34,6 +35,7 @@ class RepositoryWorkspaceBillingContextStore(
 			workspace.name,
 			owner.email,
 			workspace.plan == "trial",
+			workspace.entitlementStatus,
 			workspace.polarCustomerId,
 		)
 	}

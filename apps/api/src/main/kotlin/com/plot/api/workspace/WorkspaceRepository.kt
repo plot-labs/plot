@@ -77,6 +77,10 @@ class WorkspaceRepository(
 		this[WorkspaceTable.plan] = workspace.plan
 		this[WorkspaceTable.polarSubscriptionId] = workspace.polarSubscriptionId
 		this[WorkspaceTable.polarCustomerId] = workspace.polarCustomerId
+		this[WorkspaceTable.polarSubscriptionStatus] = workspace.polarSubscriptionStatus
+		this[WorkspaceTable.polarSubscriptionCancelAtPeriodEnd] = workspace.polarSubscriptionCancelAtPeriodEnd
+		this[WorkspaceTable.polarSubscriptionCurrentPeriodEnd] = workspace.polarSubscriptionCurrentPeriodEnd?.atOffset(ZoneOffset.UTC)
+		this[WorkspaceTable.polarSubscriptionEventAt] = workspace.polarSubscriptionEventAt?.atOffset(ZoneOffset.UTC)
 		this[WorkspaceTable.planUpdatedAt] = workspace.planUpdatedAt?.atOffset(ZoneOffset.UTC)
 		this[WorkspaceTable.entitlementStatus] = workspace.entitlementStatus
 		this[WorkspaceTable.accessMode] = workspace.accessMode
@@ -98,6 +102,10 @@ class WorkspaceRepository(
 		plan = this[WorkspaceTable.plan],
 		polarSubscriptionId = this[WorkspaceTable.polarSubscriptionId],
 		polarCustomerId = this[WorkspaceTable.polarCustomerId],
+		polarSubscriptionStatus = this[WorkspaceTable.polarSubscriptionStatus],
+		polarSubscriptionCancelAtPeriodEnd = this[WorkspaceTable.polarSubscriptionCancelAtPeriodEnd],
+		polarSubscriptionCurrentPeriodEnd = this[WorkspaceTable.polarSubscriptionCurrentPeriodEnd]?.toInstant(),
+		polarSubscriptionEventAt = this[WorkspaceTable.polarSubscriptionEventAt]?.toInstant(),
 		planUpdatedAt = this[WorkspaceTable.planUpdatedAt]?.toInstant(),
 		entitlementStatus = this[WorkspaceTable.entitlementStatus],
 		accessMode = this[WorkspaceTable.accessMode],

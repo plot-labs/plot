@@ -97,6 +97,7 @@ private class FakeWorkspaceBillingContextStore(private val workspaceId: UUID) : 
 		"Workspace",
 		"owner@example.com",
 		true,
+		"trialing",
 		customerId,
 	)
 

@@ -15,11 +15,14 @@ class PolarSubscriptionCheckoutService(
 		&& !properties.checkoutSuccessUrl.isNullOrBlank()
 
 	fun create(workspaceId: UUID): WorkspaceCheckout {
+		val context = contexts.requireContext(workspaceId)
+		if (!context.trial && context.entitlementStatus != "revoked") {
+			throw SubscriptionCheckoutNotAllowedException()
+		}
 		val productId = properties.subscriptionProductId?.trim()?.takeIf(String::isNotBlank)
 			?: throw PolarApiException("POLAR_SUBSCRIPTION_NOT_CONFIGURED", "Polar subscription checkout is not configured")
 		val successUrl = properties.checkoutSuccessUrl?.trim()?.takeIf(String::isNotBlank)
 			?: throw PolarApiException("POLAR_SUBSCRIPTION_NOT_CONFIGURED", "Polar subscription checkout is not configured")
-		val context = contexts.requireContext(workspaceId)
 		val customer = creditProvider.ensureCustomer(
 			workspaceId,
 			context.ownerEmail,
@@ -39,3 +42,5 @@ class PolarSubscriptionCheckoutService(
 		return WorkspaceCheckout(session.id, session.url)
 	}
 }
+
+class SubscriptionCheckoutNotAllowedException : RuntimeException()
