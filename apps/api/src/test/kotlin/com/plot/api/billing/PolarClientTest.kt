@@ -92,9 +92,9 @@ class PolarClientTest {
 		assertEquals("plot-workspace:$workspaceId", create.path("external_id").stringValue())
 		assertTrue(create.path("organization_id").isMissingNode)
 		assertEquals(workspaceId.toString(), create.path("metadata").path("workspace_id").stringValue())
-		assertEquals("team", create.path("type").stringValue())
+		assertEquals("individual", create.path("type").stringValue())
 		assertEquals("owner+plot-11111111111111111111111111111111@example.com", create.path("email").stringValue())
-		assertEquals("owner@example.com", create.path("owner").path("email").stringValue())
+		assertTrue(create.path("owner").isMissingNode)
 	}
 
 	@Test
@@ -132,16 +132,23 @@ class PolarClientTest {
 	}
 
 	@Test
-	fun createsWorkspaceBoundCustomerPortalSessionWithoutReturningTheToken() {
+	fun createsIndividualWorkspaceCustomerPortalSessionWithoutReturningTheToken() {
 		var requestBody: String? = null
 		val client = client { method, uri, _, body ->
-			assertEquals("POST", method)
-			assertEquals("/v1/customer-sessions", uri.path)
-			requestBody = body
-			PolarHttpResponse(
-				201,
-				"""{"customer_portal_url":"https://sandbox.polar.sh/customer-portal/session-1","token":"secret-session-token"}""",
-			)
+			when (method to uri.path) {
+				"GET" to "/v1/customers/external/plot-workspace:$workspaceId" -> PolarHttpResponse(
+					200,
+					"""{"id":"cus_workspace","external_id":"plot-workspace:$workspaceId","type":"individual"}""",
+				)
+				"POST" to "/v1/customer-sessions/" -> {
+					requestBody = body
+					PolarHttpResponse(
+						201,
+						"""{"customer_portal_url":"https://sandbox.polar.sh/customer-portal/session-1","token":"secret-session-token"}""",
+					)
+				}
+				else -> error("unexpected request: $method ${uri.path}")
+			}
 		}
 
 		val portal = client.createCustomerPortalSession(
@@ -153,6 +160,30 @@ class PolarClientTest {
 		val request = mapper.readTree(requestBody!!)
 		assertEquals("plot-workspace:$workspaceId", request.path("external_customer_id").stringValue())
 		assertEquals("http://localhost:3000/settings/workspace", request.path("return_url").stringValue())
+		assertTrue(request.path("external_member_id").isMissingNode)
+	}
+
+	@Test
+	fun createsTeamWorkspaceCustomerPortalSessionForItsWorkspaceMember() {
+		var requestBody: String? = null
+		val client = client { method, uri, _, body ->
+			when (method to uri.path) {
+				"GET" to "/v1/customers/external/plot-workspace:$workspaceId" -> PolarHttpResponse(
+					200,
+					"""{"id":"cus_workspace","external_id":"plot-workspace:$workspaceId","type":"team"}""",
+				)
+				"POST" to "/v1/customer-sessions/" -> {
+					requestBody = body
+					PolarHttpResponse(201, """{"customer_portal_url":"https://sandbox.polar.sh/customer-portal/session-1"}""")
+				}
+				else -> error("unexpected request: $method ${uri.path}")
+			}
+		}
+
+		client.createCustomerPortalSession(workspaceId, "http://localhost:3000/settings/workspace")
+
+		val request = mapper.readTree(requestBody!!)
+		assertEquals("plot-workspace:$workspaceId", request.path("external_member_id").stringValue())
 	}
 
 	@Test

@@ -84,7 +84,7 @@ class PolarSubscriptionPortalApiIntegrationTest {
 			jsonPath("$.token") { doesNotExist() }
 		}
 
-		val sessionRequest = transport.calls.single { it.uri.path == "/v1/customer-sessions" }
+		val sessionRequest = transport.calls.single { it.uri.path == "/v1/customer-sessions/" }
 		val request = objectMapper.readTree(requireNotNull(sessionRequest.body))
 		assertEquals("plot-workspace:${devContext.devWorkspaceId}", request.path("external_customer_id").stringValue())
 		assertEquals("http://localhost:3000/settings/general", request.path("return_url").stringValue())
@@ -143,9 +143,9 @@ class FakePolarHttpTransport : PolarHttpTransport {
 		return when {
 			uri.path.startsWith("/v1/customers/external/") || uri.path == "/v1/customers/cus_portal" -> PolarHttpResponse(
 				200,
-				"""{"id":"cus_portal","external_id":"plot-workspace:018fd000-0000-7000-8000-000000000002"}""",
+				"""{"id":"cus_portal","external_id":"plot-workspace:018fd000-0000-7000-8000-000000000002","type":"individual"}""",
 			)
-			uri.path == "/v1/customer-sessions" -> PolarHttpResponse(
+			uri.path == "/v1/customer-sessions/" -> PolarHttpResponse(
 				201,
 				"""{"customer_portal_url":"https://sandbox.polar.sh/customer-portal/session-1","token":"secret-session-token"}""",
 			)

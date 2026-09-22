@@ -237,6 +237,30 @@ class PolarWebhookApiIntegrationTest {
 	}
 
 	@Test
+	fun renewalSubscriptionUpdatedRefreshesTheCurrentSubscriptionSnapshot() {
+		postWebhook(
+			"msg_renewal_active",
+			subscriptionEvent("subscription.active", "sub_renewal", referenceId = devContext.devWorkspaceId, eventAt = "2026-09-21T01:00:00Z"),
+		).andExpect { status { isNoContent() } }
+
+		postWebhook(
+			"msg_renewal",
+			subscriptionEvent(
+				"subscription.updated",
+				"sub_renewal",
+				referenceId = devContext.devWorkspaceId,
+				status = "active",
+				currentPeriodEnd = "2026-11-21T00:00:00Z",
+				eventAt = "2026-10-21T00:00:00Z",
+			),
+		).andExpect { status { isNoContent() } }
+
+		assertWorkspace("founding", "active", "full", "sub_renewal", "cus_active")
+		assertLifecycle("active", false, "2026-11-21T00:00:00Z", "2026-10-21T00:00:00Z")
+		assertEvent("msg_renewal", "SNAPSHOT_UPDATED", devContext.devUserId, devContext.devWorkspaceId)
+	}
+
+	@Test
 	fun staleLifecycleEventAndInvalidTimestampCannotOverwriteSnapshot() {
 		postWebhook(
 			"msg_latest_active",

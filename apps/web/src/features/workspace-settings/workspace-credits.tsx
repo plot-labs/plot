@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ExternalLink, LoaderCircle } from "lucide-react";
 
 import {
@@ -18,6 +18,7 @@ export function WorkspaceCredits() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadNonce, setReloadNonce] = useState(0);
+  const lastFocusRefreshAt = useRef(0);
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
@@ -29,8 +30,23 @@ export function WorkspaceCredits() {
       setReloadNonce((value) => value + 1);
     };
 
+    const refreshWhenVisible = () => {
+      if (document.visibilityState !== "visible") return;
+
+      const now = Date.now();
+      if (now - lastFocusRefreshAt.current < 500) return;
+      lastFocusRefreshAt.current = now;
+      setReloadNonce((value) => value + 1);
+    };
+
     window.addEventListener("plot:workspace-changed", handleWorkspaceChanged);
-    return () => window.removeEventListener("plot:workspace-changed", handleWorkspaceChanged);
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.removeEventListener("plot:workspace-changed", handleWorkspaceChanged);
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
   }, []);
 
   useEffect(() => {
@@ -47,7 +63,10 @@ export function WorkspaceCredits() {
 
     plotApiClient.getCreditOverview()
       .then((value) => {
-        if (!cancelled) setOverview(value);
+        if (!cancelled) {
+          setOverview(value);
+          setError(null);
+        }
       })
       .catch(() => {
         if (!cancelled) setError("Credit balance could not be loaded.");
@@ -110,10 +129,9 @@ export function WorkspaceCredits() {
             <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
             Loading credits…
           </div>
-        ) : error ? (
-          <p className="mt-8 text-sm text-red-700 dark:text-red-300" role="alert">{error}</p>
         ) : overview ? (
           <>
+            {error ? <p className="mt-4 text-sm text-red-700 dark:text-red-300" role="alert">Credit balance could not be refreshed. Showing the last loaded balance.</p> : null}
             {checkoutError ? <p className="mt-4 text-sm text-red-700 dark:text-red-300" role="alert">{checkoutError}</p> : null}
             <section className="mt-8 grid gap-4 sm:grid-cols-3" aria-label="Credit summary">
               <CreditSummaryCard label="Current Balance" value={`${numberFormat.format(overview.balance)} credits`} />
@@ -165,6 +183,8 @@ export function WorkspaceCredits() {
               Credits are shared by this workspace and deducted from measured AI usage after each completed model call.
             </p>
           </>
+        ) : error ? (
+          <p className="mt-8 text-sm text-red-700 dark:text-red-300" role="alert">{error}</p>
         ) : null}
       </div>
     </div>

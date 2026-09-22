@@ -13,7 +13,11 @@ import org.springframework.stereotype.Component
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.ObjectMapper
 
-data class PolarCustomer(val id: String, val externalId: String)
+data class PolarCustomer(
+	val id: String,
+	val externalId: String,
+	val type: String = "individual",
+)
 
 data class PolarCheckoutSession(val id: String, val url: String)
 
@@ -149,8 +153,7 @@ class PolarClient(
 			"external_id" to externalId,
 			"email" to workspaceCustomerEmail(ownerEmail, workspaceId),
 			"name" to workspaceName,
-			"type" to "team",
-			"owner" to mapOf("email" to ownerEmail),
+			"type" to "individual",
 			"metadata" to mapOf("workspace_id" to workspaceId.toString()),
 		)
 		val response = execute("POST", "/v1/customers", objectMapper.writeValueAsString(payload), accepted = setOf(201, 409))
@@ -249,13 +252,21 @@ class PolarClient(
 
 	override fun createCustomerPortalSession(workspaceId: UUID, returnUrl: String): PolarCustomerPortal {
 		ensureEnabled()
+		val externalId = workspaceExternalId(workspaceId)
+		val customer = findCustomer(externalId)
+			?: throw PolarApiException("POLAR_NOT_FOUND", "Polar customer was not found")
 		val payload = mapOf(
-			"external_customer_id" to workspaceExternalId(workspaceId),
+			"external_customer_id" to externalId,
 			"return_url" to returnUrl,
-		)
+		).toMutableMap().apply {
+			// Legacy workspace customers were created as teams. Polar requires the
+			// member identity for their portal sessions; Plot binds that member to the
+			// same stable workspace external ID when it creates the customer.
+			if (customer.type == "team") put("external_member_id", externalId)
+		}
 		val response = execute(
 			"POST",
-			"/v1/customer-sessions",
+			"/v1/customer-sessions/",
 			objectMapper.writeValueAsString(payload),
 			accepted = setOf(201),
 		)
@@ -366,7 +377,8 @@ class PolarClient(
 		val root = parse(response.body)
 		val id = root.path("id").stringValue()?.takeIf(String::isNotBlank) ?: invalidResponse()
 		val externalId = root.path("external_id").stringValue().orEmpty()
-		return PolarCustomer(id, externalId)
+		val type = root.path("type").textOrNull()?.lowercase() ?: "individual"
+		return PolarCustomer(id, externalId, type)
 	}
 
 	private fun parseCustomer(body: String, expectedExternalId: String): PolarCustomer {
@@ -376,7 +388,8 @@ class PolarClient(
 		if (externalId != expectedExternalId) {
 			throw PolarApiException("POLAR_CUSTOMER_OWNERSHIP_MISMATCH", "Polar customer does not belong to this workspace")
 		}
-		return PolarCustomer(id, externalId)
+		val type = root.path("type").textOrNull()?.lowercase() ?: "individual"
+		return PolarCustomer(id, externalId, type)
 	}
 
 	private fun PolarCustomer.requireWorkspaceIdentity(expectedExternalId: String): PolarCustomer {

@@ -53,4 +53,37 @@ describe("WorkspaceCredits", () => {
 
     expect(await screen.findByText("No usage events yet.")).toBeVisible();
   });
+
+  it("refreshes the workspace balance when the page regains focus", async () => {
+    const visibilityState = Object.getOwnPropertyDescriptor(document, "visibilityState");
+    Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
+
+    render(<WorkspaceCredits />);
+
+    expect(await screen.findByText("4,998 credits")).toBeVisible();
+    mocks.getCreditOverview.mockResolvedValueOnce({
+      balance: 4_997,
+      creditedUnits: 5_000,
+      consumedUnits: 3,
+      usageEvents: [{
+        id: "event-2",
+        timestamp: "2026-09-22T13:03:14Z",
+        credits: 1,
+        provider: "openrouter",
+        model: "openai/gpt-5.6-luna",
+      }],
+    });
+
+    window.dispatchEvent(new Event("focus"));
+
+    expect(await screen.findByText("4,997 credits")).toBeVisible();
+    expect(screen.getByText("openai/gpt-5.6-luna")).toBeVisible();
+    expect(mocks.getCreditOverview).toHaveBeenCalledTimes(2);
+
+    if (visibilityState) {
+      Object.defineProperty(document, "visibilityState", visibilityState);
+    } else {
+      delete (document as Document & { visibilityState?: DocumentVisibilityState }).visibilityState;
+    }
+  });
 });
