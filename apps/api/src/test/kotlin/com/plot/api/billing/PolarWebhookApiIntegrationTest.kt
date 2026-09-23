@@ -364,6 +364,125 @@ class PolarWebhookApiIntegrationTest {
 		assertEvent("msg_stale", "STALE_SUBSCRIPTION", devContext.devUserId, devContext.devWorkspaceId)
 	}
 
+	@Test
+	fun orderLifecycleEventsAreRecordedAndWebhookDeliveryIsIdempotent() {
+		val cases = listOf(
+			Triple("order.created", "ord_created", "ORDER_CREATED"),
+			Triple("order.paid", "ord_paid", "ORDER_PAID"),
+			Triple("order.updated", "ord_partial", "ORDER_PARTIALLY_REFUNDED"),
+			Triple("order.refunded", "ord_refunded", "ORDER_REFUNDED"),
+		)
+
+		cases.forEachIndexed { index, (eventType, orderId, outcome) ->
+			val status = when (eventType) {
+				"order.created" -> "pending"
+				"order.paid" -> "paid"
+				"order.updated" -> "partially_refunded"
+				else -> "refunded"
+			}
+			val body = orderEvent(
+				type = eventType,
+				orderId = orderId,
+				status = status,
+				totalAmount = 2_500,
+				refundedAmount = if (eventType == "order.updated") 1_000 else if (eventType == "order.refunded") 2_500 else 0,
+				referenceId = devContext.devWorkspaceId,
+				subscriptionId = if (eventType == "order.paid") "sub_recurring" else null,
+			)
+			val webhookId = "msg_order_$index"
+			postWebhook(webhookId, body).andExpect { status { isNoContent() } }
+			if (eventType == "order.paid") postWebhook(webhookId, body).andExpect { status { isNoContent() } }
+
+			val row = billingWebhookEvent(webhookId)
+			val expectedCheckoutId = "checkout_${orderId.removePrefix("ord_")}"
+			assertEquals(eventType, row["event_type"])
+			assertEquals(orderId, row["resource_id"])
+			assertEquals(orderId, row["order_id"])
+			assertEquals("cus_active", row["polar_customer_id"])
+			assertEquals("prod_credits", row["polar_product_id"])
+			assertEquals(expectedCheckoutId, row["checkout_id"])
+			assertEquals(status, row["resource_status"])
+			assertEquals(2_500L, (row["amount"] as Number).toLong())
+			assertEquals(
+				if (eventType == "order.updated") 1_000L else if (eventType == "order.refunded") 2_500L else 0L,
+				(row["refunded_amount"] as Number).toLong(),
+			)
+			assertEquals("usd", row["currency"])
+			assertEquals("subscription_cycle", row["billing_reason"])
+			assertEquals(outcome, row["outcome"])
+			assertEquals(devContext.devUserId, row["matched_user_id"])
+			assertEquals(devContext.devWorkspaceId, row["matched_workspace_id"])
+		}
+
+		assertEquals(4, jdbcTemplate.queryForObject("select count(*) from polar_webhook_events", Int::class.java))
+		assertWorkspace("trial", "trialing", "full", null, null)
+	}
+
+	@Test
+	fun refundEventsResolveStoredPolarCustomerAndCaptureRefundDetails() {
+		setPolarCustomerId("cus_refund")
+		val createdBody = refundEvent(
+			type = "refund.created",
+			refundId = "ref_created",
+			orderId = "ord_refund",
+			customerId = "cus_refund",
+			status = "pending",
+			amount = 1_250,
+			revokeBenefits = true,
+		)
+		postWebhook("msg_refund_created", createdBody).andExpect { status { isNoContent() } }
+
+		val created = billingWebhookEvent("msg_refund_created")
+		assertEquals("refund.created", created["event_type"])
+		assertEquals("ref_created", created["resource_id"])
+		assertEquals("ref_created", created["refund_id"])
+		assertEquals("ord_refund", created["order_id"])
+		assertEquals("sub_refund", created["subscription_id"])
+		assertEquals("cus_refund", created["polar_customer_id"])
+		assertEquals("pending", created["resource_status"])
+		assertEquals(1_250L, (created["amount"] as Number).toLong())
+		assertEquals("usd", created["currency"])
+		assertEquals(true, created["revoke_benefits"])
+		assertEquals("REFUND_CREATED", created["outcome"])
+		assertEquals(devContext.devWorkspaceId, created["matched_workspace_id"])
+
+		val updatedBody = refundEvent(
+			type = "refund.updated",
+			refundId = "ref_created",
+			orderId = "ord_refund",
+			customerId = "cus_refund",
+			status = "succeeded",
+			amount = 1_250,
+			revokeBenefits = true,
+		)
+		postWebhook("msg_refund_updated", updatedBody).andExpect { status { isNoContent() } }
+		val updated = billingWebhookEvent("msg_refund_updated")
+		assertEquals("succeeded", updated["resource_status"])
+		assertEquals("REFUND_UPDATED", updated["outcome"])
+		assertWorkspace("trial", "trialing", "full", null, "cus_refund")
+	}
+
+	@Test
+	fun refundWithUnknownPolarCustomerIsNotMatchedByEmail() {
+		val body = refundEvent(
+			type = "refund.created",
+			refundId = "ref_unmatched",
+			orderId = "ord_unmatched",
+			customerId = "cus_unknown",
+			status = "pending",
+			amount = 500,
+			revokeBenefits = false,
+			includeKnownEmail = true,
+		)
+
+		postWebhook("msg_refund_unmatched", body).andExpect { status { isNoContent() } }
+
+		val row = billingWebhookEvent("msg_refund_unmatched")
+		assertEquals("UNMATCHED", row["outcome"])
+		assertEquals(null, row["matched_workspace_id"])
+		assertWorkspace("trial", "trialing", "full", null, null)
+	}
+
 	private fun postWebhook(webhookId: String, body: String) = Instant.now().epochSecond.toString().let { timestamp ->
 		mockMvc.post("/api/polar/webhook") {
 			contentType = MediaType.APPLICATION_JSON
@@ -408,6 +527,47 @@ class PolarWebhookApiIntegrationTest {
 		""".trimIndent()
 	}
 
+	private fun orderEvent(
+		type: String,
+		orderId: String,
+		status: String,
+		totalAmount: Long,
+		refundedAmount: Long,
+		referenceId: UUID,
+		subscriptionId: String?,
+	): String {
+		val subscription = subscriptionId?.let { ",\"subscription_id\":\"$it\"" }.orEmpty()
+		return """
+			{"type":"$type","timestamp":"2026-09-21T12:00:00Z","data":{
+			  "id":"$orderId","status":"$status","paid":${status == "paid"},
+			  "total_amount":$totalAmount,"refunded_amount":$refundedAmount,"currency":"usd",
+			  "product_id":"prod_credits","checkout_id":"checkout_${orderId.removePrefix("ord_")}",
+			  "billing_reason":"subscription_cycle","metadata":{"reference_id":"$referenceId"}$subscription,
+			  "customer":{"id":"cus_active","external_id":"plot-workspace:$referenceId","email":"dev@plot.local"}
+			}}
+		""".trimIndent()
+	}
+
+	private fun refundEvent(
+		type: String,
+		refundId: String,
+		orderId: String,
+		customerId: String,
+		status: String,
+		amount: Long,
+		revokeBenefits: Boolean,
+		includeKnownEmail: Boolean = false,
+	): String {
+		val customer = if (includeKnownEmail) ",\"customer\":{\"email\":\"dev@plot.local\"}" else ""
+		return """
+			{"type":"$type","timestamp":"2026-09-21T12:00:00Z","data":{
+			  "id":"$refundId","status":"$status","metadata":{},"amount":$amount,"currency":"usd",
+			  "order_id":"$orderId","subscription_id":"sub_refund","customer_id":"$customerId",
+			  "revoke_benefits":$revokeBenefits$customer
+			}}
+		""".trimIndent()
+	}
+
 	private fun sign(webhookId: String, timestamp: String, body: String): String {
 		val mac = Mac.getInstance("HmacSHA256")
 		mac.init(SecretKeySpec(
@@ -431,6 +591,14 @@ class PolarWebhookApiIntegrationTest {
 			where id = ?
 			""".trimIndent(),
 			subscriptionId,
+			devContext.devWorkspaceId,
+		)
+	}
+
+	private fun setPolarCustomerId(customerId: String) {
+		jdbcTemplate.update(
+			"update workspaces set polar_customer_id = ? where id = ?",
+			customerId,
 			devContext.devWorkspaceId,
 		)
 	}
@@ -494,5 +662,17 @@ class PolarWebhookApiIntegrationTest {
 		assertEquals(userId, row["matched_user_id"])
 		assertEquals(workspaceId, row["matched_workspace_id"])
 	}
+
+	private fun billingWebhookEvent(webhookId: String): Map<String, Any?> = jdbcTemplate.queryForMap(
+		"""
+		select event_type, resource_id, subscription_id, order_id, refund_id,
+		       polar_customer_id, polar_product_id, checkout_id, event_at,
+		       resource_status, amount, refunded_amount, currency, billing_reason,
+		       revoke_benefits, outcome, matched_user_id, matched_workspace_id
+		from polar_webhook_events
+		where webhook_id = ?
+		""".trimIndent(),
+		webhookId,
+	)
 
 }
