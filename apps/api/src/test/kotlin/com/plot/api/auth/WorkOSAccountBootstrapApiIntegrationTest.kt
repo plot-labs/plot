@@ -88,7 +88,7 @@ class WorkOSAccountBootstrapApiIntegrationTest {
 		)
 		assertEquals("none", newWorkspaceEntitlement["plan"])
 		assertEquals("subscription_required", newWorkspaceEntitlement["entitlement_status"])
-		assertEquals("read_only", newWorkspaceEntitlement["access_mode"])
+		assertEquals("full", newWorkspaceEntitlement["access_mode"])
 
 		mockMvc.get("/api/me") {
 			with(authenticated())

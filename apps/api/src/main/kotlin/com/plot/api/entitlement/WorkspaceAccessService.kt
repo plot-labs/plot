@@ -24,7 +24,7 @@ class WorkspaceAccessService(
 			throw ApiException(
 				HttpStatus.FORBIDDEN,
 				"WORKSPACE_READ_ONLY",
-				"An active subscription is required to make changes in this workspace.",
+				"This workspace does not allow changes.",
 			)
 		}
 	}
@@ -48,7 +48,7 @@ class WorkspaceAccessService(
 			throw ApiException(
 				HttpStatus.FORBIDDEN,
 				"WORKSPACE_READ_ONLY",
-				"An active subscription is required to make changes in this workspace.",
+				"This workspace does not allow new work.",
 			)
 		}
 	}

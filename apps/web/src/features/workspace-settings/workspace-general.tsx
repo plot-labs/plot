@@ -215,7 +215,7 @@ export function WorkspaceGeneral() {
               <p>
                 Plan: <span className="font-medium text-black/78 dark:text-white/80">{workspace.plan === "none" ? "No subscription" : "Founding"}</span>
                 {" · "}
-                Status: <span className="font-medium text-black/78 dark:text-white/80">{workspace.entitlementStatus}</span>
+                Status: <span className="font-medium text-black/78 dark:text-white/80">{workspace.entitlementStatus === "subscription_required" ? "No active subscription" : workspace.entitlementStatus}</span>
               </p>
                 {workspace.subscriptionStatus === "active" && !workspace.subscriptionCancelAtPeriodEnd && subscriptionPeriodEnd ? <p>Renews {subscriptionPeriodEnd}.</p> : null}
 				{workspace.subscriptionCancelAtPeriodEnd && subscriptionPeriodEnd ? (
@@ -231,9 +231,7 @@ export function WorkspaceGeneral() {
                 <p>New AI work is paused for this workspace. Existing drafts can still be edited, exported, and published.</p>
               ) : null}
               {workspace.accessMode === "read_only" ? (
-							<p>{workspace.entitlementStatus === "subscription_required"
-								? "Subscribe to Founding to unlock this workspace and use Plot. There is no free plan or trial."
-								: "This workspace is read-only. You can still export drafts and unpublish live changelog entries."}</p>
+							<p>This workspace is read-only. You can still export drafts and unpublish live changelog entries.</p>
               ) : null}
 				{canManageSubscription ? (
 					<div className="border-t border-black/[0.07] pt-4 dark:border-white/[0.08]">
@@ -252,7 +250,7 @@ export function WorkspaceGeneral() {
 				) : null}
 				{canStartSubscription ? (
                 <div className="border-t border-black/[0.07] pt-4 dark:border-white/[0.08]">
-								<p>{workspace.entitlementStatus === "revoked" ? "Subscribe again to restore full workspace access." : "Start a Founding subscription to unlock full workspace access and receive recurring AI credits."}</p>
+								<p>{workspace.entitlementStatus === "revoked" ? "Subscribe again to receive recurring AI credits." : "Start a Founding subscription to receive recurring AI credits. New workspaces do not receive free signup credits."}</p>
                   <button
                     type="button"
                     onClick={startSubscriptionCheckout}

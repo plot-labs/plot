@@ -22,5 +22,5 @@ class Workspace(
 	var polarSubscriptionEventAt: Instant? = null,
 	var planUpdatedAt: Instant? = null,
 	var entitlementStatus: String = "subscription_required",
-	var accessMode: String = "read_only",
+	var accessMode: String = "full",
 )

@@ -53,7 +53,7 @@ class PolarWebhookApiIntegrationTest {
 			update workspaces
 			set plan = 'none',
 			    entitlement_status = 'subscription_required',
-			    access_mode = 'read_only',
+			    access_mode = 'full',
 			    polar_subscription_id = null,
 			    polar_customer_id = null,
 			    polar_subscription_status = null,
@@ -111,7 +111,7 @@ class PolarWebhookApiIntegrationTest {
 	}
 
 	@Test
-	fun revokedMakesWorkspaceReadOnly() {
+	fun revokedSubscriptionDoesNotLockTheWorkspace() {
 		postWebhook(
 			"msg_promote",
 			subscriptionEvent("subscription.active", "sub_revoke", referenceId = devContext.devUserId, eventAt = "2026-09-21T01:00:00Z"),
@@ -122,7 +122,7 @@ class PolarWebhookApiIntegrationTest {
 			subscriptionEvent("subscription.revoked", "sub_revoke", referenceId = devContext.devUserId, eventAt = "2026-09-21T02:00:00Z"),
 		).andExpect { status { isNoContent() } }
 
-		assertWorkspace("founding", "revoked", "read_only", "sub_revoke", "cus_active")
+		assertWorkspace("founding", "revoked", "full", "sub_revoke", "cus_active")
 		assertEvent("msg_revoke", "DEMOTED", devContext.devUserId, devContext.devWorkspaceId)
 	}
 
@@ -290,13 +290,13 @@ class PolarWebhookApiIntegrationTest {
 		val body = subscriptionEvent("subscription.active", "sub_duplicate", referenceId = devContext.devUserId)
 		postWebhook("msg_duplicate", body).andExpect { status { isNoContent() } }
 		jdbcTemplate.update(
-			"update workspaces set plan = 'none', entitlement_status = 'subscription_required', access_mode = 'read_only' where id = ?",
+			"update workspaces set plan = 'none', entitlement_status = 'subscription_required', access_mode = 'full' where id = ?",
 			devContext.devWorkspaceId,
 		)
 
 		postWebhook("msg_duplicate", body).andExpect { status { isNoContent() } }
 
-		assertWorkspace("none", "subscription_required", "read_only", "sub_duplicate", "cus_active")
+		assertWorkspace("none", "subscription_required", "full", "sub_duplicate", "cus_active")
 		assertEquals(1, jdbcTemplate.queryForObject(
 			"select count(*) from polar_webhook_events where webhook_id = 'msg_duplicate'",
 			Int::class.java,
@@ -323,7 +323,7 @@ class PolarWebhookApiIntegrationTest {
 
 		postWebhook("msg_unmatched", body).andExpect { status { isNoContent() } }
 
-		assertWorkspace("none", "subscription_required", "read_only", null, null)
+		assertWorkspace("none", "subscription_required", "full", null, null)
 		assertEvent("msg_unmatched", "UNMATCHED", null, null)
 	}
 
@@ -413,7 +413,7 @@ class PolarWebhookApiIntegrationTest {
 		}
 
 		assertEquals(4, jdbcTemplate.queryForObject("select count(*) from polar_webhook_events", Int::class.java))
-		assertWorkspace("none", "subscription_required", "read_only", null, null)
+		assertWorkspace("none", "subscription_required", "full", null, null)
 	}
 
 	@Test
@@ -457,7 +457,7 @@ class PolarWebhookApiIntegrationTest {
 		val updated = billingWebhookEvent("msg_refund_updated")
 		assertEquals("succeeded", updated["resource_status"])
 		assertEquals("REFUND_UPDATED", updated["outcome"])
-		assertWorkspace("none", "subscription_required", "read_only", null, "cus_refund")
+		assertWorkspace("none", "subscription_required", "full", null, "cus_refund")
 	}
 
 	@Test
@@ -478,7 +478,7 @@ class PolarWebhookApiIntegrationTest {
 		val row = billingWebhookEvent("msg_refund_unmatched")
 		assertEquals("UNMATCHED", row["outcome"])
 		assertEquals(null, row["matched_workspace_id"])
-		assertWorkspace("none", "subscription_required", "read_only", null, null)
+		assertWorkspace("none", "subscription_required", "full", null, null)
 	}
 
 	private fun postWebhook(webhookId: String, body: String) = Instant.now().epochSecond.toString().let { timestamp ->

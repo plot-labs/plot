@@ -29,18 +29,19 @@ class PolarCreditServiceTest {
 	}
 
 	@Test
-	fun subscriptionRequiredWorkspaceCannotUseAiCreditsOrCreatePolarCustomer() {
+	fun unsubscribedWorkspaceCanUseGrantedCredits() {
 		contexts.entitlementStatus = "subscription_required"
+		provider.balance = 3
 
-		val failure = assertFailsWith<AiCreditControlException> { service.preflight(workspaceId) }
+		service.preflight(workspaceId)
 
-		assertEquals("SUBSCRIPTION_REQUIRED", failure.safeCode)
-		assertTrue(provider.ensured.isEmpty())
-		assertEquals(0, provider.balanceReads)
+		assertEquals(listOf(workspaceId), provider.ensured)
+		assertEquals(1, provider.balanceReads)
 	}
 
 	@Test
 	fun zeroBalanceFailsClosedBeforeProviderWork() {
+		contexts.entitlementStatus = "subscription_required"
 		provider.balance = 0
 
 		val failure = assertFailsWith<AiCreditControlException> { service.preflight(workspaceId) }

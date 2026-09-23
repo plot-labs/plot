@@ -180,7 +180,7 @@ class WorkOSBootstrapProvisioningService(
 				updatedAt = now,
 				plan = "none",
 				entitlementStatus = "subscription_required",
-				accessMode = "read_only",
+				accessMode = "full",
 			))
 			memberRepository.save(WorkspaceMember(
 				id = memberId,

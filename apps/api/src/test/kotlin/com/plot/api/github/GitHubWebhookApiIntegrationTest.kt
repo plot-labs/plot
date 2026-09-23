@@ -96,7 +96,7 @@ class GitHubWebhookApiIntegrationTest {
 	@Test
 	fun webhookDeliveryDoesNotRequireWritableWorkspaceEntitlement() {
 		jdbcTemplate.update(
-			"update workspaces set plan = 'founding', entitlement_status = 'revoked', access_mode = 'read_only' where id = ?",
+			"update workspaces set plan = 'founding', entitlement_status = 'active', access_mode = 'read_only' where id = ?",
 			devContext.devWorkspaceId,
 		)
 		try {

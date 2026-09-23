@@ -106,7 +106,7 @@ class PolarSubscriptionPortalApiIntegrationTest {
 	@Test
 	fun revokedWorkspaceCanStartASubscriptionCheckoutAgain() {
 		jdbcTemplate.update(
-			"update workspaces set entitlement_status = 'revoked', access_mode = 'read_only' where id = ?",
+			"update workspaces set entitlement_status = 'revoked', access_mode = 'full' where id = ?",
 			devContext.devWorkspaceId,
 		)
 
@@ -124,7 +124,7 @@ class PolarSubscriptionPortalApiIntegrationTest {
 	@Test
 	fun subscriptionRequiredWorkspaceCanStartItsFirstSubscriptionCheckout() {
 		jdbcTemplate.update(
-			"update workspaces set plan = 'none', entitlement_status = 'subscription_required', access_mode = 'read_only', polar_subscription_id = null where id = ?",
+			"update workspaces set plan = 'none', entitlement_status = 'subscription_required', access_mode = 'full', polar_subscription_id = null where id = ?",
 			devContext.devWorkspaceId,
 		)
 

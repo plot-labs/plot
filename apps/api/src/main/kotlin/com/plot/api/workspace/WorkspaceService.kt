@@ -62,7 +62,7 @@ class WorkspaceService(
 			updatedAt = now,
 			plan = "none",
 			entitlementStatus = "subscription_required",
-			accessMode = "read_only",
+			accessMode = "full",
 		))
 		memberRepository.save(WorkspaceMember(
 			id = uuidGenerator.next(),
@@ -136,7 +136,7 @@ class WorkspaceService(
 					updatedAt = now,
 					plan = "none",
 					entitlementStatus = "subscription_required",
-					accessMode = "read_only",
+					accessMode = "full",
 				))
 				val member = memberRepository.upsertWorkOSProjection(
 					workspaceId = workspace.id,

@@ -1,7 +1,6 @@
 package com.plot.api.entitlement
 
 import com.plot.api.TestcontainersConfiguration
-import com.plot.api.common.ApiException
 import com.plot.api.dev.DevContext
 import com.plot.api.artifact.workflow.ArtifactWorkflowAdmissionPersistence
 import com.plot.api.artifact.workflow.ArtifactWorkflowRunReservation
@@ -9,7 +8,6 @@ import com.plot.api.artifact.workflow.ArtifactWorkflowRunStatus
 import com.plot.api.artifact.workflow.ArtifactWorkflowState
 import java.util.UUID
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -54,27 +52,27 @@ class WorkspaceEntitlementApiIntegrationTest {
 	}
 
 	@Test
-	fun revokedWorkspaceCanReadAndExportButCannotMutate() {
-		setDevEntitlement("founding", "revoked", "read_only")
+	fun revokedWorkspaceRemainsWritable() {
+		setDevEntitlement("founding", "revoked", "full")
 
 		mockMvc.get("/api/workspaces/${devContext.devWorkspaceId}").andExpect {
 			status { isOk() }
 			jsonPath("$.plan") { value("founding") }
 			jsonPath("$.entitlementStatus") { value("revoked") }
-			jsonPath("$.accessMode") { value("read_only") }
-			jsonPath("$.capabilities.generate") { value(false) }
-			jsonPath("$.capabilities.edit") { value(false) }
-			jsonPath("$.capabilities.publish") { value(false) }
+			jsonPath("$.accessMode") { value("full") }
+			jsonPath("$.capabilities.generate") { value(true) }
+			jsonPath("$.capabilities.edit") { value(true) }
+			jsonPath("$.capabilities.publish") { value(true) }
 			jsonPath("$.capabilities.export") { value(true) }
-			jsonPath("$.capabilities.configure") { value(false) }
+			jsonPath("$.capabilities.configure") { value(true) }
 			jsonPath("$.capabilities.unpublish") { value(true) }
 		}
 		mockMvc.patch("/api/workspaces/${devContext.devWorkspaceId}") {
 			contentType = MediaType.APPLICATION_JSON
-			content = """{"name":"Blocked"}"""
+			content = """{"name":"Still usable"}"""
 		}.andExpect {
-			status { isForbidden() }
-			jsonPath("$.error") { value("WORKSPACE_READ_ONLY") }
+			status { isOk() }
+			jsonPath("$.name") { value("Still usable") }
 		}
 		mockMvc.post("/api/artifact-variants/${UUID.randomUUID()}/exports") {
 			contentType = MediaType.APPLICATION_JSON
@@ -86,17 +84,18 @@ class WorkspaceEntitlementApiIntegrationTest {
 	}
 
 	@Test
-	fun newWorkspaceRequiresSubscriptionBeforeAnyWrite() {
-		setDevEntitlement("none", "subscription_required", "read_only")
+	fun newWorkspaceIsWritableBeforeSubscription() {
+		setDevEntitlement("none", "subscription_required", "full")
 
 		mockMvc.get("/api/workspaces/${devContext.devWorkspaceId}").andExpect {
 			status { isOk() }
 			jsonPath("$.plan") { value("none") }
 			jsonPath("$.entitlementStatus") { value("subscription_required") }
-			jsonPath("$.accessMode") { value("read_only") }
-			jsonPath("$.capabilities.generate") { value(false) }
-			jsonPath("$.capabilities.edit") { value(false) }
-			jsonPath("$.capabilities.publish") { value(false) }
+			jsonPath("$.accessMode") { value("full") }
+			jsonPath("$.capabilities.generate") { value(true) }
+			jsonPath("$.capabilities.edit") { value(true) }
+			jsonPath("$.capabilities.publish") { value(true) }
+			jsonPath("$.capabilities.configure") { value(true) }
 			jsonPath("$.capabilities.export") { value(true) }
 			jsonPath("$.capabilities.unpublish") { value(true) }
 		}
@@ -105,13 +104,12 @@ class WorkspaceEntitlementApiIntegrationTest {
 			devContext.devWorkspaceId,
 		)
 		assertEquals("subscription_required", projectedOnly["entitlement_status"])
-		assertEquals("read_only", projectedOnly["access_mode"])
+		assertEquals("full", projectedOnly["access_mode"])
 		mockMvc.patch("/api/workspaces/${devContext.devWorkspaceId}") {
 			contentType = MediaType.APPLICATION_JSON
-			content = """{"name":"Blocked"}"""
+			content = """{"name":"Unsubscribed workspace"}"""
 		}.andExpect {
-			status { isForbidden() }
-			jsonPath("$.error") { value("WORKSPACE_READ_ONLY") }
+			status { isOk() }
 		}
 
 		val state = jdbcTemplate.queryForMap(
@@ -119,15 +117,15 @@ class WorkspaceEntitlementApiIntegrationTest {
 			devContext.devWorkspaceId,
 		)
 		assertEquals("subscription_required", state["entitlement_status"])
-		assertEquals("read_only", state["access_mode"])
+		assertEquals("full", state["access_mode"])
 	}
 
 	@Test
-	fun contentPacksCannotGrantFreeWorkspaceAccess() {
+	fun contentPacksDoNotChangeUnsubscribedWorkspaceBillingState() {
 		val runIds = mutableListOf<UUID>()
 		val packIds = mutableListOf<UUID>()
 		try {
-			setDevEntitlement("none", "subscription_required", "read_only")
+			setDevEntitlement("none", "subscription_required", "full")
 			repeat(3) {
 				val runId = insertArtifactWorkflowRun("READY")
 				runIds += runId
@@ -150,20 +148,19 @@ class WorkspaceEntitlementApiIntegrationTest {
 				status { isOk() }
 				jsonPath("$.plan") { value("none") }
 				jsonPath("$.entitlementStatus") { value("subscription_required") }
-				jsonPath("$.accessMode") { value("read_only") }
-				jsonPath("$.capabilities.generate") { value(false) }
-				jsonPath("$.capabilities.edit") { value(false) }
-				jsonPath("$.capabilities.publish") { value(false) }
+				jsonPath("$.accessMode") { value("full") }
+				jsonPath("$.capabilities.generate") { value(true) }
+				jsonPath("$.capabilities.edit") { value(true) }
+				jsonPath("$.capabilities.publish") { value(true) }
 				jsonPath("$.capabilities.export") { value(true) }
-				jsonPath("$.capabilities.configure") { value(false) }
+				jsonPath("$.capabilities.configure") { value(true) }
 				jsonPath("$.capabilities.unpublish") { value(true) }
 			}
 			mockMvc.patch("/api/workspaces/${devContext.devWorkspaceId}") {
 				contentType = MediaType.APPLICATION_JSON
-				content = """{"name":"Unpaid workspace"}"""
+				content = """{"name":"Unsubscribed workspace"}"""
 			}.andExpect {
-				status { isForbidden() }
-				jsonPath("$.error") { value("WORKSPACE_READ_ONLY") }
+				status { isOk() }
 			}
 
 			val persisted = jdbcTemplate.queryForMap(
@@ -171,7 +168,7 @@ class WorkspaceEntitlementApiIntegrationTest {
 				devContext.devWorkspaceId,
 			)
 			assertEquals("subscription_required", persisted["entitlement_status"])
-			assertEquals("read_only", persisted["access_mode"])
+			assertEquals("full", persisted["access_mode"])
 		} finally {
 			packIds.forEach { jdbcTemplate.update("delete from content_packs where id = ?", it) }
 			runIds.forEach { jdbcTemplate.update("delete from generation_runs where id = ?", it) }
@@ -204,14 +201,19 @@ class WorkspaceEntitlementApiIntegrationTest {
 
 	@Test
 	@Transactional
-	fun subscriptionRequiredWorkspaceCannotReserveArtifactWorkflow() {
+	fun unsubscribedWorkspaceCanReserveArtifactWorkflow() {
 		val workspaceId = UUID.randomUUID()
 		insertWorkspace(workspaceId)
 
-		val blocked = assertFailsWith<ApiException> {
-			persistence.createRun(reservation(workspaceId, UUID.randomUUID()))
-		}
-		assertEquals("WORKSPACE_READ_ONLY", blocked.error)
+		persistence.createRun(reservation(workspaceId, UUID.randomUUID()))
+		assertEquals(
+			1,
+			jdbcTemplate.queryForObject(
+				"select count(*) from generation_runs where workspace_id = ?",
+				Int::class.java,
+				workspaceId,
+			),
+		)
 	}
 
 	private fun setDevEntitlement(plan: String, status: String, accessMode: String) {

@@ -171,7 +171,7 @@ class RoutineBackgroundAccessIntegrationTest {
 	fun `read only workspace blocks refresh and agent admission`() {
 		val fixture = insertFixture(Instant.now().minusSeconds(2))
 		githubClient.enqueue(GitHubPullRequestPage(emptyList(), null))
-		setWorkspaceAccess("revoked", "read_only")
+		setWorkspaceAccess("active", "read_only")
 
 		assertTrue(worker.claimScheduledDue())
 

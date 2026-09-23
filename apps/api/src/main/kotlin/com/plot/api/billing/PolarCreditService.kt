@@ -73,9 +73,6 @@ class PolarCreditService(
 		if (!enabled) return
 		try {
 			val context = contexts.requireContext(workspaceId)
-			if (context.entitlementStatus != "active") {
-				throw AiCreditControlException("SUBSCRIPTION_REQUIRED", false, "An active subscription is required for AI usage")
-			}
 			val customer = provider.ensureCustomer(
 				workspaceId,
 				context.ownerEmail,

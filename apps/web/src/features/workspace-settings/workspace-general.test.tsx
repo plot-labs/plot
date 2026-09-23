@@ -92,7 +92,7 @@ describe("WorkspaceGeneral", () => {
     await waitFor(() => expect(mocks.getWorkspace).toHaveBeenCalledTimes(2));
   });
 
-  it("requires a subscription before a new workspace can be used", async () => {
+	it("allows an unsubscribed workspace and explains that signup credits are not included", async () => {
     mocks.getWorkspace.mockResolvedValueOnce({
       id: "workspace-1",
       name: "Personal",
@@ -103,13 +103,13 @@ describe("WorkspaceGeneral", () => {
       role: "OWNER",
       plan: "none",
       entitlementStatus: "subscription_required",
-      accessMode: "read_only",
-      capabilities: { generate: false, edit: false, publish: false, export: true, configure: false, unpublish: true },
+      accessMode: "full",
+      capabilities: { generate: true, edit: true, publish: true, export: true, configure: true, unpublish: true },
     });
 
     render(<WorkspaceGeneral />);
 
-    expect(await screen.findByText(/There is no free plan or trial/i)).toBeVisible();
+    expect(await screen.findByText(/New workspaces do not receive free signup credits/i)).toBeVisible();
     expect(await screen.findByRole("button", { name: "Subscribe to Founding" })).toBeVisible();
   });
 
@@ -160,11 +160,11 @@ describe("WorkspaceGeneral", () => {
 		expect(screen.getByRole("button", { name: "Manage subscription" })).toBeVisible();
 	});
 
-	it("lets a revoked owner subscribe again despite read-only workspace settings", async () => {
+	it("keeps a revoked workspace usable while letting its owner subscribe again", async () => {
 		mocks.getWorkspace.mockResolvedValueOnce(subscriptionWorkspace({
 			entitlementStatus: "revoked",
-			accessMode: "read_only",
-			capabilities: { configure: false, write: false, export: true, publish: false, unpublish: true },
+			accessMode: "full",
+			capabilities: { configure: true, write: true, export: true, publish: true, unpublish: true },
 			subscriptionStatus: "revoked",
 		}));
 

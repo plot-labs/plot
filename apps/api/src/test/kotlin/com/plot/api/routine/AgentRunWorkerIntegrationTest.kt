@@ -976,9 +976,9 @@ class AgentRunWorkerIntegrationTest {
 	}
 
 	@Test
-	fun `workspace revocation before an Agent decision prevents model and tool work`() {
+	fun `read only access before an Agent decision prevents model and tool work`() {
 		val admitted = admitAgent("Revoked before model", "acme/revoked-model")
-		setWorkspaceAccess("revoked", "read_only")
+		setWorkspaceAccess("active", "read_only")
 
 		assertTrue(agentWorker.processOne())
 
@@ -990,10 +990,10 @@ class AgentRunWorkerIntegrationTest {
 	}
 
 	@Test
-	fun `workspace revocation after an Agent decision prevents the typed read`() {
+	fun `read only access after an Agent decision prevents the typed read`() {
 		val admitted = admitAgent("Revoked before read", "acme/revoked-read")
 		agentModel.scriptedDecision = {
-			setWorkspaceAccess("revoked", "read_only")
+			setWorkspaceAccess("active", "read_only")
 			AgentDecision(
 				AgentDecisionAction.READ_WRITING_BLOCKS,
 				sourceScopeId = admitted.source.scopeId,
@@ -1014,10 +1014,10 @@ class AgentRunWorkerIntegrationTest {
 	}
 
 	@Test
-	fun `workspace revocation after an Agent decision prevents ArtifactWorkflow handoff`() {
+	fun `read only access after an Agent decision prevents ArtifactWorkflow handoff`() {
 		val admitted = admitAgent("Revoked before handoff", "acme/revoked-handoff")
 		agentModel.scriptedDecision = { request ->
-			setWorkspaceAccess("revoked", "read_only")
+			setWorkspaceAccess("active", "read_only")
 			AgentDecision(
 				AgentDecisionAction.CREATE_ARTIFACT,
 				selectedInputIds = request.inputs.map { it.id },
@@ -1033,7 +1033,7 @@ class AgentRunWorkerIntegrationTest {
 	}
 
 	@Test
-	fun `workspace revocation after handoff prevents the ArtifactWorkflow model call`() {
+	fun `read only access after handoff prevents the ArtifactWorkflow model call`() {
 		val admitted = admitAgent("Revoked before generation", "acme/revoked-generation")
 		agentModel.scriptedDecision = { request ->
 			AgentDecision(
@@ -1047,7 +1047,7 @@ class AgentRunWorkerIntegrationTest {
 			UUID::class.java,
 			admitted.agentRunId,
 		))
-		setWorkspaceAccess("revoked", "read_only")
+		setWorkspaceAccess("active", "read_only")
 
 		assertTrue(artifactWorkflowWorker.processOne())
 

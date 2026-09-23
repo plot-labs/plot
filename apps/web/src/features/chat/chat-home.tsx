@@ -88,13 +88,11 @@ export function ChatHome({ references, referencesLoading, referencesError }: Cha
         {!referencesLoading && !referencesError && references.length === 0 ? <SourceEmptyState /> : null}
         {referencesError ? <ErrorNotice message={referencesError} /> : null}
         {startError ? <ErrorNotice message={startError} /> : null}
-        {!canGenerate ? (
+		{!canGenerate ? (
           <p className="mt-3 text-center text-xs text-black/50 dark:text-white/50">
-					{entitlement?.entitlementStatus === "subscription_required"
-						? <>Subscribe to Founding to use Plot. <Link href="/settings/general" className="underline underline-offset-2">View subscription</Link>.</>
-						: entitlement?.accessMode === "complete_only"
-							? "New AI responses are paused. Open an existing artifact to edit, export, or publish."
-							: "This workspace cannot start new responses. You can still export existing artifacts."}
+				{entitlement?.accessMode === "complete_only"
+					? "New AI responses are paused. Open an existing artifact to edit, export, or publish."
+					: "This workspace cannot start new responses. You can still export existing artifacts."}
           </p>
         ) : null}
       </div>

@@ -58,7 +58,7 @@ class WorkOSMembershipApiIntegrationTest {
 			insert into workspaces (
 			  id, name, slug, created_by_user_id, status, plan, entitlement_status, access_mode,
 			  public_citations_enabled, created_at, updated_at
-			) values (?, 'Membership Workspace', 'membership-workspace', ?, 'ACTIVE', 'none', 'subscription_required', 'read_only', true, now(), now())
+			) values (?, 'Membership Workspace', 'membership-workspace', ?, 'ACTIVE', 'none', 'subscription_required', 'full', true, now(), now())
 			""".trimIndent(), WORKSPACE_ID, USER_ID,
 		)
 		jdbcTemplate.update(

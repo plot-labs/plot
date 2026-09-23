@@ -8,10 +8,7 @@ export function SidebarEntitlementNotice({ collapsed }: { collapsed: boolean }) 
   const entitlement = useWorkspaceEntitlement();
   if (collapsed || !entitlement || entitlement.accessMode === "full") return null;
 
-	const subscriptionRequired = entitlement.entitlementStatus === "subscription_required";
-	const copy = subscriptionRequired
-		? "A Founding subscription is required to use this workspace."
-		: entitlement.accessMode === "complete_only"
+	const copy = entitlement.accessMode === "complete_only"
 			? "New AI work is paused. You can still edit, export, and publish existing drafts."
 			: "This workspace is read-only. You can still export drafts and unpublish live changelog entries.";
 
@@ -26,7 +23,7 @@ export function SidebarEntitlementNotice({ collapsed }: { collapsed: boolean }) 
           href="/settings/general"
           className="mt-1.5 inline-block font-medium text-black/78 underline-offset-2 hover:underline dark:text-white/80"
         >
-			{subscriptionRequired ? "Subscribe to use Plot" : "Plan and access"}
+			Plan and access
         </Link>
       </section>
     </div>

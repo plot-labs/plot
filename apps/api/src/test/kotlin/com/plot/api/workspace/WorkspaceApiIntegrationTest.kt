@@ -73,8 +73,8 @@ class WorkspaceApiIntegrationTest {
 			jsonPath("$.status") { value("ACTIVE") }
 			jsonPath("$.plan") { value("none") }
 			jsonPath("$.entitlementStatus") { value("subscription_required") }
-			jsonPath("$.accessMode") { value("read_only") }
-			jsonPath("$.capabilities.generate") { value(false) }
+			jsonPath("$.accessMode") { value("full") }
+			jsonPath("$.capabilities.generate") { value(true) }
 			jsonPath("$.role") { value("OWNER") }
 		}
 	}

@@ -283,7 +283,7 @@ class ArtifactPublishIntegrationTest {
 			update workspaces
 			set plan = 'founding',
 			    entitlement_status = 'revoked',
-			    access_mode = 'read_only'
+			    access_mode = 'full'
 			where id = ?
 			""".trimIndent(),
 			devContext.devWorkspaceId,
@@ -300,7 +300,7 @@ class ArtifactPublishIntegrationTest {
 	}
 
 	@Test
-	fun `content packs cannot grant access without an active subscription`() {
+	fun `content packs do not prevent an unsubscribed workspace from being edited`() {
 		val fixture = readyPack()
 		val extraRunIds = mutableListOf<UUID>()
 		val extraPackIds = mutableListOf<UUID>()
@@ -337,7 +337,7 @@ class ArtifactPublishIntegrationTest {
 				)
 			}
 			jdbcTemplate.update(
-				"update workspaces set plan = 'none', entitlement_status = 'subscription_required', access_mode = 'read_only' where id = ?",
+				"update workspaces set plan = 'none', entitlement_status = 'subscription_required', access_mode = 'full' where id = ?",
 				devContext.devWorkspaceId,
 			)
 
@@ -345,30 +345,13 @@ class ArtifactPublishIntegrationTest {
 				contentType = MediaType.APPLICATION_JSON
 				content = """{"expectedRevisionNumber":1,"body":"Unpaid edit."}"""
 			}.andExpect {
-				status { isForbidden() }
-				jsonPath("$.error") { value("WORKSPACE_READ_ONLY") }
-			}
-			mockMvc.post("/api/artifact-variants/${fixture.variantId}/publish") {
-				contentType = MediaType.APPLICATION_JSON
-				content = objectMapper.writeValueAsString(mapOf(
-					"expectedRevisionNumber" to 1,
-					"acknowledgeUnresolved" to true,
-					"acknowledgedRevisionIds" to jdbcTemplate.queryForList(
-						"select id from content_variant_sentence_revisions where sentence_id = ? and is_current",
-						UUID::class.java,
-						fixture.firstSentenceId,
-					),
-				))
-			}.andExpect {
-				status { isForbidden() }
-				jsonPath("$.error") { value("WORKSPACE_READ_ONLY") }
+				status { isOk() }
 			}
 			mockMvc.patch("/api/workspaces/${devContext.devWorkspaceId}") {
 				contentType = MediaType.APPLICATION_JSON
-				content = """{"name":"Unpaid workspace"}"""
+				content = """{"name":"Unsubscribed workspace"}"""
 			}.andExpect {
-				status { isForbidden() }
-				jsonPath("$.error") { value("WORKSPACE_READ_ONLY") }
+				status { isOk() }
 			}
 		} finally {
 			extraPackIds.forEach { jdbcTemplate.update("delete from content_packs where id = ?", it) }
@@ -377,14 +360,14 @@ class ArtifactPublishIntegrationTest {
 	}
 
 	@Test
-	fun `subscription-required workspace cannot publish existing draft`() {
+	fun `subscription-required workspace can publish existing draft`() {
 		val fixture = readyPack()
 		jdbcTemplate.update(
 			"""
 			update workspaces
 			set plan = 'none',
 			    entitlement_status = 'subscription_required',
-			    access_mode = 'read_only'
+			    access_mode = 'full'
 			where id = ?
 			""".trimIndent(),
 			devContext.devWorkspaceId,
@@ -393,8 +376,7 @@ class ArtifactPublishIntegrationTest {
 			contentType = MediaType.APPLICATION_JSON
 			content = """{"expectedRevisionNumber":1,"acknowledgeUnresolved":false}"""
 		}.andExpect {
-			status { isForbidden() }
-			jsonPath("$.error") { value("WORKSPACE_READ_ONLY") }
+			status { isOk() }
 		}
 		mockMvc.post("/api/artifact-variants/${fixture.variantId}/exports") {
 			contentType = MediaType.APPLICATION_JSON
@@ -406,7 +388,7 @@ class ArtifactPublishIntegrationTest {
 	fun `read only workspace cannot publish`() {
 		val fixture = readyPack()
 		jdbcTemplate.update(
-			"update workspaces set entitlement_status = 'revoked', access_mode = 'read_only' where id = ?",
+			"update workspaces set entitlement_status = 'active', access_mode = 'read_only' where id = ?",
 			devContext.devWorkspaceId,
 		)
 		mockMvc.post("/api/artifact-variants/${fixture.variantId}/publish") {

@@ -265,7 +265,7 @@ class PolarSubscriptionService(
 		}
 		val now = clock.instant()
 		target.workspace.entitlementStatus = "revoked"
-		target.workspace.accessMode = "read_only"
+		target.workspace.accessMode = "full"
 		target.workspace.polarSubscriptionStatus = subscriptionStatus(data) ?: "revoked"
 		target.workspace.polarSubscriptionCancelAtPeriodEnd = false
 		target.workspace.polarSubscriptionCurrentPeriodEnd = null
