@@ -45,7 +45,7 @@ class PolarClientTest {
 				)
 				method == "GET" && uri.path == "/v1/events/" -> {
 					assertEquals(
-						"external_customer_id=plot-workspace:$workspaceId&name=plot_ai_usage&limit=100",
+						"external_customer_id=plot-workspace:$workspaceId&name=plot_ai_usage&limit=100&page=1&sorting=-timestamp",
 						uri.query,
 					)
 					PolarHttpResponse(
@@ -54,7 +54,7 @@ class PolarClientTest {
 						{"items":[
 							{"id":"event-usage","timestamp":"2026-09-19T12:00:00Z","metadata":{"credits":1,"provider":"openrouter","actual_model":"openai/test"}},
 							{"id":"event-trial","timestamp":"2026-09-19T11:00:00Z","metadata":{"credits":-5000,"reason":"trial_grant"}}
-						]}
+						],"pagination":{"total_count":2,"max_page":1}}
 						""".trimIndent(),
 					)
 				}
@@ -71,6 +71,42 @@ class PolarClientTest {
 			listOf(PolarCreditUsageEvent("event-usage", Instant.parse("2026-09-19T12:00:00Z"), 1, "openrouter", "openai/test")),
 			overview.usageEvents,
 		)
+	}
+
+	@Test
+	fun sumsConsumedCreditsAcrossAllEventPagesButReturnsOnlyTheLatestPage() {
+		val firstPage = (1..100).joinToString(",") { eventJson("usage-$it", 1) }
+		val secondPage = listOf(
+			eventJson("usage-101", 1),
+			eventJson("usage-102", 1),
+			eventJson("event-trial", -5000),
+		).joinToString(",")
+		val client = client { method, uri, _, _ ->
+			when {
+				method == "GET" && uri.path.endsWith("/state") -> PolarHttpResponse(
+					200,
+					"""{"active_meters":[{"meter_id":"meter_ai","balance":4898,"credited_units":0,"consumed_units":-4898}]}""",
+				)
+				method == "GET" && uri.path == "/v1/events/" -> when {
+					uri.query.endsWith("page=1&sorting=-timestamp") -> PolarHttpResponse(
+						200,
+						"""{"items":[$firstPage],"pagination":{"total_count":103,"max_page":2}}""",
+					)
+					uri.query.endsWith("page=2&sorting=-timestamp") -> PolarHttpResponse(
+						200,
+						"""{"items":[$secondPage],"pagination":{"total_count":103,"max_page":2}}""",
+					)
+					else -> error("unexpected events page: ${uri.query}")
+				}
+				else -> error("unexpected request: $method ${uri.path}")
+			}
+		}
+
+		val overview = client.readCreditOverview(workspaceId)
+
+		assertEquals(102, overview.consumedUnits)
+		assertEquals(5000, overview.creditedUnits)
+		assertEquals(100, overview.usageEvents.size)
 	}
 
 	@Test
@@ -293,6 +329,9 @@ class PolarClientTest {
 	}
 
 	private fun client(transport: PolarHttpTransport) = PolarClient(properties(), mapper, transport)
+
+	private fun eventJson(id: String, credits: Long): String =
+		"""{"id":"$id","timestamp":"2026-09-19T12:00:00Z","metadata":{"credits":$credits,"provider":"openrouter","actual_model":"openai/test"}}"""
 
 	private fun properties() = PolarProperties(
 		creditsEnabled = true,

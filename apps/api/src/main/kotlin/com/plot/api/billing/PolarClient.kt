@@ -172,16 +172,38 @@ class PolarClient(
 		ensureEnabled()
 		val meter = readMeterState(workspaceId, allowMissingCustomer = true) ?: return PolarCreditOverview.empty()
 		val externalId = workspaceExternalId(workspaceId)
-		val response = execute(
-			"GET",
-			"/v1/events/?external_customer_id=${segment(externalId)}&name=${segment(AI_USAGE_EVENT)}&limit=$EVENT_PAGE_SIZE",
-		)
-		val root = parse(response.body)
-		val items = root.path("items")
-		if (!items.isArray) invalidResponse()
-		val ledgerEvents = items.mapNotNull { event -> parseUsageEvent(event) }
-		val consumedUnits = sumPositiveCredits(ledgerEvents)
-		val eventCreditedUnits = sumNegativeCredits(ledgerEvents)
+		var page = 1
+		var maxPage = 1
+		var consumedUnits = 0L
+		var eventCreditedUnits = 0L
+		val recentUsageEvents = mutableListOf<PolarCreditUsageEvent>()
+		do {
+			val query = listOf(
+				"external_customer_id=${segment(externalId)}",
+				"name=${segment(AI_USAGE_EVENT)}",
+				"limit=$EVENT_PAGE_SIZE",
+				"page=$page",
+				"sorting=-timestamp",
+			).joinToString("&")
+			val response = execute(
+				"GET",
+				"/v1/events/?$query",
+			)
+			val root = parse(response.body)
+			val items = root.path("items")
+			if (!items.isArray) invalidResponse()
+			val ledgerEvents = items.mapNotNull { event -> parseUsageEvent(event) }
+			consumedUnits = consumedUnits.checkedAdd(sumPositiveCredits(ledgerEvents))
+			eventCreditedUnits = eventCreditedUnits.checkedAdd(sumNegativeCredits(ledgerEvents))
+			if (page == 1) recentUsageEvents += ledgerEvents.filter { it.credits > 0 }
+			if (page == 1) {
+				val reportedMaxPage = root.path("pagination").path("max_page").exactLongOrNull() ?: invalidResponse()
+				if (reportedMaxPage !in 0..Int.MAX_VALUE.toLong()) invalidResponse()
+				if (reportedMaxPage == 0L && items.size() > 0) invalidResponse()
+				maxPage = reportedMaxPage.toInt()
+			}
+			page++
+		} while (page <= maxPage)
 		return PolarCreditOverview(
 			balance = meter.balance,
 			creditedUnits = maxOf(
@@ -190,7 +212,7 @@ class PolarClient(
 				meter.balance.checkedAdd(consumedUnits),
 			),
 			consumedUnits = consumedUnits,
-			usageEvents = ledgerEvents.filter { it.credits > 0 },
+			usageEvents = recentUsageEvents,
 		)
 	}
 
