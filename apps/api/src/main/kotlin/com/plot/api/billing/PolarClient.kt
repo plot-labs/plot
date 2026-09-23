@@ -9,6 +9,7 @@ import java.net.http.HttpResponse
 import java.nio.charset.StandardCharsets
 import java.time.Instant
 import java.util.UUID
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.ObjectMapper
@@ -134,6 +135,8 @@ class PolarClient(
 	private val objectMapper: ObjectMapper,
 	private val transport: PolarHttpTransport = JavaPolarHttpTransport(properties),
 ) : PolarCreditProvider, PolarCheckoutProvider, PolarCustomerPortalProvider {
+	private val logger = LoggerFactory.getLogger(PolarClient::class.java)
+
 	fun workspaceExternalId(workspaceId: UUID): String = "plot-workspace:$workspaceId"
 
 	override fun ensureCustomer(
@@ -447,7 +450,15 @@ class PolarClient(
 		} catch (exception: java.io.IOException) {
 			throw PolarApiException("POLAR_UNAVAILABLE", "Polar is unavailable", retryable = true, cause = exception)
 		}
-		if (response.status !in accepted) throw statusFailure(response.status)
+		if (response.status !in accepted) {
+			logger.warn(
+				"Polar API request failed: method={} path={} status={}",
+				method,
+				path,
+				response.status,
+			)
+			throw statusFailure(response.status)
+		}
 		return response
 	}
 

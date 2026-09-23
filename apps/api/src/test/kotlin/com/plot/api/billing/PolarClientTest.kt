@@ -303,6 +303,25 @@ class PolarClientTest {
 	}
 
 	@Test
+	fun mapsUnexpectedHttpStatusesToGenericSafeError() {
+		val client = client { _, _, _, _ -> PolarHttpResponse(200, "unexpected upstream response") }
+
+		val failure = assertFailsWith<PolarApiException> {
+			client.createCheckoutSession(
+				workspaceId = workspaceId,
+				productId = "product-1",
+				customerName = "Acme",
+				customerEmail = "owner@example.com",
+				successUrl = "https://plot.test/settings/general",
+				returnUrl = null,
+			)
+		}
+
+		assertEquals("POLAR_REQUEST_FAILED", failure.safeCode)
+		assertFalse(failure.message.orEmpty().contains("unexpected upstream response"))
+	}
+
+	@Test
 	fun rejectsMalformedIngestResponse() {
 		val client = client { _, _, _, _ -> PolarHttpResponse(200, "{}") }
 
