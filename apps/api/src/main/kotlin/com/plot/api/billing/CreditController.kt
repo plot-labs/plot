@@ -25,7 +25,6 @@ data class WorkspaceCreditOverviewResponse(
 	val creditedUnits: Long,
 	val consumedUnits: Long,
 	val usageEvents: List<CreditUsageEventResponse>,
-	val checkoutAvailable: Boolean,
 )
 
 data class WorkspaceCheckoutResponse(
@@ -41,7 +40,6 @@ data class WorkspaceCustomerPortalResponse(
 @RequestMapping("/api/billing")
 class CreditController(
 	private val credits: PolarCreditService,
-	private val checkout: PolarCheckoutService,
 	private val subscriptionCheckout: PolarSubscriptionCheckoutService,
 	private val subscriptionPortal: PolarSubscriptionPortalService,
 	private val authorizedWorkspaceContext: AuthorizedWorkspaceContext,
@@ -60,27 +58,7 @@ class CreditController(
 		}
 		return ResponseEntity.ok()
 			.cacheControl(CacheControl.noStore())
-			.body(overview.toResponse(checkout.isConfigured()))
-	}
-
-	@PostMapping("/checkout")
-	fun createCheckout(): ResponseEntity<WorkspaceCheckoutResponse> {
-		val context = authorizedWorkspaceContext.require()
-		if (context.workspace.role != "OWNER") {
-			throw ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Only workspace owners can purchase credits")
-		}
-		val session = try {
-			checkout.create(context.workspace.workspaceId)
-		} catch (failure: PolarApiException) {
-			throw ApiException(
-				if (failure.retryable) HttpStatus.SERVICE_UNAVAILABLE else HttpStatus.BAD_GATEWAY,
-				failure.safeCode,
-				"Credit checkout could not be started",
-			)
-		}
-		return ResponseEntity.status(HttpStatus.CREATED).body(
-			WorkspaceCheckoutResponse(session.id, session.url),
-		)
+			.body(overview.toResponse())
 	}
 
 	@PostMapping("/subscription-checkout")
@@ -138,11 +116,10 @@ class CreditController(
 	}
 }
 
-private fun PolarCreditOverview.toResponse(checkoutAvailable: Boolean) = WorkspaceCreditOverviewResponse(
+private fun PolarCreditOverview.toResponse() = WorkspaceCreditOverviewResponse(
 	balance = balance,
 	creditedUnits = creditedUnits,
 	consumedUnits = consumedUnits,
-	checkoutAvailable = checkoutAvailable,
 	usageEvents = usageEvents.map { event ->
 		CreditUsageEventResponse(
 			id = event.id,

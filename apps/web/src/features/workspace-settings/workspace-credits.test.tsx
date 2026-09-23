@@ -5,7 +5,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   getCreditOverview: vi.fn(),
-  createCreditCheckout: vi.fn(),
 }));
 
 vi.mock("@/lib/api-client", () => ({
@@ -38,6 +37,7 @@ describe("WorkspaceCredits", () => {
     expect(screen.getByText("2 credits")).toBeVisible();
     expect(screen.getByText("0.04%")).toBeVisible();
     expect(screen.getByText("deepseek/deepseek-v4-flash-0731")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Add credits" })).not.toBeInTheDocument();
     expect(mocks.getCreditOverview).toHaveBeenCalledTimes(1);
   });
 

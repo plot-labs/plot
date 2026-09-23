@@ -241,7 +241,6 @@ describe("Plot same-origin proxy", () => {
     ["GET", ["sessions", "018fd000-0000-7000-8000-000000000002", "turns"]],
     ["GET", ["autonomy", "activity"]],
     ["GET", ["billing", "credits"]],
-    ["POST", ["billing", "checkout"]],
     ["POST", ["billing", "subscription-checkout"]],
 	["POST", ["billing", "subscription-portal"]],
     ["POST", ["routines"]],
@@ -430,6 +429,7 @@ describe("Plot same-origin proxy", () => {
     ["POST", ["admin"]],
     ["GET", ["..", "secrets"]],
     ["POST", ["sessions"]],
+    ["POST", ["billing", "checkout"]],
     ["PATCH", ["sessions", "018fd000-0000-7000-8000-000000000002"]],
   ])("rejects arbitrary %s %o", async (method, path) => {
     const fetcher = vi.fn<typeof fetch>();

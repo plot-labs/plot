@@ -3,6 +3,8 @@ package com.plot.api.billing
 import java.util.UUID
 import org.springframework.stereotype.Component
 
+data class WorkspaceCheckout(val id: String, val url: String)
+
 @Component
 class PolarSubscriptionCheckoutService(
 	private val properties: PolarProperties,

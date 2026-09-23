@@ -376,7 +376,6 @@ export interface WorkspaceCreditOverview {
   creditedUnits: number;
   consumedUnits: number;
   usageEvents: CreditUsageEvent[];
-  checkoutAvailable?: boolean;
 }
 
 export interface WorkspaceCheckout {
@@ -705,7 +704,6 @@ export interface PlotApiClient {
   getWorkspace(id: string, options?: RequestOptions): Promise<WorkspaceSummary>;
   updateWorkspace(id: string, input: { name?: string; logoUrl?: string; publicCitationsEnabled?: boolean }, options?: RequestOptions): Promise<WorkspaceSummary>;
   getCreditOverview(options?: RequestOptions): Promise<WorkspaceCreditOverview>;
-  createCreditCheckout(options?: RequestOptions): Promise<WorkspaceCheckout>;
   createSubscriptionCheckout(options?: RequestOptions): Promise<WorkspaceCheckout>;
   createSubscriptionPortal(options?: RequestOptions): Promise<WorkspaceCustomerPortal>;
   getContentProfile(options?: RequestOptions): Promise<ContentProfile>;
@@ -862,10 +860,6 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
       signal: requestOptions?.signal,
     }),
     getCreditOverview: (requestOptions) => request("/billing/credits", { signal: requestOptions?.signal }),
-    createCreditCheckout: (requestOptions) => request("/billing/checkout", {
-      method: "POST",
-      signal: requestOptions?.signal,
-    }),
     createSubscriptionCheckout: (requestOptions) => request("/billing/subscription-checkout", {
       method: "POST",
       signal: requestOptions?.signal,
