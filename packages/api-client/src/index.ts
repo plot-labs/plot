@@ -353,11 +353,38 @@ export interface WorkspaceSummary {
   plan: string;
   entitlementStatus: string;
   accessMode: "full" | "complete_only" | "read_only";
+  subscriptionStatus: string | null;
+  subscriptionCancelAtPeriodEnd: boolean | null;
+  subscriptionCurrentPeriodEnd: string | null;
+  subscriptionEventAt: string | null;
   capabilities: WorkspaceCapabilities;
-  trialEndsAt: string;
   role: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CreditUsageEvent {
+  id: string;
+  timestamp: string;
+  credits: number;
+  provider: string | null;
+  model: string | null;
+}
+
+export interface WorkspaceCreditOverview {
+  balance: number;
+  creditedUnits: number;
+  consumedUnits: number;
+  usageEvents: CreditUsageEvent[];
+}
+
+export interface WorkspaceCheckout {
+	checkoutId: string;
+	url: string;
+}
+
+export interface WorkspaceCustomerPortal {
+  url: string;
 }
 
 export type RoutineCadence =
@@ -676,6 +703,9 @@ export interface PlotApiClient {
   createWorkspace(input: { name: string }, options?: RequestOptions): Promise<WorkspaceSummary>;
   getWorkspace(id: string, options?: RequestOptions): Promise<WorkspaceSummary>;
   updateWorkspace(id: string, input: { name?: string; logoUrl?: string; publicCitationsEnabled?: boolean }, options?: RequestOptions): Promise<WorkspaceSummary>;
+  getCreditOverview(options?: RequestOptions): Promise<WorkspaceCreditOverview>;
+  createSubscriptionCheckout(options?: RequestOptions): Promise<WorkspaceCheckout>;
+  createSubscriptionPortal(options?: RequestOptions): Promise<WorkspaceCustomerPortal>;
   getContentProfile(options?: RequestOptions): Promise<ContentProfile>;
   updateContentProfile(input: UpdateContentProfileInput, options?: RequestOptions): Promise<ContentProfile>;
   listSkills(options?: RequestOptions): Promise<Skill[]>;
@@ -827,6 +857,15 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
     updateWorkspace: (id, input, requestOptions) => request(`/workspaces/${encodeURIComponent(id)}`, {
       method: "PATCH",
       body: JSON.stringify(input),
+      signal: requestOptions?.signal,
+    }),
+    getCreditOverview: (requestOptions) => request("/billing/credits", { signal: requestOptions?.signal }),
+    createSubscriptionCheckout: (requestOptions) => request("/billing/subscription-checkout", {
+      method: "POST",
+      signal: requestOptions?.signal,
+    }),
+    createSubscriptionPortal: (requestOptions) => request("/billing/subscription-portal", {
+      method: "POST",
       signal: requestOptions?.signal,
     }),
     getContentProfile: (requestOptions) => request("/content-profile", { signal: requestOptions?.signal }),

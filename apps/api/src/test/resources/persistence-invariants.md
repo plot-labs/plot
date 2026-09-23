@@ -26,7 +26,7 @@ This manifest records the persistence protocols that must remain observable acro
 | Current owner | Protocol that must remain | Required evidence | Target |
 | --- | --- | --- | --- |
 | `artifact/run/ArtifactRunPersistence.kt` | artifact-run state transitions and affected-row guards; transaction ownership | artifact run integration and rollback/error tests | U5 |
-| `artifact/workflow/ArtifactWorkflowAdmissionPersistence.kt` | idempotent workflow admission, input snapshots, run creation, and trial capacity | workflow admission and artifact API tests | U7 |
+| `artifact/workflow/ArtifactWorkflowAdmissionPersistence.kt` | idempotent workflow admission, input snapshots, run creation, and entitlement checks | workflow admission and artifact API tests | U7 |
 | `artifact/workflow/ArtifactWorkflowExecutionPersistence.kt` | model-call lease, checkpoint, retry, failure, and source-access fencing | `ArtifactWorkflowReliabilityIntegrationTest`, physical-attempt tests | U7 |
 | `artifact/workflow/ArtifactWorkflowQueryPersistence.kt` | workflow state, run timing, and materialized payload projections | workflow API and timing tests | U7 |
 | `artifact/workflow/ArtifactWorkflowRecoveryPersistence.kt` | stale claim and invocation recovery | `ArtifactWorkflowRunRecoveryIntegrationTest`, continuous claimant tests | U7 |

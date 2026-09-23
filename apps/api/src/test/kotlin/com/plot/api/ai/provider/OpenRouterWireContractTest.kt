@@ -23,6 +23,7 @@ class OpenRouterWireContractTest {
                 val body = mapper.readTree(bodies.single())
                 assertEquals(properties.model, body["model"].stringValue())
                 assertEquals(mapper.readTree(mapper.writeValueAsString(properties.openRouterProviderPolicy)), body["provider"])
+				assertTrue(body["usage"]["include"].booleanValue())
                 assertFalse(body.has("temperature"))
                 assertFalse(body.has("tools") && body["tools"].size() > 0)
                 assertEquals(ModelSchemas.WRITER.let(mapper::readTree), body["response_format"]["json_schema"]["schema"])
@@ -32,6 +33,9 @@ class OpenRouterWireContractTest {
                 assertEquals("gen-wire", result.responseId)
                 assertEquals("openai/served-model", result.actualModel)
                 assertEquals(18, result.totalTokens)
+				assertEquals(3, result.cacheReadTokens)
+				assertEquals(2, result.reasoningTokens)
+				assertEquals(java.math.BigDecimal("0.00368"), result.reportedCostUsd)
             }
         }
     }
@@ -64,6 +68,24 @@ class OpenRouterWireContractTest {
         }
     }
 
+	@Test fun `malformed structured output retains only allowlisted usage`() {
+		val malformed = success().replace("Wire contract passed.", "bad\\\"json")
+		withServer(response = malformed) { server, _, _ ->
+			transport(server).useTransport { transport ->
+				val failure = assertFailsWith<MalformedModelOutputException> {
+					transport.exchange(StructuredChatRequest(ModelRole.WRITER, ArtifactPrompt("System", "User")), WriterOutput::class.java)
+				}
+				val usage = requireNotNull(failure.usage)
+				assertEquals("gen-wire", usage.responseId)
+				assertEquals("openai/served-model", usage.actualModel)
+				assertEquals(18, usage.totalTokens)
+				assertEquals(3, usage.cacheReadTokens)
+				assertEquals(2, usage.reasoningTokens)
+				assertEquals(setOf("provider", "requestedModel", "actualModel", "responseId", "inputTokens", "outputTokens", "cacheReadTokens", "cacheWriteTokens", "reasoningTokens", "totalTokens", "reportedCostUsd"), usage::class.java.declaredFields.map { it.name }.toSet())
+			}
+		}
+	}
+
     @Test fun `unsafe configuration is rejected`() {
         assertFailsWith<IllegalArgumentException> { properties.copy(allowFallbacks = true) }
         assertFailsWith<IllegalArgumentException> { properties.copy(routingProvider = null) }
@@ -73,13 +95,15 @@ class OpenRouterWireContractTest {
 
     @Test fun `runtime sends native tools and accepts OpenRouter tool calls`() {
         val inputId = java.util.UUID.randomUUID()
-        val response = """{"id":"gen-native","object":"chat.completion","created":1784160000,"model":"openai/served-model","choices":[{"index":0,"message":{"role":"assistant","content":null,"tool_calls":[{"id":"call-1","type":"function","function":{"name":"CREATE_ARTIFACT","arguments":"{\"selectedInputIds\":[\"$inputId\"]}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":11,"completion_tokens":7,"total_tokens":18}}"""
+		val response = """{"id":"gen-native","object":"chat.completion","created":1784160000,"model":"openai/served-model","choices":[{"index":0,"message":{"role":"assistant","content":null,"tool_calls":[{"id":"call-1","type":"function","function":{"name":"CREATE_ARTIFACT","arguments":"{\"selectedInputIds\":[\"$inputId\"]}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":11,"completion_tokens":7,"total_tokens":18,"cost":0.00368}}"""
         withServer(response = response) { server, bodies, calls ->
             transport(server).useTransport { transport ->
                 var handedOff = false
+				var billedUsage: ProviderUsage? = null
                 val host = object : AgentRuntimeHost {
                     override val finished get() = handedOff
                     override fun beforeModel() = Unit
+					override fun afterModel(usage: ProviderUsage) { billedUsage = usage }
                     override fun context() = AgentDecisionRequest(
                         java.util.UUID.randomUUID(), "Create draft", emptyList(), emptyList(), emptyList(), 8, 8,
                         model = PlotAiProperties.CLAUDE_HAIKU_4_5_MODEL,
@@ -95,6 +119,9 @@ class OpenRouterWireContractTest {
                 KoogAgentRuntime(transport, mapper).run(host)
                 assertTrue(handedOff)
                 assertEquals(1, calls.get())
+				assertEquals("openai/served-model", billedUsage?.actualModel)
+				assertEquals(18, billedUsage?.totalTokens)
+				assertEquals(java.math.BigDecimal("0.00368"), billedUsage?.reportedCostUsd)
                 val body = mapper.readTree(bodies.single())
                 assertEquals(6, body["tools"].size())
                 assertFalse(body.has("response_format"))
@@ -103,6 +130,7 @@ class OpenRouterWireContractTest {
                     mapper.readTree(mapper.writeValueAsString(properties.openRouterProviderPolicyFor("anthropic"))),
                     body["provider"],
                 )
+				assertTrue(body["usage"]["include"].booleanValue())
                 assertEquals("high", body["reasoning"]["effort"].stringValue())
             }
         }
@@ -129,5 +157,5 @@ class OpenRouterWireContractTest {
         try { block(server, bodies, calls) } finally { server.stop(0) }
     }
 
-    private fun success(finish: String = "stop") = """{"id":"gen-wire","object":"chat.completion","created":1784160000,"model":"openai/served-model","choices":[{"index":0,"message":{"role":"assistant","content":"{\"sentences\":[{\"body\":\"Wire contract passed.\",\"intent\":\"FACTUAL\",\"conflictEvidenceIds\":[]}],\"layout\":[]}"},"finish_reason":"$finish"}],"usage":{"prompt_tokens":11,"completion_tokens":7,"total_tokens":18}}"""
+    private fun success(finish: String = "stop") = """{"id":"gen-wire","object":"chat.completion","created":1784160000,"model":"openai/served-model","choices":[{"index":0,"message":{"role":"assistant","content":"{\"sentences\":[{\"body\":\"Wire contract passed.\",\"intent\":\"FACTUAL\",\"conflictEvidenceIds\":[]}],\"layout\":[]}"},"finish_reason":"$finish"}],"usage":{"prompt_tokens":11,"completion_tokens":7,"total_tokens":18,"cost":0.00368,"prompt_tokens_details":{"cached_tokens":3},"completion_tokens_details":{"reasoning_tokens":2}}}"""
 }

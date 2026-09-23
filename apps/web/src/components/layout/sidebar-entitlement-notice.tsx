@@ -2,22 +2,18 @@
 
 import Link from "next/link";
 
-import { trialEndsLabel, useWorkspaceEntitlement } from "@/lib/use-workspace-entitlement";
+import { useWorkspaceEntitlement } from "@/lib/use-workspace-entitlement";
 
 export function SidebarEntitlementNotice({ collapsed }: { collapsed: boolean }) {
   const entitlement = useWorkspaceEntitlement();
   if (collapsed || !entitlement || entitlement.accessMode === "full") return null;
 
-  const until = trialEndsLabel(entitlement.trialEndsAt);
-  const copy = entitlement.accessMode === "complete_only"
-    ? until
-      ? `Trial draft limit reached. You can still edit, export, and publish existing drafts until ${until}.`
-      : "Trial draft limit reached. You can still edit, export, and publish existing drafts."
-    : entitlement.entitlementStatus === "revoked"
-      ? "This workspace is read-only. You can still export drafts and unpublish live changelog entries."
-      : until
-        ? `Trial ended on ${until}. You can still export drafts and unpublish live changelog entries.`
-        : "This workspace is read-only. You can still export drafts and unpublish live changelog entries.";
+	const subscriptionRequired = entitlement.entitlementStatus === "subscription_required";
+	const copy = subscriptionRequired
+		? "A Founding subscription is required to use this workspace."
+		: entitlement.accessMode === "complete_only"
+			? "New AI work is paused. You can still edit, export, and publish existing drafts."
+			: "This workspace is read-only. You can still export drafts and unpublish live changelog entries.";
 
   return (
     <div className="px-3 pb-3">
@@ -30,7 +26,7 @@ export function SidebarEntitlementNotice({ collapsed }: { collapsed: boolean }) 
           href="/settings/general"
           className="mt-1.5 inline-block font-medium text-black/78 underline-offset-2 hover:underline dark:text-white/80"
         >
-          Plan and access
+			{subscriptionRequired ? "Subscribe to use Plot" : "Plan and access"}
         </Link>
       </section>
     </div>

@@ -53,6 +53,13 @@ class WorkspaceRepository(
 		}.singleOrNull()?.toModel()
 	}
 
+	@Transactional(readOnly = true)
+	fun findByPolarCustomerId(polarCustomerId: String): Workspace? = sql.execute {
+		WorkspaceTable.selectAll().where {
+			(WorkspaceTable.polarCustomerId eq polarCustomerId) and (WorkspaceTable.status eq "ACTIVE")
+		}.limit(2).map { it.toModel() }.singleOrNull()
+	}
+
 	@Transactional
 	fun save(workspace: Workspace): Workspace = sql.execute {
 		val updated = WorkspaceTable.update({ WorkspaceTable.id eq workspace.id }) {
@@ -77,11 +84,13 @@ class WorkspaceRepository(
 		this[WorkspaceTable.plan] = workspace.plan
 		this[WorkspaceTable.polarSubscriptionId] = workspace.polarSubscriptionId
 		this[WorkspaceTable.polarCustomerId] = workspace.polarCustomerId
+		this[WorkspaceTable.polarSubscriptionStatus] = workspace.polarSubscriptionStatus
+		this[WorkspaceTable.polarSubscriptionCancelAtPeriodEnd] = workspace.polarSubscriptionCancelAtPeriodEnd
+		this[WorkspaceTable.polarSubscriptionCurrentPeriodEnd] = workspace.polarSubscriptionCurrentPeriodEnd?.atOffset(ZoneOffset.UTC)
+		this[WorkspaceTable.polarSubscriptionEventAt] = workspace.polarSubscriptionEventAt?.atOffset(ZoneOffset.UTC)
 		this[WorkspaceTable.planUpdatedAt] = workspace.planUpdatedAt?.atOffset(ZoneOffset.UTC)
 		this[WorkspaceTable.entitlementStatus] = workspace.entitlementStatus
 		this[WorkspaceTable.accessMode] = workspace.accessMode
-		this[WorkspaceTable.trialStartedAt] = workspace.trialStartedAt.atOffset(ZoneOffset.UTC)
-		this[WorkspaceTable.trialEndsAt] = workspace.trialEndsAt.atOffset(ZoneOffset.UTC)
 		this[WorkspaceTable.logoUrl] = workspace.logoUrl
 		this[WorkspaceTable.publicCitationsEnabled] = workspace.publicCitationsEnabled
 	}
@@ -98,11 +107,13 @@ class WorkspaceRepository(
 		plan = this[WorkspaceTable.plan],
 		polarSubscriptionId = this[WorkspaceTable.polarSubscriptionId],
 		polarCustomerId = this[WorkspaceTable.polarCustomerId],
+		polarSubscriptionStatus = this[WorkspaceTable.polarSubscriptionStatus],
+		polarSubscriptionCancelAtPeriodEnd = this[WorkspaceTable.polarSubscriptionCancelAtPeriodEnd],
+		polarSubscriptionCurrentPeriodEnd = this[WorkspaceTable.polarSubscriptionCurrentPeriodEnd]?.toInstant(),
+		polarSubscriptionEventAt = this[WorkspaceTable.polarSubscriptionEventAt]?.toInstant(),
 		planUpdatedAt = this[WorkspaceTable.planUpdatedAt]?.toInstant(),
 		entitlementStatus = this[WorkspaceTable.entitlementStatus],
 		accessMode = this[WorkspaceTable.accessMode],
-		trialStartedAt = this[WorkspaceTable.trialStartedAt].toInstant(),
-		trialEndsAt = this[WorkspaceTable.trialEndsAt].toInstant(),
 		publicCitationsEnabled = this[WorkspaceTable.publicCitationsEnabled],
 	)
 }

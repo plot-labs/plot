@@ -9,6 +9,7 @@ export const productNavigationItems = [
 export const settingsNavigationItems = [
   { href: "/settings/general", label: "Workspace" },
   { href: "/settings/content", label: "Content profile" },
+  { href: "/settings/credits", label: "Credits" },
   { href: "/settings/account", label: "Account" },
 ] as const;
 

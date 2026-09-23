@@ -10,6 +10,10 @@ import com.plot.api.ai.provider.AgentConversationMessage
 import com.plot.api.ai.provider.AgentResponseMode
 import com.plot.api.ai.provider.AgentInputView
 import com.plot.api.ai.provider.AgentStepView
+import com.plot.api.ai.provider.ProviderUsage
+import com.plot.api.billing.AiCreditControlException
+import com.plot.api.billing.AiCreditCharge
+import com.plot.api.billing.PolarCreditService
 import com.plot.api.artifact.run.ArtifactRunPersistence
 import com.plot.api.common.ApiException
 import com.plot.api.common.WorkspacePrincipal
@@ -39,6 +43,7 @@ class AgentRunWorker(
 	private val artifactWorkflowRunService: ArtifactWorkflowRunService,
 	private val artifactRunPersistence: ArtifactRunPersistence,
 	private val workspaceAccessService: WorkspaceAccessService,
+	private val creditService: PolarCreditService,
 	private val properties: AgentProperties,
 	private val objectMapper: ObjectMapper,
 	@Lazy private val agentRunDispatcher: AgentRunDispatcher,
@@ -91,6 +96,16 @@ class AgentRunWorker(
 				agentRunDispatcher.scheduleDelayed(nextAttemptAt)
 			} else {
 				executionPersistence.failAgentRun(claim, failure.code.safeCode("AGENT_MODEL_FAILED"), now)
+			}
+		} catch (failure: AiCreditControlException) {
+			outcome = "FAILED"
+			val now = clock.instant()
+			if (failure.recoverable) {
+				val nextAttemptAt = now.plus(retryDelay(queryPersistence.findAgentRun(claim.workspaceId, claim.agentRunId)?.attemptCount ?: 0))
+				executionPersistence.scheduleAgentRetry(claim, failure.safeCode.safeCode("AI_CREDIT_UNAVAILABLE"), nextAttemptAt, now)
+				agentRunDispatcher.scheduleDelayed(nextAttemptAt)
+			} else {
+				executionPersistence.failAgentRun(claim, failure.safeCode.safeCode("AI_CREDIT_FAILED"), now)
 			}
 		} catch (failure: AgentRunBudgetExceededException) {
 			outcome = "FAILED"
@@ -167,6 +182,7 @@ class AgentRunWorker(
 		val routingProvider = settings.path("routingProvider").takeIf { it.isTextual }?.stringValue()
 		val reasoningEffort = settings.path("reasoningEffort").takeIf { it.isTextual }?.stringValue()
 		val host = object : AgentRuntimeHost {
+			var activeInvocationId: UUID? = null
 			override val finished: Boolean get() = finished
 			override val modelTimeoutMillis: Long get() = minOf(
 				properties.claimTimeout.toMillis() / 2,
@@ -174,7 +190,80 @@ class AgentRunWorker(
 			).coerceAtLeast(1)
 			override fun beforeModel() {
 				checkAccess()
-				executionPersistence.beginModelDecision(claim, budget.maxModelCalls)
+				if (!creditService.enabled) {
+					executionPersistence.beginModelDecision(claim, budget.maxModelCalls)
+					return
+				}
+				recoverSettlementBeforeModel()
+				creditService.preflight(run.workspaceId)
+				try {
+					activeInvocationId = executionPersistence.beginBilledModelInvocation(claim, budget.maxModelCalls)
+				} catch (failure: AgentModelInvocationBlockedException) {
+					throw AiCreditControlException("AI_CREDIT_SETTLEMENT_PENDING", true, "Workspace AI usage is pending", failure)
+				}
+			}
+			override fun afterModel(usage: ProviderUsage) {
+				if (!creditService.enabled) return
+				val invocationId = activeInvocationId
+					?: throw AiCreditControlException("AI_USAGE_UNKNOWN", false, "AI invocation identity is unavailable")
+				val charge: AiCreditCharge = try {
+					creditService.calculate(usage)
+				} catch (failure: AiCreditControlException) {
+					executionPersistence.markModelInvocationUsageUnknown(invocationId)
+					activeInvocationId = null
+					throw failure
+				}
+				executionPersistence.recordModelInvocationUsage(claim, invocationId, usage, charge)
+				creditService.publish(run.workspaceId, invocationId, usage, charge)
+				executionPersistence.markModelInvocationSettled(invocationId)
+				activeInvocationId = null
+			}
+			override fun modelFailed(failure: AgentDecisionException) {
+				activeInvocationId?.let(executionPersistence::markModelInvocationAborted)
+				activeInvocationId = null
+			}
+			private fun recoverSettlementBeforeModel() {
+				if (executionPersistence.hasSettledUnappliedModelInvocation(run.workspaceId, run.id)) {
+					throw AiCreditControlException(
+						"AI_SETTLEMENT_RECOVERED",
+						false,
+						"Previous model usage was settled without repeating provider work",
+					)
+				}
+				val unresolved = executionPersistence.findUnresolvedModelInvocation(run.workspaceId) ?: return
+				when (unresolved.status) {
+					AgentModelInvocationStatus.PENDING -> {
+						val usage = requireNotNull(unresolved.usage)
+						val charge = AiCreditCharge(
+							providerCostUsd = requireNotNull(unresolved.providerCostUsd),
+							credits = requireNotNull(unresolved.credits),
+							basis = requireNotNull(unresolved.billingBasis),
+							policyVersion = requireNotNull(unresolved.pricePolicyVersion),
+						)
+						creditService.publish(run.workspaceId, unresolved.id, usage, charge)
+						executionPersistence.markModelInvocationSettled(unresolved.id)
+						if (unresolved.agentRunId == run.id) {
+							throw AiCreditControlException(
+								"AI_SETTLEMENT_RECOVERED",
+								false,
+								"Previous model usage was settled without repeating provider work",
+							)
+						}
+						throw AiCreditControlException(
+							"AI_CREDIT_SETTLEMENT_PENDING",
+							true,
+							"Previous workspace usage was settled; retry before new provider work",
+						)
+					}
+					AgentModelInvocationStatus.STARTED -> {
+						if (unresolved.agentRunId == run.id) {
+							executionPersistence.markModelInvocationUsageUnknown(unresolved.id)
+							throw AiCreditControlException("AI_USAGE_UNKNOWN", false, "Previous provider usage is unavailable")
+						}
+						throw AiCreditControlException("AI_CREDIT_SETTLEMENT_PENDING", true, "Workspace AI usage is in progress")
+					}
+					else -> Unit
+				}
 			}
 			private fun checkAccess() {
 				queryPersistence.requireAgentClaim(claim)

@@ -82,16 +82,24 @@ data class AgentRuntimeResult(
 interface AgentRuntimeHost {
 	fun context(): AgentDecisionRequest
 	fun beforeModel()
+	fun afterModel(usage: ProviderUsage) = Unit
+	fun modelFailed(failure: AgentDecisionException) = Unit
 	fun execute(decision: AgentDecision): String
 	val finished: Boolean
 	val modelTimeoutMillis: Long get() = 45_000
 }
+
+data class AgentModelResponse(
+	val message: ai.koog.prompt.message.Message.Assistant,
+	val usage: ProviderUsage,
+)
 
 class AgentDecisionException(
 	val code: String,
 	val recoverable: Boolean,
 	message: String,
 	cause: Throwable? = null,
+	val usage: ProviderUsage? = null,
 ) : RuntimeException(message, cause)
 
 @Configuration(proxyBeanMethods = false)

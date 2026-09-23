@@ -88,8 +88,7 @@ class ArtifactPublishIntegrationTest {
 			update workspaces
 			set plan = 'founding',
 			    entitlement_status = 'active',
-			    access_mode = 'full',
-			    trial_ends_at = now() + interval '30 days'
+			    access_mode = 'full'
 			where id = ?
 			""".trimIndent(),
 			devContext.devWorkspaceId,
@@ -272,7 +271,7 @@ class ArtifactPublishIntegrationTest {
 	}
 
 	@Test
-	fun `expired trial can still unpublish a live changelog`() {
+	fun `revoked subscription can still unpublish a live changelog`() {
 		val fixture = readyPack()
 		mockMvc.post("/api/artifact-variants/${fixture.variantId}/publish") {
 			contentType = MediaType.APPLICATION_JSON
@@ -282,10 +281,9 @@ class ArtifactPublishIntegrationTest {
 		jdbcTemplate.update(
 			"""
 			update workspaces
-			set plan = 'trial',
-			    entitlement_status = 'expired',
-			    access_mode = 'read_only',
-			    trial_ends_at = now() - interval '1 day'
+			set plan = 'founding',
+			    entitlement_status = 'revoked',
+			    access_mode = 'read_only'
 			where id = ?
 			""".trimIndent(),
 			devContext.devWorkspaceId,
@@ -302,22 +300,11 @@ class ArtifactPublishIntegrationTest {
 	}
 
 	@Test
-	fun `trial pack limit still allows edit and first publish`() {
+	fun `content packs cannot grant access without an active subscription`() {
 		val fixture = readyPack()
 		val extraRunIds = mutableListOf<UUID>()
 		val extraPackIds = mutableListOf<UUID>()
 		try {
-			jdbcTemplate.update(
-				"""
-				update workspaces
-				set plan = 'trial',
-				    entitlement_status = 'trialing',
-				    access_mode = 'full',
-				    trial_ends_at = now() + interval '30 days'
-				where id = ?
-				""".trimIndent(),
-				devContext.devWorkspaceId,
-			)
 			repeat(2) {
 				val runId = UUID.randomUUID()
 				extraRunIds += runId
@@ -333,7 +320,7 @@ class ArtifactPublishIntegrationTest {
 					runId,
 					devContext.devWorkspaceId,
 					devContext.devUserId,
-					"trial-$runId",
+					"unpaid-$runId",
 					"fingerprint-$runId",
 				)
 				val packId = UUID.randomUUID()
@@ -342,22 +329,29 @@ class ArtifactPublishIntegrationTest {
 					"""
 					insert into content_packs (
 					  id, workspace_id, generation_run_id, title, status, created_at, updated_at
-					) values (?, ?, ?, 'Trial pack', 'READY', now(), now())
+					) values (?, ?, ?, 'Test pack', 'READY', now(), now())
 					""".trimIndent(),
 					packId,
 					devContext.devWorkspaceId,
 					runId,
 				)
 			}
+			jdbcTemplate.update(
+				"update workspaces set plan = 'none', entitlement_status = 'subscription_required', access_mode = 'read_only' where id = ?",
+				devContext.devWorkspaceId,
+			)
 
 			mockMvc.patch("/api/artifact-variants/${fixture.variantId}/sentences/${fixture.firstSentenceId}") {
 				contentType = MediaType.APPLICATION_JSON
-				content = """{"expectedRevisionNumber":1,"body":"Trial completion edit."}"""
-			}.andExpect { status { isOk() } }
+				content = """{"expectedRevisionNumber":1,"body":"Unpaid edit."}"""
+			}.andExpect {
+				status { isForbidden() }
+				jsonPath("$.error") { value("WORKSPACE_READ_ONLY") }
+			}
 			mockMvc.post("/api/artifact-variants/${fixture.variantId}/publish") {
 				contentType = MediaType.APPLICATION_JSON
 				content = objectMapper.writeValueAsString(mapOf(
-					"expectedRevisionNumber" to 2,
+					"expectedRevisionNumber" to 1,
 					"acknowledgeUnresolved" to true,
 					"acknowledgedRevisionIds" to jdbcTemplate.queryForList(
 						"select id from content_variant_sentence_revisions where sentence_id = ? and is_current",
@@ -365,10 +359,13 @@ class ArtifactPublishIntegrationTest {
 						fixture.firstSentenceId,
 					),
 				))
-			}.andExpect { status { isOk() } }
+			}.andExpect {
+				status { isForbidden() }
+				jsonPath("$.error") { value("WORKSPACE_READ_ONLY") }
+			}
 			mockMvc.patch("/api/workspaces/${devContext.devWorkspaceId}") {
 				contentType = MediaType.APPLICATION_JSON
-				content = """{"name":"Blocked"}"""
+				content = """{"name":"Unpaid workspace"}"""
 			}.andExpect {
 				status { isForbidden() }
 				jsonPath("$.error") { value("WORKSPACE_READ_ONLY") }
@@ -380,15 +377,14 @@ class ArtifactPublishIntegrationTest {
 	}
 
 	@Test
-	fun `elapsed trial cannot publish existing draft`() {
+	fun `subscription-required workspace cannot publish existing draft`() {
 		val fixture = readyPack()
 		jdbcTemplate.update(
 			"""
 			update workspaces
-			set plan = 'trial',
-			    entitlement_status = 'trialing',
-			    access_mode = 'full',
-			    trial_ends_at = now() - interval '1 second'
+			set plan = 'none',
+			    entitlement_status = 'subscription_required',
+			    access_mode = 'read_only'
 			where id = ?
 			""".trimIndent(),
 			devContext.devWorkspaceId,

@@ -10,7 +10,6 @@ import com.plot.api.auth.workos.WorkOSProviderException
 import com.plot.api.auth.workos.WorkOSWorkspaceProvisioningRepository
 import com.plot.api.persistence.TransactionExecutor
 import com.plot.api.dev.DevContext
-import com.plot.api.entitlement.TrialPolicy
 import com.plot.api.entitlement.WorkspaceEntitlementReader
 import com.plot.api.entitlement.WorkspacePolicy
 import com.plot.api.workspace.dto.CreateWorkspaceRequest
@@ -61,8 +60,9 @@ class WorkspaceService(
 			status = "ACTIVE",
 			createdAt = now,
 			updatedAt = now,
-			trialStartedAt = now,
-			trialEndsAt = now.plus(TrialPolicy.DURATION),
+			plan = "none",
+			entitlementStatus = "subscription_required",
+			accessMode = "read_only",
 		))
 		memberRepository.save(WorkspaceMember(
 			id = uuidGenerator.next(),
@@ -134,8 +134,9 @@ class WorkspaceService(
 					status = "ACTIVE",
 					createdAt = now,
 					updatedAt = now,
-					trialStartedAt = now,
-					trialEndsAt = now.plus(TrialPolicy.DURATION),
+					plan = "none",
+					entitlementStatus = "subscription_required",
+					accessMode = "read_only",
 				))
 				val member = memberRepository.upsertWorkOSProjection(
 					workspaceId = workspace.id,

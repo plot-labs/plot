@@ -90,7 +90,7 @@ class KoogAgentRuntimeTest {
 		LLModel(LLMProvider.OpenRouter, "test", listOf(LLMCapability.Completion, LLMCapability.Tools)), LLMParams(), mapper,
 	) { prompt, _, tools ->
 		assertEquals(AgentDecisionAction.entries.map { it.name }.toSet(), tools.map { it.name }.toSet())
-		next(prompt)
+		AgentModelResponse(next(prompt), ProviderUsage("openrouter", "test", "test", "response", 1, 1, 0, 0, 0, 2, null))
 	}
 
 	private fun call(name: String, args: String = "{}") = Message.Assistant(

@@ -25,6 +25,7 @@ data class PlotAiProperties(
 	val workerEnabled: Boolean = true,
 	val retryInitialDelay: Duration = Duration.ofMillis(250),
 	val maxEvidenceCharacters: Int = 120_000,
+	val creditPolicyVersion: String = "2026-09-18-v2-openrouter-cost",
 ) {
 	val configured: Boolean
 		get() = enabled && provider == OPENROUTER_GATEWAY && !model.isNullOrBlank()
@@ -51,6 +52,7 @@ data class PlotAiProperties(
 		require(maxOutputTokens > 0) { "plot.ai.max-output-tokens must be positive" }
 		require(maxModelCalls > 0 && maxTotalTokens > 0) { "plot.ai run budgets must be positive" }
 		require(maxEvidenceCharacters > 0) { "plot.ai.max-evidence-characters must be positive" }
+		require(creditPolicyVersion == "2026-09-18-v2-openrouter-cost") { "plot.ai.credit-policy-version must match the deployed credit policy" }
 		require(!retryInitialDelay.isNegative) { "plot.ai.retry-initial-delay must not be negative" }
 		require(!claimTimeout.isNegative && !claimTimeout.isZero) { "plot.ai.claim-timeout must be positive" }
 		if (enabled && !model.isNullOrBlank()) {

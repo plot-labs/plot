@@ -15,15 +15,35 @@ class PolarWebhookPersistence(
 	fun recordIfNew(
 		webhookId: String,
 		eventType: String,
-		subscriptionId: String?,
+		receipt: PolarWebhookReceipt,
 		receivedAt: Instant,
 	): Boolean = sql.update(
 		"""
-		insert into polar_webhook_events (webhook_id, event_type, subscription_id, received_at, outcome)
-		values (?, ?, ?, ?, 'IGNORED')
+		insert into polar_webhook_events (
+			webhook_id, event_type, resource_id, subscription_id, order_id, refund_id,
+			polar_customer_id, polar_product_id, checkout_id, event_at, received_at,
+			resource_status, amount, refunded_amount, currency, billing_reason, revoke_benefits, outcome
+		)
+		values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'IGNORED')
 		on conflict (webhook_id) do nothing
 		""".trimIndent(),
-		webhookId, eventType, subscriptionId, Timestamp.from(receivedAt),
+		webhookId,
+		eventType,
+		receipt.resourceId,
+		receipt.subscriptionId,
+		receipt.orderId,
+		receipt.refundId,
+		receipt.polarCustomerId,
+		receipt.productId,
+		receipt.checkoutId,
+		receipt.eventAt?.let(Timestamp::from),
+		Timestamp.from(receivedAt),
+		receipt.status,
+		receipt.amount,
+		receipt.refundedAmount,
+		receipt.currency,
+		receipt.billingReason,
+		receipt.revokeBenefits,
 	) == 1
 
 	@Transactional
@@ -39,3 +59,20 @@ class PolarWebhookPersistence(
 		)
 	}
 }
+
+data class PolarWebhookReceipt(
+	val resourceId: String?,
+	val subscriptionId: String?,
+	val orderId: String?,
+	val refundId: String?,
+	val polarCustomerId: String?,
+	val productId: String?,
+	val checkoutId: String?,
+	val eventAt: Instant?,
+	val status: String?,
+	val amount: Long?,
+	val refundedAmount: Long?,
+	val currency: String?,
+	val billingReason: String?,
+	val revokeBenefits: Boolean?,
+)

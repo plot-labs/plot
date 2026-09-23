@@ -12,7 +12,6 @@ vi.mock("@/lib/use-workspace-entitlement", () => ({
     plan: "founding",
     entitlementStatus: "active",
     accessMode: "full",
-    trialEndsAt: null,
     capabilities: {
       generate: true,
       edit: true,

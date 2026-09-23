@@ -8,6 +8,10 @@
   "plan": "founding",
   "entitlementStatus": "active",
   "accessMode": "full",
+  "subscriptionStatus": null,
+  "subscriptionCancelAtPeriodEnd": null,
+  "subscriptionCurrentPeriodEnd": null,
+  "subscriptionEventAt": null,
   "capabilities": {
     "generate": true,
     "edit": true,
@@ -16,7 +20,6 @@
     "configure": true,
     "unpublish": true
   },
-  "trialEndsAt": "2026-09-01T00:00:00Z",
   "role": "OWNER",
   "organizationId": null,
   "createdAt": "2026-08-01T00:00:00Z",

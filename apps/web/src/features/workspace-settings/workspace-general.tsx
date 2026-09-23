@@ -25,6 +25,10 @@ export function WorkspaceGeneral() {
   const [error, setError] = useState<string | null>(null);
   const [reloadNonce, setReloadNonce] = useState(0);
   const [copyState, setCopyState] = useState<"idle" | "copied">("idle");
+  const [isSubscriptionCheckoutLoading, setIsSubscriptionCheckoutLoading] = useState(false);
+  const [subscriptionCheckoutError, setSubscriptionCheckoutError] = useState<string | null>(null);
+	const [isSubscriptionPortalLoading, setIsSubscriptionPortalLoading] = useState(false);
+	const [subscriptionPortalError, setSubscriptionPortalError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -86,9 +90,15 @@ export function WorkspaceGeneral() {
     || publicCitationsEnabled !== savedPublicCitationsEnabled;
   const canConfigure = workspace?.capabilities?.configure !== false;
   const canEdit = workspace?.role === "OWNER" && canConfigure;
-  const trialUntil = workspace?.trialEndsAt
-    ? new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(workspace.trialEndsAt))
-    : null;
+  const isWorkspaceOwner = workspace?.role === "OWNER";
+  const canStartSubscription = isWorkspaceOwner
+    && (workspace?.plan === "none" || workspace?.entitlementStatus === "revoked");
+	const canManageSubscription = isWorkspaceOwner
+		&& workspace?.plan === "founding"
+		&& workspace?.entitlementStatus === "active";
+	const subscriptionPeriodEnd = workspace?.subscriptionCurrentPeriodEnd
+		? new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(workspace.subscriptionCurrentPeriodEnd))
+		: null;
 
   const onLogoSelected = (file: File | undefined) => {
     if (!file) return;
@@ -155,6 +165,32 @@ export function WorkspaceGeneral() {
     window.setTimeout(() => setCopyState("idle"), 2_000);
   };
 
+  const startSubscriptionCheckout = async () => {
+    if (!canStartSubscription || isSubscriptionCheckoutLoading) return;
+    setIsSubscriptionCheckoutLoading(true);
+    setSubscriptionCheckoutError(null);
+    try {
+      const session = await plotApiClient.createSubscriptionCheckout();
+      window.location.assign(session.url);
+    } catch {
+      setSubscriptionCheckoutError("Subscription checkout could not be started.");
+      setIsSubscriptionCheckoutLoading(false);
+    }
+  };
+
+	const openSubscriptionPortal = async () => {
+		if (!canManageSubscription || isSubscriptionPortalLoading) return;
+		setIsSubscriptionPortalLoading(true);
+		setSubscriptionPortalError(null);
+		try {
+			const portal = await plotApiClient.createSubscriptionPortal();
+			window.location.assign(portal.url);
+		} catch {
+			setSubscriptionPortalError("Subscription portal could not be started.");
+			setIsSubscriptionPortalLoading(false);
+		}
+	};
+
   return (
     <div className="h-full overflow-y-auto bg-[#f4f6f8] px-5 py-8 dark:bg-[#101112] sm:px-8 sm:py-10 lg:px-10">
       <div className="mx-auto max-w-[760px] pb-16">
@@ -172,24 +208,62 @@ export function WorkspaceGeneral() {
             <div className="border-b border-black/[0.07] px-5 py-5 dark:border-white/[0.08] sm:px-6">
               <h2 id="workspace-plan-heading" className="text-[15px] font-semibold text-black/82 dark:text-white/86">Plan and access</h2>
               <p className="mt-1 text-[13px] leading-5 text-black/48 dark:text-white/48">
-                Limits and remaining trial time come from the live workspace entitlement.
+                Workspace access follows its live subscription status.
               </p>
             </div>
             <div className="space-y-3 px-5 py-5 text-[13px] leading-5 text-black/62 dark:text-white/62 sm:px-6">
               <p>
-                Plan: <span className="font-medium text-black/78 dark:text-white/80">{workspace.plan}</span>
+                Plan: <span className="font-medium text-black/78 dark:text-white/80">{workspace.plan === "none" ? "No subscription" : "Founding"}</span>
                 {" · "}
                 Status: <span className="font-medium text-black/78 dark:text-white/80">{workspace.entitlementStatus}</span>
               </p>
-              {trialUntil ? <p>Trial ends {trialUntil}.</p> : null}
+                {workspace.subscriptionStatus === "active" && !workspace.subscriptionCancelAtPeriodEnd && subscriptionPeriodEnd ? <p>Renews {subscriptionPeriodEnd}.</p> : null}
+				{workspace.subscriptionCancelAtPeriodEnd && subscriptionPeriodEnd ? (
+					<p>Cancellation scheduled. Access ends {subscriptionPeriodEnd}.</p>
+				) : null}
+				{workspace.subscriptionStatus === "canceled" && !workspace.subscriptionCancelAtPeriodEnd ? (
+					<p>Cancellation is being processed. Access remains available until Polar confirms the change.</p>
+				) : null}
+				{workspace.subscriptionStatus === "past_due" ? (
+					<p>Payment needs attention. Your workspace remains available while Polar retries.</p>
+				) : null}
               {workspace.accessMode === "complete_only" ? (
-                <p>New drafts are paused after three trial results. Existing drafts can still be edited, exported, and published until the trial ends. Founding access is provisioned after Polar checkout.</p>
+                <p>New AI work is paused for this workspace. Existing drafts can still be edited, exported, and published.</p>
               ) : null}
               {workspace.accessMode === "read_only" ? (
-                <p>This workspace is read-only. You can still export drafts and unpublish live changelog entries. Founding access is provisioned after Polar checkout.</p>
+							<p>{workspace.entitlementStatus === "subscription_required"
+								? "Subscribe to Founding to unlock this workspace and use Plot. There is no free plan or trial."
+								: "This workspace is read-only. You can still export drafts and unpublish live changelog entries."}</p>
               ) : null}
-              {workspace.accessMode === "full" && workspace.plan === "trial" ? (
-                <p>Trial includes three drafts. After that you can finish existing drafts until the trial date, then export and unpublish only unless founding access is restored.</p>
+				{canManageSubscription ? (
+					<div className="border-t border-black/[0.07] pt-4 dark:border-white/[0.08]">
+						<p>Manage payment details, invoices, or cancellation in Polar.</p>
+						<button
+							type="button"
+							onClick={openSubscriptionPortal}
+							disabled={isSubscriptionPortalLoading}
+							className="mt-3 inline-flex h-9 items-center gap-2 rounded-[9px] bg-black px-3.5 text-[13px] font-medium text-white transition hover:bg-black/82 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:cursor-wait disabled:opacity-60 dark:bg-white dark:text-black dark:hover:bg-white/88 dark:focus-visible:ring-white/30"
+						>
+							{isSubscriptionPortalLoading ? <LoaderCircle className="size-4 animate-spin" aria-hidden="true" /> : <ExternalLink className="size-4" aria-hidden="true" />}
+							Manage subscription
+						</button>
+						{subscriptionPortalError ? <p className="mt-2 text-sm text-red-700 dark:text-red-300" role="alert">{subscriptionPortalError}</p> : null}
+					</div>
+				) : null}
+				{canStartSubscription ? (
+                <div className="border-t border-black/[0.07] pt-4 dark:border-white/[0.08]">
+								<p>{workspace.entitlementStatus === "revoked" ? "Subscribe again to restore full workspace access." : "Start a Founding subscription to unlock full workspace access and receive recurring AI credits."}</p>
+                  <button
+                    type="button"
+                    onClick={startSubscriptionCheckout}
+                    disabled={isSubscriptionCheckoutLoading}
+                    className="mt-3 inline-flex h-9 items-center gap-2 rounded-[9px] bg-black px-3.5 text-[13px] font-medium text-white transition hover:bg-black/82 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:cursor-wait disabled:opacity-60 dark:bg-white dark:text-black dark:hover:bg-white/88 dark:focus-visible:ring-white/30"
+                  >
+                    {isSubscriptionCheckoutLoading ? <LoaderCircle className="size-4 animate-spin" aria-hidden="true" /> : <ExternalLink className="size-4" aria-hidden="true" />}
+                    {workspace.entitlementStatus === "revoked" ? "Subscribe again" : "Subscribe to Founding"}
+                  </button>
+                  {subscriptionCheckoutError ? <p className="mt-2 text-sm text-red-700 dark:text-red-300" role="alert">{subscriptionCheckoutError}</p> : null}
+                </div>
               ) : null}
             </div>
           </section>

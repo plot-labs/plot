@@ -28,7 +28,6 @@ data class CurrentAccountWorkspace(
 	val entitlementStatus: String,
 	val accessMode: String,
 	val capabilities: WorkspaceCapabilities,
-	val trialEndsAt: java.time.Instant,
 )
 data class CurrentAccountResponse(
 	val user: CurrentAccountUser,
@@ -84,7 +83,6 @@ class CurrentAccountController(
 					entitlement.status,
 					entitlement.accessMode,
 					entitlement.capabilities,
-					workspace.trialEndsAt,
 				)
 			}
 		}

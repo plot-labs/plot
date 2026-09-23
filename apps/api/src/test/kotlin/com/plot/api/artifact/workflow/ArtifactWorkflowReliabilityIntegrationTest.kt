@@ -114,9 +114,9 @@ class ArtifactWorkflowReliabilityIntegrationTest {
 
 		assertEquals(1, recoveryPersistence.recoverStaleClaims(Instant.now().minusSeconds(120)))
 		assertEquals(
-			"FAILED:LEASE_LOST_OUTCOME_UNKNOWN",
+			"RUNNING:USAGE_UNKNOWN:AI_USAGE_UNKNOWN",
 			jdbcTemplate.queryForObject(
-				"select status || ':' || failure_code from model_invocations where id = ?",
+				"select status || ':' || billing_status || ':' || failure_code from model_invocations where id = ?",
 				String::class.java,
 				invocation.id,
 			),

@@ -41,6 +41,10 @@ data class StructuredTransportResponse<T : Any>(
 	val promptTokens: Int?,
 	val completionTokens: Int?,
 	val totalTokens: Int?,
+	val cacheReadTokens: Long? = null,
+	val cacheWriteTokens: Long? = null,
+	val reasoningTokens: Long? = null,
+	val reportedCostUsd: java.math.BigDecimal? = null,
 )
 
 interface StructuredChatTransport {
@@ -49,7 +53,11 @@ interface StructuredChatTransport {
 
 class TransientModelTransportException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
 class NonTransientModelTransportException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
-class MalformedModelOutputException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
+class MalformedModelOutputException(
+	message: String,
+	cause: Throwable? = null,
+	val usage: ProviderUsage? = null,
+) : RuntimeException(message, cause)
 
 class KoogArtifactWorkflowGateway(
 	private val transport: StructuredChatTransport,
@@ -112,6 +120,7 @@ class KoogArtifactWorkflowGateway(
 				ModelFailureCode.MALFORMED_OUTPUT,
 				"The model returned invalid structured output",
 				failure,
+				failure.usage?.toMetadata(Duration.between(startedAt, Instant.now())),
 			)
 		} catch (failure: NonTransientModelTransportException) {
 			throw ArtifactWorkflowModelException(
@@ -121,6 +130,30 @@ class KoogArtifactWorkflowGateway(
 			)
 		}
 	}
+
+	private fun ProviderUsage.toMetadata(latency: Duration) = ModelCallMetadata(
+		responseId = responseId,
+		actualModel = actualModel,
+		finishReason = null,
+		promptTokens = inputTokens?.toModelMetadataInt(),
+		completionTokens = outputTokens?.toModelMetadataInt(),
+		totalTokens = totalTokens?.toModelMetadataInt(),
+		latency = latency,
+		observationAttributes = mapOf(
+			"gateway" to provider.orEmpty(),
+			"requestedModel" to requestedModel.orEmpty(),
+			"servedModel" to actualModel.orEmpty(),
+			"responseId" to responseId.orEmpty(),
+			"finishReason" to "",
+		),
+		gateway = provider,
+		requestedModel = requestedModel,
+		cacheReadTokens = cacheReadTokens,
+		cacheWriteTokens = cacheWriteTokens,
+		reasoningTokens = reasoningTokens,
+		reportedCostUsd = reportedCostUsd,
+	)
+
 
 	private fun StructuredTransportResponse<*>.toMetadata(latency: Duration) = ModelCallMetadata(
 		responseId = responseId,
@@ -139,6 +172,10 @@ class KoogArtifactWorkflowGateway(
 		),
 		gateway = PlotAiProperties.OPENROUTER_GATEWAY,
 		requestedModel = properties.model,
+		cacheReadTokens = cacheReadTokens,
+		cacheWriteTokens = cacheWriteTokens,
+		reasoningTokens = reasoningTokens,
+		reportedCostUsd = reportedCostUsd,
 	)
 }
 

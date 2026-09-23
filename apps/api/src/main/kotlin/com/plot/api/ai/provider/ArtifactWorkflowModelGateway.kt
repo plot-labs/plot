@@ -6,6 +6,7 @@ import com.plot.api.artifact.workflow.model.SentenceArtifact
 import com.plot.api.artifact.workflow.model.TargetedRewriteOutput
 import com.plot.api.artifact.workflow.model.WriterOutput
 import java.time.Duration
+import java.math.BigDecimal
 import java.util.UUID
 
 interface ArtifactWorkflowModelGateway {
@@ -51,10 +52,45 @@ data class ModelCallMetadata(
 	val observationAttributes: Map<String, String>,
 	val gateway: String? = null,
 	val requestedModel: String? = null,
+	val cacheReadTokens: Long? = null,
+	val cacheWriteTokens: Long? = null,
+	val reasoningTokens: Long? = null,
+	val reportedCostUsd: BigDecimal? = null,
 ) {
 	val servedModel: String?
 		get() = actualModel
 }
+
+data class ProviderUsage(
+	val provider: String?,
+	val requestedModel: String?,
+	val actualModel: String?,
+	val responseId: String?,
+	val inputTokens: Long?,
+	val outputTokens: Long?,
+	val cacheReadTokens: Long?,
+	val cacheWriteTokens: Long?,
+	val reasoningTokens: Long?,
+	val totalTokens: Long?,
+	val reportedCostUsd: BigDecimal?,
+)
+
+fun ModelCallMetadata.toProviderUsage() = ProviderUsage(
+	provider = gateway,
+	requestedModel = requestedModel,
+	actualModel = actualModel,
+	responseId = responseId,
+	inputTokens = promptTokens?.toLong(),
+	outputTokens = completionTokens?.toLong(),
+	cacheReadTokens = cacheReadTokens,
+	cacheWriteTokens = cacheWriteTokens,
+	reasoningTokens = reasoningTokens,
+	totalTokens = totalTokens?.toLong(),
+	reportedCostUsd = reportedCostUsd,
+)
+
+internal fun Long.toModelMetadataInt(): Int? =
+	takeIf { it in 0..Int.MAX_VALUE.toLong() }?.toInt()
 
 enum class ModelFailureCode {
 	MODEL_NOT_CONFIGURED,
@@ -67,6 +103,7 @@ class ArtifactWorkflowModelException(
 	val code: ModelFailureCode,
 	message: String,
 	cause: Throwable? = null,
+	val metadata: ModelCallMetadata? = null,
 ) : RuntimeException(message, cause)
 
 enum class ModelRole { WRITER, REVIEWER, REWRITER }

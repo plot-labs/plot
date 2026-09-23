@@ -230,7 +230,7 @@ function CreateRelatedContentDialogContent({
 
           <div className="-mx-6 -mb-6 mt-6 flex items-center justify-between border-t border-black/[0.08] bg-black/[0.015] px-6 py-3.5 dark:border-white/[0.08] dark:bg-white/[0.02]">
             <p className="text-[11px] text-black/45 dark:text-white/45">
-              Consumes 1 generation credit
+              Uses workspace credits based on measured AI usage
             </p>
             <button
               type="submit"

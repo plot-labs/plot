@@ -46,9 +46,7 @@ class WorkspaceEntitlementApiIntegrationTest {
 			update workspaces
 			set plan = 'founding',
 			    entitlement_status = 'active',
-			    access_mode = 'full',
-			    trial_started_at = now(),
-			    trial_ends_at = now() + interval '30 days'
+			    access_mode = 'full'
 			where id = ?
 			""".trimIndent(),
 			devContext.devWorkspaceId,
@@ -57,7 +55,7 @@ class WorkspaceEntitlementApiIntegrationTest {
 
 	@Test
 	fun revokedWorkspaceCanReadAndExportButCannotMutate() {
-		setDevEntitlement("founding", "revoked", "read_only", "now() + interval '30 days'")
+		setDevEntitlement("founding", "revoked", "read_only")
 
 		mockMvc.get("/api/workspaces/${devContext.devWorkspaceId}").andExpect {
 			status { isOk() }
@@ -88,12 +86,13 @@ class WorkspaceEntitlementApiIntegrationTest {
 	}
 
 	@Test
-	fun elapsedTrialBecomesDurablyReadOnlyOnNextWrite() {
-		setDevEntitlement("trial", "trialing", "full", "now() - interval '1 second'")
+	fun newWorkspaceRequiresSubscriptionBeforeAnyWrite() {
+		setDevEntitlement("none", "subscription_required", "read_only")
 
 		mockMvc.get("/api/workspaces/${devContext.devWorkspaceId}").andExpect {
 			status { isOk() }
-			jsonPath("$.entitlementStatus") { value("expired") }
+			jsonPath("$.plan") { value("none") }
+			jsonPath("$.entitlementStatus") { value("subscription_required") }
 			jsonPath("$.accessMode") { value("read_only") }
 			jsonPath("$.capabilities.generate") { value(false) }
 			jsonPath("$.capabilities.edit") { value(false) }
@@ -105,8 +104,8 @@ class WorkspaceEntitlementApiIntegrationTest {
 			"select entitlement_status, access_mode from workspaces where id = ?",
 			devContext.devWorkspaceId,
 		)
-		assertEquals("trialing", projectedOnly["entitlement_status"])
-		assertEquals("full", projectedOnly["access_mode"])
+		assertEquals("subscription_required", projectedOnly["entitlement_status"])
+		assertEquals("read_only", projectedOnly["access_mode"])
 		mockMvc.patch("/api/workspaces/${devContext.devWorkspaceId}") {
 			contentType = MediaType.APPLICATION_JSON
 			content = """{"name":"Blocked"}"""
@@ -119,16 +118,16 @@ class WorkspaceEntitlementApiIntegrationTest {
 			"select entitlement_status, access_mode from workspaces where id = ?",
 			devContext.devWorkspaceId,
 		)
-		assertEquals("expired", state["entitlement_status"])
+		assertEquals("subscription_required", state["entitlement_status"])
 		assertEquals("read_only", state["access_mode"])
 	}
 
 	@Test
-	fun thirdSuccessfulPackBlocksGenerationButAllowsExistingDraftCompletion() {
+	fun contentPacksCannotGrantFreeWorkspaceAccess() {
 		val runIds = mutableListOf<UUID>()
 		val packIds = mutableListOf<UUID>()
 		try {
-			setDevEntitlement("trial", "trialing", "full", "now() + interval '30 days'")
+			setDevEntitlement("none", "subscription_required", "read_only")
 			repeat(3) {
 				val runId = insertArtifactWorkflowRun("READY")
 				runIds += runId
@@ -138,7 +137,7 @@ class WorkspaceEntitlementApiIntegrationTest {
 					"""
 					insert into content_packs (
 					  id, workspace_id, generation_run_id, title, status, created_at, updated_at
-					) values (?, ?, ?, 'Trial pack', 'READY', now(), now())
+					) values (?, ?, ?, 'Test pack', 'READY', now(), now())
 					""".trimIndent(),
 					packId,
 					devContext.devWorkspaceId,
@@ -149,19 +148,19 @@ class WorkspaceEntitlementApiIntegrationTest {
 
 			mockMvc.get("/api/workspaces/${devContext.devWorkspaceId}").andExpect {
 				status { isOk() }
-				jsonPath("$.plan") { value("trial") }
-				jsonPath("$.entitlementStatus") { value("trialing") }
-				jsonPath("$.accessMode") { value("complete_only") }
+				jsonPath("$.plan") { value("none") }
+				jsonPath("$.entitlementStatus") { value("subscription_required") }
+				jsonPath("$.accessMode") { value("read_only") }
 				jsonPath("$.capabilities.generate") { value(false) }
-				jsonPath("$.capabilities.edit") { value(true) }
-				jsonPath("$.capabilities.publish") { value(true) }
+				jsonPath("$.capabilities.edit") { value(false) }
+				jsonPath("$.capabilities.publish") { value(false) }
 				jsonPath("$.capabilities.export") { value(true) }
 				jsonPath("$.capabilities.configure") { value(false) }
 				jsonPath("$.capabilities.unpublish") { value(true) }
 			}
 			mockMvc.patch("/api/workspaces/${devContext.devWorkspaceId}") {
 				contentType = MediaType.APPLICATION_JSON
-				content = """{"name":"Blocked"}"""
+				content = """{"name":"Unpaid workspace"}"""
 			}.andExpect {
 				status { isForbidden() }
 				jsonPath("$.error") { value("WORKSPACE_READ_ONLY") }
@@ -171,8 +170,8 @@ class WorkspaceEntitlementApiIntegrationTest {
 				"select entitlement_status, access_mode from workspaces where id = ?",
 				devContext.devWorkspaceId,
 			)
-			assertEquals("trialing", persisted["entitlement_status"])
-			assertEquals("full", persisted["access_mode"])
+			assertEquals("subscription_required", persisted["entitlement_status"])
+			assertEquals("read_only", persisted["access_mode"])
 		} finally {
 			packIds.forEach { jdbcTemplate.update("delete from content_packs where id = ?", it) }
 			runIds.forEach { jdbcTemplate.update("delete from generation_runs where id = ?", it) }
@@ -181,48 +180,47 @@ class WorkspaceEntitlementApiIntegrationTest {
 
 	@Test
 	@Transactional
-	fun generationReservationsCannotRacePastTrialLimit() {
+	fun subscribedWorkspaceCanReserveMoreThanThreeArtifactWorkflows() {
 		val workspaceId = UUID.randomUUID()
-		insertTrialWorkspace(workspaceId)
-		repeat(3) {
+		insertWorkspace(workspaceId)
+		jdbcTemplate.update(
+			"update workspaces set plan = 'founding', entitlement_status = 'active', access_mode = 'full' where id = ?",
+			workspaceId,
+		)
+		repeat(4) {
 			val runId = UUID.randomUUID()
 			persistence.createRun(reservation(workspaceId, runId))
 		}
 
-		val blocked = assertFailsWith<ApiException> {
-			persistence.createRun(reservation(workspaceId, UUID.randomUUID()))
-		}
-		assertEquals("TRIAL_PACK_LIMIT_REACHED", blocked.error)
 		assertEquals(
-			"The trial already has three completed or in-progress artifact drafts. Wait for a failure to release capacity or subscribe.",
-			blocked.message,
+			4,
+			jdbcTemplate.queryForObject(
+				"select count(*) from generation_runs where workspace_id = ?",
+				Int::class.java,
+				workspaceId,
+			),
 		)
 	}
 
 	@Test
 	@Transactional
-	fun failedArtifactWorkflowReleasesReservedTrialCapacity() {
+	fun subscriptionRequiredWorkspaceCannotReserveArtifactWorkflow() {
 		val workspaceId = UUID.randomUUID()
-		insertTrialWorkspace(workspaceId)
-		val runIds = List(3) {
-			UUID.randomUUID().also { runId -> persistence.createRun(reservation(workspaceId, runId)) }
-		}
+		insertWorkspace(workspaceId)
 
-		jdbcTemplate.update(
-			"update generation_runs set status = 'FAILED', finished_at = created_at, updated_at = created_at where id = ?",
-			runIds.first(),
-		)
-		persistence.createRun(reservation(workspaceId, UUID.randomUUID()))
+		val blocked = assertFailsWith<ApiException> {
+			persistence.createRun(reservation(workspaceId, UUID.randomUUID()))
+		}
+		assertEquals("WORKSPACE_READ_ONLY", blocked.error)
 	}
 
-	private fun setDevEntitlement(plan: String, status: String, accessMode: String, trialEndsAtSql: String) {
+	private fun setDevEntitlement(plan: String, status: String, accessMode: String) {
 		jdbcTemplate.update(
 			"""
 			update workspaces
 			set plan = ?,
 			    entitlement_status = ?,
-			    access_mode = ?,
-			    trial_ends_at = $trialEndsAtSql
+			    access_mode = ?
 			where id = ?
 			""".trimIndent(),
 			plan,
@@ -245,13 +243,13 @@ class WorkspaceEntitlementApiIntegrationTest {
 			runId,
 			devContext.devWorkspaceId,
 			devContext.devUserId,
-			"trial-$runId",
+			"pack-$runId",
 			"fingerprint-$runId",
 			status,
 		)
 	}
 
-	private fun insertTrialWorkspace(workspaceId: UUID) {
+	private fun insertWorkspace(workspaceId: UUID) {
 		jdbcTemplate.update(
 			"""
 			insert into workspaces (

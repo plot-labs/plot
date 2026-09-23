@@ -173,8 +173,6 @@ open class MixedPersistenceRollbackFixture(
 				status = "ACTIVE",
 				createdAt = now,
 				updatedAt = now,
-				trialStartedAt = now,
-				trialEndsAt = now.plus(30, ChronoUnit.DAYS),
 			)
 		)
 		workSessionPersistence.insert(

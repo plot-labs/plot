@@ -21,7 +21,7 @@ class PolarWebhookVerifier(
 		webhookId: String,
 		webhookTimestamp: String,
 		webhookSignature: String,
-		rawBody: String,
+		rawBody: ByteArray,
 	) {
 		val secret = properties.webhookSecret?.takeIf { it.isNotBlank() }
 		if (!properties.enabled || secret == null) {
@@ -38,23 +38,34 @@ class PolarWebhookVerifier(
 		val age = Duration.between(signedAt, clock.instant()).abs()
 		if (age > Duration.ofSeconds(properties.timestampToleranceSeconds)) invalid()
 
-		val signedPayload = "$webhookId.$webhookTimestamp.$rawBody"
+		val signedPayload = "$webhookId.$webhookTimestamp.".toByteArray(StandardCharsets.UTF_8) + rawBody
 		val mac = Mac.getInstance(HMAC_ALGORITHM)
-		mac.init(SecretKeySpec(secret.toByteArray(StandardCharsets.UTF_8), HMAC_ALGORITHM))
-		val expected = mac.doFinal(signedPayload.toByteArray(StandardCharsets.UTF_8))
-		val verified = webhookSignature
-			.trim()
-			.split(SIGNATURE_SEPARATOR)
-			.asSequence()
-			.mapNotNull(::decodeV1Signature)
+		mac.init(SecretKeySpec(signingKey(secret), HMAC_ALGORITHM))
+		val expected = mac.doFinal(signedPayload)
+		val verified = V1_SIGNATURE_PATTERN
+			.findAll(webhookSignature)
+			.mapNotNull { match -> decodeSignature(match.groupValues[1]) }
 			.any { candidate -> MessageDigest.isEqual(expected, candidate) }
 		if (!verified) invalid()
 	}
 
-	private fun decodeV1Signature(value: String): ByteArray? {
-		val parts = value.split(',', limit = 2)
-		if (parts.size != 2 || parts[0] != "v1") return null
-		return runCatching { Base64.getDecoder().decode(parts[1]) }.getOrNull()
+	fun verify(webhookId: String, webhookTimestamp: String, webhookSignature: String, rawBody: String) =
+		verify(webhookId, webhookTimestamp, webhookSignature, rawBody.toByteArray(StandardCharsets.UTF_8))
+
+	private fun decodeSignature(value: String): ByteArray? =
+		runCatching { Base64.getDecoder().decode(value) }
+			.recoverCatching { Base64.getUrlDecoder().decode(value) }
+			.getOrNull()
+
+	private fun signingKey(secret: String): ByteArray {
+		val encodedSecret = when {
+			secret.startsWith("whsec_") -> secret.removePrefix("whsec_")
+			secret.startsWith("polar_whs_") -> secret.removePrefix("polar_whs_")
+			else -> null
+		}
+		return encodedSecret?.let {
+			runCatching { Base64.getDecoder().decode(it) }.getOrElse { invalid() }
+		} ?: secret.toByteArray(StandardCharsets.UTF_8)
 	}
 
 	private fun invalid(): Nothing = throw ApiException(
@@ -65,6 +76,7 @@ class PolarWebhookVerifier(
 
 	private companion object {
 		const val HMAC_ALGORITHM = "HmacSHA256"
-		val SIGNATURE_SEPARATOR = Regex("\\s+")
+		// Svix may concatenate multiple v1 signatures with spaces or commas during key rotation.
+		val V1_SIGNATURE_PATTERN = Regex("(?:^|[\\s,])v1,([^\\s,]+)")
 	}
 }

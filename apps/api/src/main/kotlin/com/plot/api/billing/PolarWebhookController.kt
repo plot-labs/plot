@@ -18,10 +18,10 @@ class PolarWebhookController(
 		@RequestHeader("webhook-id") webhookId: String,
 		@RequestHeader("webhook-timestamp") webhookTimestamp: String,
 		@RequestHeader("webhook-signature") webhookSignature: String,
-		@RequestBody rawBody: String,
+		@RequestBody rawBody: ByteArray,
 	): ResponseEntity<Void> {
 		verifier.verify(webhookId, webhookTimestamp, webhookSignature, rawBody)
-		subscriptionService.handle(webhookId, rawBody)
+		subscriptionService.handle(webhookId, rawBody.toString(Charsets.UTF_8))
 		return ResponseEntity.noContent().build()
 	}
 }
