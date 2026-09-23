@@ -33,8 +33,15 @@ class PolarSubscriptionService(
 		val eventType = string(payload.path("type"))?.takeIf { it.isNotBlank() }
 			?: invalidPayload()
 		val data = payload.path("data")
-		val subscriptionId = string(data.path("id"))?.takeIf { it.isNotBlank() }
-		if (!webhookPersistence.recordIfNew(webhookId, eventType, subscriptionId, clock.instant()) || eventType !in HANDLED_EVENTS) return
+		val receipt = webhookReceipt(eventType, payload, data)
+		if (!webhookPersistence.recordIfNew(webhookId, eventType, receipt, clock.instant())) return
+		if (eventType !in HANDLED_EVENTS) return
+		if (eventType in ORDER_REFUND_EVENTS) {
+			handleOrderRefund(webhookId, eventType, payload, data, receipt)
+			return
+		}
+
+		val subscriptionId = receipt.subscriptionId
 		if (subscriptionId == null) {
 			recordOutcome(webhookId, "UNMATCHED", null)
 			logger.warn("Polar subscription event could not be matched: subscription_id=missing")
@@ -62,6 +69,94 @@ class PolarSubscriptionService(
 			"subscription.updated" -> refreshUpdated(webhookId, subscriptionId, data, eventAt, target)
 			"subscription.revoked" -> demote(webhookId, subscriptionId, data, eventAt, target)
 		}
+	}
+
+	private fun handleOrderRefund(
+		webhookId: String,
+		eventType: String,
+		payload: JsonNode,
+		data: JsonNode,
+		receipt: PolarWebhookReceipt,
+	) {
+		if (receipt.resourceId == null) {
+			recordOutcome(webhookId, "INVALID_RESOURCE_ID", null)
+			logger.warn("Polar order/refund event has no resource id: event_type={}", eventType)
+			return
+		}
+
+		val resolution = resolveOrderRefundTarget(data)
+		if (resolution.conflict) {
+			recordOutcome(webhookId, "IDENTITY_MISMATCH", null)
+			logger.warn("Polar order/refund event customer identity did not match workspace metadata: event_type={}", eventType)
+			return
+		}
+		val target = resolution.target
+		if (target == null) {
+			recordOutcome(webhookId, "UNMATCHED", null)
+			logger.warn("Polar order/refund event could not be matched: event_type={} resource_id={}", eventType, receipt.resourceId)
+			return
+		}
+		if (eventTimestamp(payload) == null) {
+			recordOutcome(webhookId, "INVALID_TIMESTAMP", target)
+			logger.warn("Polar order/refund event has no valid timestamp: event_type={} resource_id={}", eventType, receipt.resourceId)
+			return
+		}
+
+		val outcome = when (eventType) {
+			"order.created" -> "ORDER_CREATED"
+			"order.paid" -> "ORDER_PAID"
+			"order.updated" -> when (text(data, "status")?.lowercase()) {
+				"partially_refunded" -> "ORDER_PARTIALLY_REFUNDED"
+				"refunded" -> "ORDER_REFUNDED"
+				else -> "ORDER_UPDATED"
+			}
+			"order.refunded" -> orderRefundOutcome(data)
+			"refund.created" -> "REFUND_CREATED"
+			"refund.updated" -> "REFUND_UPDATED"
+			else -> "IGNORED"
+		}
+		// Polar remains the source of truth for credit benefits and subscription access.
+		// These events persist the payment/refund evidence without applying a second balance mutation.
+		recordOutcome(webhookId, outcome, target)
+	}
+
+	private fun orderRefundOutcome(data: JsonNode): String = when (text(data, "status")?.lowercase()) {
+		"partially_refunded" -> "ORDER_PARTIALLY_REFUNDED"
+		"refunded" -> "ORDER_REFUNDED"
+		else -> {
+			val refundedAmount = optionalLong(data, "refunded_amount")
+			val totalAmount = optionalLong(data, "total_amount")
+			when {
+				refundedAmount != null && refundedAmount > 0 && totalAmount != null && refundedAmount < totalAmount ->
+					"ORDER_PARTIALLY_REFUNDED"
+				refundedAmount != null && refundedAmount > 0 && totalAmount != null && refundedAmount >= totalAmount ->
+					"ORDER_REFUNDED"
+				else -> "ORDER_REFUND_RECORDED"
+			}
+		}
+	}
+
+	private fun webhookReceipt(eventType: String, payload: JsonNode, data: JsonNode): PolarWebhookReceipt {
+		val resourceId = text(data, "id")
+		val isSubscription = eventType.startsWith("subscription.")
+		val isOrder = eventType.startsWith("order.")
+		val isRefund = eventType.startsWith("refund.")
+		return PolarWebhookReceipt(
+			resourceId = resourceId,
+			subscriptionId = if (isSubscription) resourceId else text(data, "subscription_id"),
+			orderId = if (isOrder) resourceId else text(data, "order_id"),
+			refundId = if (isRefund) resourceId else null,
+			polarCustomerId = customerId(data),
+			productId = text(data, "product_id"),
+			checkoutId = text(data, "checkout_id"),
+			eventAt = eventTimestamp(payload),
+			status = text(data, "status"),
+			amount = optionalLong(data, if (isRefund) "amount" else "total_amount"),
+			refundedAmount = optionalLong(data, "refunded_amount"),
+			currency = text(data, "currency"),
+			billingReason = text(data, "billing_reason"),
+			revokeBenefits = boolean(data, "revoke_benefits"),
+		)
 	}
 
 	private fun promote(
@@ -237,11 +332,36 @@ class PolarSubscriptionService(
 		resolveExternalWorkspace(externalId)?.let { workspace ->
 			return BillingTarget(owner(workspace), workspace)
 		}
+		customerId(data)?.let(workspaceRepository::findByPolarCustomerId)?.let { workspace ->
+			return BillingTarget(owner(workspace), workspace)
+		}
 		resolveExternalCustomer(externalId)?.let { return targetForUser(it) }
 
 		val email = text(data, "customer", "email")?.trim()?.lowercase()
 		val emailUser = email?.let(userRepository::findByEmailIgnoreCase)
 		return emailUser?.let(::targetForUser)
+	}
+
+	private fun resolveOrderRefundTarget(data: JsonNode): BillingTargetResolution {
+		val referenceId = text(data, "metadata", "reference_id")
+			?: text(data, "metadata", "referenceId")
+		val externalId = text(data, "customer", "external_id")
+		val customerWorkspace = customerId(data)
+			?.let(workspaceRepository::findByPolarCustomerId)
+			?.let { workspace -> BillingTarget(owner(workspace), workspace) }
+		val candidates = listOfNotNull(
+			resolveReference(referenceId),
+			resolveExternalWorkspace(externalId)?.let { workspace -> BillingTarget(owner(workspace), workspace) },
+			resolveExternalCustomer(externalId)?.let(::targetForUser),
+			customerWorkspace,
+		).distinctBy { it.workspace.id }
+		if (candidates.size > 1) return BillingTargetResolution(target = null, conflict = true)
+		candidates.singleOrNull()?.let { return BillingTargetResolution(it) }
+
+		// Refund events may only contain Polar's customer ID. Avoid falling back to email
+		// when that ID is unknown, since an email can belong to more than one workspace.
+		if (customerId(data) != null) return BillingTargetResolution(target = null)
+		return BillingTargetResolution(resolveTarget(data))
 	}
 
 	private fun resolveReference(referenceId: String?): BillingTarget? {
@@ -296,6 +416,9 @@ class PolarSubscriptionService(
 		string(payload.path("timestamp"))
 			?.let { value -> runCatching { Instant.parse(value) }.getOrNull() }
 
+	private fun optionalLong(node: JsonNode, field: String): Long? =
+		node.path(field).takeIf { it.isIntegralNumber && it.canConvertToLong() }?.longValue()
+
 	private fun boolean(node: JsonNode, vararg path: String): Boolean? {
 		var current = node
 		path.forEach { segment -> current = current.path(segment) }
@@ -337,8 +460,21 @@ class PolarSubscriptionService(
 		val workspace: Workspace,
 	)
 
+	private data class BillingTargetResolution(
+		val target: BillingTarget?,
+		val conflict: Boolean = false,
+	)
+
 	private companion object {
 		val logger = LoggerFactory.getLogger(PolarSubscriptionService::class.java)
+		val ORDER_REFUND_EVENTS = setOf(
+			"order.created",
+			"order.paid",
+			"order.updated",
+			"order.refunded",
+			"refund.created",
+			"refund.updated",
+		)
 		val HANDLED_EVENTS = setOf(
 			"subscription.active",
 			"subscription.uncanceled",
@@ -346,6 +482,6 @@ class PolarSubscriptionService(
 			"subscription.canceled",
 			"subscription.past_due",
 			"subscription.revoked",
-		)
+		) + ORDER_REFUND_EVENTS
 	}
 }

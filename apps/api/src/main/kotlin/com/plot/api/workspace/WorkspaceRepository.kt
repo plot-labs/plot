@@ -53,6 +53,13 @@ class WorkspaceRepository(
 		}.singleOrNull()?.toModel()
 	}
 
+	@Transactional(readOnly = true)
+	fun findByPolarCustomerId(polarCustomerId: String): Workspace? = sql.execute {
+		WorkspaceTable.selectAll().where {
+			(WorkspaceTable.polarCustomerId eq polarCustomerId) and (WorkspaceTable.status eq "ACTIVE")
+		}.limit(2).map { it.toModel() }.singleOrNull()
+	}
+
 	@Transactional
 	fun save(workspace: Workspace): Workspace = sql.execute {
 		val updated = WorkspaceTable.update({ WorkspaceTable.id eq workspace.id }) {
