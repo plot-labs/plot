@@ -102,6 +102,14 @@ class ArtifactWorkflowRunWorker(
 			notifyAgentRunIfTerminal(claim)
 			return "FAILED" to true
 		}
+		executionPersistence.findUnknownUsageInvocation(claim.workspaceId, claim.runId)?.let { unknown ->
+			runLease.commit {
+				executionPersistence.failCheckpoint(claim, unknown, state, "AI_USAGE_UNKNOWN")
+			}
+			attemptObservation.lowCardinalityKeyValue("plot.error_code", "AI_USAGE_UNKNOWN")
+			notifyAgentRunIfTerminal(claim)
+			return "FAILED" to true
+		}
 		val budgetFailure = executionPersistence.budgetFailureCode(claim)
 		if (budgetFailure != null) {
 			runLease.commit { executionPersistence.failClaim(claim, state, budgetFailure) }

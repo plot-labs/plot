@@ -285,6 +285,28 @@ class ArtifactWorkflowExecutionPersistence(
 			billingStatus = "PENDING",
 		)
 
+	fun findUnknownUsageInvocation(workspaceId: UUID, generationRunId: UUID): ModelInvocationLease? = sqlExecutor.query(
+		"""
+		select id, workflow_step_id, role, logical_call_index, attempt_no
+		from model_invocations
+		where workspace_id = ? and generation_run_id = ?
+		  and status = 'RUNNING' and billing_status = 'USAGE_UNKNOWN'
+		order by created_at, id
+		limit 1
+		""".trimIndent(),
+		{ row, _ ->
+			ModelInvocationLease(
+				id = requireNotNull(row.getObject("id", UUID::class.java)),
+				stepId = requireNotNull(row.getObject("workflow_step_id", UUID::class.java)),
+				role = ModelRole.valueOf(requireNotNull(row.getString("role"))),
+				logicalCallIndex = row.getInt("logical_call_index"),
+				attemptNo = row.getInt("attempt_no"),
+			)
+		},
+		workspaceId,
+		generationRunId,
+	).firstOrNull()
+
 	fun findSettledUnfinishedInvocation(workspaceId: UUID, generationRunId: UUID): ArtifactModelInvocationSettlement? =
 		findModelInvocationSettlement(
 			workspaceId = workspaceId,

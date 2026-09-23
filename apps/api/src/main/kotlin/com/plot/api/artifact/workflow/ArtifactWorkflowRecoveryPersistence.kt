@@ -50,10 +50,10 @@ class ArtifactWorkflowRecoveryPersistence(
 			sqlExecutor.update(
 				"""
 				update model_invocations
-				set status = 'FAILED', failure_code = 'LEASE_LOST_OUTCOME_UNKNOWN', finished_at = ?
+				set billing_status = 'USAGE_UNKNOWN', failure_code = 'AI_USAGE_UNKNOWN'
 				where workspace_id = ? and generation_run_id = ? and status = 'RUNNING'
+				  and (billing_status is null or billing_status = 'USAGE_UNKNOWN')
 				""".trimIndent(),
-				Timestamp.from(now),
 				candidate.workspaceId,
 				candidate.runId,
 			)

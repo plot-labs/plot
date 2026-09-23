@@ -76,7 +76,7 @@ class ArtifactWorkflowService(
 		)
 	}
 
-	/** Advances exactly one durable model-call checkpoint. External model calls are at-least-once across a crash window. */
+	/** Advances one durable model-call checkpoint; after a crash the external call outcome may be unknown. */
 	fun advance(state: ArtifactWorkflowState, gateway: ArtifactWorkflowModelGateway): ArtifactWorkflowState = when (state.status) {
 		ArtifactWorkflowRunStatus.QUEUED, ArtifactWorkflowRunStatus.WRITING -> write(state, gateway)
 		ArtifactWorkflowRunStatus.REVIEWING -> review(state, gateway)

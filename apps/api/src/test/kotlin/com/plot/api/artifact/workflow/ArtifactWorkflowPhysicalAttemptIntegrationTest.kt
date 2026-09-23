@@ -358,31 +358,42 @@ class ArtifactWorkflowPhysicalAttemptIntegrationTest {
 	}
 
 	@Test
-	fun staleRecoveryCreatesTheNextAttemptForTheSameLogicalStep() {
-		val state = reserve("stale-retry")
+	fun staleRecoveryMarksUnknownUsageAndDoesNotRepeatTheProviderCall() {
+		val state = reserve("stale-usage-unknown")
 		val firstClaim = assertNotNull(executionPersistence.claimNext("first-worker", Instant.now().minusSeconds(120)))
-		val firstAttempt = executionPersistence.beginInvocation(firstClaim, ModelRole.WRITER)
+		val firstAttempt = executionPersistence.beginInvocation(firstClaim, ModelRole.WRITER, enforceSettlementGate = true)
 		jdbcTemplate.update(
 			"update generation_runs set heartbeat_at = now() - interval '10 minutes' where id = ?",
 			state.runId,
 		)
 
 		assertEquals(1, recoveryPersistence.recoverStaleClaims(Instant.now().minusSeconds(120)))
-		val replacement = assertNotNull(
-			executionPersistence.claimNext("replacement-worker", Instant.now().minusSeconds(120)),
+		assertEquals(
+			"RUNNING:USAGE_UNKNOWN:AI_USAGE_UNKNOWN",
+			jdbcTemplate.queryForObject(
+				"select status || ':' || billing_status || ':' || failure_code from model_invocations where id = ?",
+				String::class.java,
+				firstAttempt.id,
+			),
 		)
-		val secondAttempt = executionPersistence.beginInvocation(replacement, ModelRole.WRITER)
+		val gateway = RetryGateway(state.evidence.single().id, transientWriterFailures = 0)
 
-		assertEquals(firstAttempt.stepId, secondAttempt.stepId)
-		assertEquals(firstAttempt.logicalCallIndex, secondAttempt.logicalCallIndex)
-		assertEquals(2, secondAttempt.attemptNo)
+		assertEquals(true, billedWorker(gateway, "recovery-worker").processOne())
+
+		assertEquals(0, gateway.writeCalls)
+		assertEquals("FAILED", runStatus(state.runId))
+		assertEquals("AI_USAGE_UNKNOWN", runFailure(state.runId))
 		assertEquals(
 			listOf(
-				InvocationRow("WRITER", 0, 1, "FAILED", "LEASE_LOST_OUTCOME_UNKNOWN"),
-				InvocationRow("WRITER", 0, 2, "RUNNING", null),
+				InvocationRow("WRITER", 0, 1, "FAILED", "AI_USAGE_UNKNOWN"),
 			),
 			invocations(state.runId),
 		)
+
+		val nextRun = reserve("stale-usage-unknown-does-not-block-workspace")
+		val nextGateway = RetryGateway(nextRun.evidence.single().id, transientWriterFailures = 0)
+		assertEquals(true, billedWorker(nextGateway, "after-unknown-worker").processOne())
+		assertEquals(1, nextGateway.writeCalls)
 	}
 
 	@Test
