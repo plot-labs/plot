@@ -92,13 +92,10 @@ export function WorkspaceGeneral() {
   const canEdit = workspace?.role === "OWNER" && canConfigure;
   const isWorkspaceOwner = workspace?.role === "OWNER";
   const canStartSubscription = isWorkspaceOwner
-    && (workspace?.plan === "trial" || workspace?.entitlementStatus === "revoked");
+    && (workspace?.plan === "none" || workspace?.entitlementStatus === "revoked");
 	const canManageSubscription = isWorkspaceOwner
 		&& workspace?.plan === "founding"
 		&& workspace?.entitlementStatus === "active";
-  const trialUntil = workspace?.plan === "trial" && workspace.trialEndsAt
-    ? new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(workspace.trialEndsAt))
-    : null;
 	const subscriptionPeriodEnd = workspace?.subscriptionCurrentPeriodEnd
 		? new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(workspace.subscriptionCurrentPeriodEnd))
 		: null;
@@ -211,16 +208,15 @@ export function WorkspaceGeneral() {
             <div className="border-b border-black/[0.07] px-5 py-5 dark:border-white/[0.08] sm:px-6">
               <h2 id="workspace-plan-heading" className="text-[15px] font-semibold text-black/82 dark:text-white/86">Plan and access</h2>
               <p className="mt-1 text-[13px] leading-5 text-black/48 dark:text-white/48">
-                Limits and remaining trial time come from the live workspace entitlement.
+                Workspace access follows its live subscription status.
               </p>
             </div>
             <div className="space-y-3 px-5 py-5 text-[13px] leading-5 text-black/62 dark:text-white/62 sm:px-6">
               <p>
-                Plan: <span className="font-medium text-black/78 dark:text-white/80">{workspace.plan}</span>
+                Plan: <span className="font-medium text-black/78 dark:text-white/80">{workspace.plan === "none" ? "No subscription" : "Founding"}</span>
                 {" · "}
                 Status: <span className="font-medium text-black/78 dark:text-white/80">{workspace.entitlementStatus}</span>
               </p>
-              {trialUntil ? <p>Trial ends {trialUntil}.</p> : null}
                 {workspace.subscriptionStatus === "active" && !workspace.subscriptionCancelAtPeriodEnd && subscriptionPeriodEnd ? <p>Renews {subscriptionPeriodEnd}.</p> : null}
 				{workspace.subscriptionCancelAtPeriodEnd && subscriptionPeriodEnd ? (
 					<p>Cancellation scheduled. Access ends {subscriptionPeriodEnd}.</p>
@@ -232,13 +228,12 @@ export function WorkspaceGeneral() {
 					<p>Payment needs attention. Your workspace remains available while Polar retries.</p>
 				) : null}
               {workspace.accessMode === "complete_only" ? (
-                <p>New AI work is paused for this workspace. Existing drafts can still be edited, exported, and published until the trial ends. Founding access is provisioned after Polar checkout.</p>
+                <p>New AI work is paused for this workspace. Existing drafts can still be edited, exported, and published.</p>
               ) : null}
               {workspace.accessMode === "read_only" ? (
-                <p>This workspace is read-only. You can still export drafts and unpublish live changelog entries. Founding access is provisioned after Polar checkout.</p>
-              ) : null}
-              {workspace.accessMode === "full" && workspace.plan === "trial" ? (
-                <p>Trial AI usage is deducted from workspace credits until the trial ends. Existing drafts remain available to edit, export, and publish.</p>
+							<p>{workspace.entitlementStatus === "subscription_required"
+								? "Subscribe to Founding to unlock this workspace and use Plot. There is no free plan or trial."
+								: "This workspace is read-only. You can still export drafts and unpublish live changelog entries."}</p>
               ) : null}
 				{canManageSubscription ? (
 					<div className="border-t border-black/[0.07] pt-4 dark:border-white/[0.08]">
@@ -257,7 +252,7 @@ export function WorkspaceGeneral() {
 				) : null}
 				{canStartSubscription ? (
                 <div className="border-t border-black/[0.07] pt-4 dark:border-white/[0.08]">
-                  <p>{workspace.entitlementStatus === "revoked" ? "Subscribe again to restore full workspace access." : "Subscribe to keep full workspace access after the trial and receive recurring AI credits."}</p>
+								<p>{workspace.entitlementStatus === "revoked" ? "Subscribe again to restore full workspace access." : "Start a Founding subscription to unlock full workspace access and receive recurring AI credits."}</p>
                   <button
                     type="button"
                     onClick={startSubscriptionCheckout}

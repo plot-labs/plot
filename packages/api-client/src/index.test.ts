@@ -29,7 +29,6 @@ function workspaceSummary(overrides: Partial<WorkspaceSummary> = {}): WorkspaceS
       configure: true,
       unpublish: true,
     },
-    trialEndsAt: "2026-09-01T00:00:00Z",
     role: "OWNER",
     createdAt: "2026-08-01T00:00:00Z",
     updatedAt: "2026-08-17T00:00:00Z",

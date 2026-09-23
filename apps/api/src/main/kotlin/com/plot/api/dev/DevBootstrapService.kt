@@ -1,6 +1,5 @@
 package com.plot.api.dev
 
-import com.plot.api.entitlement.TrialPolicy
 import com.plot.api.workspace.User
 import com.plot.api.workspace.UserRepository
 import com.plot.api.workspace.Workspace
@@ -66,8 +65,6 @@ class DevBootstrapService(
 				updatedAt = now,
 				plan = "founding",
 				entitlementStatus = "active",
-				trialStartedAt = now,
-				trialEndsAt = now.plus(TrialPolicy.DURATION),
 			)
 		}
 		workspace.name = "Dev Workspace"

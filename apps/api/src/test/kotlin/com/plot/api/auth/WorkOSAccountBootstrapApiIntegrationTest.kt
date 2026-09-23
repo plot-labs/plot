@@ -82,6 +82,13 @@ class WorkOSAccountBootstrapApiIntegrationTest {
 		assertEquals(1, count("users where email = '$TEST_EMAIL'"))
 		assertEquals(1, count("workspaces where name = 'Personal' and created_by_user_id in (select id from users where email = '$TEST_EMAIL')"))
 		assertEquals(1, count("workspace_members where workos_membership_id = '$TEST_MEMBERSHIP_ID' and role = 'OWNER'"))
+		val newWorkspaceEntitlement = jdbcTemplate.queryForMap(
+			"select plan, entitlement_status, access_mode from workspaces where name = 'Personal' and created_by_user_id in (select id from users where email = ?)",
+			TEST_EMAIL,
+		)
+		assertEquals("none", newWorkspaceEntitlement["plan"])
+		assertEquals("subscription_required", newWorkspaceEntitlement["entitlement_status"])
+		assertEquals("read_only", newWorkspaceEntitlement["access_mode"])
 
 		mockMvc.get("/api/me") {
 			with(authenticated())

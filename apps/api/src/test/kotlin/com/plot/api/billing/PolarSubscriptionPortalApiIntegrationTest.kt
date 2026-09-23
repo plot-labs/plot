@@ -121,6 +121,23 @@ class PolarSubscriptionPortalApiIntegrationTest {
 		assertEquals(1, transport.calls.count { it.uri.path == "/v1/checkouts/" })
 	}
 
+	@Test
+	fun subscriptionRequiredWorkspaceCanStartItsFirstSubscriptionCheckout() {
+		jdbcTemplate.update(
+			"update workspaces set plan = 'none', entitlement_status = 'subscription_required', access_mode = 'read_only', polar_subscription_id = null where id = ?",
+			devContext.devWorkspaceId,
+		)
+
+		mockMvc.post("/api/billing/subscription-checkout") {
+			contentType = MediaType.APPLICATION_JSON
+		}.andExpect {
+			status { isCreated() }
+			jsonPath("$.checkoutId") { value("checkout-resubscribe") }
+		}
+
+		assertEquals(1, transport.calls.count { it.uri.path == "/v1/checkouts/" })
+	}
+
 	@TestConfiguration(proxyBeanMethods = false)
 	class Config {
 		@Bean

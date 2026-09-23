@@ -15,11 +15,10 @@ const FULL_CAPABILITIES: WorkspaceCapabilities = {
 };
 
 export type WorkspaceEntitlement = {
-  plan: string;
-  entitlementStatus: string;
-  accessMode: WorkspaceSummary["accessMode"];
-  trialEndsAt: string | null;
-  capabilities: WorkspaceCapabilities;
+	plan: string;
+	entitlementStatus: string;
+	accessMode: WorkspaceSummary["accessMode"];
+	capabilities: WorkspaceCapabilities;
 };
 
 export function useWorkspaceEntitlement(): WorkspaceEntitlement | null {
@@ -32,11 +31,10 @@ export function useWorkspaceEntitlement(): WorkspaceEntitlement | null {
       void plotApiClient.getWorkspace(workspaceId)
         .then((workspace) => {
           setEntitlement({
-            plan: workspace.plan,
-            entitlementStatus: workspace.entitlementStatus,
-            accessMode: workspace.accessMode,
-            trialEndsAt: workspace.trialEndsAt,
-            capabilities: workspace.capabilities ?? FULL_CAPABILITIES,
+				plan: workspace.plan,
+				entitlementStatus: workspace.entitlementStatus,
+				accessMode: workspace.accessMode,
+				capabilities: workspace.capabilities ?? FULL_CAPABILITIES,
           });
         })
         .catch(() => undefined);
@@ -48,11 +46,4 @@ export function useWorkspaceEntitlement(): WorkspaceEntitlement | null {
   }, []);
 
   return entitlement;
-}
-
-export function trialEndsLabel(trialEndsAt: string | null): string | null {
-  if (!trialEndsAt) return null;
-  const date = new Date(trialEndsAt);
-  if (Number.isNaN(date.getTime())) return null;
-  return new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(date);
 }

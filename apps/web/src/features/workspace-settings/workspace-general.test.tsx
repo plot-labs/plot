@@ -92,7 +92,7 @@ describe("WorkspaceGeneral", () => {
     await waitFor(() => expect(mocks.getWorkspace).toHaveBeenCalledTimes(2));
   });
 
-  it("offers a subscription checkout to a trial workspace owner", async () => {
+  it("requires a subscription before a new workspace can be used", async () => {
     mocks.getWorkspace.mockResolvedValueOnce({
       id: "workspace-1",
       name: "Personal",
@@ -101,15 +101,15 @@ describe("WorkspaceGeneral", () => {
       logoUrl: null,
       publicCitationsEnabled: true,
       role: "OWNER",
-      plan: "trial",
-      entitlementStatus: "trialing",
-      accessMode: "full",
-      capabilities: { configure: true, write: true, export: true, publish: true, unpublish: true },
-      trialEndsAt: "2026-10-01T00:00:00Z",
+      plan: "none",
+      entitlementStatus: "subscription_required",
+      accessMode: "read_only",
+      capabilities: { generate: false, edit: false, publish: false, export: true, configure: false, unpublish: true },
     });
 
     render(<WorkspaceGeneral />);
 
+    expect(await screen.findByText(/There is no free plan or trial/i)).toBeVisible();
     expect(await screen.findByRole("button", { name: "Subscribe to Founding" })).toBeVisible();
   });
 
@@ -210,7 +210,6 @@ function subscriptionWorkspace(overrides: Record<string, unknown> = {}) {
 		entitlementStatus: "active",
 		accessMode: "full",
 		capabilities: { configure: true, write: true, export: true, publish: true, unpublish: true },
-		trialEndsAt: "2026-10-01T00:00:00Z",
 		subscriptionStatus: "active",
 		subscriptionCancelAtPeriodEnd: false,
 		subscriptionCurrentPeriodEnd: "2026-10-21T00:00:00Z",

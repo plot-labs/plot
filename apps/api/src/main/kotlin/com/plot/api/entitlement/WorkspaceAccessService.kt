@@ -2,9 +2,7 @@ package com.plot.api.entitlement
 
 import com.plot.api.common.ApiException
 import com.plot.api.auth.AuthorizedWorkspaceContext
-import com.plot.api.workspace.Workspace
 import com.plot.api.workspace.WorkspaceRepository
-import java.time.Instant
 import java.util.UUID
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
@@ -21,12 +19,12 @@ class WorkspaceAccessService(
 
 	@Transactional(noRollbackFor = [ApiException::class])
 	fun requireWritable(workspaceId: UUID) {
-		val entitlement = persistDurable(workspaceId)
+		val entitlement = requireWorkspaceEntitlement(workspaceId)
 		if (entitlement.accessMode != "full") {
 			throw ApiException(
 				HttpStatus.FORBIDDEN,
 				"WORKSPACE_READ_ONLY",
-				"This workspace is read-only. Reactivate a subscription to make changes.",
+				"An active subscription is required to make changes in this workspace.",
 			)
 		}
 	}
@@ -45,42 +43,19 @@ class WorkspaceAccessService(
 
 	@Transactional(noRollbackFor = [ApiException::class])
 	fun requireCompletionAllowed(workspaceId: UUID) {
-		val entitlement = persistDurable(workspaceId)
+		val entitlement = requireWorkspaceEntitlement(workspaceId)
 		if (entitlement.accessMode != "full" && entitlement.accessMode != "complete_only") {
 			throw ApiException(
 				HttpStatus.FORBIDDEN,
 				"WORKSPACE_READ_ONLY",
-				"This workspace is read-only. Reactivate a subscription to make changes.",
+				"An active subscription is required to make changes in this workspace.",
 			)
 		}
 	}
 
-	private fun persistDurable(workspaceId: UUID): EffectiveWorkspaceEntitlement {
+	private fun requireWorkspaceEntitlement(workspaceId: UUID): EffectiveWorkspaceEntitlement {
 		val workspace = workspaceRepository.findByIdAndStatus(workspaceId, "ACTIVE")
 			?: throw ApiException(HttpStatus.FORBIDDEN, "ACCESS_DENIED", "Access denied")
-		val entitlement = entitlementReader.resolve(workspace)
-		persistDurable(workspace, entitlement)
-		return entitlement
-	}
-
-	private fun persistDurable(workspace: Workspace, entitlement: EffectiveWorkspaceEntitlement) {
-		val now = Instant.now()
-		when (entitlement.accessMode) {
-			"read_only" -> {
-				if (workspace.entitlementStatus == entitlement.status && workspace.accessMode == "read_only") return
-				workspace.entitlementStatus = entitlement.status
-				workspace.accessMode = "read_only"
-			}
-			"complete_only", "full" -> {
-				if (workspace.plan != "trial" || workspace.entitlementStatus == "revoked") return
-				if (workspace.entitlementStatus == "trialing" && workspace.accessMode == "full") return
-				workspace.entitlementStatus = "trialing"
-				workspace.accessMode = "full"
-			}
-			else -> return
-		}
-		workspace.planUpdatedAt = now
-		workspace.updatedAt = now
-		workspaceRepository.save(workspace)
+		return entitlementReader.resolve(workspace)
 	}
 }

@@ -1507,8 +1507,6 @@ class AgentPolarCreditProvider : PolarCreditProvider {
 		usageEvents = emptyList(),
 	)
 
-	override fun grantTrialCredits(workspaceId: UUID) = PolarEventResult(0, 1)
-
 	override fun ingestCredits(workspaceId: UUID, eventId: String, credits: Long, metadata: Map<String, Any>): PolarEventResult {
 		ingestAttempts++
 		if (failIngest) throw com.plot.api.billing.PolarApiException("POLAR_UNAVAILABLE", "Polar unavailable", retryable = true)

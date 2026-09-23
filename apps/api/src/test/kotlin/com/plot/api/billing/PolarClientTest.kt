@@ -53,7 +53,7 @@ class PolarClientTest {
 						"""
 						{"items":[
 							{"id":"event-usage","timestamp":"2026-09-19T12:00:00Z","metadata":{"credits":1,"provider":"openrouter","actual_model":"openai/test"}},
-							{"id":"event-trial","timestamp":"2026-09-19T11:00:00Z","metadata":{"credits":-5000,"reason":"trial_grant"}}
+							{"id":"event-benefit","timestamp":"2026-09-19T11:00:00Z","metadata":{"credits":-5000,"reason":"subscription_benefit"}}
 						],"pagination":{"total_count":2,"max_page":1}}
 						""".trimIndent(),
 					)
@@ -79,7 +79,7 @@ class PolarClientTest {
 		val secondPage = listOf(
 			eventJson("usage-101", 1),
 			eventJson("usage-102", 1),
-			eventJson("event-trial", -5000),
+			eventJson("event-grant", -5000),
 		).joinToString(",")
 		val client = client { method, uri, _, _ ->
 			when {
@@ -292,21 +292,6 @@ class PolarClientTest {
 	}
 
 	@Test
-	fun trialGrantIsNegativeAndVersionedByStableEventId() {
-		var body: String? = null
-		val client = client { _, _, _, requestBody ->
-			body = requestBody
-			PolarHttpResponse(200, """{"inserted":1,"duplicates":0}""")
-		}
-
-		client.grantTrialCredits(workspaceId)
-
-		val event = mapper.readTree(body!!).path("events").first()
-		assertEquals("trial:$workspaceId", event.path("external_id").stringValue())
-		assertEquals(-5_000, event.path("metadata").path("credits").intValue())
-	}
-
-	@Test
 	fun mapsUnsafeHttpFailuresToSafeErrors() {
 		val client = client { _, _, _, _ -> PolarHttpResponse(401, "secret upstream response polar_test_token") }
 
@@ -338,8 +323,6 @@ class PolarClientTest {
 		accessToken = "polar_test_token",
 		apiBaseUrl = "https://polar.test",
 		aiMeterId = "meter_ai",
-		trialCredits = 5_000,
-		trialPolicyVersion = "trial-v1",
 		requestTimeout = Duration.ofSeconds(5),
 	)
 }

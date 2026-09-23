@@ -22,7 +22,6 @@ fun Workspace.toResponse(
 		subscriptionCurrentPeriodEnd = polarSubscriptionCurrentPeriodEnd,
 		subscriptionEventAt = polarSubscriptionEventAt,
 		capabilities = entitlement.capabilities,
-		trialEndsAt = trialEndsAt,
 		role = role,
 		createdAt = createdAt,
 		updatedAt = updatedAt,

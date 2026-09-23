@@ -19,7 +19,6 @@ data class WorkspaceResponse(
 	val subscriptionCurrentPeriodEnd: Instant?,
 	val subscriptionEventAt: Instant?,
 	val capabilities: WorkspaceCapabilities,
-	val trialEndsAt: Instant,
 	val role: String? = null,
 	val createdAt: Instant,
 	val updatedAt: Instant,

@@ -11,7 +11,6 @@ data class WorkspaceBillingContext(
 	val workspaceId: UUID,
 	val workspaceName: String,
 	val ownerEmail: String,
-	val trial: Boolean,
 	val entitlementStatus: String,
 	val polarCustomerId: String?,
 )
@@ -34,7 +33,6 @@ class RepositoryWorkspaceBillingContextStore(
 			workspace.id,
 			workspace.name,
 			owner.email,
-			workspace.plan == "trial",
 			workspace.entitlementStatus,
 			workspace.polarCustomerId,
 		)
@@ -75,6 +73,9 @@ class PolarCreditService(
 		if (!enabled) return
 		try {
 			val context = contexts.requireContext(workspaceId)
+			if (context.entitlementStatus != "active") {
+				throw AiCreditControlException("SUBSCRIPTION_REQUIRED", false, "An active subscription is required for AI usage")
+			}
 			val customer = provider.ensureCustomer(
 				workspaceId,
 				context.ownerEmail,
@@ -82,7 +83,6 @@ class PolarCreditService(
 				context.polarCustomerId,
 			)
 			if (context.polarCustomerId != customer.id) contexts.savePolarCustomerId(workspaceId, customer.id)
-			if (context.trial) provider.grantTrialCredits(workspaceId)
 			if (provider.readCreditBalance(workspaceId) < 1) {
 				throw AiCreditControlException("AI_CREDITS_EXHAUSTED", false, "Workspace AI credits are exhausted")
 			}

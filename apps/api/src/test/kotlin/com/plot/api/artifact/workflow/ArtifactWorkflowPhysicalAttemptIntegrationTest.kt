@@ -80,7 +80,8 @@ class ArtifactWorkflowPhysicalAttemptIntegrationTest {
 		jdbcTemplate.update(
 			"""update model_invocations
 				set status = 'FAILED', billing_status = case when billing_status = 'PENDING' then 'USAGE_UNKNOWN' else billing_status end,
-				    failure_code = coalesce(failure_code, 'TEST_ISOLATION'), finished_at = coalesce(finished_at, now())
+				    failure_code = coalesce(failure_code, 'TEST_ISOLATION'),
+				    finished_at = greatest(coalesce(finished_at, now()), coalesce(started_at, now()))
 				where status = 'RUNNING'""",
 		)
 		jdbcTemplate.update(
@@ -709,8 +710,6 @@ class ArtifactPolarCreditProvider : PolarCreditProvider {
 		consumedUnits = 0,
 		usageEvents = emptyList(),
 	)
-
-	override fun grantTrialCredits(workspaceId: UUID) = PolarEventResult(0, 1)
 
 	override fun ingestCredits(
 		workspaceId: UUID,

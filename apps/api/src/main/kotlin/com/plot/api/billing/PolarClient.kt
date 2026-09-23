@@ -67,7 +67,6 @@ interface PolarCreditProvider {
 	): PolarCustomer
 	fun readCreditBalance(workspaceId: UUID): Long
 	fun readCreditOverview(workspaceId: UUID): PolarCreditOverview
-	fun grantTrialCredits(workspaceId: UUID): PolarEventResult
 	fun ingestCredits(workspaceId: UUID, eventId: String, credits: Long, metadata: Map<String, Any> = emptyMap()): PolarEventResult
 }
 
@@ -215,16 +214,6 @@ class PolarClient(
 			usageEvents = recentUsageEvents,
 		)
 	}
-
-	override fun grantTrialCredits(workspaceId: UUID): PolarEventResult = ingest(
-		workspaceId = workspaceId,
-		eventId = "trial:$workspaceId",
-		credits = -properties.trialCredits,
-		metadata = mapOf(
-			"reason" to "trial_grant",
-			"policy_version" to properties.trialPolicyVersion,
-		),
-	)
 
 	override fun ingestCredits(
 		workspaceId: UUID,

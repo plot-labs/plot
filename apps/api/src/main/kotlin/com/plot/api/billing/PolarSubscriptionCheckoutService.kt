@@ -16,7 +16,7 @@ class PolarSubscriptionCheckoutService(
 
 	fun create(workspaceId: UUID): WorkspaceCheckout {
 		val context = contexts.requireContext(workspaceId)
-		if (!context.trial && context.entitlementStatus != "revoked") {
+		if (context.entitlementStatus != "subscription_required" && context.entitlementStatus != "revoked") {
 			throw SubscriptionCheckoutNotAllowedException()
 		}
 		val productId = properties.subscriptionProductId?.trim()?.takeIf(String::isNotBlank)

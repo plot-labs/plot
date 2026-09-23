@@ -358,7 +358,6 @@ export interface WorkspaceSummary {
   subscriptionCurrentPeriodEnd: string | null;
   subscriptionEventAt: string | null;
   capabilities: WorkspaceCapabilities;
-  trialEndsAt: string;
   role: string | null;
   createdAt: string;
   updatedAt: string;

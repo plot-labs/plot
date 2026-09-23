@@ -91,8 +91,6 @@ class WorkspaceRepository(
 		this[WorkspaceTable.planUpdatedAt] = workspace.planUpdatedAt?.atOffset(ZoneOffset.UTC)
 		this[WorkspaceTable.entitlementStatus] = workspace.entitlementStatus
 		this[WorkspaceTable.accessMode] = workspace.accessMode
-		this[WorkspaceTable.trialStartedAt] = workspace.trialStartedAt.atOffset(ZoneOffset.UTC)
-		this[WorkspaceTable.trialEndsAt] = workspace.trialEndsAt.atOffset(ZoneOffset.UTC)
 		this[WorkspaceTable.logoUrl] = workspace.logoUrl
 		this[WorkspaceTable.publicCitationsEnabled] = workspace.publicCitationsEnabled
 	}
@@ -116,8 +114,6 @@ class WorkspaceRepository(
 		planUpdatedAt = this[WorkspaceTable.planUpdatedAt]?.toInstant(),
 		entitlementStatus = this[WorkspaceTable.entitlementStatus],
 		accessMode = this[WorkspaceTable.accessMode],
-		trialStartedAt = this[WorkspaceTable.trialStartedAt].toInstant(),
-		trialEndsAt = this[WorkspaceTable.trialEndsAt].toInstant(),
 		publicCitationsEnabled = this[WorkspaceTable.publicCitationsEnabled],
 	)
 }

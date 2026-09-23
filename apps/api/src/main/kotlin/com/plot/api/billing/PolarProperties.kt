@@ -17,8 +17,6 @@ data class PolarProperties(
 	val checkoutSuccessUrl: String? = null,
 	val checkoutReturnUrl: String? = null,
 	val customerPortalReturnUrl: String? = null,
-	val trialCredits: Long = 5_000,
-	val trialPolicyVersion: String = "trial-v1",
 	val requestTimeout: Duration = Duration.ofSeconds(10),
 	val maxResponseBytes: Int = 256 * 1024,
 ) {
@@ -30,8 +28,6 @@ data class PolarProperties(
 			"plot.polar.request-timeout must be positive"
 		}
 		require(maxResponseBytes > 0) { "plot.polar.max-response-bytes must be positive" }
-		require(trialCredits > 0) { "plot.polar.trial-credits must be positive" }
-		require(trialPolicyVersion.isNotBlank()) { "plot.polar.trial-policy-version must not be blank" }
 		if (creditsEnabled) {
 			require(!accessToken.isNullOrBlank()) { "plot.polar.access-token is required when Polar credits are enabled" }
 			require(!aiMeterId.isNullOrBlank()) { "plot.polar.ai-meter-id is required when Polar credits are enabled" }

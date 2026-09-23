@@ -33,8 +33,6 @@ internal object WorkspaceTable : Table("workspaces") {
 	val planUpdatedAt = timestampWithTimeZone("plan_updated_at").nullable()
 	val entitlementStatus = varchar("entitlement_status", 255)
 	val accessMode = varchar("access_mode", 255)
-	val trialStartedAt = timestampWithTimeZone("trial_started_at")
-	val trialEndsAt = timestampWithTimeZone("trial_ends_at")
 	val logoUrl = text("logo_url").nullable()
 	val publicCitationsEnabled = bool("public_citations_enabled")
 

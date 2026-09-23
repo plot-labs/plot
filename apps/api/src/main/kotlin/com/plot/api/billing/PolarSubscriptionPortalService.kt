@@ -14,7 +14,7 @@ class PolarSubscriptionPortalService(
 
 	fun create(workspaceId: UUID): PolarCustomerPortal {
 		val context = contexts.requireContext(workspaceId)
-		if (context.trial || context.entitlementStatus != "active") throw SubscriptionPortalNotAllowedException()
+		if (context.entitlementStatus != "active") throw SubscriptionPortalNotAllowedException()
 		val returnUrl = returnUrl()
 			?: throw PolarApiException("POLAR_SUBSCRIPTION_NOT_CONFIGURED", "Polar customer portal is not configured")
 		val customer = creditProvider.ensureCustomer(

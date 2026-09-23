@@ -13,10 +13,7 @@ class PolarPropertiesTest {
 	}
 
 	@Test
-	fun creditConfigurationRejectsNonPositiveValues() {
-		assertFailsWith<IllegalArgumentException> {
-			configured(trialCredits = 0)
-		}
+	fun creditConfigurationRejectsNonPositiveTimeout() {
 		assertFailsWith<IllegalArgumentException> {
 			configured(requestTimeout = Duration.ZERO)
 		}
@@ -28,14 +25,11 @@ class PolarPropertiesTest {
 	}
 
 	private fun configured(
-		trialCredits: Long = 5_000,
 		requestTimeout: Duration = Duration.ofSeconds(5),
 	) = PolarProperties(
 		creditsEnabled = true,
 		accessToken = "polar_test_token",
 		aiMeterId = "meter_ai",
-		trialCredits = trialCredits,
-		trialPolicyVersion = "trial-v1",
 		requestTimeout = requestTimeout,
 	)
 }

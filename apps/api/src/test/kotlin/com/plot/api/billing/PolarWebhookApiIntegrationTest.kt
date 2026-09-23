@@ -51,11 +51,9 @@ class PolarWebhookApiIntegrationTest {
 		jdbcTemplate.update(
 			"""
 			update workspaces
-			set plan = 'trial',
-			    entitlement_status = 'trialing',
-			    access_mode = 'full',
-			    trial_started_at = now(),
-			    trial_ends_at = now() + interval '30 days',
+			set plan = 'none',
+			    entitlement_status = 'subscription_required',
+			    access_mode = 'read_only',
 			    polar_subscription_id = null,
 			    polar_customer_id = null,
 			    polar_subscription_status = null,
@@ -292,13 +290,13 @@ class PolarWebhookApiIntegrationTest {
 		val body = subscriptionEvent("subscription.active", "sub_duplicate", referenceId = devContext.devUserId)
 		postWebhook("msg_duplicate", body).andExpect { status { isNoContent() } }
 		jdbcTemplate.update(
-			"update workspaces set plan = 'trial', entitlement_status = 'trialing', access_mode = 'full' where id = ?",
+			"update workspaces set plan = 'none', entitlement_status = 'subscription_required', access_mode = 'read_only' where id = ?",
 			devContext.devWorkspaceId,
 		)
 
 		postWebhook("msg_duplicate", body).andExpect { status { isNoContent() } }
 
-		assertWorkspace("trial", "trialing", "full", "sub_duplicate", "cus_active")
+		assertWorkspace("none", "subscription_required", "read_only", "sub_duplicate", "cus_active")
 		assertEquals(1, jdbcTemplate.queryForObject(
 			"select count(*) from polar_webhook_events where webhook_id = 'msg_duplicate'",
 			Int::class.java,
@@ -325,7 +323,7 @@ class PolarWebhookApiIntegrationTest {
 
 		postWebhook("msg_unmatched", body).andExpect { status { isNoContent() } }
 
-		assertWorkspace("trial", "trialing", "full", null, null)
+		assertWorkspace("none", "subscription_required", "read_only", null, null)
 		assertEvent("msg_unmatched", "UNMATCHED", null, null)
 	}
 
@@ -415,7 +413,7 @@ class PolarWebhookApiIntegrationTest {
 		}
 
 		assertEquals(4, jdbcTemplate.queryForObject("select count(*) from polar_webhook_events", Int::class.java))
-		assertWorkspace("trial", "trialing", "full", null, null)
+		assertWorkspace("none", "subscription_required", "read_only", null, null)
 	}
 
 	@Test
@@ -459,7 +457,7 @@ class PolarWebhookApiIntegrationTest {
 		val updated = billingWebhookEvent("msg_refund_updated")
 		assertEquals("succeeded", updated["resource_status"])
 		assertEquals("REFUND_UPDATED", updated["outcome"])
-		assertWorkspace("trial", "trialing", "full", null, "cus_refund")
+		assertWorkspace("none", "subscription_required", "read_only", null, "cus_refund")
 	}
 
 	@Test
@@ -480,7 +478,7 @@ class PolarWebhookApiIntegrationTest {
 		val row = billingWebhookEvent("msg_refund_unmatched")
 		assertEquals("UNMATCHED", row["outcome"])
 		assertEquals(null, row["matched_workspace_id"])
-		assertWorkspace("trial", "trialing", "full", null, null)
+		assertWorkspace("none", "subscription_required", "read_only", null, null)
 	}
 
 	private fun postWebhook(webhookId: String, body: String) = Instant.now().epochSecond.toString().let { timestamp ->

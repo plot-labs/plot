@@ -15,7 +15,7 @@ import {
   type PendingAgentRequest,
 } from "@/features/chat/chat-workspace-utils";
 import { plotApiClient } from "@/lib/api-client";
-import { trialEndsLabel, useWorkspaceEntitlement } from "@/lib/use-workspace-entitlement";
+import { useWorkspaceEntitlement } from "@/lib/use-workspace-entitlement";
 
 type ChatHomeProps = {
   references: SourceReference[];
@@ -29,7 +29,6 @@ export function ChatHome({ references, referencesLoading, referencesError }: Cha
   const pendingRequestRef = useRef<PendingAgentRequest | null>(null);
   const entitlement = useWorkspaceEntitlement();
   const canGenerate = entitlement?.capabilities.generate ?? true;
-  const trialUntil = trialEndsLabel(entitlement?.trialEndsAt ?? null);
 
   async function submitHomeRequest(
     message: string,
@@ -91,9 +90,11 @@ export function ChatHome({ references, referencesLoading, referencesError }: Cha
         {startError ? <ErrorNotice message={startError} /> : null}
         {!canGenerate ? (
           <p className="mt-3 text-center text-xs text-black/50 dark:text-white/50">
-            {entitlement?.accessMode === "complete_only"
-              ? `New AI responses are paused for this workspace${trialUntil ? ` until ${trialUntil}` : ""}. Open an existing artifact to edit, export, or publish.`
-              : "This workspace cannot start new responses. You can still export existing artifacts."}
+					{entitlement?.entitlementStatus === "subscription_required"
+						? <>Subscribe to Founding to use Plot. <Link href="/settings/general" className="underline underline-offset-2">View subscription</Link>.</>
+						: entitlement?.accessMode === "complete_only"
+							? "New AI responses are paused. Open an existing artifact to edit, export, or publish."
+							: "This workspace cannot start new responses. You can still export existing artifacts."}
           </p>
         ) : null}
       </div>

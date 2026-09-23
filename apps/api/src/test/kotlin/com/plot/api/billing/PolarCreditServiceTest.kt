@@ -17,7 +17,7 @@ class PolarCreditServiceTest {
 	private val service = PolarCreditService(properties(), provider, calculator(), contexts, PlotAiProperties())
 
 	@Test
-	fun preflightEnsuresWorkspaceCustomerGrantsTrialOnceAndRequiresPositiveBalance() {
+	fun activeSubscriptionPreflightEnsuresCustomerAndRequiresPositiveBalance() {
 		provider.balance = 3
 
 		service.preflight(workspaceId)
@@ -25,8 +25,18 @@ class PolarCreditServiceTest {
 
 		assertEquals(listOf(workspaceId, workspaceId), provider.ensured)
 		assertEquals("cus_workspace", contexts.customerId)
-		assertEquals(listOf(workspaceId, workspaceId), provider.grants)
 		assertEquals(2, provider.balanceReads)
+	}
+
+	@Test
+	fun subscriptionRequiredWorkspaceCannotUseAiCreditsOrCreatePolarCustomer() {
+		contexts.entitlementStatus = "subscription_required"
+
+		val failure = assertFailsWith<AiCreditControlException> { service.preflight(workspaceId) }
+
+		assertEquals("SUBSCRIPTION_REQUIRED", failure.safeCode)
+		assertTrue(provider.ensured.isEmpty())
+		assertEquals(0, provider.balanceReads)
 	}
 
 	@Test
@@ -69,7 +79,6 @@ class PolarCreditServiceTest {
 		creditsEnabled = true,
 		accessToken = "test",
 		aiMeterId = "meter",
-		trialCredits = 5_000,
 		requestTimeout = Duration.ofSeconds(1),
 	)
 
@@ -92,12 +101,12 @@ class PolarCreditServiceTest {
 
 private class FakeWorkspaceBillingContextStore(private val workspaceId: UUID) : WorkspaceBillingContextStore {
 	var customerId: String? = null
+	var entitlementStatus = "active"
 	override fun requireContext(workspaceId: UUID) = WorkspaceBillingContext(
 		this.workspaceId,
 		"Workspace",
 		"owner@example.com",
-		true,
-		"trialing",
+		entitlementStatus,
 		customerId,
 	)
 
@@ -110,7 +119,6 @@ private class FakePolarCreditProvider : PolarCreditProvider {
 	var balance = 1L
 	var balanceReads = 0
 	val ensured = mutableListOf<UUID>()
-	val grants = mutableListOf<UUID>()
 	val events = mutableListOf<FakePolarEvent>()
 
 	override fun ensureCustomer(
@@ -134,11 +142,6 @@ private class FakePolarCreditProvider : PolarCreditProvider {
 		consumedUnits = 0,
 		usageEvents = emptyList(),
 	)
-
-	override fun grantTrialCredits(workspaceId: UUID): PolarEventResult {
-		grants += workspaceId
-		return PolarEventResult(1, 0)
-	}
 
 	override fun ingestCredits(workspaceId: UUID, eventId: String, credits: Long, metadata: Map<String, Any>): PolarEventResult {
 		events += FakePolarEvent(eventId, credits, metadata)

@@ -4,7 +4,6 @@ import com.plot.api.auth.BootstrapAccountResponse
 import com.plot.api.auth.WorkOSAuthProperties
 import com.plot.api.common.ApiException
 import com.plot.api.common.UuidGenerator
-import com.plot.api.entitlement.TrialPolicy
 import com.plot.api.persistence.TransactionExecutor
 import com.plot.api.workspace.User
 import com.plot.api.workspace.UserRepository
@@ -179,8 +178,9 @@ class WorkOSBootstrapProvisioningService(
 				status = "ACTIVE",
 				createdAt = now,
 				updatedAt = now,
-				trialStartedAt = now,
-				trialEndsAt = now.plus(TrialPolicy.DURATION),
+				plan = "none",
+				entitlementStatus = "subscription_required",
+				accessMode = "read_only",
 			))
 			memberRepository.save(WorkspaceMember(
 				id = memberId,
