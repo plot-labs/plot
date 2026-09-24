@@ -124,7 +124,7 @@ class PolarClientTest {
 		val customer = client.ensureCustomer(workspaceId, "owner@example.com", "Acme")
 
 		assertEquals("cus_workspace", customer.id)
-		val create = mapper.readTree(requests.single { it.first == "/v1/customers" }.second!!)
+		val create = mapper.readTree(requests.single { it.first == "/v1/customers/" }.second!!)
 		assertEquals("plot-workspace:$workspaceId", create.path("external_id").stringValue())
 		assertTrue(create.path("organization_id").isMissingNode)
 		assertEquals(workspaceId.toString(), create.path("metadata").path("workspace_id").stringValue())

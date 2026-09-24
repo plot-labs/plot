@@ -158,7 +158,7 @@ class PolarClient(
 			"type" to "individual",
 			"metadata" to mapOf("workspace_id" to workspaceId.toString()),
 		)
-		val response = execute("POST", "/v1/customers", objectMapper.writeValueAsString(payload), accepted = setOf(201, 409))
+		val response = execute("POST", "/v1/customers/", objectMapper.writeValueAsString(payload), accepted = setOf(201, 409))
 		if (response.status == 409) {
 			return findCustomer(externalId)
 				?: throw PolarApiException("POLAR_CUSTOMER_CONFLICT", "Polar customer ownership could not be confirmed")
