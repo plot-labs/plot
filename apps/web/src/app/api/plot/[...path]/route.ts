@@ -186,6 +186,7 @@ function isAllowed(method: string, path: string[]): boolean {
   if (method === "GET" && route === "autonomy/activity") return true;
 	if (method === "GET" && route === "me") return true;
 	if (method === "POST" && route === "account/bootstrap") return true;
+	if (method === "DELETE" && route === "account") return true;
 	if (method === "POST" && route === "workspaces") return true;
   if (method === "GET" && /^workspaces\/[0-9a-fA-F-]+$/.test(route)) return true;
   if (method === "PATCH" && /^workspaces\/[0-9a-fA-F-]+$/.test(route)) return true;
