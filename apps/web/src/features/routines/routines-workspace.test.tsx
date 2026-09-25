@@ -336,7 +336,7 @@ describe("RoutinesWorkspace", () => {
     ]);
     render(<RoutinesWorkspace />);
 
-    expect(await screen.findByText("Checked · No new activity")).toBeVisible();
+    expect(await screen.findByText("Checked · No customer update identified")).toBeVisible();
     expect(screen.getByText("Agent completed")).toBeVisible();
     expect(screen.queryByRole("link", { name: "Open Chat for No activity routine" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Open artifact for No activity routine" })).not.toBeInTheDocument();
