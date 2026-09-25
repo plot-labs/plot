@@ -348,11 +348,11 @@ class RoutineAgentPersistence(
 		routineId,
 	)
 
-    fun deferForAutonomy(workspaceId: UUID, executionId: UUID, workerId: String, now: Instant) {
+    fun deferForAutonomy(workspaceId: UUID, executionId: UUID, workerId: String, now: Instant, reasonCode: String? = null) {
         val updated=sqlExecutor.update("""update routine_executions set status='DEFERRED',
-            claimed_by=null,claimed_at=null,finished_at=?,transition_version=transition_version+1,updated_at=?
+            error_code=?,claimed_by=null,claimed_at=null,finished_at=?,transition_version=transition_version+1,updated_at=?
             where workspace_id=? and id=? and status='PROBING' and claimed_by=?""",
-            Timestamp.from(now),Timestamp.from(now),workspaceId,executionId,workerId)
+            reasonCode,Timestamp.from(now),Timestamp.from(now),workspaceId,executionId,workerId)
         if(updated != 1) throw RoutineClaimLostException()
     }
 

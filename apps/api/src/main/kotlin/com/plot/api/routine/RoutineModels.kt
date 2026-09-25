@@ -5,13 +5,13 @@ import java.time.Instant
 import java.util.UUID
 
 enum class RoutineCadence {
-	DAILY, WEEKLY, ON_GITHUB_CHANGE, ON_GITHUB_RELEASE, ON_GIT_TAG;
+	DAILY, WEEKLY, ON_GITHUB_CHANGE, ON_GITHUB_PR_MERGED, ON_GITHUB_RELEASE, ON_GIT_TAG;
 
 	fun nextAfter(now: Instant): Instant = now.plusSeconds(
 		when (this) {
 			DAILY -> 24 * 60 * 60L
 			WEEKLY -> 7 * 24 * 60 * 60L
-			ON_GITHUB_CHANGE, ON_GITHUB_RELEASE, ON_GIT_TAG -> 0L
+			ON_GITHUB_CHANGE, ON_GITHUB_PR_MERGED, ON_GITHUB_RELEASE, ON_GIT_TAG -> 0L
 		},
 	)
 }

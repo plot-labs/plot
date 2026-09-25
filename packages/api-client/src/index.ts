@@ -391,6 +391,7 @@ export type RoutineCadence =
   | "DAILY"
   | "WEEKLY"
   | "ON_GITHUB_CHANGE"
+  | "ON_GITHUB_PR_MERGED"
   | "ON_GITHUB_RELEASE"
   | "ON_GIT_TAG";
 export type RoutineRunStatus = string | null;

@@ -2,6 +2,7 @@ package com.plot.api.github
 
 import com.plot.api.observability.stopSafely
 import com.plot.api.routine.GitHubChangeRoutineService
+import com.plot.api.routine.RoutineRunDispatcher
 import io.micrometer.observation.Observation
 import io.micrometer.observation.ObservationRegistry
 import java.time.Instant
@@ -27,6 +28,7 @@ class GitHubWebhookService(
 	private val releaseDispatcher: GitHubReleaseDraftDispatcher,
 	private val accessCheckDispatcher: GitHubRepositoryAccessCheckDispatcher,
 	private val gitHubChangeRoutineService: GitHubChangeRoutineService,
+	private val routineDispatcher: RoutineRunDispatcher,
 	private val lifecycleService: GitHubSourceAccessLifecycleService,
 	private val observationRegistry: ObservationRegistry,
 	private val transactionService: GitHubWebhookTransactionService,
@@ -78,6 +80,12 @@ class GitHubWebhookService(
 			errorCode = null,
 			receivedAt = Instant.now(),
 			processedAt = null,
+			prId = webhook.pullRequest?.id,
+			prNumber = webhook.pullRequest?.number,
+			prBaseRepositoryId = webhook.pullRequest?.baseRepositoryId,
+			prBaseBranch = webhook.pullRequest?.baseBranch,
+			prMergeCommitSha = webhook.pullRequest?.mergeCommitSha,
+			prMerged = webhook.pullRequest?.merged,
 		)
 
 	private fun process(
@@ -115,9 +123,24 @@ class GitHubWebhookService(
 				}
 			}
 			webhook.eventType == "push" && webhook.ref == "refs/heads/${context.defaultBranch}" -> {
-				mark(delivery, GitHubWebhookDisposition.OBSERVED)
+				if (!webhook.afterSha.isCommitSha()) return mark(delivery, GitHubWebhookDisposition.IGNORED)
+				val queued = gitHubChangeRoutineService.accept(context, delivery, webhook)
+				if (queued > 0) scheduleRoutineDispatchAfterCommit()
+				mark(delivery, if (queued > 0) GitHubWebhookDisposition.QUEUED else GitHubWebhookDisposition.OBSERVED)
 			}
 			webhook.eventType == "push" -> mark(delivery, GitHubWebhookDisposition.IGNORED)
+			webhook.eventType == "pull_request" && webhook.eventAction == "closed" -> {
+				val pr = webhook.pullRequest
+				if (pr == null || !pr.merged || pr.baseRepositoryId != context.repositoryId ||
+					pr.baseBranch != context.defaultBranch || !pr.mergeCommitSha.isCommitSha()) {
+					mark(delivery, GitHubWebhookDisposition.IGNORED)
+				} else {
+					val queued = gitHubChangeRoutineService.accept(context, delivery, webhook)
+					if (queued > 0) scheduleRoutineDispatchAfterCommit()
+					mark(delivery, if (queued > 0) GitHubWebhookDisposition.QUEUED else GitHubWebhookDisposition.OBSERVED)
+				}
+			}
+			webhook.eventType == "pull_request" -> mark(delivery, GitHubWebhookDisposition.OBSERVED)
 			// release.target_commitish may be a mutable branch. Only a canonical tag push
 			// contributes an immutable observed head SHA to the release request.
 			webhook.eventType == "release" && webhook.eventAction == "published" && webhook.tagName != null -> {
@@ -163,6 +186,15 @@ class GitHubWebhookService(
 			}
 		})
 	}
+
+	private fun scheduleRoutineDispatchAfterCommit() {
+		check(TransactionSynchronizationManager.isActualTransactionActive()) { "Routine dispatch requires an active transaction" }
+		TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+			override fun afterCommit() { routineDispatcher.dispatch() }
+		})
+	}
+
+	private fun String?.isCommitSha(): Boolean = this != null && matches(Regex("[0-9a-fA-F]{40}")) && any { it != '0' }
 
 	private fun scheduleAccessCheckDispatchAfterCommit() {
 		check(

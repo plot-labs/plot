@@ -77,7 +77,8 @@ class RoutineAgentAdmissionPersistence(
 		if (currentRoutineCursor.releaseCadence && execution.releaseRequestId == null) {
 			throw RoutineExecutionStateException("Release Routine requires a verified release request")
 		}
-		if (execution.releaseRequestId == null && currentRoutineCursor.value != execution.activityCursorBefore) {
+		if (execution.releaseRequestId == null && execution.triggerKind != RoutineExecutionTriggerKind.GITHUB &&
+			currentRoutineCursor.value != execution.activityCursorBefore) {
 			throw RoutineExecutionStateException("Routine activity cursor is stale")
 		}
 		if (execution.releaseRequestId != null) validateReleaseEvidence(execution, request)
@@ -312,7 +313,8 @@ class RoutineAgentAdmissionPersistence(
 		}
 		// An exact release is a separate range job, not a repository activity batch.
 		// Its complete bound evidence was verified above; it must not drop old inputs.
-		val activityCursorBefore = if (execution.releaseRequestId != null) 0L else execution.activityCursorBefore ?: 0L
+		val activityCursorBefore = if (execution.releaseRequestId != null ||
+			execution.triggerKind == RoutineExecutionTriggerKind.GITHUB) 0L else execution.activityCursorBefore ?: 0L
 		require(request.activityCursorAfter > activityCursorBefore) {
 			"Activity cursor must advance beyond the previous cursor"
 		}

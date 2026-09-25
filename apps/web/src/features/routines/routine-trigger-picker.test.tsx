@@ -23,7 +23,8 @@ describe("RoutineTriggerPicker", () => {
     expect(listbox).toHaveAttribute("aria-activedescendant", selectedOption.id);
     expect(screen.getByRole("group", { name: "Time" })).toBeVisible();
     expect(screen.getByRole("group", { name: "Event" })).toBeVisible();
-    expect(screen.getAllByRole("option")).toHaveLength(5);
+    expect(screen.getAllByRole("option")).toHaveLength(6);
+    expect(screen.getByRole("option", { name: /PR merged into default branch/ })).toBeVisible();
     expect(screen.getAllByRole("option").every((option) => option.tabIndex === -1)).toBe(true);
     expect(selectedOption).toHaveAttribute("aria-selected", "true");
   });

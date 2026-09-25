@@ -26,6 +26,19 @@ data class ParsedGitHubWebhook(
 	val forced: Boolean?,
 	val commits: List<GitHubWebhookCommit> = emptyList(),
 	val payloadHash: String,
+	val pullRequest: GitHubWebhookPullRequest? = null,
+)
+
+data class GitHubWebhookPullRequest(
+	val id: Long,
+	val number: Long,
+	val baseRepositoryId: Long,
+	val baseBranch: String,
+	val mergeCommitSha: String?,
+	val merged: Boolean,
+	val title: String,
+	val body: String?,
+	val url: String,
 )
 
 data class GitHubWebhookCommit(
@@ -46,6 +59,20 @@ class GitHubWebhookParser(private val objectMapper: ObjectMapper) {
 		}
 		if (root == null || !root.isObject) throw invalidPayload()
 		val ref = root.text("ref")
+		val pullRequest = root.path("pull_request").takeIf { eventType == "pull_request" && it.isObject }
+			?.let { pr ->
+				val id = pr.long("id")
+				val number = pr.long("number") ?: root.long("number")
+				val baseRepositoryId = pr.path("base").path("repo").long("id")
+				val baseBranch = pr.path("base").text("ref")
+				val title = pr.text("title")
+				val url = pr.text("html_url")
+				if (id == null || number == null || baseRepositoryId == null || baseBranch == null || title == null || url == null) null
+				else GitHubWebhookPullRequest(
+					id, number, baseRepositoryId, baseBranch, pr.text("merge_commit_sha"),
+					pr.boolean("merged") == true, title, pr.text("body"), url,
+				)
+			}
 		return ParsedGitHubWebhook(
 			externalDeliveryId = externalDeliveryId,
 			eventType = eventType,
@@ -68,6 +95,7 @@ class GitHubWebhookParser(private val objectMapper: ObjectMapper) {
 			forced = root.boolean("forced"),
 			commits = root.path("commits").commits(),
 			payloadHash = MessageDigest.getInstance("SHA-256").digest(rawBody).toHex(),
+			pullRequest = pullRequest,
 		)
 	}
 

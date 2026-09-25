@@ -123,7 +123,7 @@ class GitHubWebhookApiIntegrationTest {
 		postWebhook(
 			"delivery-${UUID.randomUUID()}",
 			"push",
-			"""{"installation":{"id":77},"repository":{"id":99},"ref":"refs/heads/main","before":"a","after":"b","created":false,"deleted":false,"forced":false}""",
+			"""{"installation":{"id":77},"repository":{"id":99},"ref":"refs/heads/main","before":"${"a".repeat(40)}","after":"${"b".repeat(40)}","created":false,"deleted":false,"forced":false}""",
 		).andExpect { status { isAccepted() } }
 
 		assertEquals("OBSERVED", latestDisposition())

@@ -40,7 +40,7 @@ class GitHubChangeRoutineService(
 		val cadence = webhook.routineCadence() ?: return 0
 		val routines = persistence.listEnabledGitHubEventRoutines(context.workspaceId, context.sourceScopeId, cadence)
 		if (routines.isEmpty()) return 0
-		if (cadence != RoutineCadence.ON_GITHUB_CHANGE) {
+		if (cadence in setOf(RoutineCadence.ON_GITHUB_RELEASE, RoutineCadence.ON_GIT_TAG)) {
 			return routines.count { routine ->
 				transactionExecutor.executeRequiresNew {
 					val request = releaseRequests.enqueueRoutineRelease(
@@ -55,12 +55,16 @@ class GitHubChangeRoutineService(
 			}
 		}
 
-		val prepared = transactionExecutor.executeRequiresNew {
+		val newRoutines = routines.filter { routine ->
+			agentPersistence.findByTriggerKey(routine.workspaceId, routine.id, triggerKey(routine, context, webhook)) == null
+		}
+		if (newRoutines.isEmpty()) return 0
+		val prepared = transactionExecutor.execute {
 			val now = delivery.receivedAt
 			val observationId = createObservation(context, delivery.externalDeliveryId, webhook.eventType, now)
 			val importer = WorkspacePrincipal(context.workspaceId, context.createdByUserId)
 			val blocks = boundedEvidenceBlocks(context, webhook, observationId, now)
-			if (blocks.isEmpty()) return@executeRequiresNew PreparedEvidence(emptyList(), emptyList())
+			if (blocks.isEmpty()) return@execute PreparedEvidence(emptyList(), emptyList())
 			evidenceBudget.requireWithinBudget(
 				blocks.size,
 				blocks.sumOf { evidenceBudget.characters(it.title, it.body) },
@@ -74,15 +78,13 @@ class GitHubChangeRoutineService(
 			}
 			PreparedEvidence(
 				blocks = blocks,
-				changedIds = upserts.filter { it.created || it.changed }.map { it.blockId },
+				changedIds = upserts.map { it.blockId },
 			)
 		}
-		if (prepared.blocks.isEmpty()) return 0
-
 		var firstAdmissionFailure: RuntimeException? = null
-		val enqueued = routines.count { routine ->
+		val enqueued = newRoutines.count { routine ->
 			try {
-				transactionExecutor.executeRequiresNew {
+				transactionExecutor.execute {
 					val execution = agentPersistence.createExecution(
 						RoutineExecutionRequest(
 							workspaceId = routine.workspaceId,
@@ -90,8 +92,8 @@ class GitHubChangeRoutineService(
 							createdByUserId = routine.createdByUserId,
 							triggerSourceScopeId = routine.sourceScopeId,
 							triggerKind = RoutineExecutionTriggerKind.GITHUB,
-							triggerKey = "github:${routine.id}:${delivery.id}",
-							requestFingerprint = githubFingerprint(routine, delivery, prepared.blocks),
+							triggerKey = triggerKey(routine, context, webhook),
+							requestFingerprint = githubFingerprint(routine, webhook, prepared.blocks),
 							triggerDeliveryId = delivery.id,
 							refreshFrom = delivery.receivedAt,
 							refreshTo = delivery.receivedAt,
@@ -155,12 +157,38 @@ class GitHubChangeRoutineService(
 			if (blocks.size == blockLimit || remainingCharacters == 0) return@forEach
 			add(commit.toWritingBlock(context, observationId, now))
 		}
+		webhook.pullRequest?.takeIf { webhook.eventType == "pull_request" }?.let { pr ->
+			add(ImportedWritingBlock(
+				sourceNamespaceId = context.sourceNamespaceId,
+				sourceScopeId = context.sourceScopeId,
+				observationId = observationId,
+				externalObjectKey = "merged-pr:${pr.id}:${requireNotNull(pr.mergeCommitSha)}",
+				sourceOrigin = "integration",
+				sourceKind = "pull_request",
+				title = pr.title,
+				body = pr.body,
+				url = "${properties.webBaseUrl.trimEnd('/')}/${context.owner}/${context.repository}/pull/${pr.number}",
+				canonicalUrl = "${properties.webBaseUrl.trimEnd('/')}/${context.owner}/${context.repository}/pull/${pr.number}",
+				author = null,
+				platform = "github",
+				metadata = mapOf("number" to pr.number, "mergeCommitSha" to pr.mergeCommitSha),
+				sourceCreatedAt = now,
+				sourceUpdatedAt = now,
+			))
+		}
 		return blocks
 	}
 
+	private fun triggerKey(routine: RoutineRecord, context: GitHubReleaseSourceContext, webhook: ParsedGitHubWebhook): String =
+		when (routine.cadence) {
+			RoutineCadence.ON_GITHUB_CHANGE -> "github:${routine.id}:push:${context.repositoryId}:${requireNotNull(webhook.afterSha)}"
+			RoutineCadence.ON_GITHUB_PR_MERGED -> "github:${routine.id}:pr:${requireNotNull(webhook.pullRequest).id}:${requireNotNull(webhook.pullRequest.mergeCommitSha)}"
+			else -> throw RoutineExecutionStateException("Unsupported change Routine cadence")
+		}
+
 	private fun githubFingerprint(
 		routine: RoutineRecord,
-		delivery: GitHubWebhookDelivery,
+		webhook: ParsedGitHubWebhook,
 		blocks: List<ImportedWritingBlock>,
 	): String = buildString {
 		append(routine.id)
@@ -171,12 +199,16 @@ class GitHubChangeRoutineService(
 		append('|').append(TOOL_POLICY_VERSION)
 		agentPersistence.listContextSources(routine.workspaceId, routine.id)
 			.forEach { append('|').append(it.sourceScopeId) }
-		append('|').append(delivery.payloadHash)
-		append('|').append(delivery.eventType)
-		append('|').append(delivery.eventAction.orEmpty())
+		append('|').append(webhook.eventType)
+		append('|').append(webhook.eventAction.orEmpty())
+		append('|').append(webhook.beforeSha.orEmpty())
+		append('|').append(webhook.afterSha.orEmpty())
+		append('|').append(webhook.pullRequest?.id?.toString().orEmpty())
+		append('|').append(webhook.pullRequest?.mergeCommitSha.orEmpty())
 		blocks.forEach {
 			append('|').append(it.externalObjectKey)
-			append('@').append(it.sourceUpdatedAt)
+			append('@').append(it.title)
+			append('@').append(it.body.orEmpty())
 		}
 	}
 
@@ -213,6 +245,7 @@ class GitHubChangeRoutineService(
 	private fun ParsedGitHubWebhook.routineCadence(): RoutineCadence? = when {
 		eventType == "push" && tagName != null -> RoutineCadence.ON_GIT_TAG
 		eventType == "push" -> RoutineCadence.ON_GITHUB_CHANGE
+		eventType == "pull_request" && eventAction == "closed" && pullRequest?.merged == true -> RoutineCadence.ON_GITHUB_PR_MERGED
 		eventType == "release" && eventAction == "published" -> RoutineCadence.ON_GITHUB_RELEASE
 		else -> null
 	}

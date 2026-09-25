@@ -11,7 +11,7 @@ data class AgentProperties(
 	val retryInitialDelay: Duration = Duration.ofSeconds(1),
 	val maxAttempts: Int = 3,
 	val maxModelCalls: Int = 8,
-	val maxToolCalls: Int = 8,
+	val maxToolCalls: Int = 12,
 	val maxRunDuration: Duration = Duration.ofMinutes(3),
 	val maxInputCharacters: Int = 12_000,
 	val maxEvidenceCharacters: Int = 60_000,

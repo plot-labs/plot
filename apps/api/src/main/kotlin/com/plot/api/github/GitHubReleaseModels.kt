@@ -28,6 +28,12 @@ data class GitHubWebhookDelivery(
 	val errorCode: String?,
 	val receivedAt: Instant,
 	val processedAt: Instant?,
+	val prId: Long? = null,
+	val prNumber: Long? = null,
+	val prBaseRepositoryId: Long? = null,
+	val prBaseBranch: String? = null,
+	val prMergeCommitSha: String? = null,
+	val prMerged: Boolean? = null,
 )
 
 data class GitHubReleaseDraftRequest(

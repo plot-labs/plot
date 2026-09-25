@@ -19,7 +19,7 @@ Plot watches connected sources and makes that judgment before drafting. It can e
 
 ```mermaid
 flowchart LR
-  A[GitHub signals] --> B[Collect release evidence]
+  A[GitHub signals] --> B[Collect release or change evidence]
   B --> C{Worth communicating?}
   C -->|No| D[Exclude]
   C -->|Not yet| E[Hold for more evidence or context]
@@ -29,11 +29,11 @@ flowchart LR
 ```
 
 - **Follow connected work.** Verified GitHub webhooks feed a durable signal inbox. Release automation is enabled by default, with no separate Autonomy mode to configure.
-- **Draft when it matters.** Automatic generation requires both a customer-value decision and evidence of a published release. A merged PR, tag, or elapsed time alone does not qualify.
+- **Draft when it matters.** Release changelogs require a published release and source evidence. Explicit GitHub change and merged PR Routines can prepare a separate product update draft from eligible changes before a release; maintenance-only changes are excluded and unclear changes are held for manual review.
 - **Keep the work inspectable.** Drafts retain their source evidence and revisions. Executions appear as conversations in **History**, alongside manual requests.
 - **Keep publication deliberate.** Prepare and revise content in Plot, then publish to the hosted changelog or export Markdown. Automatic drafting does not grant publication approval.
 
-The current runtime does not yet combine held changes across releases. Legacy scheduled and generic event Routines remain deferred to prevent generation from bypassing assessment; explicit manual runs remain available.
+The current runtime does not yet combine held changes across releases. Scheduled Routines remain deferred; GitHub change and merged PR Routines use a conservative change-title gate (`feat`, `fix`, `perf`, `security`, or `revert`). Explicit manual runs remain available.
 
 ## Workspace
 

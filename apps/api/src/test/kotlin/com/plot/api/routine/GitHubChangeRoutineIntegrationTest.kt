@@ -89,21 +89,21 @@ class GitHubChangeRoutineIntegrationTest {
 	}
 
 	@Test
-	fun `default branch delivery records one signal without bypassing assessment`() {
+	fun `default branch delivery admits one held execution and one signal`() {
         val repository = bindRepository()
         val routineId = insertRoutine(repository.scopeId, RoutineCadence.ON_GITHUB_CHANGE)
         val deliveryId = "delivery-${UUID.randomUUID()}"
         val webhook = pushWebhook(deliveryId, "b".repeat(40), "Ship routines", "c".repeat(64))
         webhookService.accept(webhook)
         webhookService.accept(webhook)
-        assertEquals(0, countExecutions(routineId))
-        assertEquals(0, routineWorker.drain())
+        assertEquals(1, countExecutions(routineId))
+        routineWorker.drain()
         assertEquals(0, count("agent_runs"))
         assertEquals(0, count("work_sessions"))
         assertEquals(1, jdbcTemplate.queryForObject(
             "select count(*) from autonomy_signals where workspace_id=? and delivery_key=?", Int::class.java,
             devContext.devWorkspaceId, deliveryId))
-        assertEquals("OBSERVED", jdbcTemplate.queryForObject(
+        assertEquals("QUEUED", jdbcTemplate.queryForObject(
             "select disposition from github_webhook_deliveries where external_delivery_id=?", String::class.java, deliveryId))
     }
 
@@ -205,12 +205,12 @@ class GitHubChangeRoutineIntegrationTest {
 	}
 
 	@Test
-	fun `new deliveries of the same change never create unassessed routine drafts`() {
+	fun `new deliveries of the same change share one held execution`() {
         val repository = bindRepository()
         val routineId = insertRoutine(repository.scopeId, RoutineCadence.ON_GITHUB_CHANGE)
         for (index in 1..2) webhookService.accept(pushWebhook("repeat-${UUID.randomUUID()}", "4".repeat(40), "Original evidence", "a".repeat(64)))
-        assertEquals(0, countExecutions(routineId))
-        assertEquals(0, routineWorker.drain())
+        assertEquals(1, countExecutions(routineId))
+        routineWorker.drain()
         assertEquals(0, count("agent_runs"))
         assertEquals(null, routinePersistence.find(devContext.devWorkspaceId, routineId)?.activityCursorSequence)
     }
@@ -241,7 +241,8 @@ class GitHubChangeRoutineIntegrationTest {
 		)
 		routineWorker.runNow(routine.workspaceId, routine.id, manual.id)
 
-		assertEquals(listOf(olderBlockId), seedIds(manual.id))
+		assertEquals(olderBlockId, seedIds(manual.id).first())
+		assertEquals(2, seedIds(manual.id).size)
 		assertEquals(1, count("work_sessions"))
 		assertEquals(1, count("agent_runs"))
 	}
