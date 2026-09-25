@@ -38,6 +38,7 @@ data class AgentDecisionRequest(
 	val model: String? = null,
 	val routingProvider: String? = null,
 	val reasoningEffort: String? = null,
+	val maxSelectedEvidenceCharacters: Int? = null,
 )
 
 enum class AgentResponseMode {
@@ -61,6 +62,7 @@ data class AgentInputView(
 	val sourceScopeId: UUID,
 	val title: String?,
 	val excerpt: String,
+	val characters: Int = 0,
 )
 
 data class AgentStepView(

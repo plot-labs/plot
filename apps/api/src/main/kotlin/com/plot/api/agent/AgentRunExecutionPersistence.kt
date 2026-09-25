@@ -394,7 +394,6 @@ class AgentRunExecutionPersistence(
 		adoptedInput: AgentRunInputRequest? = null,
 		sourceScopeId: UUID? = null,
 		sourceStatusChangedAt: Instant? = null,
-		maxEvidenceCharacters: Int,
 		now: Instant = currentInstant(),
 	): AgentStepRecord = transactionExecutor.execute {
 		val run = queryPersistence.requireAgentClaim(claim)
@@ -418,16 +417,7 @@ class AgentRunExecutionPersistence(
 				"Agent read may adopt only tool-result input"
 			}
 			require(input.sourceScopeId == sourceScopeId) { "Agent read result source mismatch" }
-			val currentCharacters = sqlExecutor.queryForObject(
-				"select coalesce(sum(length(coalesce(snapshot_title, '')) + length(snapshot_body)), 0) from agent_run_inputs where workspace_id = ? and agent_run_id = ?",
-				Long::class.java,
-				claim.workspaceId,
-				claim.agentRunId,
-			) ?: 0L
-			if (currentCharacters + input.snapshotTitle.orEmpty().length + input.snapshotBody.length > maxEvidenceCharacters) {
-				throw AgentRunBudgetExceededException("AGENT_EVIDENCE_LIMIT")
-			}
-			queryPersistence.findAdoptedInput(claim.workspaceId, claim.agentRunId, input)
+			queryPersistence.findMatchingInput(claim.workspaceId, claim.agentRunId, input)
 				?: insertAdoptedInput(claim.workspaceId, claim.agentRunId, input, now)
 		}
 
@@ -671,7 +661,7 @@ class AgentRunExecutionPersistence(
 			input.sourceCreatedAt?.let(Timestamp::from), input.sourceUpdatedAt?.let(Timestamp::from), input.contentHash,
 			Timestamp.from(input.capturedAt.takeIf { !it.isAfter(now) } ?: now),
 		)
-		return queryPersistence.findAdoptedInput(workspaceId, agentRunId, input)
+		return queryPersistence.findMatchingInput(workspaceId, agentRunId, input)
 			?: throw AgentRunStateException("Agent read result could not be adopted")
 	}
 	private fun claimRunningAgentRun(run: AgentRunRecord, workerId: String, now: Instant): ClaimedAgentRun? {

@@ -280,7 +280,9 @@ class AgentRunWorker(
 					instruction = run.instructionSnapshot,
 					sources = tools.listAllowedSources(run.workspaceId, run.id, frozenReplay).sources,
 					inputs = queryPersistence.listAgentRunInputs(run.workspaceId, run.id).map {
-						AgentInputView(it.id, it.sourceScopeId, it.snapshotTitle, (it.snapshotExcerpt ?: it.snapshotBody).take(MAX_MODEL_EXCERPT))
+						AgentInputView(it.id, it.sourceScopeId, it.snapshotTitle,
+							(it.snapshotExcerpt ?: it.snapshotBody).take(MAX_MODEL_EXCERPT),
+							it.snapshotTitle.orEmpty().length + it.snapshotBody.length)
 					},
 					completedSteps = queryPersistence.listSteps(run.workspaceId, run.id)
 						.filter { it.status == AgentStepStatus.SUCCEEDED || it.status == AgentStepStatus.FAILED }
@@ -293,6 +295,7 @@ class AgentRunWorker(
 					model = selectedModel,
 					routingProvider = routingProvider,
 					reasoningEffort = reasoningEffort,
+					maxSelectedEvidenceCharacters = budget.maxEvidenceCharacters,
 				)
 			}
 			override fun execute(decision: AgentDecision): String {
@@ -301,7 +304,21 @@ class AgentRunWorker(
 				val current = queryPersistence.requireAgentClaim(claim)
 				val context = context()
 				val arguments = try {
-					validateDecision(decision, context.sources.map { it.id }.toSet(), context.inputs.map { it.id }.toSet())
+					validateDecision(decision, context.sources.map { it.id }.toSet(), context.inputs.map { it.id }.toSet()).also { validated ->
+						if (validated.action == AgentDecisionAction.CREATE_ARTIFACT && !executionPolicy.isReleaseRun(run.workspaceId, run.id)) {
+							val inputs = queryPersistence.listAgentRunInputs(run.workspaceId, run.id).associateBy { it.id }
+							val selected = validated.selectedInputIds.map { inputs.getValue(it) }
+							if (selected.map { it.writingBlockId }.distinct().size != selected.size) {
+								throw InvalidAgentDecisionException("Select only one snapshot of each source item")
+							}
+							val characters = selected.sumOf { it.snapshotTitle.orEmpty().length + it.snapshotBody.length }
+							if (characters > budget.maxEvidenceCharacters) {
+								throw InvalidAgentDecisionException(
+									"Selected evidence uses $characters characters; choose inputs totaling at most ${budget.maxEvidenceCharacters}",
+								)
+							}
+						}
+					}
 				} catch (failure: InvalidAgentDecisionException) {
 					rejectInvalidDecision(claim, current, decision, failure, budget, retainClaim = true)
 					return objectMapper.writeValueAsString(mapOf("error" to failure.message))
@@ -368,7 +385,7 @@ class AgentRunWorker(
 					objectMapper.writeValueAsString(skill)
 				}
 				executionPersistence.completeToolStep(retainClaim = retainClaim, claim = claim, stepId = step.id,
-					resultJson = result, maxEvidenceCharacters = budget.maxEvidenceCharacters, now = clock.instant())
+					resultJson = result, now = clock.instant())
 			}
 			AgentDecisionAction.LIST_ALLOWED_SOURCES -> {
 				val result = tools.listAllowedSources(run.workspaceId, run.id, frozenReplay)
@@ -382,7 +399,6 @@ class AgentRunWorker(
 							"sources" to result.sources,
 						),
 					),
-					maxEvidenceCharacters = budget.maxEvidenceCharacters,
 					now = clock.instant(),
 				)
 			}
@@ -409,7 +425,6 @@ class AgentRunWorker(
 					),
 					sourceScopeId = sourceScopeId,
 					sourceStatusChangedAt = result.sourceStatusChangedAt,
-					maxEvidenceCharacters = budget.maxEvidenceCharacters,
 					now = clock.instant(),
 				)
 			}
@@ -435,7 +450,6 @@ class AgentRunWorker(
 					adoptedInput = adopted,
 					sourceScopeId = sourceScopeId,
 					sourceStatusChangedAt = result.sourceStatusChangedAt,
-					maxEvidenceCharacters = budget.maxEvidenceCharacters,
 					now = clock.instant(),
 				)
 			}

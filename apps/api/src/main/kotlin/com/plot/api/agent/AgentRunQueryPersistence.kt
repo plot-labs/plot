@@ -179,7 +179,7 @@ class AgentRunQueryPersistence(
 		agentRunId,
 		id,
 	).firstOrNull()
-	internal fun findAdoptedInput(
+	internal fun findMatchingInput(
 		workspaceId: UUID,
 		agentRunId: UUID,
 		input: AgentRunInputRequest,
@@ -191,8 +191,10 @@ class AgentRunQueryPersistence(
 		       snapshot_excerpt, original_url, source_created_at, source_updated_at,
 		       content_hash, captured_at
 		from agent_run_inputs
-		where workspace_id = ? and agent_run_id = ? and input_kind = 'TOOL_RESULT'
+		where workspace_id = ? and agent_run_id = ?
 		  and source_scope_id = ? and writing_block_id = ? and content_hash = ?
+		order by case when input_kind = 'SEED' then 0 else 1 end, order_index
+		limit 1
 		""".trimIndent(),
 		agentRunInputMapper,
 		workspaceId,
@@ -200,7 +202,7 @@ class AgentRunQueryPersistence(
 		input.sourceScopeId,
 		input.writingBlockId,
 		input.contentHash,
-	).singleOrNull()
+	).firstOrNull()
 	internal fun findInput(workspaceId: UUID, agentRunId: UUID, id: UUID): AgentRunInputRecord? = sqlExecutor.query(
 		"""
 		select id, workspace_id, agent_run_id, routine_id, source_scope_id, writing_block_id,
