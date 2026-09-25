@@ -9,6 +9,7 @@ import com.plot.api.agent.AgentRunSourceRequest
 import com.plot.api.agent.AgentRunSourceRole
 
 import com.plot.api.common.ApiException
+import com.plot.api.content.ContentType
 import com.plot.api.entitlement.WorkspaceAccessService
 import com.plot.api.writingblock.WritingBlock
 import com.plot.api.writingblock.WritingBlockRepository
@@ -274,6 +275,8 @@ class RoutineWorker(
 				activityCursorAfter = consumedThrough,
 				requestedModel = routine.model,
 				requestedReasoningEffort = routine.reasoningEffort,
+				contentType = if (routine.cadence in setOf(RoutineCadence.ON_GITHUB_CHANGE, RoutineCadence.ON_GITHUB_PR_MERGED))
+					ContentType.ARTIFACT else ContentType.CHANGELOG,
 			),
 			now = now,
 			workerId = workerId,
