@@ -6,7 +6,6 @@ import Link from "next/link";
 
 import {
   WorkspaceHeader,
-  workspaceListClass,
   workspacePageClass,
   workspaceSectionClass,
 } from "@/components/layout/workspace-page";
@@ -100,7 +99,7 @@ function ArtifactsWorkspaceContent() {
           {totalItems > artifacts.length && <p className="mt-2 text-[11px] text-black/40 dark:text-white/42">Views show the {artifacts.length} most recently updated artifacts of {totalItems}.</p>}
         </WorkspaceHeader>
 
-        <div className={`mt-4 ${workspaceListClass}`}>
+        <div className="divide-y divide-black/[0.07] border-b border-black/[0.07] dark:divide-white/[0.08] dark:border-white/[0.08]">
           {artifactListStatus === "loading" ? (
             <ArtifactListLoading />
           ) : artifactListStatus === "error" ? (

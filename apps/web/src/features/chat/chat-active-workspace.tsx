@@ -144,16 +144,16 @@ export function ChatActiveWorkspace({
   }, [activeChat.id, activeChat.title, agent.activities]);
 
   return (
-    <div ref={workspaceRef} className="relative flex h-[calc(100dvh-49px)] min-h-0 bg-[#fbfbf8] dark:bg-[#111113] lg:h-full">
+    <div ref={workspaceRef} className="relative flex h-[calc(100dvh-49px)] min-h-0 bg-white dark:bg-[#111113] lg:h-full">
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex min-h-14 shrink-0 items-center bg-[#fbfbf8]/90 px-4 py-3 backdrop-blur-xl dark:bg-[#111113]/90" style={toolbarBottomFade}>
+        <header className="flex min-h-14 shrink-0 items-center bg-white px-4 py-3 dark:bg-[#111113]" style={toolbarBottomFade}>
           <div className="flex w-full min-w-0 items-center justify-start gap-2 text-sm font-semibold text-black/78 dark:text-white/82">
             <h1 className="truncate text-left">{activeChat.title || "Untitled chat"}</h1>
             <MoreHorizontal aria-hidden="true" className="size-4 shrink-0 text-black/45 dark:text-white/45" />
           </div>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto bg-[#fbfbf8] dark:bg-[#16171a]" style={chatBottomFade}>
+        <div className="min-h-0 flex-1 overflow-y-auto bg-white dark:bg-[#111113]" style={chatBottomFade}>
           <div className="mx-auto w-full max-w-[760px] px-4 pb-12 pt-8 sm:px-6">
             <ChatMessageList density="compact" gap={4} style={{ flex: "none" }}>
               {agent.turns.length > 0 ? (

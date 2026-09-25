@@ -205,7 +205,7 @@ export function ChatComposer({
   return (
     <div
       id={id}
-      className="w-full bg-[#fbfbf8]/95 px-4 pb-4 pt-3 backdrop-blur-xl dark:bg-[#111113]/95 sm:px-6"
+      className="w-full bg-white px-4 pb-4 pt-3 dark:bg-[#111113] sm:px-6"
     >
       <div className="mx-auto max-w-[720px]">
         <PromptBar
