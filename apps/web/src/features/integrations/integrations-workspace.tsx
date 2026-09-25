@@ -651,7 +651,6 @@ function errorMessage(error: unknown) {
     if (error.code === "GITHUB_INSTALLATION_AMBIGUOUS") return "Multiple GitHub App installations found. Visit GitHub settings to manage your installations, then reconnect the account you want to use.";
     if (error.code === "GITHUB_ACCOUNT_NOT_LINKED") return "No linked GitHub account found. Connect a GitHub account first, then retry.";
     if (error.code === "GITHUB_PRODUCT_OAUTH_NOT_CONFIGURED") return "GitHub account authorization is not configured for this environment.";
-    if (error.code === "GITHUB_SCOPE_REQUIRED") return "GitHub authorization did not grant the permissions required for repository access.";
     if (error.code === "FORBIDDEN") return "Workspace owner must connect GitHub.";
     if (error.code === "GITHUB_PROVIDER_UNAVAILABLE") return "GitHub is temporarily unavailable. Try again shortly.";
     return "GitHub request failed. Try again.";

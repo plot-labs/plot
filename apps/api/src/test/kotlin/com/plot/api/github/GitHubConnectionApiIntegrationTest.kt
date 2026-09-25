@@ -86,7 +86,7 @@ class GitHubConnectionApiIntegrationTest {
 	}
 
 	/** Product GitHub credentials are explicitly seeded separately from account auth. */
-	private fun seedLinkedGitHubAccount(scope: String = "read:user user:email read:org") {
+	private fun seedLinkedGitHubAccount(scope: String = "") {
 		val now = Instant.now()
 		productCredentialRepository.saveActive(GitHubProductCredential(
 			id = UUID.randomUUID(),
@@ -284,7 +284,7 @@ class GitHubConnectionApiIntegrationTest {
 	}
 
 	@Test
-	fun syncRejectsAmbiguousInstallationsWhenMultipleEligibleAccountsExist() {
+	fun syncPrefersOneAdminOrganizationInstallationOverPersonalInstall() {
 		fakeClient.userInstallations = listOf(
 			GitHubUserInstallation(installationId = 101, appId = "1", accountId = 9001, accountLogin = "acme", accountType = "User"),
 			GitHubUserInstallation(installationId = 102, appId = "1", accountId = 555, accountLogin = "acme-org", accountType = "Organization"),
@@ -293,8 +293,8 @@ class GitHubConnectionApiIntegrationTest {
 
 		mockMvc.post("/api/github/installations/sync")
 			.andExpect {
-				status { isConflict() }
-				jsonPath("$.error") { value("GITHUB_INSTALLATION_AMBIGUOUS") }
+				status { isOk() }
+				jsonPath("$.installationId") { value(102) }
 			}
 	}
 
@@ -383,21 +383,6 @@ class GitHubConnectionApiIntegrationTest {
 	}
 
 	@Test
-	fun syncRequiresReauthWhenReadOrgScopeIsMissing() {
-		seedLinkedGitHubAccount(scope = "read:user repo")
-		fakeClient.userInstallations = listOf(
-			GitHubUserInstallation(installationId = 101, appId = "1", accountId = 9001, accountLogin = "acme", accountType = "User"),
-			GitHubUserInstallation(installationId = 102, appId = "1", accountId = 555, accountLogin = "acme-org", accountType = "Organization"),
-		)
-
-		mockMvc.post("/api/github/installations/sync")
-			.andExpect {
-				status { isUnauthorized() }
-				jsonPath("$.error") { value("GITHUB_REAUTH_REQUIRED") }
-			}
-	}
-
-	@Test
 	fun syncRequiresReauthWhenOrganizationMembershipCheckIsAccessDenied() {
 		fakeClient.userInstallations = listOf(
 			GitHubUserInstallation(installationId = 102, appId = "1", accountId = 555, accountLogin = "acme-org", accountType = "Organization"),
@@ -414,8 +399,7 @@ class GitHubConnectionApiIntegrationTest {
 	}
 
 	@Test
-	fun syncSucceedsWithReadOrgScopeForSingleAdminOrgInstallation() {
-		seedLinkedGitHubAccount(scope = "read:org read:user repo")
+	fun syncSucceedsForSingleAdminOrgInstallationWithoutOAuthScopes() {
 		fakeClient.userInstallations = listOf(
 			GitHubUserInstallation(installationId = 102, appId = "1", accountId = 555, accountLogin = "acme-org", accountType = "Organization"),
 		)

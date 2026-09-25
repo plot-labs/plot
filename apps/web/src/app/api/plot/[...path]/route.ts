@@ -175,7 +175,7 @@ async function readJsonRecord(response: Response): Promise<Record<string, unknow
 
 function callbackErrorKind(status: number, code: unknown): "invalid" | "unauthorized" | "unavailable" | "failed" {
   if (status === 400 || code === "INVALID_GITHUB_STATE" || code === "GITHUB_CALLBACK_INVALID") return "invalid";
-  if (status === 401 || status === 403 || code === "FORBIDDEN") return "unauthorized";
+  if (code === "FORBIDDEN") return "unauthorized";
   if (status === 429 || status >= 500 || code === "GITHUB_NOT_CONFIGURED" || code === "GITHUB_PROVIDER_UNAVAILABLE") return "unavailable";
   return "failed";
 }

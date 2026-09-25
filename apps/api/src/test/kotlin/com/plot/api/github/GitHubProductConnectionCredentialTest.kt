@@ -104,21 +104,6 @@ class GitHubProductConnectionCredentialTest {
 	}
 
 	@Test
-	fun missingProductScopeDoesNotPersistCredential() {
-		oauthClient.scope = "read:user user:email"
-		val start = mockMvc.post("/api/github/oauth/start").andReturn().response.contentAsString
-		val state = Regex("[?&]state=([A-Za-z0-9_-]+)").find(start)!!.groupValues[1]
-
-		mockMvc.get("/api/github/oauth/callback?code=oauth-code&state=$state")
-			.andExpect { status { isUnauthorized() }; jsonPath("$.error") { value("GITHUB_SCOPE_REQUIRED") } }
-		assertEquals(0, jdbcTemplate.queryForObject(
-			"select count(*) from github_product_credentials where user_id = ?",
-			Int::class.java,
-			devContext.devUserId,
-		))
-	}
-
-	@Test
 	fun credentialBackfillUsesPlotAuthSubjectCheckpointAndQuarantinesNothingForAnExactMapping() {
 		jdbcTemplate.update(
 			"""
@@ -171,7 +156,7 @@ class GitHubProductConnectionCredentialTest {
 }
 
 class FakeGitHubProductOAuthClient : GitHubProductOAuthClient {
-	var scope = "read:user user:email read:org"
+	var scope = ""
 
 	var profile = GitHubProductProfile(9001, "acme")
 
@@ -186,7 +171,7 @@ class FakeGitHubProductOAuthClient : GitHubProductOAuthClient {
 	override fun fetchProfile(accessToken: String): GitHubProductProfile = profile
 
 	fun reset() {
-		scope = "read:user user:email read:org"
+		scope = ""
 		profile = GitHubProductProfile(9001, "acme")
 	}
 }

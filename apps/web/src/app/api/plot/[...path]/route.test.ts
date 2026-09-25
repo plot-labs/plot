@@ -413,14 +413,14 @@ describe("Plot same-origin proxy", () => {
       {
         fetch: vi.fn<typeof fetch>().mockResolvedValue(Response.json({
           returnPath: "https://attacker.test/steal",
-          errorCode: "GITHUB_SCOPE_REQUIRED",
-        }, { status: 401 })),
+          errorCode: "GITHUB_REAUTH_REQUIRED",
+        }, { status: 200 })),
         baseUrl: "http://127.0.0.1:8080",
       },
     );
 
     expect(response.status).toBe(303);
-    expect(response.headers.get("location")).toBe("http://web.test/settings/integrations?githubError=unauthorized");
+    expect(response.headers.get("location")).toBe("http://web.test/settings/integrations?githubError=failed");
   });
 
   it.each([

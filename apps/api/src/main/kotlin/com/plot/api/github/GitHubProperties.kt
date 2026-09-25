@@ -15,7 +15,6 @@ data class GitHubProperties(
 	val productOAuthClientId: String? = null,
 	val productOAuthClientSecret: String? = null,
 	val productOAuthRedirectUri: String? = null,
-	val productOAuthScopes: String = "read:user user:email read:org",
 	val productCredentialEncryptionKey: String? = null,
 	val productCredentialEncryptionKeyVersion: String = "v1",
 	val productCredentialBackfillBatchSize: Int = 100,

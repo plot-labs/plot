@@ -224,25 +224,17 @@ class GitHubConnectionService(
 		val personalInstall = installations.firstOrNull {
 			it.accountType.equals("USER", ignoreCase = true) && it.accountId == link.githubAccountId
 		}
-		val hasOrgInstalls = installations.any { it.accountType.equals("ORGANIZATION", ignoreCase = true) }
-		if (hasOrgInstalls && !hasReadOrgScope(link.scope)) {
-			throw ApiException(
-				HttpStatus.UNAUTHORIZED,
-				"GITHUB_REAUTH_REQUIRED",
-				"GitHub authorization must be refreshed to check organization membership; connect GitHub again",
-			)
-		}
 		val adminOrgs = installations.filter { it.accountType.equals("ORGANIZATION", ignoreCase = true) }
 			.filter { isOrganizationAdmin(link.accessToken, it.accountLogin) }
-		val eligibleInstallations = listOfNotNull(personalInstall) + adminOrgs
-		if (eligibleInstallations.size > 1) {
+		if (adminOrgs.size == 1) return adminOrgs.first().installationId
+		if (adminOrgs.size > 1) {
 			throw ApiException(
 				HttpStatus.CONFLICT,
 				"GITHUB_INSTALLATION_AMBIGUOUS",
 				"Multiple Plot GitHub App installations were found; reconnect from GitHub settings for the account you want to use",
 			)
 		}
-		if (eligibleInstallations.size == 1) return eligibleInstallations.first().installationId
+		if (personalInstall != null) return personalInstall.installationId
 		if (installations.size == 1) return installations.first().installationId
 		throw ApiException(
 			HttpStatus.CONFLICT,
@@ -617,25 +609,19 @@ class GitHubConnectionService(
 		}
 	}
 
-	private fun hasReadOrgScope(scope: String?): Boolean {
-		if (scope.isNullOrBlank()) return false
-		return scope.split(" ", ",").any { it.trim() == "read:org" }
-	}
-
 	private fun findLinkedGitHubAccount(userId: UUID): LinkedGitHubAccount? = productCredentialRepository
 		.findActiveByUserId(userId)
 		?.let { credential ->
 			LinkedGitHubAccount(
 				githubAccountId = credential.githubAccountId,
 				accessToken = credential.accessToken,
-				scope = credential.scope,
 			)
 		}
 
 	private fun installationNotOwned(message: String = "GitHub installation does not belong to the authenticated user") =
 		ApiException(HttpStatus.FORBIDDEN, "GITHUB_INSTALLATION_NOT_OWNED", message)
 
-	private data class LinkedGitHubAccount(val githubAccountId: Long, val accessToken: String?, val scope: String?)
+	private data class LinkedGitHubAccount(val githubAccountId: Long, val accessToken: String?)
 
 	private fun listScopesForConnection(connectionId: UUID): List<GitHubRepositoryResponse> {
 		return sqlExecutor.query(

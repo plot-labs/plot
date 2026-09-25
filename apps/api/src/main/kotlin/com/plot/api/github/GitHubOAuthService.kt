@@ -61,7 +61,6 @@ class GitHubProductOAuthClientImpl(
 			.fromUriString("${properties.webBaseUrl.trimEnd('/')}/login/oauth/authorize")
 			.queryParam("client_id", clientId)
 			.queryParam("redirect_uri", redirectUri)
-			.queryParam("scope", properties.productOAuthScopes)
 			.queryParam("state", state)
 			.build()
 			.toUriString()
@@ -179,14 +178,6 @@ class GitHubOAuthService(
 			throw ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "GitHub authorization state does not belong to the authenticated user")
 		}
 		val token = oauthClient.exchangeCode(code)
-		val missingScopes = requiredScopes().filterNot { token.scopeTokens().contains(it) }
-		if (missingScopes.isNotEmpty()) {
-			throw ApiException(
-				HttpStatus.UNAUTHORIZED,
-				"GITHUB_SCOPE_REQUIRED",
-				"GitHub authorization must include the required product permissions",
-			)
-		}
 		val profile = oauthClient.fetchProfile(token.accessToken)
 		val now = Instant.now()
 		transactionExecutor.execute {
@@ -225,12 +216,6 @@ class GitHubOAuthService(
 		return ProductOAuthOwnerContext(actor.userId, workspace.workspaceId)
 	}
 
-	private fun requiredScopes(): Set<String> = properties.productOAuthScopes
-		.split(',', ' ', '\t', '\n')
-		.map(String::trim)
-		.filter(String::isNotBlank)
-		.toSet()
-
 	private fun requireProductOAuthConfigured() {
 		if (properties.productOAuthClientId.isNullOrBlank() ||
 			properties.productOAuthClientSecret.isNullOrBlank() ||
@@ -244,12 +229,6 @@ class GitHubOAuthService(
 			)
 		}
 	}
-
-	private fun GitHubProductOAuthToken.scopeTokens(): Set<String> = scope
-		.split(',', ' ', '\t', '\n')
-		.map(String::trim)
-		.filter(String::isNotBlank)
-		.toSet()
 
 	private data class ProductOAuthOwnerContext(val userId: UUID, val workspaceId: UUID)
 }
