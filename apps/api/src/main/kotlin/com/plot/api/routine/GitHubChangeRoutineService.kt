@@ -81,8 +81,6 @@ class GitHubChangeRoutineService(
 				changedIds = upserts.map { it.blockId },
 			)
 		}
-		if (prepared.blocks.isEmpty()) return 0
-
 		var firstAdmissionFailure: RuntimeException? = null
 		val enqueued = newRoutines.count { routine ->
 			try {
@@ -209,7 +207,8 @@ class GitHubChangeRoutineService(
 		append('|').append(webhook.pullRequest?.mergeCommitSha.orEmpty())
 		blocks.forEach {
 			append('|').append(it.externalObjectKey)
-			append('@').append(it.sourceUpdatedAt)
+			append('@').append(it.title)
+			append('@').append(it.body.orEmpty())
 		}
 	}
 

@@ -218,6 +218,12 @@ class RoutineWorker(
 			}
 		}
 		if (candidates.isEmpty()) {
+			if (execution.triggerKind == RoutineExecutionTriggerKind.GITHUB) {
+				val now = currentInstant()
+				agentPersistence.deferForAutonomy(execution.workspaceId, execution.id, workerId, now, "GITHUB_EVIDENCE_UNAVAILABLE")
+				finishProjection(execution, claimedRoutine, now, "DEFERRED", nextRunAtFor(execution, routine, now), "GITHUB_EVIDENCE_UNAVAILABLE")
+				return
+			}
 			agentPersistence.markNoActivity(execution.workspaceId, execution.id, currentInstant(), workerId)
 			finishProjection(
 				execution,

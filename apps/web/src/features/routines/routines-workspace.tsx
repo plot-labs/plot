@@ -664,8 +664,15 @@ function isEventCadence(cadence: RoutineCadence) {
 
 function formatRoutineStatus(routine: Routine) {
   const execution = routine.latestExecution;
-  if (execution?.status === "NO_ACTIVITY") return "Checked · No new activity";
-  if (execution?.status === "FAILED") return "Run failed";
+  if (execution?.status === "NO_ACTIVITY") return "Checked · No customer update identified";
+  if (execution?.status === "DEFERRED") return execution.errorCode === "CUSTOMER_VALUE_UNCLEAR"
+    ? "Held · Review the change manually"
+    : execution.errorCode === "GITHUB_EVIDENCE_UNAVAILABLE"
+      ? "Held · GitHub change evidence is missing"
+      : "Held · Waiting for release evidence";
+  if (execution?.status === "FAILED") return execution.errorCode
+    ? `Run failed · ${execution.errorCode.replaceAll("_", " ").toLowerCase()}`
+    : "Run failed";
   if (execution?.agentRunStatus === "QUEUED") return "Agent queued";
   if (execution?.agentRunStatus === "RUNNING") return "Agent running";
   if (execution?.agentRunStatus === "SUCCEEDED") return "Agent completed";
