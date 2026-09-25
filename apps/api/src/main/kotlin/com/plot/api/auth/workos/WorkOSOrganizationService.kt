@@ -41,11 +41,39 @@ interface WorkOSOrganizationGateway {
 	): WorkOSMembershipRecord
 }
 
+interface WorkOSOrganizationDeletionGateway {
+	fun hasOtherActiveMembers(organizationId: String, userId: String): Boolean
+	fun delete(organizationId: String)
+}
+
 @Service
 class WorkOSOrganizationService(
 	private val clientProvider: WorkOSClientProvider,
 	private val properties: WorkOSAuthProperties,
-) : WorkOSOrganizationGateway {
+) : WorkOSOrganizationGateway, WorkOSOrganizationDeletionGateway {
+	override fun hasOtherActiveMembers(organizationId: String, userId: String): Boolean {
+		try {
+			return clientProvider.require().organizationMembership
+				.list(organizationId = organizationId, statuses = listOf(OrganizationMembershipStatus.Active), limit = 100)
+				.autoPagingIterable()
+				.any { it.userId != userId }
+		} catch (_: NotFoundException) {
+			return false
+		} catch (exception: WorkOSException) {
+			throw WorkOSProviderException("WorkOS membership check failed", exception)
+		}
+	}
+
+	override fun delete(organizationId: String) {
+		try {
+			clientProvider.require().organizations.delete(organizationId)
+		} catch (_: NotFoundException) {
+			// Retrying after a successful provider call is safe.
+		} catch (exception: WorkOSException) {
+			throw WorkOSProviderException("WorkOS organization deletion failed", exception)
+		}
+	}
+
 	override fun findByExternalId(externalId: String): WorkOSOrganizationRecord? {
 		try {
 			return clientProvider.require().organizations.getByExternalId(externalId).toRecord(externalId)

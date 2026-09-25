@@ -15,10 +15,24 @@ interface WorkOSUserGateway {
 	fun get(userId: String): WorkOSUserProfile
 }
 
+interface WorkOSUserDeletionGateway {
+	fun delete(userId: String)
+}
+
 @Service
 class WorkOSUserService(
 	private val clientProvider: WorkOSClientProvider,
-) : WorkOSUserGateway {
+) : WorkOSUserGateway, WorkOSUserDeletionGateway {
+	override fun delete(userId: String) {
+		try {
+			clientProvider.require().userManagement.delete(userId)
+		} catch (_: NotFoundException) {
+			// A retry after a local transaction failure must still finish.
+		} catch (exception: WorkOSException) {
+			throw WorkOSProviderException("WorkOS user deletion failed", exception)
+		}
+	}
+
 	override fun get(userId: String): WorkOSUserProfile {
 		try {
 			val user = clientProvider.require().userManagement.get(userId)
