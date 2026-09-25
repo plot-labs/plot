@@ -5,6 +5,7 @@ import com.plot.api.auth.WorkOSAuthProperties
 import com.plot.api.common.ApiException
 import com.plot.api.common.UuidGenerator
 import com.plot.api.persistence.TransactionExecutor
+import com.plot.api.persistence.SqlExecutor
 import com.plot.api.workspace.User
 import com.plot.api.workspace.UserRepository
 import com.plot.api.workspace.Workspace
@@ -37,6 +38,7 @@ class WorkOSBootstrapProvisioningService(
 	private val uuidGenerator: UuidGenerator,
 	private val properties: WorkOSAuthProperties,
 	private val transactionExecutor: TransactionExecutor,
+	private val sql: SqlExecutor,
 ) {
 	fun bootstrap(jwt: Jwt): BootstrapAccountResponse {
 		if (!properties.enabled) {
@@ -50,6 +52,7 @@ class WorkOSBootstrapProvisioningService(
 		}
 
 		val workOSUserId = jwt.subject?.trim()?.takeIf { it.isNotBlank() } ?: throw unauthorized()
+		if (deletionPending(workOSUserId)) throw unauthorized()
 		val providerUser = try {
 			workOSUserGateway.get(workOSUserId)
 		} catch (_: WorkOSUserNotFoundException) {
@@ -147,6 +150,7 @@ class WorkOSBootstrapProvisioningService(
 		membership: WorkOSMembershipRecord,
 		workOSUserId: String,
 	): BootstrapAccountResponse = transactionExecutor.execute {
+			if (deletionPending(workOSUserId)) throw unauthorized()
 			identityRepository.findByWorkOSUserId(workOSUserId)?.let { existing ->
 				return@execute existingResponse(existing, workOSUserId)
 			}
@@ -204,6 +208,12 @@ class WorkOSBootstrapProvisioningService(
 			provisioningRepository.markCompleted(workOSUserId, userId, workspaceId, organization.id, now)
 			BootstrapAccountResponse(user.id, workspaceId, organization.id, true)
 		}
+
+	private fun deletionPending(workOSUserId: String): Boolean = sql.queryForObject(
+		"select exists(select 1 from account_deletion_provider_cleanup where workos_user_id = ?)",
+		Boolean::class.javaObjectType,
+		workOSUserId,
+	) == true
 
 	private fun existingResponse(mapping: WorkOSIdentityMapping, workOSUserId: String): BootstrapAccountResponse {
 		val user = userRepository.findById(mapping.plotUserId).orElse(null)

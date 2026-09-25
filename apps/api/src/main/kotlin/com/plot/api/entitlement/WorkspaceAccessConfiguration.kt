@@ -13,6 +13,7 @@ class WorkspaceAccessConfiguration(
 			.addPathPatterns("/api/**")
 			.excludePathPatterns(
 				"/api/account/bootstrap",
+				"/api/account",
 				"/api/me",
 				"/api/polar/webhook",
 				"/api/workos/webhook",
