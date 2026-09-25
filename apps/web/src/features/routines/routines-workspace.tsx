@@ -653,6 +653,7 @@ function formatCadence(cadence: RoutineCadence) {
   if (cadence === "DAILY") return "Daily";
   if (cadence === "WEEKLY") return "Weekly";
   if (cadence === "ON_GITHUB_CHANGE") return "When the default branch changes";
+  if (cadence === "ON_GITHUB_PR_MERGED") return "When a PR merges into the default branch";
   if (cadence === "ON_GITHUB_RELEASE") return "When a release is published";
   return "When a git tag is pushed";
 }

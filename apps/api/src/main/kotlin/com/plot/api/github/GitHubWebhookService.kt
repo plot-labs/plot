@@ -78,6 +78,12 @@ class GitHubWebhookService(
 			errorCode = null,
 			receivedAt = Instant.now(),
 			processedAt = null,
+			prId = webhook.pullRequest?.id,
+			prNumber = webhook.pullRequest?.number,
+			prBaseRepositoryId = webhook.pullRequest?.baseRepositoryId,
+			prBaseBranch = webhook.pullRequest?.baseBranch,
+			prMergeCommitSha = webhook.pullRequest?.mergeCommitSha,
+			prMerged = webhook.pullRequest?.merged,
 		)
 
 	private fun process(

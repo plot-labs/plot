@@ -23,6 +23,7 @@ const triggerGroups: ReadonlyArray<{ label: string; options: TriggerOption[] }> 
     label: "Event",
     options: [
       { value: "ON_GITHUB_CHANGE", label: "Push to default branch" },
+      { value: "ON_GITHUB_PR_MERGED", label: "PR merged into default branch" },
       { value: "ON_GITHUB_RELEASE", label: "Release published" },
       { value: "ON_GIT_TAG", label: "Git tag pushed" },
     ],

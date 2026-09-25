@@ -20,12 +20,14 @@ class GitHubWebhookDeliveryPersistence(
 			insert into github_webhook_deliveries (
 			 id, external_delivery_id, event_type, event_action, installation_id, repository_id, ref,
 			 before_sha, after_sha, tag_name, ref_created, ref_deleted, forced, payload_hash,
-			 disposition, error_code, received_at, processed_at
-			) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			 disposition, error_code, received_at, processed_at,
+			 pr_id, pr_number, pr_base_repository_id, pr_base_branch, pr_merge_commit_sha, pr_merged
+			) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			on conflict (external_delivery_id) do nothing
 			returning id, external_delivery_id, event_type, event_action, installation_id, repository_id, ref,
 			 before_sha, after_sha, tag_name, ref_created, ref_deleted, forced, payload_hash, disposition,
-			 error_code, received_at, processed_at
+			 error_code, received_at, processed_at,
+			 pr_id, pr_number, pr_base_repository_id, pr_base_branch, pr_merge_commit_sha, pr_merged
 			""".trimIndent(),
 			{ rs, _ -> rs.toDelivery() },
 			delivery.id, delivery.externalDeliveryId, delivery.eventType, delivery.eventAction,
@@ -33,6 +35,8 @@ class GitHubWebhookDeliveryPersistence(
 			delivery.tagName, delivery.refCreated, delivery.refDeleted, delivery.forced, delivery.payloadHash,
 			delivery.disposition.name, delivery.errorCode, Timestamp.from(delivery.receivedAt),
 			delivery.processedAt?.let(Timestamp::from),
+			delivery.prId, delivery.prNumber, delivery.prBaseRepositoryId, delivery.prBaseBranch,
+			delivery.prMergeCommitSha, delivery.prMerged,
 		).firstOrNull() ?: findDelivery(delivery.externalDeliveryId)
 			?: throw IllegalStateException("GitHub webhook delivery was not found after a conflicted insert")
 	}
@@ -41,7 +45,8 @@ class GitHubWebhookDeliveryPersistence(
 		"""
 		select id, external_delivery_id, event_type, event_action, installation_id, repository_id, ref,
 			before_sha, after_sha, tag_name, ref_created, ref_deleted, forced, payload_hash, disposition,
-			error_code, received_at, processed_at
+			error_code, received_at, processed_at,
+			pr_id, pr_number, pr_base_repository_id, pr_base_branch, pr_merge_commit_sha, pr_merged
 		from github_webhook_deliveries where external_delivery_id = ?
 		""".trimIndent(),
 		{ rs, _ -> rs.toDelivery() },
@@ -52,7 +57,8 @@ class GitHubWebhookDeliveryPersistence(
 		"""
 		select id, external_delivery_id, event_type, event_action, installation_id, repository_id, ref,
 			before_sha, after_sha, tag_name, ref_created, ref_deleted, forced, payload_hash, disposition,
-			error_code, received_at, processed_at
+			error_code, received_at, processed_at,
+			pr_id, pr_number, pr_base_repository_id, pr_base_branch, pr_merge_commit_sha, pr_merged
 		from github_webhook_deliveries where id = ?
 		""".trimIndent(),
 		{ rs, _ -> rs.toDelivery() },
@@ -98,4 +104,10 @@ internal fun SqlRow.toDelivery(): GitHubWebhookDelivery = GitHubWebhookDelivery(
 	errorCode = getString("error_code"),
 	receivedAt = requireNotNull(getTimestamp("received_at")).toInstant(),
 	processedAt = getTimestamp("processed_at")?.toInstant(),
+	prId = getObject("pr_id") as Long?,
+	prNumber = getObject("pr_number") as Long?,
+	prBaseRepositoryId = getObject("pr_base_repository_id") as Long?,
+	prBaseBranch = getString("pr_base_branch"),
+	prMergeCommitSha = getString("pr_merge_commit_sha"),
+	prMerged = getObject("pr_merged") as Boolean?,
 )
