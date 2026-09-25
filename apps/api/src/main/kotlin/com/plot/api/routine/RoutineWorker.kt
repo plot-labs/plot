@@ -107,7 +107,9 @@ class RoutineWorker(
 			workspaceAccessService.requireWritable(execution.workspaceId)
 			val routine = persistence.find(execution.workspaceId, execution.routineId)
 				?: throw RoutineExecutionStateException("Routine was not found")
-            if (execution.triggerKind != RoutineExecutionTriggerKind.MANUAL) {
+			if (execution.triggerKind != RoutineExecutionTriggerKind.MANUAL &&
+				!(execution.triggerKind == RoutineExecutionTriggerKind.GITHUB &&
+					routine.cadence in setOf(RoutineCadence.ON_GITHUB_CHANGE, RoutineCadence.ON_GITHUB_PR_MERGED))) {
                 transactionExecutor.execute {
                     persistence.lockWorkspaceActivity(execution.workspaceId)
                     val now=currentInstant()
@@ -191,12 +193,30 @@ class RoutineWorker(
 			completeFailure(execution, claimedRoutine, routine, "SOURCE_NOT_READY")
 			return
 		}
-		if (routine.activityCursorSequence != execution.activityCursorBefore) {
+		if (execution.triggerKind != RoutineExecutionTriggerKind.GITHUB &&
+			routine.activityCursorSequence != execution.activityCursorBefore) {
 			completeFailure(execution, claimedRoutine, routine, "ROUTINE_CURSOR_STALE")
 			return
 		}
 
 		val candidates = candidates(execution, routine)
+		if (execution.triggerKind == RoutineExecutionTriggerKind.GITHUB && candidates.isNotEmpty()) {
+			when (GitHubRoutineValueAssessment.assess(candidates)) {
+				GitHubRoutineValueAssessment.Decision.EXCLUDED -> {
+					val now = currentInstant()
+					agentPersistence.markNoActivity(execution.workspaceId, execution.id, now, workerId)
+					finishProjection(execution, claimedRoutine, now, "NO_ACTIVITY", nextRunAtFor(execution, routine, now))
+					return
+				}
+				GitHubRoutineValueAssessment.Decision.AWAITING_EVIDENCE -> {
+					val now = currentInstant()
+					agentPersistence.deferForAutonomy(execution.workspaceId, execution.id, workerId, now, "CUSTOMER_VALUE_UNCLEAR")
+					finishProjection(execution, claimedRoutine, now, "DEFERRED", nextRunAtFor(execution, routine, now), "CUSTOMER_VALUE_UNCLEAR")
+					return
+				}
+				GitHubRoutineValueAssessment.Decision.ELIGIBLE -> Unit
+			}
+		}
 		if (candidates.isEmpty()) {
 			agentPersistence.markNoActivity(execution.workspaceId, execution.id, currentInstant(), workerId)
 			finishProjection(
@@ -288,7 +308,6 @@ class RoutineWorker(
 		return evidence
 			.sortedBy { it.orderIndex }
 			.map { selected.getValue(it.writingBlockId) }
-			.filter { it.activitySequence > (routine.activityCursorSequence ?: 0L) }
 	}
 
 	private fun sourceScopes(
