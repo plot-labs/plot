@@ -308,6 +308,11 @@ class AgentRunWorker(
 						if (validated.action == AgentDecisionAction.CREATE_ARTIFACT && !executionPolicy.isReleaseRun(run.workspaceId, run.id)) {
 							val inputs = queryPersistence.listAgentRunInputs(run.workspaceId, run.id).associateBy { it.id }
 							val selected = validated.selectedInputIds.map { inputs.getValue(it) }
+							tools.eventTriggerEvidence(run.workspaceId, run.id)?.let { event ->
+								if (selected.any { it.sourceScopeId != event.sourceScopeId || it.writingBlockId !in event.writingBlockIds }) {
+									throw InvalidAgentDecisionException("Select only frozen evidence from the triggering GitHub change")
+								}
+							}
 							if (selected.map { it.writingBlockId }.distinct().size != selected.size) {
 								throw InvalidAgentDecisionException("Select only one snapshot of each source item")
 							}

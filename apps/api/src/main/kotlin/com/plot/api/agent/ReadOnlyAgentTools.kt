@@ -24,6 +24,8 @@ data class AgentToolResult(
 	val adoptedInput: AgentRunInputRequest? = null,
 )
 
+data class EventTriggerEvidence(val sourceScopeId: UUID, val writingBlockIds: Set<UUID>)
+
 @Component
 class ReadOnlyAgentTools(
 	private val sqlExecutor: SqlExecutor,
@@ -85,9 +87,30 @@ class ReadOnlyAgentTools(
 	): AgentToolResult {
 		if (frozenReplay) return replaySearch(workspaceId, agentRunId, sourceScopeId, query)
 		val source = requireActiveAllowedSource(workspaceId, agentRunId, sourceScopeId)
+		val restrictToEvent = eventTriggerEvidence(workspaceId, agentRunId)?.sourceScopeId == sourceScopeId
 		val normalized = query.trim().take(200)
 		require(normalized.isNotBlank()) { "Search query is required" }
 		val pattern = "%${escapeLike(normalized.lowercase())}%"
+		if (restrictToEvent) {
+			val matches = sqlExecutor.query(
+				"""
+				select seed.writing_block_id, seed.snapshot_title, seed.snapshot_body
+				from agent_run_inputs seed
+				where seed.workspace_id = ? and seed.agent_run_id = ? and seed.source_scope_id = ?
+				  and seed.input_kind = 'SEED'
+				  and lower(coalesce(seed.snapshot_title, '') || ' ' || seed.snapshot_body) like ? escape '!'
+				order by seed.order_index
+				limit ?
+				""".trimIndent(),
+				{ rs, _ -> AgentSearchItem(
+					writingBlockId = requireNotNull(rs.getObject("writing_block_id", UUID::class.java)),
+					title = rs.getString("snapshot_title")?.take(MAX_RESULT_TITLE),
+					excerpt = normalizedExcerpt(requireNotNull(rs.getString("snapshot_body"))),
+				) },
+				workspaceId, agentRunId, sourceScopeId, pattern, properties.searchResultLimit,
+			)
+			return AgentToolResult(sourceScopeId, source.statusChangedAt, matches = matches)
+		}
 		val matches = sqlExecutor.query(
 			"""
 			select block.id, block.title, block.body
@@ -128,13 +151,19 @@ class ReadOnlyAgentTools(
 	): AgentToolResult {
 		if (frozenReplay) return replayRead(workspaceId, agentRunId, sourceScopeId, writingBlockId)
 		val source = requireActiveAllowedSource(workspaceId, agentRunId, sourceScopeId)
+		val eventEvidence = eventTriggerEvidence(workspaceId, agentRunId)
+		if (eventEvidence?.sourceScopeId == sourceScopeId && writingBlockId !in eventEvidence.writingBlockIds) {
+			throw AgentToolAccessException("EVENT_EVIDENCE_NOT_ALLOWED")
+		}
 		val frozenInput = sqlExecutor.query(
 			"""
 			select writing_block_id, source_scope_id, snapshot_title, snapshot_body,
 			       snapshot_excerpt, original_url, source_created_at, source_updated_at, content_hash,
 			       source_provider, source_kind, source_label, input_kind, order_index, activity_sequence, captured_at
 			from agent_run_inputs
-			where workspace_id = ? and agent_run_id = ? and writing_block_id = ?
+			where workspace_id = ? and agent_run_id = ? and source_scope_id = ? and writing_block_id = ?
+			order by case when input_kind = 'SEED' then 0 else 1 end, order_index
+			limit 1
 			""".trimIndent(),
 			{ rs, _ ->
 				AgentRunInputRequest(
@@ -159,6 +188,7 @@ class ReadOnlyAgentTools(
 			},
 			workspaceId,
 			agentRunId,
+			sourceScopeId,
 			writingBlockId,
 		).firstOrNull()
 
@@ -196,6 +226,35 @@ class ReadOnlyAgentTools(
 			sourceStatusChangedAt = source.statusChangedAt,
 			adoptedInput = block,
 		)
+	}
+
+	fun eventTriggerEvidence(workspaceId: UUID, agentRunId: UUID): EventTriggerEvidence? {
+		val triggerScopeId = sqlExecutor.query(
+			"""
+			select source.source_scope_id
+			from agent_runs run
+			join routine_executions execution on execution.workspace_id = run.workspace_id
+			  and execution.id = run.routine_execution_id
+			left join agent_run_sources source on source.workspace_id = run.workspace_id
+			  and source.agent_run_id = run.id and source.source_role = 'TRIGGER'
+			where run.workspace_id = ? and run.id = ? and run.origin = 'ROUTINE'
+			  and execution.trigger_kind = 'GITHUB'
+			""".trimIndent(),
+			{ rs, _ -> requireNotNull(rs.getObject(1, UUID::class.java)) },
+			workspaceId,
+			agentRunId,
+		).singleOrNull() ?: return null
+		val blockIds = sqlExecutor.query(
+			"""
+			select writing_block_id from agent_run_inputs
+			where workspace_id = ? and agent_run_id = ? and source_scope_id = ? and input_kind = 'SEED'
+			""".trimIndent(),
+			{ rs, _ -> requireNotNull(rs.getObject(1, UUID::class.java)) },
+			workspaceId,
+			agentRunId,
+			triggerScopeId,
+		).toSet()
+		return EventTriggerEvidence(triggerScopeId, blockIds)
 	}
 
 	private fun replaySearch(
