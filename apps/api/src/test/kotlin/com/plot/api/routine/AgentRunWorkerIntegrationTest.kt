@@ -779,10 +779,7 @@ class AgentRunWorkerIntegrationTest {
 
 		assertEquals(0, agentModel.requests.size)
 		assertEquals(1, count("select count(*) from agent_steps where agent_run_id = ?", admitted.agentRunId))
-		assertEquals(1, count(
-			"select count(*) from agent_run_inputs where agent_run_id = ? and input_kind = 'TOOL_RESULT'",
-			admitted.agentRunId,
-		))
+		assertEquals(1, count("select count(*) from agent_run_inputs where agent_run_id = ?", admitted.agentRunId))
 		assertEquals(1, count("select tool_call_count from agent_runs where id = ?", admitted.agentRunId))
 	}
 
@@ -906,11 +903,12 @@ class AgentRunWorkerIntegrationTest {
 			"select count(*) from agent_steps where agent_run_id = ? and step_kind = 'READ_TOOL' and status = 'SUCCEEDED'",
 			admitted.agentRunId,
 		))
-		assertEquals(admitted.blockId, jdbcTemplate.queryForObject(
-			"select writing_block_id from agent_run_inputs where agent_run_id = ? and input_kind = 'TOOL_RESULT'",
+		assertEquals(seedInputId, jdbcTemplate.queryForObject(
+			"select adopted_input_id from agent_steps where agent_run_id = ? and tool_name = 'READ_WRITING_BLOCKS'",
 			UUID::class.java,
 			admitted.agentRunId,
 		))
+		assertEquals(1, count("select count(*) from agent_run_inputs where agent_run_id = ?", admitted.agentRunId))
 		assertEquals(1, count(
 			"select count(*) from agent_steps where agent_run_id = ? and step_kind = 'ARTIFACT_HANDOFF'",
 			admitted.agentRunId,
@@ -1174,7 +1172,7 @@ class AgentRunWorkerIntegrationTest {
 				3 -> { assertTrue(prompt.contains("Frozen supporting instruction."))
 					nativeCall("READ_WRITING_BLOCKS", """{"sourceScopeId":"${admitted.source.scopeId}","writingBlockIds":["${admitted.blockId}"]}""") }
 				else -> {
-					val inputId = jdbcTemplate.queryForObject("select id from agent_run_inputs where agent_run_id = ? and input_kind = 'TOOL_RESULT'", UUID::class.java, admitted.agentRunId)!!
+					val inputId = jdbcTemplate.queryForObject("select id from agent_run_inputs where agent_run_id = ? and input_kind = 'SEED'", UUID::class.java, admitted.agentRunId)!!
 					assertTrue(prompt.contains(inputId.toString()))
 					nativeCall("CREATE_ARTIFACT", """{"selectedInputIds":["$inputId"]}""")
 				}
