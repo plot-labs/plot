@@ -3,10 +3,9 @@
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { Add01Icon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
 
-import { workspacePageClass } from "@/components/layout/workspace-page";
+import { WorkspaceCreateAction } from "@/components/layout/workspace-create-action";
+import { WorkspaceEmptyState, WorkspaceErrorNotice, WorkspaceHeader, workspacePageClass, workspaceSectionClass } from "@/components/layout/workspace-page";
 import { ArtifactCanvasWorkspace } from "@/features/artifacts/artifact-canvas-workspace";
 import { plotApiClient, type Artifact, type ArtifactSummary } from "@/lib/api-client";
 
@@ -26,6 +25,7 @@ function ArtifactsWorkspaceContent() {
   const [remoteArtifactFailure, setRemoteArtifactFailure] = useState<{ requestedId: string; message: string } | null>(null);
   const [artifacts, setArtifacts] = useState<ArtifactSummary[]>([]);
   const [artifactListStatus, setArtifactListStatus] = useState<ArtifactListStatus>("loading");
+  const [listRetryKey, setListRetryKey] = useState(0);
   const [totalItems, setTotalItems] = useState(0);
   const remoteArtifact = remoteArtifactResult?.requestedId === requestedArtifactId ? remoteArtifactResult.artifact : null;
   const remoteArtifactError = remoteArtifactFailure?.requestedId === requestedArtifactId ? remoteArtifactFailure.message : "";
@@ -58,7 +58,7 @@ function ArtifactsWorkspaceContent() {
         }
       });
     return () => controller.abort();
-  }, [requestedArtifactId]);
+  }, [requestedArtifactId, listRetryKey]);
 
   if (requestedArtifactId) {
     return (
@@ -74,29 +74,16 @@ function ArtifactsWorkspaceContent() {
 
   return (
     <div className={workspacePageClass}>
-      <section className="mx-auto min-h-full w-full max-w-[1180px] px-6 pb-12 pt-10 sm:px-10 lg:px-12" aria-labelledby="contents-heading">
-        <header className="flex flex-wrap items-start justify-between gap-5">
-          <div>
-            <h1 id="contents-heading" className="font-display text-[38px] leading-none tracking-[-0.025em] text-black/90 dark:text-white/92">Contents</h1>
-            <p className="mt-3 text-[14px] leading-6 text-black/48 dark:text-white/50">Your customer updates, from first draft to published post.</p>
-          </div>
-          <Link
-            href="/chat"
-            aria-label="Create content"
-            style={{
-              background: "linear-gradient(to bottom, rgba(0, 0, 0, 0.78), rgba(0, 0, 0, 0.88))",
-              backdropFilter: "saturate(200%) blur(40px)",
-              WebkitBackdropFilter: "saturate(200%) blur(40px)",
-              border: "1px solid rgba(255, 255, 255, 0.18)",
-              boxShadow: "inset 0 1px 1px rgba(255, 255, 255, 0.25), inset 0 -1px 1px rgba(0, 0, 0, 0.1), 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.08)",
-              color: "#FFFFFF",
-            }}
-            className="inline-flex h-8.5 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[12px] font-semibold text-white transition-all duration-200 hover:opacity-90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
-          >
-            <HugeiconsIcon icon={Add01Icon} size={15} color="currentColor" strokeWidth={1.5} aria-hidden="true" />
-            Create
-          </Link>
-        </header>
+      <section className={`${workspaceSectionClass} px-6 pb-12`} aria-labelledby="contents-heading">
+        <WorkspaceHeader
+          id="contents-heading"
+          title="Contents"
+          description="Your customer updates, from first draft to published post."
+          variant="standalone"
+          actions={
+            <WorkspaceCreateAction href="/chat" aria-label="Create content" />
+          }
+        />
 
         <div className="mt-10 overflow-hidden rounded-[14px] border border-black/[0.09] bg-white dark:border-white/10 dark:bg-white/[0.035]">
           <div className="hidden grid-cols-[minmax(0,1fr)_110px_145px] gap-4 border-b border-black/[0.07] bg-black/[0.025] px-6 py-3 text-[12px] font-medium text-black/45 dark:border-white/[0.08] dark:bg-white/[0.035] dark:text-white/45 md:grid">
@@ -105,13 +92,14 @@ function ArtifactsWorkspaceContent() {
           {artifactListStatus === "loading" ? (
             <ArtifactListLoading />
           ) : artifactListStatus === "error" ? (
-            <div role="alert" className="px-5 py-10 text-center text-sm text-black/48 dark:text-white/48">
-              Artifacts could not be loaded. Refresh the page to try again.
+            <div className="p-6">
+              <WorkspaceErrorNotice
+                message="Contents could not be loaded. Please try again."
+                onRetry={() => { setArtifactListStatus("loading"); setListRetryKey((key) => key + 1); }}
+              />
             </div>
           ) : artifacts.length === 0 ? (
-            <div className="px-5 py-10 text-center text-sm leading-6 text-black/45 dark:text-white/45">
-              No contents yet. Start in Chat to create your first draft.
-            </div>
+            <WorkspaceEmptyState title="No contents yet" description="Start in Chat to create your first draft." />
           ) : (
             <div className="divide-y divide-black/[0.07] dark:divide-white/[0.08]" aria-label="Contents">
               {artifacts.map((artifact) => {
@@ -150,7 +138,7 @@ function ArtifactsWorkspaceContent() {
 
 function ArtifactListLoading() {
   return (
-    <div aria-label="Loading artifacts" className="divide-y divide-black/[0.07] dark:divide-white/[0.08]">
+    <div role="status" aria-label="Loading contents" className="divide-y divide-black/[0.07] dark:divide-white/[0.08]">
       {[0, 1, 2].map((row) => (
         <div key={row} className="flex min-h-[76px] items-center justify-between gap-6 px-6 py-5">
           <div className="h-4 min-w-0 w-full max-w-[320px] flex-1 animate-pulse rounded bg-black/[0.07] dark:bg-white/10" />

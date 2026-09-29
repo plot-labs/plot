@@ -1,6 +1,8 @@
 "use client";
 
-import { Add01Icon, Cancel01Icon, Search01Icon, ZapIcon } from "@hugeicons/core-free-icons";
+import { WorkspaceCreateAction } from "@/components/layout/workspace-create-action";
+
+import { Cancel01Icon, Search01Icon, ZapIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
@@ -20,6 +22,8 @@ import {
 } from "@/lib/api-client";
 import {
   WorkspaceHeader,
+  WorkspaceEmptyState,
+  WorkspaceErrorNotice,
   workspaceIconButtonClass,
   workspaceSearchClass,
   workspaceSearchInputClass,
@@ -432,24 +436,11 @@ export function RoutinesWorkspace() {
               <>
                 <button type="button" onClick={retryLoad} disabled={refreshDisabled} aria-label="Refresh routines" title="Refresh routines" className={workspaceIconButtonClass}><RefreshCw className={`size-3.5 ${isLoading ? "animate-spin" : ""}`} /></button>
                 {!createOpen && (
-                  <button
+                  <WorkspaceCreateAction
                     ref={createTriggerRef}
-                    type="button"
                     onClick={openCreate}
                     disabled={isLoading || !sources.length}
-                    style={{
-                      background: "linear-gradient(to bottom, rgba(0, 0, 0, 0.78), rgba(0, 0, 0, 0.88))",
-                      backdropFilter: "saturate(200%) blur(40px)",
-                      WebkitBackdropFilter: "saturate(200%) blur(40px)",
-                      border: "1px solid rgba(255, 255, 255, 0.18)",
-                      boxShadow: "inset 0 1px 1px rgba(255, 255, 255, 0.25), inset 0 -1px 1px rgba(0, 0, 0, 0.1), 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.08)",
-                      color: "#FFFFFF",
-                    }}
-                    className="inline-flex h-8.5 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[12px] font-semibold text-white transition-all duration-200 hover:opacity-90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    <HugeiconsIcon icon={Add01Icon} size={15} color="currentColor" strokeWidth={1.5} aria-hidden="true" />
-                    Create
-                  </button>
+                  />
                 )}
               </>
             }
@@ -461,11 +452,11 @@ export function RoutinesWorkspace() {
             </label>
           </WorkspaceHeader>
 
-          {(loadError ?? error) && <div role="alert" className="mx-6 mt-4 flex items-center justify-between gap-3 rounded-[9px] border border-black/10 bg-white px-3 py-2.5 text-[12px] text-black/58 dark:border-white/12 dark:bg-white/[0.04] dark:text-white/60"><span>{loadError ?? error}</span><button type="button" onClick={retryLoad} disabled={refreshDisabled} aria-label="Retry loading routines" className="inline-flex size-7 items-center justify-center rounded-[7px] text-black/45 transition hover:bg-black/[0.04] disabled:cursor-wait disabled:opacity-45 dark:text-white/48 dark:hover:bg-white/10"><RefreshCw className="size-3.5" /></button></div>}
+          {(loadError ?? error) && <div className="mx-6 mt-4"><WorkspaceErrorNotice message={(loadError ?? error)!} onRetry={retryLoad} retrying={refreshDisabled} /></div>}
 
           {!isLoading && !loadError && !sources.length && <div className="mx-6 mt-4 flex items-center justify-between gap-3 rounded-[9px] border border-black/10 bg-white px-3 py-2.5 text-[12px] text-black/58 dark:border-white/12 dark:bg-white/[0.04] dark:text-white/60"><span>Connect a source before creating a routine.</span><Link href="/settings/integrations" className="shrink-0 font-medium text-black/72 underline underline-offset-4 dark:text-white/75">Integrations</Link></div>}
 
-          {isLoading ? <div className="flex items-center gap-2 px-6 py-8 text-[13px] text-black/45 dark:text-white/45"><LoaderCircle className="size-4 animate-spin" /> Loading routines…</div> : loadError ? null : visibleRoutines.length ? (
+          {isLoading ? <div role="status" className="flex items-center gap-2 px-6 py-8 text-[13px] text-black/45 dark:text-white/45"><LoaderCircle className="size-4 animate-spin" /> Loading routines…</div> : loadError ? null : visibleRoutines.length ? (
             <div className="divide-y divide-black/[0.07] dark:divide-white/[0.08]">
               {visibleRoutines.map((routine) => {
                 const busy = busyRoutineId === routine.id;
@@ -480,21 +471,21 @@ export function RoutinesWorkspace() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <h2 className="truncate text-[14px] font-semibold text-black/82 dark:text-white/86">{routine.name}</h2>
+                            <h2 className="truncate text-[14px] font-medium text-black/82 dark:text-white/86">{routine.name}</h2>
                             {routine.skills?.length ? <p className="mt-1 text-xs text-black/45 dark:text-white/45">Skills: {routine.skills.map((skill) => skill.name).join(", ")}</p> : null}
                             <p className="mt-1 text-xs text-black/45 dark:text-white/45">{formatRoutineModel(routine.model)}{routine.reasoningEffort ? ` · Effort ${formatReasoningEffort(routine.reasoningEffort)}` : ""}</p>
                             <p className="mt-1 text-[12px] leading-5 text-black/45 dark:text-white/45">{formatCadence(routine.cadence)}</p>
                           </div>
-                          <span className="shrink-0 text-[11px] font-medium text-black/38 dark:text-white/40">{routine.enabled ? "On" : "Paused"}</span>
+                          <span className="shrink-0 text-[12px] font-medium text-black/38 dark:text-white/40">{routine.enabled ? "On" : "Paused"}</span>
                         </div>
-                        <p className="mt-2 truncate text-[11px] text-black/38 dark:text-white/40">{routine.sourceLabel}</p>
-                        <div className="mt-3 flex items-center justify-between gap-3">
-                          <span className="truncate text-[11px] text-black/38 dark:text-white/40">{formatRoutineStatus(routine)}</span>
-                          <div className="flex shrink-0 items-center gap-1">
-                            {chatId && <Link href={`/chat?chat=${encodeURIComponent(chatId)}${artifactId ? `&artifact=${encodeURIComponent(artifactId)}` : ""}`} aria-label={`Open Chat for ${routine.name}`} className="inline-flex h-7 items-center rounded-[7px] px-2 text-[11px] font-medium text-black/55 transition hover:bg-black/[0.04] hover:text-black/78 dark:text-white/58 dark:hover:bg-white/10 dark:hover:text-white/82">Chat</Link>}
-                            {artifactId && <Link href={`/contents?artifact=${encodeURIComponent(artifactId)}`} aria-label={`Open artifact for ${routine.name}`} className="inline-flex h-7 items-center rounded-[7px] px-2 text-[11px] font-medium text-black/55 transition hover:bg-black/[0.04] hover:text-black/78 dark:text-white/58 dark:hover:bg-white/10 dark:hover:text-white/82">Artifact</Link>}
-                            {agentRunId && <button type="button" onClick={() => { void toggleAgentDetail(routine); }} aria-expanded={expanded} aria-label={`View agent activity for ${routine.name}`} className="inline-flex h-7 items-center rounded-[7px] px-2 text-[11px] font-medium text-black/55 transition hover:bg-black/[0.04] hover:text-black/78 dark:text-white/58 dark:hover:bg-white/10 dark:hover:text-white/82">Activity</button>}
-                            {!isReleaseCadence(routine.cadence) && <button type="button" onClick={() => { void runRoutine(routine); }} disabled={busyRoutineId !== null || isRoutineRunInProgress(routine)} className="inline-flex h-7 items-center gap-1.5 rounded-[7px] px-2 text-[11px] font-medium text-black/55 transition hover:bg-black/[0.04] hover:text-black/78 disabled:cursor-wait disabled:opacity-50 dark:text-white/58 dark:hover:bg-white/10 dark:hover:text-white/82"><Play className="size-3" /> Run</button>}
+                        <p className="mt-2 truncate text-[12px] text-black/38 dark:text-white/40">{routine.sourceLabel}</p>
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                          <span className="truncate text-[12px] text-black/38 dark:text-white/40">{formatRoutineStatus(routine)}</span>
+                          <div className="flex max-w-full flex-wrap items-center gap-1">
+                            {chatId && <Link href={`/chat?chat=${encodeURIComponent(chatId)}${artifactId ? `&artifact=${encodeURIComponent(artifactId)}` : ""}`} aria-label={`Open Chat for ${routine.name}`} className="inline-flex h-7 items-center rounded-[7px] px-2 text-[12px] font-medium text-black/55 transition hover:bg-black/[0.04] hover:text-black/78 dark:text-white/58 dark:hover:bg-white/10 dark:hover:text-white/82">Chat</Link>}
+                            {artifactId && <Link href={`/contents?artifact=${encodeURIComponent(artifactId)}`} aria-label={`Open artifact for ${routine.name}`} className="inline-flex h-7 items-center rounded-[7px] px-2 text-[12px] font-medium text-black/55 transition hover:bg-black/[0.04] hover:text-black/78 dark:text-white/58 dark:hover:bg-white/10 dark:hover:text-white/82">Artifact</Link>}
+                            {agentRunId && <button type="button" onClick={() => { void toggleAgentDetail(routine); }} aria-expanded={expanded} aria-label={`View agent activity for ${routine.name}`} className="inline-flex h-7 items-center rounded-[7px] px-2 text-[12px] font-medium text-black/55 transition hover:bg-black/[0.04] hover:text-black/78 dark:text-white/58 dark:hover:bg-white/10 dark:hover:text-white/82">Activity</button>}
+                            {!isReleaseCadence(routine.cadence) && <button type="button" onClick={() => { void runRoutine(routine); }} disabled={busyRoutineId !== null || isRoutineRunInProgress(routine)} className="inline-flex h-7 items-center gap-1.5 rounded-[7px] px-2 text-[12px] font-medium text-black/55 transition hover:bg-black/[0.04] hover:text-black/78 disabled:cursor-wait disabled:opacity-50 dark:text-white/58 dark:hover:bg-white/10 dark:hover:text-white/82"><Play className="size-3" /> Run</button>}
                             <button type="button" onClick={() => { void toggleRoutine(routine); }} disabled={busyRoutineId !== null} aria-label={routine.enabled ? `Pause ${routine.name}` : `Enable ${routine.name}`} title={routine.enabled ? "Pause routine" : "Enable routine"} className="inline-flex size-7 items-center justify-center rounded-[7px] text-black/42 transition hover:bg-black/[0.04] hover:text-black/72 disabled:cursor-wait disabled:opacity-50 dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white/75">{busy ? <LoaderCircle className="size-3.5 animate-spin" /> : <Power className="size-3.5" />}</button>
                           </div>
                         </div>
@@ -506,9 +497,9 @@ export function RoutinesWorkspace() {
                           />
                         ) : null}
                         {expanded && <div className="mt-3 border-t border-black/[0.07] pt-3 dark:border-white/[0.08]">
-                          {agentDetailLoadingId === routine.id ? <p className="text-[11px] text-black/42 dark:text-white/45">Loading agent activity…</p> : agentDetailError ? <p role="alert" className="text-[11px] text-black/55 dark:text-white/60">{agentDetailError}</p> : agentDetail?.routineId === routine.id ? (
+                          {agentDetailLoadingId === routine.id ? <p className="text-[12px] text-black/42 dark:text-white/45">Loading agent activity…</p> : agentDetailError ? <p role="alert" className="text-[12px] text-black/55 dark:text-white/60">{agentDetailError}</p> : agentDetail?.routineId === routine.id ? (
                             <ol aria-label={`Agent activity for ${routine.name}`} className="space-y-1.5">
-                              {[...agentDetail.value.steps].sort((left, right) => left.sequence - right.sequence).map((step) => <li key={step.sequence} className="flex items-center justify-between gap-3 text-[11px]"><span className="min-w-0 truncate text-black/55 dark:text-white/58">{formatAgentStep(step)}</span><span className="shrink-0 text-black/38 dark:text-white/40">{step.status.toLowerCase()}</span></li>)}
+                              {[...agentDetail.value.steps].sort((left, right) => left.sequence - right.sequence).map((step) => <li key={step.sequence} className="flex items-center justify-between gap-3 text-[12px]"><span className="min-w-0 truncate text-black/55 dark:text-white/58">{formatAgentStep(step)}</span><span className="shrink-0 text-black/38 dark:text-white/40">{step.status.toLowerCase()}</span></li>)}
                             </ol>
                           ) : null}
                         </div>}
@@ -519,11 +510,11 @@ export function RoutinesWorkspace() {
               })}
             </div>
           ) : (
-            <div className="px-6 py-14 text-center">
-              <HugeiconsIcon icon={ZapIcon} size={20} color="currentColor" strokeWidth={1.5} className="mx-auto text-black/25 dark:text-white/30" aria-hidden="true" />
-              <p className="mt-3 text-[13px] font-medium text-black/58 dark:text-white/62">{routines.length ? "No matching routines" : "No routines yet"}</p>
-              <p className="mt-1 text-[12px] leading-5 text-black/40 dark:text-white/42">{routines.length ? "Try another search." : sources.length ? "Create one to keep your next draft moving." : "Connect a source to get started."}</p>
-            </div>
+            <WorkspaceEmptyState
+              icon={<HugeiconsIcon icon={ZapIcon} size={20} color="currentColor" strokeWidth={1.5} aria-hidden="true" />}
+              title={routines.length ? "No matching routines" : "No routines yet"}
+              description={routines.length ? "Try another search." : sources.length ? "Create one to keep your next draft moving." : "Connect a source to get started."}
+            />
           )}
         </section>
 

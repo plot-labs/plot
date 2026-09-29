@@ -13,8 +13,8 @@ import { useEffect, useRef, useState } from "react";
 
 import {
   WorkspaceHeader,
+  WorkspaceEmptyState,
   workspaceIconButtonClass,
-  workspaceNoticeClass,
   workspacePageClass,
   workspaceSearchClass,
   workspaceSearchInputClass,
@@ -488,7 +488,7 @@ export function IntegrationsWorkspace() {
                       Coming soon
                     </span>
                   </div>
-                  <h3 className="mt-5 text-[15px] font-semibold tracking-[-0.01em] text-black/82 dark:text-white/86">
+                  <h3 className="mt-5 text-[16px] font-semibold tracking-[-0.01em] text-black/82 dark:text-white/86">
                     {integration.name}
                   </h3>
                   <p className="mt-3 text-[13px] leading-5 text-black/50 dark:text-white/50">
@@ -501,10 +501,7 @@ export function IntegrationsWorkspace() {
         )}
 
         {!githubMatchesQuery && matchingPlannedIntegrations.length === 0 && (
-          <div className={`mx-6 mt-4 py-10 text-center ${workspaceNoticeClass}`}>
-            <p className="text-sm font-medium text-black/65 dark:text-white/68">No integrations found</p>
-            <p className="mt-1 text-sm text-black/42 dark:text-white/42">Try another search term.</p>
-          </div>
+          <WorkspaceEmptyState title="No integrations found" description="Try another search term." />
         )}
       </section>
     </div>
