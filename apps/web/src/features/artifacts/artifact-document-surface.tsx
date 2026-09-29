@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import type { Artifact, ArtifactHistoryDetail, PlotApiClient } from "@plot/api-client";
 
 import { ArtifactEditorStatus, artifactSaveStateLabel } from "@/features/artifacts/artifact-editor-chrome";
@@ -20,6 +21,9 @@ type ArtifactDocumentSurfaceProps = {
   presentation?: "panel" | "canvas" | "workspace";
   saveRequestToken?: number;
   editorLocked?: boolean;
+  draftTitle?: string;
+  onDraftTitleChange?: (title: string) => void;
+  topActions?: ReactNode;
 };
 
 export function ArtifactDocumentSurface({
@@ -35,6 +39,9 @@ export function ArtifactDocumentSurface({
   presentation = "panel",
   saveRequestToken,
   editorLocked = false,
+  draftTitle,
+  onDraftTitleChange,
+  topActions,
 }: ArtifactDocumentSurfaceProps) {
   const readOnly = Boolean(historical) || editorLocked;
   const shownPack = historical?.artifact ?? pack;
@@ -46,10 +53,39 @@ export function ArtifactDocumentSurface({
         aria-label="Artifact document surface"
         className={workspacePresentation
           ? "min-h-full w-full max-w-[980px] px-[clamp(24px,5vw,48px)] pb-16 text-black/88 dark:text-white/90"
-          : "min-h-[min(956px,calc(100dvh-128px))] w-full max-w-[980px] overflow-hidden rounded-[8px] border border-black/10 bg-white px-[clamp(28px,7.35vw,72px)] pb-[52px] pt-16 shadow-[0_8px_20px_rgba(0,0,0,0.08)] dark:border-white/10 dark:bg-[#202024]"}
+          : "min-h-full w-full max-w-[1080px] self-start border-x border-black/10 bg-white px-[clamp(24px,4vw,52px)] pb-24 pt-12 dark:border-white/10 dark:bg-[#202024]"}
       >
         {!workspacePresentation ? (
-          <h1 className="font-display text-[30px] leading-[38px] text-black/88 dark:text-white/90">{shownPack.title || "Generated artifact"}</h1>
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+            <span className="text-xs font-medium text-black/45 dark:text-white/45">
+              {contentTypeLabel(shownPack.contentType)} · {historical ? "Historical snapshot" : shownPack.publication ? "Published" : "Draft"}
+            </span>
+            {topActions}
+          </div>
+        ) : null}
+        {!workspacePresentation ? (
+          readOnly ? (
+            <h1 className="font-display text-[30px] leading-[38px] text-black/88 dark:text-white/90">{shownPack.title || "Generated artifact"}</h1>
+          ) : (
+            <>
+              <label className="sr-only" htmlFor={`artifact-title-${shownPack.id}`}>Document title</label>
+              <textarea
+                id={`artifact-title-${shownPack.id}`}
+                aria-invalid={!draftTitle?.trim()}
+                value={draftTitle ?? shownPack.title ?? ""}
+                onChange={(event) => onDraftTitleChange?.(event.target.value.replace(/[\r\n]+/g, " "))}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") event.preventDefault();
+                }}
+                disabled={saveState === "saving"}
+                maxLength={200}
+                rows={1}
+                placeholder="Untitled artifact"
+                className="block w-full resize-none overflow-hidden bg-transparent p-0 font-display text-[30px] leading-[38px] text-black/88 outline-none placeholder:text-black/25 [field-sizing:content] focus-visible:underline focus-visible:decoration-black/20 focus-visible:underline-offset-4 dark:text-white/90 dark:placeholder:text-white/30 dark:focus-visible:decoration-white/25"
+              />
+              {!draftTitle?.trim() ? <p className="mt-1 text-xs text-rose-600">Enter a title before saving.</p> : null}
+            </>
+          )
         ) : null}
         <TiptapDraftEditor
           pack={shownPack}

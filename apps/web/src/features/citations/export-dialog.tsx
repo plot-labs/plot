@@ -145,7 +145,7 @@ export function ExportDialog({ pack, client, presentation = "buttons" }: { pack:
               <div
                 role="menu"
                 aria-label="Export options"
-                className="absolute left-0 top-[calc(100%+4px)] z-50 min-w-[136px] rounded-[8px] border border-black/10 bg-white p-1 shadow-[0_4px_16px_rgba(0,0,0,0.08)] dark:border-white/10 dark:bg-[#202024]"
+                className="absolute right-0 top-[calc(100%+4px)] z-50 min-w-[136px] rounded-[8px] border border-black/10 bg-white p-1 shadow-[0_4px_16px_rgba(0,0,0,0.08)] dark:border-white/10 dark:bg-[#202024]"
               >
                 <button
                   type="button"

@@ -734,7 +734,7 @@ export interface PlotApiClient {
   getArtifactVariant(id: string, options?: RequestOptions): Promise<Artifact>;
   replicateArtifact(id: string, input: ReplicateArtifactInput, idempotencyKey: string, options?: RequestOptions): Promise<ChatAgentRun>;
   listArtifacts(page?: number, size?: number, options?: RequestOptions): Promise<ArtifactPage>;
-  saveArtifactVariant(variantId: string, input: { expectedRevisionNumber: number; lexicalContent: Record<string, unknown>; statements: ContentStatementInput[] }, options?: RequestOptions): Promise<Artifact>;
+  saveArtifactVariant(variantId: string, input: { expectedRevisionNumber: number; lexicalContent: Record<string, unknown>; statements: ContentStatementInput[]; title?: string }, options?: RequestOptions): Promise<Artifact>;
   editSentence(variantId: string, sentenceId: string, input: { expectedRevisionNumber: number; body: string }, options?: RequestOptions): Promise<Artifact>;
   exportArtifactVariant(variantId: string, input: { expectedRevisionNumber: number; includeSources: boolean; acknowledgeUnresolved: boolean; acknowledgedWarningKeys?: string[]; acknowledgedRevisionIds?: string[]; disposition: "COPY" | "DOWNLOAD" }, options?: RequestOptions): Promise<ContentExport>;
   publishArtifactVariant(variantId: string, input: { expectedRevisionNumber: number; acknowledgeUnresolved: boolean; acknowledgedWarningKeys?: string[]; acknowledgedRevisionIds?: string[] }, options?: RequestOptions): Promise<PublishContentVariantResult>;

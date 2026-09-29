@@ -22,6 +22,7 @@ data class SaveContentVariantRequest(
 	@field:NotNull val expectedRevisionNumber: Int?,
 	@field:NotNull val lexicalContent: JsonNode?,
 	@field:NotNull @field:Size(max = 1_000) @field:Valid val statements: List<@Valid ContentStatementInput>?,
+	@field:NotBlank @field:Size(max = 200) val title: String? = null,
 )
 
 /**

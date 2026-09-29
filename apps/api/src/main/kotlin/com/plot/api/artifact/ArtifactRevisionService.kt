@@ -36,8 +36,9 @@ class ArtifactRevisionService(
 		expectedRevisionNumber: Int,
 		lexicalContent: JsonNode,
 		statements: List<ContentStatementInput>,
+		title: String? = null,
 	): ArtifactResponse = transactionExecutor.execute {
-		saveVariantInTransaction(variantId, expectedRevisionNumber, lexicalContent, statements)
+		saveVariantInTransaction(variantId, expectedRevisionNumber, lexicalContent, statements, title)
 	}
 
 	/**
@@ -83,6 +84,7 @@ class ArtifactRevisionService(
 		expectedRevisionNumber: Int,
 		lexicalContent: JsonNode,
 		statements: List<ContentStatementInput>,
+		title: String? = null,
 	): ArtifactResponse {
 		var normalized = validator.normalizeStatements(statements)
 			val sanitizedLexicalContent = validator.validateAndSanitizeLexicalContent(
@@ -93,6 +95,13 @@ class ArtifactRevisionService(
 		lockVariant(variantId)
 		val currentRevision = materializer.currentArtifactRevisionForUpdate(variantId)
 		if (currentRevision.revisionNumber != expectedRevisionNumber) throw staleArtifactRevision(variantId)
+		val normalizedTitle = title?.trim()
+		val currentTitle = sqlExecutor.queryForObject(
+			"select cp.title from content_packs cp join content_variants cv on cv.workspace_id = cp.workspace_id and cv.content_pack_id = cp.id where cv.workspace_id = ? and cv.id = ?",
+			String::class.java,
+			devContext.devWorkspaceId, variantId,
+		)
+		val titleChanged = normalizedTitle != null && normalizedTitle != currentTitle
 		val now = clock.instant()
 		val previousStatements = materializer.loadCurrentStatements(currentRevision.id, variantId)
 		val currentDocumentVersion = currentRevision.lexicalContent.get("documentVersion")
@@ -141,7 +150,7 @@ class ArtifactRevisionService(
 		val nextContent = normalized
 			.sortedBy { it.orderIndex }
 			.map { statement -> listOf(statement.id, statement.orderIndex, statement.body, statement.lineage.filter { it != statement.id }) }
-		if (sanitizedLexicalContent == currentRevision.lexicalContent && previousContent == nextContent) {
+		if (sanitizedLexicalContent == currentRevision.lexicalContent && previousContent == nextContent && !titleChanged) {
 			return query.getVariant(variantId)
 		}
 
@@ -238,10 +247,17 @@ class ArtifactRevisionService(
 			"update content_variants set updated_at = ? where workspace_id = ? and id = ?",
 			Timestamp.from(now), devContext.devWorkspaceId, variantId,
 		)
-		sqlExecutor.update(
-			"update content_packs set updated_at = ? where workspace_id = ? and id = (select content_pack_id from content_variants where workspace_id = ? and id = ?)",
-			Timestamp.from(now), devContext.devWorkspaceId, devContext.devWorkspaceId, variantId,
-		)
+		if (titleChanged) {
+			sqlExecutor.update(
+				"update content_packs set title = ?, updated_at = ? where workspace_id = ? and id = (select content_pack_id from content_variants where workspace_id = ? and id = ?)",
+				normalizedTitle, Timestamp.from(now), devContext.devWorkspaceId, devContext.devWorkspaceId, variantId,
+			)
+		} else {
+			sqlExecutor.update(
+				"update content_packs set updated_at = ? where workspace_id = ? and id = (select content_pack_id from content_variants where workspace_id = ? and id = ?)",
+				Timestamp.from(now), devContext.devWorkspaceId, devContext.devWorkspaceId, variantId,
+			)
+		}
 		return query.getVariant(variantId)
 	}
 

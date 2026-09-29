@@ -111,6 +111,7 @@ class ArtifactController(
 			requireNotNull(request.expectedRevisionNumber),
 			requireNotNull(request.lexicalContent),
 			requireNotNull(request.statements),
+			request.title,
 		),
 	)
 

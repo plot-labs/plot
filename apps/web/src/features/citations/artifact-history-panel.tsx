@@ -73,10 +73,23 @@ export function ArtifactHistoryPanel({ variantId, client, refreshKey = "initial"
               onClick={() => void select(item.position)}
               className={`${presentation === "drawer" ? "h-[76px] rounded-[8px] px-3.5 py-[13px]" : "rounded-lg px-3 py-2.5"} w-full border text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${selectedPosition === item.position ? "border-black/20 bg-[#eef0f3] dark:border-white/25 dark:bg-white/10" : "border-black/[0.08] hover:bg-black/[0.025] dark:border-white/10 dark:hover:bg-white/[0.06]"}`}
             >
-              {presentation === "drawer" ? <><time aria-label={formatSnapshotTime(item.createdAt)} dateTime={item.createdAt} className="flex items-center gap-2 text-[15px] font-semibold leading-5 text-black/88 dark:text-white/88">
-                {loadingPosition === item.position ? <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" /> : null}
-                {formatSnapshotTime(item.createdAt)}
-              </time><span className="mt-1 block truncate text-[13px] leading-[18px] text-black/52 dark:text-white/52">{item.cause}</span></> : <><span className="flex items-center gap-2 text-sm font-medium text-black/76 dark:text-white/80">{loadingPosition === item.position ? <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" /> : null}{item.cause}</span><time aria-label={formatSnapshotTime(item.createdAt)} dateTime={item.createdAt} className="mt-1 block text-xs text-black/48 dark:text-white/48">{formatSnapshotTime(item.createdAt)}</time></>}
+              {presentation === "drawer" ? (
+                <>
+                  <time aria-label={formatSnapshotTime(item.createdAt)} dateTime={item.createdAt} className="flex items-center gap-2 text-[15px] font-semibold leading-5 text-black/88 dark:text-white/88">
+                    {loadingPosition === item.position ? <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" /> : null}
+                    {formatSnapshotTime(item.createdAt)}
+                  </time>
+                  <span className="mt-1 block truncate text-[13px] leading-[18px] text-black/52 dark:text-white/52">{item.cause}</span>
+                </>
+              ) : (
+                <>
+                  <span className="flex items-center gap-2 text-sm font-medium text-black/76 dark:text-white/80">
+                    {loadingPosition === item.position ? <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" /> : null}
+                    {item.cause}
+                  </span>
+                  <time aria-label={formatSnapshotTime(item.createdAt)} dateTime={item.createdAt} className="mt-1 block text-xs text-black/48 dark:text-white/48">{formatSnapshotTime(item.createdAt)}</time>
+                </>
+              )}
             </button>
           </li>
         ))}
