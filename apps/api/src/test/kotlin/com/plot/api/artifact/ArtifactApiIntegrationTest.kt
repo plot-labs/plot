@@ -193,6 +193,7 @@ class ArtifactApiIntegrationTest {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 1,
+				"title" to fixture.title,
 				"lexicalContent" to lexicalContent("Delivered edit.", "Stable sentence."),
 				"statements" to listOf(
 					mapOf("id" to fixture.firstSentenceId, "orderIndex" to 0, "body" to "Delivered edit."),
@@ -218,6 +219,7 @@ class ArtifactApiIntegrationTest {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 1,
+				"title" to fixture.title,
 				"lexicalContent" to lexicalContent("Latest unreviewed rewrite.", "Stable sentence."),
 				"statements" to listOf(
 					mapOf("id" to fixture.firstSentenceId, "orderIndex" to 0, "body" to "Latest unreviewed rewrite."),
@@ -258,6 +260,7 @@ class ArtifactApiIntegrationTest {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 1,
+				"title" to fixture.title,
 				"lexicalContent" to lexicalContent(),
 				"statements" to emptyList<Any>(),
 			))
@@ -284,6 +287,7 @@ class ArtifactApiIntegrationTest {
 		val fixture = readyPack()
 		val unchanged = objectMapper.writeValueAsString(mapOf(
 			"expectedRevisionNumber" to 1,
+			"title" to fixture.title,
 			"lexicalContent" to lexicalContent("Supported sentence.", "Stable sentence."),
 			"statements" to listOf(
 				mapOf("id" to fixture.firstSentenceId, "orderIndex" to 0, "body" to "Supported sentence."),
@@ -338,6 +342,7 @@ class ArtifactApiIntegrationTest {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 1,
+				"title" to fixture.title,
 				"lexicalContent" to lexicalContent("Stable sentence.", "Supported sentence."),
 				"statements" to listOf(
 					mapOf("id" to fixture.secondSentenceId, "orderIndex" to 0, "body" to "Stable sentence."),
@@ -357,6 +362,7 @@ class ArtifactApiIntegrationTest {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 2,
+				"title" to fixture.title,
 				"lexicalContent" to lexicalContent("Stable sentence."),
 				"statements" to listOf(mapOf("id" to fixture.secondSentenceId, "orderIndex" to 0, "body" to "Stable sentence.")),
 			))
@@ -379,6 +385,7 @@ class ArtifactApiIntegrationTest {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 1,
+				"title" to fixture.title,
 				"lexicalContent" to lexicalContent("Stable sentence."),
 				"statements" to listOf(mapOf("id" to fixture.secondSentenceId, "orderIndex" to 0, "body" to "Stable sentence.")),
 			))
@@ -388,6 +395,7 @@ class ArtifactApiIntegrationTest {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 2,
+				"title" to fixture.title,
 				"lexicalContent" to lexicalContent("Reintroduced sentence.", "Stable sentence."),
 				"statements" to listOf(
 					mapOf("id" to fixture.firstSentenceId, "orderIndex" to 0, "body" to "Reintroduced sentence."),
@@ -418,6 +426,7 @@ class ArtifactApiIntegrationTest {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 1,
+				"title" to fixture.title,
 				"lexicalContent" to lexicalContent("Supported sentence.", "Stable sentence."),
 				"statements" to listOf(
 					mapOf("id" to fixture.firstSentenceId, "orderIndex" to 0, "body" to "Supported sentence."),
@@ -436,6 +445,7 @@ class ArtifactApiIntegrationTest {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 1,
+				"title" to fixture.title,
 				"lexicalContent" to lexicalContentV2(
 					mapOf("type" to "heading", "nodeId" to headingNodeId, "statementId" to fixture.firstSentenceId, "tag" to "h1", "body" to "Supported sentence."),
 					mapOf("type" to "list", "nodeId" to listNodeId, "listType" to "bullet", "start" to 1, "children" to listOf(
@@ -491,6 +501,7 @@ class ArtifactApiIntegrationTest {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 1,
+				"title" to fixture.title,
 				"lexicalContent" to lexicalContentV2(
 					mapOf("type" to "paragraph", "nodeId" to splitNodeIds[0], "statementId" to fixture.firstSentenceId, "body" to firstSplitBody),
 					mapOf("type" to "paragraph", "nodeId" to splitNodeIds[1], "statementId" to splitId, "body" to splitBody),
@@ -526,6 +537,7 @@ class ArtifactApiIntegrationTest {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 2,
+				"title" to fixture.title,
 				"lexicalContent" to lexicalContentV2(
 					mapOf("type" to "paragraph", "nodeId" to mergeNodeIds[0], "statementId" to fixture.firstSentenceId, "body" to mergedBody),
 					mapOf("type" to "paragraph", "nodeId" to mergeNodeIds[1], "statementId" to fixture.secondSentenceId, "body" to "Stable sentence."),
@@ -563,6 +575,7 @@ class ArtifactApiIntegrationTest {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 1,
+				"title" to fixture.title,
 				"lexicalContent" to lexicalContentV2(
 					mapOf("type" to "paragraph", "nodeId" to nodeIds[0], "statementId" to fixture.firstSentenceId, "body" to "First part."),
 					mapOf("type" to "paragraph", "nodeId" to nodeIds[1], "statementId" to firstSplitId, "body" to "Second part."),
@@ -589,6 +602,7 @@ class ArtifactApiIntegrationTest {
 		val fixture = readyPack()
 		val malformed = objectMapper.writeValueAsString(mapOf(
 			"expectedRevisionNumber" to 1,
+			"title" to fixture.title,
 			"lexicalContent" to mapOf("root" to mapOf("children" to emptyList<Any>())),
 			"statements" to listOf(mapOf("id" to fixture.firstSentenceId, "orderIndex" to 0, "body" to "Supported sentence.")),
 		))
@@ -599,6 +613,7 @@ class ArtifactApiIntegrationTest {
 
 		val mismatched = objectMapper.writeValueAsString(mapOf(
 			"expectedRevisionNumber" to 1,
+			"title" to fixture.title,
 			"lexicalContent" to lexicalContent("Different body."),
 			"statements" to listOf(mapOf("id" to fixture.firstSentenceId, "orderIndex" to 0, "body" to "Supported sentence.")),
 		))
@@ -613,6 +628,7 @@ class ArtifactApiIntegrationTest {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 1,
+				"title" to fixture.title,
 				"lexicalContent" to nodeKey,
 				"statements" to listOf(mapOf("id" to fixture.firstSentenceId, "orderIndex" to 0, "body" to "Supported sentence.")),
 			))
@@ -624,6 +640,7 @@ class ArtifactApiIntegrationTest {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 1,
+				"title" to fixture.title,
 				"lexicalContent" to unknownType,
 				"statements" to listOf(mapOf("id" to fixture.firstSentenceId, "orderIndex" to 0, "body" to "Supported sentence.")),
 			))
@@ -635,6 +652,7 @@ class ArtifactApiIntegrationTest {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 1,
+				"title" to fixture.title,
 				"lexicalContent" to unknownField,
 				"statements" to listOf(mapOf("id" to fixture.firstSentenceId, "orderIndex" to 0, "body" to "Supported sentence.")),
 			))
@@ -642,6 +660,7 @@ class ArtifactApiIntegrationTest {
 
 		val negativeOrder = objectMapper.writeValueAsString(mapOf(
 			"expectedRevisionNumber" to 1,
+			"title" to fixture.title,
 			"lexicalContent" to lexicalContent("Supported sentence."),
 			"statements" to listOf(mapOf("id" to fixture.firstSentenceId, "orderIndex" to -1, "body" to "Supported sentence.")),
 		))
@@ -674,6 +693,7 @@ class ArtifactApiIntegrationTest {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 1,
+				"title" to fixture.title,
 				"lexicalContent" to fractional,
 				"statements" to listOf(mapOf("id" to fixture.firstSentenceId, "orderIndex" to 0, "body" to "Supported sentence.")),
 			))
@@ -685,6 +705,7 @@ class ArtifactApiIntegrationTest {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 1,
+				"title" to fixture.title,
 				"lexicalContent" to wrongRootVersion,
 				"statements" to listOf(mapOf("id" to fixture.firstSentenceId, "orderIndex" to 0, "body" to "Supported sentence.")),
 			))
@@ -696,6 +717,7 @@ class ArtifactApiIntegrationTest {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 1,
+				"title" to fixture.title,
 				"lexicalContent" to wrongTextVersion,
 				"statements" to listOf(mapOf("id" to fixture.firstSentenceId, "orderIndex" to 0, "body" to "Supported sentence.")),
 			))
@@ -709,6 +731,7 @@ class ArtifactApiIntegrationTest {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 1,
+				"title" to fixture.title,
 				"lexicalContent" to lexicalContentWithLinebreak(),
 				"statements" to listOf(mapOf("id" to fixture.firstSentenceId, "orderIndex" to 0, "body" to "First\nSecond")),
 			))
@@ -724,6 +747,7 @@ class ArtifactApiIntegrationTest {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 1,
+				"title" to fixture.title,
 				"lexicalContent" to lexicalContentWithLinebreak(unknownField = true),
 				"statements" to listOf(mapOf("id" to unknownFieldFixture.firstSentenceId, "orderIndex" to 0, "body" to "First\nSecond")),
 			))
@@ -734,6 +758,7 @@ class ArtifactApiIntegrationTest {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 1,
+				"title" to fixture.title,
 				"lexicalContent" to lexicalContentWithLinebreak(linebreakVersion = 2),
 				"statements" to listOf(mapOf("id" to wrongVersionFixture.firstSentenceId, "orderIndex" to 0, "body" to "First\nSecond")),
 			))
@@ -759,6 +784,7 @@ class ArtifactApiIntegrationTest {
 			contentType = MediaType.APPLICATION_JSON
 			content = objectMapper.writeValueAsString(mapOf(
 				"expectedRevisionNumber" to 2,
+				"title" to fixture.title,
 				"lexicalContent" to canonicalLexicalContent,
 				"statements" to listOf(
 					mapOf("id" to fixture.firstSentenceId, "orderIndex" to 0, "body" to "Legacy edited sentence."),
@@ -777,6 +803,7 @@ class ArtifactApiIntegrationTest {
 		val fixture = readyPack()
 		val emptySave = objectMapper.writeValueAsString(mapOf(
 			"expectedRevisionNumber" to 1,
+			"title" to fixture.title,
 			"lexicalContent" to lexicalContent(),
 			"statements" to emptyList<Any>(),
 		))
@@ -1000,7 +1027,7 @@ class ArtifactApiIntegrationTest {
 		ArtifactWorkflowRunWorker(executionPersistence, queryPersistence, workflow, gateway, workerId = "artifact-test").drain()
 		val row = jdbcTemplate.queryForMap(
 			"""
-			select cp.id pack_id, cv.id variant_id from content_packs cp join content_variants cv on cv.content_pack_id=cp.id
+			select cp.id pack_id, cp.title, cv.id variant_id from content_packs cp join content_variants cv on cv.content_pack_id=cp.id
 			where cp.generation_run_id = ?
 			""".trimIndent(), runId,
 		)
@@ -1008,11 +1035,11 @@ class ArtifactApiIntegrationTest {
 			"select id from content_variant_sentences where generation_run_id = ? order by order_index",
 			{ rs, _ -> rs.getObject(1, UUID::class.java) }, runId,
 		)
-		return Fixture(runId, row["pack_id"] as UUID, row["variant_id"] as UUID, sentenceIds.first(), sentenceIds[1])
+		return Fixture(runId, row["pack_id"] as UUID, row["variant_id"] as UUID, sentenceIds.first(), sentenceIds[1], row["title"] as String)
 	}
 }
 
-private data class Fixture(val runId: UUID, val packId: UUID, val variantId: UUID, val firstSentenceId: UUID, val secondSentenceId: UUID)
+private data class Fixture(val runId: UUID, val packId: UUID, val variantId: UUID, val firstSentenceId: UUID, val secondSentenceId: UUID, val title: String)
 
 private class PackGateway(private val evidenceId: UUID) : ArtifactWorkflowModelGateway {
 	private lateinit var sentenceIds: List<UUID>

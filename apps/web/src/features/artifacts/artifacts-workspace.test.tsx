@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -68,32 +68,32 @@ describe("ArtifactsWorkspace", () => {
   it("uses the unselected route as a full artifact library with relative update times", async () => {
     render(<ArtifactsWorkspace />);
 
-    const firstArtifact = await screen.findByRole("option", { name: /Local preview artifact/ });
+    const firstArtifact = await screen.findByRole("link", { name: /Local preview artifact/ });
     expect(screen.getByText("Updated 2 hours ago")).toBeVisible();
     expect(screen.getByText("Updated 2 days ago")).toBeVisible();
-    expect(screen.getByText("Artifact")).toBeVisible();
+    expect(screen.getByText("Name")).toBeVisible();
+    expect(screen.getByText("Status")).toBeVisible();
+    expect(screen.getByText("Updated")).toBeVisible();
     expect(screen.queryByText("Select an artifact to inspect its draft and citations.")).not.toBeInTheDocument();
 
-    fireEvent.click(firstArtifact);
-    expect(mocks.push).toHaveBeenCalledWith("/contents?artifact=artifact-1");
+    expect(firstArtifact).toHaveAttribute("href", "/contents?artifact=artifact-1");
   });
 
-  it.each([
-    ["draft", "Local preview artifact", "v1.1.0 changelog"],
-    ["published", "v1.1.0 changelog", "Local preview artifact"],
-  ])("filters %s by live publication, not generation readiness", async (view, included, excluded) => {
+  it.each(["draft", "published"])("keeps the full library for legacy view=%s links", async (view) => {
     mocks.search = `view=${view}`;
     render(<ArtifactsWorkspace />);
-    expect(await screen.findByRole("option", { name: new RegExp(included) })).toBeVisible();
-    expect(screen.queryByRole("option", { name: new RegExp(excluded) })).not.toBeInTheDocument();
+    const draft = await screen.findByRole("link", { name: /Local preview artifact/ });
+    const published = screen.getByRole("link", { name: /v1.1.0 changelog/ });
+    expect(within(draft).getByText("Draft", { exact: true })).toBeVisible();
+    expect(within(published).getByText("Published", { exact: true })).toBeVisible();
   });
 
-  it("does not misclassify unknown publication metadata as a draft", async () => {
-    mocks.search = "view=draft";
-    mocks.listArtifacts.mockResolvedValue({ items: [{ id: "old", status: "READY", title: "Unknown", contentType: "CHANGELOG", updatedAt: "2026-08-08T10:00:00Z" }], totalItems: 1 });
+  it("labels missing publication metadata as unknown", async () => {
+    mocks.listArtifacts.mockResolvedValue({ items: [{ id: "old", status: "READY", title: "Legacy content", contentType: "CHANGELOG", updatedAt: "2026-08-08T10:00:00Z" }], totalItems: 1 });
     render(<ArtifactsWorkspace />);
-    expect(await screen.findByText("No unpublished drafts in this view.")).toBeVisible();
-    expect(screen.queryByRole("option")).not.toBeInTheDocument();
+    const row = await screen.findByRole("link", { name: /Legacy content/ });
+    expect(within(row).getByText("Unknown", { exact: true })).toBeVisible();
+    expect(within(row).queryByText("Draft", { exact: true })).not.toBeInTheDocument();
   });
 
   it("shows a dedicated failure state when the artifact library cannot load", async () => {
@@ -101,6 +101,9 @@ describe("ArtifactsWorkspace", () => {
 
     render(<ArtifactsWorkspace />);
 
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Artifacts could not be loaded"));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Contents could not be loaded"));
+    mocks.listArtifacts.mockResolvedValue({ items: [], totalItems: 0 });
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByText("No contents yet")).toBeVisible();
   });
 });

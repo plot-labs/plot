@@ -106,7 +106,7 @@ describe("RoutinesWorkspace", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Routines could not be loaded.");
     expect(screen.queryByText("No routines yet")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Retry loading routines" }));
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(await screen.findByText("No routines yet")).toBeVisible();
   });
 
