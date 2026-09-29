@@ -63,3 +63,5 @@ apps/web/.playwright-artifacts/
 
 # Local implementation notes
 /docs/implementation/2026-09-15-koog-skills.md
+
+.aether
