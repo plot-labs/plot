@@ -60,6 +60,17 @@ class ArtifactApiIntegrationTest {
 	@Autowired private lateinit var objectMapper: ObjectMapper
 
 	@Test
+	fun `removed replication endpoint does not create an agent run`() {
+		val before = jdbcTemplate.queryForObject("select count(*) from agent_runs", Long::class.java)
+		mockMvc.post("/api/artifacts/${UUID.randomUUID()}/replicate") {
+			contentType = MediaType.APPLICATION_JSON
+			header("Idempotency-Key", "removed-replication")
+			content = """{"contentType":"LAUNCH_ANNOUNCEMENT"}"""
+		}.andExpect { status { isNotFound() } }
+		assertEquals(before, jdbcTemplate.queryForObject("select count(*) from agent_runs", Long::class.java))
+	}
+
+	@Test
 	fun `sentence-local edit stales citations and acknowledged exports share private-safe markdown`() {
 		val fixture = readyPack()
 		mockMvc.get("/api/artifacts?page=0&size=25").andExpect {

@@ -35,7 +35,7 @@ This manifest records the persistence protocols that must remain observable acro
 | `routine/RoutinePersistence.kt` | routine eligibility/order, retry counters, state transitions | `RoutineWorkerIntegrationTest`, routine migration/background tests | U5 |
 | `routine/RoutineAgentPersistence.kt` | routine execution admission, claims, status and affected-row fencing | `RoutineAgentMigrationIntegrationTest`, `AgentRunWorkerIntegrationTest` | U7 |
 | `routine/RoutineAgentAdmissionPersistence.kt` | routine eligibility and locking before shared AgentRun registration | `RoutineAgentMigrationIntegrationTest`, admission tests | U7 |
-| `agent/AgentRunRegistrationPersistence.kt` | shared run/source/input insertion, strict routine registration, partial-index Chat idempotency, frozen retry copy order | `RoutineAgentMigrationIntegrationTest`, `ArtifactReplicationIntegrationTest`, `AgentRunWorkerIntegrationTest` | U7 |
+| `agent/AgentRunRegistrationPersistence.kt` | shared run/source/input insertion, strict routine registration, partial-index Chat idempotency, frozen retry copy order | `RoutineAgentMigrationIntegrationTest`, `AgentRunWorkerIntegrationTest` | U7 |
 | `agent/AgentExecutionSnapshotPersistence.kt` | execution envelopes, source-snapshot linkage, tool transcript and frozen-replay completeness | `AgentRunWorkerIntegrationTest` | U7 |
 | `chat/ChatPersistence.kt` | sessions, turns, response versions, idempotent Chat lookup and response deactivation | Chat API and response-version tests | U7 |
 | `routine/RoutineAgentRunProjection.kt` | routine terminal projection and success-only cursor advancement at existing transaction boundaries | `RoutineWorkerIntegrationTest`, `AgentRunWorkerIntegrationTest` | U7 |

@@ -5,14 +5,12 @@ import com.plot.api.agent.AgentRunSourceRole
 import com.plot.api.agent.NewAgentRun
 import com.plot.api.agent.AgentRunRegistrationPersistence
 import com.plot.api.agent.AgentExecutionSnapshotPersistence
-import com.plot.api.artifact.dto.ReplicateContentRequest
 import com.plot.api.chat.dto.ChatAgentRunResponse
 import com.plot.api.chat.dto.ChatResponseVersionDto
 import com.plot.api.chat.dto.CreateChatAgentRunRequest
 import com.plot.api.common.ApiException
 import com.plot.api.common.UuidGenerator
 import com.plot.api.common.WorkspacePrincipal
-import com.plot.api.content.ContentBrief
 import com.plot.api.content.ContentSourceSnapshotService
 import com.plot.api.content.ContentType
 import com.plot.api.contentprofile.ContentProfileService
@@ -80,190 +78,6 @@ class ChatRunService(
 			chatTitle = null,
 		)
 		return queries.toRunResponse(run)
-	}
-
-	fun admitReplication(
-		principal: WorkspacePrincipal,
-		artifactId: UUID,
-		request: ReplicateContentRequest,
-		idempotencyKey: String,
-	): ChatAgentRunResponse {
-		sourceManagedAccessGuard.requireReadable()
-		workspaceAccessService.requireWritable(principal.workspaceId)
-
-		val workspaceId = principal.workspaceId
-		val userId = principal.userId
-		val key = idempotencyKey.trim()
-		if (key.isBlank() || key.length > 200) {
-			throw ApiException(HttpStatus.BAD_REQUEST, "IDEMPOTENCY_KEY_REQUIRED", "Idempotency-Key is required")
-		}
-
-		val sourceRunInfo = sqlExecutor.query(
-			"""
-			select ar.id as agent_run_id, ar.work_session_id, ar.content_type, ar.content_profile_revision_id,
-			       ar.instruction_snapshot, ar.content_brief_snapshot::text as content_brief_snapshot, cp.title
-			from content_packs cp
-			join generation_runs gr on gr.workspace_id = cp.workspace_id and gr.id = cp.generation_run_id
-			join agent_runs ar on ar.workspace_id = gr.workspace_id and ar.id = gr.agent_run_id
-			where cp.workspace_id = ? and cp.id = ?
-			""".trimIndent(),
-			{ rs, _ ->
-				SourceArtifactRunInfo(
-					agentRunId = requireNotNull(rs.getObject("agent_run_id", UUID::class.java)),
-					workSessionId = rs.getObject("work_session_id", UUID::class.java),
-					contentType = ContentType.parse(rs.getString("content_type")),
-					contentProfileRevisionId = rs.getObject("content_profile_revision_id", UUID::class.java),
-					instructionSnapshot = requireNotNull(rs.getString("instruction_snapshot")),
-					contentBriefSnapshot = rs.getString("content_brief_snapshot"),
-					title = rs.getString("title"),
-				)
-			},
-			workspaceId,
-			artifactId,
-		).firstOrNull() ?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Artifact not found")
-
-		val snapshot = contentSourceSnapshotService.findOrCreateSnapshotForAgentRun(workspaceId, sourceRunInfo.agentRunId)
-
-		// Re-validate that source is still active and connected
-		if (snapshot.sourceScopeId != null) {
-			val activeScopeCount = sqlExecutor.queryForObject(
-				"""
-				select count(*)
-				from source_scopes scope
-				join source_namespaces namespace
-				  on namespace.workspace_id = scope.workspace_id and namespace.id = scope.source_namespace_id
-				 and namespace.provider = scope.provider
-				join connection_namespace_bindings binding
-				  on binding.workspace_id = namespace.workspace_id and binding.source_namespace_id = namespace.id
-				 and binding.provider = namespace.provider
-				join connections connection
-				  on connection.workspace_id = binding.workspace_id and connection.id = binding.connection_id
-				 and connection.provider = binding.provider
-				where scope.workspace_id = ? and scope.id = ?
-				  and scope.status = 'ACTIVE' and namespace.status = 'ACTIVE'
-				  and binding.status = 'ACTIVE' and connection.status = 'ACTIVE'
-				""".trimIndent(),
-				Long::class.java,
-				workspaceId,
-				snapshot.sourceScopeId,
-			) ?: 0L
-			if (activeScopeCount == 0L) {
-				throw ApiException(HttpStatus.CONFLICT, "SOURCE_NOT_READY", "The source repository or connection is no longer active")
-			}
-		}
-
-		val frozenProfileRevisionId = request.contentProfileRevisionId?.let {
-			contentProfileService.requireRevisionInWorkspace(workspaceId, it).id
-		} ?: sourceRunInfo.contentProfileRevisionId ?: contentProfileService.currentRevisionId(workspaceId)
-
-		val domainBrief = request.brief?.toDomain() ?: snapshot.briefSnapshotJson?.let {
-			runCatching { objectMapper.readValue(it, ContentBrief::class.java) }.getOrNull()
-		}
-		val briefJson = domainBrief?.takeUnless { it.isBlank() }?.let(objectMapper::writeValueAsString)
-
-		val normalizedInstruction = request.instruction?.trim()?.takeUnless { it.isEmpty() }
-			?: defaultInstructionFor(request.contentType, sourceRunInfo.title)
-
-		val fingerprint = buildString {
-			append(snapshot.id).append('|')
-			append(request.contentType.name).append('|')
-			append(frozenProfileRevisionId ?: "none").append('|')
-			append(domainBrief?.canonicalFingerprint().orEmpty()).append('|')
-			append(normalizedInstruction)
-		}.let { raw ->
-			MessageDigest.getInstance("SHA-256").digest(raw.toByteArray(Charsets.UTF_8))
-				.joinToString("") { "%02x".format(it) }
-		}
-
-		val run = transactionExecutor.execute {
-			sqlExecutor.queryForObject(
-				"select pg_advisory_xact_lock(hashtextextended(?, 0))",
-				{ _, _ -> Unit },
-				"$workspaceId:$key",
-			)
-			findExisting(workspaceId, key)?.let { existing ->
-				if (existing.requestFingerprint != fingerprint) throw AgentRunIdempotencyConflictException()
-				return@execute existing
-			}
-
-			val chatId = resolveChat(null, workspaceId, userId, "Replicated ${request.contentType.name} from ${sourceRunInfo.title ?: sourceRunInfo.contentType.name}")
-			val runId = uuidGenerator.next()
-			val now = Instant.now()
-			val inserted = registration.insertChatIfAbsent(
-				NewAgentRun(
-					id = runId,
-					workspaceId = workspaceId,
-					workSessionId = chatId,
-					createdByUserId = userId,
-					origin = AgentRunOrigin.CHAT,
-					idempotencyKey = key,
-					requestFingerprint = fingerprint,
-					instructionSnapshot = normalizedInstruction,
-					promptVersion = "chat-agent-v1",
-					toolPolicyVersion = "read-only-v1",
-					budgetSnapshotJson = objectMapper.writeValueAsString(properties.chatBudgetSnapshot()),
-					contentType = request.contentType,
-					contentProfileRevisionId = frozenProfileRevisionId,
-					contentBriefSnapshotJson = briefJson,
-					maxAttempts = properties.maxAttempts,
-					sourceSnapshotId = snapshot.id,
-				),
-				now,
-			)
-			if (!inserted) {
-				val raced = requireNotNull(findExisting(workspaceId, key))
-				if (raced.requestFingerprint != fingerprint) throw AgentRunIdempotencyConflictException()
-				return@execute raced
-			}
-
-				if (snapshot.sourceScopeId != null) {
-					val sourceDisplayName = snapshot.inputs.firstOrNull { it.sourceScopeId == snapshot.sourceScopeId }?.sourceLabel
-						?: requireActiveScopeDisplayName(workspaceId, snapshot.sourceScopeId)
-					registration.insertSource(
-						workspaceId, runId, snapshot.sourceScopeId, sourceDisplayName, AgentRunSourceRole.CONTEXT,
-						0, "ACTIVE", now, now,
-					)
-			}
-
-			// Generate brand-new agent_run_input rows with unique IDs [E16]
-			snapshot.inputs.forEachIndexed { index, input ->
-				registration.insertSnapshotInput(workspaceId, runId, input, index, now)
-			}
-
-			val settingsJson = objectMapper.writeValueAsString(
-				mapOf(
-					"promptVersion" to "chat-agent-v1",
-					"toolPolicyVersion" to "read-only-v1",
-					"budgetSnapshot" to objectMapper.writeValueAsString(properties.chatBudgetSnapshot()),
-					"contentType" to request.contentType.name,
-					"contentProfileRevisionId" to frozenProfileRevisionId,
-					"contentBriefSnapshot" to briefJson,
-				),
-			)
-			compatibilityWriter.recordDirectChatRun(
-				workspaceId = workspaceId,
-				userId = userId,
-				chatId = chatId,
-				runId = runId,
-				instruction = normalizedInstruction,
-				fingerprint = fingerprint,
-				settingsJson = settingsJson,
-				sourceSnapshotId = snapshot.id,
-				now = now,
-			)
-
-			val admittedRun = requireNotNull(agentRunQueryPersistence.findAgentRun(workspaceId, runId))
-			scheduleAgentRunDispatchAfterCommit()
-			admittedRun
-		}
-
-		return queries.toRunResponse(run)
-	}
-
-	private fun defaultInstructionFor(contentType: ContentType, title: String?): String = when (contentType) {
-		ContentType.ARTIFACT -> "Create an artifact from the available source evidence."
-		ContentType.LAUNCH_ANNOUNCEMENT -> "Write a concise launch announcement highlighting who this helps and how to get started."
-		ContentType.CHANGELOG -> "Generate release notes summarizing the key changes."
 	}
 
 	private fun admitInternal(
@@ -690,21 +504,6 @@ class ChatRunService(
 			.joinToString("") { byte -> "%02x".format(byte) }
 	}
 
-	private fun requireActiveScopeDisplayName(workspaceId: UUID, sourceScopeId: UUID): String = requireNotNull(sqlExecutor.queryForObject(
-		"select display_name from source_scopes where workspace_id = ? and id = ? and status = 'ACTIVE'",
-		String::class.java,
-		workspaceId,
-		sourceScopeId,
-	))
 	private data class FrozenSource(val id: UUID, val displayName: String, val lifecycleVersionAt: Instant)
 	private data class ChatSessionRow(val routineExecutionId: UUID?)
-	private data class SourceArtifactRunInfo(
-		val agentRunId: UUID,
-		val workSessionId: UUID?,
-		val contentType: ContentType,
-		val contentProfileRevisionId: UUID?,
-		val instructionSnapshot: String,
-		val contentBriefSnapshot: String?,
-		val title: String?,
-	)
 }

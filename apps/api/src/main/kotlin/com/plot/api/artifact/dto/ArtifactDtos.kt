@@ -1,7 +1,5 @@
 package com.plot.api.artifact.dto
 
-import com.plot.api.chat.dto.ContentBriefRequest
-import com.plot.api.content.ContentType
 import jakarta.validation.Valid
 import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotBlank
@@ -86,13 +84,6 @@ data class RelatedArtifactSummaryResponse(
 	val contentType: String,
 	val status: String,
 	val updatedAt: Instant,
-)
-
-data class ReplicateContentRequest(
-	val contentType: ContentType = ContentType.LAUNCH_ANNOUNCEMENT,
-	@field:Size(max = 2_000) val instruction: String? = null,
-	val contentProfileRevisionId: UUID? = null,
-	@field:Valid val brief: ContentBriefRequest? = null,
 )
 
 data class ContentVariantResponse(
