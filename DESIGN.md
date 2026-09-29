@@ -105,6 +105,23 @@ components:
     padding: 0 12px
   button-primary-hover:
     backgroundColor: "rgba(18, 18, 18, 0.8)"
+  button-create:
+    background: "linear-gradient(to bottom, rgba(0, 0, 0, 0.78), rgba(0, 0, 0, 0.88))"
+    textColor: "#ffffff"
+    typography: "{typography.body-xs}"
+    fontWeight: 600
+    rounded: "{rounded.full}"
+    height: 34px
+    padding: 0 14px
+    iconSize: 15px
+    iconGap: 6px
+    border: "1px solid rgba(255, 255, 255, 0.18)"
+    backdropFilter: "saturate(200%) blur(40px)"
+    boxShadow: "inset 0 1px 1px rgba(255, 255, 255, 0.25), inset 0 -1px 1px rgba(0, 0, 0, 0.1), 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.08)"
+  button-create-hover:
+    opacity: 0.9
+  button-create-active:
+    scale: 0.98
   button-secondary:
     backgroundColor: "rgba(0, 0, 0, 0.04)"
     textColor: "{colors.foreground}"
@@ -182,7 +199,7 @@ Fonts reinforce the editorial metaphor:
 - **Playfair Display** for display headlines and narrative emphasis (journalistic authority)
 - **Inter** for body text, metadata, labels, and technical annotations (contemporary readability and precision)
 
-The result is a workspace that feels like a CMS for factual content: grid backgrounds, minimal shadows, pill-shaped primary actions, and compact uppercase labels. The published changelog reads like editorial output — generous line height, citation footnotes, numbered sources — not a SaaS dashboard.
+The result is a workspace that feels like a CMS for factual content: grid backgrounds, minimal shadows on most surfaces, a distinct pill-shaped Create action, and compact uppercase labels. The published changelog reads like editorial output — generous line height, citation footnotes, numbered sources — not a SaaS dashboard.
 
 ## Colors
 
@@ -191,11 +208,11 @@ The color system is deliberately constrained. Near-black ink (`oklch(0.145 0 0)`
 Two functional accents break the monochrome:
 
 - **Citation Red (`#ef3f2c`)**: A bold, high-contrast red used exclusively for citation chips in published content. The color signals "this claim has an inspectable source." Background tint: `#fff4f1`.
-- **Focus Amber (`#f59e0b`)**: Amber rings and highlights mark focus states, warnings, and statements under review in the workspace. This warm accent stands apart from the cool red of citations.
+- **Focus Amber (`#f59e0b`)**: Amber rings and highlights mark input focus, warnings, and statements under review in the workspace. The header Create action uses a neutral focus ring. This warm accent stands apart from the cool red of citations.
 
 The destructive color (`oklch(0.577 0.245 27.325)`) is a muted earthy red, distinct from citation red, reserved for error states.
 
-All colors use OKLCH notation to preserve perceptual uniformity. The system avoids gradients, glassmorphism, or layered transparency — the paper metaphor is flat and direct.
+Neutral colors use OKLCH notation to preserve perceptual uniformity. Workspace surfaces stay flat and direct; the Create action uses a restrained near-black gradient as a deliberate exception.
 
 ## Typography
 
@@ -224,25 +241,26 @@ The spacing unit is `4px`. All spacing tokens are multiples of this unit to main
 
 ## Elevation & Depth
 
-Plot avoids layered depth and glassmorphism. Elevation is minimal and functional:
+Plot keeps elevation minimal and functional:
 
-- **No shadows on most UI**: Buttons, inputs, and cards rely on border contrast and background fill, not drop shadows.
+- **No shadows on most UI**: Standard buttons, inputs, and cards rely on border contrast and background fill. The header Create action uses the inset highlights and soft shadow specified below.
 - **Subtle card shadows**: Published changelog cards and elevated modals use soft shadows (`shadow-sm` or custom `0 12px 32px rgba(0,0,0,0.14)`) to separate content from the background without implying stacked glass layers.
-- **Focus rings**: All interactive elements use a 2px ring at focus (`focus-visible:ring-2`). Workspace primary actions use amber rings; public citation chips use red-tinted rings.
+- **Focus rings**: Interactive elements use a 2px ring at focus (`focus-visible:ring-2`). Inputs and review controls use amber; the Create action uses a neutral black ring; public citation chips use red-tinted rings.
 - **Popovers and dialogs**: Float above the page with crisp borders and minimal shadows. No blur, no transparency layers.
 
-The editorial metaphor is **flat paper with ink**, not physical depth or translucent surfaces.
+The editorial metaphor remains **flat paper with ink** across content surfaces. The Create action has a small amount of depth so it is easy to find.
 
 ## Shapes
 
-The design system uses **subtle rounding** on most interactive elements, never sharp corners or extreme pill shapes except for specific components:
+The design system uses **subtle rounding** on most interactive elements. Pill shapes are reserved for specific components:
 
-- **Buttons and inputs**: `rounded-lg` (0.25rem / 4px)
+- **Standard buttons and inputs**: `rounded-lg` (0.25rem / 4px)
+- **Create action**: `rounded-full` (pill shape)
 - **Cards**: `rounded-xl` (0.375rem / 6px)
 - **Tags and status badges**: `rounded-full` (pill shape) for compact, scannable metadata
 - **Citation chips**: `rounded-full` to visually distinguish them from surrounding prose
 
-Borders are consistent (`border: oklch(0.88 0 0)`) and typically 1px. No gradient borders, no glow effects.
+Borders are consistent (`border: oklch(0.88 0 0)`) and typically 1px. The Create action uses a subtle translucent light border; gradient borders and glow effects remain out of scope.
 
 The **Plot logo** is an abstract organic mark with continuous curves, rendered in solid black. It appears in the sidebar, landing navigation, and public changelog header — always flat, never animated or layered.
 
@@ -250,13 +268,15 @@ The **Plot logo** is an abstract organic mark with continuous curves, rendered i
 
 ### Buttons
 
-**Primary button**: Black background (`{colors.foreground}`), white text, rounded (`{rounded.lg}`), 32px height. Used sparingly — one primary action per screen. Hover reduces opacity slightly.
+**Standard primary button**: Black background (`{colors.foreground}`), white text, rounded (`{rounded.lg}`), 32px height. Used for primary actions other than Create. Hover reduces opacity slightly.
+
+**Create action**: The Automation and Contents headers use the same compact Create button. It is 34px high, pill-shaped, with 12px semibold Inter text, 14px horizontal padding, a 15px Add icon, and a 6px icon gap. Its near-black vertical gradient, light 1px border, inset highlights, soft outer shadow, and backdrop filter are limited to this action. Hover opacity is 0.9; active scale is 0.98; keyboard focus has a 2px neutral ring. Keep the visible label **Create** and use an accessible name that identifies the object when the page context is ambiguous.
 
 **Secondary button**: Light gray background (`rgba(0,0,0,0.04)`), black text. Used for alternate actions like "Cancel" or "Export."
 
 **Ghost button**: Transparent background, black text. Hover adds a subtle gray tint. Used for tertiary actions and icon-only controls.
 
-All buttons use `{typography.body-xs}` (12px Inter) for labels. Icon-only buttons are 32px square.
+All buttons use `{typography.body-xs}` (12px Inter) for labels. Icon-only buttons are 32px square. Keep one prominent primary action per screen.
 
 ### Citation Chips
 
@@ -316,7 +336,7 @@ Icons are 14px to 16px, from Hugeicons (free) and Lucide. All navigation uses In
 
 ### Do
 
-- **Use one solid primary action per screen.** A single black button makes the intended action obvious. Secondary actions can be ghost or outline buttons.
+- **Use one prominent primary action per screen.** Use the specified Create action for Automation and Contents header creation; use a standard black button for other primary actions. Secondary actions can be ghost or outline buttons.
 
 - **Reserve Playfair Display for headlines and published narrative.** Playfair Display signals "this is the story" or "this is the published output." Use Inter for all operator UI.
 
@@ -336,10 +356,10 @@ Icons are 14px to 16px, from Hugeicons (free) and Lucide. All navigation uses In
 
 - **Don't fake completeness with skeleton loaders or empty states that look published.** If data isn't loaded, say "Loading…" with a spinner. If a list is empty, say "No items yet" with a clear action. Never show gray placeholder boxes that imply structure before data arrives.
 
-- **Don't add glassmorphism, gradients, or layered transparency.** Plot's aesthetic is **flat ink on paper**, not frosted glass or stacked translucent surfaces. Cards are opaque; shadows are minimal; no blur effects.
+- **Don't apply the Create action's gradient, backdrop filter, or shadow to other controls or content surfaces.** Cards stay opaque and the rest of the workspace keeps the flat paper aesthetic.
 
-- **Don't create multiple primary CTAs on one screen.** If two actions compete for attention (e.g., "Save draft" and "Publish"), make one primary (black button) and one secondary (gray or ghost). Users scan for the single black pill.
+- **Don't create multiple primary CTAs on one screen.** If two actions compete for attention (e.g., "Save draft" and "Publish"), make one primary and one secondary (gray or ghost). The header Create action is the only elevated pill button.
 
-- **Don't use extreme border radius or sharp corners.** Buttons and cards use subtle rounding (`4px` to `6px`). Tags and citation chips are fully rounded (`rounded-full`). Never use `0px` (sharp) or `16px+` (overly soft) radius on standard UI.
+- **Don't use extreme border radius or sharp corners on standard UI.** Standard buttons and cards use subtle rounding (`4px` to `6px`). The Create action, tags, and citation chips use `rounded-full` by design.
 
 - **Don't hide the source link in citations.** Every citation chip must open a popover or link to the external source. No decorative citation chips that lack the evidence backing.
