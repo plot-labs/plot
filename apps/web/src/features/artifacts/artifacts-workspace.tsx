@@ -1,14 +1,12 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
+import { Add01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 
-import {
-  WorkspaceHeader,
-  workspacePageClass,
-  workspaceSectionClass,
-} from "@/components/layout/workspace-page";
+import { workspacePageClass } from "@/components/layout/workspace-page";
 import { ArtifactCanvasWorkspace } from "@/features/artifacts/artifact-canvas-workspace";
 import { plotApiClient, type Artifact, type ArtifactSummary } from "@/lib/api-client";
 
@@ -23,16 +21,12 @@ export function ArtifactsWorkspace() {
 
 function ArtifactsWorkspaceContent() {
   const searchParams = useSearchParams();
-  const router = useRouter();
   const requestedArtifactId = searchParams.get("artifact");
-  const requestedView = searchParams.get("view");
-  const view = requestedView === "draft" || requestedView === "published" ? requestedView : "all";
   const [remoteArtifactResult, setRemoteArtifactResult] = useState<{ requestedId: string; artifact: Artifact } | null>(null);
   const [remoteArtifactFailure, setRemoteArtifactFailure] = useState<{ requestedId: string; message: string } | null>(null);
   const [artifacts, setArtifacts] = useState<ArtifactSummary[]>([]);
   const [artifactListStatus, setArtifactListStatus] = useState<ArtifactListStatus>("loading");
   const [totalItems, setTotalItems] = useState(0);
-  const visibleArtifacts = artifacts.filter((artifact) => view === "all" || (view === "published" ? artifact.published === true : artifact.published === false));
   const remoteArtifact = remoteArtifactResult?.requestedId === requestedArtifactId ? remoteArtifactResult.artifact : null;
   const remoteArtifactError = remoteArtifactFailure?.requestedId === requestedArtifactId ? remoteArtifactFailure.message : "";
 
@@ -80,62 +74,72 @@ function ArtifactsWorkspaceContent() {
 
   return (
     <div className={workspacePageClass}>
-      <section className={workspaceSectionClass} aria-labelledby="contents-heading">
-        <WorkspaceHeader
-          id="contents-heading"
-          title="Contents"
-          description="Review customer updates, continue a draft, or revisit published work."
-        >
-          <nav aria-label="Contents views" className="mt-5 flex gap-1 text-[12px]">
-          {([ ["all", "All updates"], ["draft", "Draft"], ["published", "Published"] ] as const).map(([value, label]) => (
-            <Link key={value} href={value === "all" ? "/contents" : `/contents?view=${value}`} aria-current={view === value ? "page" : undefined}
-              className={`rounded-[7px] px-2.5 py-1.5 transition ${view === value ? "bg-black/[0.07] font-medium text-black/78 dark:bg-white/12 dark:text-white/82" : "text-black/48 hover:bg-black/[0.04] hover:text-black/72 dark:text-white/50 dark:hover:bg-white/10 dark:hover:text-white/75"}`}>
-              {label}
-            </Link>
-          ))}
-          </nav>
-          <p className="mt-3 text-[11px] leading-4 text-black/40 dark:text-white/42">Published means currently live on your public changelog. Draft means not currently published.</p>
-          {artifactListStatus === "ready" && artifacts.some((artifact) => artifact.published === undefined) && <p role="status" className="mt-2 text-[11px] text-black/40 dark:text-white/42">Some publication statuses are unavailable. Those artifacts appear only in All contents.</p>}
-          {totalItems > artifacts.length && <p className="mt-2 text-[11px] text-black/40 dark:text-white/42">Views show the {artifacts.length} most recently updated artifacts of {totalItems}.</p>}
-        </WorkspaceHeader>
+      <section className="mx-auto min-h-full w-full max-w-[1180px] px-6 pb-12 pt-10 sm:px-10 lg:px-12" aria-labelledby="contents-heading">
+        <header className="flex flex-wrap items-start justify-between gap-5">
+          <div>
+            <h1 id="contents-heading" className="font-display text-[38px] leading-none tracking-[-0.025em] text-black/90 dark:text-white/92">Contents</h1>
+            <p className="mt-3 text-[14px] leading-6 text-black/48 dark:text-white/50">Your customer updates, from first draft to published post.</p>
+          </div>
+          <Link
+            href="/chat"
+            aria-label="Create content"
+            style={{
+              background: "linear-gradient(to bottom, rgba(0, 0, 0, 0.78), rgba(0, 0, 0, 0.88))",
+              backdropFilter: "saturate(200%) blur(40px)",
+              WebkitBackdropFilter: "saturate(200%) blur(40px)",
+              border: "1px solid rgba(255, 255, 255, 0.18)",
+              boxShadow: "inset 0 1px 1px rgba(255, 255, 255, 0.25), inset 0 -1px 1px rgba(0, 0, 0, 0.1), 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.08)",
+              color: "#FFFFFF",
+            }}
+            className="inline-flex h-8.5 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[12px] font-semibold text-white transition-all duration-200 hover:opacity-90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
+          >
+            <HugeiconsIcon icon={Add01Icon} size={15} color="currentColor" strokeWidth={1.5} aria-hidden="true" />
+            Create
+          </Link>
+        </header>
 
-        <div className="divide-y divide-black/[0.07] border-b border-black/[0.07] dark:divide-white/[0.08] dark:border-white/[0.08]">
+        <div className="mt-10 overflow-hidden rounded-[14px] border border-black/[0.09] bg-white dark:border-white/10 dark:bg-white/[0.035]">
+          <div className="hidden grid-cols-[minmax(0,1fr)_110px_145px] gap-4 border-b border-black/[0.07] bg-black/[0.025] px-6 py-3 text-[12px] font-medium text-black/45 dark:border-white/[0.08] dark:bg-white/[0.035] dark:text-white/45 md:grid">
+            <span>Name</span><span>Status</span><span>Updated</span>
+          </div>
           {artifactListStatus === "loading" ? (
             <ArtifactListLoading />
           ) : artifactListStatus === "error" ? (
             <div role="alert" className="px-5 py-10 text-center text-sm text-black/48 dark:text-white/48">
               Artifacts could not be loaded. Refresh the page to try again.
             </div>
-          ) : visibleArtifacts.length === 0 ? (
+          ) : artifacts.length === 0 ? (
             <div className="px-5 py-10 text-center text-sm leading-6 text-black/45 dark:text-white/45">
-              {view === "all" ? "No artifacts yet. Start in Chat to create your first draft." : view === "draft" ? "No unpublished drafts in this view." : "No published artifacts in this view. Publish a reviewed changelog from its editor."}
+              No contents yet. Start in Chat to create your first draft.
             </div>
           ) : (
-            <div className="divide-y divide-black/[0.07] dark:divide-white/[0.08]" role="listbox" aria-label="Artifacts">
-              {visibleArtifacts.map((artifact) => {
+            <div className="divide-y divide-black/[0.07] dark:divide-white/[0.08]" aria-label="Contents">
+              {artifacts.map((artifact) => {
                 const updatedLabel = formatRelativeUpdatedAt(artifact.updatedAt);
                 return (
-                  <button
+                  <Link
                     key={artifact.id}
-                    type="button"
-                    role="option"
-                    aria-selected="false"
-                    onClick={() => router.push(`/contents?artifact=${encodeURIComponent(artifact.id)}`)}
-                    className="grid w-full grid-cols-1 gap-3 px-6 py-4 text-left transition hover:bg-white/70 focus-visible:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-black/20 active:bg-white dark:hover:bg-white/[0.04] dark:focus-visible:bg-white/[0.04] dark:focus-visible:ring-white/25 dark:active:bg-white/[0.06] sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                    href={`/contents?artifact=${encodeURIComponent(artifact.id)}`}
+                    className="grid min-h-[76px] grid-cols-1 gap-2 px-6 py-4 text-left transition hover:bg-black/[0.025] focus-visible:bg-black/[0.025] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-black/20 dark:hover:bg-white/[0.04] dark:focus-visible:bg-white/[0.04] dark:focus-visible:ring-white/25 md:grid-cols-[minmax(0,1fr)_110px_145px] md:items-center md:gap-4"
                   >
-                    <span className="min-w-0 truncate text-[15px] font-semibold tracking-[-0.01em] text-black/82 dark:text-white/86">
+                    <span className="min-w-0 line-clamp-2 text-[14px] font-medium leading-5 text-black/85 dark:text-white/88" title={artifact.title ?? "Generated artifact"}>
                       {artifact.title ?? "Generated artifact"}
                     </span>
-                    <span className="flex shrink-0 items-center gap-3 text-xs text-black/42 dark:text-white/42">
-                      <span>{artifact.published === true ? "Published" : artifact.published === false ? "Draft" : "Publication unknown"}</span>
-                      <span>{contentTypeLabel(artifact.contentType)}</span>
-                      <time dateTime={artifact.updatedAt} title={formatAbsoluteTime(artifact.updatedAt)}>
-                        {updatedLabel}
-                      </time>
+                    <span className="hidden md:block"><span className="inline-flex rounded-[5px] border border-black/10 px-2 py-0.5 text-[12px] text-black/60 dark:border-white/15 dark:text-white/62">{artifact.published === true ? "Published" : artifact.published === false ? "Draft" : "Unknown"}</span></span>
+                    <span className="flex items-center gap-2 text-[12px] text-black/45 dark:text-white/45 md:block">
+                      <span className="md:hidden">{artifact.published === true ? "Published" : artifact.published === false ? "Draft" : "Unknown"} · </span>
+                      <time dateTime={artifact.updatedAt} title={formatAbsoluteTime(artifact.updatedAt)}>{updatedLabel}</time>
                     </span>
-                  </button>
+                  </Link>
                 );
               })}
+            </div>
+          )}
+          {artifactListStatus === "ready" && artifacts.length > 0 && (
+            <div className="border-t border-black/[0.07] bg-black/[0.025] px-6 py-3 text-[12px] text-black/45 dark:border-white/[0.08] dark:bg-white/[0.035] dark:text-white/45">
+              {totalItems > artifacts.length
+                ? `Showing ${artifacts.length} most recently updated of ${totalItems} contents`
+                : `${artifacts.length} contents`}
             </div>
           )}
         </div>
@@ -148,7 +152,7 @@ function ArtifactListLoading() {
   return (
     <div aria-label="Loading artifacts" className="divide-y divide-black/[0.07] dark:divide-white/[0.08]">
       {[0, 1, 2].map((row) => (
-        <div key={row} className="flex items-center justify-between gap-6 px-6 py-5">
+        <div key={row} className="flex min-h-[76px] items-center justify-between gap-6 px-6 py-5">
           <div className="h-4 min-w-0 w-full max-w-[320px] flex-1 animate-pulse rounded bg-black/[0.07] dark:bg-white/10" />
           <div className="h-3 w-24 animate-pulse rounded bg-black/[0.05] dark:bg-white/[0.07]" />
         </div>
@@ -181,12 +185,6 @@ function formatRelativeUpdatedAt(value: string, now = Date.now()) {
 function formatAbsoluteTime(value: string) {
   const timestamp = Date.parse(value);
   return Number.isFinite(timestamp) ? absoluteTimeFormatter.format(timestamp) : "Update time unavailable";
-}
-
-function contentTypeLabel(contentType: ArtifactSummary["contentType"]) {
-  if (contentType === "LAUNCH_ANNOUNCEMENT") return "Launch announcement";
-  if (contentType === "CHANGELOG") return "Changelog";
-  return "Artifact";
 }
 
 function GeneratedArtifactDetail({ artifact }: { artifact: Artifact }) {
