@@ -28,8 +28,9 @@ class ArtifactMarkdownExportService {
 		}
 		val base = render(sentences, evidence, acknowledgeUnresolved, includeSources = false)
 		val sentenceBodies = base.renderedSentences
+		val rawSentenceBodies = sentences.associate { it.id to it.body.trim() }
 		val root = document.get("root") ?: throw IllegalArgumentException("V2 document root is missing")
-		val markdownBody = renderV2Children(root.get("children"), sentenceBodies)
+		val markdownBody = renderV2Children(root.get("children"), sentenceBodies, rawSentenceBodies)
 		val markdown = buildString {
 			append(markdownBody.trimEnd())
 			if (includeSources) appendSourceSections(this, evidence, sources)
@@ -70,13 +71,13 @@ class ArtifactMarkdownExportService {
 		)
 	}
 
-	private fun renderV2Children(children: JsonNode?, sentenceBodies: Map<UUID, String>): String {
+	private fun renderV2Children(children: JsonNode?, sentenceBodies: Map<UUID, String>, rawSentenceBodies: Map<UUID, String>): String {
 		if (children == null || !children.isArray) throw IllegalArgumentException("V2 document children must be an array")
-		return children.mapIndexed { index, child -> renderV2Node(child, "V2 block $index", sentenceBodies) }
+		return children.mapIndexed { index, child -> renderV2Node(child, "V2 block $index", sentenceBodies, rawSentenceBodies) }
 			.joinToString("\n\n")
 	}
 
-	private fun renderV2Node(node: JsonNode, path: String, sentenceBodies: Map<UUID, String>): String {
+	private fun renderV2Node(node: JsonNode, path: String, sentenceBodies: Map<UUID, String>, rawSentenceBodies: Map<UUID, String>): String {
 		val type = node.get("type")?.asText() ?: throw IllegalArgumentException("$path type is missing")
 		if (type == "list") {
 			val children = node.get("children")
@@ -84,25 +85,67 @@ class ArtifactMarkdownExportService {
 			val ordered = node.get("listType")?.asText() == "ordered"
 			val start = node.get("start")?.asInt() ?: 1
 			return children.mapIndexed { index, item ->
-				val body = renderV2Node(item, "$path item $index", sentenceBodies)
+				val body = renderV2Node(item, "$path item $index", sentenceBodies, rawSentenceBodies)
 				if (ordered) "${start + index}. $body" else "- $body"
 			}.joinToString("\n")
 		}
 		val statementId = node.get("statementId")?.asText()?.let { parseUuid(it, "$path statementId") }
 			?: throw IllegalArgumentException("$path statementId is missing")
 		val body = sentenceBodies[statementId] ?: throw IllegalArgumentException("$path statement body is missing")
+		val children = node.get("children")
+		val formattedBody = if (hasInlineFormatting(children) && plainInlineText(children)?.trim() == rawSentenceBodies[statementId]) renderInline(children) else body
 		return when (type) {
 			"heading" -> {
 				val tag = node.get("tag")?.asText() ?: throw IllegalArgumentException("$path heading tag is missing")
-				"#".repeat(tag.removePrefix("h").toIntOrNull()?.coerceIn(1, 3) ?: 2) + " " + body
+				"#".repeat(tag.removePrefix("h").toIntOrNull()?.coerceIn(1, 3) ?: 2) + " " + formattedBody
 			}
-			"paragraph", "listItem" -> body
+			"paragraph", "listItem" -> formattedBody
 			"cta" -> {
 				val label = node.get("destinationLabel")?.asText()?.trim().takeUnless { it.isNullOrBlank() } ?: body
 				val url = approvedCtaUrl(node.get("destinationUrl")?.asText())
 				if (url == null) body else "[${neutralizeUntrustedText(label)}]($url)"
 			}
 			else -> throw IllegalArgumentException("$path has unsupported type '$type'")
+		}
+	}
+
+	private fun plainInlineText(children: JsonNode?): String? {
+		if (children == null || !children.isArray) return null
+		return children.joinToString("") { child ->
+			when (child.get("type")?.asText()) {
+				"text" -> child.get("text")?.asText() ?: ""
+				"linebreak" -> "\n"
+				else -> ""
+			}
+		}
+	}
+
+	private fun hasInlineFormatting(children: JsonNode?): Boolean = children?.isArray == true &&
+		children.any { child -> child.get("type")?.asText() == "text" && ((child.get("format")?.asInt() ?: 0) and 23) != 0 }
+
+	private fun renderInline(children: JsonNode?): String {
+		if (children == null || !children.isArray) return ""
+		return children.joinToString("") { child ->
+			when (child.get("type")?.asText()) {
+				"linebreak" -> "  \n"
+				"text" -> {
+					val format = child.get("format")?.asInt() ?: 0
+					val rawText = child.get("text")?.asText() ?: ""
+					if (format and 16 != 0) {
+						val text = rawText.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+						val delimiter = "`".repeat((Regex("`+").findAll(text).maxOfOrNull { it.value.length } ?: 0) + 1)
+						val padding = if (text.startsWith('`') || text.endsWith('`') || text.startsWith(' ') || text.endsWith(' ')) " " else ""
+						"$delimiter$padding$text$padding$delimiter"
+					} else {
+						var text = neutralizeUntrustedText(rawText)
+						if (format and 1 != 0) text = "**$text**"
+						if (format and 2 != 0) text = "*$text*"
+						if (format and 4 != 0) text = "~~$text~~"
+						text
+					}
+				}
+				else -> ""
+			}
 		}
 	}
 

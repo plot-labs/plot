@@ -6,6 +6,8 @@ export type ArtifactDocumentVersion = 1 | 2;
 
 export const V2_DOCUMENT_VERSION = 2 as const;
 
+const TEXT_FORMAT = { bold: 1, italic: 2, strike: 4, code: 16 } as const;
+
 type JsonRecord = Record<string, unknown>;
 
 export function artifactDocumentVersion(content: JsonRecord | undefined): ArtifactDocumentVersion {
@@ -188,7 +190,7 @@ export function tiptapToArtifactDocument(
   generatedIds: Map<string, string> = new Map(),
 ): Record<string, unknown> {
   const blocks = doc.content ?? [];
-  const structural = blocks.some((node) => isStructuralNode(node)) || blocks.some((node) => hasIdentity(node));
+  const structural = blocks.some((node) => isStructuralNode(node) || hasTextMarks(node));
   if (!structural) return v1Document(blocks);
 
   let statementIndex = 0;
@@ -209,10 +211,11 @@ export function tiptapToArtifactDocument(
     }
     if (node.type === "listItem") {
       const paragraph = node.content?.find((child) => child.type === "paragraph");
-      if (!paragraph) return null;
+      if (!paragraph || !extractTextFromBlock(paragraph).trim()) return null;
       return statementNode(paragraph, node, "listItem", path, generatedIds, statements, () => statementIndex++, usedNodeIds);
     }
     if (!["paragraph", "heading", "cta"].includes(node.type ?? "")) return null;
+    if (!extractTextFromBlock(node).trim()) return null;
     const type = node.type === "heading" ? "heading" : node.type === "cta" ? "cta" : "paragraph";
     return statementNode(node, node, type, path, generatedIds, statements, () => statementIndex++, usedNodeIds);
   };
@@ -298,7 +301,13 @@ function v1Document(blocks: JSONContent[]): Record<string, unknown> {
 
 function lexicalChildrenToTiptap(value: unknown): JSONContent[] {
   return arrayOfRecords(value).flatMap((child) => {
-    if (child.type === "text" && typeof child.text === "string") return [{ type: "text", text: child.text }];
+    if (child.type === "text" && typeof child.text === "string") {
+      const format = typeof child.format === "number" ? child.format : 0;
+      const marks = Object.entries(TEXT_FORMAT)
+        .filter(([, bit]) => (format & bit) !== 0)
+        .map(([type]) => ({ type }));
+      return [{ type: "text", text: child.text, ...(marks.length ? { marks } : {}) }];
+    }
     if (child.type === "linebreak") return [{ type: "hardBreak" }];
     return [];
   });
@@ -306,15 +315,18 @@ function lexicalChildrenToTiptap(value: unknown): JSONContent[] {
 
 function tiptapInlineToLexical(content: JSONContent[] | undefined): JsonRecord[] {
   const children = (content ?? []).flatMap((child) => {
-    if (child.type === "text" && child.text) return [lexicalText(child.text)];
+    if (child.type === "text" && child.text) {
+      const format = (child.marks ?? []).reduce((value, mark) => value | (TEXT_FORMAT[mark.type as keyof typeof TEXT_FORMAT] ?? 0), 0);
+      return [lexicalText(child.text, format)];
+    }
     if (child.type === "hardBreak") return [{ type: "linebreak", version: 1 }];
     return [];
   });
   return children.length ? children : [lexicalText("")];
 }
 
-function lexicalText(text: string): JsonRecord {
-  return { detail: 0, format: 0, mode: "normal", style: "", text, type: "text", version: 1 };
+function lexicalText(text: string, format = 0): JsonRecord {
+  return { detail: 0, format, mode: "normal", style: "", text, type: "text", version: 1 };
 }
 
 function appendCitation(content: JSONContent[], sentence: ContentSentence | undefined, number: number) {
@@ -349,6 +361,10 @@ function isStructuralNode(node: JSONContent): boolean {
 function hasIdentity(node: JSONContent): boolean {
   const attrs = node.attrs as JsonRecord | undefined;
   return typeof attrs?.nodeId === "string" || typeof attrs?.statementId === "string";
+}
+
+function hasTextMarks(node: JSONContent): boolean {
+  return Boolean(node.marks?.length) || Boolean(node.content?.some(hasTextMarks));
 }
 
 function nodeIdFor(node: JSONContent, generatedIds: Map<string, string>, key: string): string {

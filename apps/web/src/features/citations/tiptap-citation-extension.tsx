@@ -69,7 +69,7 @@ export const TiptapCitationExtension = TiptapNode.create({
   },
 });
 
-export function TiptapCitationNodeView({ node }: NodeViewProps) {
+export function TiptapCitationNodeView({ node, editor }: NodeViewProps) {
   const { sources = [], number = 1 } = node.attrs as {
     sources: CitationSourceItem[];
     number: number;
@@ -80,6 +80,7 @@ export function TiptapCitationNodeView({ node }: NodeViewProps) {
   const popoverId = useId();
   const popoverRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLSpanElement>(null);
+  const previousOpenRef = useRef(open);
 
   const sourceList: CitationSourceItem[] = sources.length
     ? sources
@@ -87,6 +88,14 @@ export function TiptapCitationNodeView({ node }: NodeViewProps) {
   const currentSource = sourceList[currentIndex] || sourceList[0];
   const primarySource = sourceList[0];
   const additionalCount = sourceList.length - 1;
+
+  useEffect(() => {
+    if (previousOpenRef.current === open) return;
+    previousOpenRef.current = open;
+    if (!editor.isDestroyed) {
+      editor.view.dispatch(editor.state.tr.setMeta("documentFormatting", open ? "hide" : "updatePosition"));
+    }
+  }, [editor, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -157,10 +166,10 @@ export function TiptapCitationNodeView({ node }: NodeViewProps) {
           id={popoverId}
           role="dialog"
           aria-label="Citation details"
-          className="absolute left-0 top-[calc(100%+8px)] z-50 w-[320px] rounded-2xl border border-black/10 bg-white/95 p-4 shadow-[0_16px_40px_rgba(0,0,0,0.12)] backdrop-blur-xl dark:border-white/10 dark:bg-[#1c1c1f]/95 dark:shadow-[0_16px_40px_rgba(0,0,0,0.4)] sm:w-[350px]"
+          className="absolute left-0 top-[calc(100%+8px)] z-50 w-[min(300px,calc(100vw-32px))] rounded-xl border border-black/10 bg-white/95 p-3 shadow-[0_12px_32px_rgba(0,0,0,0.12)] backdrop-blur-xl dark:border-white/10 dark:bg-[#1c1c1f]/95 dark:shadow-[0_12px_32px_rgba(0,0,0,0.4)]"
         >
           {/* Header with Provider Badge and Navigation */}
-          <div className="flex items-center justify-between pb-3 border-b border-black/[0.06] dark:border-white/[0.08]">
+          <div className="flex items-center justify-between gap-2 pb-2 border-b border-black/[0.06] dark:border-white/[0.08]">
             <div className="inline-flex items-center gap-1.5 rounded-full border border-black/[0.08] bg-black/[0.03] px-2.5 py-0.5 text-[11px] font-medium text-black/70 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-white/75">
               {getSourceProviderIcon(currentSource)}
               <span>{currentSource.provider || resolveProviderName(currentSource)}</span>
@@ -214,10 +223,10 @@ export function TiptapCitationNodeView({ node }: NodeViewProps) {
           </div>
 
           {/* Body */}
-          <div className="pt-3">
-            <h3 className="line-clamp-2 text-[13px] font-medium leading-snug tracking-[-0.01em] text-black/90 dark:text-white/92">
+          <div className="pt-2.5">
+            <div role="heading" aria-level={3} title={currentSource.title} className="line-clamp-2 text-[13px] font-medium leading-snug tracking-[-0.01em] text-black/90 dark:text-white/92">
               {currentSource.title}
-            </h3>
+            </div>
 
             {citationStatusMessage(currentSource.status) ? (
               <p
@@ -235,8 +244,8 @@ export function TiptapCitationNodeView({ node }: NodeViewProps) {
             ) : null}
 
             {isSafeHttpUrl(currentSource.url) ? (
-              <div className="mt-3 flex items-center justify-between border-t border-black/[0.06] pt-2.5 dark:border-white/[0.08]">
-                <span className="truncate max-w-[220px] font-sans text-[11px] text-black/40 dark:text-white/40">
+              <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-black/[0.06] pt-2 dark:border-white/[0.08]">
+                <span className="min-w-0 flex-1 truncate font-sans text-[11px] text-black/40 dark:text-white/40">
                   {currentSource.url.replace(/^https?:\/\/(www\.)?/, "")}
                 </span>
                 <a
@@ -244,7 +253,7 @@ export function TiptapCitationNodeView({ node }: NodeViewProps) {
                   target="_blank"
                   rel="noreferrer noopener"
                   onClick={(e) => e.stopPropagation()}
-                  className="inline-flex items-center gap-1 text-xs font-medium text-black/70 hover:text-black hover:underline dark:text-white/70 dark:hover:text-white"
+                  className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-black/70 hover:text-black hover:underline dark:text-white/70 dark:hover:text-white"
                 >
                   <span>Open</span>
                   <ExternalLink className="size-3 shrink-0 opacity-70" />

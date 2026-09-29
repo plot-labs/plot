@@ -189,7 +189,7 @@ class ArtifactExportService(
 	)
 
 	private companion object {
-		const val MARKDOWN_RENDERER_VERSION = "markdown-v2"
+		const val MARKDOWN_RENDERER_VERSION = "markdown-v3"
 	}
 }
 
