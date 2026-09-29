@@ -18,6 +18,21 @@ const authenticatedSession = {
 };
 
 describe("Plot same-origin proxy", () => {
+  it("rejects the removed artifact replication route without forwarding", async () => {
+    const fetcher = vi.fn<typeof fetch>();
+    const request = new Request("http://web.test/api/plot/artifacts/artifact-1/replicate", {
+      method: "POST",
+      headers: { Origin: "http://web.test" },
+      body: JSON.stringify({ contentType: "LAUNCH_ANNOUNCEMENT" }),
+    });
+    const response = await proxyPlotRequest(request, ["artifacts", "artifact-1", "replicate"], {
+      fetch: fetcher,
+      getSession: async () => authenticatedSession,
+    });
+    expect(response.status).toBe(404);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it("uses the managed WorkOS access token and never forwards browser credentials", async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ ok: true }));
     const request = new Request("http://web.test/api/plot/agent-runs", {
