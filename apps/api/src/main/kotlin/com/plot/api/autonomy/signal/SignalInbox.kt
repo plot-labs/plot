@@ -52,7 +52,7 @@ class SignalInbox(private val sql: SqlExecutor) {
 		return SignalReceipt(id, true)
 	}
 
-	/** Poll per provider to allow the scheduler to enforce independent provider budgets. */
+	/** Claim per provider while preserving independent provider budgets. */
 	fun claim(provider: String, now: Instant, lease: Duration, maxAttempts: Int = 5): SignalClaim? {
 		require(!lease.isNegative && !lease.isZero && maxAttempts > 0)
 		val token = UUID.randomUUID()
@@ -100,6 +100,13 @@ class SignalInbox(private val sql: SqlExecutor) {
 			claim.envelope.workspaceId, claim.id, claim.token, Timestamp.from(now),
 		) == 1
 	}
+
+	/** Includes leases even on the last attempt, so crashed claims reach FAILED. */
+	fun nextWakeupAt(provider: String): Instant? = sql.queryForObject(
+		"""select min(case when state = 'PROCESSING' then lease_until else available_at end)
+		from autonomy_signals where provider = ? and state in ('PENDING', 'RETRY_WAIT', 'PROCESSING')""",
+		{ row, _ -> row.getTimestamp(1)?.toInstant() }, provider,
+	)
 
 	/** A crash on the last allowed attempt must not leave an unclaimable PROCESSING row. */
 	fun failExhausted(provider: String, now: Instant, maxAttempts: Int = 5): Int {

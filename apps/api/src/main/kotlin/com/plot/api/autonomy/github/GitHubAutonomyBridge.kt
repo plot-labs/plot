@@ -5,6 +5,7 @@ import com.plot.api.autonomy.signal.SignalInbox
 import com.plot.api.github.*
 import com.plot.api.persistence.SqlExecutor
 import java.util.UUID
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Component
 import tools.jackson.databind.ObjectMapper
 
@@ -13,6 +14,7 @@ class GitHubAutonomyBridge(
     private val inbox: SignalInbox,
     private val sql: SqlExecutor,
     private val mapper: ObjectMapper,
+    private val events: ApplicationEventPublisher,
 ) {
     fun bootstrap(workspaceId: UUID, sourceScopeId: UUID) {
         // Legacy mission hierarchy removed
@@ -36,6 +38,7 @@ class GitHubAutonomyBridge(
                 and agent_run_id is null""",
                 context.workspaceId, context.sourceScopeId, webhook.tagName)
         }
+        events.publishEvent(GitHubSignalAccepted())
     }
 
     companion object {

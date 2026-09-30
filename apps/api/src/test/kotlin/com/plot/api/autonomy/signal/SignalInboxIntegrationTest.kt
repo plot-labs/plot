@@ -162,6 +162,24 @@ class SignalInboxIntegrationTest {
 		assertFailsWith<IllegalArgumentException> { input.copy(payload = "x".repeat(262145)) }
 	}
 
+	@Test
+	fun `next wakeup follows retry and terminal attempt lease until recovery`() {
+		val input = fixture()
+		inbox.accept(input, now)
+		assertEquals(now, inbox.nextWakeupAt(input.provider))
+		val first = assertNotNull(inbox.claim(input.provider, now, lease))
+		assertEquals(now.plus(lease), inbox.nextWakeupAt(input.provider))
+		val retryAt = now.plusSeconds(60)
+		assertTrue(inbox.retry(first, now, retryAt, "TEST_FAILURE"))
+		assertEquals(retryAt, inbox.nextWakeupAt(input.provider))
+		assertNull(inbox.claim(input.provider, now.plusSeconds(59), lease))
+		val last = assertNotNull(inbox.claim(input.provider, retryAt, lease))
+		jdbc.update("update autonomy_signals set attempts = 5 where id = ?", last.id)
+		assertEquals(retryAt.plus(lease), inbox.nextWakeupAt(input.provider))
+		assertEquals(1, inbox.failExhausted(input.provider, retryAt.plus(lease)))
+		assertNull(inbox.nextWakeupAt(input.provider))
+	}
+
 	private fun fixture(): SignalEnvelope {
 		val workspace = UUID.randomUUID()
 		val namespace = UUID.randomUUID()

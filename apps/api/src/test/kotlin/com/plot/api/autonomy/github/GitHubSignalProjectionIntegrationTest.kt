@@ -10,6 +10,16 @@ import java.time.Instant
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import com.plot.api.persistence.TransactionExecutor
+import org.springframework.context.ApplicationEventPublisher
+import org.springframework.core.task.SyncTaskExecutor
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
+import org.springframework.test.context.bean.override.mockito.MockitoBean
+import org.junit.jupiter.api.BeforeEach
+import org.mockito.Mockito.doAnswer
+import org.mockito.ArgumentMatchers.any
+import java.util.concurrent.Executors
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -17,14 +27,71 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import org.springframework.jdbc.core.JdbcTemplate
 
-@SpringBootTest
+@SpringBootTest(properties = ["plot.autonomy.dispatch-enabled=true"])
 @Import(TestcontainersConfiguration::class)
 class GitHubSignalProjectionIntegrationTest {
 	@Autowired private lateinit var inbox: SignalInbox
 	@Autowired private lateinit var projection: GitHubSignalProjection
 	@Autowired private lateinit var evaluations: SignalEvaluationPersistence
 	@Autowired private lateinit var jdbc: JdbcTemplate
+	@Autowired private lateinit var transactions: TransactionExecutor
+	@Autowired private lateinit var events: ApplicationEventPublisher
+	@MockitoBean(name = "githubSignalTaskExecutor")
+	private lateinit var taskExecutor: ThreadPoolTaskExecutor
+	private val turns = mutableListOf<Runnable>()
 	private val workspaces = mutableSetOf<UUID>()
+
+	@BeforeEach
+	fun captureTurns() {
+		turns.clear()
+		doAnswer { call -> turns += call.getArgument<Runnable>(0); null }
+			.`when`(taskExecutor).execute(any(Runnable::class.java))
+	}
+
+	@Test
+	fun `signal wakeup runs only after commit and rollback never dispatches`() {
+		val fixture = fixture()
+		val envelope = SignalEnvelope(fixture.workspaceId, fixture.namespaceId, fixture.scopeId,
+			"GITHUB", "committed", "ref:main", "push", null, "{}")
+		transactions.execute {
+			inbox.accept(envelope, Instant.now())
+			events.publishEvent(GitHubSignalAccepted())
+			assertTrue(turns.isEmpty())
+		}
+		assertEquals(1, turns.size)
+		turns.removeAt(0).run()
+		assertEquals("SUCCEEDED", jdbc.queryForObject(
+			"select state from autonomy_signals where workspace_id = ?", String::class.java, fixture.workspaceId))
+		try {
+			transactions.execute {
+				inbox.accept(envelope.copy(deliveryKey = "rollback"), Instant.now())
+				events.publishEvent(GitHubSignalAccepted())
+				error("rollback")
+			}
+		} catch (_: IllegalStateException) { }
+		assertTrue(turns.isEmpty())
+		assertEquals(1, jdbc.queryForObject("select count(*) from autonomy_signals where workspace_id = ?", Int::class.java, fixture.workspaceId))
+	}
+
+	@Test
+	fun `startup and missed wakeup recovery drain more than fifty signals without duplicate evaluations`() {
+		val fixture = fixture()
+		val envelope = SignalEnvelope(fixture.workspaceId, fixture.namespaceId, fixture.scopeId,
+			"GITHUB", "backlog", "ref:main", "push", null, "{}")
+		repeat(51) { inbox.accept(envelope.copy(deliveryKey = "backlog-$it", objectKey = "ref:$it"), Instant.now()) }
+		val timer = Executors.newSingleThreadScheduledExecutor()
+		try {
+			val dispatcher = GitHubSignalDispatcher(projection, inbox, SyncTaskExecutor(), timer, true)
+			dispatcher.recoverAtStartup()
+			// Persisted after startup with no event delivery: simulate a lost after-commit wakeup.
+			inbox.accept(envelope.copy(deliveryKey = "lost-wakeup", objectKey = "ref:lost"), Instant.now())
+			dispatcher.recoverMissedWakeups()
+			assertEquals(52, jdbc.queryForObject("select count(*) from autonomy_signals where workspace_id = ? and state = 'SUCCEEDED'", Int::class.java, fixture.workspaceId))
+			assertEquals(52, jdbc.queryForObject("select count(*) from signal_evaluations where workspace_id = ?", Int::class.java, fixture.workspaceId))
+			assertNull(inbox.nextWakeupAt("GITHUB"))
+		} finally { timer.shutdownNow() }
+	}
+
 
 	@AfterEach
 	fun cleanup() {

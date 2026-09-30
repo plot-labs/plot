@@ -7,7 +7,6 @@ import com.plot.api.persistence.TransactionExecutor
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
-import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 
 /** Materializes durable webhook observations into Signal evaluation records. */
@@ -18,10 +17,9 @@ class GitHubSignalProjection(
     private val transactions: TransactionExecutor,
     private val signalEvaluationPersistence: SignalEvaluationPersistence? = null,
 ) {
-    @Scheduled(fixedDelayString = "\${plot.autonomy.scan-delay:PT30S}", initialDelayString = "\${plot.autonomy.scan-delay:PT30S}")
     fun scan() {
         inbox.failExhausted("GITHUB", Instant.now())
-        for (index in 0 until 50) { if (!projectNext()) break }
+        while (projectNext()) { /* Drain committed work, including batches larger than 50. */ }
     }
 
     fun projectNext(): Boolean {
