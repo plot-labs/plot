@@ -7,17 +7,26 @@ const api = vi.hoisted(() => ({ listSessions: vi.fn() }));
 vi.mock("@/lib/api-client", () => ({ plotApiClient: api }));
 afterEach(() => { vi.useRealTimers(); api.listSessions.mockReset(); });
 
-it("refreshes background conversations and stops polling on unmount", async () => {
+it("leaves idle conversations unchanged and refreshes on focus or session changes", async () => {
   vi.useFakeTimers();
   api.listSessions.mockResolvedValueOnce([]).mockResolvedValue([{ id: "automated", title: "Release notes" }]);
   const { result, unmount } = renderHook(() => useRecentChats({ settingsMode: false, selectedWorkspaceId: "a" }));
   await act(async () => {});
   expect(result.current).toEqual([]);
-  await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+  await act(async () => { await vi.advanceTimersByTimeAsync(30 * 60_000); });
+  expect(api.listSessions).toHaveBeenCalledTimes(1);
+  expect(result.current).toEqual([]);
+  await act(async () => { window.dispatchEvent(new Event("plot:sessions-changed")); });
   expect(result.current[0].id).toBe("automated");
+  await act(async () => { window.dispatchEvent(new Event("focus")); });
+  expect(api.listSessions).toHaveBeenCalledTimes(3);
   unmount();
-  await vi.advanceTimersByTimeAsync(30_000);
-  expect(api.listSessions).toHaveBeenCalledTimes(2);
+  await act(async () => {
+    window.dispatchEvent(new Event("focus"));
+    window.dispatchEvent(new Event("plot:sessions-changed"));
+    await vi.advanceTimersByTimeAsync(30_000);
+  });
+  expect(api.listSessions).toHaveBeenCalledTimes(3);
 });
 
 it("hides the previous workspace and ignores late responses from it", async () => {

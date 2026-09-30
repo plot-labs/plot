@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   search: "",
@@ -70,6 +70,7 @@ function agentRun(overrides: Record<string, unknown> = {}) {
 }
 
 describe("ChatWorkspace", () => {
+  afterEach(() => vi.restoreAllMocks());
   beforeEach(() => {
     mocks.search = "";
     Object.values(mocks).forEach((value) => { if (typeof value === "function" && "mockReset" in value) value.mockReset(); });
@@ -115,6 +116,7 @@ describe("ChatWorkspace", () => {
     mocks.listSessionAgentRuns.mockResolvedValue([succeeded]);
     mocks.getChatAgentRun.mockResolvedValue(succeeded);
     mocks.createChatAgentRun.mockResolvedValue(agentRun({ id: "agent-followup", chatId: "chat-1" }));
+    const dispatchEvent = vi.spyOn(window, "dispatchEvent");
     render(<ChatWorkspace />);
     await waitFor(() => expect(screen.queryByText("Loading sources…")).not.toBeInTheDocument());
     expect(screen.queryByLabelText("Purpose (recommended)")).not.toBeInTheDocument();
@@ -134,6 +136,7 @@ describe("ChatWorkspace", () => {
       expect.any(String),
       expect.any(Object),
     ));
+    await waitFor(() => expect(dispatchEvent).toHaveBeenCalledWith(expect.objectContaining({ type: "plot:sessions-changed" })));
   });
 
   it("reuses the pending idempotency key after an admission response is lost", async () => {

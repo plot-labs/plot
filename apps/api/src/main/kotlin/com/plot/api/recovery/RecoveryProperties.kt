@@ -7,6 +7,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties
 data class RecoveryProperties(
 	val enabled: Boolean = false,
 	val observeOnly: Boolean = false,
-	val interval: Duration = Duration.ofSeconds(30),
+	val interval: Duration = Duration.ofMinutes(30),
 	val batchSize: Int = 50,
 )

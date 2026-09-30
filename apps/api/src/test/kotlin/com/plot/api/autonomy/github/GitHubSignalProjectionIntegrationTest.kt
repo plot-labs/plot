@@ -19,7 +19,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.junit.jupiter.api.BeforeEach
 import org.mockito.Mockito.doAnswer
 import org.mockito.ArgumentMatchers.any
-import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledThreadPoolExecutor
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -79,7 +79,7 @@ class GitHubSignalProjectionIntegrationTest {
 		val envelope = SignalEnvelope(fixture.workspaceId, fixture.namespaceId, fixture.scopeId,
 			"GITHUB", "backlog", "ref:main", "push", null, "{}")
 		repeat(51) { inbox.accept(envelope.copy(deliveryKey = "backlog-$it", objectKey = "ref:$it"), Instant.now()) }
-		val timer = Executors.newSingleThreadScheduledExecutor()
+		val timer = ScheduledThreadPoolExecutor(1)
 		try {
 			val dispatcher = GitHubSignalDispatcher(projection, inbox, SyncTaskExecutor(), timer, true)
 			dispatcher.recoverAtStartup()
@@ -89,6 +89,7 @@ class GitHubSignalProjectionIntegrationTest {
 			assertEquals(52, jdbc.queryForObject("select count(*) from autonomy_signals where workspace_id = ? and state = 'SUCCEEDED'", Int::class.java, fixture.workspaceId))
 			assertEquals(52, jdbc.queryForObject("select count(*) from signal_evaluations where workspace_id = ?", Int::class.java, fixture.workspaceId))
 			assertNull(inbox.nextWakeupAt("GITHUB"))
+			assertTrue(timer.queue.isEmpty()) // No idle retry/warmup timer after the durable queue drains.
 		} finally { timer.shutdownNow() }
 	}
 

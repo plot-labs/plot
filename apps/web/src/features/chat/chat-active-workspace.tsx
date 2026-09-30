@@ -73,6 +73,7 @@ export function ChatActiveWorkspace({
   }, [activeChat.id, router]);
   const onAdmitted = useCallback((run: ChatAgentRun) => {
     router.replace(chatHref(activeChat.id, run.id), { scroll: false });
+    window.dispatchEvent(new Event("plot:sessions-changed"));
   }, [activeChat.id, router]);
   const agent = useChatAgentActivity({
     chatId: activeChat.id,

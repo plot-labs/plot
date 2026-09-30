@@ -25,12 +25,10 @@ export function useRecentChats({ settingsMode, selectedWorkspaceId }: { settings
         .catch(() => undefined);
     };
     loadSessions();
-    const interval = window.setInterval(loadSessions, 30_000);
     window.addEventListener("focus", loadSessions);
     window.addEventListener("plot:sessions-changed", loadSessions);
     return () => {
       controller?.abort();
-      window.clearInterval(interval);
       window.removeEventListener("focus", loadSessions);
       window.removeEventListener("plot:sessions-changed", loadSessions);
     };
