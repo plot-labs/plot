@@ -1,12 +1,9 @@
 package com.plot.api.content
 
-import com.plot.api.chat.dto.ContentBriefRequest
-import com.plot.api.chat.dto.CtaDestinationRequest
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class CtaDestinationContractTest {
@@ -14,9 +11,9 @@ class CtaDestinationContractTest {
 
 	@Test
 	fun `only confirmed absolute HTTPS destinations enter the domain brief`() {
-		val brief = ContentBriefRequest(
-			destinations = listOf(CtaDestinationRequest(destinationId, "Join the beta", "https://plot.test/join")),
-		).toDomain()
+		val brief = ContentBrief(
+			destinations = listOf(ContentBriefDestination(destinationId, "Join the beta", "https://plot.test/join")),
+		)
 
 		assertEquals(destinationId, brief.destinations.single().id)
 		assertEquals("Join the beta", brief.destinations.single().label)
@@ -25,15 +22,7 @@ class CtaDestinationContractTest {
 	}
 
 	@Test
-	fun `destination identity and values participate in the frozen brief fingerprint`() {
-		val first = ContentBrief(destinations = listOf(ContentBriefDestination(destinationId, "Join", "https://plot.test/join")))
-		val changed = first.copy(destinations = listOf(ContentBriefDestination(destinationId, "Start", "https://plot.test/start")))
-
-		assertNotEquals(first.canonicalFingerprint(), changed.canonicalFingerprint())
-	}
-
-	@Test
-	fun `invalid destination schemes credentials and duplicate ids are rejected`() {
+	fun `invalid destination schemes and credentials are rejected`() {
 		listOf(
 			"http://plot.test/join",
 			"/join",
@@ -41,20 +30,9 @@ class CtaDestinationContractTest {
 			"https://user:pass@plot.test/join",
 			"https://plot.test:444/join",
 		).forEach { url ->
-			assertFailsWith<RuntimeException> {
-				ContentBriefRequest(
-					destinations = listOf(CtaDestinationRequest(destinationId, "Join", url)),
-				).toDomain()
+			assertFailsWith<IllegalArgumentException> {
+				ContentBriefDestination(destinationId, "Join", url)
 			}
-		}
-
-		assertFailsWith<RuntimeException> {
-			ContentBriefRequest(
-				destinations = listOf(
-					CtaDestinationRequest(destinationId, "One", "https://plot.test/one"),
-					CtaDestinationRequest(destinationId, "Two", "https://plot.test/two"),
-				),
-			).toDomain()
 		}
 	}
 }

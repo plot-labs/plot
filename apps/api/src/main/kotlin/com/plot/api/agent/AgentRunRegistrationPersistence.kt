@@ -2,7 +2,6 @@ package com.plot.api.agent
 
 import com.plot.api.common.UuidGenerator
 import com.plot.api.content.ContentType
-import com.plot.api.content.ContentSourceSnapshotInput
 import com.plot.api.persistence.SqlExecutor
 import java.sql.Timestamp
 import java.time.Instant
@@ -96,37 +95,6 @@ class AgentRunRegistrationPersistence(
 			Timestamp.from(input.capturedAt),
 		)
 		return id
-	}
-
-	fun insertSnapshotInput(workspaceId: UUID, runId: UUID, input: ContentSourceSnapshotInput, index: Int, now: Instant) {
-		sqlExecutor.update(
-			"""
-			insert into agent_run_inputs (
-			  id, workspace_id, agent_run_id, routine_id, source_scope_id, writing_block_id,
-			  source_provider, source_kind, source_label,
-			  input_kind, order_index, activity_sequence, snapshot_title, snapshot_body,
-			  snapshot_excerpt, original_url, source_created_at, source_updated_at,
-			  content_hash, captured_at
-			) values (?, ?, ?, null, ?, ?, ?, ?, ?, 'SEED', ?, null, ?, ?, ?, ?, ?, ?, ?, ?)
-			""".trimIndent(),
-			uuidGenerator.next(),
-			workspaceId,
-			runId,
-			input.sourceScopeId,
-			input.writingBlockId,
-			input.sourceProvider,
-			input.sourceKind,
-			input.sourceLabel,
-			index,
-			input.snapshotTitle,
-			input.snapshotBody,
-			input.snapshotExcerpt,
-			input.originalUrl,
-			input.sourceCreatedAt?.let(Timestamp::from),
-			input.sourceUpdatedAt?.let(Timestamp::from),
-			input.contentHash,
-			Timestamp.from(now),
-		)
 	}
 
 	fun copySourcesAndInputs(workspaceId: UUID, targetRunId: UUID, newRunId: UUID, now: Instant) {

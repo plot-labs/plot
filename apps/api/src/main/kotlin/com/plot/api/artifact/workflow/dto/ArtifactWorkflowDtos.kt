@@ -6,18 +6,8 @@ import com.plot.api.artifact.workflow.model.ReviewVerdict
 import com.plot.api.artifact.workflow.model.SentenceOrigin
 import com.plot.api.artifact.workflow.model.SourceProvider
 import com.plot.api.artifact.dto.ArtifactResponse
-import jakarta.validation.constraints.NotEmpty
-import jakarta.validation.constraints.NotNull
-import jakarta.validation.constraints.Size
 import java.time.Instant
 import java.util.UUID
-
-data class CreateArtifactWorkflowRequest(
-	@field:NotNull val sourceScopeId: UUID?,
-	@field:NotEmpty @field:Size(max = 20) val writingBlockIds: List<UUID>,
-	@field:Size(max = 2_000) val instruction: String? = null,
-	val workSessionId: UUID? = null,
-)
 
 data class ArtifactWorkflowRunResponse(
 	val id: UUID,

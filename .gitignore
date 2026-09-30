@@ -65,3 +65,5 @@ apps/web/.playwright-artifacts/
 /docs/implementation/2026-09-15-koog-skills.md
 
 .aether
+graphify-out/
+.graphifyignore

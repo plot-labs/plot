@@ -35,23 +35,6 @@ data class ContentBrief(
 			userAction.isNullOrBlank() &&
 			confirmedFacts.isEmpty() &&
 				destinations.isEmpty()
-
-	fun canonicalFingerprint(): String = buildString {
-		append(purpose.orEmpty().trim()).append('|')
-		append(audience.orEmpty().trim()).append('|')
-		append(availability.orEmpty().trim()).append('|')
-		append(pricing.orEmpty().trim()).append('|')
-		append(userAction.orEmpty().trim()).append('|')
-		confirmedFacts.forEach { fact ->
-			append(fact.kind.trim()).append(':')
-			append(fact.body.trim()).append(';')
-		}
-		destinations.forEach { destination ->
-			append(destination.id).append(':')
-			append(destination.label.trim()).append(':')
-			append(destination.url.trim()).append(';')
-		}
-	}
 }
 
 data class ConfirmedFact(

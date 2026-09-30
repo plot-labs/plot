@@ -40,10 +40,6 @@ class ContentProfileService(
 		return revision.toResponse()
 	}
 
-	fun requireRevisionInWorkspace(workspaceId: UUID, revisionId: UUID): ContentProfileRevision =
-		persistence.findRevision(workspaceId, revisionId)
-			?: throw ApiException(HttpStatus.NOT_FOUND, "CONTENT_PROFILE_REVISION_NOT_FOUND", "Content profile revision was not found")
-
 	fun currentRevisionId(workspaceId: UUID): UUID? =
 		persistence.findCurrentRevision(workspaceId)?.id
 
