@@ -7,16 +7,12 @@ import {
   ZapIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import {
-  ChatComposer as AstryxChatComposer,
-  ChatComposerDrawer,
-  ChatComposerInput,
-  ChatMessage,
-  ChatMessageBubble,
-  ChatMessageList,
-  ChatSendButton,
-} from "@astryxdesign/core/Chat";
-import { Citation } from "@astryxdesign/core/Citation";
+import {Message, MessageContent} from "@/components/ai-elements/message";
+import {Conversation, ConversationContent} from "@/components/ai-elements/conversation";
+import {PromptInput, PromptInputTextarea, PromptInputSubmit} from "@/components/ai-elements/prompt-input";
+import {Source} from "@/components/ai-elements/sources";
+import {ArrowUp} from "lucide-react";
+import {Collapsible, CollapsibleTrigger, CollapsibleContent} from "@/components/ui/collapsible";
 import {
   Check,
   ChevronDown,
@@ -27,7 +23,7 @@ import {
   X,
 } from "lucide-react";
 import Image from "next/image";
-import { useId, useState, type CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 
 const initialDraft = [
   "Find projects faster. This release brings search and pinned favorites to your workspace.",
@@ -91,17 +87,17 @@ export function ProductPreview() {
                 className={`${panel === "chat" ? "flex" : "hidden"} min-w-0 flex-1 flex-col lg:flex`}
               >
                 <LandingChatHeader />
-                <div className="min-h-0 flex-1 overflow-y-auto bg-[#fbfbf8]">
-                  <div className="mx-auto w-full max-w-[760px] px-4 pb-12 pt-8 sm:px-6">
-                    <ChatMessageList density="compact" gap={4} style={{ flex: "none" }}>
-                      <ChatMessage sender="user">
-                        <ChatMessageBubble className="max-w-[min(680px,92%)]">
+                <Conversation className="min-h-0 bg-[#fbfbf8]">
+                  <ConversationContent className="mx-auto w-full max-w-[760px] gap-0 px-4 pb-12 pt-8 sm:px-6" scrollClassName="overflow-y-auto">
+                    <div className="flex flex-col gap-4 px-3 pb-2 pt-6">
+                      <Message from="user">
+                        <MessageContent className="max-w-[min(680px,92%)]">
                           <p>Write a changelog for the published v2.4 release. Include only changes supported by the sources.</p>
-                        </ChatMessageBubble>
-                      </ChatMessage>
+                        </MessageContent>
+                      </Message>
 
-                      <ChatMessage sender="assistant">
-                        <ChatMessageBubble variant="ghost" className="w-full min-w-0 max-w-full">
+                      <Message from="assistant">
+                        <MessageContent className="w-full min-w-0 max-w-full">
                           <p className="text-sm leading-6 text-black/65">
                             I prepared a draft from the published release. Every customer-facing claim keeps its source.
                           </p>
@@ -114,12 +110,7 @@ export function ProductPreview() {
                               Sources <span className="font-normal text-black/35">2</span>
                             </span>
                             {sources.map((source, index) => (
-                              <Citation
-                                key={source.label}
-                                source={{ title: source.shortLabel }}
-                                number={index + 1}
-                                variant="label"
-                              />
+                              <Source key={source.label} title={source.shortLabel} aria-label={`Citation ${index + 1}: ${source.shortLabel}`} className="ml-0.5"/>
                             ))}
                           </div>
                           <button
@@ -137,23 +128,23 @@ export function ProductPreview() {
                             </span>
                           </button>
                           <p className="mt-4 text-xs text-black/42">6:00 PM · Source agent</p>
-                        </ChatMessageBubble>
-                      </ChatMessage>
+                        </MessageContent>
+                      </Message>
 
                       {message ? (
-                        <ChatMessage sender="user">
-                          <ChatMessageBubble><p>{message}</p></ChatMessageBubble>
-                        </ChatMessage>
+                        <Message from="user">
+                          <MessageContent><p>{message}</p></MessageContent>
+                        </Message>
                       ) : null}
-                    </ChatMessageList>
+                    </div>
 
                     {message ? (
                       <p role="status" className="mt-4 text-sm text-black/55">
                         This example stays in the preview.
                       </p>
                     ) : null}
-                  </div>
-                </div>
+                  </ConversationContent>
+                </Conversation>
                 <LandingChatComposer onSubmit={setMessage} />
               </section>
 
@@ -308,7 +299,6 @@ function LandingChatHeader() {
 
 function LandingChatComposer({ onSubmit }: { onSubmit: (value: string) => void }) {
   const [value, setValue] = useState("");
-  const labelId = useId();
 
   function submit() {
     const trimmed = value.trim();
@@ -322,49 +312,22 @@ function LandingChatComposer({ onSubmit }: { onSubmit: (value: string) => void }
       className="w-full bg-[#fbfbf8]/95 px-4 pb-4 pt-3 backdrop-blur-xl sm:px-6"
       style={{ borderBottomLeftRadius: 15 }}
     >
-      <AstryxChatComposer
-        onSubmit={(submitted) => {
-          onSubmit(submitted);
-          setValue("");
-        }}
-        placeholder="Ask Plot to refine the draft…"
-        density="balanced"
-        elevation="none"
-        drawer={
-          <ChatComposerDrawer count={2} label="Sources" defaultIsCollapsed>
-            <div className="flex min-w-0 flex-wrap items-center gap-2" aria-label="Connected sources">
-              {sources.map((source, index) => (
-                <Citation key={source.label} source={{ title: source.label }} number={index + 1} variant="label" />
-              ))}
-            </div>
-          </ChatComposerDrawer>
-        }
-        input={
-          <ChatComposerInput
-            label="Chat message"
-            maxRows={7}
-            value={value}
-            onChange={setValue}
-          />
-        }
-        footerActions={<span className="text-xs text-black/42">Enter to send</span>}
-        sendButton={
-          <>
-            <span id={labelId} className="sr-only">Send message</span>
-            <ChatSendButton
-              aria-labelledby={labelId}
-              size="sm"
-              onClick={submit}
-              className="!rounded-full rounded-full bg-primary text-primary-foreground hover:bg-[#303036] active:bg-black disabled:bg-black/25"
-            />
-          </>
-        }
-        className="mx-auto max-w-[720px]"
-        style={{
-          "--_chat-composer-radius": "12px",
-          "--_chat-composer-padding": "10px",
-        } as CSSProperties}
-      />
+      <PromptInput onSubmit={submit} className="mx-auto max-w-[720px]">
+        <Collapsible className="relative -mb-7 rounded-t-[28px] bg-[light-dark(#ffffff,#1f1f22)] [background-image:linear-gradient(light-dark(#0536590c,#1111127f),light-dark(#0536590c,#1111127f))] px-4 pb-10 pt-3">
+          <CollapsibleTrigger aria-label="Expand Sources" className="flex h-5 items-center gap-2 text-[14px] leading-5 text-[light-dark(#4e606f,#aaafb5)]">
+            <span className="inline-flex size-5 items-center justify-center rounded-full bg-white/15 text-[12px] text-[light-dark(#0a1317,#dfe2e5)]">2</span>Sources
+          </CollapsibleTrigger>
+          <CollapsibleContent className="mt-3 flex min-w-0 flex-wrap items-center gap-2" aria-label="Connected sources">
+            {sources.map((source,index)=><Source key={source.label} title={source.label} aria-label={`Citation ${index+1}: ${source.label}`}/>)}
+          </CollapsibleContent>
+        </Collapsible>
+        <div className="relative flex flex-col gap-2 rounded-[12px] border border-[light-dark(#ccd3db,#494d53)] bg-[light-dark(#ffffff,#28292c)] p-[9px]">
+          <PromptInputTextarea aria-label="Chat message" placeholder="Ask Plot to refine the draft…" value={value} onChange={event=>setValue(event.target.value)} rows={1} className="[font-family:-apple-system,BlinkMacSystemFont,Segoe_UI,Roboto,Helvetica,Arial,sans-serif] [field-sizing:content] max-h-[154px] min-h-[30px] w-full resize-none bg-transparent p-1 text-[14px] leading-[22px] text-[light-dark(#0a1317,#dfe2e5)] outline-none placeholder:text-[light-dark(#4e606f,#aaafb5)]"/>
+          <div className="flex h-8 items-center justify-between"><span className="text-xs text-black/42">Enter to send</span>
+            <PromptInputSubmit aria-label="Send message" disabled={!value.trim()} className="flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-[#303036] disabled:bg-black/25 disabled:opacity-50"><ArrowUp className="size-4"/></PromptInputSubmit>
+          </div>
+        </div>
+      </PromptInput>
     </div>
   );
 }
@@ -413,7 +376,7 @@ function LandingSourcesPopover({
           <ol className="mt-4 space-y-2" aria-label="Current sources">
             {sources.map((source, index) => (
               <li key={source.label} className="rounded-xl border border-black/[0.08] px-3 py-2.5">
-                <Citation source={{ title: source.label }} number={index + 1} variant="label" />
+                <Source title={source.label} aria-label={`Citation ${index + 1}: ${source.label}`} className="ml-0.5"/>
               </li>
             ))}
           </ol>

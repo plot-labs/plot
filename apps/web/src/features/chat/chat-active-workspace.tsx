@@ -4,11 +4,8 @@ import { Eye, History, MoreHorizontal, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import {
-  ChatMessage,
-  ChatMessageBubble,
-  ChatMessageList,
-} from "@astryxdesign/core/Chat";
+import {Message, MessageContent} from "@/components/ai-elements/message";
+import {Conversation, ConversationContent} from "@/components/ai-elements/conversation";
 import { ResizeHandle, useResizable } from "@astryxdesign/core/Resizable";
 import type { ChatAgentRun, SourceReference, WorkSessionSummary as ChatSummary } from "@plot/api-client";
 import { ArtifactDocumentSurface } from "@/features/artifacts/artifact-document-surface";
@@ -154,9 +151,9 @@ export function ChatActiveWorkspace({
           </div>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto bg-white dark:bg-[#111113]" style={chatBottomFade}>
-          <div className="mx-auto w-full max-w-[760px] px-4 pb-12 pt-8 sm:px-6">
-            <ChatMessageList density="compact" gap={4} style={{ flex: "none" }}>
+        <Conversation className="min-h-0 bg-white dark:bg-[#111113]" style={chatBottomFade}>
+          <ConversationContent className="mx-auto w-full max-w-[760px] gap-0 px-4 pb-12 pt-8 sm:px-6" scrollClassName="overflow-y-auto">
+            <div className="flex flex-col gap-4 px-3 pb-2 pt-6">
               {agent.turns.length > 0 ? (
                 agent.turns.map((turn, turnIdx) => {
                   const isLatestTurn = turnIdx === agent.turns.length - 1;
@@ -183,11 +180,11 @@ export function ChatActiveWorkspace({
 
                   return (
                     <div key={turn.id} className="space-y-4">
-                      <ChatMessage sender="user">
-                        <ChatMessageBubble className="max-w-[min(680px,92%)]">
+                      <Message from="user">
+                        <MessageContent className="max-w-[min(680px,92%)]">
                           <p>{turn.userMessage}</p>
-                        </ChatMessageBubble>
-                      </ChatMessage>
+                        </MessageContent>
+                      </Message>
                       {selectedVersion && (
                         <AgentActivityDetail
                           run={runForDetail}
@@ -235,11 +232,11 @@ export function ChatActiveWorkspace({
               ) : (
                 <>
                   {messages.map((message) => (
-                    <ChatMessage key={message.id} sender="user">
-                      <ChatMessageBubble className="max-w-[min(680px,92%)]">
+                    <Message key={message.id} from="user">
+                      <MessageContent className="max-w-[min(680px,92%)]">
                         <p>{message.content}</p>
-                      </ChatMessageBubble>
-                    </ChatMessage>
+                      </MessageContent>
+                    </Message>
                   ))}
                   <AgentActivityDetail
                     run={agent.agentRun ?? agent.selectedActivity}
@@ -269,7 +266,7 @@ export function ChatActiveWorkspace({
                   />
                 </>
               )}
-            </ChatMessageList>
+            </div>
 
             {document.artifactError ? <ErrorNotice message={document.artifactError} /> : null}
             <div className="mt-5 lg:hidden">
@@ -323,8 +320,8 @@ export function ChatActiveWorkspace({
                 </div>
               ) : null}
             </div>
-          </div>
-        </div>
+          </ConversationContent>
+        </Conversation>
 
         <ChatComposer
           id="chat-composer"
