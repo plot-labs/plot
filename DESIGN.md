@@ -349,3 +349,15 @@ Do not describe skeleton loading as forbidden. Preserve retry and disabled state
 
 - Automation and Contents share `WorkspaceErrorNotice`: 12px message text, a 28px icon-only retry button with an accessible label, and a wrapping layout for narrow widths. Contents retries loading without a full page refresh.
 - Routine row actions wrap when space is limited. List loading indicators expose a status role while retaining each page's spinner or skeleton presentation.
+
+
+## AI UI components
+
+AI surfaces use locally owned AI Elements subsets in `apps/web/src/components/ai-elements` and shadcn primitives in `components/ui`. Keep the existing Inter/Playfair fonts, product colors, typography scale and center/dock composition. Adapt selected registry components to existing callbacks; generation, polling and document persistence remain in the current hooks.
+
+- Composer: PromptInput with controlled draft, native form submission and IME guard; ModelSelector uses Command inside Popover, with reasoning controls outside Command.
+- Chat: Message, Conversation with one focusable scroll owner, static Tool status and Sources. Safe HTTP links use the existing URL validator.
+- Document: inline citation badges remain inert inside the NodeView trigger; the dialog returns focus and retains citation serialization.
+- Workspace: shadcn v4 resizable panels start at 50:50. Desktop preserves document pixels with 420px minimum per pane when space permits and 1200px document maximum; mobile retains the mounted editor in a full workspace overlay.
+
+Global Tailwind tokens own the existing 8/10/12/14/17/20/24/29/35/42px text scale and small/medium/large shadows. Component installation must preserve these tokens and avoid importing a second global theme.

@@ -182,7 +182,7 @@ export function AgentActivityDetail({
           <ChatSourceCitations sources={citationSources} totalCount={citationCount} />
           {artifactAction ? <div className="mt-4">{artifactAction}</div> : null}
         </MessageContent>
-          <MessageActions className="mt-2 gap-1 whitespace-nowrap px-4 text-[12px] leading-[1.6667] text-[light-dark(#4e606f,#aaafb5)]">
+          <MessageActions className="mt-[10px] [[role=log]_&]:mt-2 gap-1 whitespace-nowrap px-4 text-[12px] leading-[1.6667] text-[light-dark(#4e606f,#aaafb5)]">
             {run ? <span><time dateTime={new Date(run.createdAt).toISOString()} className="whitespace-nowrap">{formatChatTime(run.createdAt)}</time></span> : null} {run ? <span>·</span> : null}
             
                 <div className="flex items-center gap-1.5 whitespace-nowrap text-black/50 dark:text-white/50">

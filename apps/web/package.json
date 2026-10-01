@@ -10,11 +10,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@astryxdesign/core": "^0.2.0",
     "@hugeicons/core-free-icons": "^4.2.3",
     "@hugeicons/react": "^1.1.9",
     "@plot/api-client": "workspace:*",
-    "@stylexjs/stylex": "^0.19.0",
     "@tiptap/core": "^3.30.2",
     "@tiptap/extension-placeholder": "^3.30.2",
     "@tiptap/react": "^3.30.2",
