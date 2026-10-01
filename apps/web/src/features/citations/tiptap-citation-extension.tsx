@@ -2,7 +2,7 @@
 
 import { Node as TiptapNode, mergeAttributes } from "@tiptap/core";
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from "@tiptap/react";
-import { Citation } from "@astryxdesign/core/Citation";
+import {InlineCitation, InlineCitationText, InlineCitationSource, InlineCitationQuote} from "@/components/ai-elements/inline-citation";
 import { ExternalLink, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useState, useId, useRef, useEffect, type ReactNode } from "react";
 
@@ -92,6 +92,8 @@ export function TiptapCitationNodeView({ node, editor }: NodeViewProps) {
   useEffect(() => {
     if (previousOpenRef.current === open) return;
     previousOpenRef.current = open;
+    if (open) popoverRef.current?.focus();
+    else triggerRef.current?.focus();
     if (!editor.isDestroyed) {
       editor.view.dispatch(editor.state.tr.setMeta("documentFormatting", open ? "hide" : "updatePosition"));
     }
@@ -117,11 +119,9 @@ export function TiptapCitationNodeView({ node, editor }: NodeViewProps) {
       }
     }
 
-    document.addEventListener("pointerdown", handleOutsideClick, true);
     document.addEventListener("click", handleOutsideClick, true);
     document.addEventListener("keydown", handleKeyDown);
     return () => {
-      document.removeEventListener("pointerdown", handleOutsideClick, true);
       document.removeEventListener("click", handleOutsideClick, true);
       document.removeEventListener("keydown", handleKeyDown);
     };
@@ -133,6 +133,7 @@ export function TiptapCitationNodeView({ node, editor }: NodeViewProps) {
         ref={triggerRef}
         role="button"
         tabIndex={0}
+        aria-label={`Citation ${number}: ${additionalCount > 0 ? `${primarySource.title} +${additionalCount}` : primarySource.title}`}
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={open ? popoverId : undefined}
@@ -149,15 +150,10 @@ export function TiptapCitationNodeView({ node, editor }: NodeViewProps) {
         }}
         className="inline-flex cursor-pointer items-center transition-transform hover:opacity-90 active:scale-95"
       >
-        <Citation
-          source={{
-            title: additionalCount > 0 ? `${primarySource.title} +${additionalCount}` : primarySource.title,
-            url: primarySource.url,
-            icon: getSourceProviderIcon(primarySource),
-          }}
-          number={number}
-          variant="label"
-        />
+        <InlineCitation className="ml-0.5 inline-flex h-5 max-w-[15em] items-center gap-1 overflow-hidden rounded-[8px] border border-[light-dark(#05365919,#f2f4f619)] pl-0.5 pr-2 text-[12px] leading-[1.6667] text-[light-dark(#4e606f,#aaafb5)]">
+          <span aria-hidden className="inline-flex size-4 shrink-0 items-center justify-center rounded-full border border-[light-dark(#05365919,#f2f4f619)] bg-[light-dark(#ffffff,#1f1f22)]">{getSourceProviderIcon(primarySource)}</span>
+          <InlineCitationText className="min-w-0 truncate group-hover:bg-transparent">{additionalCount > 0 ? `${primarySource.title} +${additionalCount}` : primarySource.title}</InlineCitationText>
+        </InlineCitation>
       </span>
 
       {open ? (
@@ -166,6 +162,7 @@ export function TiptapCitationNodeView({ node, editor }: NodeViewProps) {
           id={popoverId}
           role="dialog"
           aria-label="Citation details"
+          tabIndex={-1}
           className="absolute left-0 top-[calc(100%+8px)] z-50 w-[min(300px,calc(100vw-32px))] rounded-xl border border-black/10 bg-white/95 p-3 shadow-[0_12px_32px_rgba(0,0,0,0.12)] backdrop-blur-xl dark:border-white/10 dark:bg-[#1c1c1f]/95 dark:shadow-[0_12px_32px_rgba(0,0,0,0.4)]"
         >
           {/* Header with Provider Badge and Navigation */}
@@ -223,7 +220,7 @@ export function TiptapCitationNodeView({ node, editor }: NodeViewProps) {
           </div>
 
           {/* Body */}
-          <div className="pt-2.5">
+          <InlineCitationSource className="space-y-0 pt-2.5">
             <div role="heading" aria-level={3} title={currentSource.title} className="line-clamp-2 text-[13px] font-medium leading-snug tracking-[-0.01em] text-black/90 dark:text-white/92">
               {currentSource.title}
             </div>
@@ -238,9 +235,9 @@ export function TiptapCitationNodeView({ node, editor }: NodeViewProps) {
             ) : null}
 
             {currentSource.excerpt ? (
-              <div className="mt-2.5 rounded-xl border border-black/[0.06] bg-black/[0.02] p-2.5 text-xs leading-relaxed text-black/60 dark:border-white/[0.06] dark:bg-white/[0.03] dark:text-white/60">
+              <InlineCitationQuote className="mt-2.5 rounded-xl border border-l border-black/[0.06] bg-black/[0.02] p-2.5 text-xs not-italic leading-relaxed text-black/60 dark:border-white/[0.06] dark:bg-white/[0.03] dark:text-white/60">
                 {currentSource.excerpt}
-              </div>
+              </InlineCitationQuote>
             ) : null}
 
             {isSafeHttpUrl(currentSource.url) ? (
@@ -260,7 +257,7 @@ export function TiptapCitationNodeView({ node, editor }: NodeViewProps) {
                 </a>
               </div>
             ) : null}
-          </div>
+          </InlineCitationSource>
         </div>
       ) : null}
     </NodeViewWrapper>

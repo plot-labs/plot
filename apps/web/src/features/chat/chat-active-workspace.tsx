@@ -6,7 +6,8 @@ import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState }
 
 import {Message, MessageContent} from "@/components/ai-elements/message";
 import {Conversation, ConversationContent} from "@/components/ai-elements/conversation";
-import { ResizeHandle, useResizable } from "@astryxdesign/core/Resizable";
+import {ResizablePanelGroup, ResizablePanel, ResizableHandle} from "@/components/ui/resizable";
+import {usePanelRef} from "react-resizable-panels";
 import type { ChatAgentRun, SourceReference, WorkSessionSummary as ChatSummary } from "@plot/api-client";
 import { ArtifactDocumentSurface } from "@/features/artifacts/artifact-document-surface";
 import { ArtifactEditorStatus, ArtifactSaveDraftButton, artifactSaveStateLabel } from "@/features/artifacts/artifact-editor-chrome";
@@ -54,14 +55,16 @@ export function ChatActiveWorkspace({
   const [artifactPanelOpen, setArtifactPanelOpen] = useState(false);
   const [artifactHistoryOpen, setArtifactHistoryOpen] = useState(false);
   const [artifactSaveRequestToken, setArtifactSaveRequestToken] = useState(0);
-  const artifactPanel = useResizable({ defaultSize: 720, minSizePx: 420, maxSizePx: 1200 });
-  const resizeArtifactPanel = artifactPanel.resize;
+  const artifactPanelRef = usePanelRef();
+  const artifactSizeRef = useRef<number | null>(null);
+  const [desktop, setDesktop] = useState(false);
+  const [workspaceWidth, setWorkspaceWidth] = useState(0);
+  const panelMinimum = Math.min(420, Math.max(0, workspaceWidth - 1) / 2);
   const mobileAssistantTriggerRef = useRef<HTMLButtonElement>(null);
   const mobileHistoryTriggerRef = useRef<HTMLButtonElement>(null);
   const artifactTriggerRef = useRef<HTMLButtonElement>(null);
   const artifactHistoryTriggerRef = useRef<HTMLButtonElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
-  const artifactPanelInitializedRef = useRef(false);
   const artifactAutoOpenedRef = useRef<string | null>(null);
   const previousMobilePanelRef = useRef<"assistant" | "history" | null>(null);
 
@@ -86,6 +89,7 @@ export function ChatActiveWorkspace({
     requestedArtifactId,
     selectedActivityArtifactId: agent.selectedActivity?.artifactId ?? null,
   });
+  const desktopArtifactVisible = desktop && artifactPanelOpen && Boolean(document.currentArtifact);
   const shownArtifact = document.historicalArtifact?.artifact ?? document.currentArtifact;
   const artifactMetrics = useMemo(() => {
     if (!shownArtifact) return null;
@@ -114,13 +118,20 @@ export function ChatActiveWorkspace({
   }, [document.artifactLoading, document.currentArtifact, requestedArtifactId]);
 
   useEffect(() => {
-    if (!artifactPanelOpen || artifactPanelInitializedRef.current) return;
-    if (!window.matchMedia("(min-width: 1024px)").matches) return;
-    const workspaceWidth = workspaceRef.current?.getBoundingClientRect().width;
+    const media = window.matchMedia("(min-width: 1024px)");
+    const update = () => setDesktop(media.matches);
+    update();
+    media.addEventListener("change", update);
+    const observer = new ResizeObserver(() => setWorkspaceWidth(workspaceRef.current?.getBoundingClientRect().width ?? 0));
+    if (workspaceRef.current) observer.observe(workspaceRef.current);
+    setWorkspaceWidth(workspaceRef.current?.getBoundingClientRect().width ?? 0);
+    return () => { media.removeEventListener("change", update); observer.disconnect(); };
+  }, []);
+
+  useEffect(() => {
     if (!workspaceWidth) return;
-    resizeArtifactPanel(Math.round(workspaceWidth / 2));
-    artifactPanelInitializedRef.current = true;
-  }, [artifactPanelOpen, resizeArtifactPanel]);
+    artifactPanelRef.current?.resize(desktopArtifactVisible ? `${artifactSizeRef.current ?? workspaceWidth / 2}px` : "0%");
+  }, [artifactPanelRef, desktopArtifactVisible, workspaceWidth]);
 
   const selectActivity = useCallback((activity: ChatAgentRun) => {
     document.resetHistory();
@@ -143,7 +154,9 @@ export function ChatActiveWorkspace({
 
   return (
     <div ref={workspaceRef} className="relative flex h-[calc(100dvh-49px)] min-h-0 bg-white dark:bg-[#111113] lg:h-full">
-      <div className="flex min-w-0 flex-1 flex-col">
+      <ResizablePanelGroup orientation="horizontal" disabled={!desktopArtifactVisible} className="min-h-0">
+      <ResizablePanel id="chat-pane" minSize={desktopArtifactVisible ? `${panelMinimum}px` : "0%"} groupResizeBehavior="preserve-relative-size" className="flex h-full min-w-0 flex-col">
+
         <header className="flex min-h-14 shrink-0 items-center bg-white px-4 py-3 dark:bg-[#111113]" style={toolbarBottomFade}>
           <div className="flex w-full min-w-0 items-center justify-start gap-2 text-sm font-semibold text-black/78 dark:text-white/82">
             <h1 className="truncate text-left">{activeChat.title || "Untitled chat"}</h1>
@@ -341,24 +354,14 @@ export function ChatActiveWorkspace({
             Response in progress. Wait for it to finish before sending a follow-up.
           </p>
         )}
-      </div>
-      {artifactPanelOpen && document.currentArtifact ? (
-        <ResizeHandle
-          direction="horizontal"
-          isReversed
-          hasDivider
-          isAlwaysVisible={false}
-          label="Resize artifact document"
-          resizable={artifactPanel.props}
-          className="hidden lg:block"
-        />
-      ) : null}
+      </ResizablePanel>
+      <ResizableHandle aria-label="Resize artifact document" disabled={!desktopArtifactVisible} className={`w-px bg-black/[0.08] dark:bg-white/10 ${desktopArtifactVisible ? "flex" : "hidden"}`}/>
+        <ResizablePanel id="artifact-pane" panelRef={artifactPanelRef} defaultSize="0%" minSize={desktopArtifactVisible ? `${panelMinimum}px` : "0%"} maxSize={desktop ? "1200px" : "100%"} groupResizeBehavior="preserve-pixel-size" style={{overflow:"visible",height:"100%"}} onResize={(size, _id, previousSize) => {if (desktopArtifactVisible && size.inPixels > 0 && (previousSize?.inPixels ?? 0) > 0) artifactSizeRef.current = size.inPixels;}}>
       {artifactPanelOpen && document.currentArtifact ? (
         <aside
           id="artifact-editor-panel"
           aria-label="Artifact document panel"
-          className="absolute inset-0 z-30 flex min-w-0 flex-col border-l border-black/[0.08] bg-[#fbfbf8] dark:border-white/10 dark:bg-[#16171a] lg:relative lg:w-[var(--artifact-panel-width)] lg:max-w-[calc(100%-420px)] lg:shrink-0"
-          style={{ "--artifact-panel-width": `${artifactPanel.size}px` } as CSSProperties}
+          className="absolute inset-0 z-30 flex h-full min-w-0 flex-col border-l border-black/[0.08] bg-[#fbfbf8] dark:border-white/10 dark:bg-[#16171a] lg:relative"
         >
           <header className="relative z-20 flex min-h-16 shrink-0 items-center justify-between gap-3 bg-[#fbfbf8]/85 px-4 backdrop-blur-xl dark:bg-[#16171a]/85">
             <div className="flex items-center gap-1">
@@ -471,6 +474,8 @@ export function ChatActiveWorkspace({
           ) : null}
         </aside>
       ) : null}
+        </ResizablePanel>
+      </ResizablePanelGroup>
     </div>
   );
 }
