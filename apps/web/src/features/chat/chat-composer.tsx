@@ -141,9 +141,9 @@ export function ChatComposer({
   }, [reasoningEffort, reasoningPreferenceLoaded]);
 
   function handleSend(text: string) {
-    if (submittingRef.current || isSendDisabled) return;
+    if (submittingRef.current || isSendDisabled) return false;
     const trimmed = text.trim();
-    if (!trimmed) return;
+    if (!trimmed) return false;
 
     const selectedModel = chatModels.find((item) => item.id === model);
     const supportedReasoningEfforts = selectedModel?.reasoningEfforts;
@@ -162,6 +162,7 @@ export function ChatComposer({
     queueMicrotask(() => {
       submittingRef.current = false;
     });
+    return true;
   }
 
   const sendBtnClass =

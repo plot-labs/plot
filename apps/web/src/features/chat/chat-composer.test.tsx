@@ -17,7 +17,7 @@ function inputText(element: HTMLElement, value: string) {
 }
 
 describe("ChatComposer", () => {
-  beforeEach(() => window.localStorage.clear());
+  beforeEach(() => {window.localStorage.clear(); Element.prototype.scrollIntoView = vi.fn();});
 
   it("submits the selected writing skill with the original prompt", async () => {
     const onSubmit = vi.fn();
@@ -136,10 +136,7 @@ describe("ChatComposer", () => {
     render(<ChatComposer references={references} onSubmit={onSubmit} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Choose model" }));
-    expect(screen.getByRole("listbox", { name: "Available models" }).parentElement).toHaveStyle({
-      bottom: "calc(100% + 8px)",
-      transformOrigin: "bottom right",
-    });
+    expect(screen.getByRole("listbox", { name: "Available models" }).closest("[data-side]")).toHaveAttribute("data-side", "top");
     fireEvent.click(screen.getByRole("option", { name: /Gemini 3\.8 Flash/ }));
     inputText(screen.getByRole("textbox", { name: "Chat message" }), "Answer quickly");
     fireEvent.click(screen.getByRole("button", { name: "Send message" }));
@@ -204,9 +201,34 @@ describe("ChatComposer", () => {
     render(<ChatComposer variant="center" references={references} onSubmit={vi.fn()} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Choose model" }));
-    expect(screen.getByRole("listbox", { name: "Available models" }).parentElement).toHaveStyle({
-      top: "calc(100% - 6px)",
-      transformOrigin: "top right",
-    });
+    expect(screen.getByRole("listbox", { name: "Available models" }).closest("[data-side]")).toHaveAttribute("data-side", "bottom");
   });
+  it("preserves draft for Shift+Enter and IME while Enter submits once", () => {
+    const onSubmit=vi.fn(); render(<ChatComposer onSubmit={onSubmit}/>);
+    const input=screen.getByRole('textbox',{name:'Chat message'});
+    fireEvent.change(input,{target:{value:'Hello'}});
+    fireEvent.keyDown(input,{key:'Enter',shiftKey:true});
+    fireEvent.compositionStart(input);
+    fireEvent.keyDown(input,{key:'Enter'});
+    expect(onSubmit).not.toHaveBeenCalled(); expect(input).toHaveValue('Hello');
+    fireEvent.compositionEnd(input);
+    fireEvent.keyDown(input,{key:'Enter'});
+    expect(onSubmit).toHaveBeenCalledTimes(1); expect(input).toHaveValue('');
+  });
+
+  it("does not consume Enter on reasoning effort controls as model selection", () => {
+    render(<ChatComposer onSubmit={vi.fn()}/>);
+    fireEvent.click(screen.getByRole("button", {name:"Choose model"}));
+    fireEvent.click(screen.getByRole("option", {name:/GPT-5\.5/}));
+    fireEvent.click(screen.getByRole("button", {name:"Choose model"}));
+    const trigger=screen.getByRole("button", {name:/Choose reasoning effort/});
+    expect(fireEvent.keyDown(trigger,{key:"Enter"})).toBe(true);
+    fireEvent.click(trigger);
+    const high=screen.getByRole("menuitemradio", {name:/^High/});
+    expect(fireEvent.keyDown(high,{key:"Enter"})).toBe(true);
+    fireEvent.click(high);
+    expect(screen.getByRole("button", {name:/Choose reasoning effort/})).toHaveTextContent("High");
+    expect(screen.getByRole("button", {name:"Choose model"})).toHaveTextContent("GPT-5.5");
+  });
+
 });
