@@ -5,6 +5,11 @@ import com.plot.api.agent.AgentRunOrigin
 import com.plot.api.agent.AgentRunQueryPersistence
 import com.plot.api.agent.AgentRunStatus
 import com.plot.api.agent.ClaimedAgentRun
+import com.plot.api.artifact.workflow.ArtifactWorkflowExecutionPersistence
+import com.plot.api.artifact.workflow.ArtifactWorkflowRunLeaseLostException
+import com.plot.api.artifact.workflow.ClaimedArtifactWorkflowRun
+import com.plot.api.artifact.workflow.ModelInvocationLease
+import com.plot.api.ai.provider.ModelRole
 import com.plot.api.persistence.SqlExecutor
 import com.plot.api.persistence.TransactionExecutor
 import java.util.UUID
@@ -29,6 +34,7 @@ class ChatRunProgressPersistence(
 	private val transactions: TransactionExecutor,
 	private val runs: AgentRunQueryPersistence,
 	private val mapper: ObjectMapper,
+	private val artifacts: ArtifactWorkflowExecutionPersistence,
 ) {
 	fun beginAgent(claim: ClaimedAgentRun): Long? = transactions.execute {
 		if (runs.requireAgentClaim(claim).origin != AgentRunOrigin.CHAT) return@execute null
@@ -49,6 +55,41 @@ class ChatRunProgressPersistence(
 			update chat_run_progress set phase=?, response_text=?, revision=revision+1, updated_at=now()
 			where workspace_id=? and agent_run_id=? and epoch=? and phase not in ('COMPLETE','FAILED')
 		""".trimIndent(), phase, text, claim.workspaceId, claim.agentRunId, epoch) != 1) throw AgentRunClaimLostException()
+	}
+
+	fun beginArtifact(claim: ClaimedArtifactWorkflowRun, invocation: ModelInvocationLease): Long? = transactions.execute {
+		val owner = artifactOwner(claim, invocation) ?: return@execute null
+		val phase = when (invocation.role) { ModelRole.WRITER -> "WRITING"; ModelRole.REVIEWER -> "REVIEWING"; else -> "REWRITING" }
+		sql.queryForObject("""
+			insert into chat_run_progress (workspace_id,agent_run_id,epoch,revision,phase)
+			values (?,?,1,1,?) on conflict (workspace_id,agent_run_id) do update
+			set epoch=chat_run_progress.epoch+1,revision=chat_run_progress.revision+1,phase=excluded.phase,
+			    draft_paragraphs=case when excluded.phase='WRITING' then '[]'::jsonb else chat_run_progress.draft_paragraphs end,updated_at=now()
+			returning epoch
+		""".trimIndent(), Long::class.javaObjectType, claim.workspaceId, owner, phase)
+	}
+
+	fun updateArtifact(claim: ClaimedArtifactWorkflowRun, invocation: ModelInvocationLease, epoch: Long, phase: String, paragraphs: List<String>) = transactions.execute {
+		val owner = artifactOwner(claim, invocation) ?: return@execute
+		require(phase in setOf("WRITING","REVIEWING","REWRITING"))
+		val json = mapper.writeValueAsString(paragraphs)
+		require(json.length <= 800_000)
+		if (sql.update("""
+			update chat_run_progress set phase=?,draft_paragraphs=?::jsonb,revision=revision+1,updated_at=now()
+			where workspace_id=? and agent_run_id=? and epoch=? and phase not in ('COMPLETE','FAILED')
+		""".trimIndent(),phase,json,claim.workspaceId,owner,epoch) != 1) throw ArtifactWorkflowRunLeaseLostException()
+	}
+
+	private fun artifactOwner(claim: ClaimedArtifactWorkflowRun, invocation: ModelInvocationLease): UUID? {
+		artifacts.requireClaim(claim)
+		if (sql.queryForObject("select exists(select 1 from model_invocations where workspace_id=? and generation_run_id=? and id=? and workflow_step_id=? and role=? and status='RUNNING')",
+			Boolean::class.java,claim.workspaceId,claim.runId,invocation.id,invocation.stepId,invocation.role.name) != true) throw ArtifactWorkflowRunLeaseLostException()
+		val owner = sql.query("""
+			select a.id,a.status from generation_runs g join agent_runs a on a.workspace_id=g.workspace_id and a.id=g.agent_run_id
+			where g.workspace_id=? and g.id=? and a.origin='CHAT' for update of a
+		""".trimIndent(), { row,_ -> row.getObject("id",UUID::class.java)!! to row.getString("status") },claim.workspaceId,claim.runId).singleOrNull() ?: return null
+		if (owner.second != "RUNNING") throw ArtifactWorkflowRunLeaseLostException()
+		return owner.first
 	}
 
 	fun load(workspaceId: UUID, runId: UUID): ChatRunSnapshot? = loadMany(listOf(workspaceId to runId))[workspaceId to runId]

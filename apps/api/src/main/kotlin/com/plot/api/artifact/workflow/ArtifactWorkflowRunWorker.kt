@@ -45,6 +45,7 @@ class ArtifactWorkflowRunWorker(
 	private val agentRunsEnabled: Boolean = true,
 	private val agentRunCompletion: ArtifactWorkflowAgentRunCompletionHandler? = null,
 	private val creditService: PolarCreditService? = null,
+	private val chatProgress: com.plot.api.chat.ChatRunProgressPersistence? = null,
 ) {
 	internal var lastFailure: RuntimeException? = null
 		private set
@@ -139,7 +140,20 @@ class ArtifactWorkflowRunWorker(
 			return "RETRY_SCHEDULED" to true
 		}
 		attemptObservation.lowCardinalityKeyValue("plot.physical_attempt", invocation.attemptNo.toString())
-		val recording = RecordingGateway(modelGateway)
+		val progressEpoch = if (state.agentRunId != null) chatProgress?.beginArtifact(claim, invocation) else null
+		var paragraphs = emptyList<String>()
+		var lastWrite = 0L
+		fun flushDraft() {
+			if (progressEpoch != null) runLease.commit {
+				chatProgress?.updateArtifact(claim, invocation, progressEpoch, "WRITING", paragraphs)
+			}
+			lastWrite = System.nanoTime()
+		}
+		val projector = if (progressEpoch != null && role == ModelRole.WRITER) com.plot.api.chat.WriterDraftProjector { draft ->
+			paragraphs = draft
+			if (lastWrite == 0L || System.nanoTime()-lastWrite >= 250_000_000) flushDraft()
+		} else null
+		val recording = RecordingGateway(modelGateway, projector?.let { it::accept })
 		val modelObservation = Observation.start("plot.artifact_workflow.model_call", observationRegistry)
 			.lowCardinalityKeyValue("plot.operation", "model_invocation")
 			.lowCardinalityKeyValue("plot.model_role", role.name)
@@ -159,7 +173,14 @@ class ArtifactWorkflowRunWorker(
 					modelObservation.highCardinalityKeyValue("plot.model_latency_ms", metadata.latency.toMillis().toString())
 				}
 				settleInvocation(claim, invocation, recording.metadata)
-				runLease.commit { executionPersistence.completeCheckpoint(claim, invocation, advanced, recording.metadata) }
+				runLease.commit {
+					executionPersistence.completeCheckpoint(claim, invocation, advanced, recording.metadata) {
+						if (progressEpoch != null) {
+							val phase = if (advanced.status == ArtifactWorkflowRunStatus.REWRITING) "REWRITING" else "REVIEWING"
+							chatProgress?.updateArtifact(claim, invocation, progressEpoch, phase, advanced.sentences.sortedBy { it.orderIndex }.map { it.body })
+						}
+					}
+				}
 			}
 		} catch (failure: AiCreditControlException) {
 			attemptObservation.lowCardinalityKeyValue("plot.error_code", failure.safeCode)
@@ -234,6 +255,7 @@ class ArtifactWorkflowRunWorker(
 				executionPersistence.failCheckpoint(claim, invocation, state, "WORKFLOW_FAILED", recording.metadata, failure)
 			}
 		} finally {
+			projector?.close()
 			modelObservation.lowCardinalityKeyValue("plot.outcome", modelOutcome)
 			modelObservation.stopSafely()
 		}
@@ -410,11 +432,15 @@ private fun ArtifactModelInvocationSettlement.toMetadata() = ModelCallMetadata(
 	reportedCostUsd = usage.reportedCostUsd,
 )
 
-private class RecordingGateway(private val delegate: ArtifactWorkflowModelGateway) : ArtifactWorkflowModelGateway {
+private class RecordingGateway(
+	private val delegate: ArtifactWorkflowModelGateway,
+	private val onWriterText: ((String) -> Unit)? = null,
+) : ArtifactWorkflowModelGateway {
 	var metadata: ModelCallMetadata? = null
 		private set
 
-	override fun write(request: WriterModelRequest): ModelCallResult<WriterOutput> = delegate.write(request).capture()
+	override fun write(request: WriterModelRequest): ModelCallResult<WriterOutput> =
+		delegate.write(if (onWriterText == null) request else request.copy(onText = onWriterText)).capture()
 	override fun review(request: ReviewerModelRequest): ModelCallResult<ReviewerOutput> = delegate.review(request).capture()
 	override fun rewrite(request: RewriteModelRequest): ModelCallResult<TargetedRewriteOutput> = delegate.rewrite(request).capture()
 

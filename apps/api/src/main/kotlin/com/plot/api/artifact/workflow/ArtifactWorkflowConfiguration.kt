@@ -50,6 +50,7 @@ class ArtifactWorkflowConfiguration {
 		routineAgentProperties: AgentProperties,
 		agentRunCompletion: ArtifactWorkflowAgentRunCompletionHandler,
 		creditService: PolarCreditService,
+		chatProgress: com.plot.api.chat.ChatRunProgressPersistence,
 	): ArtifactWorkflowRunWorker = ArtifactWorkflowRunWorker(
 		executionPersistence = executionPersistence,
 		queryPersistence = queryPersistence,
@@ -63,6 +64,7 @@ class ArtifactWorkflowConfiguration {
 		agentRunsEnabled = routineAgentProperties.workersEnabled,
 		agentRunCompletion = agentRunCompletion,
 		creditService = creditService,
+		chatProgress = chatProgress,
 	)
 
 	@Bean(destroyMethod = "shutdown")
