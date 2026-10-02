@@ -170,7 +170,7 @@ class ArtifactWorkflowRunWorker(
 			modelObservation.lowCardinalityKeyValue("plot.error_code", failure.code.name)
 			val metadata = recording.metadata ?: failure.metadata
 			var billingHandled = false
-			if (failure.code == ModelFailureCode.MALFORMED_OUTPUT && creditService?.enabled == true) {
+			if ((failure.code == ModelFailureCode.MALFORMED_OUTPUT || metadata != null) && creditService?.enabled == true) {
 				try {
 					settleInvocation(claim, invocation, metadata, failure.code.name)
 				} catch (billingFailure: AiCreditControlException) {

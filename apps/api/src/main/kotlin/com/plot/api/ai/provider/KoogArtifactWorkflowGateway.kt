@@ -31,6 +31,7 @@ data class StructuredChatRequest(
 	val prompt: ArtifactPrompt,
 	/** Intentionally empty: artifact workflow models are never granted tools. */
 	val toolCallbacks: List<Nothing> = emptyList(),
+	val onText: ((String) -> Unit)? = null,
 )
 
 data class StructuredTransportResponse<T : Any>(
@@ -51,8 +52,8 @@ interface StructuredChatTransport {
 	fun <T : Any> exchange(request: StructuredChatRequest, responseType: Class<T>): StructuredTransportResponse<T>
 }
 
-class TransientModelTransportException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
-class NonTransientModelTransportException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
+class TransientModelTransportException(message: String, cause: Throwable? = null, val usage: ProviderUsage? = null) : RuntimeException(message, cause)
+class NonTransientModelTransportException(message: String, cause: Throwable? = null, val usage: ProviderUsage? = null) : RuntimeException(message, cause)
 class MalformedModelOutputException(
 	message: String,
 	cause: Throwable? = null,
@@ -77,6 +78,7 @@ class KoogArtifactWorkflowGateway(
 				request.documentVersion,
 			),
 			responseType = WriterOutput::class.java,
+			onText = request.onText,
 		)
 	}
 
@@ -101,10 +103,10 @@ class KoogArtifactWorkflowGateway(
 	private fun promptFactoryFor(artifactWorkflowRunId: UUID) =
 		contentTypeRegistry.promptFactoryFor(frozenPromptVersionLookup.promptVersionFor(artifactWorkflowRunId))
 
-	private fun <T : Any> invoke(role: ModelRole, prompt: ArtifactPrompt, responseType: Class<T>): ModelCallResult<T> {
+	private fun <T : Any> invoke(role: ModelRole, prompt: ArtifactPrompt, responseType: Class<T>, onText: ((String) -> Unit)? = null): ModelCallResult<T> {
 		val startedAt = Instant.now()
 		try {
-			val response = transport.exchange(StructuredChatRequest(role, prompt), responseType)
+			val response = transport.exchange(StructuredChatRequest(role, prompt, onText = onText), responseType)
 			return ModelCallResult(
 				response.value,
 				response.toMetadata(Duration.between(startedAt, Instant.now())),
@@ -114,6 +116,7 @@ class KoogArtifactWorkflowGateway(
 				ModelFailureCode.PROVIDER_UNAVAILABLE,
 				"The model provider is temporarily unavailable",
 				failure,
+				failure.usage?.toMetadata(Duration.between(startedAt, Instant.now())),
 			)
 		} catch (failure: MalformedModelOutputException) {
 			throw ArtifactWorkflowModelException(
@@ -127,6 +130,7 @@ class KoogArtifactWorkflowGateway(
 				ModelFailureCode.PROVIDER_REJECTED,
 				"The model provider rejected the request",
 				failure,
+				failure.usage?.toMetadata(Duration.between(startedAt, Instant.now())),
 			)
 		}
 	}

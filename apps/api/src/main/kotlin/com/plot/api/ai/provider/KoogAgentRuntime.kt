@@ -33,7 +33,7 @@ internal class KoogAgentRuntime(
 	private val resolveModel: (AgentDecisionRequest) -> LLModel,
 	private val resolveParams: (AgentDecisionRequest) -> LLMParams,
 	private val mapper: ObjectMapper,
-	private val exchange: suspend (Prompt, LLModel, List<ToolDescriptor>) -> AgentModelResponse,
+	private val exchange: suspend (Prompt, LLModel, List<ToolDescriptor>, (String) -> Unit) -> AgentModelResponse,
 ) : AgentRuntime {
 	constructor(transport: KoogModelTransport, mapper: ObjectMapper) : this(
 		{ request -> transport.agentModel(request.model) },
@@ -47,7 +47,7 @@ internal class KoogAgentRuntime(
 		params: LLMParams,
 		mapper: ObjectMapper,
 		exchange: suspend (Prompt, LLModel, List<ToolDescriptor>) -> AgentModelResponse,
-	) : this({ model }, { params }, mapper, exchange)
+	) : this({ model }, { params }, mapper, { prompt, selectedModel, tools, _ -> exchange(prompt, selectedModel, tools) })
 
 	override fun run(host: AgentRuntimeHost): AgentRuntimeResult {
 		var fatal: Exception? = null
@@ -62,7 +62,7 @@ internal class KoogAgentRuntime(
 				fatal?.let { throw it }
 				host.beforeModel()
 				return try {
-					withTimeout(host.modelTimeoutMillis) { exchange(prompt, model, tools) }
+					withTimeout(host.modelTimeoutMillis) { exchange(prompt, model, tools, host::onText) }
 						.also { host.afterModel(it.usage) }
 						.message
 				} catch (_: TimeoutCancellationException) {

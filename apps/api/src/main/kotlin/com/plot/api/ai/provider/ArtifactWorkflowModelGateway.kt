@@ -20,6 +20,7 @@ data class WriterModelRequest(
 	val instruction: String?,
 	val evidence: List<EvidenceSnapshot>,
 	val documentVersion: Int = 1,
+	val onText: ((String) -> Unit)? = null,
 )
 
 data class ReviewerModelRequest(
