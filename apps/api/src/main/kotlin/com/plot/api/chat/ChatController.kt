@@ -26,6 +26,9 @@ class ChatController(
 	private val runs: ChatRunService,
 	private val queries: ChatQueryService,
 	private val aiProperties: PlotAiProperties,
+	private val streams: ChatRunStreamService,
+	private val context: com.plot.api.auth.AuthorizedWorkspaceContext,
+	private val sourceAccess: com.plot.api.source.SourceManagedAccessGuard,
 ) {
 	@PostMapping
 	fun create(
@@ -48,6 +51,16 @@ class ChatController(
 	fun get(@PathVariable id: UUID): ResponseEntity<ChatAgentRunResponse> = ResponseEntity.ok()
 		.cacheControl(CacheControl.noStore())
 		.body(queries.getRun(id))
+
+	@GetMapping("/{id}/stream", produces = ["text/event-stream"])
+	fun stream(@PathVariable id: UUID): ResponseEntity<org.springframework.web.servlet.mvc.method.annotation.SseEmitter> {
+		sourceAccess.requireReadable()
+		val actor = context.require()
+		val expiresAt = (org.springframework.security.core.context.SecurityContextHolder.getContext().authentication
+			as? org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken)?.token?.expiresAt
+		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).header("X-Accel-Buffering", "no")
+			.body(streams.subscribe(com.plot.api.common.WorkspacePrincipal(actor.workspace.workspaceId, actor.actor.userId), id, expiresAt))
+	}
 
 	@GetMapping("/versions/{versionId}")
 	fun getResponseVersion(@PathVariable versionId: UUID): ResponseEntity<ChatResponseVersionDto> = ResponseEntity.ok()

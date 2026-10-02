@@ -1,0 +1,13 @@
+{
+  "runId": "018fd000-0000-7000-8000-000000000101",
+  "epoch": 2,
+  "revision": 3,
+  "phase": "WRITING",
+  "responseText": "",
+  "draftParagraphs": [
+    "작성 중인 첫 문장입니다."
+  ],
+  "status": "RUNNING",
+  "artifactId": null,
+  "failureCode": null
+}

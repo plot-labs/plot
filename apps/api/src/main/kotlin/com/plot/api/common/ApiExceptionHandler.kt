@@ -24,6 +24,7 @@ class ApiExceptionHandler {
 	fun handleApiException(exception: ApiException): ResponseEntity<ApiErrorResponse> {
 		return ResponseEntity
 			.status(exception.status)
+			.contentType(org.springframework.http.MediaType.APPLICATION_JSON)
 			.cacheControl(CacheControl.noStore())
 			.body(ApiErrorResponse(exception.error, exception.message, exception.resourceId))
 	}
