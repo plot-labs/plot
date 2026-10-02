@@ -220,8 +220,8 @@ function TiptapArtifactEditor({
   });
 
   useEffect(() => {
-    onSaveStateChange?.("saved");
-  }, [onSaveStateChange, revisionKey]);
+    onSaveStateChange?.(initialDraft ? "dirty" : "saved");
+  }, [initialDraft, onSaveStateChange, revisionKey]);
 
   const save = useCallback(async () => {
     if (saving || readOnly) return;
@@ -231,6 +231,7 @@ function TiptapArtifactEditor({
     try {
       const updated = await onSaveArtifact({
         expectedRevisionNumber: revisionNumber,
+        title: pack.title ?? "Generated artifact",
         lexicalContent: draftStateRef.current,
         statements: draftStatementsRef.current,
       });
@@ -248,7 +249,7 @@ function TiptapArtifactEditor({
     } finally {
       setSaving(false);
     }
-  }, [onPackChange, onSaveArtifact, onSaveStateChange, readOnly, revisionNumber, saving]);
+  }, [onPackChange, onSaveArtifact, onSaveStateChange, pack.title, readOnly, revisionNumber, saving]);
 
   useEffect(() => {
     if (saveRequestToken === undefined || previousSaveRequestRef.current === saveRequestToken) return;

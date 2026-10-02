@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { Artifact, ArtifactHistoryDetail } from "@plot/api-client";
+import { PlotApiError, type Artifact, type ArtifactHistoryDetail } from "@plot/api-client";
 import type { SaveArtifactInput } from "@/features/citations/tiptap-draft-editor";
-import { plotApiClient } from "@/lib/api-client";
+import { getSelectedWorkspaceId, plotApiClient } from "@/lib/api-client";
 
-export function useChatArtifactDocument({ requestedArtifactId, selectedActivityArtifactId }: { requestedArtifactId: string | null; selectedActivityArtifactId: string | null }) {
+import { abortableDelay } from "@/lib/chat-agent-stream";
+
+export function useChatArtifactDocument({ requestedArtifactId, selectedActivityArtifactId, retainCurrentArtifact = false, retryFinalRead = false }: { requestedArtifactId: string | null; selectedActivityArtifactId: string | null; retainCurrentArtifact?: boolean; retryFinalRead?: boolean }) {
   const [generatedArtifact, setGeneratedArtifact] = useState<Artifact | null>(null);
   const [historicalArtifact, setHistoricalArtifact] = useState<ArtifactHistoryDetail | null>(null);
   const [historicalPosition, setHistoricalPosition] = useState<number | null>(null);
@@ -16,22 +18,27 @@ export function useChatArtifactDocument({ requestedArtifactId, selectedActivityA
   const [drafts, setDrafts] = useState<Record<string, Omit<SaveArtifactInput, "expectedRevisionNumber">>>({});
   const previousArtifactIdRef = useRef<string | null>(null);
   const documentKeyRef = useRef("");
-  const artifactId = selectedActivityArtifactId ?? requestedArtifactId;
+  const requestedDocumentId = selectedActivityArtifactId ?? requestedArtifactId;
+  const artifactId = retainCurrentArtifact && generatedArtifact ? generatedArtifact.id : requestedDocumentId;
+  const retrySelectedArtifact = retryFinalRead && artifactId === requestedDocumentId;
 
   useEffect(() => {
+    const controller = new AbortController();
+    const workspaceId = getSelectedWorkspaceId();
+    const isCurrent = () => !controller.signal.aborted && getSelectedWorkspaceId() === workspaceId;
     if (!artifactId) {
       queueMicrotask(() => {
+        if (!isCurrent()) return;
         setGeneratedArtifact(null);
         setArtifactLoading(false);
         setArtifactError("");
       });
-      return;
+      return () => controller.abort();
     }
     const restoredArtifactId = artifactId;
-    const controller = new AbortController();
 
     queueMicrotask(() => {
-      if (controller.signal.aborted) return;
+      if (!isCurrent()) return;
       setArtifactLoading(true);
       setArtifactError("");
       setGeneratedArtifact(null);
@@ -41,21 +48,30 @@ export function useChatArtifactDocument({ requestedArtifactId, selectedActivityA
     });
 
     async function restoreArtifact() {
+      let delay = 500;
       try {
-        const artifact = await plotApiClient.getArtifact(restoredArtifactId, { signal: controller.signal });
-        if (controller.signal.aborted) return;
-        setGeneratedArtifact(artifact);
-      } catch (error) {
-        if (!controller.signal.aborted && !(error instanceof DOMException && error.name === "AbortError")) {
-          setArtifactError(error instanceof Error && error.message ? error.message : "The saved artifact could not be restored.");
+        while (isCurrent()) {
+          try {
+            const artifact = await plotApiClient.getArtifact(restoredArtifactId, { signal: controller.signal });
+            if (!isCurrent()) return;
+            setGeneratedArtifact(artifact);
+            setArtifactError("");
+            return;
+          } catch (error) {
+            if (!isCurrent() || (error instanceof DOMException && error.name === "AbortError")) return;
+            setArtifactError(error instanceof Error && error.message ? error.message : "The saved artifact could not be restored.");
+            if (!retrySelectedArtifact || (error instanceof PlotApiError && [401, 403, 404].includes(error.status))) return;
+            await abortableDelay(delay, controller.signal);
+            delay = Math.min(delay * 2, 4_000);
+          }
         }
       } finally {
-        if (!controller.signal.aborted) setArtifactLoading(false);
+        if (isCurrent()) setArtifactLoading(false);
       }
     }
-    void restoreArtifact();
+    void restoreArtifact().catch(() => undefined);
     return () => controller.abort();
-  }, [artifactId]);
+  }, [artifactId, retrySelectedArtifact]);
 
   const currentArtifact = historicalArtifact?.artifact ?? generatedArtifact;
   const currentArtifactId = currentArtifact?.id ?? null;

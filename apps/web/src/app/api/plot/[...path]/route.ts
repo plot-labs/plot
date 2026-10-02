@@ -110,6 +110,9 @@ export async function proxyPlotRequest(
   upstreamResponse.headers.forEach((value, key) => {
     if (allowedResponseHeaders.has(key.toLowerCase())) responseHeaders.set(key, value);
   });
+  if (request.method === "GET" && path.length === 3 && path[0] === "agent-runs" && path[2] === "stream") {
+    responseHeaders.set("Cache-Control", "no-store, no-transform");
+  }
   const location = responseHeaders.get("location");
   if (location) {
     try {
@@ -225,6 +228,7 @@ function isAllowed(method: string, path: string[]): boolean {
   if (method === "POST" && /^routines\/[0-9a-fA-F-]+\/run$/.test(route)) return true;
   if (method === "POST" && route === "agent-runs") return true;
   if (method === "GET" && route === "agent-runs/models") return true;
+  if (method === "GET" && /^agent-runs\/[0-9a-fA-F-]+\/stream$/.test(route)) return true;
   if (method === "GET" && /^agent-runs\/[0-9a-fA-F-]+$/.test(route)) return true;
   if (method === "GET" && /^agent-runs\/versions\/[^/]+(?:\/eligibility)?$/.test(route)) return true;
   if (method === "POST" && /^agent-runs\/versions\/[^/]+\/retry$/.test(route)) return true;

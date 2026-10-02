@@ -109,6 +109,27 @@ describe("TiptapDraftEditor", () => {
     expect(screen.queryByRole("dialog", { name: "Citation details" })).not.toBeInTheDocument();
   });
 
+  it.each([pack.title, null])("includes the displayed document title when saving from the chat panel (%s)", async (title) => {
+    const currentPack = { ...pack, title };
+    const onSaveArtifact = vi.fn().mockResolvedValue(currentPack);
+    const { rerender } = render(<TiptapDraftEditor pack={currentPack} onSaveArtifact={onSaveArtifact} saveRequestToken={0} />);
+    await screen.findByRole("textbox", { name: "Draft content" });
+    rerender(<TiptapDraftEditor pack={currentPack} onSaveArtifact={onSaveArtifact} saveRequestToken={1} />);
+    await waitFor(() => expect(onSaveArtifact).toHaveBeenCalledWith(expect.objectContaining({
+      title: title ?? "Generated artifact",
+      expectedRevisionNumber: pack.variant.revisionNumber,
+    })));
+  });
+
+  it("marks a restored unsaved draft as dirty instead of saved", async () => {
+    const onSaveStateChange = vi.fn();
+    render(<TiptapDraftEditor pack={pack} onSaveArtifact={vi.fn()} initialDraft={{
+      lexicalContent: pack.variant.lexicalContent, statements: [],
+    }} onSaveStateChange={onSaveStateChange} />);
+    await waitFor(() => expect(onSaveStateChange).toHaveBeenCalledWith("dirty"));
+    expect(onSaveStateChange).not.toHaveBeenCalledWith("saved");
+  });
+
   it("displays save confirmation status", async () => {
     const onSaveArtifact = vi.fn().mockResolvedValue(pack);
     const onSaveStateChange = vi.fn();
