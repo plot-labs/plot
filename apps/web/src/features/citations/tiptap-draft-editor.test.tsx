@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { TiptapDraftEditor } from "./tiptap-draft-editor";
@@ -87,13 +87,26 @@ describe("TiptapDraftEditor", () => {
     expect(screen.queryByRole("button", { name: "Save draft" })).not.toBeInTheDocument();
   });
 
-  it("renders document text and Astryx inline citations correctly", async () => {
+  it("renders document text and inline citations correctly", async () => {
     const onSaveArtifact = vi.fn().mockResolvedValue(pack);
     render(<TiptapDraftEditor pack={pack} onSaveArtifact={onSaveArtifact} />);
 
     expect(screen.getByRole("textbox", { name: "Draft content" })).toBeInTheDocument();
     expect(screen.getByText("Sign-in recovery now explains the next step.")).toBeInTheDocument();
     expect(screen.getByText("The release is delightful.")).toBeInTheDocument();
+  });
+
+  it("opens citations by keyboard and returns focus without nested links", async () => {
+    render(<TiptapDraftEditor pack={pack} onSaveArtifact={vi.fn()} />);
+    const trigger = await screen.findByRole("button", { name: "Citation 1: PR #184" });
+    expect(trigger.querySelector("a, button")).toBeNull();
+    fireEvent.keyDown(trigger, { key: "Enter" });
+    const dialog = await screen.findByRole("dialog", { name: "Citation details" });
+    await waitFor(() => expect(dialog).toHaveFocus());
+    expect(screen.getByRole("link", { name: "Open" })).toHaveAttribute("href", "https://github.com/acme/plot/pull/184");
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(trigger).toHaveFocus());
+    expect(screen.queryByRole("dialog", { name: "Citation details" })).not.toBeInTheDocument();
   });
 
   it("displays save confirmation status", async () => {

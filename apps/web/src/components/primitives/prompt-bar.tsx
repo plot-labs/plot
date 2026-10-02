@@ -1,6 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Command } from "@/components/ui/command";
+import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
+import { ModelSelectorInput, ModelSelectorList, ModelSelectorItem, ModelSelectorName } from "@/components/ai-elements/model-selector";
+import { PromptInput, PromptInputTextarea, PromptInputSubmit } from "@/components/ai-elements/prompt-input";
 import { createShader, playSweep, accentChain, ACCENTS } from "glimm";
 import type { ChatReasoningEffort } from "@plot/api-client";
 import { ChatModelIcon, type ChatModelProvider } from "@/features/chat/chat-model-icon";
@@ -226,7 +230,7 @@ export default function PromptBar({
   /** hero sizing: a multi-line input with controls on their own row */
   tall?: boolean;
   placeholder?: string;
-  onSend?: (text: string) => void;
+  onSend?: (text: string) => void | boolean;
   ariaLabel?: string;
   sendLabel?: string;
   extraControls?: React.ReactNode;
@@ -275,7 +279,7 @@ export default function PromptBar({
   const modelRef = useRef<HTMLButtonElement>(null);
   const modelMenuRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  const modelRowRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const modelRowRefs = useRef<(HTMLDivElement | null)[]>([]);
   const glimmRef = useRef<HTMLCanvasElement>(null);
   const shaderRef = useRef<ReturnType<typeof createShader> | null>(null);
   const sweepingRef = useRef(false);
@@ -591,21 +595,23 @@ export default function PromptBar({
   const canSend = !disabled && (draft.trim().length > 0 || attachments.length > 0);
   const send = () => {
     if (!canSend) return;
-    onSend?.(draft.trim());
+    if (onSend?.(draft.trim()) === false) return;
     setDraft("");
     setAttachments([]);
     closeMenus();
   };
 
   return (
-    <div
+    <PromptInput
+      onSubmit={send}
       data-promptbar
       className={demo ? "flex min-h-[384px] w-full max-w-105 flex-col justify-end pb-8" : "w-full"}
       onPointerDownCapture={takeOver}
       onKeyDownCapture={takeOver}
     >
+      <Popover open={modelOpen} onOpenChange={(open) => {setModelOpen(open);if (!open) {setEffortOpen(false);setModelQuery("");}}}>
       {/* composer is the anchor for the menus */}
-      <div ref={composerAnchorRef} className="relative">
+      <PopoverAnchor asChild><div ref={composerAnchorRef} className="relative">
       {/* ── @ / slash menu ─────────────────────────────── */}
       {menu && (
         <div
@@ -692,27 +698,27 @@ export default function PromptBar({
       )}
 
       {/* ── model menu ─────────────────────────────────── */}
-      {modelOpen && (
-        <div
+        <PopoverContent
+          data-promptbar
+          side={modelMenuPlacement}
+          align="start"
+          alignOffset={modelMenuLeft}
+          sideOffset={modelMenuPlacement === "top" ? 8 : -6}
+          onCloseAutoFocus={(event) => {event.preventDefault();inputRef.current?.focus();}}
+          onOpenAutoFocus={(event) => {event.preventDefault();modelMenuRef.current?.querySelector<HTMLInputElement>("input")?.focus();}}
           ref={modelMenuRef}
           onMouseLeave={() => setModelHovered(null)}
-          className="absolute z-30 w-72 overflow-visible rounded-[12px] border border-line bg-surface shadow-overlay backdrop-blur-md"
-          style={{
-            left: modelMenuLeft,
-            ...(modelMenuPlacement === "top"
-              ? { bottom: "calc(100% + 8px)", transformOrigin: "bottom right" }
-              : { top: "calc(100% - 6px)", transformOrigin: "top right" }),
-            animation: "pop-in 180ms cubic-bezier(0.23,1,0.32,1) both",
-          }}
+          className="z-30 w-72 p-0 overflow-visible rounded-[12px] border border-line bg-surface shadow-overlay backdrop-blur-md"
         >
+          <Command shouldFilter={false} className="overflow-visible bg-transparent text-ink [&_[cmdk-input-wrapper]]:contents [&_[cmdk-input-wrapper]>svg]:hidden">
           <div className="border-b border-line p-2">
             <div className="flex h-8 items-center gap-2 rounded-[7px] bg-field px-2.5 text-ink-3">
               <Icon size={14}><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></Icon>
-              <input
+              <ModelSelectorInput
                 autoFocus
                 value={modelQuery}
-                onChange={(event) => {
-                  setModelQuery(event.target.value);
+                onValueChange={(value) => {
+                  setModelQuery(value);
                   setModelHovered(null);
                 }}
                 onKeyDown={(event) => {
@@ -726,11 +732,11 @@ export default function PromptBar({
                 }}
                 placeholder="Search models..."
                 aria-label="Search models"
-                className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-3"
+                className="h-8 min-w-0 flex-1 rounded-none bg-transparent p-0 text-[13px] text-ink outline-none placeholder:text-ink-3"
               />
             </div>
           </div>
-          <div className="relative max-h-[280px] overflow-y-auto p-1.5" role="listbox" aria-label="Available models">
+          <ModelSelectorList className="relative max-h-[280px] overflow-y-auto p-1.5" label="Available models">
           {/* single gliding highlight — floats to the hovered / selected row */}
           <span
             aria-hidden
@@ -744,9 +750,9 @@ export default function PromptBar({
             }}
           />
           {filteredModels.map((item, i) => (
-            <button
+            <ModelSelectorItem
               key={item.id}
-              type="button"
+              value={item.id}
               role="option"
               aria-selected={item.id === model.id}
               ref={(el) => {
@@ -754,29 +760,30 @@ export default function PromptBar({
               }}
               onMouseDown={(event) => event.preventDefault()}
               onMouseEnter={() => setModelHovered(i)}
-              onClick={() => {
+              onSelect={() => {
                 selectModel(item);
                 inputRef.current?.focus();
               }}
-              className="relative z-10 flex w-full items-start gap-2.5 rounded-[8px] px-2.5 py-2 text-left"
+              className="relative z-10 flex w-full items-start gap-2.5 rounded-[8px] px-2.5 py-2 text-left data-[selected=true]:bg-hover data-[selected=true]:text-ink"
             >
               <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center text-ink">
                 <ChatModelIcon className="size-4" provider={item.provider} />
               </span>
               <span className="flex min-w-0 flex-1 flex-col">
-                <span className="text-[13px] font-medium text-ink">{item.label}</span>
+                <ModelSelectorName className="text-[13px] font-medium text-ink">{item.label}</ModelSelectorName>
                 <span className="text-[11.5px] leading-4 text-ink-3">{item.description}</span>
                 <span className="text-[10px] leading-4 text-ink-3/75">{item.pricing}</span>
               </span>
               <span className={`mt-1 shrink-0 text-ink ${item.id === model.id ? "" : "invisible"}`}>
                 <Icon size={13} strokeWidth={2.5}><path d="M20 6L9 17l-5-5" /></Icon>
               </span>
-            </button>
+            </ModelSelectorItem>
           ))}
           {filteredModels.length === 0 ? (
             <div className="px-3 py-6 text-center text-[12px] text-ink-3">No models found.</div>
           ) : null}
-          </div>
+          </ModelSelectorList>
+          </Command>
           {reasoningEnabled ? (
             <div className="relative border-t border-line px-2 pb-2 pt-2">
               <button
@@ -831,8 +838,7 @@ export default function PromptBar({
               ) : null}
             </div>
           ) : null}
-        </div>
-      )}
+        </PopoverContent>
 
       {/* ── composer ───────────────────────────────────── */}
       <div
@@ -958,7 +964,7 @@ export default function PromptBar({
             /
           </button>
 
-          <textarea
+          <PromptInputTextarea
             ref={inputRef}
             rows={1}
             value={draft}
@@ -997,10 +1003,7 @@ export default function PromptBar({
                 closeMenus();
                 return;
               }
-              if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-                event.preventDefault();
-                send();
-              }
+
             }}
             placeholder={listening ? "Listening…" : placeholder ?? "Write a message…"}
             aria-label={ariaLabel}
@@ -1068,11 +1071,9 @@ export default function PromptBar({
           </button>
 
           {/* send — tactile square (round in the pill variant) */}
-          <button
-            type="button"
+          <PromptInputSubmit
             aria-label={sendLabel}
             disabled={!canSend}
-            onClick={send}
             className={`flex size-7 shrink-0 items-center justify-center transition-[background-color,color,transform] duration-200 enabled:active:scale-[0.94] ${
               pill ? "rounded-full" : "rounded-[8px]"
             } ${wide ? "col-start-6 row-start-2" : "col-start-6 row-start-1"} ${sendButtonClassName || ""}`}
@@ -1086,11 +1087,12 @@ export default function PromptBar({
             }
           >
             <Icon size={16} strokeWidth={2.4}><path d="M12 19V5M5 12l7-7 7 7" /></Icon>
-          </button>
+          </PromptInputSubmit>
         </div>
       </div>
-      </div>
-    </div>
+      </div></PopoverAnchor>
+      </Popover>
+    </PromptInput>
   );
 }
 

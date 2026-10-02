@@ -1,12 +1,7 @@
 "use client";
 
-import {
-  ChatMessage,
-  ChatMessageBubble,
-  ChatMessageMetadata,
-  ChatToolCalls,
-} from "@astryxdesign/core/Chat";
-import { Text } from "@astryxdesign/core/Text";
+import {Message, MessageContent, MessageActions} from "@/components/ai-elements/message";
+import {Tool, ToolHeader, type ToolState} from "@/components/ai-elements/tool";
 import { ChevronLeft, ChevronRight, LoaderCircle, RotateCcw } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -158,11 +153,11 @@ export function AgentActivityDetail({
         title: citation.title || "Source",
         url: citation.url,
       }));
-  const toolStatus = error || isFailed || isNeedsConnection
-    ? "error"
+  const toolState: ToolState = error || isFailed || isNeedsConnection
+    ? "output-error"
     : isComplete
-      ? "complete"
-      : "running";
+      ? "output-available"
+      : status === "QUEUED" ? "input-streaming" : "input-available";
 
   const currentVersionIndex = versions.length > 0 && selectedVersionId
     ? Math.max(0, versions.findIndex((v) => v.id === selectedVersionId))
@@ -170,19 +165,30 @@ export function AgentActivityDetail({
 
   return (
     <section aria-label="Agent request details">
-      <ChatMessage sender="assistant">
-        <ChatMessageBubble
-          variant="ghost"
+      <Message from="assistant">
+        <MessageContent
           className="w-full min-w-0 max-w-full"
-          metadata={
-            <ChatMessageMetadata
-              className="mt-3 whitespace-nowrap"
-              timestamp={run ? <time dateTime={new Date(run.createdAt).toISOString()} className="whitespace-nowrap">{formatChatTime(run.createdAt)}</time> : undefined}
-              footer={
+        >
+          <p className="whitespace-pre-wrap text-sm leading-6 text-black/75 dark:text-white/78">
+            {responseText || (linkedArtifact ? "The artifact is ready below." : instruction ? agentProgressLabel(status) : "Plot is preparing the request…")}
+          </p>
+
+
+          {(linkedArtifact || busy || isFailed || isNeedsConnection) ? (
+            <Tool>
+              <ToolHeader title={linkedArtifact ? "Create artifact" : "Process request"} state={toolState} errorText={error || (isNeedsConnection ? "Repository connection required." : isFailed ? "The response could not be completed." : undefined)}/>
+            </Tool>
+          ) : null}
+          <ChatSourceCitations sources={citationSources} totalCount={citationCount} />
+          {artifactAction ? <div className="mt-4">{artifactAction}</div> : null}
+        </MessageContent>
+          <MessageActions className="mt-[10px] [[role=log]_&]:mt-2 gap-1 whitespace-nowrap px-4 text-[12px] leading-[1.6667] text-[light-dark(#4e606f,#aaafb5)]">
+            {run ? <span><time dateTime={new Date(run.createdAt).toISOString()} className="whitespace-nowrap">{formatChatTime(run.createdAt)}</time></span> : null} {run ? <span>·</span> : null}
+            
                 <div className="flex items-center gap-1.5 whitespace-nowrap text-black/50 dark:text-white/50">
-                  <Text type="supporting" color="secondary" className="mr-1">
+                  <span className="mr-1 text-[12px] text-[light-dark(#4e606f,#aaafb5)]">
                     Plot
-                  </Text>
+                  </span>
                     {retryEligibility?.eligible && (
                       <button
                         type="button"
@@ -228,29 +234,10 @@ export function AgentActivityDetail({
                       </div>
                     )}
                   </div>
-              }
-            />
-          }
-        >
-          <p className="whitespace-pre-wrap text-sm leading-6 text-black/75 dark:text-white/78">
-            {responseText || (linkedArtifact ? "The artifact is ready below." : instruction ? agentProgressLabel(status) : "Plot is preparing the request…")}
-          </p>
 
+          </MessageActions>
 
-          {(linkedArtifact || busy || isFailed || isNeedsConnection) ? (
-            <ChatToolCalls
-              calls={[{
-                name: linkedArtifact ? "Create artifact" : "Process request",
-                status: toolStatus,
-                errorMessage: error || (isNeedsConnection ? "Repository connection required." : isFailed ? "The response could not be completed." : undefined),
-              }]}
-              defaultIsExpanded={false}
-            />
-          ) : null}
-          <ChatSourceCitations sources={citationSources} totalCount={citationCount} />
-          {artifactAction ? <div className="mt-4">{artifactAction}</div> : null}
-        </ChatMessageBubble>
-      </ChatMessage>
+      </Message>
       {error ? <ErrorNotice message={error} /> : null}
       {(isFailed || isNeedsConnection) && !error ? (
         <ErrorNotice message={isNeedsConnection ? `Repository connection required. Reconnect repository access to proceed.` : "Plot could not complete this response. It remains available in chat history."} />

@@ -1,5 +1,3 @@
-import "@astryxdesign/core/astryx.css";
-
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 

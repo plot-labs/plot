@@ -1,6 +1,6 @@
 "use client";
 
-import { Citation } from "@astryxdesign/core/Citation";
+import {Source} from "@/components/ai-elements/sources";
 import { ExternalLink, X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 
@@ -134,15 +134,8 @@ export function SourcesPopover({ sources }: SourcesPopoverProps) {
             <ol className="mt-4 space-y-2" aria-label="Current sources">
               {uniqueSources.map((source, index) => (
                 <li key={source.evidenceId} className="rounded-xl border border-black/[0.08] px-3 py-2.5 dark:border-white/10">
-                  <Citation
-                    source={{
-                      title: source.sourceLabel,
-                      url: source.originalUrl ?? undefined,
-                    }}
-                    number={index + 1}
-                    variant="label"
-                    className="max-w-full"
-                  />
+                  <Source title={source.sourceLabel} href={source.originalUrl ?? undefined} role="doc-noteref" aria-label={`Citation ${index + 1}: ${source.sourceLabel}`} className="ml-0.5 max-w-full"/>
+
                   {source.provider === "USER_CONFIRMED" ? (
                     <p className="mt-1 text-[11px] text-black/45 dark:text-white/45">Confirmed in Plot</p>
                   ) : null}
