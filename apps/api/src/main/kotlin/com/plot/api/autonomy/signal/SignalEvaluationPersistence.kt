@@ -34,8 +34,6 @@ data class SignalEvaluationRecord(
 class SignalEvaluationPersistence(
 	private val sql: SqlExecutor,
 	private val uuidGenerator: UuidGenerator,
-	@Value("\${plot.autonomy.signal-evaluator.enabled:false}")
-	val signalEvaluatorEnabled: Boolean = false,
 	@Value("\${plot.autonomy.new-execution-writer.enabled:false}")
 	val newExecutionWriterEnabled: Boolean = false,
 ) {

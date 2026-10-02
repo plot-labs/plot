@@ -1,27 +1,15 @@
 package com.plot.api.github
 
 import java.util.UUID
-import org.springframework.stereotype.Component
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionSynchronization
 import org.springframework.transaction.support.TransactionSynchronizationManager
 
-interface GitHubReleaseRetryDispatcher {
-	fun dispatch()
-}
-
-@Component
-class DefaultGitHubReleaseRetryDispatcher(
-	private val releaseDraftDispatcher: GitHubReleaseDraftDispatcher,
-) : GitHubReleaseRetryDispatcher {
-	override fun dispatch() = releaseDraftDispatcher.dispatch()
-}
-
 @Service
 class GitHubReleaseRetryService(
 	private val leasePersistence: GitHubReleaseLeaseStore,
-	private val dispatcher: GitHubReleaseRetryDispatcher,
+	private val dispatcher: GitHubReleaseDraftDispatcher,
 ) {
 	@Transactional
 	fun retry(

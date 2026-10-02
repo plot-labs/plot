@@ -272,6 +272,34 @@ class GitHubReleaseDraftRecoveryIntegrationTest {
 		)
 	}
 
+	@Test
+	fun retryAndRangeSelectionDispatchOnlyCommittedRequests() {
+		for (selectRange in listOf(false, true)) {
+			for (rollback in listOf(false, true)) {
+				val requestId = insertClaimedRequest()
+				leasePersistence.finish(requestId, 1, GitHubReleaseDraftStatus.FAILED, "TEST_FAILURE")
+				retryDispatchProbe.reset()
+
+				TransactionTemplate(transactionManager).executeWithoutResult { transaction ->
+					if (selectRange) {
+						retryService.selectRange(requestId, devContext.devWorkspaceId, 2, "a".repeat(40), "b".repeat(40))
+					} else {
+						retryService.retry(requestId, devContext.devWorkspaceId, 2)
+					}
+					assertEquals(0, retryDispatchProbe.dispatches.get())
+					if (rollback) transaction.setRollbackOnly()
+				}
+
+				assertEquals(if (rollback) 0 else 1, retryDispatchProbe.dispatches.get())
+				assertEquals(if (rollback) null else requestId, retryDispatchProbe.visibleQueuedRunId.get())
+				assertEquals(
+					if (rollback) "FAILED" else "QUEUED",
+					jdbcTemplate.queryForObject("select status from github_release_draft_requests where id = ?", String::class.java, requestId),
+				)
+			}
+		}
+	}
+
 	private fun insertObservationForRequest(requestId: UUID): UUID {
 		val scopeId = jdbcTemplate.queryForObject(
 			"select source_scope_id from github_release_draft_requests where id = ?",
@@ -413,7 +441,7 @@ class GitHubReleaseDraftRecoveryIntegrationTest {
 class CommitVisibleArtifactWorkflowRetryDispatcher(
 	private val jdbcTemplate: JdbcTemplate,
 	transactionManager: PlatformTransactionManager,
-) : GitHubReleaseRetryDispatcher {
+) : GitHubReleaseDraftDispatcher {
 	private val requiresNew = TransactionTemplate(transactionManager).apply {
 		propagationBehavior = TransactionDefinition.PROPAGATION_REQUIRES_NEW
 	}
