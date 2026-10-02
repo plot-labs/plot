@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from "react";
 
-import type { ChatAgentRun, SourceReference } from "@plot/api-client";
+import type { ChatAgentRun } from "@plot/api-client";
 
 export type PendingAgentRequest = { key: string; fingerprint: string };
 
@@ -15,33 +15,6 @@ export function chatHref(
   if (agentRunId) params.set("agent", agentRunId);
   if (artifactId) params.set("artifact", artifactId);
   return `/chat?${params.toString()}`;
-}
-
-export function toComposerReferences(references: SourceReference[]) {
-  return references.map((reference) => ({
-    id: reference.id,
-    label: `${reference.repositoryLabel} / ${reference.sourceLabel}`,
-    available: true,
-    groupId: reference.sourceScopeId,
-    url: reference.originalUrl ?? undefined,
-  }));
-}
-
-export function selectReferences(references: SourceReference[], ids: string[]) {
-  return references.filter((reference) => ids.includes(reference.id));
-}
-
-export function resolveComposerReferenceIds(
-  references: { id: string; available: boolean }[],
-  selectedIds: string[],
-): string[] {
-  if (selectedIds.length > 0) return selectedIds;
-  return references.filter((reference) => reference.available).map((reference) => reference.id);
-}
-
-export function validateSourceSelection(selected: SourceReference[], sourceError: string) {
-  if (sourceError && selected.length > 0) return sourceError;
-  return "";
 }
 
 export function pendingAgentRequestKey(ref: { current: PendingAgentRequest | null }, instruction: string, writingBlockIds: string[], settings = "") {

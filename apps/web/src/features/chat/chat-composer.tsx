@@ -11,12 +11,10 @@ import {
   parseChatModel,
   parseChatReasoningEffort,
 } from "./chat-models";
-import { resolveComposerReferenceIds } from "./chat-workspace-utils";
 
 type ChatComposerProps = {
   onSubmit: (
     message: string,
-    referenceIds: string[],
     skillIds: string[],
     model: ChatModel,
     reasoningEffort: ChatReasoningEffort,
@@ -24,7 +22,6 @@ type ChatComposerProps = {
   variant?: "center" | "dock";
   id?: string;
   placeholder?: string;
-  references?: { id: string; label: string; available: boolean; groupId?: string; url?: string }[];
   busy?: boolean;
   canGenerate?: boolean;
 };
@@ -34,7 +31,6 @@ export function ChatComposer({
   variant = "dock",
   id,
   placeholder,
-  references = [],
   busy = false,
   canGenerate = true,
 }: ChatComposerProps) {
@@ -157,7 +153,7 @@ export function ChatComposer({
     }
 
     submittingRef.current = true;
-    onSubmit(trimmed, resolveComposerReferenceIds(references, []), skillIds, model, effectiveReasoningEffort);
+    onSubmit(trimmed, skillIds, model, effectiveReasoningEffort);
     setSkillIds([]);
     queueMicrotask(() => {
       submittingRef.current = false;

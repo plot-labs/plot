@@ -54,6 +54,8 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.context.TestConfiguration
@@ -65,6 +67,8 @@ import org.springframework.core.task.TaskExecutor
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.annotation.DirtiesContext
 import org.springframework.test.context.ActiveProfiles
+import org.springframework.test.context.DynamicPropertyRegistry
+import org.springframework.test.context.DynamicPropertySource
 import org.springframework.test.context.TestPropertySource
 
 @SpringBootTest
@@ -87,6 +91,19 @@ import org.springframework.test.context.TestPropertySource
 ])
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class AgentRunWorkerIntegrationTest {
+	companion object {
+		@JvmStatic
+		@DynamicPropertySource
+		fun liveWorkerProperties(registry: DynamicPropertyRegistry) {
+			if (System.getenv("PLOT_EVAL_LIVE") == "true") {
+				val defaults = com.plot.api.agent.AgentProperties()
+				registry.add("plot.routine-agent.claim-timeout") { defaults.claimTimeout }
+				registry.add("plot.routine-agent.retry-initial-delay") { defaults.retryInitialDelay }
+				registry.add("plot.routine-agent.max-attempts") { defaults.maxAttempts }
+			}
+		}
+	}
+
 	@Autowired private lateinit var devBootstrapService: DevBootstrapService
 	@Autowired private lateinit var devContext: DevContext
 	@Autowired private lateinit var jdbcTemplate: JdbcTemplate
@@ -103,6 +120,10 @@ class AgentRunWorkerIntegrationTest {
 	@Autowired private lateinit var agentModel: ScriptedAgentRuntime
 	@Autowired private lateinit var artifactWorkflowModel: AgentArtifactWorkflowModelGateway
 	@Autowired private lateinit var polarCredits: AgentPolarCreditProvider
+	@Autowired private lateinit var readTools: com.plot.api.agent.ReadOnlyAgentTools
+	@Autowired private lateinit var agentProperties: com.plot.api.agent.AgentProperties
+	@Autowired private lateinit var liveTransport: com.plot.api.ai.provider.KoogModelTransport
+	@Autowired private lateinit var postgresContainer: org.testcontainers.postgresql.PostgreSQLContainer
 
 	@BeforeEach
 	fun isolateScenario() {
@@ -1198,6 +1219,256 @@ class AgentRunWorkerIntegrationTest {
 		assertEquals(0, count("select count(*) from generation_runs where agent_run_id = ?", admitted.agentRunId))
 	}
 
+	@Test
+	fun `native chat searches and reads without SEED then retries frozen evidence`() {
+		val source = insertSource("acme/native-chat-selection")
+		val block = insertBlock(source, "Orbit release", "Immutable Orbit evidence")
+		val unreadBlock = insertBlock(source, "Unrelated billing", "Not part of the frozen evidence")
+		val chat = chatAdmission.admit(CreateChatAgentRunRequest("Draft Orbit release notes"), "native-chat-${UUID.randomUUID()}")
+		setChatSelectionBudget(chat.id)
+		assertEquals(0, count("select count(*) from agent_run_inputs where agent_run_id = ?", chat.id))
+		var calls = 0
+		agentModel.nativeRuntime = nativeRuntime {
+			when (calls++) {
+				0 -> nativeCall("SEARCH_WRITING_BLOCKS", """{"sourceScopeId":"${source.scopeId}","query":"Orbit"}""")
+				1 -> nativeCall("READ_WRITING_BLOCKS", """{"sourceScopeId":"${source.scopeId}","writingBlockIds":["$block"]}""")
+				else -> {
+					val inputId = jdbcTemplate.queryForObject("select id from agent_run_inputs where agent_run_id = ? limit 1", UUID::class.java, chat.id)
+					nativeCall("CREATE_ARTIFACT", """{"selectedInputIds":["$inputId"]}""")
+				}
+			}
+		}
+		assertTrue(agentWorker.processOne())
+		artifactWorkflowWorker.drain()
+		assertEquals("SUCCEEDED", agentStatus(chat.id))
+		assertEquals(0, count("select count(*) from agent_run_inputs where agent_run_id = ? and input_kind = 'SEED'", chat.id))
+		assertEquals(1, count("select count(*) from agent_run_inputs where agent_run_id = ? and input_kind = 'TOOL_RESULT'", chat.id))
+		val originalInput = jdbcTemplate.queryForMap("select snapshot_body, content_hash from agent_run_inputs where agent_run_id = ?", chat.id)
+		val originalVersion = chatQueries.listTurnsForSession(chat.chatId).single().versions.single()
+		assertEquals(1, originalVersion.citations.size)
+		val retry = chatAdmission.retry(originalVersion.id, "native-chat-retry-${UUID.randomUUID()}")
+		jdbcTemplate.update("update writing_blocks set body = 'Changed live body', content_hash = 'changed' where id = ?", block)
+		jdbcTemplate.update("update connections set status = 'DISABLED', status_changed_at = now() where workspace_id = ?", devContext.devWorkspaceId)
+		calls = 0
+		agentModel.nativeRuntime = nativeRuntime {
+			when (calls++) {
+				0 -> nativeCall("SEARCH_WRITING_BLOCKS", """{"sourceScopeId":"${source.scopeId}","query":"Orbit"}""")
+				1 -> nativeCall("READ_WRITING_BLOCKS", """{"sourceScopeId":"${source.scopeId}","writingBlockIds":["$block"]}""")
+				else -> ai.koog.prompt.message.Message.Assistant("Orbit release notes based on the frozen evidence.", ai.koog.prompt.message.ResponseMetaInfo.Empty)
+			}
+		}
+		assertTrue(agentWorker.processOne())
+		assertEquals(originalInput, jdbcTemplate.queryForMap("select snapshot_body, content_hash from agent_run_inputs where agent_run_id = ? limit 1", retry.agentRunId))
+		assertEquals(2, count("select count(*) from chat_execution_transcript_entries where envelope_id = (select id from chat_execution_envelopes where agent_run_id = ?)", chat.id))
+		assertEquals("SUCCEEDED", agentStatus(retry.agentRunId))
+		assertEquals(1, chatQueries.listTurnsForSession(chat.chatId).single().versions.last().citations.size)
+		assertTrue(artifactWorkflowModel.writerRequests.single().evidence.single().snapshotBody.contains("Immutable Orbit evidence"))
+		assertEquals("FROZEN_EVIDENCE_MISS", assertFailsWith<com.plot.api.agent.AgentToolAccessException> {
+			readTools.searchWritingBlocks(devContext.devWorkspaceId, retry.agentRunId, source.scopeId, "Unrecorded query", frozenReplay = true)
+		}.safeCode)
+		assertEquals("FROZEN_EVIDENCE_MISS", assertFailsWith<com.plot.api.agent.AgentToolAccessException> {
+			readTools.readWritingBlock(devContext.devWorkspaceId, retry.agentRunId, source.scopeId, unreadBlock, frozenReplay = true)
+		}.safeCode)
+		assertEquals(1, count("select count(*) from agent_run_inputs where agent_run_id = ?", retry.agentRunId))
+	}
+
+	@Test
+	fun `native empty research is bounded across batches and recovery with frozen replay unchanged`() {
+		val source = insertSource("acme/no-matching-evidence")
+		val block = insertBlock(source, "Billing", "Billing records")
+		val chat = chatAdmission.admit(CreateChatAgentRunRequest("Draft Neptune notes"), "native-empty-${UUID.randomUUID()}")
+		setChatSelectionBudget(chat.id)
+		var calls = 0
+		agentModel.nativeRuntime = nativeRuntime { prompt ->
+			when (calls++) {
+				0 -> ai.koog.prompt.message.Message.Assistant(parts =
+					nativeCall("SEARCH_WRITING_BLOCKS", """{"sourceScopeId":"${source.scopeId}","query":"Neptune"}""").parts +
+					nativeCall("SEARCH_WRITING_BLOCKS", """{"sourceScopeId":"${source.scopeId}","query":"teleport"}""").parts,
+					metaInfo = ai.koog.prompt.message.ResponseMetaInfo.Empty)
+				1 -> throw AgentDecisionException("PROVIDER_UNAVAILABLE", true, "Scripted retry")
+				2 -> ai.koog.prompt.message.Message.Assistant(parts =
+					nativeCall("SEARCH_WRITING_BLOCKS", """{"sourceScopeId":"${source.scopeId}","query":"Billing"}""").parts +
+					nativeCall("READ_WRITING_BLOCKS", """{"sourceScopeId":"${source.scopeId}","writingBlockIds":["$block"]}""").parts +
+					nativeCall("CREATE_ARTIFACT", """{"selectedInputIds":[]}""").parts,
+					metaInfo = ai.koog.prompt.message.ResponseMetaInfo.Empty)
+				else -> {
+					assertTrue(prompt.contains("This request was NOT executed"))
+					assertTrue(prompt.contains("Two earlier consecutive searches"))
+					assertTrue(prompt.contains("Artifact selection is empty"))
+					ai.koog.prompt.message.Message.Assistant("These searches found no relevant evidence. Please provide the release details.", ai.koog.prompt.message.ResponseMetaInfo.Empty)
+				}
+			}
+		}
+		assertTrue(agentWorker.processOne())
+		assertEquals("QUEUED", agentStatus(chat.id))
+		assertTrue(agentWorker.processOne())
+		assertEquals("SUCCEEDED", agentStatus(chat.id))
+		assertEquals(2, count("select count(*) from agent_steps where agent_run_id = ? and tool_name = 'SEARCH_WRITING_BLOCKS' and status = 'SUCCEEDED'", chat.id))
+		assertEquals(3, count("select count(*) from agent_steps where agent_run_id = ? and status = 'FAILED'", chat.id))
+		assertEquals(4, count("select tool_call_count from agent_runs where id = ?", chat.id))
+		assertEquals(0, count("select count(*) from agent_run_inputs where agent_run_id = ?", chat.id))
+		assertEquals(0, count("select count(*) from generation_runs where agent_run_id = ?", chat.id))
+		val originalVersion = chatQueries.listTurnsForSession(chat.chatId).single().versions.single()
+		val retry = chatAdmission.retry(originalVersion.id, "native-empty-retry-${UUID.randomUUID()}")
+		agentModel.nativeRuntime = nativeRuntime {
+			nativeCall("SEARCH_WRITING_BLOCKS", """{"sourceScopeId":"${source.scopeId}","query":"Unrecorded"}""")
+		}
+		assertTrue(agentWorker.processOne())
+		assertEquals("FROZEN_EVIDENCE_MISS", agentFailure(retry.agentRunId))
+	}
+
+	@Test
+	fun `empty research guard permits positive or unproven results and excludes seeded and required runs`() {
+		val source = insertSource("acme/research-boundary")
+		val block = insertBlock(source, "Orbit", "Relevant Orbit evidence")
+		val cases = mapOf("positive" to null, "missing" to "{}", "error" to "{\"error\":\"unavailable\"}",
+			"wrong-type" to "{\"matches\":\"[]\"}", "truncated" to """{"summary":"${"x".repeat(2500)}","matches":[{"id":"$block"}]}""", "seeded" to null, "required" to null)
+		cases.forEach { (case, result) ->
+			val chat = chatAdmission.admit(CreateChatAgentRunRequest("Draft Orbit notes",
+				writingBlockIds = if (case == "seeded") listOf(block) else emptyList()), "boundary-$case-${UUID.randomUUID()}")
+			setChatSelectionBudget(chat.id)
+			if (case == "required") jdbcTemplate.update("update chat_execution_envelopes set generation_settings = generation_settings || '{\"responseMode\":\"ARTIFACT_REQUIRED\"}'::jsonb where agent_run_id = ?", chat.id)
+			var calls = 0
+			agentModel.nativeRuntime = nativeRuntime {
+				when (calls++) {
+					0 -> nativeCall("SEARCH_WRITING_BLOCKS", """{"sourceScopeId":"${source.scopeId}","query":"Neptune"}""")
+					1 -> nativeCall("SEARCH_WRITING_BLOCKS", """{"sourceScopeId":"${source.scopeId}","query":"${if (case == "positive") "Orbit" else "teleport"}"}""")
+					2 -> if (case == "positive") nativeCall("SEARCH_WRITING_BLOCKS", """{"sourceScopeId":"${source.scopeId}","query":"Neptune"}""") else {
+						if (result != null) jdbcTemplate.update("update agent_steps set result = ?::jsonb where agent_run_id = ? and sequence = 1", result, chat.id)
+						nativeCall("READ_WRITING_BLOCKS", """{"sourceScopeId":"${source.scopeId}","writingBlockIds":["$block"]}""")
+					}
+					3 -> if (case == "positive") nativeCall("READ_WRITING_BLOCKS", """{"sourceScopeId":"${source.scopeId}","writingBlockIds":["$block"]}""") else {
+						val inputId = jdbcTemplate.queryForObject("select id from agent_run_inputs where agent_run_id = ? limit 1", UUID::class.java, chat.id)
+						nativeCall("CREATE_ARTIFACT", """{"selectedInputIds":["$inputId"]}""")
+					}
+					else -> {
+						val inputId = jdbcTemplate.queryForObject("select id from agent_run_inputs where agent_run_id = ? limit 1", UUID::class.java, chat.id)
+						nativeCall("CREATE_ARTIFACT", """{"selectedInputIds":["$inputId"]}""")
+					}
+				}
+			}
+			assertTrue(agentWorker.processOne(), case)
+			artifactWorkflowWorker.drain()
+			assertEquals("SUCCEEDED", agentStatus(chat.id), case)
+			assertEquals(1, count("select count(*) from agent_steps where agent_run_id = ? and tool_name = 'READ_WRITING_BLOCKS' and status = 'SUCCEEDED'", chat.id), case)
+		}
+	}
+
+	@Test
+	fun `empty research limit does not bypass unauthorized source denial`() {
+		val source = insertSource("acme/empty-unauthorized")
+		val chat = chatAdmission.admit(CreateChatAgentRunRequest("Draft Neptune notes"), "empty-unauthorized-${UUID.randomUUID()}")
+		setChatSelectionBudget(chat.id)
+		var calls = 0
+		agentModel.nativeRuntime = nativeRuntime {
+			val scope = if (calls++ < 2) source.scopeId else UUID.randomUUID()
+			nativeCall("SEARCH_WRITING_BLOCKS", """{"sourceScopeId":"$scope","query":"Neptune"}""")
+		}
+		assertTrue(agentWorker.processOne())
+		assertEquals("AGENT_INVALID_DECISION", agentFailure(chat.id))
+		assertEquals(2, count("select tool_call_count from agent_runs where id = ?", chat.id))
+		assertEquals(0, count("select count(*) from agent_steps where agent_run_id = ? and status = 'FAILED'", chat.id))
+	}
+
+	@Test
+	@Tag("live-eval")
+	@EnabledIfEnvironmentVariable(named = "PLOT_EVAL_LIVE", matches = "true")
+	fun `live chat general source selection`() = liveChatSelectionCase(
+		Case("general", "Explain how to write a clear product update in two sentences.", true, false),
+	)
+
+	@Test
+	@Tag("live-eval")
+	@EnabledIfEnvironmentVariable(named = "PLOT_EVAL_LIVE", matches = "true")
+	fun `live chat no-sources source selection`() = liveChatSelectionCase(
+		Case("no-sources", "Create release notes using evidence from my connected repositories.", false, false),
+	)
+
+	@Test
+	@Tag("live-eval")
+	@EnabledIfEnvironmentVariable(named = "PLOT_EVAL_LIVE", matches = "true")
+	fun `live chat english source selection`() = liveChatSelectionCase(
+		Case("english", "Create release notes for Orbit 2.4 from the connected repository.", true, true),
+	)
+
+	@Test
+	@Tag("live-eval")
+	@EnabledIfEnvironmentVariable(named = "PLOT_EVAL_LIVE", matches = "true")
+	fun `live chat korean source selection`() = liveChatSelectionCase(
+		Case("korean", "연결된 저장소를 근거로 Orbit 2.4 출시 노트를 한국어로 작성해줘.", true, true),
+	)
+
+	@Test
+	@Tag("live-eval")
+	@EnabledIfEnvironmentVariable(named = "PLOT_EVAL_LIVE", matches = "true")
+	fun `live chat no-match source selection`() = liveChatSelectionCase(
+		Case("no-match", "Create release notes for Neptune teleportation using the connected repository.", true, false),
+	)
+
+	private data class Case(val id: String, val instruction: String, val connected: Boolean, val artifact: Boolean)
+
+	private fun liveChatSelectionCase(case: Case) {
+		val defaults = com.plot.api.agent.AgentProperties()
+		assertEquals(defaults.claimTimeout, agentProperties.claimTimeout)
+		assertEquals(defaults.retryInitialDelay, agentProperties.retryInitialDelay)
+		assertEquals(defaults.maxAttempts, agentProperties.maxAttempts)
+		assertTrue(postgresContainer.isRunning)
+		jdbcTemplate.dataSource!!.connection.use { assertEquals(postgresContainer.jdbcUrl, it.metaData.url) }
+		jdbcTemplate.update("update connections set status = 'DISABLED', status_changed_at = now() where workspace_id = ?", devContext.devWorkspaceId)
+		val relevant = if (case.connected) {
+			val source = insertSource("acme/orbit-product")
+			val block = insertBlock(source, "Orbit 2.4 release", "Orbit 2.4 ships offline drafts and faster search. Released September 30, 2026.")
+			repeat(21) { insertBlock(source, "Billing record $it", "Unrelated historical billing statistics for account $it.") }
+			block
+		} else null
+		val chat = chatAdmission.admit(CreateChatAgentRunRequest(case.instruction), "live-selection-${case.id}-${UUID.randomUUID()}")
+		setChatSelectionBudget(chat.id)
+		assertEquals(0, count("select count(*) from agent_run_inputs where agent_run_id = ?", chat.id))
+		agentModel.nativeRuntime = com.plot.api.ai.provider.KoogAgentRuntime(liveTransport, tools.jackson.module.kotlin.jacksonObjectMapper())
+		assertEquals(defaults.maxAttempts, count("select max_attempts from agent_runs where id = ?", chat.id))
+		val attempts = mutableListOf<Map<String, String?>>()
+		repeat(defaults.maxAttempts) {
+			if (agentStatus(chat.id) == "QUEUED") {
+				val next = jdbcTemplate.queryForObject("select next_attempt_at from agent_runs where id = ?", java.sql.Timestamp::class.java, chat.id)
+				if (next != null) Thread.sleep(Duration.between(Instant.now(), next.toInstant()).toMillis().coerceAtLeast(0) + 50)
+				assertTrue(agentWorker.processOne(), jdbcTemplate.queryForMap("select status, attempt_count, max_attempts, next_attempt_at, claimed_by, claimed_at, failure_code from agent_runs where id = ?", chat.id).toString())
+				val attempt = chatQueries.getRun(chat.id)
+				attempts += mapOf("status" to attempt.status.name, "failureCode" to attempt.failureCode)
+			}
+		}
+		if (agentStatus(chat.id) == "RUNNING") artifactWorkflowWorker.drain()
+		val response = chatQueries.getRun(chat.id)
+		val steps = jdbcTemplate.queryForList("select tool_name, status, arguments::text as arguments, result::text as result from agent_steps where agent_run_id = ? order by sequence", chat.id)
+		val inputIds = jdbcTemplate.queryForList("select writing_block_id from agent_run_inputs where agent_run_id = ?", UUID::class.java, chat.id)
+		val result = mapOf("case" to case.id, "status" to response.status.name, "failureCode" to response.failureCode,
+			"model" to jdbcTemplate.queryForObject("select generation_settings ->> 'model' from chat_execution_envelopes where agent_run_id = ?", String::class.java, chat.id),
+			"attempts" to attempts, "counters" to jdbcTemplate.queryForMap("select attempt_count, model_call_count, tool_call_count from agent_runs where id = ?", chat.id),
+			"tools" to steps, "writingBlockIds" to inputIds, "artifact" to (response.artifactId != null), "responseText" to response.responseText)
+		println("CHAT_SELECTION_LIVE " + tools.jackson.module.kotlin.jacksonObjectMapper().writeValueAsString(result))
+		assertEquals("SUCCEEDED", agentStatus(chat.id), "${case.id}: ${response.failureCode}")
+		assertEquals(case.artifact, response.artifactId != null, case.id)
+		assertTrue(count("select model_call_count from agent_runs where id = ?", chat.id) <= 8)
+		assertTrue(count("select tool_call_count from agent_runs where id = ?", chat.id) <= 12)
+		if (case.artifact) {
+			assertEquals(listOf(relevant), inputIds.distinct(), case.id)
+			assertTrue(steps.any { it["tool_name"] == "SEARCH_WRITING_BLOCKS" }, case.id)
+			assertTrue(steps.any { it["tool_name"] == "READ_WRITING_BLOCKS" }, case.id)
+		} else {
+			assertTrue(inputIds.isEmpty(), case.id)
+			assertTrue(response.responseText.orEmpty().isNotBlank(), case.id)
+			if (case.id == "general") assertFalse(steps.any { it["tool_name"] in listOf("SEARCH_WRITING_BLOCKS", "READ_WRITING_BLOCKS") })
+			if (case.id == "no-match") {
+				assertTrue(steps.any { it["tool_name"] == "SEARCH_WRITING_BLOCKS" })
+				assertTrue(steps.count { it["tool_name"] == "SEARCH_WRITING_BLOCKS" && it["status"] == "SUCCEEDED" } <= 2)
+				assertFalse(steps.any { it["tool_name"] == "READ_WRITING_BLOCKS" && it["status"] == "SUCCEEDED" })
+			}
+		}
+	}
+
+	private fun setChatSelectionBudget(runId: UUID) {
+		jdbcTemplate.update("update agent_runs set budget_snapshot = budget_snapshot || '{\"maxModelCalls\":8,\"maxToolCalls\":12}'::jsonb where id = ?", runId)
+	}
+
 	private fun nativeRuntime(next: (String) -> ai.koog.prompt.message.Message.Assistant): AgentRuntime =
 		com.plot.api.ai.provider.KoogAgentRuntime(
 			ai.koog.prompt.llm.LLModel(ai.koog.prompt.llm.LLMProvider.OpenRouter, "test", listOf(ai.koog.prompt.llm.LLMCapability.Completion, ai.koog.prompt.llm.LLMCapability.Tools)),
@@ -1381,6 +1652,18 @@ class AgentRunWorkerIntegrationTest {
 		@Bean
 		@Primary
 		fun polarCreditProvider() = AgentPolarCreditProvider()
+
+		@Bean
+		@Primary
+		fun noOpAgentRunDispatcher(
+			@org.springframework.beans.factory.annotation.Qualifier("agentRunTaskExecutor") taskExecutor: TaskExecutor,
+			@org.springframework.context.annotation.Lazy worker: AgentRunWorker,
+			properties: com.plot.api.agent.AgentProperties,
+			@org.springframework.beans.factory.annotation.Qualifier("agentRunRetryExecutor") retryExecutor: java.util.concurrent.ScheduledExecutorService,
+		): com.plot.api.agent.AgentRunDispatcher = object : com.plot.api.agent.AgentRunDispatcher(taskExecutor, worker, properties, retryExecutor) {
+			override fun dispatch() {}
+			override fun scheduleDelayed(at: Instant) {}
+		}
 
 		@Bean
 		@Primary

@@ -7,15 +7,22 @@ import {ChatSourceCitations} from './chat-source-citations';
 const run:ChatAgentRun={id:'run',chatId:'chat',status:'QUEUED',failureCode:null,responseText:null,artifactId:null,artifact:null,instruction:'Release',createdAt:'2026-07-01T00:00:00Z',updatedAt:'2026-07-01T00:00:00Z'};
 describe('AI presentation',()=>{
  it('maps queued, running, completed artifact and failed status without changing the run',()=>{
-  const {container,rerender}=render(<AgentActivityDetail run={run} busy error="" instruction="Release" references={[]}/>);
+  const {container,rerender}=render(<AgentActivityDetail run={run} busy error="" instruction="Release"/>);
   expect(container.querySelector('[data-tool-state]')).toHaveAttribute('data-tool-state','input-streaming');
-  rerender(<AgentActivityDetail run={{...run,status:'RUNNING'}} busy error="" instruction="Release" references={[]}/>);
+  rerender(<AgentActivityDetail run={{...run,status:'RUNNING'}} busy error="" instruction="Release"/>);
   expect(container.querySelector('[data-tool-state]')).toHaveAttribute('data-tool-state','input-available');
-  rerender(<AgentActivityDetail run={{...run,status:'SUCCEEDED',artifactId:'artifact'}} busy={false} error="" instruction="Release" references={[]}/>);
+  rerender(<AgentActivityDetail run={{...run,status:'SUCCEEDED',artifactId:'artifact'}} busy={false} error="" instruction="Release"/>);
   expect(container.querySelector('[data-tool-state]')).toHaveAttribute('data-tool-state','output-available');
-  rerender(<AgentActivityDetail run={{...run,status:'FAILED'}} busy={false} error="" instruction="Release" references={[]}/>);
+  rerender(<AgentActivityDetail run={{...run,status:'FAILED'}} busy={false} error="" instruction="Release"/>);
   expect(container.querySelector('[data-tool-state]')).toHaveAttribute('data-tool-state','output-error');
   expect(screen.getByRole('alert')).toHaveTextContent('could not complete');
+ });
+ it('renders only response citations and leaves absent citations empty',()=>{
+  const {container,rerender}=render(<AgentActivityDetail run={{...run,status:'SUCCEEDED',responseText:'General answer'}} busy={false} error="" instruction="Question"/>);
+  expect(container.querySelectorAll('a')).toHaveLength(0);
+  rerender(<AgentActivityDetail run={{...run,status:'SUCCEEDED',responseText:'Grounded answer'}} busy={false} error="" instruction="Question" citations={[{id:'evidence-1',title:'Selected evidence',excerpt:'Selected excerpt',url:'https://example.com/1'},{id:'evidence-2',title:'Other evidence',excerpt:'Other excerpt',url:'https://example.com/2'}]}/>);
+  expect(screen.getByRole('link',{name:'Citation 1: Selected evidence'})).toHaveAttribute('href','https://example.com/1');
+  expect(screen.getByRole('link',{name:'Citation 2: Other evidence'})).toBeVisible();
  });
  it('keeps source labels and counts while rejecting unsafe URLs',()=>{
   const {container,rerender}=render(<ChatSourceCitations sources={[]}/>);

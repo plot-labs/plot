@@ -305,6 +305,20 @@ class AgentRunWorker(
 				val context = context()
 				val arguments = try {
 					validateDecision(decision, context.sources.map { it.id }.toSet(), context.inputs.map { it.id }.toSet()).also { validated ->
+						if (responseMode == AgentResponseMode.FLEXIBLE && !frozenReplay && context.inputs.isEmpty() &&
+							validated.action in setOf(AgentDecisionAction.SEARCH_WRITING_BLOCKS, AgentDecisionAction.READ_WRITING_BLOCKS)) {
+							val searches = queryPersistence.listSteps(run.workspaceId, run.id)
+								.filter { it.status == AgentStepStatus.SUCCEEDED && it.toolName == AgentDecisionAction.SEARCH_WRITING_BLOCKS.name }
+								.takeLast(2)
+							if (searches.size == 2 && searches.all { step ->
+								val matches = runCatching { objectMapper.readTree(step.resultJson).get("matches") }.getOrNull()
+								matches?.isArray == true && matches.isEmpty
+							}) {
+								throw InvalidAgentDecisionException(
+									"This request was NOT executed and produced no search or read result. Two earlier consecutive searches found no matches. Do not describe this rejected request as a performed search or an empty result. Stop source research, explain this limited search without claiming repository-wide absence, and ask for source material. Finish with text.",
+								)
+							}
+						}
 						if (validated.action == AgentDecisionAction.CREATE_ARTIFACT && !executionPolicy.isReleaseRun(run.workspaceId, run.id)) {
 							val inputs = queryPersistence.listAgentRunInputs(run.workspaceId, run.id).associateBy { it.id }
 							val selected = validated.selectedInputIds.map { inputs.getValue(it) }
