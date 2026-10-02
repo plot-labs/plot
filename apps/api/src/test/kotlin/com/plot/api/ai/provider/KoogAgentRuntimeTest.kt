@@ -1,5 +1,7 @@
 package com.plot.api.ai.provider
 
+import ai.koog.agents.core.tools.ToolDescriptor
+import ai.koog.agents.core.tools.ToolParameterType
 import ai.koog.prompt.Prompt
 import ai.koog.prompt.llm.LLMCapability
 import ai.koog.prompt.llm.LLMProvider
@@ -86,10 +88,69 @@ class KoogAgentRuntimeTest {
 		assertTrue(host.finished)
 	}
 
-	private fun runtime(next: (Prompt) -> Message.Assistant) = KoogAgentRuntime(
+	@Test
+	fun `native tools advertise only their required action arguments`() {
+		var descriptors = emptyList<ToolDescriptor>()
+		runtime(inspectTools = { descriptors = it }) { Message.Assistant("Answer", ResponseMetaInfo.Empty) }.run(Host())
+		assertEquals(mapOf(
+			"LIST_ALLOWED_SOURCES" to emptySet(), "LIST_AVAILABLE_SKILLS" to emptySet(),
+			"GET_SKILL" to setOf("skillId"), "SEARCH_WRITING_BLOCKS" to setOf("sourceScopeId", "query"),
+			"READ_WRITING_BLOCKS" to setOf("sourceScopeId", "writingBlockIds"), "CREATE_ARTIFACT" to setOf("selectedInputIds"),
+		), descriptors.associate { it.name to it.requiredParameters.map { parameter -> parameter.name }.toSet() })
+		descriptors.forEach { descriptor ->
+			assertTrue(descriptor.optionalParameters.isEmpty())
+			descriptor.requiredParameters.forEach { parameter ->
+				val expected = if (parameter.name in setOf("writingBlockIds", "selectedInputIds")) ToolParameterType.List(ToolParameterType.String) else ToolParameterType.String
+				assertEquals(expected, parameter.type, "${descriptor.name}.${parameter.name}")
+			}
+		}
+	}
+
+	@Test
+	fun `native tools ignore malformed UUID fields unused by their action`() {
+		val sourceId = UUID.randomUUID()
+		val unused = mapOf("sourceScopeId" to "", "skillId" to "not-a-uuid", "writingBlockIds" to listOf("bad-id"), "selectedInputIds" to listOf("bad-id"))
+		val calls = ArrayDeque(listOf(
+			"LIST_AVAILABLE_SKILLS" to emptyMap(),
+			"GET_SKILL" to mapOf("skillId" to skillId.toString()),
+			"SEARCH_WRITING_BLOCKS" to mapOf("sourceScopeId" to sourceId.toString(), "query" to "Orbit"),
+			"READ_WRITING_BLOCKS" to mapOf("sourceScopeId" to sourceId.toString(), "writingBlockIds" to listOf(inputId.toString())),
+			"LIST_ALLOWED_SOURCES" to emptyMap(),
+			"CREATE_ARTIFACT" to mapOf("selectedInputIds" to listOf(inputId.toString())),
+		).map { (name, used) -> call(name, mapper.writeValueAsString(unused + used)) })
+		val host = Host()
+		runtime { calls.removeFirst() }.run(host)
+		assertTrue(host.finished)
+		assertEquals(listOf(
+			AgentDecision(AgentDecisionAction.LIST_AVAILABLE_SKILLS),
+			AgentDecision(AgentDecisionAction.GET_SKILL, skillId = skillId),
+			AgentDecision(AgentDecisionAction.SEARCH_WRITING_BLOCKS, sourceId, "Orbit"),
+			AgentDecision(AgentDecisionAction.READ_WRITING_BLOCKS, sourceScopeId = sourceId, writingBlockIds = listOf(inputId)),
+			AgentDecision(AgentDecisionAction.LIST_ALLOWED_SOURCES),
+			AgentDecision(AgentDecisionAction.CREATE_ARTIFACT, selectedInputIds = listOf(inputId)),
+		), host.decisions)
+	}
+
+	@Test
+	fun `malformed UUIDs used by a native action still stop before host execution`() {
+		listOf(
+			"GET_SKILL" to """{"skillId":"not-a-uuid"}""",
+			"SEARCH_WRITING_BLOCKS" to """{"sourceScopeId":"not-a-uuid","query":"Orbit"}""",
+			"READ_WRITING_BLOCKS" to """{"sourceScopeId":"${UUID.randomUUID()}","writingBlockIds":["not-a-uuid"]}""",
+			"CREATE_ARTIFACT" to """{"selectedInputIds":["not-a-uuid"]}""",
+		).forEach { (name, arguments) ->
+			val host = Host(restored = true)
+			assertFailsWith<IllegalArgumentException>(name) { runtime { call(name, arguments) }.run(host) }
+			assertTrue(host.decisions.isEmpty(), name)
+			assertEquals(1, host.modelCalls, name)
+		}
+	}
+
+	private fun runtime(inspectTools: (List<ToolDescriptor>) -> Unit = {}, next: (Prompt) -> Message.Assistant) = KoogAgentRuntime(
 		LLModel(LLMProvider.OpenRouter, "test", listOf(LLMCapability.Completion, LLMCapability.Tools)), LLMParams(), mapper,
 	) { prompt, _, tools ->
 		assertEquals(AgentDecisionAction.entries.map { it.name }.toSet(), tools.map { it.name }.toSet())
+		inspectTools(tools)
 		AgentModelResponse(next(prompt), ProviderUsage("openrouter", "test", "test", "response", 1, 1, 0, 0, 0, 2, null))
 	}
 

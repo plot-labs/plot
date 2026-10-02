@@ -8,22 +8,20 @@ import {Message, MessageContent} from "@/components/ai-elements/message";
 import {Conversation, ConversationContent} from "@/components/ai-elements/conversation";
 import {ResizablePanelGroup, ResizablePanel, ResizableHandle} from "@/components/ui/resizable";
 import {usePanelRef} from "react-resizable-panels";
-import type { ChatAgentRun, SourceReference, WorkSessionSummary as ChatSummary } from "@plot/api-client";
+import type { ChatAgentRun, WorkSessionSummary as ChatSummary } from "@plot/api-client";
 import { ArtifactDocumentSurface } from "@/features/artifacts/artifact-document-surface";
 import { ArtifactEditorStatus, ArtifactSaveDraftButton, artifactSaveStateLabel } from "@/features/artifacts/artifact-editor-chrome";
 import { ArtifactHistoryPanel } from "@/features/citations/artifact-history-panel";
 import { ExportDialog } from "@/features/citations/export-dialog";
 import { ChatComposer } from "@/features/chat/chat-composer";
 import { AgentActivityDetail, ChatActivityPanel, ErrorNotice } from "@/features/chat/chat-activity";
-import { chatHref, toComposerReferences } from "@/features/chat/chat-workspace-utils";
+import { chatHref } from "@/features/chat/chat-workspace-utils";
 import { useChatAgentActivity } from "@/features/chat/use-chat-agent-activity";
 import { useChatArtifactDocument } from "@/features/chat/use-chat-artifact-document";
 import { plotApiClient } from "@/lib/api-client";
 import { useWorkspaceEntitlement } from "@/lib/use-workspace-entitlement";
 type ChatActiveWorkspaceProps = {
   activeChat: ChatSummary;
-  references: SourceReference[];
-  sourceError: string;
   requestedAgentId: string | null;
   requestedArtifactId: string | null;
   requestedVersionId?: string | null;
@@ -41,8 +39,6 @@ const toolbarBottomFade: CSSProperties = {
 
 export function ChatActiveWorkspace({
   activeChat,
-  references,
-  sourceError,
   requestedAgentId,
   requestedArtifactId,
   requestedVersionId = null,
@@ -80,9 +76,7 @@ export function ChatActiveWorkspace({
     requestedAgentId,
     requestedArtifactId,
     requestedVersionId,
-    references,
-    sourceError,
-    onAgentArtifact,
+        onAgentArtifact,
     onAdmitted,
   });
   const document = useChatArtifactDocument({
@@ -204,7 +198,6 @@ export function ChatActiveWorkspace({
                           busy={isLatestTurn && (agent.agentBusy || agent.isPendingRun)}
                           error={isLatestTurn ? agent.agentError : ""}
                           instruction={selectedVersion.instruction || turn.userMessage}
-                          references={references}
                           citations={selectedVersion.citations ?? []}
                           versions={turn.versions}
                           selectedVersionId={selectedVersion.id}
@@ -256,7 +249,6 @@ export function ChatActiveWorkspace({
                     busy={agent.agentBusy}
                     error={agent.agentError}
                     instruction={agent.agentInstruction}
-                    references={references}
                     artifactAction={document.currentArtifact ? (
                       <button
                         ref={artifactTriggerRef}
@@ -338,14 +330,12 @@ export function ChatActiveWorkspace({
 
         <ChatComposer
           id="chat-composer"
-          key={references.map((reference) => reference.id).join(":") || "no-references"}
           variant="dock"
           placeholder={agent.isPendingRun ? "Response in progress. Wait for it to finish..." : "Ask a follow-up..."}
-          onSubmit={(message, ids, skills, model, reasoningEffort) => {
+          onSubmit={(message, skills, model, reasoningEffort) => {
             setArtifactPanelOpen(false);
-            void agent.submitMessage(message, ids, document.clearArtifactSelection, skills, model, reasoningEffort);
+            void agent.submitMessage(message, document.clearArtifactSelection, skills, model, reasoningEffort);
           }}
-          references={toComposerReferences(references)}
           busy={document.artifactLoading || agent.agentBusy || agent.activitiesLoading || agent.isPendingRun}
           canGenerate={canGenerate && !agent.isPendingRun}
         />

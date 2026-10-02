@@ -41,8 +41,8 @@ vi.mock("@/lib/chat-agent-polling", () => ({
   isTerminalChatAgentStatus: (status: string) => ["SUCCEEDED", "FAILED"].includes(status),
 }));
 vi.mock("@/features/chat/chat-composer", () => ({
-  ChatComposer: ({ onSubmit, variant, busy }: { onSubmit: (message: string, ids: string[], skillIds: string[], model: "openai/gpt-5.4", reasoningEffort: "medium") => void; variant?: string; busy?: boolean }) => (
-    <button type="button" disabled={busy} onClick={() => onSubmit("Write release notes", ["block-1"], ["skill-1"], "openai/gpt-5.4", "medium")}>
+  ChatComposer: ({ onSubmit, variant, busy }: { onSubmit: (message: string, skillIds: string[], model: "openai/gpt-5.4", reasoningEffort: "medium") => void; variant?: string; busy?: boolean }) => (
+    <button type="button" disabled={busy} onClick={() => onSubmit("Write release notes", ["skill-1"], "openai/gpt-5.4", "medium")}>
       {variant === "center" ? "Start request" : "Generate again"}
     </button>
   ),
@@ -95,14 +95,25 @@ describe("ChatWorkspace", () => {
     expect(screen.queryByText("No chats yet. Start with a source-backed request.")).not.toBeInTheDocument();
   });
 
+  it.each([0, 1, 25])("starts without fetching or attaching the workspace's %i blocks", async (count) => {
+    mocks.listReferences.mockResolvedValue(Array.from({ length: count }, (_, index) => ({ ...reference, id: `block-${index}` })));
+    mocks.createChatAgentRun.mockResolvedValue(agentRun({ id: "agent-new", chatId: "chat-new" }));
+    render(<ChatWorkspace />);
+    fireEvent.click(await screen.findByRole("button", { name: "Start request" }));
+    await waitFor(() => expect(mocks.createChatAgentRun).toHaveBeenCalledWith(
+      expect.objectContaining({ writingBlockIds: [] }), expect.any(String),
+    ));
+    expect(mocks.listReferences).not.toHaveBeenCalled();
+    expect(screen.queryByText("Loading sources…")).not.toBeInTheDocument();
+  });
+
   it("admits one Chat Agent request and navigates without a direct artifact workflow call", async () => {
     mocks.createChatAgentRun.mockResolvedValue(agentRun({ id: "agent-new", chatId: "chat-new" }));
     render(<ChatWorkspace />);
-    await waitFor(() => expect(screen.queryByText("Loading sources…")).not.toBeInTheDocument());
     fireEvent.click(await screen.findByRole("button", { name: "Start request" }));
 
     await waitFor(() => expect(mocks.createChatAgentRun).toHaveBeenCalledWith({
-      writingBlockIds: ["block-1"], instruction: "Write release notes", skillIds: ["skill-1"], model: "openai/gpt-5.4", reasoningEffort: "medium",
+      writingBlockIds: [], instruction: "Write release notes", skillIds: ["skill-1"], model: "openai/gpt-5.4", reasoningEffort: "medium",
     }, expect.any(String)));
     expect(mocks.createChatAgentRun).toHaveBeenCalledTimes(1);
     expect(mocks.locationAssign).toHaveBeenCalledWith("/chat?chat=chat-new&agent=agent-new");
@@ -118,7 +129,6 @@ describe("ChatWorkspace", () => {
     mocks.createChatAgentRun.mockResolvedValue(agentRun({ id: "agent-followup", chatId: "chat-1" }));
     const dispatchEvent = vi.spyOn(window, "dispatchEvent");
     render(<ChatWorkspace />);
-    await waitFor(() => expect(screen.queryByText("Loading sources…")).not.toBeInTheDocument());
     expect(screen.queryByLabelText("Purpose (recommended)")).not.toBeInTheDocument();
     expect(screen.queryByRole("group", { name: "Content type" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Launch announcement" })).not.toBeInTheDocument();
@@ -128,7 +138,7 @@ describe("ChatWorkspace", () => {
       {
         instruction: "Write release notes",
         workSessionId: "chat-1",
-        writingBlockIds: ["block-1"],
+        writingBlockIds: [],
         skillIds: ["skill-1"],
         model: "openai/gpt-5.4",
         reasoningEffort: "medium",
@@ -142,7 +152,6 @@ describe("ChatWorkspace", () => {
   it("reuses the pending idempotency key after an admission response is lost", async () => {
     mocks.createChatAgentRun.mockRejectedValueOnce(new TypeError("Network request failed")).mockResolvedValueOnce(agentRun({ id: "agent-retry", chatId: "chat-retry" }));
     render(<ChatWorkspace />);
-    await waitFor(() => expect(screen.queryByText("Loading sources…")).not.toBeInTheDocument());
     const start = await screen.findByRole("button", { name: "Start request" });
     fireEvent.click(start);
     await waitFor(() => expect(mocks.createChatAgentRun).toHaveBeenCalledTimes(1));
@@ -311,12 +320,12 @@ describe("ChatWorkspace", () => {
 
     render(<ChatWorkspace />);
     await screen.findByText("Open artifact");
-    await waitFor(() => expect(screen.queryByText("Loading sources…")).not.toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Generate again" }));
 
     await waitFor(() => expect(mocks.createChatAgentRun).toHaveBeenCalled());
-    expect(mocks.createChatAgentRun).toHaveBeenCalledWith(expect.objectContaining({ workSessionId: "chat-1", writingBlockIds: ["block-1"] }), expect.any(String), expect.any(Object));
+    expect(mocks.createChatAgentRun).toHaveBeenCalledWith(expect.objectContaining({ workSessionId: "chat-1", writingBlockIds: [] }), expect.any(String), expect.any(Object));
     expect(mocks.replace).toHaveBeenCalledWith("/chat?chat=chat-1&agent=agent-2", { scroll: false });
+    expect(mocks.listReferences).not.toHaveBeenCalled();
   });
 
   it("returns to the Chat home when the workspace changes", async () => {
@@ -330,6 +339,7 @@ describe("ChatWorkspace", () => {
 
     window.dispatchEvent(new CustomEvent("plot:workspace-changed", { detail: { id: "workspace-2" } }));
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/chat", { scroll: false }));
+    expect(mocks.listReferences).not.toHaveBeenCalled();
   });
 
   it("opens the mobile History panel and restores focus when it closes", async () => {

@@ -8,7 +8,6 @@ import type {
   ChatAgentRun,
   ChatResponseVersion,
   ChatTurn,
-  SourceReference,
 } from "@plot/api-client";
 import { isTerminalChatAgentStatus, pollChatAgentRun } from "@/lib/chat-agent-polling";
 import { plotApiClient } from "@/lib/api-client";
@@ -17,9 +16,7 @@ import {
   isNonRetryableRequestError,
   messageFor,
   pendingAgentRequestKey,
-  selectReferences,
   upsertActivity,
-  validateSourceSelection,
   type PendingAgentRequest,
 } from "@/features/chat/chat-workspace-utils";
 
@@ -28,8 +25,6 @@ type UseChatAgentActivityProps = {
   requestedAgentId: string | null;
   requestedArtifactId: string | null;
   requestedVersionId?: string | null;
-  references: SourceReference[];
-  sourceError: string;
   onAgentArtifact: (run: ChatAgentRun) => void;
   onAdmitted: (run: ChatAgentRun) => void;
 };
@@ -43,8 +38,6 @@ export function useChatAgentActivity({
   requestedAgentId,
   requestedArtifactId,
   requestedVersionId = null,
-  references,
-  sourceError,
   onAgentArtifact,
   onAdmitted,
 }: UseChatAgentActivityProps) {
@@ -360,18 +353,11 @@ export function useChatAgentActivity({
 
   async function submitMessage(
     message: string,
-    referenceIds: string[],
     onRequestStart?: () => void,
     skillIds: string[] = [],
     model: ChatModel = "auto",
     reasoningEffort: ChatReasoningEffort = "medium",
   ) {
-    const selected = selectReferences(references, referenceIds);
-    const validationError = validateSourceSelection(selected, sourceError);
-    if (validationError) {
-      setAgentError(validationError);
-      return;
-    }
     onRequestStart?.();
     agentAbortRef.current?.abort();
     const controller = new AbortController();
@@ -379,7 +365,7 @@ export function useChatAgentActivity({
     const idempotencyKey = pendingAgentRequestKey(
       pendingRequestRef,
       message,
-      selected.map((reference) => reference.id),
+      [],
       JSON.stringify({ skillIds, model, reasoningEffort }),
     );
     setAgentInstruction(message);
@@ -390,7 +376,7 @@ export function useChatAgentActivity({
     try {
       const run = await plotApiClient.createChatAgentRun({
         instruction: message,
-        writingBlockIds: selected.map((reference) => reference.id),
+        writingBlockIds: [],
         workSessionId: chatId,
         skillIds,
         model,

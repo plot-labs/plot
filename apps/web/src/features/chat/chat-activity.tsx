@@ -5,7 +5,7 @@ import {Tool, ToolHeader, type ToolState} from "@/components/ai-elements/tool";
 import { ChevronLeft, ChevronRight, LoaderCircle, RotateCcw } from "lucide-react";
 import type { ReactNode } from "react";
 
-import type { ChatAgentRun, ChatCitation, ChatResponseVersion, RetryEligibility, SourceReference } from "@plot/api-client";
+import type { ChatAgentRun, ChatCitation, ChatResponseVersion, RetryEligibility } from "@plot/api-client";
 
 function formatChatTime(value: string | number | Date): string {
   const date = new Date(value);
@@ -22,7 +22,6 @@ import {
   agentStatusLabel,
   CONNECTION_ERROR_CODES,
   formatActivity,
-  toComposerReferences,
 } from "@/features/chat/chat-workspace-utils";
 import { ChatSourceCitations } from "@/features/chat/chat-source-citations";
 
@@ -110,7 +109,6 @@ export function AgentActivityDetail({
   busy,
   error,
   instruction,
-  references,
   citations,
   artifactAction,
   versions = [],
@@ -124,7 +122,6 @@ export function AgentActivityDetail({
   busy: boolean;
   error: string;
   instruction: string;
-  references: SourceReference[];
   citations?: ChatCitation[];
   artifactAction?: ReactNode;
   versions?: ChatResponseVersion[];
@@ -141,18 +138,12 @@ export function AgentActivityDetail({
   const isFailed = run?.status === "FAILED";
   const isNeedsConnection = Boolean(run?.failureCode && CONNECTION_ERROR_CODES.has(run.failureCode));
   const isComplete = Boolean(linkedArtifact || run?.status === "SUCCEEDED");
-  const citationCount = citations?.length ?? references.length;
-  const citationSources = citations === undefined
-    ? toComposerReferences(references.slice(0, 2)).map((reference) => ({
-        id: reference.id,
-        title: reference.label,
-        url: reference.url,
-      }))
-    : citations.slice(0, 2).map((citation) => ({
-        id: citation.id,
-        title: citation.title || "Source",
-        url: citation.url,
-      }));
+  const citationCount = citations?.length ?? 0;
+  const citationSources = (citations ?? []).slice(0, 2).map((citation) => ({
+    id: citation.id,
+    title: citation.title || "Source",
+    url: citation.url,
+  }));
   const toolState: ToolState = error || isFailed || isNeedsConnection
     ? "output-error"
     : isComplete

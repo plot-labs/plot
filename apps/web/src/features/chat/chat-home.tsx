@@ -1,29 +1,19 @@
 "use client";
 
-import Link from "next/link";
 import { useRef, useState } from "react";
 
-import type { ChatModel, ChatReasoningEffort, SourceReference } from "@plot/api-client";
+import type { ChatModel, ChatReasoningEffort } from "@plot/api-client";
 import { ChatComposer } from "@/features/chat/chat-composer";
 import {
   isNonRetryableRequestError,
   messageFor,
   pendingAgentRequestKey,
-  selectReferences,
-  toComposerReferences,
-  validateSourceSelection,
   type PendingAgentRequest,
 } from "@/features/chat/chat-workspace-utils";
 import { plotApiClient } from "@/lib/api-client";
 import { useWorkspaceEntitlement } from "@/lib/use-workspace-entitlement";
 
-type ChatHomeProps = {
-  references: SourceReference[];
-  referencesLoading: boolean;
-  referencesError: string;
-};
-
-export function ChatHome({ references, referencesLoading, referencesError }: ChatHomeProps) {
+export function ChatHome() {
   const [startError, setStartError] = useState("");
   const [starting, setStarting] = useState(false);
   const pendingRequestRef = useRef<PendingAgentRequest | null>(null);
@@ -32,30 +22,22 @@ export function ChatHome({ references, referencesLoading, referencesError }: Cha
 
   async function submitHomeRequest(
     message: string,
-    referenceIds: string[],
     skillIds: string[] = [],
     model: ChatModel = "auto",
     reasoningEffort: ChatReasoningEffort = "medium",
   ) {
-    const selected = selectReferences(references, referenceIds);
-    const validationError = validateSourceSelection(selected, referencesError);
-    if (validationError) {
-      setStartError(validationError);
-      return;
-    }
-
     setStarting(true);
     setStartError("");
     const idempotencyKey = pendingAgentRequestKey(
       pendingRequestRef,
       message,
-      selected.map((reference) => reference.id),
+      [],
       JSON.stringify({ skillIds, model, reasoningEffort }),
     );
     try {
       const run = await plotApiClient.createChatAgentRun({
         instruction: message,
-        writingBlockIds: selected.map((reference) => reference.id),
+        writingBlockIds: [],
         skillIds,
         model,
         reasoningEffort,
@@ -76,17 +58,12 @@ export function ChatHome({ references, referencesLoading, referencesError }: Cha
           What can Plot help with?
         </h1>
         <ChatComposer
-          key={references.map((reference) => reference.id).join(":") || "no-references"}
           variant="center"
           placeholder="Ask a question or create content..."
-          onSubmit={(message, ids, skills, model, effort) => void submitHomeRequest(message, ids, skills, model, effort)}
-          references={toComposerReferences(references)}
-          busy={starting || referencesLoading}
+          onSubmit={(message, skills, model, effort) => void submitHomeRequest(message, skills, model, effort)}
+          busy={starting}
           canGenerate={canGenerate}
         />
-        {referencesLoading ? <p className="mt-3 text-center text-xs text-black/45 dark:text-white/45">Loading sources…</p> : null}
-        {!referencesLoading && !referencesError && references.length === 0 ? <SourceEmptyState /> : null}
-        {referencesError ? <ErrorNotice message={referencesError} /> : null}
         {startError ? <ErrorNotice message={startError} /> : null}
 		{!canGenerate ? (
           <p className="mt-3 text-center text-xs text-black/50 dark:text-white/50">
@@ -98,10 +75,6 @@ export function ChatHome({ references, referencesLoading, referencesError }: Cha
       </div>
     </div>
   );
-}
-
-function SourceEmptyState() {
-  return <p className="mt-4 text-center text-xs text-black/50 dark:text-white/50">You can chat now. Connect a source in <Link href="/settings/integrations" className="text-[#2563eb] hover:underline dark:text-[#93c5fd]">Integrations</Link> when you want Plot to use workspace evidence.</p>;
 }
 
 function ErrorNotice({ message }: { message: string }) {
