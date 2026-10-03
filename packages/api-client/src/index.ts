@@ -52,6 +52,8 @@ export interface ArtifactPublication {
   entrySlug: string;
   publicPath: string;
   publishedAt: string;
+  /** Artifact revision the live entry was published from. */
+  revisionNumber?: number;
 }
 
 export type ContentType = "ARTIFACT" | "CHANGELOG" | "LAUNCH_ANNOUNCEMENT";
@@ -118,6 +120,7 @@ export interface PublishContentVariantResult {
   entrySlug: string;
   publicPath: string;
   publishedAt: string;
+  revisionNumber?: number;
 }
 
 export interface UnpublishContentVariantResult {

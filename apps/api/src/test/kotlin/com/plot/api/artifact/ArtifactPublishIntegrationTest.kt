@@ -414,6 +414,57 @@ class ArtifactPublishIntegrationTest {
 	}
 
 	@Test
+	fun `publishing a newer revision replaces the live entry at the same slug`() {
+		val fixture = readyPack()
+		val first = mockMvc.post("/api/artifact-variants/${fixture.variantId}/publish") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"expectedRevisionNumber":1,"acknowledgeUnresolved":false}"""
+		}.andExpect {
+			status { isOk() }
+			jsonPath("$.revisionNumber") { value(1) }
+		}.andReturn().response.contentAsString
+		val entrySlug = objectMapper.readTree(first).path("entrySlug").stringValue()
+
+		mockMvc.patch("/api/artifact-variants/${fixture.variantId}/sentences/${fixture.firstSentenceId}") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"expectedRevisionNumber":1,"body":"Updated after the first publish."}"""
+		}.andExpect { status { isOk() } }
+
+		mockMvc.post("/api/artifact-variants/${fixture.variantId}/publish") {
+			contentType = MediaType.APPLICATION_JSON
+			content = objectMapper.writeValueAsString(mapOf(
+				"expectedRevisionNumber" to 2,
+				"acknowledgeUnresolved" to true,
+				"acknowledgedRevisionIds" to jdbcTemplate.queryForList(
+					"select id from content_variant_sentence_revisions where sentence_id = ? and is_current",
+					UUID::class.java,
+					fixture.firstSentenceId,
+				),
+			))
+		}.andExpect {
+			status { isOk() }
+			jsonPath("$.entrySlug") { value(entrySlug) }
+			jsonPath("$.revisionNumber") { value(2) }
+		}
+
+		mockMvc.get("/api/artifacts/${fixture.packId}").andExpect {
+			status { isOk() }
+			jsonPath("$.publication.entrySlug") { value(entrySlug) }
+			jsonPath("$.publication.revisionNumber") { value(2) }
+		}
+		val publicEntry = mockMvc.get("/api/public/changelog/dev-workspace/$entrySlug").andExpect {
+			status { isOk() }
+		}.andReturn().response.contentAsString
+		assertTrue(publicEntry.contains("Updated after the first publish."))
+		assertEquals(1, jdbcTemplate.queryForObject(
+			"select count(*) from published_changelog_entries where workspace_id = ? and content_variant_id = ? and unpublished_at is null",
+			Int::class.java,
+			devContext.devWorkspaceId,
+			fixture.variantId,
+		))
+	}
+
+	@Test
 	fun `duplicate release tag publish returns conflict`() {
 		val fixture = readyPack()
 		val releaseRequestId = UUID.randomUUID()

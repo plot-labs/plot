@@ -89,7 +89,10 @@ class ArtifactPublishService(
 	private fun insertPublishedEntry(variantId: UUID, gate: DeliveryGateOutcome.Ready): PublishContentVariantResponse {
 		val metadata = loadPublishMetadata(variantId)
 		val entryId = uuidGenerator.next()
-		val entrySlug = metadata.tagName?.let(::entrySlugFromTag) ?: shortEntrySlug(entryId)
+		// A newer revision of a live entry replaces it at the same public URL. Publishing the live
+		// revision again still falls through to the duplicate conflict below.
+		val replacedSlug = retireOlderLiveEntry(variantId, gate.revision.revisionNumber)
+		val entrySlug = replacedSlug ?: metadata.tagName?.let(::entrySlugFromTag) ?: shortEntrySlug(entryId)
 		val title = metadata.title?.trim()?.takeIf { it.isNotEmpty() }
 			?: metadata.tagName
 			?: "Changelog"
@@ -138,7 +141,37 @@ class ArtifactPublishService(
 			entrySlug = entrySlug,
 			publicPath = "/${workspace.slug}/changelog/$entrySlug",
 			publishedAt = publishedAt,
+			revisionNumber = gate.revision.revisionNumber,
 		)
+	}
+
+	/** Unpublishes the live entry when it holds an older revision and returns its slug for reuse. */
+	private fun retireOlderLiveEntry(variantId: UUID, revisionNumber: Int): String? {
+		val live = sqlExecutor.query(
+			"""
+			select id, entry_slug, artifact_revision_number
+			from published_changelog_entries
+			where workspace_id = ? and content_variant_id = ? and unpublished_at is null
+			for update
+			""".trimIndent(),
+			{ rs, _ -> Triple(requireNotNull(rs.getObject(1, UUID::class.java)), requireNotNull(rs.getString(2)), rs.getInt(3)) },
+			devContext.devWorkspaceId,
+			variantId,
+		).firstOrNull() ?: return null
+		val (liveId, liveSlug, liveRevision) = live
+		if (liveRevision >= revisionNumber) return null
+		sqlExecutor.update(
+			"""
+			update published_changelog_entries
+			set unpublished_at = ?, unpublished_by_user_id = ?
+			where workspace_id = ? and id = ?
+			""".trimIndent(),
+			Timestamp.from(clock.instant()),
+			devContext.devUserId,
+			devContext.devWorkspaceId,
+			liveId,
+		)
+		return liveSlug
 	}
 
 	private fun insertCitationSnapshot(entryId: UUID, gate: DeliveryGateOutcome.Ready) {

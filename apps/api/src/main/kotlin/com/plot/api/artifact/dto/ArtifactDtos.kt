@@ -66,6 +66,7 @@ data class ArtifactPublicationResponse(
 	val entrySlug: String,
 	val publicPath: String,
 	val publishedAt: Instant,
+	val revisionNumber: Int,
 )
 
 data class ArtifactResponse(
@@ -162,6 +163,7 @@ data class PublishContentVariantResponse(
 	val entrySlug: String,
 	val publicPath: String,
 	val publishedAt: Instant,
+	val revisionNumber: Int,
 )
 
 data class UnpublishContentVariantResponse(
