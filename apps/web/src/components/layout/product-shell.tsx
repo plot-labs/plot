@@ -13,9 +13,29 @@ import { isSettingsPath, productNavigationItems, settingsNavigationItems, naviga
 
 export type ProductTheme = "system" | "light" | "dark";
 
+const THEME_STORAGE_KEY = "plot:theme";
+
+function readStoredTheme(): ProductTheme {
+  try {
+    const value = window.localStorage.getItem(THEME_STORAGE_KEY);
+    return value === "light" || value === "dark" ? value : "system";
+  } catch {
+    return "system";
+  }
+}
+
+function storeTheme(theme: ProductTheme) {
+  try {
+    if (theme === "system") window.localStorage.removeItem(THEME_STORAGE_KEY);
+    else window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  } catch {
+    // Storage can be unavailable (private mode, blocked site data); the choice then lasts for this visit only.
+  }
+}
+
 export function ProductShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const [theme, setTheme] = useState<ProductTheme>("light");
+  const [theme, setTheme] = useState<ProductTheme>("system");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [systemDark, setSystemDark] = useState(() => {
     if (typeof window === "undefined") {
@@ -24,6 +44,16 @@ export function ProductShell({ children }: { children: ReactNode }) {
 
     return window.matchMedia("(prefers-color-scheme: dark)").matches;
   });
+
+  useEffect(() => {
+    // Read after mount so the server render and the first client render match.
+    queueMicrotask(() => setTheme(readStoredTheme()));
+  }, []);
+
+  function changeTheme(next: ProductTheme) {
+    setTheme(next);
+    storeTheme(next);
+  }
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
@@ -55,7 +85,7 @@ export function ProductShell({ children }: { children: ReactNode }) {
         <ProductSidebar
           collapsed={!sidebarOpen}
           theme={theme}
-          onThemeChange={setTheme}
+          onThemeChange={changeTheme}
           onToggleSidebar={() => setSidebarOpen((open) => !open)}
         />
 

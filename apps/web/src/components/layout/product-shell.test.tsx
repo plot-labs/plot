@@ -81,4 +81,16 @@ describe("ProductShell", () => {
     unmount();
     expect(document.documentElement.dataset.theme).toBe("light");
   });
+
+  it("remembers the chosen theme across visits", async () => {
+    window.localStorage.clear();
+    const first = render(<ProductShell><div>Content</div></ProductShell>);
+    fireEvent.click(screen.getByRole("button", { name: "Use dark theme" }));
+    expect(window.localStorage.getItem("plot:theme")).toBe("dark");
+    first.unmount();
+
+    render(<ProductShell><div>Content</div></ProductShell>);
+    await waitFor(() => expect(document.documentElement.dataset.theme).toBe("dark"));
+    window.localStorage.clear();
+  });
 });
