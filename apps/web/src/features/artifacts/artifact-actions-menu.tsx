@@ -3,6 +3,8 @@
 import { Ellipsis, type LucideIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 
+import { useMenuKeyboard } from "@/lib/use-menu-keyboard";
+
 type ArtifactActionsMenuProps = {
   triggerRef?: RefObject<HTMLButtonElement | null>;
   children: (close: () => void) => ReactNode;
@@ -11,9 +13,11 @@ type ArtifactActionsMenuProps = {
 export function ArtifactActionsMenu({ triggerRef, children }: ArtifactActionsMenuProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const fallbackTriggerRef = useRef<HTMLButtonElement>(null);
   const buttonRef = triggerRef ?? fallbackTriggerRef;
   const close = useCallback(() => setOpen(false), []);
+  useMenuKeyboard(menuRef, open);
 
   useEffect(() => {
     if (!open) return;
@@ -56,7 +60,7 @@ export function ArtifactActionsMenu({ triggerRef, children }: ArtifactActionsMen
         <Ellipsis aria-hidden="true" className="size-4" />
       </button>
       {open ? (
-        <div role="menu" aria-label="Content actions" className="glass-layer absolute right-0 top-full z-40 mt-2 w-[204px] rounded-[8px] border border-black/10 p-2 text-[13px] text-[#18181b] dark:border-white/10 dark:text-white">
+        <div ref={menuRef} role="menu" aria-label="Content actions" className="glass-layer absolute right-0 top-full z-40 mt-2 w-[204px] rounded-[8px] border border-black/10 p-2 text-[13px] text-[#18181b] dark:border-white/10 dark:text-white">
           {children(close)}
         </div>
       ) : null}

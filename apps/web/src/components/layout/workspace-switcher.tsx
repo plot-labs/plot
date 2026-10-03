@@ -6,6 +6,7 @@ import { useEffect, useRef } from "react";
 import type { FormEvent, Dispatch, SetStateAction } from "react";
 
 import type { SidebarWorkspace } from "@/components/layout/use-sidebar-workspace";
+import { useMenuKeyboard } from "@/lib/use-menu-keyboard";
 import { cn } from "@/lib/utils";
 
 export type WorkspaceMenuItem = SidebarWorkspace & { mark: string; selected: boolean };
@@ -58,6 +59,9 @@ export function WorkspaceSwitcher({
   handleCreateWorkspace,
 }: WorkspaceSwitcherProps) {
   const workspaceMenuRef = useRef<HTMLDivElement>(null);
+  const workspacePopupRef = useRef<HTMLDivElement>(null);
+  const workspaceTriggerRef = useRef<HTMLButtonElement>(null);
+  useMenuKeyboard(workspacePopupRef, workspaceMenuOpen);
 
   useEffect(() => {
     if (!workspaceMenuOpen) return;
@@ -69,7 +73,10 @@ export function WorkspaceSwitcher({
     }
 
     function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") setWorkspaceMenuOpen(false);
+      if (event.key === "Escape") {
+        setWorkspaceMenuOpen(false);
+        workspaceTriggerRef.current?.focus();
+      }
     }
 
     document.addEventListener("mousedown", closeOnOutsidePointer);
@@ -100,6 +107,7 @@ export function WorkspaceSwitcher({
         </div>
 
         <button
+          ref={workspaceTriggerRef}
           type="button"
           onClick={() => {
             if (!workspaceMenuOpen) onOpen();
@@ -133,6 +141,7 @@ export function WorkspaceSwitcher({
 
         {workspaceMenuOpen && (
           <div
+            ref={workspacePopupRef}
             role="menu"
             aria-label="Workspace menu"
             className={cn("glass-layer", "absolute z-50 w-[228px] overflow-hidden rounded-[12px] border border-black/[0.08] text-[13px] text-black/76 dark:border-white/10 dark:text-white/80", collapsed ? "left-2 top-[48px]" : "left-3 top-[76px]")}
@@ -175,6 +184,7 @@ export function WorkspaceSwitcher({
             <div className="border-t border-black/[0.08] p-1 dark:border-white/10">
               <button
                 type="button"
+                role="menuitem"
                 aria-label="Create workspace"
                 onClick={() => {
                   setWorkspaceMenuOpen(false);

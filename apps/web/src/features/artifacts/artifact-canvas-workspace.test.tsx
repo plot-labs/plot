@@ -93,6 +93,20 @@ describe("ArtifactCanvasWorkspace", () => {
     expect(screen.getByRole("button", { name: "Publish changelog" })).toBeVisible();
   });
 
+  it("moves through content actions with the keyboard", () => {
+    render(<ArtifactCanvasWorkspace artifact={artifact} client={client()} onSaveArtifact={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Content actions" }));
+    const items = Array.from(screen.getByRole("menu").querySelectorAll<HTMLElement>("[role^=menuitem]"));
+    expect(items[0]).toHaveFocus();
+    fireEvent.keyDown(items[0], { key: "ArrowDown" });
+    expect(items[1]).toHaveFocus();
+    fireEvent.keyDown(items[1], { key: "ArrowUp" });
+    expect(items[0]).toHaveFocus();
+    fireEvent.keyDown(items[0], { key: "ArrowUp" });
+    expect(items[items.length - 1]).toHaveFocus();
+  });
+
   it("renders related documents in the Sources drawer", async () => {
     const artifactWithRelated: Artifact = {
       ...artifact,

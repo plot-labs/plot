@@ -255,7 +255,14 @@ describe("Settings navigation", () => {
     expect(screen.getByText("Workspaces")).toBeInTheDocument();
     expect(option).toHaveClass("h-9");
     expect(option).toHaveAttribute("aria-checked", "true");
-    const createButton = screen.getByRole("button", { name: "Create workspace" });
+    expect(option).toHaveFocus();
+    fireEvent.keyDown(option, { key: "ArrowDown" });
+    const createButton = screen.getByRole("menuitem", { name: "Create workspace" });
+    expect(createButton).toHaveFocus();
+    fireEvent.keyDown(createButton, { key: "ArrowDown" });
+    expect(option).toHaveFocus();
+    fireEvent.keyDown(option, { key: "End" });
+    expect(createButton).toHaveFocus();
     expect(createButton).toBeEnabled();
     fireEvent.click(createButton);
     expect(screen.getByRole("dialog", { name: "Create workspace" })).toBeInTheDocument();
