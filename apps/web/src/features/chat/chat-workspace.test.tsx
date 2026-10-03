@@ -203,11 +203,10 @@ describe("ChatWorkspace", () => {
     expect(screen.getByText("Reviewed artifact")).toBeVisible();
     expect(artifactBody).toContainElement(screen.getByText("Reviewed artifact"));
     expect(within(artifactPanel).getByRole("button", { name: "Copy artifact" })).toBeVisible();
-    fireEvent.click(within(artifactPanel).getByRole("button", { name: "Artifact history" }));
-    expect(screen.getByRole("complementary", { name: "Artifact history drawer" })).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Close artifact history" }));
-    expect(screen.queryByRole("complementary", { name: "Artifact history drawer" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("tabpanel", { name: "Assistant panel" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Artifact history" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Assistant" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "History" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Chat activity")).not.toBeInTheDocument();
     await waitFor(() => expect(document.querySelectorAll("time")).toHaveLength(1));
 		expect(screen.getByText("Plot")).toBeVisible();
 	});
@@ -347,7 +346,7 @@ describe("ChatWorkspace", () => {
     expect(mocks.listReferences).not.toHaveBeenCalled();
   });
 
-  it("opens the mobile History panel and restores focus when it closes", async () => {
+  it("keeps mobile chat free of activity and history panels", async () => {
     mocks.search = "chat=chat-1&agent=agent-1";
     mocks.listSessions.mockResolvedValue([chat]);
     const succeeded = agentRun({ status: "SUCCEEDED", artifactId: "artifact-1", artifact: artifactSummary });
@@ -356,13 +355,13 @@ describe("ChatWorkspace", () => {
     render(<ChatWorkspace />);
     await screen.findByText("Open artifact");
 
-    const historyTrigger = screen.getAllByRole("tab", { name: "History" }).find((element) => element.getAttribute("aria-controls") === "mobile-chat-history-panel");
-    expect(historyTrigger).toBeDefined();
-    await waitFor(() => expect(historyTrigger).toBeEnabled());
-    fireEvent.click(historyTrigger!);
-    expect(await screen.findByRole("tabpanel", { name: "History panel" })).toBeVisible();
-    fireEvent.click(historyTrigger!);
-    await waitFor(() => expect(document.activeElement).toBe(historyTrigger));
+    expect(screen.queryByRole("tab", { name: "History" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Assistant" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tablist", { name: "Chat workspace panels" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Chat activity")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("Open artifact"));
+    expect(screen.getByRole("complementary", { name: "Artifact document panel" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Artifact history" })).not.toBeInTheDocument();
   });
 
   it("allows switching between response versions", async () => {

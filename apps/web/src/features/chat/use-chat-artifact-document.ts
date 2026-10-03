@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { PlotApiError, type Artifact, type ArtifactHistoryDetail } from "@plot/api-client";
+import { PlotApiError, type Artifact } from "@plot/api-client";
 import type { SaveArtifactInput } from "@/features/citations/tiptap-draft-editor";
 import { getSelectedWorkspaceId, plotApiClient } from "@/lib/api-client";
 
@@ -10,8 +10,6 @@ import { abortableDelay } from "@/lib/chat-agent-stream";
 
 export function useChatArtifactDocument({ requestedArtifactId, selectedActivityArtifactId, retainCurrentArtifact = false, retryFinalRead = false }: { requestedArtifactId: string | null; selectedActivityArtifactId: string | null; retainCurrentArtifact?: boolean; retryFinalRead?: boolean }) {
   const [generatedArtifact, setGeneratedArtifact] = useState<Artifact | null>(null);
-  const [historicalArtifact, setHistoricalArtifact] = useState<ArtifactHistoryDetail | null>(null);
-  const [historicalPosition, setHistoricalPosition] = useState<number | null>(null);
   const [artifactError, setArtifactError] = useState("");
   const [artifactLoading, setArtifactLoading] = useState(false);
   const [saveState, setSaveState] = useState<"saved" | "saving" | "dirty" | "error">("saved");
@@ -42,8 +40,6 @@ export function useChatArtifactDocument({ requestedArtifactId, selectedActivityA
       setArtifactLoading(true);
       setArtifactError("");
       setGeneratedArtifact(null);
-      setHistoricalArtifact(null);
-      setHistoricalPosition(null);
       setSaveState("saved");
     });
 
@@ -73,9 +69,9 @@ export function useChatArtifactDocument({ requestedArtifactId, selectedActivityA
     return () => controller.abort();
   }, [artifactId, retrySelectedArtifact]);
 
-  const currentArtifact = historicalArtifact?.artifact ?? generatedArtifact;
+  const currentArtifact = generatedArtifact;
   const currentArtifactId = currentArtifact?.id ?? null;
-  const documentKey = `${historicalArtifact ? "history" : "current"}:${currentArtifactId ?? "none"}`;
+  const documentKey = `current:${currentArtifactId ?? "none"}`;
 
   useEffect(() => {
     documentKeyRef.current = documentKey;
@@ -89,29 +85,16 @@ export function useChatArtifactDocument({ requestedArtifactId, selectedActivityA
 
   const clearArtifactSelection = useCallback(() => {
     setGeneratedArtifact(null);
-    setHistoricalArtifact(null);
-    setHistoricalPosition(null);
   }, []);
-
-  const resetHistory = useCallback(() => {
-    setHistoricalArtifact(null);
-    setHistoricalPosition(null);
-  }, []);
-
-  const selectHistoricalArtifact = useCallback((detail: ArtifactHistoryDetail, position: number) => {
-    if (documentKeyRef.current !== documentKey) return;
-    setHistoricalArtifact(detail);
-    setHistoricalPosition(position);
-  }, [documentKey]);
 
   const onSaveStateChange = useCallback((state: "saved" | "saving" | "dirty" | "error") => {
     if (documentKeyRef.current === documentKey) setSaveState(state);
   }, [documentKey]);
 
   const onDraftChange = useCallback((draft: Omit<SaveArtifactInput, "expectedRevisionNumber">) => {
-    if (historicalArtifact || documentKeyRef.current !== documentKey || !currentArtifactId) return;
+    if (documentKeyRef.current !== documentKey || !currentArtifactId) return;
     setDrafts((current) => ({ ...current, [currentArtifactId]: draft }));
-  }, [currentArtifactId, documentKey, historicalArtifact]);
+  }, [currentArtifactId, documentKey]);
 
   const onSaveArtifact = useCallback((input: SaveArtifactInput) => {
     if (!currentArtifact) return Promise.reject(new Error("No artifact is selected."));
@@ -126,8 +109,6 @@ export function useChatArtifactDocument({ requestedArtifactId, selectedActivityA
     });
     if (documentKeyRef.current !== documentKey) return;
     setGeneratedArtifact(next);
-    setHistoricalArtifact(null);
-    setHistoricalPosition(null);
   }, [documentKey]);
 
   return {
@@ -139,14 +120,10 @@ export function useChatArtifactDocument({ requestedArtifactId, selectedActivityA
     documentKey,
     documentKeyRef,
     drafts,
-    historicalArtifact,
-    historicalPosition,
     onDraftChange,
     onPackChange,
     onSaveArtifact,
     onSaveStateChange,
-    resetHistory,
     saveState,
-    selectHistoricalArtifact,
   };
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, History, MoreHorizontal, X } from "lucide-react";
+import { Eye, MoreHorizontal, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -11,10 +11,9 @@ import {usePanelRef} from "react-resizable-panels";
 import type { ChatAgentRun, WorkSessionSummary as ChatSummary } from "@plot/api-client";
 import { ArtifactDocumentSurface } from "@/features/artifacts/artifact-document-surface";
 import { ArtifactEditorStatus, ArtifactSaveDraftButton, artifactSaveStateLabel } from "@/features/artifacts/artifact-editor-chrome";
-import { ArtifactHistoryPanel } from "@/features/citations/artifact-history-panel";
 import { ExportDialog } from "@/features/citations/export-dialog";
 import { ChatComposer } from "@/features/chat/chat-composer";
-import { AgentActivityDetail, ChatActivityPanel, ErrorNotice } from "@/features/chat/chat-activity";
+import { AgentActivityDetail, ErrorNotice } from "@/features/chat/chat-activity";
 import { chatHref } from "@/features/chat/chat-workspace-utils";
 import { useChatAgentActivity } from "@/features/chat/use-chat-agent-activity";
 import { useChatArtifactDocument } from "@/features/chat/use-chat-artifact-document";
@@ -47,23 +46,17 @@ export function ChatActiveWorkspace({
   const entitlement = useWorkspaceEntitlement();
   const canGenerate = entitlement?.capabilities.generate ?? true;
   const canEdit = entitlement?.capabilities.edit ?? true;
-  const [mobilePanel, setMobilePanel] = useState<"assistant" | "history" | null>(null);
   const [artifactPanelOpen, setArtifactPanelOpen] = useState(false);
   const [generationOpenedRunId, setGenerationOpenedRunId] = useState<string | null>(null);
-  const [artifactHistoryOpen, setArtifactHistoryOpen] = useState(false);
   const [artifactSaveRequestToken, setArtifactSaveRequestToken] = useState(0);
   const artifactPanelRef = usePanelRef();
   const artifactSizeRef = useRef<number | null>(null);
   const [desktop, setDesktop] = useState(false);
   const [workspaceWidth, setWorkspaceWidth] = useState(0);
   const panelMinimum = Math.min(420, Math.max(0, workspaceWidth - 1) / 2);
-  const mobileAssistantTriggerRef = useRef<HTMLButtonElement>(null);
-  const mobileHistoryTriggerRef = useRef<HTMLButtonElement>(null);
   const artifactTriggerRef = useRef<HTMLButtonElement>(null);
-  const artifactHistoryTriggerRef = useRef<HTMLButtonElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const artifactAutoOpenedRef = useRef<string | null>(null);
-  const previousMobilePanelRef = useRef<"assistant" | "history" | null>(null);
 
   const onAgentArtifact = useCallback((run: ChatAgentRun) => {
     if (run.artifactId) router.replace(chatHref(activeChat.id, run.id, run.artifactId), { scroll: false });
@@ -103,25 +96,17 @@ export function ChatActiveWorkspace({
       <Eye aria-hidden="true" className="mr-2 inline size-3.5" />Open generated document
     </button>
   ) : undefined;
-  const shownArtifact = document.historicalArtifact?.artifact ?? document.currentArtifact;
+  const shownArtifact = document.currentArtifact;
   const artifactMetrics = useMemo(() => {
     if (!shownArtifact) return null;
-    const draft = document.historicalArtifact ? undefined : document.drafts[shownArtifact.id];
+    const draft = document.drafts[shownArtifact.id];
     const statements = draft?.statements ?? shownArtifact.variant.sentences;
     const text = statements.map((statement) => statement.body).join("\n");
     return {
       characters: text.length.toLocaleString("en-US"),
       words: (text.trim() ? text.trim().split(/\s+/u).length : 0).toLocaleString("en-US"),
     };
-  }, [document.drafts, document.historicalArtifact, shownArtifact]);
-
-  useEffect(() => {
-    const previous = previousMobilePanelRef.current;
-    if (previous && mobilePanel === null) {
-      (previous === "assistant" ? mobileAssistantTriggerRef : mobileHistoryTriggerRef).current?.focus();
-    }
-    previousMobilePanelRef.current = mobilePanel;
-  }, [mobilePanel]);
+  }, [document.drafts, shownArtifact]);
 
   useEffect(() => {
     if (!requestedArtifactId || document.artifactLoading || !document.currentArtifact) return;
@@ -159,12 +144,6 @@ export function ChatActiveWorkspace({
     if (!workspaceWidth) return;
     artifactPanelRef.current?.resize(desktopArtifactVisible ? `${artifactSizeRef.current ?? workspaceWidth / 2}px` : "0%");
   }, [artifactPanelRef, desktopArtifactVisible, workspaceWidth]);
-
-  const selectActivity = useCallback((activity: ChatAgentRun) => {
-    document.resetHistory();
-    if (!activity.artifactId) setMobilePanel("assistant");
-    router.replace(chatHref(activeChat.id, activity.id, activity.artifactId), { scroll: false });
-  }, [activeChat.id, document, router]);
 
   const messages = useMemo(() => {
     const current = agent.activities
@@ -311,57 +290,6 @@ export function ChatActiveWorkspace({
             </div>
 
             {document.artifactError ? <ErrorNotice message={document.artifactError} /> : null}
-            <div className="mt-5 lg:hidden">
-              <div role="tablist" aria-label="Chat workspace panels" className="flex gap-2">
-                <button
-                  ref={mobileAssistantTriggerRef}
-                  type="button"
-                  role="tab"
-                  aria-selected={mobilePanel === "assistant"}
-                  aria-expanded={mobilePanel === "assistant"}
-                  aria-controls="mobile-chat-assistant-panel"
-                  onClick={() => setMobilePanel((current) => current === "assistant" ? null : "assistant")}
-                  className={`min-h-8 rounded-full border px-3 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 dark:focus-visible:ring-white/25 ${mobilePanel === "assistant" ? "border-black bg-black text-white dark:border-white dark:bg-white dark:text-black" : "border-black/10 bg-white text-black/55 hover:bg-black/[0.03] dark:border-white/10 dark:bg-white/[0.04] dark:text-white/58 dark:hover:bg-white/[0.07]"}`}
-                >
-                  Assistant
-                </button>
-                <button
-                  ref={mobileHistoryTriggerRef}
-                  type="button"
-                  role="tab"
-                  disabled={!document.currentArtifact}
-                  aria-selected={mobilePanel === "history"}
-                  aria-expanded={mobilePanel === "history"}
-                  aria-controls="mobile-chat-history-panel"
-                  onClick={() => setMobilePanel((current) => current === "history" ? null : "history")}
-                  className={`min-h-8 rounded-full border px-3 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 disabled:cursor-not-allowed disabled:opacity-40 dark:focus-visible:ring-white/25 ${mobilePanel === "history" ? "border-black bg-black text-white dark:border-white dark:bg-white dark:text-black" : "border-black/10 bg-white text-black/55 hover:bg-black/[0.03] dark:border-white/10 dark:bg-white/[0.04] dark:text-white/58 dark:hover:bg-white/[0.07]"}`}
-                >
-                  History
-                </button>
-              </div>
-              {mobilePanel === "assistant" ? (
-                <div id="mobile-chat-assistant-panel" role="tabpanel" aria-label="Assistant panel" className="mt-3">
-                  <ChatActivityPanel
-                    activities={agent.activities}
-                    selectedActivityId={agent.selectedActivity?.id ?? null}
-                    loading={agent.activitiesLoading}
-                    error={agent.activitiesError}
-                    onSelect={selectActivity}
-                  />
-                </div>
-              ) : null}
-              {mobilePanel === "history" && document.currentArtifact ? (
-                <div id="mobile-chat-history-panel" role="tabpanel" aria-label="History panel" className="mt-3 rounded-xl border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-white/[0.04]">
-                  <ArtifactHistoryPanel
-                    variantId={document.currentArtifact.variant.id}
-                    client={plotApiClient}
-                    refreshKey={document.currentArtifact.variant.revisionId}
-                    selectedPosition={document.historicalPosition}
-                    onSelect={document.selectHistoricalArtifact}
-                  />
-                </div>
-              ) : null}
-            </div>
           </ConversationContent>
         </Conversation>
 
@@ -392,30 +320,18 @@ export function ChatActiveWorkspace({
         >
           <header className="relative z-20 flex min-h-16 shrink-0 items-center justify-between gap-3 bg-[#fbfbf8]/85 px-4 backdrop-blur-xl dark:bg-[#16171a]/85">
             <div className="flex items-center gap-1">
-              {!showPreview && !document.historicalArtifact && shownArtifact ? (
+              {!showPreview && shownArtifact ? (
                 <ExportDialog pack={shownArtifact} client={plotApiClient} presentation="copy" />
               ) : null}
-              {!showPreview && document.currentArtifact ? <button
-                ref={artifactHistoryTriggerRef}
-                type="button"
-                aria-label="Artifact history"
-                aria-controls="artifact-history-drawer"
-                aria-expanded={artifactHistoryOpen}
-                onClick={() => setArtifactHistoryOpen((open) => !open)}
-                className="inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-black/58 transition hover:bg-black/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 dark:text-white/60 dark:hover:bg-white/[0.08] dark:focus-visible:ring-white/25"
-              >
-                <History aria-hidden="true" className="size-3.5" />
-                History
-              </button> : null}
               {showPreview ? <span role="status" className="text-sm text-black/60 dark:text-white/60">{selectedProgress?.status === "FAILED" ? "생성 실패 · 마지막 초안" : selectedProgress?.status === "SUCCEEDED" ? "최종 문서 불러오는 중" : "생성 중"}</span> : null}
             </div>
             <div className="flex items-center gap-2">
               <span className="hidden sm:inline">
                 <ArtifactEditorStatus>
-                  {showPreview ? "읽기 전용 초안" : artifactSaveStateLabel(document.saveState, Boolean(document.historicalArtifact))}
+                  {showPreview ? "읽기 전용 초안" : artifactSaveStateLabel(document.saveState, false)}
                 </ArtifactEditorStatus>
               </span>
-              {!showPreview && document.currentArtifact && !document.historicalArtifact && canEdit ? (
+              {!showPreview && document.currentArtifact && canEdit ? (
                 <ArtifactSaveDraftButton
                   saving={document.saveState === "saving"}
                   onClick={() => setArtifactSaveRequestToken((value) => value + 1)}
@@ -425,7 +341,6 @@ export function ChatActiveWorkspace({
                 type="button"
                 aria-label="Close artifact"
                 onClick={() => {
-                  setArtifactHistoryOpen(false);
                   setArtifactPanelOpen(false);
                   artifactTriggerRef.current?.focus();
                 }}
@@ -454,9 +369,9 @@ export function ChatActiveWorkspace({
               ) : document.currentArtifact ? <ArtifactDocumentSurface
                 presentation="workspace"
                 pack={document.currentArtifact}
-                historical={document.historicalArtifact}
+                historical={null}
                 client={plotApiClient}
-                initialDraft={document.historicalArtifact ? undefined : document.drafts[document.currentArtifact.id]}
+                initialDraft={document.drafts[document.currentArtifact.id]}
                 saveState={document.saveState}
                 saveRequestToken={artifactSaveRequestToken}
                 editorLocked={!canEdit}
@@ -467,44 +382,6 @@ export function ChatActiveWorkspace({
               /> : null}
             </div>
           </div>
-          {!showPreview && artifactHistoryOpen && document.currentArtifact ? (
-            <aside
-              id="artifact-history-drawer"
-              aria-label="Artifact history drawer"
-              className="absolute inset-y-0 right-0 z-30 flex w-[min(360px,100%)] flex-col border-l border-black/[0.08] bg-[#fbfbf8] shadow-[-12px_0_28px_rgba(0,0,0,0.08)] dark:border-white/10 dark:bg-[#1b1c20]"
-            >
-              <header className="flex min-h-16 shrink-0 items-center justify-between px-4">
-                <div>
-                  <div className="text-sm font-medium text-black/72 dark:text-white/76">History</div>
-                  <div className="mt-0.5 text-xs text-black/50 dark:text-white/52">Content snapshots</div>
-                </div>
-                <button
-                  type="button"
-                  aria-label="Close artifact history"
-                  onClick={() => {
-                    setArtifactHistoryOpen(false);
-                    artifactHistoryTriggerRef.current?.focus();
-                  }}
-                  className="inline-flex size-8 items-center justify-center rounded-full text-black/45 transition hover:bg-black/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 dark:text-white/50 dark:hover:bg-white/[0.08] dark:focus-visible:ring-white/25"
-                >
-                  <X aria-hidden="true" className="size-4" />
-                </button>
-              </header>
-              <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
-                <ArtifactHistoryPanel
-                  variantId={document.currentArtifact.variant.id}
-                  client={plotApiClient}
-                  refreshKey={document.currentArtifact.variant.revisionId}
-                  selectedPosition={document.historicalPosition}
-                  presentation="drawer"
-                  onSelect={(detail, position) => {
-                    document.selectHistoricalArtifact(detail, position);
-                    setArtifactHistoryOpen(false);
-                  }}
-                />
-              </div>
-            </aside>
-          ) : null}
         </aside>
       ) : null}
         </ResizablePanel>
