@@ -51,7 +51,6 @@ vi.mock("@/features/chat/chat-composer", () => ({
 }));
 vi.mock("@/features/citations/tiptap-draft-editor", () => ({ TiptapDraftEditor: () => <div>Reviewed artifact</div> }));
 vi.mock("@/features/citations/export-dialog", () => ({ ExportDialog: ({ presentation }: { presentation?: string }) => presentation === "copy" ? <button type="button" aria-label="Copy artifact">Copy</button> : null }));
-vi.mock("@/features/citations/artifact-history-panel", () => ({ ArtifactHistoryPanel: () => <div>History</div> }));
 
 import type { ChatAgentStreamOptions } from "@/lib/chat-agent-stream";
 import { ChatWorkspace } from "./chat-workspace";

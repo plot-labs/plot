@@ -60,6 +60,20 @@ class ArtifactApiIntegrationTest {
 	@Autowired private lateinit var objectMapper: ObjectMapper
 
 	@Test
+	fun `removed history endpoints do not expose snapshots`() {
+		val fixture = readyPack()
+		for (suffix in listOf("history", "history/${UUID.randomUUID()}", "history/at/0")) {
+			mockMvc.get("/api/artifact-variants/${fixture.variantId}/$suffix").andExpect {
+				status { isNotFound() }
+			}
+		}
+		mockMvc.get("/api/artifact-variants/${fixture.variantId}").andExpect {
+			status { isOk() }
+			jsonPath("$.variant.revisionNumber") { value(1) }
+		}
+	}
+
+	@Test
 	fun `removed replication endpoint does not create an agent run`() {
 		val before = jdbcTemplate.queryForObject("select count(*) from agent_runs", Long::class.java)
 		mockMvc.post("/api/artifacts/${UUID.randomUUID()}/replicate") {
@@ -283,7 +297,7 @@ class ArtifactApiIntegrationTest {
 	}
 
 	@Test
-	fun `content history contains only initial and changed saves`() {
+	fun `document revisions contain only initial and changed saves`() {
 		val fixture = readyPack()
 		val unchanged = objectMapper.writeValueAsString(mapOf(
 			"expectedRevisionNumber" to 1,
@@ -313,14 +327,10 @@ class ArtifactApiIntegrationTest {
 			status { isOk() }
 			jsonPath("$.variant.revisionNumber") { value(2) }
 		}
-		mockMvc.get("/api/artifact-variants/${fixture.variantId}/history").andExpect {
-			status { isOk() }
-			jsonPath("$.length()") { value(2) }
-			jsonPath("$[0].cause") { value("Edited by you") }
-			jsonPath("$[1].cause") { value("Initial draft") }
-			jsonPath("$[0].revisionNumber") { doesNotExist() }
-			jsonPath("$[0].revisionId") { doesNotExist() }
-		}
+		assertEquals(2, jdbcTemplate.queryForObject(
+			"select count(*) from content_variant_revisions where content_variant_id = ?",
+			Int::class.java, fixture.variantId,
+		))
 
 		mockMvc.patch("/api/artifact-variants/${fixture.variantId}") {
 			contentType = MediaType.APPLICATION_JSON
@@ -479,12 +489,6 @@ class ArtifactApiIntegrationTest {
 			jsonPath("$.variant.lexicalContent.root.children[1].type") { value("list") }
 		}
 
-		mockMvc.get("/api/artifact-variants/${fixture.variantId}/history/at/1").andExpect {
-			status { isOk() }
-			jsonPath("$.artifact.variant.documentVersion") { value(2) }
-			jsonPath("$.artifact.variant.lexicalContent.root.children[0].type") { value("heading") }
-			jsonPath("$.artifact.variant.lexicalContent.root.children[1].type") { value("list") }
-		}
 
 		val exported = export(fixture.variantId, "COPY", includeSources = false)
 		assertTrue(exported.startsWith("# Updated heading.\n\n- Stable sentence."))
@@ -525,11 +529,6 @@ class ArtifactApiIntegrationTest {
 			splitId,
 		))
 
-		val splitHistory = mockMvc.get("/api/artifact-variants/${fixture.variantId}/history/at/0").andExpect {
-			status { isOk() }
-			jsonPath("$.artifact.variant.sentences[1].citations[0].status") { value("STALE") }
-		}.andReturn().response.contentAsString
-		assertFalse(splitHistory.contains("LINEAGE_DERIVED"))
 
 		val mergeNodeIds = listOf(UUID.randomUUID(), UUID.randomUUID())
 		val mergedBody = "Supported sentence. (continued)"

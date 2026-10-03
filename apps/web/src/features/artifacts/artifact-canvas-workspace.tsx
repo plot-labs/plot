@@ -111,7 +111,6 @@ export function ArtifactCanvasWorkspace({ artifact, client, onSaveArtifact }: Ar
       <main className="flex min-h-0 flex-1 items-stretch justify-center overflow-y-auto bg-[#eef0f3] px-4 dark:bg-[#18181b] sm:px-8">
         <ArtifactDocumentSurface
           pack={currentArtifact}
-          historical={null}
           client={client}
           presentation="canvas"
           editorLocked={!canEdit}

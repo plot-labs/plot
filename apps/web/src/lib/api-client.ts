@@ -3,7 +3,6 @@ import { createPlotApiClient } from "@plot/api-client";
 export { PlotApiError } from "@plot/api-client";
 
 export type {
-  ArtifactHistoryDetail,
   Artifact,
   ArtifactSummary,
   ChatModel,

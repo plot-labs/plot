@@ -104,19 +104,6 @@ data class ContentBriefDestinationResponse(
 	val url: String,
 )
 
-data class ContentVariantHistoryItemResponse(
-	val position: Int,
-	val createdAt: Instant,
-	val cause: String,
-)
-
-data class ContentVariantHistoryDetailResponse(
-	val createdAt: Instant,
-	val cause: String,
-	val readOnly: Boolean,
-	val artifact: ArtifactResponse,
-)
-
 data class ContentSentenceResponse(
 	val id: UUID,
 	val revisionId: UUID,

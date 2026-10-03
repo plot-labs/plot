@@ -18,6 +18,21 @@ const authenticatedSession = {
 };
 
 describe("Plot same-origin proxy", () => {
+  it.each([
+    ["artifact-variants", "variant-1", "history"],
+    ["artifact-variants", "variant-1", "history", "revision-1"],
+    ["artifact-variants", "variant-1", "history", "at", "0"],
+  ])("rejects removed history route %o", async (...path) => {
+    const fetcher = vi.fn<typeof fetch>();
+    const response = await proxyPlotRequest(
+      new Request(`http://web.test/api/plot/${path.join("/")}`),
+      path,
+      { fetch: fetcher, baseUrl: "http://127.0.0.1:8080" },
+    );
+    expect(response.status).toBe(404);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it("rejects the removed artifact replication route without forwarding", async () => {
     const fetcher = vi.fn<typeof fetch>();
     const request = new Request("http://web.test/api/plot/artifacts/artifact-1/replicate", {
@@ -270,9 +285,6 @@ describe("Plot same-origin proxy", () => {
     ["GET", ["artifacts"]],
     ["GET", ["artifacts", "artifact-1"]],
     ["GET", ["artifact-variants", "variant-1"]],
-    ["GET", ["artifact-variants", "variant-1", "history"]],
-    ["GET", ["artifact-variants", "variant-1", "history", "revision-1"]],
-    ["GET", ["artifact-variants", "variant-1", "history", "at", "0"]],
     ["PATCH", ["artifact-variants", "variant-1"]],
     ["PUT", ["artifact-variants", "variant-1"]],
     ["PATCH", ["artifact-variants", "variant-1", "sentences", "sentence-1"]],

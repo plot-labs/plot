@@ -427,23 +427,17 @@ it("reads the workspace credit overview with workspace scoping", async () => {
 		});
 	});
 
-	it("loads ordered Chat Agent runs and content-only artifact history", async () => {
+	it("loads ordered Chat Agent runs", async () => {
 		const fetcher = vi.fn<typeof fetch>()
-			.mockResolvedValueOnce(Response.json([{ id: "agent-1", chatId: "session-1", instruction: "Changelog", status: "SUCCEEDED", failureCode: null, artifactId: "artifact-1", artifact: { id: "artifact-1", status: "READY", title: "Changelog", updatedAt: "2026-08-01T00:01:00Z" }, createdAt: "2026-08-01T00:00:00Z", updatedAt: "2026-08-01T00:01:00Z" }]))
-			.mockResolvedValueOnce(Response.json([{ position: 0, createdAt: "2026-08-01T00:01:00Z", cause: "Edited by you" }]))
-			.mockResolvedValueOnce(Response.json({ createdAt: "2026-08-01T00:01:00Z", cause: "Edited by you", readOnly: true, artifact: { id: "artifact-1" } }));
+			.mockResolvedValueOnce(Response.json([{ id: "agent-1", chatId: "session-1", instruction: "Changelog", status: "SUCCEEDED", failureCode: null, artifactId: "artifact-1", artifact: { id: "artifact-1", status: "READY", title: "Changelog", updatedAt: "2026-08-01T00:01:00Z" }, createdAt: "2026-08-01T00:00:00Z", updatedAt: "2026-08-01T00:01:00Z" }]));
 		const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
 
 		await client.listSessionAgentRuns("session-1");
-		await client.listArtifactHistory("variant-1");
-		await client.getArtifactHistoryAt("variant-1", 0);
 
 		expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
 			"/api/plot/sessions/session-1/agent-runs",
-			"/api/plot/artifact-variants/variant-1/history",
-			"/api/plot/artifact-variants/variant-1/history/at/0",
 		]);
-		expect(new Headers(fetcher.mock.calls[2]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
+		expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
 	});
 
 	it("loads and saves the whole artifact with revision-bound source export inputs", async () => {

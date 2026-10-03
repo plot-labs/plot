@@ -637,19 +637,6 @@ export interface WorkSessionSummary {
 }
 
 
-export interface ArtifactHistoryItem {
-  position: number;
-  createdAt: string;
-  cause: string;
-}
-
-export interface ArtifactHistoryDetail {
-  createdAt: string;
-  cause: string;
-  readOnly: true;
-  artifact: Artifact;
-}
-
 export class PlotApiError extends Error {
   constructor(
     public readonly status: number,
@@ -749,8 +736,6 @@ export interface PlotApiClient {
   publishArtifactVariant(variantId: string, input: { expectedRevisionNumber: number; acknowledgeUnresolved: boolean; acknowledgedWarningKeys?: string[]; acknowledgedRevisionIds?: string[] }, options?: RequestOptions): Promise<PublishContentVariantResult>;
   unpublishArtifactVariant(variantId: string, options?: RequestOptions): Promise<UnpublishContentVariantResult>;
   recordProductDeliveryEvent(variantId: string, input: RecordProductDeliveryEventInput, options?: RequestOptions): Promise<ProductDeliveryEventResult>;
-  listArtifactHistory(variantId: string, options?: RequestOptions): Promise<ArtifactHistoryItem[]>;
-  getArtifactHistoryAt(variantId: string, position: number, options?: RequestOptions): Promise<ArtifactHistoryDetail>;
 }
 
 export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof fetch; workspaceId?: string | (() => string | null) } = {}): PlotApiClient {
@@ -1015,14 +1000,6 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
     recordProductDeliveryEvent: (variantId, input, requestOptions) => request(
       `/artifact-variants/${encodeURIComponent(variantId)}/delivery-events`,
       { method: "POST", body: JSON.stringify(input), signal: requestOptions?.signal },
-    ),
-    listArtifactHistory: (variantId, requestOptions) => request(
-      `/artifact-variants/${encodeURIComponent(variantId)}/history`,
-      { signal: requestOptions?.signal },
-    ),
-    getArtifactHistoryAt: (variantId, position, requestOptions) => request(
-      `/artifact-variants/${encodeURIComponent(variantId)}/history/at/${encodeURIComponent(String(position))}`,
-      { signal: requestOptions?.signal },
     ),
   };
 }

@@ -369,7 +369,6 @@ export function ChatActiveWorkspace({
               ) : document.currentArtifact ? <ArtifactDocumentSurface
                 presentation="workspace"
                 pack={document.currentArtifact}
-                historical={null}
                 client={plotApiClient}
                 initialDraft={document.drafts[document.currentArtifact.id]}
                 saveState={document.saveState}

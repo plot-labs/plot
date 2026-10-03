@@ -3,8 +3,6 @@ package com.plot.api.artifact
 import com.plot.api.artifact.dto.ArtifactPageResponse
 import com.plot.api.artifact.dto.ArtifactResponse
 import com.plot.api.artifact.dto.ContentExportResponse
-import com.plot.api.artifact.dto.ContentVariantHistoryDetailResponse
-import com.plot.api.artifact.dto.ContentVariantHistoryItemResponse
 import com.plot.api.artifact.dto.EditSentenceRequest
 import com.plot.api.artifact.dto.ExportContentVariantRequest
 import com.plot.api.artifact.dto.ProductDeliveryEventResponse
@@ -53,24 +51,6 @@ class ArtifactController(
 	@GetMapping("/artifact-variants/{variantId}")
 	fun getVariant(@PathVariable variantId: UUID): ResponseEntity<ArtifactResponse> = ResponseEntity.ok()
 		.cacheControl(CacheControl.noStore()).body(queryService.getVariant(variantId))
-
-	@GetMapping("/artifact-variants/{variantId}/history")
-	fun history(@PathVariable variantId: UUID): ResponseEntity<List<ContentVariantHistoryItemResponse>> = ResponseEntity.ok()
-		.cacheControl(CacheControl.noStore()).body(queryService.history(variantId))
-
-	@GetMapping("/artifact-variants/{variantId}/history/{revisionId}")
-	fun historyDetail(
-		@PathVariable variantId: UUID,
-		@PathVariable revisionId: UUID,
-	): ResponseEntity<ContentVariantHistoryDetailResponse> = ResponseEntity.ok()
-		.cacheControl(CacheControl.noStore()).body(queryService.historyDetail(variantId, revisionId))
-
-	@GetMapping("/artifact-variants/{variantId}/history/at/{position}")
-	fun historyAt(
-		@PathVariable variantId: UUID,
-		@PathVariable position: Int,
-	): ResponseEntity<ContentVariantHistoryDetailResponse> = ResponseEntity.ok()
-		.cacheControl(CacheControl.noStore()).body(queryService.historyDetailAt(variantId, position))
 
 	@PatchMapping("/artifact-variants/{variantId}")
 	@CompletionAllowed

@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import type { Artifact, ArtifactHistoryDetail, PlotApiClient } from "@plot/api-client";
+import type { Artifact, PlotApiClient } from "@plot/api-client";
 
 import { ArtifactEditorStatus, artifactSaveStateLabel } from "@/features/artifacts/artifact-editor-chrome";
 import { ExportDialog } from "@/features/citations/export-dialog";
@@ -10,7 +10,6 @@ import { TiptapDraftEditor, type SaveArtifactInput } from "@/features/citations/
 
 type ArtifactDocumentSurfaceProps = {
   pack: Artifact;
-  historical: ArtifactHistoryDetail | null;
   client: PlotApiClient;
   initialDraft?: Omit<SaveArtifactInput, "expectedRevisionNumber">;
   saveState?: "saved" | "saving" | "dirty" | "error";
@@ -28,7 +27,6 @@ type ArtifactDocumentSurfaceProps = {
 
 export function ArtifactDocumentSurface({
   pack,
-  historical,
   client,
   initialDraft,
   saveState,
@@ -43,8 +41,8 @@ export function ArtifactDocumentSurface({
   onDraftTitleChange,
   topActions,
 }: ArtifactDocumentSurfaceProps) {
-  const readOnly = Boolean(historical) || editorLocked;
-  const shownPack = historical?.artifact ?? pack;
+  const readOnly = editorLocked;
+  const shownPack = pack;
 
   if (presentation === "canvas" || presentation === "workspace") {
     const workspacePresentation = presentation === "workspace";
@@ -58,7 +56,7 @@ export function ArtifactDocumentSurface({
         {!workspacePresentation ? (
           <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
             <span className="text-xs font-medium text-black/45 dark:text-white/45">
-              {contentTypeLabel(shownPack.contentType)} · {historical ? "Historical snapshot" : shownPack.publication ? "Published" : "Draft"}
+              {contentTypeLabel(shownPack.contentType)} · {shownPack.publication ? "Published" : "Draft"}
             </span>
             {topActions}
           </div>
@@ -110,23 +108,19 @@ export function ArtifactDocumentSurface({
           <div className="text-xs font-semibold uppercase tracking-[0.08em] text-black/42 dark:text-white/45">Artifact</div>
           <h2 className="mt-1 truncate text-xl font-semibold text-black/88 dark:text-white/90">{shownPack.title || "Generated artifact"}</h2>
           <p className="mt-1 text-sm text-black/52 dark:text-white/55">
-            {historical ? `${historical.cause} · historical preview` : shownPack.status}
+            {shownPack.status}
             {" · "}
             {contentTypeLabel(shownPack.contentType)}
           </p>
         </div>
         <div className="flex min-w-0 flex-col items-end gap-2">
           {saveState ? <ArtifactEditorStatus>{saveStateLabel(saveState, readOnly)}</ArtifactEditorStatus> : null}
-          {!historical ? (
-            <div className="flex flex-col items-end gap-2">
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                <ExportDialog pack={shownPack} client={client} />
-                <PublishDialog pack={shownPack} client={client} presentation="inline" onPackChange={onPackChange} />
-              </div>
+          <div className="flex flex-col items-end gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <ExportDialog pack={shownPack} client={client} />
+              <PublishDialog pack={shownPack} client={client} presentation="inline" onPackChange={onPackChange} />
             </div>
-          ) : (
-            <p className="text-right text-xs text-black/48 dark:text-white/52">Editing and delivery are disabled for this snapshot.</p>
-          )}
+          </div>
         </div>
       </header>
       <TiptapDraftEditor
