@@ -237,7 +237,7 @@ export function RoutineModelPicker({
             event.preventDefault();
             openModelList();
           }}
-          className="glass-control inline-flex max-w-[75%] items-center gap-1.5 rounded-[6px] px-2 py-1 font-normal outline-none disabled:cursor-not-allowed"
+          className="glass-control inline-flex max-w-[75%] items-center gap-1.5 rounded-[6px] px-2 py-1 font-normal disabled:cursor-not-allowed"
         >
           <span className="truncate">{selectedModel.label}</span>
           <HugeiconsIcon icon={ArrowDown01Icon} size={14} color="currentColor" strokeWidth={1.5} aria-hidden="true" className={`shrink-0 text-black/40 transition dark:text-white/42 ${openPicker === "model" ? "rotate-180" : ""}`} />
@@ -297,7 +297,7 @@ export function RoutineModelPicker({
               event.preventDefault();
               openEffortList();
             }}
-            className="glass-control inline-flex items-center gap-1.5 rounded-[6px] px-2 py-1 font-normal outline-none disabled:cursor-not-allowed"
+            className="glass-control inline-flex items-center gap-1.5 rounded-[6px] px-2 py-1 font-normal disabled:cursor-not-allowed"
           >
             <span>{selectedEffort.label}</span>
             <HugeiconsIcon icon={ArrowDown01Icon} size={14} color="currentColor" strokeWidth={1.5} aria-hidden="true" className={`shrink-0 text-black/40 transition dark:text-white/42 ${openPicker === "effort" ? "rotate-180" : ""}`} />

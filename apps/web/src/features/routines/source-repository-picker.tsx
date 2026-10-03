@@ -64,7 +64,7 @@ export function SourceRepositoryPicker({ sources, value, onChange }: SourceRepos
             setOpen(true);
           }
         }}
-        className="glass-control flex h-10 w-full items-center justify-between gap-2.5 rounded-[9px] border px-3 text-sm font-normal outline-none disabled:cursor-not-allowed"
+        className="glass-control flex h-10 w-full items-center justify-between gap-2.5 rounded-[9px] border px-3 text-sm font-normal disabled:cursor-not-allowed"
       >
         <span className="flex min-w-0 items-center gap-1.5"><span className="truncate">{selectedSource ? selectedSource.displayName : "Connect GitHub first"}</span>{selectedSource?.visibility === "PRIVATE" && <LockKeyhole aria-label="Private repository" className="size-3 shrink-0 text-black/35 dark:text-white/38" strokeWidth={1.6} />}</span>
         <HugeiconsIcon

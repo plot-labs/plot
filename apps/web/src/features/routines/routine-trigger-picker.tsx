@@ -173,7 +173,7 @@ export function RoutineTriggerPicker({
             event.preventDefault();
             openRepeatListbox();
           }}
-          className="glass-control inline-flex items-center gap-1.5 rounded-[6px] px-2 py-1 font-normal outline-none"
+          className="glass-control inline-flex items-center gap-1.5 rounded-[6px] px-2 py-1 font-normal"
         >
           <span>{selected.label}</span>
           <HugeiconsIcon
@@ -254,7 +254,7 @@ export function RoutineTriggerPicker({
               event.preventDefault();
               openDayListbox();
             }}
-            className="glass-control inline-flex items-center gap-1.5 rounded-[6px] px-2 py-1 font-normal outline-none"
+            className="glass-control inline-flex items-center gap-1.5 rounded-[6px] px-2 py-1 font-normal"
           >
             <span>{activeDay}</span>
             <HugeiconsIcon
