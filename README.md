@@ -29,11 +29,11 @@ flowchart LR
 ```
 
 - **Follow connected work.** Verified GitHub webhooks feed a durable signal inbox. Release automation is enabled by default, with no separate Autonomy mode to configure.
-- **Draft when it matters.** Release changelogs require a published release and source evidence. Explicit GitHub change and merged PR Routines can prepare a separate product update draft from eligible changes before a release; maintenance-only changes are excluded and unclear changes are held for manual review.
+- **Draft when it matters.** Release changelogs require a published release and source evidence. Explicit GitHub change and merged PR Automations can prepare a separate product update draft from eligible changes before a release; maintenance-only changes are excluded and unclear changes are held for manual review.
 - **Keep the work inspectable.** Drafts retain their source evidence and revisions. Executions appear as conversations in **History**, alongside manual requests.
 - **Keep publication deliberate.** Prepare and revise content in Plot, then publish to the hosted changelog or export Markdown. Automatic drafting does not grant publication approval.
 
-The current runtime does not yet combine held changes across releases. Scheduled Routines remain deferred; GitHub change and merged PR Routines use a conservative change-title gate (`feat`, `fix`, `perf`, `security`, or `revert`). Explicit manual runs remain available.
+The current runtime does not yet combine held changes across releases. Daily and weekly Automations run on their schedule; GitHub change and merged PR Automations use a conservative change-title gate (`feat`, `fix`, `perf`, `security`, or `revert`). Explicit manual runs remain available.
 
 ## Workspace
 
