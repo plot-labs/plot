@@ -588,7 +588,7 @@ describe("Chat streaming document panel", () => {
     expect(await screen.findByText("Streaming answer")).toBeVisible();
     const panel = await screen.findByRole("complementary", { name: "Content panel" });
     expect(within(panel).getByText("Visible draft paragraph")).toBeVisible();
-    expect(within(panel).getByText("Generating")).toBeVisible();
+    expect(within(panel).getByText("Drafting")).toBeVisible();
     expect(within(panel).queryByRole("button", { name: "Save draft" })).not.toBeInTheDocument();
     expect(within(panel).queryByRole("button", { name: "Content actions" })).not.toBeInTheDocument();
     expect(screen.queryByText("Reviewed content")).not.toBeInTheDocument();

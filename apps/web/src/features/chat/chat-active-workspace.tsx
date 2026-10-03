@@ -16,7 +16,7 @@ import { ExportDialog } from "@/features/citations/export-dialog";
 import { PublishDialog } from "@/features/citations/publish-dialog";
 import { ChatComposer } from "@/features/chat/chat-composer";
 import { AgentActivityDetail, ErrorNotice } from "@/features/chat/chat-activity";
-import { chatHref } from "@/features/chat/chat-workspace-utils";
+import { chatHref, documentPhaseStatus } from "@/features/chat/chat-workspace-utils";
 import { useChatAgentActivity } from "@/features/chat/use-chat-agent-activity";
 import { useChatArtifactDocument } from "@/features/chat/use-chat-artifact-document";
 import { plotApiClient } from "@/lib/api-client";
@@ -210,6 +210,7 @@ export function ChatActiveWorkspace({
                       {selectedVersion && (
                         <AgentActivityDetail
                           run={runForDetail}
+                          phase={runForDetail && selectedProgress?.runId === runForDetail.id ? selectedProgress.phase : null}
                           busy={isLatestTurn && (agent.agentBusy || agent.isPendingRun)}
                           error={isLatestTurn ? agent.agentError : ""}
                           instruction={selectedVersion.instruction || turn.userMessage}
@@ -265,6 +266,7 @@ export function ChatActiveWorkspace({
                   ))}
                   <AgentActivityDetail
                     run={agent.agentRun ?? agent.selectedActivity}
+                    phase={selectedProgress && (agent.agentRun ?? agent.selectedActivity)?.id === selectedProgress.runId ? selectedProgress.phase : null}
                     busy={agent.agentBusy}
                     error={agent.agentError}
                     instruction={agent.agentInstruction}
@@ -328,7 +330,7 @@ export function ChatActiveWorkspace({
                   {() => <ExportDialog pack={shownArtifact} client={plotApiClient} presentation="menu" />}
                 </ArtifactActionsMenu>
               ) : null}
-              {showPreview ? <span role="status" className="text-sm text-black/60 dark:text-white/60">{selectedProgress?.status === "FAILED" ? "Generation failed · last draft" : selectedProgress?.status === "SUCCEEDED" ? "Loading final draft" : "Generating"}</span> : null}
+              {showPreview ? <span role="status" className="text-sm text-black/60 dark:text-white/60">{selectedProgress?.status === "FAILED" ? "Generation failed · last draft" : selectedProgress?.status === "SUCCEEDED" ? "Loading final draft" : documentPhaseStatus(selectedProgress?.phase)}</span> : null}
             </div>
             <div className="flex items-center gap-2">
               <span className="hidden sm:inline">

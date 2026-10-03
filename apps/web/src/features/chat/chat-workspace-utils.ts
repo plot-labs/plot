@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from "react";
 
-import type { ChatAgentRun } from "@plot/api-client";
+import type { ChatAgentRun, ChatRunSnapshot } from "@plot/api-client";
 
 export type PendingAgentRequest = { key: string; fingerprint: string };
 
@@ -55,11 +55,30 @@ export function agentStatusLabel(status: ChatAgentRun["status"]) {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-export function agentProgressLabel(status: ChatAgentRun["status"]) {
+const RUNNING_PHASE_LABELS: Partial<Record<ChatRunSnapshot["phase"], string>> = {
+  RESEARCHING: "Reading the linked changes…",
+  RESPONDING: "Writing a reply…",
+  WRITING: "Drafting the content…",
+  REVIEWING: "Checking the draft against its sources…",
+  REWRITING: "Revising the draft…",
+};
+
+const DOCUMENT_PHASE_STATUS: Partial<Record<ChatRunSnapshot["phase"], string>> = {
+  WRITING: "Drafting",
+  REVIEWING: "Checking sources",
+  REWRITING: "Revising",
+};
+
+export function agentProgressLabel(status: ChatAgentRun["status"], phase?: ChatRunSnapshot["phase"] | null) {
   if (status === "QUEUED") return "Queued…";
-  if (status === "RUNNING") return "Plot is working on a response…";
+  if (status === "RUNNING") return (phase && RUNNING_PHASE_LABELS[phase]) || "Plot is working on a response…";
   if (status === "SUCCEEDED") return "Response complete.";
   return "Plot could not complete the response.";
+}
+
+/** Short status for the document panel while a draft streams in. */
+export function documentPhaseStatus(phase?: ChatRunSnapshot["phase"] | null) {
+  return (phase && DOCUMENT_PHASE_STATUS[phase]) || "Generating";
 }
 
 export function upsertActivity(setActivities: Dispatch<SetStateAction<ChatAgentRun[]>>, next: ChatAgentRun) {

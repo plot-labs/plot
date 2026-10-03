@@ -6,7 +6,7 @@ import { ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import type { ChatAgentRun, ChatCitation, ChatResponseVersion, RetryEligibility } from "@plot/api-client";
+import type { ChatAgentRun, ChatCitation, ChatResponseVersion, ChatRunSnapshot, RetryEligibility } from "@plot/api-client";
 
 function formatChatTime(value: string | number | Date): string {
   const date = new Date(value);
@@ -37,6 +37,7 @@ export function AgentActivityDetail({
   onRetry,
   retrying = false,
   retryEligibility = null,
+  phase = null,
 }: {
   run: ChatAgentRun | null;
   busy: boolean;
@@ -50,6 +51,7 @@ export function AgentActivityDetail({
   onRetry?: () => void;
   retrying?: boolean;
   retryEligibility?: RetryEligibility | null;
+  phase?: ChatRunSnapshot["phase"] | null;
 }) {
   if (!run && !busy && !error) return null;
   const status = run?.status ?? "QUEUED";
@@ -81,7 +83,7 @@ export function AgentActivityDetail({
           className="w-full min-w-0 max-w-full"
         >
           <p className="whitespace-pre-wrap text-sm leading-6 text-black/75 dark:text-white/78">
-            {responseText || (linkedArtifact && isComplete ? "The content is ready below." : instruction ? agentProgressLabel(status) : "Plot is preparing the request…")}
+            {responseText || (linkedArtifact && isComplete ? "The content is ready below." : instruction ? agentProgressLabel(status, phase) : "Plot is preparing the request…")}
           </p>
 
 
