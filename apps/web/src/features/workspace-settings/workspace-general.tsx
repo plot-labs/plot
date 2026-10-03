@@ -356,7 +356,7 @@ export function WorkspaceGeneral() {
           <section className="glass-card mt-6 overflow-hidden rounded-[14px] border border-black/[0.09] dark:border-white/10" aria-labelledby="public-changelog-heading">
             <div className="border-b border-black/[0.07] px-5 py-5 dark:border-white/[0.08] sm:px-6">
               <h2 id="public-changelog-heading" className="text-[15px] font-semibold text-black/82 dark:text-white/86">Public changelog</h2>
-              <p className="mt-1 text-[13px] leading-5 text-black/48 dark:text-white/48">Share this URL after you publish changelog entries from an artifact.</p>
+              <p className="mt-1 text-[13px] leading-5 text-black/48 dark:text-white/48">Share this URL after you publish changelog entries from Contents.</p>
             </div>
             <div className="space-y-4 px-5 py-6 sm:px-6">
               <div>

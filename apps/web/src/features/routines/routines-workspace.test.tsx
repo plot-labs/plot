@@ -375,7 +375,7 @@ describe("RoutinesWorkspace", () => {
     const steps = within(activity).getAllByRole("listitem");
     expect(steps).toHaveLength(2);
     expect(steps[0]).toHaveTextContent("Read github.search");
-    expect(steps[1]).toHaveTextContent("Create artifact");
+    expect(steps[1]).toHaveTextContent("Create content");
     expect(screen.getAllByRole("link", { name: "Open content for Agent automation" })).toHaveLength(1);
   });
 

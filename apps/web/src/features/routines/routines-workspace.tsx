@@ -483,7 +483,7 @@ export function RoutinesWorkspace() {
                           <span className="truncate text-[12px] text-black/38 dark:text-white/40">{formatRoutineStatus(routine)}</span>
                           <div className="flex max-w-full flex-wrap items-center gap-1">
                             {chatId && <Link href={`/chat?chat=${encodeURIComponent(chatId)}${artifactId ? `&artifact=${encodeURIComponent(artifactId)}` : ""}`} aria-label={`Open chat for ${routine.name}`} className="glass-button inline-flex items-center">Chat</Link>}
-                            {artifactId && <Link href={`/contents?artifact=${encodeURIComponent(artifactId)}`} aria-label={`Open content for ${routine.name}`} className="glass-button inline-flex items-center">Artifact</Link>}
+                            {artifactId && <Link href={`/contents?artifact=${encodeURIComponent(artifactId)}`} aria-label={`Open content for ${routine.name}`} className="glass-button inline-flex items-center">Content</Link>}
                             {agentRunId && <button type="button" onClick={() => { void toggleAgentDetail(routine); }} aria-expanded={expanded} aria-label={`View agent activity for ${routine.name}`} className="glass-button inline-flex items-center">Activity</button>}
                             {!isReleaseCadence(routine.cadence) && <button type="button" onClick={() => { void runRoutine(routine); }} disabled={busyRoutineId !== null || isRoutineRunInProgress(routine)} aria-busy={busy || isRoutineRunInProgress(routine)} className="glass-button inline-flex items-center gap-1.5 disabled:cursor-wait"><Play className="size-3" /> Run</button>}
                             <button type="button" onClick={() => { void toggleRoutine(routine); }} disabled={busyRoutineId !== null} aria-busy={busy} aria-label={routine.enabled ? `Pause ${routine.name}` : `Enable ${routine.name}`} title={routine.enabled ? "Pause automation" : "Enable automation"} className="glass-button glass-icon inline-flex size-7 items-center justify-center disabled:cursor-wait">{busy ? <LoaderCircle className="size-3.5 animate-spin" /> : <Power className="size-3.5" />}</button>
@@ -669,7 +669,7 @@ function formatRoutineStatus(routine: Routine) {
 
 function formatAgentStep(step: RoutineAgentRunDetail["steps"][number]) {
   const label = step.kind === "ARTIFACT_HANDOFF"
-    ? "Create artifact"
+    ? "Create content"
     : step.toolName ? `Read ${step.toolName}` : "Read source context";
   return step.failureCode ? `${label} · ${step.failureCode.replaceAll("_", " ").toLowerCase()}` : label;
 }

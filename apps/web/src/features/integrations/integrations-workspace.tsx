@@ -54,7 +54,7 @@ const plannedIntegrations: Array<{
   },
   {
     brand: "figma",
-    description: "Keep design context close to the artifacts it helped shape.",
+    description: "Keep design context close to the content it helped shape.",
     name: "Figma",
   },
 ];
