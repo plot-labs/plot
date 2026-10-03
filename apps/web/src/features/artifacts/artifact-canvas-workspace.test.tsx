@@ -81,11 +81,15 @@ describe("ArtifactCanvasWorkspace", () => {
     })));
   });
 
-  it("shows publish and export actions in the header", () => {
+  it("groups copy and download under artifact actions", () => {
     render(<ArtifactCanvasWorkspace artifact={artifact} client={client()} onSaveArtifact={vi.fn()} />);
 
     expect(screen.getByRole("button", { name: "Save draft" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Copy changelog" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Copy changelog" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Export options" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Artifact actions" }));
+    expect(screen.getByRole("menuitem", { name: "Copy Markdown" })).toBeVisible();
+    expect(screen.getByRole("menuitem", { name: "Download Markdown" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Publish changelog" })).toBeVisible();
   });
 

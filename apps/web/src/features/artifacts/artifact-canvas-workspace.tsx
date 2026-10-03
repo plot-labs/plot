@@ -88,7 +88,6 @@ export function ArtifactCanvasWorkspace({ artifact, client, onSaveArtifact }: Ar
           </span>
         </nav>
         <div ref={actionsRef} className="relative flex shrink-0 items-center gap-2">
-          <ExportDialog pack={currentArtifact} client={client} presentation="copy" />
           <button
             ref={overflowTriggerRef}
             type="button"
@@ -103,6 +102,7 @@ export function ArtifactCanvasWorkspace({ artifact, client, onSaveArtifact }: Ar
           {menuOpen ? (
             <div role="menu" aria-label="Artifact actions" className="glass-layer absolute right-0 top-full z-40 mt-2 w-[204px] rounded-[8px] border border-black/10 p-2 text-[13px] text-[#18181b] dark:border-white/10 dark:text-white">
               <MenuButton icon={Library} onClick={openSources}>Sources</MenuButton>
+              <ExportDialog pack={currentArtifact} client={client} presentation="menu" />
             </div>
           ) : null}
         </div>
