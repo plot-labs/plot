@@ -97,6 +97,28 @@ describe("ChatWorkspace", () => {
     expect(screen.queryByText("No chats yet. Start with a source-backed request.")).not.toBeInTheDocument();
   });
 
+  it("shows a not-found state instead of the empty composer for an unknown chat link", async () => {
+    mocks.search = "chat=missing-chat";
+    mocks.listSessions.mockResolvedValue([chat]);
+    render(<ChatWorkspace />);
+
+    expect(screen.getByRole("status")).toHaveTextContent("Loading chat…");
+    expect(await screen.findByRole("alert")).toHaveTextContent("This chat could not be found.");
+    expect(screen.getByRole("link", { name: "Start a new chat" })).toHaveAttribute("href", "/chat");
+    expect(screen.queryByRole("button", { name: "Start request" })).not.toBeInTheDocument();
+  });
+
+  it("reports a failed chat list load and retries it", async () => {
+    mocks.search = "chat=chat-1";
+    mocks.listSessions.mockRejectedValueOnce(new Error("offline")).mockResolvedValue([chat]);
+    render(<ChatWorkspace />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("This chat could not be loaded.");
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(mocks.listSessions).toHaveBeenCalledTimes(2));
+    expect(await screen.findByRole("heading", { name: "Release" })).toBeInTheDocument();
+  });
+
   it.each([0, 1, 25])("starts without fetching or attaching the workspace's %i blocks", async (count) => {
     mocks.listReferences.mockResolvedValue(Array.from({ length: count }, (_, index) => ({ ...reference, id: `block-${index}` })));
     mocks.createChatAgentRun.mockResolvedValue(agentRun({ id: "agent-new", chatId: "chat-new" }));
