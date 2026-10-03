@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, MoreHorizontal, X } from "lucide-react";
+import { Eye, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -170,7 +170,6 @@ export function ChatActiveWorkspace({
         <header className="flex min-h-14 shrink-0 items-center bg-white px-4 py-3 dark:bg-[#111113]" style={toolbarBottomFade}>
           <div className="flex w-full min-w-0 items-center justify-start gap-2 text-sm font-semibold text-black/78 dark:text-white/82">
             <h1 className="truncate text-left">{activeChat.title || "Untitled chat"}</h1>
-            <MoreHorizontal aria-hidden="true" className="size-4 shrink-0 text-black/45 dark:text-white/45" />
           </div>
         </header>
 
