@@ -25,7 +25,7 @@ export function PublicChangelogLayout({
     <main className="min-h-dvh bg-[#faf9f6] dark:bg-[#141416] px-6 py-8 text-[#171512] dark:text-[#f4f4f5] sm:px-10 lg:px-16">
       <nav className="mx-auto flex max-w-5xl items-center justify-between gap-4">
         <Link href="/" className="flex items-center gap-2" aria-label="Plot home">
-          <Image src="/plot-logo.png" alt="" width={24} height={24} className="size-6" />
+          <Image src="/plot-logo.png" alt="" width={24} height={24} className="size-6 dark:invert" />
           <span className="font-display text-2xl leading-none">Plot</span>
         </Link>
         <Link
