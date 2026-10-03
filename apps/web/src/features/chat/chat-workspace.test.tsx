@@ -215,7 +215,7 @@ describe("ChatWorkspace", () => {
     expect(openArtifact.compareDocumentPosition(responseTime!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.queryByText("Reviewed content")).not.toBeInTheDocument();
     fireEvent.click(openArtifact);
-    const artifactPanel = screen.getByRole("complementary", { name: "Content panel" });
+    const artifactPanel = await screen.findByRole("complementary", { name: "Content panel" });
     const artifactBody = within(artifactPanel).getByRole("region", { name: "Content body" });
     const artifactTitle = within(artifactPanel).getByText("Release", { exact: true });
     expect(artifactPanel).toBeVisible();
@@ -243,7 +243,7 @@ describe("ChatWorkspace", () => {
 
 		render(<ChatWorkspace />);
 		fireEvent.click(await screen.findByText("Open content"));
-		const artifactPanel = screen.getByRole("complementary", { name: "Content panel" });
+		const artifactPanel = await screen.findByRole("complementary", { name: "Content panel" });
 		expect(await within(artifactPanel).findByRole("button", { name: /Publish changelog/ })).toBeVisible();
 	});
 
@@ -407,7 +407,7 @@ describe("ChatWorkspace", () => {
     expect(screen.queryByRole("tablist", { name: "Chat workspace panels" })).not.toBeInTheDocument();
     expect(screen.queryByText("Chat activity")).not.toBeInTheDocument();
     fireEvent.click(screen.getByText("Open content"));
-    expect(screen.getByRole("complementary", { name: "Content panel" })).toBeVisible();
+    expect(await screen.findByRole("complementary", { name: "Content panel" })).toBeVisible();
     expect(screen.queryByRole("button", { name: "Content history" })).not.toBeInTheDocument();
   });
 

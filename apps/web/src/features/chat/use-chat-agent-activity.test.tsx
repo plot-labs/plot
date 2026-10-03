@@ -21,7 +21,7 @@ describe("Chat subscription ownership", () => {
     const callbacks = props();
     const { result, unmount } = renderHook(() => useChatAgentActivity(callbacks));
     await waitFor(() => expect(mocks.streamChatAgentRun).toHaveBeenCalledTimes(1), { timeout: 2000 });
-    expect(result.current.agentRun?.id).toBe("run-1");
+    await waitFor(() => expect(result.current.agentRun?.id).toBe("run-1"));
     expect(mocks.getChatAgentRun).toHaveBeenCalledTimes(2);
     unmount();
   });
