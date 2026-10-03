@@ -36,7 +36,7 @@ describe("RoutineReleaseActivity", () => {
 
   it("renders nothing when release activity returns 204", async () => {
     mocks.getGitHubReleaseActivity.mockResolvedValue(null);
-    render(<RoutineReleaseActivity sourceScopeId="source-1" routineName="Release routine" />);
+    render(<RoutineReleaseActivity sourceScopeId="source-1" routineName="Release automation" />);
 
     await waitFor(() => expect(mocks.getGitHubReleaseActivity).toHaveBeenCalledTimes(1));
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
@@ -44,31 +44,31 @@ describe("RoutineReleaseActivity", () => {
 
   it("shows an open artifact link when release draft is ready", async () => {
     mocks.getGitHubReleaseActivity.mockResolvedValue(activity({ status: "READY", artifactId: "artifact-42" }));
-    render(<RoutineReleaseActivity sourceScopeId="source-1" routineName="Release routine" />);
+    render(<RoutineReleaseActivity sourceScopeId="source-1" routineName="Release automation" />);
 
     expect(await screen.findByRole("status")).toHaveTextContent("Latest release: v2.4.0 · Draft ready");
-    expect(screen.getByRole("link", { name: "Open artifact for Release routine release v2.4.0" }))
+    expect(screen.getByRole("link", { name: "Open content for Release automation release v2.4.0" }))
       .toHaveAttribute("href", "/contents?artifact=artifact-42");
   });
 
   it("calls retry when a failed release draft is retried", async () => {
     mocks.getGitHubReleaseActivity.mockResolvedValue(activity({ status: "FAILED", artifactId: null, errorCode: "AGENT_RUN_FAILED" }));
     mocks.retryGitHubReleaseDraft.mockResolvedValue(activity({ status: "QUEUED", errorCode: null }));
-    render(<RoutineReleaseActivity sourceScopeId="source-1" routineName="Release routine" />);
+    render(<RoutineReleaseActivity sourceScopeId="source-1" routineName="Release automation" />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Retry release draft for Release routine" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Retry release draft for Release automation" }));
 
     await waitFor(() => expect(mocks.retryGitHubReleaseDraft).toHaveBeenCalledWith("source-1", "request-1", expect.anything()));
     expect(await screen.findByRole("status")).toHaveTextContent("Latest release: Preparing draft for v2.4.0…");
-    expect(screen.queryByRole("button", { name: "Retry release draft for Release routine" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Retry release draft for Release automation" })).not.toBeInTheDocument();
   });
 
   it("shows in-flight copy without retry for generating drafts", async () => {
     mocks.getGitHubReleaseActivity.mockResolvedValue(activity({ status: "GENERATING", artifactId: null }));
-    render(<RoutineReleaseActivity sourceScopeId="source-1" routineName="Release routine" />);
+    render(<RoutineReleaseActivity sourceScopeId="source-1" routineName="Release automation" />);
 
     expect(await screen.findByRole("status")).toHaveTextContent("Latest release: Preparing draft for v2.4.0…");
-    expect(screen.queryByRole("button", { name: "Retry release draft for Release routine" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Retry release draft for Release automation" })).not.toBeInTheDocument();
   });
 
   it("loads a specific request id and posts a pinned-head range", async () => {
@@ -81,16 +81,16 @@ describe("RoutineReleaseActivity", () => {
       headSha: head,
     }));
     mocks.selectGitHubReleaseRange.mockResolvedValue(activity({ status: "QUEUED", artifactId: null, baseSha: base, headSha: head }));
-    render(<RoutineReleaseActivity sourceScopeId="source-1" routineName="Release routine" releaseRequestId="request-1" />);
+    render(<RoutineReleaseActivity sourceScopeId="source-1" routineName="Release automation" releaseRequestId="request-1" />);
 
     expect(await screen.findByRole("status")).toHaveTextContent("Latest release: First release for v2.4.0");
     expect(mocks.getGitHubReleaseActivityById).toHaveBeenCalledWith("source-1", "request-1", expect.anything());
     expect(mocks.getGitHubReleaseActivity).not.toHaveBeenCalled();
     expect(screen.getByText(`Tag head ${head}`)).toBeVisible();
 
-    const baseInput = screen.getByRole("textbox", { name: "Previous commit SHA for Release routine" });
+    const baseInput = screen.getByRole("textbox", { name: "Previous commit SHA for Release automation" });
     fireEvent.change(baseInput, { target: { value: base } });
-    fireEvent.click(screen.getByRole("button", { name: "Generate draft from range for Release routine" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate draft from range for Release automation" }));
 
     await waitFor(() => expect(mocks.selectGitHubReleaseRange).toHaveBeenCalledWith(
       "source-1",

@@ -144,7 +144,7 @@ export function SourcesPopover({ sources }: SourcesPopoverProps) {
             </ol>
           ) : (
             <p className="mt-4 rounded-xl border border-dashed border-black/10 px-3 py-4 text-sm leading-6 text-black/52 dark:border-white/12 dark:text-white/55">
-              No current sources are available for this artifact.
+              No current sources are available for this content.
             </p>
           )}
         </div>

@@ -192,7 +192,7 @@ export function RoutineTriggerPicker({
             id={listboxId}
             role="listbox"
             tabIndex={0}
-            aria-label="Routine trigger"
+            aria-label="Automation trigger"
             aria-activedescendant={`${listboxId}-option-${activeIndex}`}
             onKeyDown={handleRepeatKeyDown}
             className="glass-layer absolute right-3 top-[calc(100%+4px)] z-50 min-w-[200px] max-h-[min(360px,70vh)] overflow-y-auto rounded-[12px] border border-black/10 p-1.5 dark:border-white/12"

@@ -24,7 +24,7 @@ vi.mock("@/lib/api-client", () => ({
 }));
 
 vi.mock("@/features/artifacts/artifact-canvas-workspace", () => ({
-  ArtifactCanvasWorkspace: () => <div>Artifact canvas</div>,
+  ArtifactCanvasWorkspace: () => <div>Content canvas</div>,
 }));
 
 import { ArtifactsWorkspace } from "./artifacts-workspace";
@@ -40,7 +40,7 @@ describe("ArtifactsWorkspace", () => {
           id: "artifact-1",
           status: "READY",
           published: false,
-          title: "Local preview artifact · Chat workspace",
+          title: "Local preview content · Chat workspace",
           contentType: "ARTIFACT",
           updatedAt: "2026-08-08T10:00:00Z",
         },
@@ -65,16 +65,16 @@ describe("ArtifactsWorkspace", () => {
     vi.restoreAllMocks();
   });
 
-  it("uses the unselected route as a full artifact library with relative update times", async () => {
+  it("uses the unselected route as a full document library with relative update times", async () => {
     render(<ArtifactsWorkspace />);
 
-    const firstArtifact = await screen.findByRole("link", { name: /Local preview artifact/ });
+    const firstArtifact = await screen.findByRole("link", { name: /Local preview content/ });
     expect(screen.getByText("Updated 2 hours ago")).toBeVisible();
     expect(screen.getByText("Updated 2 days ago")).toBeVisible();
     expect(screen.getByText("Name")).toBeVisible();
     expect(screen.getByText("Status")).toBeVisible();
     expect(screen.getByText("Updated")).toBeVisible();
-    expect(screen.queryByText("Select an artifact to inspect its draft and citations.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Select content to inspect its draft and citations.")).not.toBeInTheDocument();
 
     expect(firstArtifact).toHaveAttribute("href", "/contents?artifact=artifact-1");
   });
@@ -82,7 +82,7 @@ describe("ArtifactsWorkspace", () => {
   it.each(["draft", "published"])("keeps the full library for legacy view=%s links", async (view) => {
     mocks.search = `view=${view}`;
     render(<ArtifactsWorkspace />);
-    const draft = await screen.findByRole("link", { name: /Local preview artifact/ });
+    const draft = await screen.findByRole("link", { name: /Local preview content/ });
     const published = screen.getByRole("link", { name: /v1.1.0 changelog/ });
     expect(within(draft).getByText("Draft", { exact: true })).toBeVisible();
     expect(within(published).getByText("Published", { exact: true })).toBeVisible();
@@ -96,7 +96,7 @@ describe("ArtifactsWorkspace", () => {
     expect(within(row).queryByText("Draft", { exact: true })).not.toBeInTheDocument();
   });
 
-  it("shows a dedicated failure state when the artifact library cannot load", async () => {
+  it("shows a dedicated failure state when the document library cannot load", async () => {
     mocks.listArtifacts.mockRejectedValue(new Error("offline"));
 
     render(<ArtifactsWorkspace />);

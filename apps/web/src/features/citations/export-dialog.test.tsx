@@ -87,7 +87,7 @@ describe("ExportDialog", () => {
       "variant-1",
       expect.objectContaining({ kind: "CLIPBOARD_WRITE_SUCCEEDED", exportId: "export-copy" }),
     ));
-    expect(await screen.findByText("Artifact copied.")).toBeInTheDocument();
+    expect(await screen.findByText("Content copied.")).toBeInTheDocument();
   });
 
   it("does not count clipboard failure as a copy success", async () => {
@@ -103,7 +103,7 @@ describe("ExportDialog", () => {
       "variant-1",
       expect.objectContaining({ kind: "CLIPBOARD_WRITE_FAILED", exportId: "export-fail" }),
     ));
-    expect(screen.queryByText("Artifact copied.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Content copied.")).not.toBeInTheDocument();
     expect(await screen.findByText("Clipboard blocked")).toBeInTheDocument();
   });
 
@@ -130,11 +130,11 @@ describe("ExportDialog", () => {
     expect(screen.getByRole("button", { name: "Download launch announcement" })).toBeInTheDocument();
   });
 
-  it("uses neutral labels for prompt-driven artifacts", () => {
+  it("uses neutral labels for prompt-driven documents", () => {
     render(<ExportDialog pack={{ ...pack, contentType: "ARTIFACT" }} client={{} as PlotApiClient} />);
 
-    expect(screen.getByRole("button", { name: "Copy artifact" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Download artifact" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy content" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Download content" })).toBeInTheDocument();
   });
 
   it("offers a dropdown menu with Download .md option in copy presentation mode", async () => {

@@ -20,7 +20,7 @@ export function ExportDialog({ pack, client, presentation = "buttons" }: { pack:
     ? "launch announcement"
     : pack.contentType === "CHANGELOG"
       ? "changelog"
-      : "artifact";
+      : "content";
   const copyLabel = `Copy ${contentNoun}`;
   const downloadLabel = `Download ${contentNoun}`;
 
@@ -68,7 +68,7 @@ export function ExportDialog({ pack, client, presentation = "buttons" }: { pack:
           await navigator.clipboard.writeText(result.text);
           await reportDelivery(result.exportId, "CLIPBOARD_WRITE_SUCCEEDED");
           setConfirmation(null);
-          setMessage("Artifact copied.");
+          setMessage("Content copied.");
         } catch (error) {
           await reportDelivery(result.exportId, "CLIPBOARD_WRITE_FAILED");
           setConfirmation(null);
@@ -88,7 +88,7 @@ export function ExportDialog({ pack, client, presentation = "buttons" }: { pack:
         setConfirmation({ disposition, warnings });
         setMessage("Explicit confirmation is required before export.");
       } else {
-        setMessage(error instanceof Error ? error.message : "The artifact could not be exported.");
+        setMessage(error instanceof Error ? error.message : "The content could not be exported.");
       }
     } finally {
       setPending(null);
@@ -124,7 +124,7 @@ export function ExportDialog({ pack, client, presentation = "buttons" }: { pack:
             className="glass-button min-w-[96px]"
           >
             <Copy aria-hidden="true" className="size-3.5 text-black/60 dark:text-white/60" />
-            <span>{pending === "COPY" ? "Copying…" : message === "Artifact copied." ? "Copied" : "Copy"}</span>
+            <span>{pending === "COPY" ? "Copying…" : message === "Content copied." ? "Copied" : "Copy"}</span>
           </button>
           <div className="w-px self-stretch bg-black/15 dark:bg-white/15" aria-hidden="true" />
           <div className="relative inline-flex h-full">
@@ -212,7 +212,7 @@ export function ExportDialog({ pack, client, presentation = "buttons" }: { pack:
   }
 
   return (
-    <section aria-label="Export artifact" className="flex min-w-0 flex-col items-end gap-2 sm:max-w-[24rem]">
+    <section aria-label="Export content" className="flex min-w-0 flex-col items-end gap-2 sm:max-w-[24rem]">
       <label className="inline-flex min-h-10 items-center gap-2 self-end text-xs font-medium text-black/58 dark:text-white/58">
         <input
           type="checkbox"

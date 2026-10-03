@@ -105,7 +105,7 @@ describe("SourcesPopover", () => {
     const trigger = screen.getByRole("button", { name: "Sources" });
     trigger.focus();
     fireEvent.click(trigger);
-    expect(screen.getByText("No current sources are available for this artifact.")).toBeInTheDocument();
+    expect(screen.getByText("No current sources are available for this content.")).toBeInTheDocument();
 
     const dialog = screen.getByRole("dialog", { name: "Sources" });
     const close = screen.getByRole("button", { name: "Close sources" });

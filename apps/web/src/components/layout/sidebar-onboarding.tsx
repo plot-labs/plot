@@ -43,7 +43,7 @@ export function SidebarOnboarding({ workspaceId }: { workspaceId: string | null 
   if (!status || status.firstRun) return null;
   const steps = [
     ["Install GitHub App", status.connected],
-    ["Create first Routine", status.routine],
+    ["Create first automation", status.routine],
     ["Get the first draft", status.firstRun],
   ] as const;
   const completed = steps.filter(([, done]) => done).length;

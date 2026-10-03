@@ -126,7 +126,7 @@ export function RoutinesWorkspace() {
     if (!workspaceId) {
       queueMicrotask(() => {
         if (controller.signal.aborted || workspaceRevisionRef.current !== workspaceRevision) return;
-        setLoadError("Select a workspace to manage routines.");
+        setLoadError("Select a workspace to manage automations.");
         setIsLoading(false);
       });
       return () => controller.abort();
@@ -139,7 +139,7 @@ export function RoutinesWorkspace() {
       .then(([routineResult, connectionResult]) => {
         if (!requestIsCurrent(controller, workspaceRevision, workspaceId)) return;
         if (routineResult.status === "rejected") {
-          setLoadError("Routines could not be loaded.");
+          setLoadError("Automations could not be loaded.");
           return;
         }
         const nextRoutines = routineResult.value;
@@ -163,7 +163,7 @@ export function RoutinesWorkspace() {
       })
       .catch(() => {
         if (requestIsCurrent(controller, workspaceRevision, workspaceId)) {
-          setLoadError("Routines could not be loaded.");
+          setLoadError("Automations could not be loaded.");
         }
       })
       .finally(() => {
@@ -227,7 +227,7 @@ export function RoutinesWorkspace() {
     if (!canCreate || createAbortRef.current) return;
     const workspaceId = getSelectedWorkspaceId();
     if (!workspaceId) {
-      setError("Select a workspace to create a routine.");
+      setError("Select a workspace to create an automation.");
       return;
     }
     const controller = new AbortController();
@@ -262,7 +262,7 @@ export function RoutinesWorkspace() {
       setCreateOpen(false);
     } catch {
       if (requestIsCurrent(controller, workspaceRevision, workspaceId)) {
-        setError("Routine could not be created. Check the connected GitHub source and try again.");
+        setError("Automation could not be created. Check the connected GitHub source and try again.");
       }
     } finally {
       if (createAbortRef.current === controller) {
@@ -291,7 +291,7 @@ export function RoutinesWorkspace() {
       setRoutines((current) => current.map((item) => item.id === updated.id ? updated : item));
     } catch {
       if (requestIsCurrent(controller, workspaceRevision, workspaceId)) {
-        setError("Routine could not be updated.");
+        setError("Automation could not be updated.");
       }
     } finally {
       if (routineActionAbortRef.current === controller) {
@@ -332,8 +332,8 @@ export function RoutinesWorkspace() {
       if (requestIsCurrent(controller, workspaceRevision, workspaceId)) {
         setError(
           err instanceof PlotApiError && err.code === "GITHUB_RELEASE_RANGE_REQUIRED"
-            ? "Release routines need a GitHub tag or published release. Choose a commit range on the release activity."
-            : "Routine could not run. Try again after checking the connected source.",
+            ? "Release automations need a GitHub tag or published release. Choose a commit range on the release activity."
+            : "Automation could not run. Try again after checking the connected source.",
         );
       }
     } finally {
@@ -434,7 +434,7 @@ export function RoutinesWorkspace() {
             description="Manage recurring draft preparation. Automatic assessment follows the configured workspace policy; publishing requires review."
             actions={
               <>
-                <button type="button" onClick={retryLoad} disabled={refreshDisabled} aria-label="Refresh routines" title="Refresh routines" className={`glass-button glass-icon ${workspaceIconButtonClass}`}><RefreshCw className={`size-3.5 ${isLoading ? "animate-spin" : ""}`} /></button>
+                <button type="button" onClick={retryLoad} disabled={refreshDisabled} aria-label="Refresh automations" title="Refresh automations" className={`glass-button glass-icon ${workspaceIconButtonClass}`}><RefreshCw className={`size-3.5 ${isLoading ? "animate-spin" : ""}`} /></button>
                 {!createOpen && (
                   <WorkspaceCreateAction
                     ref={createTriggerRef}
@@ -447,16 +447,16 @@ export function RoutinesWorkspace() {
           >
             <label className={workspaceSearchClass}>
               <HugeiconsIcon icon={Search01Icon} size={16} color="currentColor" strokeWidth={1.5} aria-hidden="true" />
-              <span className="sr-only">Search routines</span>
-              <input type="search" value={routineQuery} onChange={(event) => setRoutineQuery(event.target.value)} placeholder="Search routines" className={workspaceSearchInputClass} />
+              <span className="sr-only">Search automations</span>
+              <input type="search" value={routineQuery} onChange={(event) => setRoutineQuery(event.target.value)} placeholder="Search automations" className={workspaceSearchInputClass} />
             </label>
           </WorkspaceHeader>
 
           {(loadError ?? error) && <div className="mx-6 mt-4"><WorkspaceErrorNotice message={(loadError ?? error)!} onRetry={retryLoad} retrying={refreshDisabled} /></div>}
 
-          {!isLoading && !loadError && !sources.length && <div className="glass-card mx-6 mt-4 flex items-center justify-between gap-3 rounded-[9px] border border-black/10 px-3 py-2.5 text-[12px] text-black/58 dark:border-white/12 dark:text-white/60"><span>Connect a source before creating a routine.</span><Link href="/settings/integrations" className="shrink-0 font-medium text-black/72 underline underline-offset-4 dark:text-white/75">Integrations</Link></div>}
+          {!isLoading && !loadError && !sources.length && <div className="glass-card mx-6 mt-4 flex items-center justify-between gap-3 rounded-[9px] border border-black/10 px-3 py-2.5 text-[12px] text-black/58 dark:border-white/12 dark:text-white/60"><span>Connect a source before creating an automation.</span><Link href="/settings/integrations" className="shrink-0 font-medium text-black/72 underline underline-offset-4 dark:text-white/75">Connections</Link></div>}
 
-          {isLoading ? <div role="status" className="flex items-center gap-2 px-6 py-8 text-[13px] text-black/45 dark:text-white/45"><LoaderCircle className="size-4 animate-spin" /> Loading routines…</div> : loadError ? null : visibleRoutines.length ? (
+          {isLoading ? <div role="status" className="flex items-center gap-2 px-6 py-8 text-[13px] text-black/45 dark:text-white/45"><LoaderCircle className="size-4 animate-spin" /> Loading automations…</div> : loadError ? null : visibleRoutines.length ? (
             <div className="divide-y divide-black/[0.07] dark:divide-white/[0.08]">
               {visibleRoutines.map((routine) => {
                 const busy = busyRoutineId === routine.id;
@@ -482,11 +482,11 @@ export function RoutinesWorkspace() {
                         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                           <span className="truncate text-[12px] text-black/38 dark:text-white/40">{formatRoutineStatus(routine)}</span>
                           <div className="flex max-w-full flex-wrap items-center gap-1">
-                            {chatId && <Link href={`/chat?chat=${encodeURIComponent(chatId)}${artifactId ? `&artifact=${encodeURIComponent(artifactId)}` : ""}`} aria-label={`Open Chat for ${routine.name}`} className="glass-button inline-flex items-center">Chat</Link>}
-                            {artifactId && <Link href={`/contents?artifact=${encodeURIComponent(artifactId)}`} aria-label={`Open artifact for ${routine.name}`} className="glass-button inline-flex items-center">Artifact</Link>}
+                            {chatId && <Link href={`/chat?chat=${encodeURIComponent(chatId)}${artifactId ? `&artifact=${encodeURIComponent(artifactId)}` : ""}`} aria-label={`Open chat for ${routine.name}`} className="glass-button inline-flex items-center">Chat</Link>}
+                            {artifactId && <Link href={`/contents?artifact=${encodeURIComponent(artifactId)}`} aria-label={`Open content for ${routine.name}`} className="glass-button inline-flex items-center">Artifact</Link>}
                             {agentRunId && <button type="button" onClick={() => { void toggleAgentDetail(routine); }} aria-expanded={expanded} aria-label={`View agent activity for ${routine.name}`} className="glass-button inline-flex items-center">Activity</button>}
                             {!isReleaseCadence(routine.cadence) && <button type="button" onClick={() => { void runRoutine(routine); }} disabled={busyRoutineId !== null || isRoutineRunInProgress(routine)} aria-busy={busy || isRoutineRunInProgress(routine)} className="glass-button inline-flex items-center gap-1.5 disabled:cursor-wait"><Play className="size-3" /> Run</button>}
-                            <button type="button" onClick={() => { void toggleRoutine(routine); }} disabled={busyRoutineId !== null} aria-busy={busy} aria-label={routine.enabled ? `Pause ${routine.name}` : `Enable ${routine.name}`} title={routine.enabled ? "Pause routine" : "Enable routine"} className="glass-button glass-icon inline-flex size-7 items-center justify-center disabled:cursor-wait">{busy ? <LoaderCircle className="size-3.5 animate-spin" /> : <Power className="size-3.5" />}</button>
+                            <button type="button" onClick={() => { void toggleRoutine(routine); }} disabled={busyRoutineId !== null} aria-busy={busy} aria-label={routine.enabled ? `Pause ${routine.name}` : `Enable ${routine.name}`} title={routine.enabled ? "Pause automation" : "Enable automation"} className="glass-button glass-icon inline-flex size-7 items-center justify-center disabled:cursor-wait">{busy ? <LoaderCircle className="size-3.5 animate-spin" /> : <Power className="size-3.5" />}</button>
                           </div>
                         </div>
                         {isReleaseCadence(routine.cadence) ? (
@@ -512,7 +512,7 @@ export function RoutinesWorkspace() {
           ) : (
             <WorkspaceEmptyState
               icon={<HugeiconsIcon icon={ZapIcon} size={20} color="currentColor" strokeWidth={1.5} aria-hidden="true" />}
-              title={routines.length ? "No matching routines" : "No routines yet"}
+              title={routines.length ? "No matching automations" : "No automations yet"}
               description={routines.length ? "Try another search." : sources.length ? "Create one to keep your next draft moving." : "Connect a source to get started."}
             />
           )}
@@ -523,10 +523,10 @@ export function RoutinesWorkspace() {
             <header className="border-b border-black/[0.08] px-6 pb-5 pt-8 dark:border-white/10 sm:px-8">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 id="create-routine-heading" className="font-display text-[28px] font-normal leading-tight tracking-[-0.02em] text-black/86 dark:text-white/90">Create routine</h2>
+                  <h2 id="create-routine-heading" className="font-display text-[28px] font-normal leading-tight tracking-[-0.02em] text-black/86 dark:text-white/90">Create automation</h2>
                   <p className="mt-1.5 text-[13px] leading-5 text-black/45 dark:text-white/46">Choose what Plot should watch and what the draft should cover.</p>
                 </div>
-                <button type="button" onClick={closeCreate} aria-label="Close create routine" className="glass-button glass-icon inline-flex size-8 shrink-0 items-center justify-center"><HugeiconsIcon icon={Cancel01Icon} size={17} color="currentColor" strokeWidth={1.5} aria-hidden="true" /></button>
+                <button type="button" onClick={closeCreate} aria-label="Close create automation" className="glass-button glass-icon inline-flex size-8 shrink-0 items-center justify-center"><HugeiconsIcon icon={Cancel01Icon} size={17} color="currentColor" strokeWidth={1.5} aria-hidden="true" /></button>
               </div>
             </header>
 
@@ -547,7 +547,7 @@ export function RoutinesWorkspace() {
                   </div>
                 </fieldset>}
                 <label className="flex flex-col gap-2.5 text-[12px] font-medium text-black/62 dark:text-white/65">
-                  <span>Routine name</span>
+                  <span>Automation name</span>
                   <input ref={nameInputRef} value={name} onChange={(event) => setName(event.target.value)} placeholder="Weekly product update" maxLength={80} className="h-10 w-full rounded-[9px] border border-black/10 bg-white px-3 text-sm font-normal text-black/80 outline-none placeholder:text-black/35 focus:border-black/25 focus:ring-2 focus:ring-black/[0.05] dark:border-white/12 dark:bg-white/[0.06] dark:text-white/85 dark:placeholder:text-white/35" />
                 </label>
                 <label className="flex flex-col gap-2.5 text-[12px] font-medium text-black/62 dark:text-white/65">
@@ -579,7 +579,7 @@ export function RoutinesWorkspace() {
                   className="glass-button glass-primary min-w-[132px] inline-flex items-center gap-2 disabled:cursor-not-allowed"
                 >
                   {isSaving ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" /> : null}
-                  {isSaving ? "Creating…" : "Create routine"}
+                  {isSaving ? "Creating…" : "Create automation"}
                 </button>
               </div>
             </form>

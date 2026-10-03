@@ -195,7 +195,7 @@ function TiptapArtifactEditor({
     editorProps: {
       attributes: {
         role: "textbox",
-        "aria-label": readOnly ? "Historical artifact content" : "Draft content",
+        "aria-label": readOnly ? "Historical content" : "Draft content",
         "aria-readonly": readOnly ? "true" : "false",
         ...(!readOnly ? { "aria-keyshortcuts": "Alt+F10" } : {}),
         class: presentation === "document"
@@ -231,7 +231,7 @@ function TiptapArtifactEditor({
     try {
       const updated = await onSaveArtifact({
         expectedRevisionNumber: revisionNumber,
-        title: pack.title ?? "Generated artifact",
+        title: pack.title ?? "Generated content",
         lexicalContent: draftStateRef.current,
         statements: draftStatementsRef.current,
       });
@@ -261,19 +261,19 @@ function TiptapArtifactEditor({
 
   return (
     <section
-      aria-label={readOnly ? "Historical artifact preview" : "Artifact editor"}
+      aria-label={readOnly ? "Historical content preview" : "Content editor"}
       className={`glass-card ${embedded ? "min-w-0" : "rounded-xl border border-black/10 dark:border-white/10"}`}
     >
       {!documentPresentation ? (
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-black/[0.07] px-4 py-4 dark:border-white/10 sm:px-6">
           <div>
             <h2 className="text-sm font-semibold text-black/82 dark:text-white/88">
-              {readOnly ? "Historical preview" : "Artifact document"}
+              {readOnly ? "Historical preview" : "Content"}
             </h2>
             <p className="mt-1 text-xs text-black/50 dark:text-white/52">
               {readOnly
                 ? "This snapshot is read-only. Editing and delivery are disabled."
-                : "Edit the whole artifact. Sources stay outside the document and stay attached to it."}
+                : "Edit this content. Sources stay outside the document and stay attached to it."}
             </p>
           </div>
           <SourcesPopover sources={pack.variant.sources} />

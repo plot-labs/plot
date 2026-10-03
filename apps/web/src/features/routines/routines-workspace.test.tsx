@@ -87,27 +87,27 @@ describe("RoutinesWorkspace", () => {
     mocks.workspaceId = null;
     render(<RoutinesWorkspace />);
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Select a workspace to manage routines.");
-    expect(screen.queryByText("No routines yet")).not.toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Select a workspace to manage automations.");
+    expect(screen.queryByText("No automations yet")).not.toBeInTheDocument();
 
     mocks.workspaceId = "workspace-1";
     act(() => {
       window.dispatchEvent(new CustomEvent("plot:workspace-changed", { detail: { id: "workspace-1" } }));
     });
 
-    expect(await screen.findByText("No routines yet")).toBeVisible();
+    expect(await screen.findByText("No automations yet")).toBeVisible();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
-  it("does not render the empty state when routines fail to load", async () => {
+  it("does not render the empty state when automations fail to load", async () => {
     mocks.listRoutines.mockRejectedValueOnce(new Error("offline")).mockResolvedValue([]);
     render(<RoutinesWorkspace />);
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Routines could not be loaded.");
-    expect(screen.queryByText("No routines yet")).not.toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Automations could not be loaded.");
+    expect(screen.queryByText("No automations yet")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
-    expect(await screen.findByText("No routines yet")).toBeVisible();
+    expect(await screen.findByText("No automations yet")).toBeVisible();
   });
 
   it("ignores an initial load that resolves after the workspace changes", async () => {
@@ -115,7 +115,7 @@ describe("RoutinesWorkspace", () => {
     const pendingConnections = deferred<(typeof activeConnection)[]>();
     mocks.listRoutines
       .mockReturnValueOnce(pendingRoutines.promise)
-      .mockResolvedValueOnce([routine({ id: "routine-2", name: "Workspace two routine" })]);
+      .mockResolvedValueOnce([routine({ id: "routine-2", name: "Workspace two automation" })]);
     mocks.listGitHubConnections
       .mockReturnValueOnce(pendingConnections.promise)
       .mockResolvedValueOnce([activeConnection]);
@@ -128,72 +128,72 @@ describe("RoutinesWorkspace", () => {
     switchWorkspace("workspace-2");
     expect(routinesSignal.aborted).toBe(true);
     expect(connectionsSignal.aborted).toBe(true);
-    await screen.findByText("Workspace two routine");
+    await screen.findByText("Workspace two automation");
 
     await act(async () => {
-      pendingRoutines.resolve([routine({ id: "routine-old", name: "Old workspace routine" })]);
+      pendingRoutines.resolve([routine({ id: "routine-old", name: "Old workspace automation" })]);
       pendingConnections.resolve([activeConnection]);
       await Promise.all([pendingRoutines.promise, pendingConnections.promise]);
     });
-    expect(screen.queryByText("Old workspace routine")).not.toBeInTheDocument();
+    expect(screen.queryByText("Old workspace automation")).not.toBeInTheDocument();
   });
 
   it("ignores a create response from the previous workspace", async () => {
     const pendingCreate = deferred<Routine>();
-    const workspaceTwoRoutine = routine({ id: "routine-2", name: "Workspace two routine" });
+    const workspaceTwoRoutine = routine({ id: "routine-2", name: "Workspace two automation" });
     mocks.listRoutines.mockResolvedValueOnce([]).mockResolvedValueOnce([workspaceTwoRoutine]);
     mocks.createRoutine.mockReturnValue(pendingCreate.promise);
     render(<RoutinesWorkspace />);
 
-    await screen.findByText("No routines yet");
+    await screen.findByText("No automations yet");
     fireEvent.click(screen.getByRole("button", { name: "Create" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Routine name" }), {
-      target: { value: "Old workspace routine" },
+    fireEvent.change(screen.getByRole("textbox", { name: "Automation name" }), {
+      target: { value: "Old workspace automation" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Create routine" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create automation" }));
     await waitFor(() => expect(mocks.createRoutine).toHaveBeenCalledTimes(1));
     const signal = mocks.createRoutine.mock.calls[0]?.[1].signal as AbortSignal;
 
     switchWorkspace("workspace-2");
     expect(signal.aborted).toBe(true);
-    await screen.findByText("Workspace two routine");
+    await screen.findByText("Workspace two automation");
 
     await act(async () => {
-      pendingCreate.resolve(routine({ id: "routine-old", name: "Old workspace routine" }));
+      pendingCreate.resolve(routine({ id: "routine-old", name: "Old workspace automation" }));
       await pendingCreate.promise;
     });
-    expect(screen.queryByText("Old workspace routine")).not.toBeInTheDocument();
+    expect(screen.queryByText("Old workspace automation")).not.toBeInTheDocument();
   });
 
   it("ignores a toggle response from the previous workspace", async () => {
     const pendingUpdate = deferred<Routine>();
-    const oldRoutine = routine({ id: "routine-old", name: "Old routine", enabled: true });
+    const oldRoutine = routine({ id: "routine-old", name: "Old automation", enabled: true });
     mocks.listRoutines
       .mockResolvedValueOnce([oldRoutine])
-      .mockResolvedValueOnce([routine({ id: "routine-2", name: "Workspace two routine" })]);
+      .mockResolvedValueOnce([routine({ id: "routine-2", name: "Workspace two automation" })]);
     mocks.updateRoutine.mockReturnValue(pendingUpdate.promise);
     render(<RoutinesWorkspace />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Pause Old routine" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Pause Old automation" }));
     await waitFor(() => expect(mocks.updateRoutine).toHaveBeenCalledTimes(1));
     const signal = mocks.updateRoutine.mock.calls[0]?.[2].signal as AbortSignal;
     switchWorkspace("workspace-2");
     expect(signal.aborted).toBe(true);
-    await screen.findByText("Workspace two routine");
+    await screen.findByText("Workspace two automation");
 
     await act(async () => {
       pendingUpdate.resolve({ ...oldRoutine, enabled: false });
       await pendingUpdate.promise;
     });
-    expect(screen.queryByText("Old routine")).not.toBeInTheDocument();
+    expect(screen.queryByText("Old automation")).not.toBeInTheDocument();
   });
 
   it("ignores a run response from the previous workspace", async () => {
     const pendingRun = deferred<Routine>();
-    const oldRoutine = routine({ id: "routine-old", name: "Old routine" });
+    const oldRoutine = routine({ id: "routine-old", name: "Old automation" });
     mocks.listRoutines
       .mockResolvedValueOnce([oldRoutine])
-      .mockResolvedValueOnce([routine({ id: "routine-2", name: "Workspace two routine" })]);
+      .mockResolvedValueOnce([routine({ id: "routine-2", name: "Workspace two automation" })]);
     mocks.runRoutineNow.mockReturnValue(pendingRun.promise);
     render(<RoutinesWorkspace />);
 
@@ -204,17 +204,17 @@ describe("RoutinesWorkspace", () => {
     expect(idempotencyKey).toMatch(/^[0-9a-f-]{36}$/);
     switchWorkspace("workspace-2");
     expect(signal.aborted).toBe(true);
-    await screen.findByText("Workspace two routine");
+    await screen.findByText("Workspace two automation");
 
     await act(async () => {
       pendingRun.resolve({ ...oldRoutine, lastRunStatus: "READY" });
       await pendingRun.promise;
     });
-    expect(screen.queryByText("Old routine")).not.toBeInTheDocument();
+    expect(screen.queryByText("Old automation")).not.toBeInTheDocument();
   });
 
   it("keeps an in-progress run disabled until an explicit refresh settles it", async () => {
-    const idleRoutine = routine({ id: "routine-1", name: "Release routine" });
+    const idleRoutine = routine({ id: "routine-1", name: "Release automation" });
     mocks.listRoutines
       .mockResolvedValueOnce([idleRoutine])
       .mockResolvedValueOnce([{ ...idleRoutine, latestExecution: execution({ agentRunStatus: "SUCCEEDED", artifactId: "artifact-1" }) }]);
@@ -226,7 +226,7 @@ describe("RoutinesWorkspace", () => {
 
     expect(await screen.findByText("Agent queued")).toBeVisible();
     expect(run).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "Refresh routines" }));
+    fireEvent.click(screen.getByRole("button", { name: "Refresh automations" }));
 
     expect(await screen.findByText("Agent completed", {}, { timeout: 2_000 })).toBeVisible();
     await waitFor(() => expect(screen.getByRole("button", { name: "Run" })).toBeEnabled());
@@ -234,7 +234,7 @@ describe("RoutinesWorkspace", () => {
   });
 
   it("reuses the manual run key when the first response is lost", async () => {
-    const idleRoutine = routine({ id: "routine-1", name: "Release routine" });
+    const idleRoutine = routine({ id: "routine-1", name: "Release automation" });
     mocks.listRoutines.mockResolvedValue([idleRoutine]);
     mocks.runRoutineNow
       .mockRejectedValueOnce(new Error("response lost"))
@@ -243,30 +243,30 @@ describe("RoutinesWorkspace", () => {
 
     const run = await screen.findByRole("button", { name: "Run" });
     fireEvent.click(run);
-    await screen.findByText("Routine could not run. Try again after checking the connected source.");
+    await screen.findByText("Automation could not run. Try again after checking the connected source.");
     fireEvent.click(run);
 
     await waitFor(() => expect(mocks.runRoutineNow).toHaveBeenCalledTimes(2));
     expect(mocks.runRoutineNow.mock.calls[1]?.[1]).toBe(mocks.runRoutineNow.mock.calls[0]?.[1]);
   });
 
-  it("keeps creation unavailable and offers one Integrations action without a source", async () => {
+  it("keeps creation unavailable and offers one Connections action without a source", async () => {
     mocks.listGitHubConnections.mockResolvedValue([]);
     render(<RoutinesWorkspace />);
 
-    await screen.findByText("No routines yet");
+    await screen.findByText("No automations yet");
     const create = screen.getByRole("button", { name: "Create" });
     expect(create).toBeDisabled();
     fireEvent.click(create);
 
-    const integrations = screen.getAllByRole("link", { name: "Integrations" });
+    const integrations = screen.getAllByRole("link", { name: "Connections" });
     expect(integrations).toHaveLength(1);
     expect(integrations[0]).toHaveAttribute("href", "/settings/integrations");
-    expect(screen.queryByRole("heading", { name: "Create routine" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Create automation" })).not.toBeInTheDocument();
     expect(mocks.createRoutine).not.toHaveBeenCalled();
   });
 
-  it("creates a routine with distinct optional context sources", async () => {
+  it("creates an automation with distinct optional context sources", async () => {
     const docsSource = {
       ...activeConnection.repositories[0],
       id: "source-2",
@@ -283,11 +283,11 @@ describe("RoutinesWorkspace", () => {
     }));
     render(<RoutinesWorkspace />);
 
-    await screen.findByText("No routines yet");
+    await screen.findByText("No automations yet");
     fireEvent.click(screen.getByRole("button", { name: "Create" }));
     fireEvent.click(screen.getByRole("checkbox", { name: "acme/docs" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Routine name" }), { target: { value: "Cross-repo update" } });
-    fireEvent.click(screen.getByRole("button", { name: "Create routine" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Automation name" }), { target: { value: "Cross-repo update" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create automation" }));
 
     await waitFor(() => expect(mocks.createRoutine).toHaveBeenCalledWith(expect.objectContaining({
       sourceScopeId: "source-1",
@@ -295,7 +295,7 @@ describe("RoutinesWorkspace", () => {
     }), expect.anything()));
   });
 
-  it("creates a routine with the selected model and reasoning effort", async () => {
+  it("creates an automation with the selected model and reasoning effort", async () => {
     mocks.createRoutine.mockImplementation(async (input) => routine({
       id: "routine-created",
       model: input.model,
@@ -303,14 +303,14 @@ describe("RoutinesWorkspace", () => {
     }));
     render(<RoutinesWorkspace />);
 
-    await screen.findByText("No routines yet");
+    await screen.findByText("No automations yet");
     fireEvent.click(screen.getByRole("button", { name: "Create" }));
     fireEvent.click(screen.getByRole("button", { name: "Automation model: Auto" }));
     fireEvent.click(within(screen.getByRole("listbox", { name: "Automation model" })).getByRole("option", { name: "Claude Sonnet 4.6" }));
     fireEvent.click(screen.getByRole("button", { name: "Automation reasoning effort: Medium" }));
     fireEvent.click(within(screen.getByRole("listbox", { name: "Automation reasoning effort" })).getByRole("option", { name: "High" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Routine name" }), { target: { value: "Reasoned update" } });
-    fireEvent.click(screen.getByRole("button", { name: "Create routine" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Automation name" }), { target: { value: "Reasoned update" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create automation" }));
 
     await waitFor(() => expect(mocks.createRoutine).toHaveBeenCalledWith(expect.objectContaining({
       model: "anthropic/claude-sonnet-4.6",
@@ -321,7 +321,7 @@ describe("RoutinesWorkspace", () => {
   it("hides effort selection for models without reasoning support", async () => {
     render(<RoutinesWorkspace />);
 
-    await screen.findByText("No routines yet");
+    await screen.findByText("No automations yet");
     fireEvent.click(screen.getByRole("button", { name: "Create" }));
     fireEvent.click(screen.getByRole("button", { name: "Automation model: Auto" }));
     fireEvent.click(within(screen.getByRole("listbox", { name: "Automation model" })).getByRole("option", { name: "Claude Haiku 4.5" }));
@@ -331,27 +331,27 @@ describe("RoutinesWorkspace", () => {
 
   it("shows no artifact or Chat for no activity and links successful work to one Chat and Artifact", async () => {
     mocks.listRoutines.mockResolvedValue([
-      routine({ id: "routine-empty", name: "No activity routine", latestExecution: execution({ status: "NO_ACTIVITY", chatId: null, agentRunId: null, agentRunStatus: null }) }),
-      routine({ id: "routine-ready", name: "Successful routine", latestExecution: execution({ agentRunStatus: "SUCCEEDED", artifactId: "artifact-1" }) }),
+      routine({ id: "routine-empty", name: "No activity automation", latestExecution: execution({ status: "NO_ACTIVITY", chatId: null, agentRunId: null, agentRunStatus: null }) }),
+      routine({ id: "routine-ready", name: "Successful automation", latestExecution: execution({ agentRunStatus: "SUCCEEDED", artifactId: "artifact-1" }) }),
     ]);
     render(<RoutinesWorkspace />);
 
     expect(await screen.findByText("Checked · No customer update identified")).toBeVisible();
     expect(screen.getByText("Agent completed")).toBeVisible();
-    expect(screen.queryByRole("link", { name: "Open Chat for No activity routine" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Open artifact for No activity routine" })).not.toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: "Open Chat for Successful routine" })).toHaveLength(1);
-    expect(screen.getByRole("link", { name: "Open Chat for Successful routine" })).toHaveAttribute(
+    expect(screen.queryByRole("link", { name: "Open chat for No activity automation" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Open content for No activity automation" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Open chat for Successful automation" })).toHaveLength(1);
+    expect(screen.getByRole("link", { name: "Open chat for Successful automation" })).toHaveAttribute(
       "href",
       "/chat?chat=chat-1&artifact=artifact-1",
     );
-    const artifactLinks = screen.getAllByRole("link", { name: "Open artifact for Successful routine" });
+    const artifactLinks = screen.getAllByRole("link", { name: "Open content for Successful automation" });
     expect(artifactLinks).toHaveLength(1);
     expect(artifactLinks[0]).toHaveAttribute("href", "/contents?artifact=artifact-1");
   });
 
   it("loads safe agent activity in sequence order", async () => {
-    const current = routine({ name: "Agent routine", latestExecution: execution({ agentRunStatus: "SUCCEEDED", artifactId: "artifact-1" }) });
+    const current = routine({ name: "Agent automation", latestExecution: execution({ agentRunStatus: "SUCCEEDED", artifactId: "artifact-1" }) });
     mocks.listRoutines.mockResolvedValue([current]);
     mocks.getRoutineAgentRun.mockResolvedValue({
       id: "agent-1",
@@ -370,30 +370,30 @@ describe("RoutinesWorkspace", () => {
     });
     render(<RoutinesWorkspace />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "View agent activity for Agent routine" }));
-    const activity = await screen.findByRole("list", { name: "Agent activity for Agent routine" });
+    fireEvent.click(await screen.findByRole("button", { name: "View agent activity for Agent automation" }));
+    const activity = await screen.findByRole("list", { name: "Agent activity for Agent automation" });
     const steps = within(activity).getAllByRole("listitem");
     expect(steps).toHaveLength(2);
     expect(steps[0]).toHaveTextContent("Read github.search");
     expect(steps[1]).toHaveTextContent("Create artifact");
-    expect(screen.getAllByRole("link", { name: "Open artifact for Agent routine" })).toHaveLength(1);
+    expect(screen.getAllByRole("link", { name: "Open content for Agent automation" })).toHaveLength(1);
   });
 
   it("ignores an agent detail response from the previous workspace", async () => {
     const pendingDetail = deferred<Awaited<ReturnType<typeof mocks.getRoutineAgentRun>>>();
-    const oldRoutine = routine({ id: "routine-old", name: "Old agent routine", latestExecution: execution() });
+    const oldRoutine = routine({ id: "routine-old", name: "Old agent automation", latestExecution: execution() });
     mocks.listRoutines
       .mockResolvedValueOnce([oldRoutine])
-      .mockResolvedValueOnce([routine({ id: "routine-2", name: "Workspace two routine" })]);
+      .mockResolvedValueOnce([routine({ id: "routine-2", name: "Workspace two automation" })]);
     mocks.getRoutineAgentRun.mockReturnValue(pendingDetail.promise);
     render(<RoutinesWorkspace />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "View agent activity for Old agent routine" }));
+    fireEvent.click(await screen.findByRole("button", { name: "View agent activity for Old agent automation" }));
     await waitFor(() => expect(mocks.getRoutineAgentRun).toHaveBeenCalledTimes(1));
     const signal = mocks.getRoutineAgentRun.mock.calls[0]?.[2].signal as AbortSignal;
     switchWorkspace("workspace-2");
     expect(signal.aborted).toBe(true);
-    await screen.findByText("Workspace two routine");
+    await screen.findByText("Workspace two automation");
 
     await act(async () => {
       pendingDetail.resolve({
@@ -415,26 +415,26 @@ describe("RoutinesWorkspace", () => {
 
   it("focuses and scrolls to the create form, then restores focus when it closes", async () => {
     render(<RoutinesWorkspace />);
-    await screen.findByText("No routines yet");
+    await screen.findByText("No automations yet");
 
     fireEvent.click(screen.getByRole("button", { name: "Create" }));
 
-    expect(screen.getByRole("textbox", { name: "Routine name" })).toHaveFocus();
+    expect(screen.getByRole("textbox", { name: "Automation name" })).toHaveFocus();
     expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({ block: "start" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Close create routine" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close create automation" }));
     expect(screen.getByRole("button", { name: "Create" })).toHaveFocus();
   });
 
   it("keeps the closed desktop list scrollable", async () => {
     render(<RoutinesWorkspace />);
-    await screen.findByText("No routines yet");
+    await screen.findByText("No automations yet");
 
     expect(screen.getByRole("heading", { name: "Automation" }).closest("section"))
       .toHaveClass("lg:h-full", "lg:overflow-y-auto");
   });
 
-  it("shows release activity for release routines but not weekly routines", async () => {
+  it("shows release activity for release automations but not weekly automations", async () => {
     mocks.getGitHubReleaseActivity.mockResolvedValue({
       id: "request-1",
       sourceScopeId: "source-1",
@@ -454,7 +454,7 @@ describe("RoutinesWorkspace", () => {
     render(<RoutinesWorkspace />);
 
     expect(await screen.findByText("Latest release: v2.4.0 · Draft ready")).toBeVisible();
-    expect(screen.getByRole("link", { name: "Open artifact for Release changelog release v2.4.0" }))
+    expect(screen.getByRole("link", { name: "Open content for Release changelog release v2.4.0" }))
       .toHaveAttribute("href", "/contents?artifact=artifact-release");
     expect(screen.queryByRole("status", { name: "Latest release for Weekly update" })).not.toBeInTheDocument();
     expect(mocks.getGitHubReleaseActivity).toHaveBeenCalledTimes(1);

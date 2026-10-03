@@ -49,7 +49,7 @@ vi.mock("@/features/chat/chat-composer", () => ({
     </button>
   ),
 }));
-vi.mock("@/features/citations/tiptap-draft-editor", () => ({ TiptapDraftEditor: () => <div>Reviewed artifact</div> }));
+vi.mock("@/features/citations/tiptap-draft-editor", () => ({ TiptapDraftEditor: () => <div>Reviewed content</div> }));
 vi.mock("@/features/citations/export-dialog", () => ({ ExportDialog: ({ presentation }: { presentation?: string }) => presentation === "menu" ? <button type="button" role="menuitem">Copy Markdown</button> : null }));
 
 import type { ChatAgentStreamOptions } from "@/lib/chat-agent-stream";
@@ -131,7 +131,7 @@ describe("ChatWorkspace", () => {
     expect(screen.queryByText("Loading sources…")).not.toBeInTheDocument();
   });
 
-  it("admits one Chat Agent request and navigates without a direct artifact workflow call", async () => {
+  it("admits one Chat Agent request and navigates without a direct document workflow call", async () => {
     mocks.createChatAgentRun.mockResolvedValue(agentRun({ id: "agent-new", chatId: "chat-new" }));
     render(<ChatWorkspace />);
     fireEvent.click(await screen.findByRole("button", { name: "Start request" }));
@@ -187,7 +187,7 @@ describe("ChatWorkspace", () => {
     expect(mocks.createChatAgentRun.mock.calls[0]![1]).toBe(mocks.createChatAgentRun.mock.calls[1]![1]);
   });
 
-  it("opens the artifact panel when the chat URL includes an artifact query", async () => {
+  it("opens the document panel when the chat URL includes a document query", async () => {
     mocks.search = "chat=chat-1&agent=agent-1&artifact=artifact-1";
     mocks.listSessions.mockResolvedValue([chat]);
     const succeeded = agentRun({ status: "SUCCEEDED", artifactId: "artifact-1", artifact: artifactSummary });
@@ -195,11 +195,11 @@ describe("ChatWorkspace", () => {
     mocks.getChatAgentRun.mockResolvedValue(succeeded);
 
     render(<ChatWorkspace />);
-    expect(await screen.findByRole("complementary", { name: "Artifact document panel" })).toBeVisible();
-    expect(screen.getByText("Reviewed artifact")).toBeVisible();
+    expect(await screen.findByRole("complementary", { name: "Content panel" })).toBeVisible();
+    expect(screen.getByText("Reviewed content")).toBeVisible();
   });
 
-	it("loads Chat Agent activity and renders its Artifact", async () => {
+	it("loads Chat Agent activity and renders its Document", async () => {
     mocks.search = "chat=chat-1&agent=agent-1";
     mocks.listSessions.mockResolvedValue([chat]);
     const succeeded = agentRun({ status: "SUCCEEDED", artifactId: "artifact-1", artifact: artifactSummary });
@@ -207,25 +207,25 @@ describe("ChatWorkspace", () => {
     mocks.getChatAgentRun.mockResolvedValue(succeeded);
 
     render(<ChatWorkspace />);
-    const openArtifact = await screen.findByText("Open artifact");
+    const openArtifact = await screen.findByText("Open content");
     const agentResponse = screen.getByRole("region", { name: "Agent request details" });
     expect(agentResponse).toContainElement(openArtifact);
     const responseTime = agentResponse.querySelector("time");
     expect(responseTime).not.toBeNull();
     expect(openArtifact.compareDocumentPosition(responseTime!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.queryByText("Reviewed artifact")).not.toBeInTheDocument();
+    expect(screen.queryByText("Reviewed content")).not.toBeInTheDocument();
     fireEvent.click(openArtifact);
-    const artifactPanel = screen.getByRole("complementary", { name: "Artifact document panel" });
-    const artifactBody = within(artifactPanel).getByRole("region", { name: "Artifact document body" });
+    const artifactPanel = screen.getByRole("complementary", { name: "Content panel" });
+    const artifactBody = within(artifactPanel).getByRole("region", { name: "Content body" });
     const artifactTitle = within(artifactPanel).getByText("Release", { exact: true });
     expect(artifactPanel).toBeVisible();
     expect(artifactBody).not.toContainElement(artifactTitle);
-    expect(screen.getByRole("separator", { name: "Resize artifact document" })).toBeInTheDocument();
-    expect(screen.getByText("Reviewed artifact")).toBeVisible();
-    expect(artifactBody).toContainElement(screen.getByText("Reviewed artifact"));
-    fireEvent.click(within(artifactPanel).getByRole("button", { name: "Artifact actions" }));
+    expect(screen.getByRole("separator", { name: "Resize content panel" })).toBeInTheDocument();
+    expect(screen.getByText("Reviewed content")).toBeVisible();
+    expect(artifactBody).toContainElement(screen.getByText("Reviewed content"));
+    fireEvent.click(within(artifactPanel).getByRole("button", { name: "Content actions" }));
     expect(within(artifactPanel).getByRole("menuitem", { name: "Copy Markdown" })).toBeVisible();
-    expect(screen.queryByRole("button", { name: "Artifact history" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Content history" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "Assistant" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "History" })).not.toBeInTheDocument();
     expect(screen.queryByText("Chat activity")).not.toBeInTheDocument();
@@ -242,8 +242,8 @@ describe("ChatWorkspace", () => {
 		mocks.getChatAgentRun.mockResolvedValue(succeeded);
 
 		render(<ChatWorkspace />);
-		fireEvent.click(await screen.findByText("Open artifact"));
-		const artifactPanel = screen.getByRole("complementary", { name: "Artifact document panel" });
+		fireEvent.click(await screen.findByText("Open content"));
+		const artifactPanel = screen.getByRole("complementary", { name: "Content panel" });
 		expect(await within(artifactPanel).findByRole("button", { name: /Publish changelog/ })).toBeVisible();
 	});
 
@@ -258,7 +258,7 @@ describe("ChatWorkspace", () => {
 		expect(await screen.findByRole("link", { name: "Open Connections" })).toHaveAttribute("href", "/settings/integrations");
 	});
 
-	it("renders a completed assistant text response without an artifact", async () => {
+	it("renders a completed assistant text response without a document", async () => {
 		mocks.search = "chat=chat-1";
 		mocks.listSessions.mockResolvedValue([chat]);
 		mocks.listChatTurns.mockResolvedValue([{
@@ -290,7 +290,7 @@ describe("ChatWorkspace", () => {
 		render(<ChatWorkspace />);
 
 		expect(await screen.findByText("Plot turns connected product evidence into useful content and can also answer questions directly.")).toBeVisible();
-		expect(screen.queryByText("Open artifact")).not.toBeInTheDocument();
+		expect(screen.queryByText("Open content")).not.toBeInTheDocument();
 	});
 
 	it("unlocks follow-up input after a restored Agent run finishes", async () => {
@@ -354,8 +354,8 @@ describe("ChatWorkspace", () => {
     mocks.listSessionAgentRuns.mockResolvedValue([succeeded]);
 
     render(<ChatWorkspace />);
-    expect(await screen.findByText("Open artifact")).toBeVisible();
-    expect(screen.queryByText("Reviewed artifact")).not.toBeInTheDocument();
+    expect(await screen.findByText("Open content")).toBeVisible();
+    expect(screen.queryByText("Reviewed content")).not.toBeInTheDocument();
 		expect(screen.getByText("Plot")).toBeVisible();
     expect(mocks.getChatAgentRun).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "Retry response" })).not.toBeInTheDocument();
@@ -370,7 +370,7 @@ describe("ChatWorkspace", () => {
     mocks.createChatAgentRun.mockResolvedValue(agentRun({ id: "agent-2", status: "QUEUED", artifactId: null, artifact: null }));
 
     render(<ChatWorkspace />);
-    await screen.findByText("Open artifact");
+    await screen.findByText("Open content");
     fireEvent.click(screen.getByRole("button", { name: "Generate again" }));
 
     await waitFor(() => expect(mocks.createChatAgentRun).toHaveBeenCalled());
@@ -386,7 +386,7 @@ describe("ChatWorkspace", () => {
     mocks.listSessionAgentRuns.mockResolvedValue([succeeded]);
     mocks.getChatAgentRun.mockResolvedValue(succeeded);
     render(<ChatWorkspace />);
-    await screen.findByText("Open artifact");
+    await screen.findByText("Open content");
 
     window.dispatchEvent(new CustomEvent("plot:workspace-changed", { detail: { id: "workspace-2" } }));
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/chat", { scroll: false }));
@@ -400,15 +400,15 @@ describe("ChatWorkspace", () => {
     mocks.listSessionAgentRuns.mockResolvedValue([succeeded]);
     mocks.getChatAgentRun.mockResolvedValue(succeeded);
     render(<ChatWorkspace />);
-    await screen.findByText("Open artifact");
+    await screen.findByText("Open content");
 
     expect(screen.queryByRole("tab", { name: "History" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "Assistant" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tablist", { name: "Chat workspace panels" })).not.toBeInTheDocument();
     expect(screen.queryByText("Chat activity")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByText("Open artifact"));
-    expect(screen.getByRole("complementary", { name: "Artifact document panel" })).toBeVisible();
-    expect(screen.queryByRole("button", { name: "Artifact history" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("Open content"));
+    expect(screen.getByRole("complementary", { name: "Content panel" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Content history" })).not.toBeInTheDocument();
   });
 
   it("allows switching between response versions", async () => {
@@ -586,15 +586,15 @@ describe("Chat streaming document panel", () => {
     await waitFor(() => expect(mocks.watchChatAgentRun).toHaveBeenCalledTimes(1));
     await act(async () => options.onProgress?.({ runId: "agent-1", epoch: 1, revision: 2, phase: "WRITING", responseText: "Streaming answer", draftParagraphs: ["Visible draft paragraph"], status: "RUNNING", artifactId: null, failureCode: null }));
     expect(await screen.findByText("Streaming answer")).toBeVisible();
-    const panel = await screen.findByRole("complementary", { name: "Artifact document panel" });
+    const panel = await screen.findByRole("complementary", { name: "Content panel" });
     expect(within(panel).getByText("Visible draft paragraph")).toBeVisible();
     expect(within(panel).getByText("Generating")).toBeVisible();
     expect(within(panel).queryByRole("button", { name: "Save draft" })).not.toBeInTheDocument();
-    expect(within(panel).queryByRole("button", { name: "Artifact actions" })).not.toBeInTheDocument();
-    expect(screen.queryByText("Reviewed artifact")).not.toBeInTheDocument();
+    expect(within(panel).queryByRole("button", { name: "Content actions" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Reviewed content")).not.toBeInTheDocument();
     await act(async () => { options.onProgress?.({ runId: "agent-1", epoch: 1, revision: 3, phase: "COMPLETE", responseText: "Final answer", draftParagraphs: ["Final paragraph"], status: "SUCCEEDED", artifactId: "artifact-1", failureCode: null }); complete(agentRun({ status: "SUCCEEDED", responseText: "Final answer", artifactId: "artifact-1", artifact: artifactSummary })); });
-    expect(await screen.findByText("Reviewed artifact")).toBeVisible();
-    expect(within(panel).getByRole("button", { name: "Artifact actions" })).toBeVisible();
+    expect(await screen.findByText("Reviewed content")).toBeVisible();
+    expect(within(panel).getByRole("button", { name: "Content actions" })).toBeVisible();
     expect(screen.queryByText("Visible draft paragraph")).not.toBeInTheDocument();
   });
 
@@ -607,15 +607,15 @@ describe("Chat streaming document panel", () => {
     await waitFor(() => expect(mocks.watchChatAgentRun).toHaveBeenCalled());
     const progress = { runId: "agent-1", epoch: 1, revision: 2, phase: "WRITING" as const, responseText: "Streaming", draftParagraphs: ["Draft"], status: "RUNNING" as const, artifactId: null, failureCode: null };
     await act(async () => options.onProgress?.(progress));
-    fireEvent.click(await screen.findByRole("button", { name: "Close artifact" }));
-    expect(screen.queryByRole("complementary", { name: "Artifact document panel" })).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Close content" }));
+    expect(screen.queryByRole("complementary", { name: "Content panel" })).not.toBeInTheDocument();
     await act(async () => options.onProgress?.({ ...progress, revision: 3, draftParagraphs: ["Later draft"] }));
-    expect(screen.queryByRole("complementary", { name: "Artifact document panel" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("complementary", { name: "Content panel" })).not.toBeInTheDocument();
     await act(async () => { options.onProgress?.({ ...progress, revision: 4, phase: "COMPLETE", status: "SUCCEEDED", artifactId: "artifact-1" }); complete(agentRun({ status: "SUCCEEDED", artifactId: "artifact-1", artifact: artifactSummary })); });
     await waitFor(() => expect(mocks.getArtifact).toHaveBeenCalled());
-    expect(screen.queryByRole("complementary", { name: "Artifact document panel" })).not.toBeInTheDocument();
-    fireEvent.click(await screen.findByRole("button", { name: /Open artifact/ }));
-    expect(await screen.findByText("Reviewed artifact")).toBeVisible();
+    expect(screen.queryByRole("complementary", { name: "Content panel" })).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: /Open content/ }));
+    expect(await screen.findByText("Reviewed content")).toBeVisible();
   });
   it("keeps the terminal preview visible and retries a failed final document read", async () => {
     let options!: ChatAgentStreamOptions;
@@ -628,8 +628,8 @@ describe("Chat streaming document panel", () => {
     await act(async () => { options.onProgress?.({ runId: "agent-1", epoch: 1, revision: 2, phase: "COMPLETE", responseText: "Final", draftParagraphs: ["Preserved preview"], status: "SUCCEEDED", artifactId: "artifact-1", failureCode: null }); complete(agentRun({ status: "SUCCEEDED", artifactId: "artifact-1", artifact: artifactSummary })); });
     expect(await screen.findByText("Temporary final read failure")).toBeVisible();
     expect(screen.getByText("Preserved preview")).toBeVisible();
-    expect(screen.queryByText("Reviewed artifact")).not.toBeInTheDocument();
-    expect(await screen.findByText("Reviewed artifact", {}, { timeout: 2000 })).toBeVisible();
+    expect(screen.queryByText("Reviewed content")).not.toBeInTheDocument();
+    expect(await screen.findByText("Reviewed content", {}, { timeout: 2000 })).toBeVisible();
     expect(mocks.getArtifact).toHaveBeenCalledTimes(2);
   });
 
@@ -646,7 +646,7 @@ describe("Chat streaming document panel", () => {
     await waitFor(() => expect(mocks.getArtifact).toHaveBeenCalledWith("artifact-1", expect.anything()));
     fireEvent.click(await screen.findByRole("button", { name: /Earlier document/ }));
     await waitFor(() => expect(mocks.getArtifact).toHaveBeenCalledWith("old-artifact", expect.anything()));
-    expect(await screen.findByRole("complementary", { name: "Artifact document panel" })).toBeVisible();
+    expect(await screen.findByRole("complementary", { name: "Content panel" })).toBeVisible();
   });
 
   it("does not switch a selected historical response back to the streaming run when it finishes", async () => {

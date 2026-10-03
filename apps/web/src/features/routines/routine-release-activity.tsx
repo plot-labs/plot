@@ -110,10 +110,10 @@ export function RoutineReleaseActivity({
         {activity?.status === "READY" && activity.artifactId ? (
           <Link
             href={`/contents?artifact=${encodeURIComponent(activity.artifactId)}`}
-            aria-label={`Open artifact for ${routineName} release ${activity.tagName}`}
+            aria-label={`Open content for ${routineName} release ${activity.tagName}`}
             className="glass-button inline-flex items-center"
           >
-            Open artifact
+            Open content
           </Link>
         ) : null}
         {activity?.status === "FAILED" ? (

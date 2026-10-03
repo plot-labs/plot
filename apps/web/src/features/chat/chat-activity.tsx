@@ -81,13 +81,13 @@ export function AgentActivityDetail({
           className="w-full min-w-0 max-w-full"
         >
           <p className="whitespace-pre-wrap text-sm leading-6 text-black/75 dark:text-white/78">
-            {responseText || (linkedArtifact && isComplete ? "The artifact is ready below." : instruction ? agentProgressLabel(status) : "Plot is preparing the request…")}
+            {responseText || (linkedArtifact && isComplete ? "The content is ready below." : instruction ? agentProgressLabel(status) : "Plot is preparing the request…")}
           </p>
 
 
           {(linkedArtifact || busy || isFailed || isNeedsConnection) ? (
             <Tool>
-              <ToolHeader title={linkedArtifact ? "Create artifact" : "Process request"} state={toolState} errorText={error || (isNeedsConnection ? "Repository connection required." : isFailed ? "The response could not be completed." : undefined)}/>
+              <ToolHeader title={linkedArtifact ? "Create content" : "Process request"} state={toolState} errorText={error || (isNeedsConnection ? "Repository connection required." : isFailed ? "The response could not be completed." : undefined)}/>
             </Tool>
           ) : null}
           <ChatSourceCitations sources={citationSources} totalCount={citationCount} />

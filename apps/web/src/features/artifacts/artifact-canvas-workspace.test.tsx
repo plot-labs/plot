@@ -60,7 +60,7 @@ function client() {
 }
 
 describe("ArtifactCanvasWorkspace", () => {
-  it("renders a linked artifact breadcrumb", () => {
+  it("renders a linked document breadcrumb", () => {
     render(<ArtifactCanvasWorkspace artifact={artifact} client={client()} onSaveArtifact={vi.fn()} />);
 
     const breadcrumb = screen.getByRole("navigation", { name: "Breadcrumb" });
@@ -81,19 +81,19 @@ describe("ArtifactCanvasWorkspace", () => {
     })));
   });
 
-  it("groups copy and download under artifact actions", () => {
+  it("groups copy and download under document actions", () => {
     render(<ArtifactCanvasWorkspace artifact={artifact} client={client()} onSaveArtifact={vi.fn()} />);
 
     expect(screen.getByRole("button", { name: "Save draft" })).toBeVisible();
     expect(screen.queryByRole("button", { name: "Copy changelog" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Export options" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Artifact actions" }));
+    fireEvent.click(screen.getByRole("button", { name: "Content actions" }));
     expect(screen.getByRole("menuitem", { name: "Copy Markdown" })).toBeVisible();
     expect(screen.getByRole("menuitem", { name: "Download Markdown" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Publish changelog" })).toBeVisible();
   });
 
-  it("renders related artifacts in the Sources drawer", async () => {
+  it("renders related documents in the Sources drawer", async () => {
     const artifactWithRelated: Artifact = {
       ...artifact,
       relatedArtifacts: [
@@ -109,11 +109,11 @@ describe("ArtifactCanvasWorkspace", () => {
 
     render(<ArtifactCanvasWorkspace artifact={artifactWithRelated} client={client()} onSaveArtifact={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Artifact actions" }));
+    fireEvent.click(screen.getByRole("button", { name: "Content actions" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Sources" }));
 
     expect(await screen.findByRole("dialog", { name: "Sources" })).toBeVisible();
-    expect(screen.getByRole("list", { name: "Related artifacts" })).toBeVisible();
+    expect(screen.getByRole("list", { name: "Related content" })).toBeVisible();
     expect(screen.getByText("Related Launch Announcement")).toBeVisible();
     expect(screen.getByRole("link", { name: /Related Launch Announcement/i })).toHaveAttribute(
       "href",

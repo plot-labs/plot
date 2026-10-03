@@ -30,7 +30,7 @@ export function ArtifactCanvasWorkspace({ artifact, client, onSaveArtifact }: Ar
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const overflowTriggerRef = useRef<HTMLButtonElement>(null);
   const entitlement = useWorkspaceEntitlement();
-  const artifactTitle = currentArtifact.title ?? "Untitled artifact";
+  const artifactTitle = currentArtifact.title ?? "Untitled content";
   const canEdit = entitlement?.capabilities.edit ?? true;
   const canPublish = entitlement?.capabilities.publish ?? true;
   const canUnpublish = entitlement?.capabilities.unpublish ?? true;
@@ -200,7 +200,7 @@ function ArtifactSources({
         </h3>
         {!uniqueSources.length ? (
           <p className="rounded-[8px] border border-dashed border-black/10 px-3.5 py-4 text-sm leading-6 text-black/52 dark:border-white/12 dark:text-white/55">
-            No current sources are available for this artifact.
+            No current sources are available for this content.
           </p>
         ) : (
           <ol className="divide-y divide-black/[0.07] border-y border-black/[0.07] dark:divide-white/10 dark:border-white/10" aria-label="Current sources">
@@ -218,7 +218,7 @@ function ArtifactSources({
           <h3 className="mb-3 text-xs font-semibold text-black/55 dark:text-white/55">
             Related content <span className="ml-1 rounded-full bg-black/[0.05] px-1.5 py-0.5 text-[11px] tabular-nums dark:bg-white/10">{relatedArtifacts.length}</span>
           </h3>
-          <ul className="divide-y divide-black/[0.07] border-y border-black/[0.07] dark:divide-white/10 dark:border-white/10" aria-label="Related artifacts">
+          <ul className="divide-y divide-black/[0.07] border-y border-black/[0.07] dark:divide-white/10 dark:border-white/10" aria-label="Related content">
             {relatedArtifacts.map((related) => (
               <li key={related.id}>
                 <Link
@@ -227,14 +227,14 @@ function ArtifactSources({
                 >
                   <div className="min-w-0 flex-1">
                     <p className="line-clamp-2 text-[13px] font-medium leading-5 text-black/85 dark:text-white/85">
-                      {related.title || "Untitled artifact"}
+                      {related.title || "Untitled content"}
                     </p>
                     <span className="mt-0.5 inline-block text-[11px] text-black/50 dark:text-white/50">
                       {related.contentType === "LAUNCH_ANNOUNCEMENT"
                         ? "Launch announcement"
                         : related.contentType === "CHANGELOG"
                           ? "Changelog"
-                          : "Artifact"}
+                          : "Content"}
                     </span>
                   </div>
                   <ArrowUpRight aria-hidden="true" className="size-4 shrink-0 text-black/35 dark:text-white/40" />

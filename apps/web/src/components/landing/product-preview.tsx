@@ -124,7 +124,7 @@ export function ProductPreview() {
                             </span>
                             <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-black/[0.035] px-3 py-1.5 text-xs font-medium text-black/50">
                               <Eye aria-hidden="true" className="size-3.5" />
-                              Open artifact
+                              Open content
                             </span>
                           </button>
                           <p className="mt-4 text-xs text-black/42">6:00 PM · Source agent</p>
@@ -219,8 +219,8 @@ export function ProductPreview() {
 function LandingProductSidebar() {
   const navigation = [
     { label: "Chat", icon: MessageMultiple01Icon },
-    { label: "Routines", icon: ZapIcon },
-    { label: "Artifacts", icon: Shapes01Icon },
+    { label: "Automation", icon: ZapIcon },
+    { label: "Contents", icon: Shapes01Icon },
   ];
 
   return (

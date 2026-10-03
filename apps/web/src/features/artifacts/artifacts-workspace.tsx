@@ -37,7 +37,7 @@ function ArtifactsWorkspaceContent() {
       .then((artifact) => setRemoteArtifactResult({ requestedId: requestedArtifactId, artifact }))
       .catch((error: unknown) => {
         if (!(error instanceof DOMException && error.name === "AbortError")) {
-          setRemoteArtifactFailure({ requestedId: requestedArtifactId, message: error instanceof Error ? error.message : "The artifact could not be loaded." });
+          setRemoteArtifactFailure({ requestedId: requestedArtifactId, message: error instanceof Error ? error.message : "The content could not be loaded." });
         }
       });
     return () => controller.abort();
@@ -66,7 +66,7 @@ function ArtifactsWorkspaceContent() {
         {remoteArtifact ? <GeneratedArtifactDetail key={remoteArtifact.id} artifact={remoteArtifact} /> : remoteArtifactError ? (
           <div className="flex h-full min-h-[inherit] items-center justify-center bg-[#eef0f3] px-6"><div role="alert" className="max-w-sm rounded-xl border border-rose-300/60 bg-rose-50 p-4 text-sm text-rose-900 dark:border-rose-400/25 dark:bg-rose-400/[0.08] dark:text-rose-200">{remoteArtifactError}</div></div>
         ) : (
-          <div className="flex h-full min-h-[inherit] items-center justify-center bg-[#eef0f3] text-sm text-black/45 dark:bg-[#18181b] dark:text-white/45">Loading the selected artifact…</div>
+          <div className="flex h-full min-h-[inherit] items-center justify-center bg-[#eef0f3] text-sm text-black/45 dark:bg-[#18181b] dark:text-white/45">Loading the selected content…</div>
         )}
       </div>
     );
@@ -110,8 +110,8 @@ function ArtifactsWorkspaceContent() {
                     href={`/contents?artifact=${encodeURIComponent(artifact.id)}`}
                     className="grid min-h-[76px] grid-cols-1 gap-2 px-6 py-4 text-left transition-colors hover:bg-black/[0.025] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-black/60 dark:hover:bg-white/[0.04] dark:focus-visible:outline-white/70 md:grid-cols-[minmax(0,1fr)_110px_145px] md:items-center md:gap-4"
                   >
-                    <span className="min-w-0 line-clamp-2 text-[14px] font-medium leading-5 text-black/85 dark:text-white/88" title={artifact.title ?? "Generated artifact"}>
-                      {artifact.title ?? "Generated artifact"}
+                    <span className="min-w-0 line-clamp-2 text-[14px] font-medium leading-5 text-black/85 dark:text-white/88" title={artifact.title ?? "Generated content"}>
+                      {artifact.title ?? "Generated content"}
                     </span>
                     <span className="hidden md:block"><span className="inline-flex rounded-[5px] border border-black/10 px-2 py-0.5 text-[12px] text-black/60 dark:border-white/15 dark:text-white/62">{artifact.published === true ? "Published" : artifact.published === false ? "Draft" : "Unknown"}</span></span>
                     <span className="flex items-center gap-2 text-[12px] text-black/45 dark:text-white/45 md:block">

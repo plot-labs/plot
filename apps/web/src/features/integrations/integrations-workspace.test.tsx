@@ -89,7 +89,7 @@ describe("IntegrationsWorkspace", () => {
     expect(screen.getByRole("img", { name: "Notion" })).toBeVisible();
     expect(screen.getByRole("img", { name: "Figma" })).toBeVisible();
 
-    fireEvent.change(screen.getByRole("searchbox", { name: "Search integrations" }), {
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search connections" }), {
       target: { value: "slack" },
     });
 
@@ -100,7 +100,7 @@ describe("IntegrationsWorkspace", () => {
     expect(screen.queryByRole("img", { name: "Figma" })).not.toBeInTheDocument();
   });
 
-  it("does not expose unavailable integrations as connectable", () => {
+  it("does not expose unavailable connections as connectable", () => {
     render(<IntegrationsWorkspace />);
 
     expect(screen.getAllByText("Coming soon")).toHaveLength(4);
@@ -113,7 +113,7 @@ describe("IntegrationsWorkspace", () => {
 
     expect(screen.getByRole("img", { name: "Linear" })).toBeVisible();
     expect(screen.getByRole("img", { name: "Slack" })).toBeVisible();
-    expect(screen.queryByRole("tablist", { name: "Integration categories" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tablist", { name: "Connection categories" })).not.toBeInTheDocument();
   });
 
   it("syncs an existing GitHub App installation before redirecting to GitHub", async () => {

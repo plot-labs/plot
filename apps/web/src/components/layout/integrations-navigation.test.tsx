@@ -102,7 +102,7 @@ describe("Settings navigation", () => {
 
     sidebarMocks.listGitHubRepositories.mockResolvedValue([{ id: "repository-1", status: "ACTIVE", externalRepositoryId: 1, displayName: "plot/app", visibility: "PRIVATE" }]);
     const connected = await screen.findByRole("button", { name: "Install GitHub App" });
-    const pending = screen.getByRole("button", { name: "Create first Routine" });
+    const pending = screen.getByRole("button", { name: "Create first automation" });
     expect(connected).toBeEnabled();
     expect(pending).toBeEnabled();
     fireEvent.click(connected);
@@ -126,13 +126,13 @@ describe("Settings navigation", () => {
     }]);
     render(<ProductSidebar theme="light" onThemeChange={() => undefined} onToggleSidebar={() => undefined} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Create first Routine" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Create first automation" }));
     expect(screen.getByRole("progressbar", { name: "Step 2 of 3" })).toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: "Your first Routine" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Your first automation" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Close onboarding" }));
     fireEvent.click(screen.getByRole("button", { name: "Get the first draft" }));
     expect(screen.getByRole("dialog", { name: "Set up Plot" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("link", { name: "View Routines" }));
+    fireEvent.click(screen.getByRole("link", { name: "View automations" }));
     expect(screen.queryByRole("dialog", { name: "Set up Plot" })).not.toBeInTheDocument();
   });
 
@@ -162,8 +162,8 @@ describe("Settings navigation", () => {
 
     await waitFor(() => expect(sidebarMocks.importGitHubRepository).toHaveBeenCalledWith("repository-1", expect.any(Object)));
     expect(sidebarMocks.runRoutineNow).not.toHaveBeenCalled();
-    expect(await screen.findByRole("heading", { name: "Your Routine is ready" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "View Routines" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Your automation is ready" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View automations" })).toBeInTheDocument();
   });
 
   it("announces the workspace selected after account loading", async () => {

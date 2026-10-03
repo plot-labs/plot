@@ -15,7 +15,7 @@ describe("RoutineTriggerPicker", () => {
 
     fireEvent.click(trigger);
 
-    const listbox = screen.getByRole("listbox", { name: "Routine trigger" });
+    const listbox = screen.getByRole("listbox", { name: "Automation trigger" });
     const selectedOption = screen.getByRole("option", { name: /Weekly/ });
     expect(trigger).toHaveAttribute("aria-expanded", "true");
     expect(listbox).toHaveFocus();
@@ -35,7 +35,7 @@ describe("RoutineTriggerPicker", () => {
     const trigger = screen.getByRole("button", { name: "Trigger: Weekly" });
 
     fireEvent.keyDown(trigger, { key: "ArrowDown" });
-    const listbox = screen.getByRole("listbox", { name: "Routine trigger" });
+    const listbox = screen.getByRole("listbox", { name: "Automation trigger" });
     const daily = screen.getByRole("option", { name: /Daily/ });
     const release = screen.getByRole("option", { name: /Release published/ });
     const tag = screen.getByRole("option", { name: /Git tag pushed/ });
@@ -49,7 +49,7 @@ describe("RoutineTriggerPicker", () => {
     fireEvent.keyDown(listbox, { key: " " });
 
     expect(onChange).toHaveBeenCalledWith("ON_GITHUB_RELEASE");
-    expect(screen.queryByRole("listbox", { name: "Routine trigger" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("listbox", { name: "Automation trigger" })).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
   });
 
@@ -59,7 +59,7 @@ describe("RoutineTriggerPicker", () => {
     const trigger = screen.getByRole("button", { name: "Trigger: Daily" });
 
     fireEvent.keyDown(trigger, { key: "ArrowDown" });
-    const listbox = screen.getByRole("listbox", { name: "Routine trigger" });
+    const listbox = screen.getByRole("listbox", { name: "Automation trigger" });
     fireEvent.keyDown(listbox, { key: "ArrowDown" });
     fireEvent.keyDown(listbox, { key: "Enter" });
 
@@ -76,7 +76,7 @@ describe("RoutineTriggerPicker", () => {
     fireEvent.click(screen.getByRole("option", { name: /Release published/ }));
 
     expect(onChange).toHaveBeenCalledWith("ON_GITHUB_RELEASE");
-    expect(screen.queryByRole("listbox", { name: "Routine trigger" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("listbox", { name: "Automation trigger" })).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
   });
 
@@ -85,9 +85,9 @@ describe("RoutineTriggerPicker", () => {
     const trigger = screen.getByRole("button", { name: "Trigger: Daily" });
 
     fireEvent.click(trigger);
-    fireEvent.keyDown(screen.getByRole("listbox", { name: "Routine trigger" }), { key: "Escape" });
+    fireEvent.keyDown(screen.getByRole("listbox", { name: "Automation trigger" }), { key: "Escape" });
 
-    expect(screen.queryByRole("listbox", { name: "Routine trigger" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("listbox", { name: "Automation trigger" })).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
   });
 
@@ -101,14 +101,14 @@ describe("RoutineTriggerPicker", () => {
     const trigger = screen.getByRole("button", { name: "Trigger: Daily" });
 
     fireEvent.click(trigger);
-    fireEvent.keyDown(screen.getByRole("listbox", { name: "Routine trigger" }), { key: "Tab" });
-    expect(screen.queryByRole("listbox", { name: "Routine trigger" })).not.toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole("listbox", { name: "Automation trigger" }), { key: "Tab" });
+    expect(screen.queryByRole("listbox", { name: "Automation trigger" })).not.toBeInTheDocument();
 
     fireEvent.click(trigger);
-    const listbox = screen.getByRole("listbox", { name: "Routine trigger" });
+    const listbox = screen.getByRole("listbox", { name: "Automation trigger" });
     const afterPicker = screen.getByRole("button", { name: "After picker" });
     fireEvent.blur(listbox, { relatedTarget: afterPicker });
-    expect(screen.queryByRole("listbox", { name: "Routine trigger" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("listbox", { name: "Automation trigger" })).not.toBeInTheDocument();
   });
 
   it("dismisses on an outside pointer interaction", () => {
@@ -117,7 +117,7 @@ describe("RoutineTriggerPicker", () => {
 
     fireEvent.pointerDown(document.body);
 
-    expect(screen.queryByRole("listbox", { name: "Routine trigger" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("listbox", { name: "Automation trigger" })).not.toBeInTheDocument();
   });
 
   it("allows selecting day of week when Weekly is selected", () => {

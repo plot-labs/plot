@@ -97,7 +97,7 @@ export function ChatActiveWorkspace({
   const previewAction = hasDocumentProgress ? (
     <button ref={artifactTriggerRef} type="button" aria-controls="artifact-editor-panel" aria-expanded={artifactPanelOpen && showPreview}
       onClick={openGeneratedDocument} className="glass-button border text-left">
-      <Eye aria-hidden="true" className="mr-2 inline size-3.5" />Open generated document
+      <Eye aria-hidden="true" className="mr-2 inline size-3.5" />Open generated content
     </button>
   ) : undefined;
   const shownArtifact = document.currentArtifact;
@@ -194,7 +194,7 @@ export function ChatActiveWorkspace({
                     artifact: selectedVersion.artifactId ? {
                       id: selectedVersion.artifactId,
                       status: selectedVersion.status === "SUCCEEDED" ? "READY" : "DRAFT",
-                      title: selectedVersion.artifact?.title || "Generated artifact",
+                      title: selectedVersion.artifact?.title || "Generated content",
                       updatedAt: selectedVersion.updatedAt,
                     } : null,
                     createdAt: selectedVersion.createdAt,
@@ -242,11 +242,11 @@ export function ChatActiveWorkspace({
                               className="glass-control glass-card glass-primary flex w-full items-center justify-between gap-4 rounded-xl border px-4 py-3 text-left"
                             >
                               <span className="min-w-0 truncate text-sm font-medium text-black/82 dark:text-white/85">
-                                {selectedVersion.artifact?.title || (selectedVersion.artifactId === document.currentArtifact?.id ? document.currentArtifact.title : "Generated artifact")}
+                                {selectedVersion.artifact?.title || (selectedVersion.artifactId === document.currentArtifact?.id ? document.currentArtifact.title : "Generated content")}
                               </span>
                               <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-black/[0.035] px-3 py-1.5 text-xs font-medium text-black/50 dark:bg-white/[0.06] dark:text-white/55">
                                 <Eye aria-hidden="true" className="size-3.5" />
-                                Open artifact
+                                Open content
                               </span>
                             </button>
                           ) : selectedVersion.agentRunId === selectedProgress?.runId ? previewAction : undefined}
@@ -280,11 +280,11 @@ export function ChatActiveWorkspace({
                         className="glass-control glass-card glass-primary flex w-full items-center justify-between gap-4 rounded-xl border px-4 py-3 text-left"
                       >
                         <span className="min-w-0 truncate text-sm font-medium text-black/82 dark:text-white/85">
-                          {document.currentArtifact.title || "Generated artifact"}
+                          {document.currentArtifact.title || "Generated content"}
                         </span>
                         <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-black/[0.035] px-3 py-1.5 text-xs font-medium text-black/50 dark:bg-white/[0.06] dark:text-white/55">
                           <Eye aria-hidden="true" className="size-3.5" />
-                          Open artifact
+                          Open content
                         </span>
                       </button>
                     ) : previewAction}
@@ -313,12 +313,12 @@ export function ChatActiveWorkspace({
           </p>
         )}
       </ResizablePanel>
-      <ResizableHandle aria-label="Resize artifact document" disabled={!desktopArtifactVisible} className={`w-px bg-black/[0.08] dark:bg-white/10 ${desktopArtifactVisible ? "flex" : "hidden"}`}/>
+      <ResizableHandle aria-label="Resize content panel" disabled={!desktopArtifactVisible} className={`w-px bg-black/[0.08] dark:bg-white/10 ${desktopArtifactVisible ? "flex" : "hidden"}`}/>
         <ResizablePanel id="artifact-pane" panelRef={artifactPanelRef} defaultSize="0%" minSize={desktopArtifactVisible ? `${panelMinimum}px` : "0%"} maxSize={desktop ? "1200px" : "100%"} groupResizeBehavior="preserve-pixel-size" style={{overflow:"visible",height:"100%"}} onResize={(size, _id, previousSize) => {if (desktopArtifactVisible && size.inPixels > 0 && (previousSize?.inPixels ?? 0) > 0) artifactSizeRef.current = size.inPixels;}}>
       {artifactPanelOpen && hasPanelContent ? (
         <aside
           id="artifact-editor-panel"
-          aria-label="Artifact document panel"
+          aria-label="Content panel"
           aria-busy={showPreview && selectedProgress?.status !== "FAILED"}
           className="glass-layer absolute inset-0 z-30 flex h-full min-w-0 flex-col border-l border-black/[0.08] dark:border-white/10 lg:relative"
         >
@@ -348,7 +348,7 @@ export function ChatActiveWorkspace({
               ) : null}
               <button
                 type="button"
-                aria-label="Close artifact"
+                aria-label="Close content"
                 onClick={() => {
                   setArtifactPanelOpen(false);
                   artifactTriggerRef.current?.focus();
@@ -361,13 +361,13 @@ export function ChatActiveWorkspace({
           </header>
           {!showPreview && shownArtifact ? (
             <div className="relative z-[9] shrink-0 bg-[#fbfbf8] px-6 pb-3 pt-1 dark:bg-[#18181b]">
-              <div className="truncate text-[16px] font-medium leading-[22px] text-black/72 dark:text-white/76">{shownArtifact.title || "Generated artifact"}</div>
+              <div className="truncate text-[16px] font-medium leading-[22px] text-black/72 dark:text-white/76">{shownArtifact.title || "Generated content"}</div>
               {artifactMetrics ? (
                 <div className="mt-1 text-[12px] leading-4 text-black/50 dark:text-white/52">{artifactMetrics.characters} characters · {artifactMetrics.words} words</div>
               ) : null}
             </div>
           ) : null}
-          <div role="region" aria-label="Artifact document body" className="relative min-h-0 flex-1 overflow-y-auto bg-[#fbfbf8] dark:bg-[#18181b]">
+          <div role="region" aria-label="Content body" className="relative min-h-0 flex-1 overflow-y-auto bg-[#fbfbf8] dark:bg-[#18181b]">
             <div aria-hidden="true" className="pointer-events-none sticky top-0 z-10 -mb-1.5 h-1.5 w-full bg-gradient-to-b from-[#fbfbf8] to-transparent dark:from-[#18181b]" />
             <div className="flex items-start justify-center">
               {showPreview ? (

@@ -341,19 +341,19 @@ export function IntegrationsWorkspace() {
         >
         <label className={workspaceSearchClass}>
           <HugeiconsIcon icon={Search01Icon} size={16} color="currentColor" strokeWidth={1.5} aria-hidden="true" />
-          <span className="sr-only">Search integrations</span>
+          <span className="sr-only">Search connections</span>
           <input
             type="search"
             value={integrationQuery}
             onChange={(event) => setIntegrationQuery(event.target.value)}
-            placeholder="Search integrations"
+            placeholder="Search connections"
             className={workspaceSearchInputClass}
           />
           {integrationQuery && (
             <button
               type="button"
               onClick={() => setIntegrationQuery("")}
-              aria-label="Clear integration search"
+              aria-label="Clear connection search"
               className="glass-button"
             >
               <HugeiconsIcon icon={Cancel01Icon} size={15} color="currentColor" strokeWidth={1.5} aria-hidden="true" />
@@ -366,7 +366,7 @@ export function IntegrationsWorkspace() {
           <section className="mt-6 px-6" aria-labelledby="essentials-heading">
             <SectionHeading
               id="essentials-heading"
-              title="Available integrations"
+              title="Available connections"
               description={needsRepositorySetup ? "Choose a repository" : connectionBadgeStatus === "connected" ? "Configured for this workspace" : "Ready to connect"}
             />
 
@@ -477,7 +477,7 @@ export function IntegrationsWorkspace() {
           <section className="mt-8 px-6 pb-10" aria-labelledby="more-integrations-heading">
             <SectionHeading
               id="more-integrations-heading"
-              title="More integrations"
+              title="More connections"
               description="Sources we are shaping next"
             />
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -505,7 +505,7 @@ export function IntegrationsWorkspace() {
         )}
 
         {!githubMatchesQuery && matchingPlannedIntegrations.length === 0 && (
-          <WorkspaceEmptyState title="No integrations found" description="Try another search term." />
+          <WorkspaceEmptyState title="No connections found" description="Try another search term." />
         )}
       </section>
     </div>
@@ -656,7 +656,7 @@ function errorMessage(error: unknown) {
     if (error.code === "GITHUB_PROVIDER_UNAVAILABLE") return "GitHub is temporarily unavailable. Try again shortly.";
     return "GitHub request failed. Try again.";
   }
-  return "Could not update the GitHub integration. Try again.";
+  return "Could not update the GitHub connection. Try again.";
 }
 
 function providerRequestId(error: unknown) {

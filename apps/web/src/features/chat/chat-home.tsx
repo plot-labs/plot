@@ -68,8 +68,8 @@ export function ChatHome() {
 		{!canGenerate ? (
           <p className="mt-3 text-center text-xs text-black/50 dark:text-white/50">
 				{entitlement?.accessMode === "complete_only"
-					? "New AI responses are paused. Open an existing artifact to edit, export, or publish."
-					: "This workspace cannot start new responses. You can still export existing artifacts."}
+					? "New AI responses are paused. Open existing content to edit, export, or publish."
+					: "This workspace cannot start new responses. You can still export existing content."}
           </p>
         ) : null}
       </div>

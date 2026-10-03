@@ -71,7 +71,7 @@ export function PublishDialog({
         setConfirmation({ warnings });
         setMessage("Explicit confirmation is required before publish.");
       } else {
-        setMessage(error instanceof Error ? error.message : "The artifact could not be published.");
+        setMessage(error instanceof Error ? error.message : "The content could not be published.");
       }
     } finally {
       setPending(false);

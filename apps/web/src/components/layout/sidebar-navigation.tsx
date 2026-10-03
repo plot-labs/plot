@@ -29,7 +29,7 @@ const workspaceSettingsNavGroups = [
     label: "Workspace",
     items: [
       { href: "/settings/general", label: "General", icon: SettingsIcon },
-      { href: "/settings/content", label: "Content", icon: ContentIcon },
+      { href: "/settings/content", label: "Content profile", icon: ContentIcon },
       { href: "/settings/credits", label: "Credits", icon: CreditsIcon },
     ],
   },

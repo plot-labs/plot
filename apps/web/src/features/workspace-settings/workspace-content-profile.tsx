@@ -91,7 +91,7 @@ export function WorkspaceContentProfile() {
   return (
     <section className="mx-auto max-w-2xl px-6 py-10">
       <header className="mb-8">
-        <h1 className="font-display text-3xl text-black/90 dark:text-white/92">Content</h1>
+        <h1 className="font-display text-3xl text-black/90 dark:text-white/92">Content profile</h1>
         <p className="mt-2 text-sm leading-6 text-black/55 dark:text-white/55">
           Product context and voice for drafts. Saving creates a new revision; runs already in progress keep the revision they started with.
         </p>

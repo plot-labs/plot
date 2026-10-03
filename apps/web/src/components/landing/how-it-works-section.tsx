@@ -1,7 +1,7 @@
 export function HowItWorksSection() {
   const steps = [
     ["01", "Assess what matters", "Plot starts from a published GitHub release and identifies the changes customers need to know."],
-    ["02", "Shape the customer update", "Open the artifact beside the conversation, refine the customer-facing wording, and check supporting evidence when needed."],
+    ["02", "Shape the customer update", "Open the content beside the conversation, refine the customer-facing wording, and check supporting evidence when needed."],
     ["03", "Approve the final update", "Publish to your public changelog or export Markdown when the release note is ready."],
   ];
 

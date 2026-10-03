@@ -170,7 +170,7 @@ export function AutonomyHomeWorkspace({ view = "overview" }: { view?: "overview"
                   </Link>
                 ) : item.artifactId ? (
                   <Link className={`glass-button ${buttonClass}`} href={`/contents?artifact=${encodeURIComponent(item.artifactId)}`}>
-                    Open artifact
+                    Open content
                   </Link>
                 ) : null}
               </div>

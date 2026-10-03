@@ -83,7 +83,7 @@ describe("TiptapDraftEditor", () => {
   it("renders historical snapshots read-only without a delivery edit control", () => {
     render(<TiptapDraftEditor pack={pack} readOnly onSaveArtifact={vi.fn()} />);
 
-    expect(screen.getByRole("textbox", { name: "Historical artifact content" })).toHaveAttribute("contenteditable", "false");
+    expect(screen.getByRole("textbox", { name: "Historical content" })).toHaveAttribute("contenteditable", "false");
     expect(screen.queryByRole("button", { name: "Save draft" })).not.toBeInTheDocument();
   });
 
@@ -116,7 +116,7 @@ describe("TiptapDraftEditor", () => {
     await screen.findByRole("textbox", { name: "Draft content" });
     rerender(<TiptapDraftEditor pack={currentPack} onSaveArtifact={onSaveArtifact} saveRequestToken={1} />);
     await waitFor(() => expect(onSaveArtifact).toHaveBeenCalledWith(expect.objectContaining({
-      title: title ?? "Generated artifact",
+      title: title ?? "Generated content",
       expectedRevisionNumber: pack.variant.revisionNumber,
     })));
   });

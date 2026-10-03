@@ -47,7 +47,7 @@ export function ArtifactActionsMenu({ triggerRef, children }: ArtifactActionsMen
       <button
         ref={buttonRef}
         type="button"
-        aria-label="Artifact actions"
+        aria-label="Content actions"
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
@@ -56,7 +56,7 @@ export function ArtifactActionsMenu({ triggerRef, children }: ArtifactActionsMen
         <Ellipsis aria-hidden="true" className="size-4" />
       </button>
       {open ? (
-        <div role="menu" aria-label="Artifact actions" className="glass-layer absolute right-0 top-full z-40 mt-2 w-[204px] rounded-[8px] border border-black/10 p-2 text-[13px] text-[#18181b] dark:border-white/10 dark:text-white">
+        <div role="menu" aria-label="Content actions" className="glass-layer absolute right-0 top-full z-40 mt-2 w-[204px] rounded-[8px] border border-black/10 p-2 text-[13px] text-[#18181b] dark:border-white/10 dark:text-white">
           {children(close)}
         </div>
       ) : null}
