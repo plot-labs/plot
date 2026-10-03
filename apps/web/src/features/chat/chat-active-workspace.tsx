@@ -20,6 +20,7 @@ import { chatHref, documentPhaseStatus } from "@/features/chat/chat-workspace-ut
 import { useChatAgentActivity } from "@/features/chat/use-chat-agent-activity";
 import { useChatArtifactDocument } from "@/features/chat/use-chat-artifact-document";
 import { plotApiClient } from "@/lib/api-client";
+import { useUnsavedChangesWarning } from "@/lib/use-unsaved-changes-warning";
 import { useWorkspaceEntitlement } from "@/lib/use-workspace-entitlement";
 type ChatActiveWorkspaceProps = {
   activeChat: ChatSummary;
@@ -101,6 +102,9 @@ export function ChatActiveWorkspace({
     </button>
   ) : undefined;
   const shownArtifact = document.currentArtifact;
+  // Export and publish read the last saved revision; anything not yet saved would be left out.
+  const hasUnsavedChanges = canEdit && Boolean(shownArtifact) && document.saveState !== "saved";
+  useUnsavedChangesWarning(hasUnsavedChanges);
   const artifactMetrics = useMemo(() => {
     if (!shownArtifact) return null;
     const draft = document.drafts[shownArtifact.id];
@@ -327,7 +331,7 @@ export function ChatActiveWorkspace({
             <div className="flex items-center gap-1">
               {!showPreview && shownArtifact ? (
                 <ArtifactActionsMenu>
-                  {() => <ExportDialog pack={shownArtifact} client={plotApiClient} presentation="menu" />}
+                  {() => <ExportDialog pack={shownArtifact} client={plotApiClient} presentation="menu" hasUnsavedChanges={hasUnsavedChanges} />}
                 </ArtifactActionsMenu>
               ) : null}
               {showPreview ? <span role="status" className="text-sm text-black/60 dark:text-white/60">{selectedProgress?.status === "FAILED" ? "Generation failed · last draft" : selectedProgress?.status === "SUCCEEDED" ? "Loading final draft" : documentPhaseStatus(selectedProgress?.phase)}</span> : null}
@@ -345,7 +349,7 @@ export function ChatActiveWorkspace({
                 />
               ) : null}
               {!showPreview && shownArtifact && (canPublish || (shownArtifact.publication && canUnpublish)) ? (
-                <PublishDialog pack={shownArtifact} client={plotApiClient} onPackChange={document.onPackChange} />
+                <PublishDialog pack={shownArtifact} client={plotApiClient} onPackChange={document.onPackChange} hasUnsavedChanges={hasUnsavedChanges} />
               ) : null}
               <button
                 type="button"

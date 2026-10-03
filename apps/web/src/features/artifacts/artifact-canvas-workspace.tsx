@@ -13,6 +13,7 @@ import { ExportDialog } from "@/features/citations/export-dialog";
 import { PublishDialog } from "@/features/citations/publish-dialog";
 import type { SaveArtifactInput } from "@/features/citations/tiptap-draft-editor";
 import { isSafeHttpUrl } from "@/lib/safe-url";
+import { useUnsavedChangesWarning } from "@/lib/use-unsaved-changes-warning";
 import { useWorkspaceEntitlement } from "@/lib/use-workspace-entitlement";
 
 type ArtifactCanvasWorkspaceProps = {
@@ -37,7 +38,10 @@ export function ArtifactCanvasWorkspace({ artifact, client, onSaveArtifact }: Ar
   const readOnly = !canEdit;
   const titleDirty = draftTitle.trim() !== (currentArtifact.title?.trim() ?? "");
   const visibleSaveState = titleDirty && saveState === "saved" ? "dirty" : saveState;
+  // Export and publish read the last saved revision; anything not yet saved would be left out.
+  const hasUnsavedChanges = canEdit && visibleSaveState !== "saved";
   const closeSources = useCallback(() => setSourcesOpen(false), []);
+  useUnsavedChangesWarning(hasUnsavedChanges);
 
   return (
     <div className="relative flex h-full min-h-[calc(100dvh-49px)] min-w-0 flex-col overflow-hidden bg-shell-canvas lg:min-h-0">
@@ -58,7 +62,7 @@ export function ArtifactCanvasWorkspace({ artifact, client, onSaveArtifact }: Ar
           {(close) => (
             <>
               <ArtifactMenuButton icon={Library} onClick={() => { close(); setSourcesOpen(true); }}>Sources</ArtifactMenuButton>
-              <ExportDialog pack={currentArtifact} client={client} presentation="menu" />
+              <ExportDialog pack={currentArtifact} client={client} presentation="menu" hasUnsavedChanges={hasUnsavedChanges} />
             </>
           )}
         </ArtifactActionsMenu>
@@ -84,7 +88,7 @@ export function ArtifactCanvasWorkspace({ artifact, client, onSaveArtifact }: Ar
               />
             ) : null}
             {canPublish || (currentArtifact.publication && canUnpublish) ? (
-              <PublishDialog pack={currentArtifact} client={client} onPackChange={setCurrentArtifact} />
+              <PublishDialog pack={currentArtifact} client={client} onPackChange={setCurrentArtifact} hasUnsavedChanges={hasUnsavedChanges} />
             ) : null}
           </div>}
           saveRequestToken={saveRequestToken}

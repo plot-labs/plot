@@ -6,9 +6,22 @@ import { useEffect, useRef, useState } from "react";
 import { PlotApiError, type Artifact, type PlotApiClient } from "@plot/api-client";
 
 type Disposition = "COPY" | "DOWNLOAD";
+
+const UNSAVED_EXPORT_MESSAGE = "Save your changes before exporting. Export uses the last saved draft.";
 type ExportWarning = { key: string; sentenceNumber: number; excerpt: string };
 
-export function ExportDialog({ pack, client, presentation = "buttons" }: { pack: Artifact; client: PlotApiClient; presentation?: "buttons" | "menu" | "copy" }) {
+export function ExportDialog({
+  pack,
+  client,
+  presentation = "buttons",
+  hasUnsavedChanges = false,
+}: {
+  pack: Artifact;
+  client: PlotApiClient;
+  presentation?: "buttons" | "menu" | "copy";
+  /** Export uses the last saved revision, so unsaved editor changes block it. */
+  hasUnsavedChanges?: boolean;
+}) {
   const [pending, setPending] = useState<Disposition | null>(null);
   const [includeSources, setIncludeSources] = useState(false);
   const [confirmation, setConfirmation] = useState<{ disposition: Disposition; warnings: ExportWarning[] } | null>(null);
@@ -53,6 +66,10 @@ export function ExportDialog({ pack, client, presentation = "buttons" }: { pack:
 
   async function requestExport(disposition: Disposition, acknowledgeUnresolved: boolean, acknowledgedWarningKeys: string[] = []) {
     if (pending) return;
+    if (hasUnsavedChanges) {
+      setMessage(UNSAVED_EXPORT_MESSAGE);
+      return;
+    }
     setPending(disposition);
     setMessage("");
     try {
@@ -199,14 +216,15 @@ export function ExportDialog({ pack, client, presentation = "buttons" }: { pack:
             Markdown Sources can include private repository labels and URLs. Hosted publish only shows public citations.
           </p>
         ) : null}
-        <button aria-busy={pending === "COPY"} type="button" role="menuitem" disabled={Boolean(pending)} onClick={() => void requestExport("COPY", false)} className="glass-control flex h-8 w-full items-center gap-2 rounded-[4px] px-2.5 text-left">
+        <button aria-busy={pending === "COPY"} type="button" role="menuitem" disabled={Boolean(pending) || hasUnsavedChanges} onClick={() => void requestExport("COPY", false)} className="glass-control flex h-8 w-full items-center gap-2 rounded-[4px] px-2.5 text-left">
           <Copy aria-hidden="true" className="size-4" /> Copy Markdown
         </button>
-        <button aria-busy={pending === "DOWNLOAD"} type="button" role="menuitem" disabled={Boolean(pending)} onClick={() => void requestExport("DOWNLOAD", false)} className="glass-control flex h-8 w-full items-center gap-2 rounded-[4px] px-2.5 text-left">
+        <button aria-busy={pending === "DOWNLOAD"} type="button" role="menuitem" disabled={Boolean(pending) || hasUnsavedChanges} onClick={() => void requestExport("DOWNLOAD", false)} className="glass-control flex h-8 w-full items-center gap-2 rounded-[4px] px-2.5 text-left">
           <Download aria-hidden="true" className="size-4" /> Download Markdown
         </button>
+        {hasUnsavedChanges ? <p className="px-2.5 py-1 text-xs text-black/58 dark:text-white/58">{UNSAVED_EXPORT_MESSAGE}</p> : null}
         {confirmation ? <ExportConfirmation confirmation={confirmation} pending={pending} pack={pack} onCancel={() => setConfirmation(null)} onConfirm={() => void requestExport(confirmation.disposition, true, confirmation.warnings.map((warning) => warning.key))} /> : null}
-        {message ? <p role="status" aria-live="polite" className="px-2.5 py-1 text-xs text-black/58 dark:text-white/58">{message}</p> : null}
+        {message && message !== UNSAVED_EXPORT_MESSAGE ? <p role="status" aria-live="polite" className="px-2.5 py-1 text-xs text-black/58 dark:text-white/58">{message}</p> : null}
       </div>
     );
   }

@@ -93,6 +93,16 @@ describe("ArtifactCanvasWorkspace", () => {
     expect(screen.getByRole("button", { name: "Publish changelog" })).toBeVisible();
   });
 
+  it("blocks publish and export until an edited title is saved", () => {
+    render(<ArtifactCanvasWorkspace artifact={artifact} client={client()} onSaveArtifact={vi.fn()} />);
+
+    fireEvent.change(screen.getByPlaceholderText("Untitled content"), { target: { value: "Renamed changelog" } });
+
+    expect(screen.getByRole("button", { name: "Publish changelog" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Content actions" }));
+    expect(screen.getByRole("menuitem", { name: "Copy Markdown" })).toBeDisabled();
+  });
+
   it("moves through content actions with the keyboard", () => {
     render(<ArtifactCanvasWorkspace artifact={artifact} client={client()} onSaveArtifact={vi.fn()} />);
 

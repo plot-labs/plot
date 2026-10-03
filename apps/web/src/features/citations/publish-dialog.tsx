@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Copy, ExternalLink, Globe, ShieldAlert, Undo2, X } from "lucide-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import { PlotApiError, type Artifact, type ArtifactPublication, type PlotApiClient } from "@plot/api-client";
 import { publicChangelogEntryUrl } from "@/lib/public-changelog-url";
@@ -21,11 +21,14 @@ export function PublishDialog({
   client,
   presentation = "button",
   onPackChange,
+  hasUnsavedChanges = false,
 }: {
   pack: Artifact;
   client: PlotApiClient;
   presentation?: "button" | "inline" | "menu";
   onPackChange?: (pack: Artifact) => void;
+  /** Publishing uses the last saved revision, so unsaved editor changes block it. */
+  hasUnsavedChanges?: boolean;
 }) {
   const entitlement = useWorkspaceEntitlement();
   const canPublish = (entitlement?.capabilities.publish ?? true) && pack.contentType === "CHANGELOG";
@@ -122,11 +125,27 @@ export function PublishDialog({
   const live = livePublication;
   const showUnpublish = Boolean(live) && canUnpublish;
   const showPublish = !live && canPublish;
+  // The live entry is behind the latest saved revision; publishing again replaces it at the same URL.
+  const showUpdate = Boolean(live) && canPublish && typeof live?.revisionNumber === "number" && pack.variant.revisionNumber > live.revisionNumber;
+  const publishBlocked = pending || hasUnsavedChanges;
+  const unsavedNote = hasUnsavedChanges && (showPublish || showUpdate) ? "Save your changes before publishing. Publish uses the last saved draft." : "";
+  const visibleMessage = confirmation ? "" : message;
   if (!showPublish && !showUnpublish && !success && !withdrawn) return null;
 
   if (presentation === "menu") {
     return (
       <div role="none" className="relative border-t border-black/[0.06] pt-1 dark:border-white/10">
+        {showUpdate ? (
+          <button aria-busy={Boolean(pending)}
+            type="button"
+            role="menuitem"
+            disabled={publishBlocked}
+            onClick={() => void requestPublish(false)}
+            className="glass-control flex h-8 w-full items-center gap-2 rounded-[4px] px-2.5 text-left"
+          >
+            <Globe aria-hidden="true" className="size-4" /> Update published changelog
+          </button>
+        ) : null}
         {showUnpublish ? (
           <button aria-busy={Boolean(pending)}
             type="button"
@@ -141,7 +160,7 @@ export function PublishDialog({
           <button aria-busy={Boolean(pending)}
             type="button"
             role="menuitem"
-            disabled={pending}
+            disabled={publishBlocked}
             onClick={() => void requestPublish(false)}
             className="glass-control flex h-8 w-full items-center gap-2 rounded-[4px] px-2.5 text-left"
           >
@@ -175,15 +194,35 @@ export function PublishDialog({
             onDismiss={() => setSuccess(null)}
           />
         ) : null}
+        {unsavedNote ? <p className="px-2.5 py-1 text-xs text-black/58 dark:text-white/58">{unsavedNote}</p> : null}
         {withdrawn ? <p role="status" aria-live="polite" className="px-2.5 py-1 text-xs text-black/58 dark:text-white/58">Public changelog withdrawn. The internal snapshot is kept.</p> : null}
-        {message ? <p role="status" aria-live="polite" className="px-2.5 py-1 text-xs text-black/58 dark:text-white/58">{message}</p> : null}
+        {visibleMessage ? <p role="alert" className="px-2.5 py-1 text-xs text-rose-700 dark:text-rose-300">{visibleMessage}</p> : null}
       </div>
     );
   }
 
 
   return (
-    <div className={presentation === "inline" ? "relative inline-flex flex-col items-end gap-2" : "relative inline-flex items-center"}>
+    <div className={presentation === "inline" ? "relative inline-flex flex-col items-end gap-2" : "relative inline-flex items-center gap-2"}>
+      {unsavedNote ? (
+        <span id="publish-unsaved-note" className="text-xs text-black/50 dark:text-white/50">
+          Save changes to publish
+        </span>
+      ) : null}
+      {showUpdate ? (
+        <button aria-busy={Boolean(pending)}
+          type="button"
+          disabled={publishBlocked}
+          onClick={() => void requestPublish(false)}
+          aria-label="Update published changelog"
+          aria-describedby={unsavedNote ? "publish-unsaved-note" : undefined}
+          title="Replace the live changelog with the latest saved draft at the same URL."
+          className="glass-button glass-primary min-w-[120px]"
+        >
+          <Globe aria-hidden="true" className="size-3.5 text-black/60 dark:text-white/60" />
+          {pending ? "Updating…" : "Update"}
+        </button>
+      ) : null}
       {showUnpublish ? (
         <button aria-busy={Boolean(pending)}
           type="button"
@@ -198,9 +237,10 @@ export function PublishDialog({
       ) : showPublish ? (
         <button aria-busy={Boolean(pending)}
           type="button"
-          disabled={pending}
+          disabled={publishBlocked}
           onClick={() => void requestPublish(false)}
           aria-label="Publish changelog"
+          aria-describedby={unsavedNote ? "publish-unsaved-note" : undefined}
           title="Hosted publish includes the body and public citations only. Private source labels stay private. Plot does not remove secrets from the body."
           className="glass-button glass-primary min-w-[120px]"
         >
@@ -251,16 +291,54 @@ export function PublishDialog({
       ) : null}
 
       {withdrawn ? (
-        <span role="status" aria-live="polite" className={presentation === "inline" ? "text-right text-xs text-black/58 dark:text-white/58" : "sr-only"}>
+        <PublishNotice presentation={presentation} tone="status" onDismiss={() => setWithdrawn(false)}>
           Public changelog withdrawn. The internal snapshot is kept.
-        </span>
+        </PublishNotice>
       ) : null}
 
-      {message ? (
-        <span role="status" aria-live="polite" className={presentation === "inline" ? "text-right text-xs text-black/58 dark:text-white/58" : "sr-only"}>
-          {message}
-        </span>
+      {visibleMessage ? (
+        <PublishNotice presentation={presentation} tone="error" onDismiss={() => setMessage("")}>
+          {visibleMessage}
+        </PublishNotice>
       ) : null}
+    </div>
+  );
+}
+
+/** Visible outcome text: anchored under the trigger for the compact button, inline otherwise. */
+function PublishNotice({
+  presentation,
+  tone,
+  onDismiss,
+  children,
+}: {
+  presentation: "button" | "inline" | "menu";
+  tone: "status" | "error";
+  onDismiss: () => void;
+  children: ReactNode;
+}) {
+  const toneClass = tone === "error" ? "text-rose-700 dark:text-rose-300" : "text-black/62 dark:text-white/62";
+  if (presentation !== "button") {
+    return (
+      <span role={tone === "error" ? "alert" : "status"} className={`text-right text-xs ${toneClass}`}>
+        {children}
+      </span>
+    );
+  }
+  return (
+    <div
+      role={tone === "error" ? "alert" : "status"}
+      className="glass-layer absolute right-0 top-[calc(100%+12px)] z-50 flex w-[min(320px,calc(100vw-32px))] items-start gap-2 rounded-lg border border-black/10 p-3 text-xs leading-5 dark:border-white/10"
+    >
+      <p className={`min-w-0 flex-1 ${toneClass}`}>{children}</p>
+      <button
+        type="button"
+        onClick={onDismiss}
+        aria-label="Dismiss publish message"
+        className="glass-button glass-icon inline-flex size-7 shrink-0 items-center justify-center"
+      >
+        <X aria-hidden="true" className="size-3.5" />
+      </button>
     </div>
   );
 }

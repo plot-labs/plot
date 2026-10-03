@@ -221,4 +221,84 @@ describe("PublishDialog", () => {
       acknowledgedWarningKeys: ["warning-key-1"],
     }));
   });
+
+  it("shows a publish failure on screen", async () => {
+    const publishArtifactVariant = vi.fn().mockRejectedValue(new Error("Publishing is temporarily unavailable."));
+    render(<PublishDialog pack={pack} client={{ publishArtifactVariant } as unknown as PlotApiClient} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Publish changelog" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Publishing is temporarily unavailable.");
+    expect(alert).not.toHaveClass("sr-only");
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss publish message" }));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("blocks publishing while the editor has unsaved changes", () => {
+    const publishArtifactVariant = vi.fn();
+    render(<PublishDialog pack={pack} client={{ publishArtifactVariant } as unknown as PlotApiClient} hasUnsavedChanges />);
+
+    const publish = screen.getByRole("button", { name: "Publish changelog" });
+    expect(publish).toBeDisabled();
+    expect(screen.getByText("Save changes to publish")).toBeVisible();
+    fireEvent.click(publish);
+    expect(publishArtifactVariant).not.toHaveBeenCalled();
+  });
+
+  it("updates a live changelog when a newer revision is saved", async () => {
+    const publishArtifactVariant = vi.fn().mockResolvedValue({
+      entryId: "entry-2",
+      entrySlug: "v2.4.0",
+      publicPath: "/acme/changelog/v2.4.0",
+      publishedAt: "2026-09-08T12:00:00Z",
+      revisionNumber: 3,
+    });
+    const onPackChange = vi.fn();
+    render(
+      <PublishDialog
+        pack={{
+          ...pack,
+          publication: {
+            entryId: "entry-1",
+            entrySlug: "v2.4.0",
+            publicPath: "/acme/changelog/v2.4.0",
+            publishedAt: "2026-08-31T12:00:00Z",
+            revisionNumber: 2,
+          },
+        }}
+        client={{ publishArtifactVariant } as unknown as PlotApiClient}
+        onPackChange={onPackChange}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Unpublish changelog" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Update published changelog" }));
+
+    await screen.findByText("Changelog published");
+    expect(publishArtifactVariant).toHaveBeenCalledWith("variant-1", expect.objectContaining({ expectedRevisionNumber: 3 }));
+    expect(onPackChange).toHaveBeenCalledWith(expect.objectContaining({ publication: expect.objectContaining({ revisionNumber: 3 }) }));
+    expect(screen.queryByRole("button", { name: "Update published changelog" })).not.toBeInTheDocument();
+  });
+
+  it("does not offer an update when the live entry is the latest revision", () => {
+    render(
+      <PublishDialog
+        pack={{
+          ...pack,
+          publication: {
+            entryId: "entry-1",
+            entrySlug: "v2.4.0",
+            publicPath: "/acme/changelog/v2.4.0",
+            publishedAt: "2026-08-31T12:00:00Z",
+            revisionNumber: 3,
+          },
+        }}
+        client={{} as PlotApiClient}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Unpublish changelog" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Update published changelog" })).not.toBeInTheDocument();
+  });
 });

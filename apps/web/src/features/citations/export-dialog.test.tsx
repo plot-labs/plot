@@ -119,6 +119,16 @@ describe("ExportDialog", () => {
     expect(exportArtifactVariant).toHaveBeenCalledWith("variant-1", expect.objectContaining({ disposition: "COPY" }));
   });
 
+  it("blocks export from the menu while the editor has unsaved changes", () => {
+    const exportArtifactVariant = vi.fn();
+    render(<ExportDialog pack={pack} client={{ exportArtifactVariant } as unknown as PlotApiClient} presentation="menu" hasUnsavedChanges />);
+
+    expect(screen.getByRole("menuitem", { name: "Copy Markdown" })).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: "Download Markdown" })).toBeDisabled();
+    expect(screen.getByText("Save your changes before exporting. Export uses the last saved draft.")).toBeVisible();
+    expect(exportArtifactVariant).not.toHaveBeenCalled();
+  });
+
   it("labels launch announcement copy and download actions", () => {
     render(
       <ExportDialog
