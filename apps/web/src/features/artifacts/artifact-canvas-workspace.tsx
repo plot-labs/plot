@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowUpRight, Check, Copy, Ellipsis, Library, X } from "lucide-react";
+import { ArrowUpRight, Check, Library, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 
 import type { Artifact, PlotApiClient } from "@plot/api-client";
 import { GitHubMark } from "@/components/auth/github-mark";
+import { ArtifactActionsMenu, ArtifactMenuButton } from "@/features/artifacts/artifact-actions-menu";
 import { ArtifactDocumentSurface } from "@/features/artifacts/artifact-document-surface";
 import { ArtifactEditorStatus, ArtifactSaveDraftButton, artifactSaveStateLabel } from "@/features/artifacts/artifact-editor-chrome";
 import { ExportDialog } from "@/features/citations/export-dialog";
@@ -26,9 +27,7 @@ export function ArtifactCanvasWorkspace({ artifact, client, onSaveArtifact }: Ar
   const [saveState, setSaveState] = useState<"saved" | "saving" | "dirty" | "error">("saved");
   const [drafts, setDrafts] = useState<Record<string, Omit<SaveArtifactInput, "expectedRevisionNumber">>>({});
   const [saveRequestToken, setSaveRequestToken] = useState(0);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [sourcesOpen, setSourcesOpen] = useState(false);
-  const actionsRef = useRef<HTMLDivElement>(null);
   const overflowTriggerRef = useRef<HTMLButtonElement>(null);
   const entitlement = useWorkspaceEntitlement();
   const artifactTitle = currentArtifact.title ?? "Untitled artifact";
@@ -39,38 +38,6 @@ export function ArtifactCanvasWorkspace({ artifact, client, onSaveArtifact }: Ar
   const titleDirty = draftTitle.trim() !== (currentArtifact.title?.trim() ?? "");
   const visibleSaveState = titleDirty && saveState === "saved" ? "dirty" : saveState;
   const closeSources = useCallback(() => setSourcesOpen(false), []);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-
-    function dismiss(event: Event) {
-      if (event.target instanceof Node && !actionsRef.current?.contains(event.target)) {
-        setMenuOpen(false);
-      }
-    }
-
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        setMenuOpen(false);
-        overflowTriggerRef.current?.focus();
-      }
-    }
-
-    document.addEventListener("pointerdown", dismiss, true);
-    document.addEventListener("click", dismiss, true);
-    document.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.removeEventListener("pointerdown", dismiss, true);
-      document.removeEventListener("click", dismiss, true);
-      document.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [menuOpen]);
-
-  function openSources() {
-    setMenuOpen(false);
-    setSourcesOpen(true);
-  }
 
   return (
     <div className="relative flex h-full min-h-[calc(100dvh-49px)] min-w-0 flex-col overflow-hidden bg-[#eef0f3] dark:bg-[#18181b] lg:min-h-0">
@@ -87,25 +54,14 @@ export function ArtifactCanvasWorkspace({ artifact, client, onSaveArtifact }: Ar
             {artifactTitle}
           </span>
         </nav>
-        <div ref={actionsRef} className="relative flex shrink-0 items-center gap-2">
-          <button
-            ref={overflowTriggerRef}
-            type="button"
-            aria-label="Artifact actions"
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-            onClick={() => setMenuOpen((open) => !open)}
-            className="glass-button glass-icon inline-flex size-9 items-center justify-center"
-          >
-            <Ellipsis aria-hidden="true" className="size-4" />
-          </button>
-          {menuOpen ? (
-            <div role="menu" aria-label="Artifact actions" className="glass-layer absolute right-0 top-full z-40 mt-2 w-[204px] rounded-[8px] border border-black/10 p-2 text-[13px] text-[#18181b] dark:border-white/10 dark:text-white">
-              <MenuButton icon={Library} onClick={openSources}>Sources</MenuButton>
+        <ArtifactActionsMenu triggerRef={overflowTriggerRef}>
+          {(close) => (
+            <>
+              <ArtifactMenuButton icon={Library} onClick={() => { close(); setSourcesOpen(true); }}>Sources</ArtifactMenuButton>
               <ExportDialog pack={currentArtifact} client={client} presentation="menu" />
-            </div>
-          ) : null}
-        </div>
+            </>
+          )}
+        </ArtifactActionsMenu>
       </header>
 
       <main className="flex min-h-0 flex-1 items-stretch justify-center overflow-y-auto bg-[#eef0f3] px-4 dark:bg-[#18181b] sm:px-8">
@@ -166,15 +122,6 @@ export function ArtifactCanvasWorkspace({ artifact, client, onSaveArtifact }: Ar
       </ArtifactDrawer>
 
     </div>
-  );
-}
-
-function MenuButton({ icon: Icon, children, onClick }: { icon: typeof Copy; children: string; onClick: () => void }) {
-  return (
-    <button type="button" role="menuitem" onClick={onClick} className="glass-control flex h-8 w-full items-center gap-2 rounded-[4px] px-2.5 text-left">
-      <Icon aria-hidden="true" className="size-4" />
-      {children}
-    </button>
   );
 }
 

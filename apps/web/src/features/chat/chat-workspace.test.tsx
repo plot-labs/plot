@@ -50,7 +50,7 @@ vi.mock("@/features/chat/chat-composer", () => ({
   ),
 }));
 vi.mock("@/features/citations/tiptap-draft-editor", () => ({ TiptapDraftEditor: () => <div>Reviewed artifact</div> }));
-vi.mock("@/features/citations/export-dialog", () => ({ ExportDialog: ({ presentation }: { presentation?: string }) => presentation === "copy" ? <button type="button" aria-label="Copy artifact">Copy</button> : null }));
+vi.mock("@/features/citations/export-dialog", () => ({ ExportDialog: ({ presentation }: { presentation?: string }) => presentation === "menu" ? <button type="button" role="menuitem">Copy Markdown</button> : null }));
 
 import type { ChatAgentStreamOptions } from "@/lib/chat-agent-stream";
 import { ChatWorkspace } from "./chat-workspace";
@@ -223,7 +223,8 @@ describe("ChatWorkspace", () => {
     expect(screen.getByRole("separator", { name: "Resize artifact document" })).toBeInTheDocument();
     expect(screen.getByText("Reviewed artifact")).toBeVisible();
     expect(artifactBody).toContainElement(screen.getByText("Reviewed artifact"));
-    expect(within(artifactPanel).getByRole("button", { name: "Copy artifact" })).toBeVisible();
+    fireEvent.click(within(artifactPanel).getByRole("button", { name: "Artifact actions" }));
+    expect(within(artifactPanel).getByRole("menuitem", { name: "Copy Markdown" })).toBeVisible();
     expect(screen.queryByRole("button", { name: "Artifact history" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "Assistant" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "History" })).not.toBeInTheDocument();
@@ -575,11 +576,11 @@ describe("Chat streaming document panel", () => {
     expect(within(panel).getByText("Visible draft paragraph")).toBeVisible();
     expect(within(panel).getByText("생성 중")).toBeVisible();
     expect(within(panel).queryByRole("button", { name: "Save draft" })).not.toBeInTheDocument();
-    expect(within(panel).queryByRole("button", { name: "Copy artifact" })).not.toBeInTheDocument();
+    expect(within(panel).queryByRole("button", { name: "Artifact actions" })).not.toBeInTheDocument();
     expect(screen.queryByText("Reviewed artifact")).not.toBeInTheDocument();
     await act(async () => { options.onProgress?.({ runId: "agent-1", epoch: 1, revision: 3, phase: "COMPLETE", responseText: "Final answer", draftParagraphs: ["Final paragraph"], status: "SUCCEEDED", artifactId: "artifact-1", failureCode: null }); complete(agentRun({ status: "SUCCEEDED", responseText: "Final answer", artifactId: "artifact-1", artifact: artifactSummary })); });
     expect(await screen.findByText("Reviewed artifact")).toBeVisible();
-    expect(within(panel).getByRole("button", { name: "Copy artifact" })).toBeVisible();
+    expect(within(panel).getByRole("button", { name: "Artifact actions" })).toBeVisible();
     expect(screen.queryByText("Visible draft paragraph")).not.toBeInTheDocument();
   });
 

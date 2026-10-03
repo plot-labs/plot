@@ -11,6 +11,7 @@ import {usePanelRef} from "react-resizable-panels";
 import type { ChatAgentRun, WorkSessionSummary as ChatSummary } from "@plot/api-client";
 import { ArtifactDocumentSurface } from "@/features/artifacts/artifact-document-surface";
 import { ArtifactEditorStatus, ArtifactSaveDraftButton, artifactSaveStateLabel } from "@/features/artifacts/artifact-editor-chrome";
+import { ArtifactActionsMenu } from "@/features/artifacts/artifact-actions-menu";
 import { ExportDialog } from "@/features/citations/export-dialog";
 import { ChatComposer } from "@/features/chat/chat-composer";
 import { AgentActivityDetail, ErrorNotice } from "@/features/chat/chat-activity";
@@ -321,7 +322,9 @@ export function ChatActiveWorkspace({
           <header className="relative z-20 flex min-h-16 shrink-0 items-center justify-between gap-3 bg-[#fbfbf8]/85 px-4 backdrop-blur-xl dark:bg-[#16171a]/85">
             <div className="flex items-center gap-1">
               {!showPreview && shownArtifact ? (
-                <ExportDialog pack={shownArtifact} client={plotApiClient} presentation="copy" />
+                <ArtifactActionsMenu>
+                  {() => <ExportDialog pack={shownArtifact} client={plotApiClient} presentation="menu" />}
+                </ArtifactActionsMenu>
               ) : null}
               {showPreview ? <span role="status" className="text-sm text-black/60 dark:text-white/60">{selectedProgress?.status === "FAILED" ? "생성 실패 · 마지막 초안" : selectedProgress?.status === "SUCCEEDED" ? "최종 문서 불러오는 중" : "생성 중"}</span> : null}
             </div>
