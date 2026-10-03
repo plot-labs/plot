@@ -112,7 +112,7 @@ export function WorkspaceCredits() {
               <CreditSummaryCard label="Usage" value={formatPercent(usagePercent)} />
             </section>
 
-            <section className="mt-8 overflow-hidden rounded-[14px] border border-black/[0.09] bg-white shadow-[0_1px_2px_rgb(15_23_42_/_0.025)] dark:border-white/10 dark:bg-white/[0.045]" aria-labelledby="credit-usage-heading">
+            <section className="glass-card mt-8 overflow-hidden rounded-[14px] border border-black/[0.09] dark:border-white/10" aria-labelledby="credit-usage-heading">
               <div className="border-b border-black/[0.07] px-5 py-5 dark:border-white/[0.08] sm:px-6">
                 <h2 id="credit-usage-heading" className="text-[15px] font-semibold text-black/82 dark:text-white/86">Usage</h2>
                 <p className="mt-1 text-[13px] leading-5 text-black/48 dark:text-white/48">
@@ -166,7 +166,7 @@ export function WorkspaceCredits() {
 
 function CreditSummaryCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-[14px] border border-black/[0.09] bg-white px-5 py-5 shadow-[0_1px_2px_rgb(15_23_42_/_0.025)] dark:border-white/10 dark:bg-white/[0.045]">
+    <div className="glass-card rounded-[14px] border border-black/[0.09] px-5 py-5 dark:border-white/10">
       <p className="text-[12px] font-medium text-black/45 dark:text-white/45">{label}</p>
       <p className="mt-3 text-[20px] font-semibold tracking-[-0.02em] text-black/82 dark:text-white/86">{value}</p>
     </div>

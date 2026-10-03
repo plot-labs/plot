@@ -151,7 +151,7 @@ export function PublicChangelogEntryView({ workspaceSlug, entry }: PublicChangel
                   href={citation.originalUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex min-w-0 items-center gap-3 rounded-xl border border-black/10 bg-white/60 px-3 py-2.5 text-sm transition hover:border-black/20 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
+                  className="glass-button flex min-w-0 items-center gap-3 border"
                 >
                   <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-black/[0.05] font-sans text-[11px] font-semibold text-black/55">
                     {number}

@@ -47,7 +47,7 @@ describe("ChatComposer", () => {
     const prompt = screen.getByRole("textbox", { name: "Chat message" });
     const send = screen.getByRole("button", { name: "Send message" });
 
-    expect(send).toHaveClass("bg-primary", "text-primary-foreground", "dark:bg-[#f4f4f5]");
+    expect(send).toHaveClass("glass-button", "glass-primary");
     expect(send).toBeDisabled();
     inputText(prompt, "   ");
     expect(send).toBeDisabled();
@@ -67,6 +67,22 @@ describe("ChatComposer", () => {
     render(<ChatComposer variant="center" onSubmit={vi.fn()} />);
 
     expect(screen.queryByRole("button", { name: "Voice input" })).not.toBeInTheDocument();
+  });
+
+  it("shows progress and blocks repeated sends until the response finishes", () => {
+    const onSubmit = vi.fn();
+    const { rerender } = render(<ChatComposer busy onSubmit={onSubmit} />);
+    const prompt = screen.getByRole("textbox", { name: "Chat message" });
+    const send = screen.getByRole("button", { name: "Send message" });
+    inputText(prompt, "Write release notes");
+    expect(send).toHaveAttribute("aria-busy", "true");
+    expect(send).toBeDisabled();
+    fireEvent.click(send);
+    fireEvent.keyDown(prompt, { key: "Enter" });
+    expect(onSubmit).not.toHaveBeenCalled();
+    rerender(<ChatComposer busy={false} onSubmit={onSubmit} />);
+    expect(send).toHaveAttribute("aria-busy", "false");
+    expect(send).toBeEnabled();
   });
 
   it("stays disabled when generation is not allowed", () => {

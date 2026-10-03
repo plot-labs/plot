@@ -1,6 +1,6 @@
 "use client";
 
-import { Save } from "lucide-react";
+import { LoaderCircle, Save } from "lucide-react";
 
 export function artifactSaveStateLabel(
   state: "saved" | "saving" | "dirty" | "error",
@@ -21,13 +21,13 @@ type ArtifactSaveDraftButtonProps = {
 
 export function ArtifactSaveDraftButton({ disabled = false, saving = false, onClick }: ArtifactSaveDraftButtonProps) {
   return (
-    <button
+    <button aria-busy={Boolean(saving)}
       type="button"
       disabled={disabled || saving}
       onClick={onClick}
-      className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-black px-3 text-xs font-medium text-white transition hover:bg-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 disabled:pointer-events-none disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-white/85 dark:focus-visible:ring-white/25"
+      className="glass-button glass-primary min-w-[116px]"
     >
-      <Save aria-hidden="true" className="size-3.5" />
+      {saving ? <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" /> : <Save aria-hidden="true" className="size-3.5" />}
       {saving ? "Saving…" : "Save draft"}
     </button>
   );

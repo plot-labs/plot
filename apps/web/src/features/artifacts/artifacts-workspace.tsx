@@ -85,8 +85,8 @@ function ArtifactsWorkspaceContent() {
           }
         />
 
-        <div className="mt-10 overflow-hidden rounded-[14px] border border-black/[0.09] bg-white dark:border-white/10 dark:bg-white/[0.035]">
-          <div className="hidden grid-cols-[minmax(0,1fr)_110px_145px] gap-4 border-b border-black/[0.07] bg-black/[0.025] px-6 py-3 text-[12px] font-medium text-black/45 dark:border-white/[0.08] dark:bg-white/[0.035] dark:text-white/45 md:grid">
+        <div className="glass-card mt-10 overflow-hidden rounded-[14px] border border-black/[0.09] dark:border-white/10">
+          <div className="hidden grid-cols-[minmax(0,1fr)_110px_145px] gap-4 border-b border-black/[0.07] px-6 py-3 text-[12px] font-medium text-black/45 dark:border-white/[0.08] dark:text-white/45 md:grid">
             <span>Name</span><span>Status</span><span>Updated</span>
           </div>
           {artifactListStatus === "loading" ? (
@@ -108,7 +108,7 @@ function ArtifactsWorkspaceContent() {
                   <Link
                     key={artifact.id}
                     href={`/contents?artifact=${encodeURIComponent(artifact.id)}`}
-                    className="grid min-h-[76px] grid-cols-1 gap-2 px-6 py-4 text-left transition hover:bg-black/[0.025] focus-visible:bg-black/[0.025] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-black/20 dark:hover:bg-white/[0.04] dark:focus-visible:bg-white/[0.04] dark:focus-visible:ring-white/25 md:grid-cols-[minmax(0,1fr)_110px_145px] md:items-center md:gap-4"
+                    className="grid min-h-[76px] grid-cols-1 gap-2 px-6 py-4 text-left transition-colors hover:bg-black/[0.025] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-black/60 dark:hover:bg-white/[0.04] dark:focus-visible:outline-white/70 md:grid-cols-[minmax(0,1fr)_110px_145px] md:items-center md:gap-4"
                   >
                     <span className="min-w-0 line-clamp-2 text-[14px] font-medium leading-5 text-black/85 dark:text-white/88" title={artifact.title ?? "Generated artifact"}>
                       {artifact.title ?? "Generated artifact"}
@@ -124,7 +124,7 @@ function ArtifactsWorkspaceContent() {
             </div>
           )}
           {artifactListStatus === "ready" && artifacts.length > 0 && (
-            <div className="border-t border-black/[0.07] bg-black/[0.025] px-6 py-3 text-[12px] text-black/45 dark:border-white/[0.08] dark:bg-white/[0.035] dark:text-white/45">
+            <div className="border-t border-black/[0.07] px-6 py-3 text-[12px] text-black/45 dark:border-white/[0.08] dark:text-white/45">
               {totalItems > artifacts.length
                 ? `Showing ${artifacts.length} most recently updated of ${totalItems} contents`
                 : `${artifacts.length} contents`}

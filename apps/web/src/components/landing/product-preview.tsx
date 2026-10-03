@@ -72,8 +72,8 @@ export function ProductPreview() {
                   type="button"
                   aria-pressed={panel === value}
                   onClick={() => setPanel(value)}
-                  className={`min-h-10 flex-1 rounded-lg text-sm capitalize ${
-                    panel === value ? "bg-white font-medium shadow-sm" : "text-black/55"
+                  className={`glass-control min-h-10 flex-1 rounded-lg text-sm capitalize ${
+                    panel === value ? "font-medium" : ""
                   }`}
                 >
                   {value}
@@ -117,7 +117,7 @@ export function ProductPreview() {
                             type="button"
                             onClick={() => setPanel("artifact")}
                             aria-expanded={panel === "artifact"}
-                            className="mt-4 flex w-full items-center justify-between gap-4 rounded-xl border border-black/[0.08] bg-white/70 px-4 py-3 text-left transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
+                            className="glass-button mt-4 flex w-full items-center justify-between gap-4 border text-left"
                           >
                             <span className="min-w-0 truncate text-sm font-medium text-black/82">
                               Find projects faster.
@@ -160,7 +160,7 @@ export function ProductPreview() {
                     <button
                       type="button"
                       onClick={() => setSavedDraft(draft)}
-                      className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-black px-3 text-xs font-medium text-white transition hover:bg-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
+                      className="glass-button glass-primary inline-flex items-center gap-1.5"
                     >
                       <Save aria-hidden="true" className="size-3.5" />
                       Save draft
@@ -185,7 +185,7 @@ export function ProductPreview() {
                         <button
                           key={label}
                           type="button"
-                          className="min-h-8 rounded-md border border-black/10 px-2.5 text-xs font-medium text-black/65 transition hover:bg-black/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                          className="glass-button border"
                         >
                           {label}
                         </button>
@@ -242,7 +242,7 @@ function LandingProductSidebar() {
         <div className="mb-2 flex h-7 items-center pl-0.5">
           <div className="text-[11px] font-medium uppercase text-black/35">Workspace</div>
         </div>
-        <div className="flex h-9 w-full items-center gap-2 rounded-[8px] border border-black/[0.12] bg-white/40 px-2 text-left text-[13px] font-semibold text-black/76">
+        <div className="glass-card flex h-9 w-full items-center gap-2 rounded-[8px] border border-black/[0.12] px-2 text-left text-[13px] font-semibold text-black/76">
           <span className="flex size-6 items-center justify-center rounded-[7px] bg-[#ec5b45] text-xs font-semibold text-white">A</span>
           <span className="min-w-0 flex-1 truncate">Acme</span>
           <ChevronDown aria-hidden="true" className="size-4 shrink-0 text-black/38" />
@@ -324,7 +324,7 @@ function LandingChatComposer({ onSubmit }: { onSubmit: (value: string) => void }
         <div className="relative flex flex-col gap-2 rounded-[12px] border border-[light-dark(#ccd3db,#494d53)] bg-[light-dark(#ffffff,#28292c)] p-[9px]">
           <PromptInputTextarea aria-label="Chat message" placeholder="Ask Plot to refine the draft…" value={value} onChange={event=>setValue(event.target.value)} rows={1} className="[font-family:-apple-system,BlinkMacSystemFont,Segoe_UI,Roboto,Helvetica,Arial,sans-serif] [field-sizing:content] max-h-[154px] min-h-[30px] w-full resize-none bg-transparent p-1 text-[14px] leading-[22px] text-[light-dark(#0a1317,#dfe2e5)] outline-none placeholder:text-[light-dark(#4e606f,#aaafb5)]"/>
           <div className="flex h-8 items-center justify-between"><span className="text-xs text-black/42">Enter to send</span>
-            <PromptInputSubmit aria-label="Send message" disabled={!value.trim()} className="flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-[#303036] disabled:bg-black/25 disabled:opacity-50"><ArrowUp className="size-4"/></PromptInputSubmit>
+            <PromptInputSubmit aria-label="Send message" disabled={!value.trim()} className="glass-button glass-icon glass-primary flex size-7 items-center justify-center"><ArrowUp className="size-4"/></PromptInputSubmit>
           </div>
         </div>
       </PromptInput>
@@ -346,7 +346,7 @@ function LandingSourcesPopover({
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => onOpenChange(!open)}
-        className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-black/10 bg-white px-3 text-sm font-semibold text-black/70 transition hover:border-black/20 hover:bg-black/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2"
+        className="glass-button inline-flex items-center gap-2 border"
       >
         <ExternalLink aria-hidden="true" className="size-4" />
         Sources · 2
@@ -357,7 +357,7 @@ function LandingSourcesPopover({
           role="dialog"
           aria-modal="true"
           aria-label="Sources"
-          className="fixed inset-x-3 bottom-3 z-50 max-h-[min(70vh,34rem)] overflow-y-auto rounded-2xl border border-black/12 bg-white p-4 text-left shadow-[0_24px_80px_rgba(0,0,0,0.2)] sm:absolute sm:left-0 sm:top-[calc(100%+10px)] sm:bottom-auto sm:w-[360px]"
+          className="glass-layer fixed inset-x-3 bottom-3 z-50 max-h-[min(70vh,34rem)] overflow-y-auto rounded-2xl border border-black/12 p-4 text-left sm:absolute sm:left-0 sm:top-[calc(100%+10px)] sm:bottom-auto sm:w-[360px]"
         >
           <div className="flex items-start gap-3">
             <div className="min-w-0 flex-1">
@@ -368,7 +368,7 @@ function LandingSourcesPopover({
               type="button"
               onClick={() => onOpenChange(false)}
               aria-label="Close sources"
-              className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-black/50 hover:bg-black/5"
+              className="glass-button glass-icon inline-flex size-9 shrink-0 items-center justify-center"
             >
               <X aria-hidden="true" className="size-4" />
             </button>

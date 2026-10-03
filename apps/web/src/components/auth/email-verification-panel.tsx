@@ -111,21 +111,21 @@ export function EmailVerificationPanel({ email }: EmailVerificationPanelProps) {
           {message ? <p className="text-sm text-emerald-700">{message}</p> : null}
         </div>
 
-        <button
+        <button aria-busy={Boolean(busy)}
           type="submit"
           disabled={Boolean(busy)}
-          className="flex h-11 w-full items-center justify-center gap-2 rounded-full bg-[#191919] px-6 text-base font-medium tracking-[-0.015em] text-white shadow-[0_2px_5px_rgba(0,0,0,0.1)] transition-[background-color,box-shadow,transform] hover:-translate-y-0.5 hover:bg-black hover:shadow-[0_5px_10px_rgba(0,0,0,0.16)] focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[#191919] disabled:pointer-events-none disabled:opacity-50"
+          className="glass-button glass-primary flex w-full items-center justify-center gap-2 tracking-[-0.015em]"
         >
           {busy === "verify" ? <LoaderCircle className="size-4 animate-spin" aria-hidden="true" /> : null}
           {busy === "verify" ? "Verifying…" : "Verify email"}
         </button>
       </form>
 
-      <button
+      <button aria-busy={busy === "resend"}
         type="button"
         onClick={() => void resend()}
         disabled={Boolean(busy)}
-        className="mt-4 flex h-10 w-full items-center justify-center rounded-full border border-black/12 bg-white px-4 text-sm font-medium text-black/65 transition-colors hover:border-black/20 hover:text-black focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[#191919] disabled:pointer-events-none disabled:opacity-50"
+        className="glass-button mt-4 flex w-full items-center justify-center border"
       >
         {busy === "resend" ? "Sending…" : "Resend code"}
       </button>

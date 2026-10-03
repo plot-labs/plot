@@ -95,7 +95,7 @@ export function SourcesPopover({ sources }: SourcesPopoverProps) {
         aria-expanded={open}
         aria-controls={popoverId}
         onClick={() => setOpen((current) => !current)}
-        className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-black/10 bg-white px-3 text-sm font-semibold text-black/70 transition hover:border-black/20 hover:bg-black/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 dark:border-white/15 dark:bg-white/[0.05] dark:text-white/75 dark:hover:border-white/25 dark:hover:bg-white/[0.1]"
+        className="glass-button inline-flex items-center gap-2 border"
       >
         <ExternalLink aria-hidden="true" className="size-4" />
         Sources{uniqueSources.length ? ` · ${uniqueSources.length}` : ""}
@@ -109,7 +109,7 @@ export function SourcesPopover({ sources }: SourcesPopoverProps) {
           aria-modal="true"
           aria-labelledby={`${popoverId}-title`}
           tabIndex={-1}
-          className="fixed inset-x-3 bottom-3 z-50 max-h-[min(70vh,34rem)] overflow-y-auto rounded-2xl border border-black/12 bg-white p-4 text-left shadow-[0_24px_80px_rgba(0,0,0,0.2)] dark:border-white/15 dark:bg-[#202024] sm:absolute sm:right-0 sm:top-[calc(100%+10px)] sm:bottom-auto sm:w-[min(360px,calc(100vw-32px))]"
+          className="glass-layer fixed inset-x-3 bottom-3 z-50 max-h-[min(70vh,34rem)] overflow-y-auto rounded-2xl border border-black/12 p-4 text-left dark:border-white/15 sm:absolute sm:right-0 sm:top-[calc(100%+10px)] sm:bottom-auto sm:w-[min(360px,calc(100vw-32px))]"
         >
           <div className="flex items-start gap-3">
             <div className="min-w-0 flex-1">
@@ -124,7 +124,7 @@ export function SourcesPopover({ sources }: SourcesPopoverProps) {
               type="button"
               onClick={close}
               aria-label="Close sources"
-              className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-black/50 hover:bg-black/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 dark:text-white/55 dark:hover:bg-white/10"
+              className="glass-button glass-icon inline-flex size-9 shrink-0 items-center justify-center"
             >
               <X aria-hidden="true" className="size-4" />
             </button>

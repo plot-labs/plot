@@ -114,17 +114,17 @@ export function ExportDialog({ pack, client, presentation = "buttons" }: { pack:
   if (presentation === "copy") {
     return (
       <div ref={dropdownRef} className="relative inline-flex items-center">
-        <div className="inline-flex h-8 items-stretch rounded-[8px] border border-black/15 bg-white/70 shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition dark:border-white/15 dark:bg-white/[0.04]">
-          <button
+        <div className="glass-card glass-split inline-flex h-8.5 items-stretch rounded-full border border-black/15 transition dark:border-white/15">
+          <button aria-busy={pending === "COPY"}
             type="button"
             disabled={Boolean(pending)}
             onClick={() => void requestExport("COPY", false)}
             title={copyLabel}
             aria-label={copyLabel}
-            className="inline-flex h-full items-center gap-1.5 rounded-l-[7px] pl-2.5 pr-2 text-xs font-medium text-black/70 transition hover:bg-black/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 disabled:pointer-events-none disabled:opacity-40 dark:text-white/70 dark:hover:bg-white/[0.08] dark:focus-visible:ring-white/25"
+            className="glass-button min-w-[96px]"
           >
             <Copy aria-hidden="true" className="size-3.5 text-black/60 dark:text-white/60" />
-            <span>Copy</span>
+            <span>{pending === "COPY" ? "Copying…" : message === "Artifact copied." ? "Copied" : "Copy"}</span>
           </button>
           <div className="w-px self-stretch bg-black/15 dark:bg-white/15" aria-hidden="true" />
           <div className="relative inline-flex h-full">
@@ -136,7 +136,7 @@ export function ExportDialog({ pack, client, presentation = "buttons" }: { pack:
               aria-haspopup="menu"
               aria-expanded={dropdownOpen}
               onClick={() => setDropdownOpen((open) => !open)}
-              className="inline-flex h-full items-center justify-center rounded-r-[7px] px-1.5 text-black/60 transition hover:bg-black/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 disabled:pointer-events-none disabled:opacity-40 dark:text-white/60 dark:hover:bg-white/[0.08] dark:focus-visible:ring-white/25"
+              className="glass-button inline-flex items-center justify-center"
             >
               <ChevronDown aria-hidden="true" className="size-3 text-black/60 dark:text-white/60" />
             </button>
@@ -145,9 +145,9 @@ export function ExportDialog({ pack, client, presentation = "buttons" }: { pack:
               <div
                 role="menu"
                 aria-label="Export options"
-                className="absolute right-0 top-[calc(100%+4px)] z-50 min-w-[136px] rounded-[8px] border border-black/10 bg-white p-1 shadow-[0_4px_16px_rgba(0,0,0,0.08)] dark:border-white/10 dark:bg-[#202024]"
+                className="glass-layer absolute right-0 top-[calc(100%+4px)] z-50 min-w-[136px] rounded-[8px] border border-black/10 p-1 dark:border-white/10"
               >
-                <button
+                <button aria-busy={pending === "DOWNLOAD"}
                   type="button"
                   role="menuitem"
                   disabled={Boolean(pending)}
@@ -155,7 +155,7 @@ export function ExportDialog({ pack, client, presentation = "buttons" }: { pack:
                     setDropdownOpen(false);
                     void requestExport("DOWNLOAD", false);
                   }}
-                  className="flex h-7.5 w-full items-center gap-2 rounded-[6px] px-2 text-left text-xs font-medium text-black/70 transition hover:bg-black/[0.04] focus-visible:bg-black/[0.04] focus-visible:outline-none disabled:opacity-40 dark:text-white/70 dark:hover:bg-white/[0.08]"
+                  className="glass-control flex h-7.5 w-full items-center gap-2 rounded-[6px] px-2 text-left text-xs font-medium"
                 >
                   <Download aria-hidden="true" className="size-3.5 shrink-0 text-black/60 dark:text-white/60" />
                   <span>Download .md</span>
@@ -187,7 +187,7 @@ export function ExportDialog({ pack, client, presentation = "buttons" }: { pack:
           role="menuitemcheckbox"
           aria-checked={includeSources}
           onClick={() => setIncludeSources((current) => !current)}
-          className="flex h-8 w-full items-center gap-2 rounded-[4px] px-2.5 text-left text-xs text-black/58 transition hover:bg-black/[0.04] focus-visible:bg-black/[0.04] focus-visible:outline-none dark:text-white/58 dark:hover:bg-white/10 dark:focus-visible:bg-white/10"
+          className="glass-control flex h-8 w-full items-center gap-2 rounded-[4px] px-2.5 text-left text-xs"
         >
           <span aria-hidden="true" className="inline-flex size-3.5 items-center justify-center rounded-[3px] border border-black/20 dark:border-white/20">
             {includeSources ? <Check className="size-2.5" /> : null}
@@ -199,10 +199,10 @@ export function ExportDialog({ pack, client, presentation = "buttons" }: { pack:
             Markdown Sources can include private repository labels and URLs. Hosted publish only shows public citations.
           </p>
         ) : null}
-        <button type="button" role="menuitem" disabled={Boolean(pending)} onClick={() => void requestExport("COPY", false)} className="flex h-8 w-full items-center gap-2 rounded-[4px] px-2.5 text-left transition hover:bg-black/[0.04] focus-visible:bg-black/[0.04] focus-visible:outline-none disabled:opacity-40 dark:hover:bg-white/10 dark:focus-visible:bg-white/10">
+        <button aria-busy={pending === "COPY"} type="button" role="menuitem" disabled={Boolean(pending)} onClick={() => void requestExport("COPY", false)} className="glass-control flex h-8 w-full items-center gap-2 rounded-[4px] px-2.5 text-left">
           <Copy aria-hidden="true" className="size-4" /> Copy Markdown
         </button>
-        <button type="button" role="menuitem" disabled={Boolean(pending)} onClick={() => void requestExport("DOWNLOAD", false)} className="flex h-8 w-full items-center gap-2 rounded-[4px] px-2.5 text-left transition hover:bg-black/[0.04] focus-visible:bg-black/[0.04] focus-visible:outline-none disabled:opacity-40 dark:hover:bg-white/10 dark:focus-visible:bg-white/10">
+        <button aria-busy={pending === "DOWNLOAD"} type="button" role="menuitem" disabled={Boolean(pending)} onClick={() => void requestExport("DOWNLOAD", false)} className="glass-control flex h-8 w-full items-center gap-2 rounded-[4px] px-2.5 text-left">
           <Download aria-hidden="true" className="size-4" /> Download Markdown
         </button>
         {confirmation ? <ExportConfirmation confirmation={confirmation} pending={pending} pack={pack} onCancel={() => setConfirmation(null)} onConfirm={() => void requestExport(confirmation.disposition, true, confirmation.warnings.map((warning) => warning.key))} /> : null}
@@ -228,23 +228,23 @@ export function ExportDialog({ pack, client, presentation = "buttons" }: { pack:
         </p>
       ) : null}
       <div className="flex items-center gap-1.5">
-        <button
+        <button aria-busy={pending === "COPY"}
           type="button"
           disabled={Boolean(pending)}
           onClick={() => void requestExport("COPY", false)}
           title={copyLabel}
           aria-label={copyLabel}
-          className="inline-flex size-10 items-center justify-center rounded-lg text-black/45 transition hover:bg-black/5 hover:text-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:pointer-events-none disabled:opacity-40 dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white/75 dark:focus-visible:ring-offset-[#18181b]"
+          className="glass-button glass-icon inline-flex size-10 items-center justify-center"
         >
           <Copy aria-hidden="true" className="size-4" />
         </button>
-        <button
+        <button aria-busy={pending === "DOWNLOAD"}
           type="button"
           disabled={Boolean(pending)}
           onClick={() => void requestExport("DOWNLOAD", false)}
           title={downloadLabel}
           aria-label={downloadLabel}
-          className="inline-flex size-10 items-center justify-center rounded-lg text-black/45 transition hover:bg-black/5 hover:text-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:pointer-events-none disabled:opacity-40 dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white/75 dark:focus-visible:ring-offset-[#18181b]"
+          className="glass-button glass-icon inline-flex size-10 items-center justify-center"
         >
           <Download aria-hidden="true" className="size-4" />
         </button>
@@ -265,7 +265,7 @@ export function ExportDialog({ pack, client, presentation = "buttons" }: { pack:
                         <button
                           type="button"
                           onClick={() => focusStatement(pack, warning.sentenceNumber)}
-                          className="block max-w-full truncate rounded-sm text-left font-medium underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1"
+                          className="glass-button block max-w-full truncate text-left underline underline-offset-2"
                         >
                           Statement {warning.sentenceNumber} — “{warning.excerpt}”
                         </button>
@@ -280,19 +280,19 @@ export function ExportDialog({ pack, client, presentation = "buttons" }: { pack:
             <button
               type="button"
               onClick={() => setConfirmation(null)}
-              className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-black/55 transition hover:bg-black/5 hover:text-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1 dark:text-white/55 dark:hover:bg-white/10 dark:hover:text-white/85"
+              className="glass-button glass-icon inline-flex size-9 shrink-0 items-center justify-center"
               aria-label="Cancel export warning"
               title="Cancel export warning"
             >
               <X aria-hidden="true" className="size-4" />
             </button>
           </div>
-          <button
+          <button aria-busy={Boolean(pending)}
             autoFocus
             type="button"
             disabled={Boolean(pending)}
             onClick={() => void requestExport(confirmation.disposition, true, confirmation.warnings.map((warning) => warning.key))}
-            className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg bg-amber-950 px-3 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-40 dark:bg-amber-200 dark:text-amber-950"
+            className="glass-button glass-primary mt-3 inline-flex items-center gap-2"
           >
             <Check aria-hidden="true" className="size-4" /> Confirm and {confirmation.disposition === "COPY" ? "copy" : "download"}
           </button>
@@ -312,12 +312,12 @@ function ExportConfirmation({ confirmation, pending, pack, onCancel, onConfirm }
           <h3 id="menu-export-warning-title" className="text-sm font-semibold">Unresolved statements will be exported</h3>
           <div id="menu-export-warning-description" className="mt-1 text-xs leading-5 text-black/62 dark:text-white/62">
             <p>Review affected statements before continuing.</p>
-            {confirmation.warnings.length ? <ul className="mt-2 space-y-1">{confirmation.warnings.map((warning) => <li key={warning.key}><button type="button" onClick={() => focusStatement(pack, warning.sentenceNumber)} className="block max-w-full truncate text-left font-medium underline underline-offset-2">Statement {warning.sentenceNumber} — “{warning.excerpt}”</button></li>)}</ul> : <p className="mt-1">Affected statement details are unavailable.</p>}
+            {confirmation.warnings.length ? <ul className="mt-2 space-y-1">{confirmation.warnings.map((warning) => <li key={warning.key}><button type="button" onClick={() => focusStatement(pack, warning.sentenceNumber)} className="glass-button block max-w-full truncate text-left underline underline-offset-2">Statement {warning.sentenceNumber} — “{warning.excerpt}”</button></li>)}</ul> : <p className="mt-1">Affected statement details are unavailable.</p>}
           </div>
         </div>
-        <button type="button" onClick={onCancel} aria-label="Cancel export warning" className="inline-flex size-8 items-center justify-center rounded-lg"><X aria-hidden="true" className="size-4" /></button>
+        <button type="button" onClick={onCancel} aria-label="Cancel export warning" className="glass-button glass-icon inline-flex size-8 items-center justify-center"><X aria-hidden="true" className="size-4" /></button>
       </div>
-      <button autoFocus type="button" disabled={Boolean(pending)} onClick={onConfirm} className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-lg bg-amber-950 px-3 text-sm font-semibold text-white disabled:opacity-40 dark:bg-amber-200 dark:text-amber-950"><Check aria-hidden="true" className="size-4" /> Confirm and {confirmation.disposition === "COPY" ? "copy" : "download"}</button>
+      <button aria-busy={Boolean(pending)} autoFocus type="button" disabled={Boolean(pending)} onClick={onConfirm} className="glass-button glass-primary mt-3 inline-flex items-center gap-2"><Check aria-hidden="true" className="size-4" /> Confirm and {confirmation.disposition === "COPY" ? "copy" : "download"}</button>
     </div>
   );
 }

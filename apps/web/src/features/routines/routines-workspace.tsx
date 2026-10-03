@@ -434,7 +434,7 @@ export function RoutinesWorkspace() {
             description="Manage recurring draft preparation. Automatic assessment follows the configured workspace policy; publishing requires review."
             actions={
               <>
-                <button type="button" onClick={retryLoad} disabled={refreshDisabled} aria-label="Refresh routines" title="Refresh routines" className={workspaceIconButtonClass}><RefreshCw className={`size-3.5 ${isLoading ? "animate-spin" : ""}`} /></button>
+                <button type="button" onClick={retryLoad} disabled={refreshDisabled} aria-label="Refresh routines" title="Refresh routines" className={`glass-button glass-icon ${workspaceIconButtonClass}`}><RefreshCw className={`size-3.5 ${isLoading ? "animate-spin" : ""}`} /></button>
                 {!createOpen && (
                   <WorkspaceCreateAction
                     ref={createTriggerRef}
@@ -454,7 +454,7 @@ export function RoutinesWorkspace() {
 
           {(loadError ?? error) && <div className="mx-6 mt-4"><WorkspaceErrorNotice message={(loadError ?? error)!} onRetry={retryLoad} retrying={refreshDisabled} /></div>}
 
-          {!isLoading && !loadError && !sources.length && <div className="mx-6 mt-4 flex items-center justify-between gap-3 rounded-[9px] border border-black/10 bg-white px-3 py-2.5 text-[12px] text-black/58 dark:border-white/12 dark:bg-white/[0.04] dark:text-white/60"><span>Connect a source before creating a routine.</span><Link href="/settings/integrations" className="shrink-0 font-medium text-black/72 underline underline-offset-4 dark:text-white/75">Integrations</Link></div>}
+          {!isLoading && !loadError && !sources.length && <div className="glass-card mx-6 mt-4 flex items-center justify-between gap-3 rounded-[9px] border border-black/10 px-3 py-2.5 text-[12px] text-black/58 dark:border-white/12 dark:text-white/60"><span>Connect a source before creating a routine.</span><Link href="/settings/integrations" className="shrink-0 font-medium text-black/72 underline underline-offset-4 dark:text-white/75">Integrations</Link></div>}
 
           {isLoading ? <div role="status" className="flex items-center gap-2 px-6 py-8 text-[13px] text-black/45 dark:text-white/45"><LoaderCircle className="size-4 animate-spin" /> Loading routines…</div> : loadError ? null : visibleRoutines.length ? (
             <div className="divide-y divide-black/[0.07] dark:divide-white/[0.08]">
@@ -482,11 +482,11 @@ export function RoutinesWorkspace() {
                         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                           <span className="truncate text-[12px] text-black/38 dark:text-white/40">{formatRoutineStatus(routine)}</span>
                           <div className="flex max-w-full flex-wrap items-center gap-1">
-                            {chatId && <Link href={`/chat?chat=${encodeURIComponent(chatId)}${artifactId ? `&artifact=${encodeURIComponent(artifactId)}` : ""}`} aria-label={`Open Chat for ${routine.name}`} className="inline-flex h-7 items-center rounded-[7px] px-2 text-[12px] font-medium text-black/55 transition hover:bg-black/[0.04] hover:text-black/78 dark:text-white/58 dark:hover:bg-white/10 dark:hover:text-white/82">Chat</Link>}
-                            {artifactId && <Link href={`/contents?artifact=${encodeURIComponent(artifactId)}`} aria-label={`Open artifact for ${routine.name}`} className="inline-flex h-7 items-center rounded-[7px] px-2 text-[12px] font-medium text-black/55 transition hover:bg-black/[0.04] hover:text-black/78 dark:text-white/58 dark:hover:bg-white/10 dark:hover:text-white/82">Artifact</Link>}
-                            {agentRunId && <button type="button" onClick={() => { void toggleAgentDetail(routine); }} aria-expanded={expanded} aria-label={`View agent activity for ${routine.name}`} className="inline-flex h-7 items-center rounded-[7px] px-2 text-[12px] font-medium text-black/55 transition hover:bg-black/[0.04] hover:text-black/78 dark:text-white/58 dark:hover:bg-white/10 dark:hover:text-white/82">Activity</button>}
-                            {!isReleaseCadence(routine.cadence) && <button type="button" onClick={() => { void runRoutine(routine); }} disabled={busyRoutineId !== null || isRoutineRunInProgress(routine)} className="inline-flex h-7 items-center gap-1.5 rounded-[7px] px-2 text-[12px] font-medium text-black/55 transition hover:bg-black/[0.04] hover:text-black/78 disabled:cursor-wait disabled:opacity-50 dark:text-white/58 dark:hover:bg-white/10 dark:hover:text-white/82"><Play className="size-3" /> Run</button>}
-                            <button type="button" onClick={() => { void toggleRoutine(routine); }} disabled={busyRoutineId !== null} aria-label={routine.enabled ? `Pause ${routine.name}` : `Enable ${routine.name}`} title={routine.enabled ? "Pause routine" : "Enable routine"} className="inline-flex size-7 items-center justify-center rounded-[7px] text-black/42 transition hover:bg-black/[0.04] hover:text-black/72 disabled:cursor-wait disabled:opacity-50 dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white/75">{busy ? <LoaderCircle className="size-3.5 animate-spin" /> : <Power className="size-3.5" />}</button>
+                            {chatId && <Link href={`/chat?chat=${encodeURIComponent(chatId)}${artifactId ? `&artifact=${encodeURIComponent(artifactId)}` : ""}`} aria-label={`Open Chat for ${routine.name}`} className="glass-button inline-flex items-center">Chat</Link>}
+                            {artifactId && <Link href={`/contents?artifact=${encodeURIComponent(artifactId)}`} aria-label={`Open artifact for ${routine.name}`} className="glass-button inline-flex items-center">Artifact</Link>}
+                            {agentRunId && <button type="button" onClick={() => { void toggleAgentDetail(routine); }} aria-expanded={expanded} aria-label={`View agent activity for ${routine.name}`} className="glass-button inline-flex items-center">Activity</button>}
+                            {!isReleaseCadence(routine.cadence) && <button type="button" onClick={() => { void runRoutine(routine); }} disabled={busyRoutineId !== null || isRoutineRunInProgress(routine)} aria-busy={busy || isRoutineRunInProgress(routine)} className="glass-button inline-flex items-center gap-1.5 disabled:cursor-wait"><Play className="size-3" /> Run</button>}
+                            <button type="button" onClick={() => { void toggleRoutine(routine); }} disabled={busyRoutineId !== null} aria-busy={busy} aria-label={routine.enabled ? `Pause ${routine.name}` : `Enable ${routine.name}`} title={routine.enabled ? "Pause routine" : "Enable routine"} className="glass-button glass-icon inline-flex size-7 items-center justify-center disabled:cursor-wait">{busy ? <LoaderCircle className="size-3.5 animate-spin" /> : <Power className="size-3.5" />}</button>
                           </div>
                         </div>
                         {isReleaseCadence(routine.cadence) ? (
@@ -526,7 +526,7 @@ export function RoutinesWorkspace() {
                   <h2 id="create-routine-heading" className="font-display text-[28px] font-normal leading-tight tracking-[-0.02em] text-black/86 dark:text-white/90">Create routine</h2>
                   <p className="mt-1.5 text-[13px] leading-5 text-black/45 dark:text-white/46">Choose what Plot should watch and what the draft should cover.</p>
                 </div>
-                <button type="button" onClick={closeCreate} aria-label="Close create routine" className="inline-flex size-8 shrink-0 items-center justify-center rounded-[8px] text-black/40 transition hover:bg-black/[0.04] hover:text-black/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white/75"><HugeiconsIcon icon={Cancel01Icon} size={17} color="currentColor" strokeWidth={1.5} aria-hidden="true" /></button>
+                <button type="button" onClick={closeCreate} aria-label="Close create routine" className="glass-button glass-icon inline-flex size-8 shrink-0 items-center justify-center"><HugeiconsIcon icon={Cancel01Icon} size={17} color="currentColor" strokeWidth={1.5} aria-hidden="true" /></button>
               </div>
             </header>
 
@@ -575,15 +575,8 @@ export function RoutinesWorkspace() {
                 <button
                   type="submit"
                   disabled={!canCreate}
-                  style={{
-                    background: "linear-gradient(to bottom, rgba(0, 0, 0, 0.78), rgba(0, 0, 0, 0.88))",
-                    backdropFilter: "saturate(200%) blur(40px)",
-                    WebkitBackdropFilter: "saturate(200%) blur(40px)",
-                    border: "1px solid rgba(255, 255, 255, 0.18)",
-                    boxShadow: "inset 0 1px 1px rgba(255, 255, 255, 0.25), inset 0 -1px 1px rgba(0, 0, 0, 0.1), 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.08)",
-                    color: "#FFFFFF",
-                  }}
-                  className="inline-flex h-9 items-center gap-2 rounded-full px-4 text-[13px] font-semibold text-white transition-all duration-200 hover:opacity-90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 disabled:cursor-not-allowed disabled:opacity-40"
+                  aria-busy={isSaving}
+                  className="glass-button glass-primary min-w-[132px] inline-flex items-center gap-2 disabled:cursor-not-allowed"
                 >
                   {isSaving ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" /> : null}
                   {isSaving ? "Creating…" : "Create routine"}

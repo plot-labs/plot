@@ -98,7 +98,7 @@ export function RoutineReleaseActivity({
               type="submit"
               disabled={savingRange}
               aria-label={`Generate draft from range for ${routineName}`}
-              className="inline-flex h-7 items-center rounded-[7px] px-2 text-[11px] font-medium text-black/55 transition hover:bg-black/[0.04] hover:text-black/78 disabled:cursor-wait disabled:opacity-50 dark:text-white/58 dark:hover:bg-white/10 dark:hover:text-white/82"
+              className="glass-button glass-primary inline-flex items-center disabled:cursor-wait"
             >
               Generate draft
             </button>
@@ -111,18 +111,18 @@ export function RoutineReleaseActivity({
           <Link
             href={`/contents?artifact=${encodeURIComponent(activity.artifactId)}`}
             aria-label={`Open artifact for ${routineName} release ${activity.tagName}`}
-            className="inline-flex h-7 items-center rounded-[7px] px-2 text-[11px] font-medium text-black/55 transition hover:bg-black/[0.04] hover:text-black/78 dark:text-white/58 dark:hover:bg-white/10 dark:hover:text-white/82"
+            className="glass-button inline-flex items-center"
           >
             Open artifact
           </Link>
         ) : null}
         {activity?.status === "FAILED" ? (
-          <button
+          <button aria-busy={Boolean(retrying)}
             type="button"
             onClick={() => { void retry(); }}
             disabled={retrying}
             aria-label={`Retry release draft for ${routineName}`}
-            className="inline-flex h-7 items-center rounded-[7px] px-2 text-[11px] font-medium text-black/55 transition hover:bg-black/[0.04] hover:text-black/78 disabled:cursor-wait disabled:opacity-50 dark:text-white/58 dark:hover:bg-white/10 dark:hover:text-white/82"
+            className="glass-button inline-flex items-center disabled:cursor-wait"
           >
             Retry
           </button>

@@ -100,13 +100,13 @@ export function AgentActivityDetail({
                     Plot
                   </span>
                     {retryEligibility?.eligible && (
-                      <button
+                      <button aria-busy={Boolean(retrying)}
                         type="button"
                         disabled={retrying || status === "QUEUED" || status === "RUNNING"}
                         onClick={onRetry}
                         aria-label="Retry response"
                         title="Retry"
-                        className="inline-flex size-6 items-center justify-center rounded text-black/45 transition-colors hover:bg-black/5 hover:text-black/75 disabled:opacity-30 dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white/75"
+                        className="glass-button glass-icon inline-flex size-6 items-center justify-center"
                       >
                         <RotateCcw className={`size-3.5 ${retrying ? "animate-spin" : ""}`} />
                       </button>
@@ -121,7 +121,7 @@ export function AgentActivityDetail({
                             if (prev && onSelectVersion) onSelectVersion(prev.id);
                           }}
                           aria-label="Previous response version"
-                          className="inline-flex size-6 items-center justify-center rounded text-black/45 transition-colors hover:bg-black/5 hover:text-black/75 disabled:opacity-25 dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white/75"
+                          className="glass-button glass-icon inline-flex size-6 items-center justify-center"
                         >
                           <ChevronLeft className="size-3.5" />
                         </button>
@@ -137,7 +137,7 @@ export function AgentActivityDetail({
                             if (next && onSelectVersion) onSelectVersion(next.id);
                           }}
                           aria-label="Next response version"
-                          className="inline-flex size-6 items-center justify-center rounded text-black/45 transition-colors hover:bg-black/5 hover:text-black/75 disabled:opacity-25 dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white/75"
+                          className="glass-button glass-icon inline-flex size-6 items-center justify-center"
                         >
                           <ChevronRight className="size-3.5" />
                         </button>

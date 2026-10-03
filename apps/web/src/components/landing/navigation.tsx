@@ -33,8 +33,8 @@ export function Navigation() {
       <nav 
         className={`relative z-50 mx-auto transition-all duration-500 ${
           isScrolled || isMobileMenuOpen
-            ? "bg-background border border-foreground/10 rounded-lg max-w-[1200px]"
-            : "bg-transparent max-w-[1400px]"
+            ? "glass-layer border border-foreground/10 rounded-lg max-w-[1200px]"
+            : "max-w-[1400px]"
         }`}
       >
         <div 
@@ -72,7 +72,7 @@ export function Navigation() {
           {/* Desktop CTA */}
           <div className="hidden md:flex items-center gap-4">
             <a
-              className={`inline-flex items-center justify-center rounded-full bg-foreground font-medium text-background transition-all duration-500 hover:bg-foreground/90 ${isScrolled ? "h-8 px-4 text-xs" : "h-8 px-6 text-sm"}`}
+              className="glass-button glass-primary inline-flex items-center justify-center"
               href="#waitlist"
             >
               Join waitlist
@@ -82,7 +82,7 @@ export function Navigation() {
           {/* Mobile Menu Button */}
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="md:hidden p-2"
+            className="glass-button md:hidden"
             aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
             aria-expanded={isMobileMenuOpen}
             aria-controls="landing-mobile-menu"
@@ -101,7 +101,7 @@ export function Navigation() {
       <div
         id="landing-mobile-menu"
         inert={!isMobileMenuOpen}
-        className={`md:hidden fixed inset-0 bg-background z-40 transition-all duration-500 ${
+        className={`glass-layer md:hidden fixed inset-0 z-40 transition-all duration-500 ${
           isMobileMenuOpen 
             ? "opacity-100 pointer-events-auto" 
             : "opacity-0 pointer-events-none"
@@ -137,7 +137,7 @@ export function Navigation() {
           style={{ transitionDelay: isMobileMenuOpen ? "300ms" : "0ms" }}
           >
             <a
-              className="inline-flex h-14 w-full items-center justify-center rounded-full bg-foreground text-base font-medium text-background"
+              className="glass-button glass-primary inline-flex w-full items-center justify-center"
               href="#waitlist"
               onClick={() => setIsMobileMenuOpen(false)}
             >

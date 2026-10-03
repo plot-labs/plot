@@ -87,13 +87,7 @@ export function SidebarNavigation({ collapsed, settingsMode, pathname, selectedC
                 href={`/chat?chat=${encodeURIComponent(chat.id)}`}
                 aria-current={selectedChatId === chat.id ? "page" : undefined}
                 title={chat.title || "Untitled chat"}
-                className={cn(
-                  "flex h-8 w-full items-center gap-2 rounded-[8px] text-left text-[13px] transition",
-                  collapsed ? "mx-auto w-9 justify-center px-0" : "px-2.5",
-                  selectedChatId === chat.id
-                    ? "bg-white/75 text-[#18181b] shadow-sm shadow-black/[0.03] dark:bg-white/10 dark:text-white"
-                    : "text-black/55 hover:bg-black/[0.04] hover:text-black/80 dark:text-white/55 dark:hover:bg-white/[0.08] dark:hover:text-white/85",
-                )}
+                className={cn("glass-control", "flex h-8 w-full items-center gap-2 rounded-[8px] text-left text-[13px]", collapsed ? "mx-auto w-9 justify-center px-0" : "px-2.5", "")}
               >
                 <HugeiconsIcon
                   icon={MessageMultiple01Icon}
@@ -128,13 +122,7 @@ function SidebarNavLink({ collapsed, item, pathname, current = "page" }: { colla
       href={item.href}
       title={collapsed ? item.label : undefined}
       aria-current={active ? current : undefined}
-      className={cn(
-        "flex h-8 items-center gap-2 rounded-[8px] text-[13px] font-medium transition",
-        collapsed ? "mx-auto w-9 justify-center px-0" : "px-2.5",
-        active
-          ? "bg-white/75 text-[#18181b] shadow-sm shadow-black/[0.03] dark:bg-white/10 dark:text-white"
-          : "text-black/65 hover:bg-black/5 dark:text-white/65 dark:hover:bg-white/10",
-      )}
+      className={cn("glass-control", "flex h-8 items-center gap-2 rounded-[8px] text-[13px] font-medium", collapsed ? "mx-auto w-9 justify-center px-0" : "px-2.5", "")}
     >
       <Icon />
       <span className={collapsed ? "sr-only" : undefined}>{item.label}</span>

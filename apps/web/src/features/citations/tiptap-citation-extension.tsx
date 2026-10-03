@@ -163,11 +163,11 @@ export function TiptapCitationNodeView({ node, editor }: NodeViewProps) {
           role="dialog"
           aria-label="Citation details"
           tabIndex={-1}
-          className="absolute left-0 top-[calc(100%+8px)] z-50 w-[min(300px,calc(100vw-32px))] rounded-xl border border-black/10 bg-white/95 p-3 shadow-[0_12px_32px_rgba(0,0,0,0.12)] backdrop-blur-xl dark:border-white/10 dark:bg-[#1c1c1f]/95 dark:shadow-[0_12px_32px_rgba(0,0,0,0.4)]"
+          className="glass-layer absolute left-0 top-[calc(100%+8px)] z-50 w-[min(300px,calc(100vw-32px))] rounded-xl border border-black/10 p-3 dark:border-white/10"
         >
           {/* Header with Provider Badge and Navigation */}
           <div className="flex items-center justify-between gap-2 pb-2 border-b border-black/[0.06] dark:border-white/[0.08]">
-            <div className="inline-flex items-center gap-1.5 rounded-full border border-black/[0.08] bg-black/[0.03] px-2.5 py-0.5 text-[11px] font-medium text-black/70 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-white/75">
+            <div className="glass-card inline-flex items-center gap-1.5 rounded-full border border-black/[0.08] px-2.5 py-0.5 text-[11px] font-medium text-black/70 dark:border-white/[0.08] dark:text-white/75">
               {getSourceProviderIcon(currentSource)}
               <span>{currentSource.provider || resolveProviderName(currentSource)}</span>
             </div>
@@ -183,7 +183,7 @@ export function TiptapCitationNodeView({ node, editor }: NodeViewProps) {
                       e.stopPropagation();
                       setCurrentIndex((prev) => Math.max(0, prev - 1));
                     }}
-                    className="inline-flex size-6 items-center justify-center rounded-md text-black/50 hover:bg-black/5 disabled:opacity-25 dark:text-white/50 dark:hover:bg-white/10"
+                    className="glass-button glass-icon inline-flex size-6 items-center justify-center"
                   >
                     <ChevronLeft className="size-3.5" />
                   </button>
@@ -198,7 +198,7 @@ export function TiptapCitationNodeView({ node, editor }: NodeViewProps) {
                       e.stopPropagation();
                       setCurrentIndex((prev) => Math.min(sourceList.length - 1, prev + 1));
                     }}
-                    className="inline-flex size-6 items-center justify-center rounded-md text-black/50 hover:bg-black/5 disabled:opacity-25 dark:text-white/50 dark:hover:bg-white/10"
+                    className="glass-button glass-icon inline-flex size-6 items-center justify-center"
                   >
                     <ChevronRight className="size-3.5" />
                   </button>
@@ -212,7 +212,7 @@ export function TiptapCitationNodeView({ node, editor }: NodeViewProps) {
                   e.stopPropagation();
                   setOpen(false);
                 }}
-                className="inline-flex size-6 items-center justify-center rounded-md text-black/45 hover:bg-black/5 hover:text-black dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white"
+                className="glass-button glass-icon inline-flex size-6 items-center justify-center"
               >
                 <X className="size-3.5" />
               </button>
@@ -235,7 +235,7 @@ export function TiptapCitationNodeView({ node, editor }: NodeViewProps) {
             ) : null}
 
             {currentSource.excerpt ? (
-              <InlineCitationQuote className="mt-2.5 rounded-xl border border-l border-black/[0.06] bg-black/[0.02] p-2.5 text-xs not-italic leading-relaxed text-black/60 dark:border-white/[0.06] dark:bg-white/[0.03] dark:text-white/60">
+              <InlineCitationQuote className="glass-card mt-2.5 rounded-xl border border-l border-black/[0.06] p-2.5 text-xs not-italic leading-relaxed text-black/60 dark:border-white/[0.06] dark:text-white/60">
                 {currentSource.excerpt}
               </InlineCitationQuote>
             ) : null}

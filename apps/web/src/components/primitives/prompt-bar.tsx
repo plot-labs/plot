@@ -1,5 +1,7 @@
 "use client";
 
+import { LoaderCircle } from "lucide-react";
+
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Command } from "@/components/ui/command";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
@@ -213,6 +215,7 @@ export default function PromptBar({
   sendLabel = "Send",
   extraControls,
   disabled = false,
+  busy = false,
   sendButtonClassName,
   skills,
   selectedSkillIds = [],
@@ -235,6 +238,7 @@ export default function PromptBar({
   sendLabel?: string;
   extraControls?: React.ReactNode;
   disabled?: boolean;
+  busy?: boolean;
   sendButtonClassName?: string;
   skills?: PromptSkill[];
   selectedSkillIds?: string[];
@@ -592,7 +596,7 @@ export default function PromptBar({
     inputRef.current?.focus();
   };
 
-  const canSend = !disabled && (draft.trim().length > 0 || attachments.length > 0);
+  const canSend = !disabled && !busy && (draft.trim().length > 0 || attachments.length > 0);
   const send = () => {
     if (!canSend) return;
     if (onSend?.(draft.trim()) === false) return;
@@ -616,7 +620,7 @@ export default function PromptBar({
       {menu && (
         <div
           onMouseLeave={() => setEngaged(false)}
-          className="absolute inset-x-0 bottom-full z-20 mb-2 max-h-72 overflow-y-auto rounded-[12px] border border-line bg-surface p-1.5 shadow-overlay backdrop-blur-md"
+          className="glass-layer absolute inset-x-0 bottom-full z-20 mb-2 max-h-72 overflow-y-auto rounded-[12px] border border-line p-1.5"
           style={{ animation: "pop-in 180ms cubic-bezier(0.23,1,0.32,1) both", transformOrigin: "bottom center" }}
         >
           {/* single gliding highlight — appears once a row is hovered */}
@@ -648,7 +652,7 @@ export default function PromptBar({
                   setEngaged(true);
                 }}
                 onClick={() => pick(row)}
-                className={`relative z-10 flex w-full rounded-[8px] px-3 text-left transition-colors duration-100 ${
+                className={`glass-control relative z-10 flex w-full rounded-[8px] px-3 text-left ${
                   isSlash ? "flex-col justify-center py-2" : "h-9 items-center gap-2.5"
                 }`}
               >
@@ -708,7 +712,7 @@ export default function PromptBar({
           onOpenAutoFocus={(event) => {event.preventDefault();modelMenuRef.current?.querySelector<HTMLInputElement>("input")?.focus();}}
           ref={modelMenuRef}
           onMouseLeave={() => setModelHovered(null)}
-          className="z-30 w-72 p-0 overflow-visible rounded-[12px] border border-line bg-surface shadow-overlay backdrop-blur-md"
+          className="glass-layer z-30 w-72 p-0 overflow-visible rounded-[12px] border border-line"
         >
           <Command shouldFilter={false} className="overflow-visible bg-transparent text-ink [&_[cmdk-input-wrapper]]:contents [&_[cmdk-input-wrapper]>svg]:hidden">
           <div className="border-b border-line p-2">
@@ -792,7 +796,7 @@ export default function PromptBar({
                 aria-haspopup="menu"
                 aria-label={`Choose reasoning effort (currently ${selectedReasoningEffort.label})`}
                 onClick={() => setEffortOpen((current) => !current)}
-                className="flex w-full items-center justify-between gap-2 rounded-[7px] px-2.5 py-2 text-left transition-colors hover:bg-hover"
+                className="glass-button flex w-full items-center justify-between gap-2 text-left"
               >
                 <span className="text-[13px] font-medium">
                   <span className="text-ink-3">Effort</span>{" "}
@@ -806,7 +810,7 @@ export default function PromptBar({
                 <div
                   role="menu"
                   aria-label="Reasoning effort options"
-                  className={`absolute bottom-0 z-40 w-52 rounded-[12px] border border-line bg-surface p-1.5 shadow-overlay backdrop-blur-md ${
+                  className={`glass-layer absolute bottom-0 z-40 w-52 rounded-[12px] border border-line p-1.5 ${
                     effortMenuSide === "right" ? "left-[calc(100%+8px)]" : "right-[calc(100%+8px)]"
                   }`}
                 >
@@ -823,7 +827,7 @@ export default function PromptBar({
                           onReasoningEffortChange?.(option.value);
                           setEffortOpen(false);
                         }}
-                        className="flex w-full items-center gap-2 rounded-[8px] px-2.5 py-2 text-left transition-colors hover:bg-hover"
+                        className="glass-control flex w-full items-center gap-2 rounded-[8px] px-2.5 py-2 text-left"
                       >
                         <span className="min-w-0 flex-1 text-[13px] font-medium text-ink">{option.label}</span>
                         {isSelected ? (
@@ -842,7 +846,7 @@ export default function PromptBar({
 
       {/* ── composer ───────────────────────────────────── */}
       <div
-        className={`relative isolate flex flex-col overflow-hidden border border-line bg-surface shadow-card transition-[border-color,border-radius] duration-150 focus-within:border-line-strong ${
+        className={`glass-card relative isolate flex flex-col overflow-hidden border border-line transition-[border-color,border-radius] duration-150 focus-within:border-line-strong ${
           tall ? "gap-2.5 p-3.5" : "gap-1.5 p-1.5"
         } ${
           pill ? (attachments.length > 0 || wide ? "rounded-[24px]" : "rounded-full") : tall ? "rounded-[22px]" : "rounded-[14px]"
@@ -881,9 +885,7 @@ export default function PromptBar({
                   type="button"
                   aria-label={`Remove ${file}`}
                   onClick={() => setAttachments((current) => current.filter((_, j) => j !== i))}
-                  className={`-my-1 flex size-6 items-center justify-center text-ink-3 transition-colors duration-100 hover:bg-line/70 hover:text-ink ${
-                    pill ? "rounded-full" : "rounded-[5px]"
-                  }`}
+                  className="glass-button glass-icon -my-1 flex size-6 items-center justify-center"
                 >
                   <Icon size={10} strokeWidth={2.5}><path d="M18 6L6 18M6 6l12 12" /></Icon>
                 </button>
@@ -918,7 +920,7 @@ export default function PromptBar({
                     onSelectedSkillIdsChange?.(selectedSkillIds.filter((id) => id !== skill.id));
                     inputRef.current?.focus();
                   }}
-                  className="-mr-1 flex size-5 items-center justify-center rounded text-ink-3 transition-colors hover:bg-hover hover:text-ink"
+                  className="glass-button glass-icon -mr-1 flex size-5 items-center justify-center"
                 >
                   <Icon size={10} strokeWidth={2.5}><path d="M18 6L6 18M6 6l12 12" /></Icon>
                 </button>
@@ -945,9 +947,7 @@ export default function PromptBar({
               setPlusOpen((current) => !current);
               inputRef.current?.focus();
             }}
-            className={`flex size-7 shrink-0 items-center justify-center justify-self-start text-ink-3 transition-[background-color,color,transform] duration-150 hover:bg-hover hover:text-ink active:scale-[0.94] ${
-              pill ? "rounded-full" : "rounded-[8px]"
-            } ${plusOpen ? "bg-hover text-ink" : ""} ${wide ? "col-start-1 row-start-2" : "col-start-1 row-start-1"}`}
+            className={`glass-button glass-icon flex size-7 shrink-0 items-center justify-center justify-self-start ${wide ? "col-start-1 row-start-2" : "col-start-1 row-start-1"}`}
           >
             <Icon size={16} strokeWidth={2}><path d="M12 5v14M5 12h14" /></Icon>
           </button>
@@ -957,9 +957,7 @@ export default function PromptBar({
             aria-label="Choose skill (/)"
             title="Choose writing guide (/)"
             onClick={triggerSlash}
-            className={`flex size-7 shrink-0 items-center justify-center font-mono text-[13px] font-semibold text-ink-3 transition-[background-color,color,transform] duration-150 hover:bg-hover hover:text-ink active:scale-[0.94] ${
-              pill ? "rounded-full" : "rounded-[8px]"
-            } ${menu === "slash" ? "bg-hover text-ink" : ""} ${wide ? "col-start-2 row-start-2" : "col-start-2 row-start-1"}`}
+            className={`glass-button glass-icon flex size-7 shrink-0 items-center justify-center font-mono text-[13px] font-semibold ${wide ? "col-start-2 row-start-2" : "col-start-2 row-start-1"}`}
           >
             /
           </button>
@@ -1034,9 +1032,7 @@ export default function PromptBar({
                 return !current;
               });
             }}
-            className={`flex h-7 shrink-0 items-center gap-1 px-1.5 text-[12px] font-medium text-ink-2 transition-colors duration-150 hover:bg-hover hover:text-ink ${
-              pill ? "rounded-full" : "rounded-[8px]"
-            } ${wide ? "col-start-4 row-start-2 justify-self-end" : "col-start-4 row-start-1"}`}
+            className={`glass-button flex shrink-0 items-center gap-1 ${wide ? "col-start-4 row-start-2 justify-self-end" : "col-start-4 row-start-1"}`}
           >
             <ChatModelIcon className="size-3.5" provider={model.provider} />
             {model.label}
@@ -1051,9 +1047,9 @@ export default function PromptBar({
             aria-label={listening ? "Stop dictation" : "Start dictation"}
             aria-pressed={listening}
             onClick={() => setListening((current) => !current)}
-            className={`flex size-7 shrink-0 items-center justify-center transition-[background-color,color,transform] duration-150 active:scale-[0.94] ${
+            className={`glass-control flex size-7 shrink-0 items-center justify-center ${
               pill ? "rounded-full" : "rounded-[8px]"
-            } ${listening ? "bg-accent-tint text-accent-ink" : "text-ink-3 hover:bg-hover hover:text-ink"} ${wide ? "col-start-5 row-start-2" : "col-start-5 row-start-1"}`}
+            } ${listening ? "text-accent-ink" : ""} ${wide ? "col-start-5 row-start-2" : "col-start-5 row-start-1"}`}
           >
             {listening ? (
               <span className="flex h-3.5 items-center gap-[2.5px]">
@@ -1073,20 +1069,12 @@ export default function PromptBar({
           {/* send — tactile square (round in the pill variant) */}
           <PromptInputSubmit
             aria-label={sendLabel}
+            title={busy ? "Response in progress" : sendLabel}
+            aria-busy={busy}
             disabled={!canSend}
-            className={`flex size-7 shrink-0 items-center justify-center transition-[background-color,color,transform] duration-200 enabled:active:scale-[0.94] ${
-              pill ? "rounded-full" : "rounded-[8px]"
-            } ${wide ? "col-start-6 row-start-2" : "col-start-6 row-start-1"} ${sendButtonClassName || ""}`}
-            style={
-              sendButtonClassName
-                ? undefined
-                : {
-                    background: canSend ? "var(--ink)" : "var(--line-strong)",
-                    color: canSend ? "var(--surface)" : "var(--ink-2)",
-                  }
-            }
+            className={`glass-button glass-icon glass-primary flex size-7 shrink-0 items-center justify-center ${wide ? "col-start-6 row-start-2" : "col-start-6 row-start-1"} ${sendButtonClassName || ""}`}
           >
-            <Icon size={16} strokeWidth={2.4}><path d="M12 19V5M5 12l7-7 7 7" /></Icon>
+            {busy ? <LoaderCircle aria-hidden="true" className="size-4 animate-spin" /> : <Icon size={16} strokeWidth={2.4}><path d="M12 19V5M5 12l7-7 7 7" /></Icon>}
           </PromptInputSubmit>
         </div>
       </div>

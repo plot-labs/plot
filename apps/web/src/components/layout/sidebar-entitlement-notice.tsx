@@ -16,7 +16,7 @@ export function SidebarEntitlementNotice({ collapsed }: { collapsed: boolean }) 
     <div className="px-3 pb-3">
       <section
         aria-label="Workspace access"
-        className="rounded-[12px] border border-black/[0.08] bg-white/70 px-3 py-2.5 text-[12px] leading-5 text-black/62 dark:border-white/10 dark:bg-white/[0.05] dark:text-white/65"
+        className="glass-card rounded-[12px] border border-black/[0.08] px-3 py-2.5 text-[12px] leading-5 text-black/62 dark:border-white/10 dark:text-white/65"
       >
         <p>{copy}</p>
         <Link

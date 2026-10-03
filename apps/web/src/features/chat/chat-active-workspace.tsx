@@ -92,7 +92,7 @@ export function ChatActiveWorkspace({
   };
   const previewAction = hasDocumentProgress ? (
     <button ref={artifactTriggerRef} type="button" aria-controls="artifact-editor-panel" aria-expanded={artifactPanelOpen && showPreview}
-      onClick={openGeneratedDocument} className="rounded-xl border border-black/10 px-4 py-3 text-left text-sm dark:border-white/10">
+      onClick={openGeneratedDocument} className="glass-button border text-left">
       <Eye aria-hidden="true" className="mr-2 inline size-3.5" />Open generated document
     </button>
   ) : undefined;
@@ -235,7 +235,7 @@ export function ChatActiveWorkspace({
                                 agent.selectVersion(turn.id, selectedVersion.id);
                                 setArtifactPanelOpen(true);
                               }}
-                              className="flex w-full items-center justify-between gap-4 rounded-xl border border-black/[0.08] bg-white/70 px-4 py-3 text-left transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/[0.07] dark:focus-visible:ring-white/25"
+                              className="glass-control glass-card glass-primary flex w-full items-center justify-between gap-4 rounded-xl border px-4 py-3 text-left"
                             >
                               <span className="min-w-0 truncate text-sm font-medium text-black/82 dark:text-white/85">
                                 {selectedVersion.artifact?.title || (selectedVersion.artifactId === document.currentArtifact?.id ? document.currentArtifact.title : "Generated artifact")}
@@ -273,7 +273,7 @@ export function ChatActiveWorkspace({
                         aria-controls="artifact-editor-panel"
                         aria-expanded={artifactPanelOpen}
                         onClick={() => setArtifactPanelOpen(true)}
-                        className="flex w-full items-center justify-between gap-4 rounded-xl border border-black/[0.08] bg-white/70 px-4 py-3 text-left transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/[0.07] dark:focus-visible:ring-white/25"
+                        className="glass-control glass-card glass-primary flex w-full items-center justify-between gap-4 rounded-xl border px-4 py-3 text-left"
                       >
                         <span className="min-w-0 truncate text-sm font-medium text-black/82 dark:text-white/85">
                           {document.currentArtifact.title || "Generated artifact"}
@@ -316,7 +316,7 @@ export function ChatActiveWorkspace({
           id="artifact-editor-panel"
           aria-label="Artifact document panel"
           aria-busy={showPreview && selectedProgress?.status !== "FAILED"}
-          className="absolute inset-0 z-30 flex h-full min-w-0 flex-col border-l border-black/[0.08] bg-[#fbfbf8] dark:border-white/10 dark:bg-[#16171a] lg:relative"
+          className="glass-layer absolute inset-0 z-30 flex h-full min-w-0 flex-col border-l border-black/[0.08] dark:border-white/10 lg:relative"
         >
           <header className="relative z-20 flex min-h-16 shrink-0 items-center justify-between gap-3 bg-[#fbfbf8]/85 px-4 backdrop-blur-xl dark:bg-[#16171a]/85">
             <div className="flex items-center gap-1">
@@ -344,7 +344,7 @@ export function ChatActiveWorkspace({
                   setArtifactPanelOpen(false);
                   artifactTriggerRef.current?.focus();
                 }}
-                className="inline-flex size-8 shrink-0 items-center justify-center rounded-full text-black/45 transition hover:bg-black/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 dark:text-white/50 dark:hover:bg-white/[0.08] dark:focus-visible:ring-white/25"
+                className="glass-button glass-icon inline-flex size-8 shrink-0 items-center justify-center"
               >
                 <X aria-hidden="true" className="size-4" />
               </button>

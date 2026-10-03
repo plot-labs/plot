@@ -354,7 +354,7 @@ export function IntegrationsWorkspace() {
               type="button"
               onClick={() => setIntegrationQuery("")}
               aria-label="Clear integration search"
-              className="rounded-[6px] p-1 text-black/35 transition hover:bg-black/[0.05] hover:text-black/65 dark:text-white/35 dark:hover:bg-white/10 dark:hover:text-white/70"
+              className="glass-button"
             >
               <HugeiconsIcon icon={Cancel01Icon} size={15} color="currentColor" strokeWidth={1.5} aria-hidden="true" />
             </button>
@@ -371,7 +371,7 @@ export function IntegrationsWorkspace() {
             />
 
             <div className="mt-3">
-              <article className="rounded-[9px] border border-black/10 bg-white p-4 transition hover:border-black/[0.16] dark:border-white/12 dark:bg-white/[0.04] dark:hover:border-white/20">
+              <article className="glass-card rounded-[9px] border border-black/10 p-4 transition hover:border-black/[0.16] dark:border-white/12 dark:hover:border-white/20">
                 <div className="flex items-center gap-3">
                   <BrandIcon brand="github" />
                   <div className="min-w-0 flex-1">
@@ -384,9 +384,10 @@ export function IntegrationsWorkspace() {
                       type="button"
                       onClick={() => { void disconnectRepository(); }}
                       disabled={action !== null}
+                      aria-busy={action === "disconnect"}
                       aria-label="Disconnect GitHub"
                       title="Disconnect GitHub"
-                      className={workspaceIconButtonClass}
+                      className={`glass-button glass-icon glass-danger ${workspaceIconButtonClass}`}
                     >
                       {action === "disconnect" ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" /> : <HugeiconsIcon icon={Unlink04Icon} size={16} color="currentColor" strokeWidth={1.5} aria-hidden="true" />}
                     </button>
@@ -396,9 +397,10 @@ export function IntegrationsWorkspace() {
                       type="button"
                       onClick={() => { void installGitHub(); }}
                       disabled={action !== null}
+                      aria-busy={action === "install"}
                       aria-label={connectionBadgeStatus === "attention" ? "Reconnect GitHub" : "Connect GitHub"}
                       title={connectionBadgeStatus === "attention" ? "Reconnect GitHub" : "Connect GitHub"}
-                      className={workspaceIconButtonClass}
+                      className={`glass-button glass-icon ${workspaceIconButtonClass}`}
                     >
                       {action === "install" ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" /> : <HugeiconsIcon icon={Link01Icon} size={16} color="currentColor" strokeWidth={1.5} aria-hidden="true" />}
                     </button>
@@ -432,7 +434,8 @@ export function IntegrationsWorkspace() {
                       type="button"
                       onClick={() => { void enableRepository(); }}
                       disabled={action !== null || !selectedExternalRepositoryId}
-                      className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-[8px] bg-[#252a30] px-3 text-[12px] font-medium text-white transition hover:bg-[#171a1e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 disabled:cursor-wait disabled:opacity-45 dark:bg-white dark:text-[#18191b] dark:hover:bg-white/90"
+                      aria-busy={action === "enable"}
+                      className="glass-button glass-primary inline-flex shrink-0 items-center gap-1.5 disabled:cursor-wait"
                     >
                       {action === "enable" ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" /> : null}
                       Enable
@@ -454,8 +457,9 @@ export function IntegrationsWorkspace() {
                         <button
                           type="button"
                           onClick={() => { void reauthenticateGitHub(); }}
+                          aria-busy={action === "reauthenticate"}
                           disabled={action !== null}
-                          className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[8px] bg-[#252a30] px-3 text-[12px] font-medium text-white transition hover:bg-[#171a1e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 disabled:cursor-wait disabled:opacity-45 dark:bg-white dark:text-[#18191b] dark:hover:bg-white/90"
+                          className="glass-button glass-primary inline-flex w-full items-center justify-center gap-1.5 disabled:cursor-wait"
                         >
                           {action === "reauthenticate" ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" /> : <HugeiconsIcon icon={Link01Icon} size={14} color="currentColor" strokeWidth={1.5} aria-hidden="true" />}
                           Reconnect GitHub account
@@ -480,7 +484,7 @@ export function IntegrationsWorkspace() {
               {matchingPlannedIntegrations.map((integration) => (
                 <article
                   key={integration.name}
-                  className="group min-h-[150px] rounded-[9px] border border-black/10 bg-white p-4 transition hover:border-black/[0.16] dark:border-white/12 dark:bg-white/[0.04] dark:hover:border-white/20"
+                  className="glass-card group min-h-[150px] rounded-[9px] border border-black/10 p-4 transition hover:border-black/[0.16] dark:border-white/12 dark:hover:border-white/20"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <BrandIcon brand={integration.brand} />
@@ -582,7 +586,7 @@ function ConnectionBadge({ status }: { status: "connected" | "attention" | "disc
 
 function NonOwnerState({ connected }: { connected: boolean }) {
   return (
-    <div className="mt-6 rounded-[10px] border border-black/10 bg-black/[0.015] p-4 text-sm dark:border-white/10 dark:bg-white/[0.025]">
+    <div className="glass-card mt-6 rounded-[10px] border border-black/10 p-4 text-sm dark:border-white/10">
       <div className="font-medium text-black/78 dark:text-white/80">
         GitHub is {connected ? "connected" : "not connected"} for this workspace
       </div>
@@ -622,8 +626,8 @@ function StatusMessage({
           </details>
         )}
       </div>
-      <button type="button" onClick={onRetry} className="shrink-0 font-semibold underline underline-offset-2">Retry</button>
-      <button type="button" onClick={onDismiss} aria-label="Dismiss message">
+      <button type="button" onClick={onRetry} className="glass-button shrink-0 underline underline-offset-2">Retry</button>
+      <button className="glass-button glass-icon" type="button" onClick={onDismiss} aria-label="Dismiss message">
         <HugeiconsIcon icon={Cancel01Icon} size={16} aria-hidden="true" />
       </button>
     </div>

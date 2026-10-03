@@ -10,8 +10,8 @@ export function HeroSection() {
           <h1 className="font-display text-5xl leading-[1.02] tracking-tight sm:text-7xl lg:text-[88px]">Make every release <br />land.</h1>
           <p className="mx-auto mt-6 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">Plot identifies the shipped changes customers need to know, turns them into a customer-ready changelog, and keeps you in control of publication. Supporting evidence stays available when you review.</p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-5">
-            <a href="#waitlist" className="inline-flex min-h-12 items-center gap-3 rounded-lg bg-foreground px-6 text-sm font-medium text-background hover:bg-foreground/85 focus-visible:outline-2 focus-visible:outline-offset-4">Join waitlist <ArrowRight aria-hidden="true" className="size-4" /></a>
-            <a href="#product-preview" className="inline-flex min-h-12 items-center gap-2 text-sm underline-offset-4 hover:underline">Explore the workspace <ArrowDown aria-hidden="true" className="size-4" /></a>
+            <a href="#waitlist" className="glass-button glass-primary inline-flex items-center gap-3">Join waitlist <ArrowRight aria-hidden="true" className="size-4" /></a>
+            <a href="#product-preview" className="glass-button inline-flex items-center gap-2 underline-offset-4 hover:underline">Explore the workspace <ArrowDown aria-hidden="true" className="size-4" /></a>
           </div>
         </div>
         <ProductPreview />

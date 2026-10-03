@@ -71,7 +71,7 @@ export function AccountSettings() {
           </p>
         </header>
 
-        <section className="mt-8 overflow-hidden rounded-[14px] border border-black/[0.09] bg-white shadow-[0_1px_2px_rgb(15_23_42_/_0.025)] dark:border-white/10 dark:bg-white/[0.045]" aria-labelledby="account-profile-heading">
+        <section className="glass-card mt-8 overflow-hidden rounded-[14px] border border-black/[0.09] dark:border-white/10" aria-labelledby="account-profile-heading">
           <div className="border-b border-black/[0.07] px-5 py-5 dark:border-white/[0.08] sm:px-6">
             <h2 id="account-profile-heading" className="text-[15px] font-semibold text-black/82 dark:text-white/86">Profile</h2>
             <p className="mt-1 text-[13px] leading-5 text-black/48 dark:text-white/48">Your sign-in identity and contact details.</p>
@@ -91,7 +91,7 @@ export function AccountSettings() {
           </div>
         </section>
 
-        <section className="mt-8 overflow-hidden rounded-[14px] border border-red-200 bg-white dark:border-red-900/60 dark:bg-white/[0.045]" aria-labelledby="delete-account-heading">
+        <section className="glass-card mt-8 overflow-hidden rounded-[14px] border border-red-200 dark:border-red-900/60" aria-labelledby="delete-account-heading">
           <div className="px-5 py-5 sm:px-6">
             <h2 id="delete-account-heading" className="text-[15px] font-semibold text-red-700 dark:text-red-300">Delete account</h2>
             <p className="mt-2 text-[13px] leading-5 text-black/55 dark:text-white/55">
@@ -99,7 +99,7 @@ export function AccountSettings() {
             </p>
             {!confirmingDeletion ? (
               <button type="button" onClick={() => setConfirmingDeletion(true)} disabled={isLoading || !!error}
-                className="mt-4 rounded-lg border border-red-300 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950/30">
+                className="glass-button glass-danger mt-4 border">
                 Delete account
               </button>
             ) : (
@@ -109,12 +109,12 @@ export function AccountSettings() {
                   autoComplete="off" className="mt-2 w-full rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20" />
                 {deletionError && <p role="alert" className="mt-2 text-sm text-red-700 dark:text-red-300">{deletionError}</p>}
                 <div className="mt-3 flex gap-2">
-                  <button type="button" onClick={deleteAccount} disabled={confirmation !== "DELETE" || deleting}
-                    className="rounded-lg bg-red-700 px-3 py-2 text-sm font-medium text-white disabled:opacity-50">
+                  <button aria-busy={Boolean(deleting)} type="button" onClick={deleteAccount} disabled={confirmation !== "DELETE" || deleting}
+                    className="glass-button glass-danger">
                     {deleting ? "Deleting…" : "Delete my account"}
                   </button>
                   <button type="button" onClick={() => { setConfirmingDeletion(false); setConfirmation(""); setDeletionError(null); }} disabled={deleting}
-                    className="rounded-lg px-3 py-2 text-sm text-black/65 dark:text-white/65">Cancel</button>
+                    className="glass-button">Cancel</button>
                 </div>
               </div>
             )}

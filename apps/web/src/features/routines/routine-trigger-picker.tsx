@@ -152,7 +152,7 @@ export function RoutineTriggerPicker({
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget)) setOpenPicker(null);
       }}
-      className="relative rounded-[12px] border border-black/10 bg-white divide-y divide-black/[0.06] dark:border-white/12 dark:bg-white/[0.04] dark:divide-white/[0.06]"
+      className="glass-card relative rounded-[12px] border border-black/10 divide-y divide-black/[0.06] dark:border-white/12 dark:divide-white/[0.06]"
     >
       {/* Row 1: Repeat / Frequency Trigger Selection */}
       <div className="relative flex min-h-[44px] items-center justify-between px-3.5 py-2 text-[13px]">
@@ -173,7 +173,7 @@ export function RoutineTriggerPicker({
             event.preventDefault();
             openRepeatListbox();
           }}
-          className="inline-flex items-center gap-1.5 rounded-[6px] px-2 py-1 font-normal text-black/75 hover:bg-black/[0.04] hover:text-black dark:text-white/80 dark:hover:bg-white/[0.08] dark:hover:text-white transition outline-none focus-visible:ring-2 focus-visible:ring-black/15 dark:focus-visible:ring-white/15"
+          className="glass-control inline-flex items-center gap-1.5 rounded-[6px] px-2 py-1 font-normal outline-none"
         >
           <span>{selected.label}</span>
           <HugeiconsIcon
@@ -195,7 +195,7 @@ export function RoutineTriggerPicker({
             aria-label="Routine trigger"
             aria-activedescendant={`${listboxId}-option-${activeIndex}`}
             onKeyDown={handleRepeatKeyDown}
-            className="absolute right-3 top-[calc(100%+4px)] z-50 min-w-[200px] max-h-[min(360px,70vh)] overflow-y-auto rounded-[12px] border border-black/10 bg-white p-1.5 shadow-[0_14px_40px_rgb(15_23_42_/_0.14)] dark:border-white/12 dark:bg-[#202125] dark:shadow-black/40"
+            className="glass-layer absolute right-3 top-[calc(100%+4px)] z-50 min-w-[200px] max-h-[min(360px,70vh)] overflow-y-auto rounded-[12px] border border-black/10 p-1.5 dark:border-white/12"
           >
             {triggerGroups.map((group, groupIndex) => (
               <div
@@ -221,7 +221,7 @@ export function RoutineTriggerPicker({
                       aria-selected={isSelected}
                       onClick={() => selectOption(option)}
                       onPointerMove={() => setActiveIndex(optionIndex)}
-                      className={`flex w-full items-center justify-between gap-2.5 rounded-[9px] px-2.5 py-2 text-left outline-none transition ${isSelected ? "bg-[#eef1f4] text-black/88 dark:bg-white/[0.08] dark:text-white/92" : "text-black/72 hover:bg-black/[0.04] dark:text-white/75 dark:hover:bg-white/[0.07]"} ${active ? "ring-2 ring-inset ring-black/15 dark:ring-white/15" : ""}`}
+                      className={`glass-control flex w-full items-center justify-between gap-2.5 rounded-[9px] px-2.5 py-2 text-left outline-none  ${active ? "ring-2 ring-inset ring-black/15 dark:ring-white/15" : ""}`}
                     >
                       <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{option.label}</span>
                       {isSelected ? <HugeiconsIcon icon={Tick02Icon} size={16} color="currentColor" strokeWidth={1.5} className="shrink-0 text-black/65 dark:text-white/75" aria-hidden="true" /> : null}
@@ -254,7 +254,7 @@ export function RoutineTriggerPicker({
               event.preventDefault();
               openDayListbox();
             }}
-            className="inline-flex items-center gap-1.5 rounded-[6px] px-2 py-1 font-normal text-black/75 hover:bg-black/[0.04] hover:text-black dark:text-white/80 dark:hover:bg-white/[0.08] dark:hover:text-white transition outline-none focus-visible:ring-2 focus-visible:ring-black/15 dark:focus-visible:ring-white/15"
+            className="glass-control inline-flex items-center gap-1.5 rounded-[6px] px-2 py-1 font-normal outline-none"
           >
             <span>{activeDay}</span>
             <HugeiconsIcon
@@ -276,7 +276,7 @@ export function RoutineTriggerPicker({
               aria-label="Day of week"
               aria-activedescendant={`${listboxId}-day-option-${activeDayIndex}`}
               onKeyDown={handleDayKeyDown}
-              className="absolute right-3 top-[calc(100%+4px)] z-50 min-w-[160px] max-h-[min(320px,60vh)] overflow-y-auto rounded-[12px] border border-black/10 bg-white p-1.5 shadow-[0_14px_40px_rgb(15_23_42_/_0.14)] dark:border-white/12 dark:bg-[#202125] dark:shadow-black/40"
+              className="glass-layer absolute right-3 top-[calc(100%+4px)] z-50 min-w-[160px] max-h-[min(320px,60vh)] overflow-y-auto rounded-[12px] border border-black/10 p-1.5 dark:border-white/12"
             >
               {daysOfWeek.map((dayName, dayIndex) => {
                 const active = dayIndex === activeDayIndex;
@@ -291,7 +291,7 @@ export function RoutineTriggerPicker({
                     aria-selected={isSelected}
                     onClick={() => selectDay(dayName)}
                     onPointerMove={() => setActiveDayIndex(dayIndex)}
-                    className={`flex w-full items-center justify-between gap-2.5 rounded-[9px] px-2.5 py-2 text-left outline-none transition ${isSelected ? "bg-[#eef1f4] text-black/88 dark:bg-white/[0.08] dark:text-white/92" : "text-black/72 hover:bg-black/[0.04] dark:text-white/75 dark:hover:bg-white/[0.07]"} ${active ? "ring-2 ring-inset ring-black/15 dark:ring-white/15" : ""}`}
+                    className={`glass-control flex w-full items-center justify-between gap-2.5 rounded-[9px] px-2.5 py-2 text-left outline-none  ${active ? "ring-2 ring-inset ring-black/15 dark:ring-white/15" : ""}`}
                   >
                     <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{dayName}</span>
                     {isSelected ? <HugeiconsIcon icon={Tick02Icon} size={16} color="currentColor" strokeWidth={1.5} className="shrink-0 text-black/65 dark:text-white/75" aria-hidden="true" /> : null}

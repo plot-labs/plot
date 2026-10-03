@@ -100,7 +100,7 @@ export function WorkspaceContentProfile() {
         ) : null}
       </header>
 
-      <div className="space-y-5 rounded-xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/[0.04]">
+      <div className="glass-card space-y-5 rounded-xl border border-black/10 p-5 dark:border-white/10">
         <Field label="Product summary" value={productSummary} onChange={setProductSummary} multiline />
         <Field label="Primary audience" value={primaryAudience} onChange={setPrimaryAudience} />
         <Field label="Customer terms" value={customerTerms} onChange={setCustomerTerms} hint="Words customers use for your product." />
@@ -114,11 +114,11 @@ export function WorkspaceContentProfile() {
           hint="One phrase per line. Style guidance only — not evidence."
         />
         <div className="flex items-center gap-3 pt-2">
-          <button
+          <button aria-busy={Boolean(isSaving)}
             type="button"
             onClick={() => void save()}
             disabled={isSaving}
-            className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-60 dark:bg-white dark:text-black"
+            className="glass-button glass-primary min-w-[116px]"
           >
             {isSaving ? "Saving…" : "Save profile"}
           </button>

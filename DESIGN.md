@@ -1,7 +1,7 @@
 ---
 version: alpha
 name: Plot
-description: Current Plot web UI reference; document implemented component variants
+description: Plot web UI reference with adopted transparent glass button and card specifications
 colors:
   background: oklch(0.985 0 0)
   foreground: oklch(0.145 0 0)
@@ -96,19 +96,9 @@ spacing:
   comfortable: 24px
   spacious: 32px
 components:
-  button-document-primary:
-    backgroundColor: "#000000"
-    textColor: "#ffffff"
-    typography: "{typography.body-xs}"
-    fontWeight: 500
-    rounded: "{rounded.lg}"
-    minHeight: 32px
-    padding: 0 12px
-  button-document-primary-hover:
-    backgroundColor: "rgba(0, 0, 0, 0.8)"
-  button-create:
-    background: "linear-gradient(to bottom, rgba(0, 0, 0, 0.78), rgba(0, 0, 0, 0.88))"
-    textColor: "#ffffff"
+  button-primary:
+    backgroundColor: transparent
+    textColor: "{colors.foreground}"
     typography: "{typography.body-xs}"
     fontWeight: 600
     rounded: "{rounded.full}"
@@ -116,33 +106,48 @@ components:
     padding: 0 14px
     iconSize: 15px
     iconGap: 6px
-    border: "1px solid rgba(255, 255, 255, 0.18)"
-    backdropFilter: "saturate(200%) blur(40px)"
-    boxShadow: "inset 0 1px 1px rgba(255, 255, 255, 0.25), inset 0 -1px 1px rgba(0, 0, 0, 0.1), 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.08)"
-  button-create-hover:
-    opacity: 0.9
-  button-create-active:
-    scale: 0.98
-  button-workspace-primary:
-    backgroundColor: "#252a30"
-    textColor: "#ffffff"
-    typography: "{typography.body-xs}"
-    fontWeight: 600
-    rounded: "{rounded.full}"
-    height: 32px
-    padding: 0 14px
-  button-workspace-text:
+    borderLight: "1px solid rgba(0, 0, 0, 0.12)"
+    borderDark: "1px solid rgba(255, 255, 255, 0.18)"
+  button-secondary:
     backgroundColor: transparent
-    fontSize: 12px
+    textColor: "{colors.foreground}"
     fontWeight: 500
-    rounded: 7px
-    height: 32px
-    padding: 0 10px
-  button-workspace-icon:
+    rounded: "{rounded.full}"
+    height: 34px
+    padding: 0 14px
+    border: 1px solid transparent
+  button-icon:
     backgroundColor: transparent
-    rounded: 9px
+    rounded: "{rounded.full}"
     height: 36px
     width: 36px
+    border: 1px solid transparent
+  button-destructive:
+    backgroundLight: "rgba(255, 255, 255, 0.65)"
+    backgroundDark: "rgba(255, 255, 255, 0.08)"
+    textLight: "#b91c1c"
+    textDark: "#fca5a5"
+    rounded: "{rounded.full}"
+  button-hover:
+    backgroundLight: "rgba(0, 0, 0, 0.03)"
+    backgroundDark: "rgba(255, 255, 255, 0.06)"
+    highlightLight: "inset 0 1px 0 rgba(255, 255, 255, 0.7)"
+    highlightDark: "inset 0 1px 0 rgba(255, 255, 255, 0.12)"
+  button-pressed:
+    backgroundLight: "rgba(0, 0, 0, 0.06)"
+    backgroundDark: "rgba(255, 255, 255, 0.1)"
+    scale: 0.98
+  button-focus:
+    ringWidth: 2px
+    ringOffset: 2px
+  button-disabled:
+    opacity: 0.4
+  card:
+    backgroundColor: transparent
+    borderLight: "1px solid rgba(0, 0, 0, 0.08)"
+    borderDark: "1px solid rgba(255, 255, 255, 0.12)"
+    rounded: 14px
+    boxShadow: none
   citation-chip:
     backgroundColor: "{colors.citation-red-bg}"
     textColor: "{colors.citation-red}"
@@ -159,7 +164,7 @@ components:
     height: 40px
     padding: 0 12px
   contents-table:
-    backgroundColor: "#ffffff"
+    backgroundColor: transparent
     rounded: 14px
     rowMinHeight: 76px
   content-status:
@@ -192,15 +197,15 @@ components:
 
 ## Purpose and source of truth
 
-This document describes the implemented Plot web UI. Update it when an adopted UI changes. A difference from an older design rule is a documentation update candidate; it is not, by itself, a reason to restyle working screens.
+This document records Plot's adopted design and the existing web UI reference. The Buttons and Surfaces sections, and their button/card tokens, specify the approved transparent glass direction. These specifications are not a claim that the current UI already implements them. Other sections describe the existing implementation unless stated otherwise.
 
-The reference implementation is `apps/web/src`. The tables below distinguish existing component variants rather than imposing one radius, font size, or surface treatment on every screen. The token block records selected shared values; explicit component styles also form part of the current design.
+The reference implementation is `apps/web/src`. Update implementation and documentation together when applying an adopted specification; retain existing dimensions and behavior outside that scope.
 
 ## Visual direction
 
-Plot combines neutral workspace backgrounds, editorial serif headings, compact sans-serif controls, and rounded surfaces. Most list content uses light borders and restrained fills. Create buttons, onboarding surfaces, and citation popovers also use gradients, translucency, blur, or shadows where specified below.
+Plot combines neutral workspace backgrounds, editorial serif headings, compact sans-serif controls, and rounded surfaces. Preserve an Apple Liquid Glass inspired appearance through visible underlying surfaces, subtle edge highlights, and restrained depth.
 
-Keep these treatments tied to their existing components. When adding a similar action or surface, reuse the nearest implemented variant and update this document if a new variant is deliberately introduced.
+Buttons and ordinary cards have transparent backgrounds by default. Primary actions use persistent thin borders and semibold labels; other actions reveal their surface on interaction. Use blur and shadows for floating layers over actual content. Create follows the same primary action specification as New chat, Save draft, Copy, Export, and Continue.
 
 ## Typography
 
@@ -227,8 +232,8 @@ Global semantic colors are defined in `app/globals.css`. The UI also uses compon
 - Workspace lists: `#f7f8fa` in light mode, `#18191d` in dark mode.
 - Content editor canvas: `#eef0f3`, with a white document surface; dark canvas `#18181b`, document `#202024`.
 - Chat header: `#fbfbf8` at 85% opacity; dark `#16171a` at 85% opacity.
-- Standard workspace primary action: `#252a30` with white text; dark mode reverses to a white fill with dark text.
-- Header Create action: near-black translucent gradient with white text in both themes.
+- Adopted button colors: transparent surfaces with dark text in light mode and light text in dark mode. Primary action emphasis comes from borders and weight.
+- Adopted destructive actions: a light translucent surface with red text and icons; use a faint white surface with lighter red text in dark mode.
 - Public citation accent: `#ef3f2c` on `#fff4f1`. Workspace citations have their own rendering and popover treatment.
 - Warnings, errors, connection states, and review states use the colors defined by their owning components; accents are not restricted to citation red and amber.
 
@@ -268,20 +273,34 @@ Components also use explicit radii. Search and workspace icon controls use 9px, 
 
 ## Buttons
 
-| Variant | Current treatment | Typical use |
+Shared implementation: `apps/web/src/components/ui/glass.css`. Most actions share transparent backgrounds and a rounded pill shape. Use the primary treatment for Create, New chat, Save draft, Copy, Export, and Continue. Use the secondary treatment for Cancel and other supporting actions. Labels describe the action; an Add icon belongs only to creation actions.
+
+| Variant | Treatment | Typical use |
 | --- | --- | --- |
-| Header Create | 34px high, full radius, 12px semibold label, 14px horizontal padding, 15px Add icon, 6px gap | Automation and Contents headers |
-| Create routine submit | 36px high, full radius, 13px semibold label, 16px horizontal padding; same gradient and depth treatment as header Create | Routine creation form |
-| Workspace primary | 32px high, full radius, 12px semibold label, 14px horizontal padding, solid fill | Home New chat |
-| Document primary | Minimum 32px high, 4px radius, 12px medium label, 12px horizontal padding, black fill | Save draft and document confirmation actions |
-| Workspace text | 32px high, 7px radius, 12px medium label, 10px horizontal padding | Compact secondary actions |
-| Workspace icon | 36px square, 9px radius | Refresh and similar list controls |
-| Document Copy split control | 32px high, 8px outer radius, bordered translucent white fill, subtle shadow | Copy and export menu |
-| Onboarding actions | Full radius; height and label size vary by step | Install on GitHub, Continue |
+| Primary | Transparent, persistent thin border, 12px semibold label, 34px height, 14px horizontal padding | Create, Save draft, Continue |
+| Secondary | Transparent, no visible resting border, 12px medium label; same size as primary | Cancel, supporting actions |
+| Icon | Transparent, no visible resting border, 36px circle, accessible action label | Close, refresh, more |
+| Destructive | Light translucent surface, red text and icons; primary dimensions | Delete, disconnect |
+| Copy split control | Transparent, one persistent outer border; a divider separates Copy and export menu | Document Copy |
 
-The two Create variants use the gradient, border, backdrop filter, and shadow values recorded in `button-create`. Both use hover opacity 0.9 and active scale 0.98. The header label is **Create**; the form submission label is **Create routine** or **Creating…**. Disabled controls use reduced opacity and block interaction.
+Use 15px icons with a 6px label gap when an icon helps explain the action. Existing compact or form-specific sizes can remain where space requires them; surface and state rules remain shared. Reserve transparent border space so interactions do not shift layout. Tabs, selected list rows, and formatting controls retain their selection semantics rather than adopting action-button styling. Onboarding checklist rows and profile/menu rows retain left alignment and their existing spacing; only standalone action buttons center their contents.
 
-Prefer an existing variant when adding a button. Keep label, icon, spacing, and state treatment consistent within that variant. A link styled as a button remains a link when it navigates to another page.
+### Button states
+
+| State | Required treatment and behavior |
+| --- | --- |
+| Default | Transparent surface; only primary actions have a visible resting border. No filled black gradient or outer shadow. |
+| Hover | Enabled controls reveal a faint translucent surface and subtle top edge highlight. Secondary/icon borders may become visible. No hover enlargement. |
+| Pressed | Slightly stronger surface, scale 0.98; preserve layout size. Destructive actions keep their light surface and red label. |
+| Keyboard focus | Visible 2px outer ring with 2px offset, in a contrasting theme-aware color. Keep the ring visible during hover, press, and loading when focused. |
+| Disabled | Opacity 0.4, unavailable to activation, no hover or pressed effects. Preserve an understandable label; explain unavailable actions nearby when needed. |
+| Loading | Preserve the normal surface and readable opacity; replace the icon with a spinner and use progress text such as Saving…. Preserve width, prevent duplicate activation, and expose aria-busy. Retain existing focus and announce progress accessibly. |
+| Success | Return to the normal enabled appearance. When useful, briefly show a check and completion label without changing button width; announce completion. |
+| Failure | Restore the action for retry where possible. Show an accessible error and recovery guidance nearby; red button styling remains reserved for destructive actions. |
+
+Disabled suppresses interaction effects. Loading blocks repeat activation without looking unavailable. Focus is additive and must not be hidden by another state. Destructive colors persist across hover and press; do not turn destructive controls into solid red buttons.
+
+Transition colors, opacity, borders, and highlights over 150ms; pressed transforms over 100ms. With reduced motion, omit scale animation and spinner rotation while retaining progress text. Native buttons use disabled when unavailable; links remain links for navigation, and aria-disabled links must also suppress activation. Icon-only controls always have accessible names.
 
 ## Inputs and focus states
 
@@ -290,7 +309,7 @@ Shared workspace search fields use a 40px-high white container with a 9px radius
 Focus styling follows the current control family:
 
 - Workspace search: neutral `focus-within` ring.
-- Create and most compact workspace actions: neutral 2px `focus-visible` ring.
+- Adopted button focus: theme-aware 2px `focus-visible` ring with 2px offset, as specified above.
 - Editor formatting and selected export/review controls: amber focus ring.
 - Document title: underline on keyboard focus.
 
@@ -298,18 +317,21 @@ Onboarding fields have their own rounded, translucent treatment. A blanket prohi
 
 ## Surfaces, blur, and elevation
 
-| Surface | Current treatment |
-| --- | --- |
-| Contents table | White fill, 14px radius, subtle border and row separators, lightly tinted header/footer |
-| Header Create and Create routine submit | Near-black gradient, translucent light border, inset highlights, soft outer shadow, backdrop filter |
-| Getting started sidebar card | Translucent white layers, gradient border wrapper, inset/outer shadows, backdrop blur, decorative soft highlights |
-| Onboarding modal | 22px radius, translucent surface, backdrop blur, layered shadow; dimmed and lightly blurred page overlay |
-| Workspace switcher modal overlay | Dimmed background with 2px blur |
-| Citation popover | Translucent white surface, 8px radius, backdrop blur, soft shadow; dark translucent variant |
-| Chat header | Translucent fill with backdrop blur |
-| Copy menu and Sources drawer | Bordered surfaces with overlay shadows |
+Cards and floating layers share the surface classes in `glass.css`. Keep workspace/page and document backgrounds readable. Transparent cards reveal that background rather than adding another opaque fill.
 
-Blur and depth are part of these implemented components. They are not restricted to the header Create button. Ordinary list rows stay visually quiet so titles and actions remain easy to scan.
+| Surface | Adopted treatment |
+| --- | --- |
+| Ordinary cards and Contents list container | Transparent background, thin theme-aware border, existing radius, no outer shadow |
+| Interactive cards and list rows | Transparent at rest; faint hover/pressed surface only when clickable. Selected state remains identifiable with text/icon or border as well as tint. |
+| Primary action buttons, including Create | Transparent background, persistent thin border; edge highlight on interaction |
+| Getting started sidebar card | Transparent surface with restrained edges; remove decorative filled gradients and persistent heavy shadows |
+| Popovers, menus, dialogs, and floating cards | Light translucent neutral surface, subtle edge highlight, backdrop blur over content, restrained outer shadow |
+| Sources drawer and Chat header | Translucency/blur when layered over content; use a quiet surface otherwise |
+| Overlay backdrop | Dimming and light blur where needed to distinguish the active layer |
+
+Floating layers use a 96% neutral surface with backdrop blur so underlying text does not compete with menu items. Use blur where there is an underlying surface to see through. Ordinary inline buttons and cards do not need a backdrop filter. When backdrop filtering is unavailable or transparency is reduced, floating layers use an opaque theme surface that preserves readability. Decorative transparency must not reduce text or control contrast; adjust the translucent layer as needed.
+
+Dangerous actions are the deliberate filled-surface exception: light translucent backgrounds with red labels, as specified under Buttons. Status and citation accents retain their semantic styling.
 
 ## Status badges and citations
 
@@ -334,7 +356,7 @@ Do not describe skeleton loading as forbidden. Preserve retry and disabled state
 
 ## Maintaining this reference
 
-- Inspect the relevant component and the rendered screen before updating a rule.
+- Inspect the relevant component and rendered screen when recording implemented behavior. Mark approved design specifications separately until their implementation is verified.
 - Record deliberate variants with their scope; do not turn one screen's style into a universal rule.
 - Update this document when approved UI changes alter dimensions, typography, surfaces, or interaction states.
 - If a new request is to synchronize documentation, change the documentation rather than restyling the implementation to fit older prose.
@@ -342,7 +364,7 @@ Do not describe skeleton loading as forbidden. Preserve retry and disabled state
 
 ### Shared workspace list controls
 
-- Automation and Contents use `WorkspaceCreateAction` for their header Create control. It preserves native link or button behavior with the same icon, label, and glossy pill styling.
+- Automation and Contents use `WorkspaceCreateAction` for their header Create control. It preserves native link or button behavior with the same icon and label. It uses the shared transparent primary treatment.
 - Automation and Contents item titles use 14px medium text. Routine metadata and compact row actions use 12px text.
 - Connections provider card titles use 16px semibold text.
 - Automation, Contents, and Connections use `WorkspaceEmptyState`: 13px medium title, 12px description with 20px line height, 4px title-to-description gap, and 40px vertical padding. An optional icon sits 12px above the title.

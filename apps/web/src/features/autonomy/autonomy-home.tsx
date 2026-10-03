@@ -163,13 +163,13 @@ export function AutonomyHomeWorkspace({ view = "overview" }: { view?: "overview"
               <div className="flex flex-wrap items-center gap-2">
                 {item.chatId ? (
                   <Link
-                    className={buttonClass}
+                    className={`glass-button ${buttonClass}`}
                     href={`/chat?chat=${encodeURIComponent(item.chatId)}${item.responseVersionId ? `&version=${encodeURIComponent(item.responseVersionId)}` : item.agentRunId ? `&agent=${encodeURIComponent(item.agentRunId)}` : ""}${item.artifactId ? `&artifact=${encodeURIComponent(item.artifactId)}` : ""}`}
                   >
                     {item.status === "READY_FOR_REVIEW" || item.status === "ACTION_REQUIRED" ? "Review and discuss" : "View in chat"}
                   </Link>
                 ) : item.artifactId ? (
-                  <Link className={buttonClass} href={`/contents?artifact=${encodeURIComponent(item.artifactId)}`}>
+                  <Link className={`glass-button ${buttonClass}`} href={`/contents?artifact=${encodeURIComponent(item.artifactId)}`}>
                     Open artifact
                   </Link>
                 ) : null}
@@ -189,9 +189,9 @@ export function AutonomyHomeWorkspace({ view = "overview" }: { view?: "overview"
           title={view === "overview" ? "Home" : "Activity"}
           description={view === "overview" ? "What Plot is preparing and what needs your attention." : "Connected changes and the reasons to prepare, hold, or exclude an update."}
           actions={
-            <button
+            <button aria-busy={Boolean(loading)}
               type="button"
-              className={workspaceIconButtonClass}
+              className={`glass-button glass-icon ${workspaceIconButtonClass}`}
               disabled={loading}
               onClick={refresh}
               aria-label="Refresh updates"
@@ -203,8 +203,8 @@ export function AutonomyHomeWorkspace({ view = "overview" }: { view?: "overview"
         >
           {view === "overview" && (
             <nav aria-label="Home actions" className="mt-5 flex flex-wrap items-center gap-1.5">
-              <Link className={workspacePrimaryButtonClass} href="/chat">New chat</Link>
-              <Link className={workspaceTextButtonClass} href="/contents">Review updates</Link>
+              <Link className={`glass-button glass-primary ${workspacePrimaryButtonClass}`} href="/chat">New chat</Link>
+              <Link className={`glass-button ${workspaceTextButtonClass}`} href="/contents">Review updates</Link>
             </nav>
           )}
         </WorkspaceHeader>
@@ -236,7 +236,7 @@ export function AutonomyHomeWorkspace({ view = "overview" }: { view?: "overview"
                   role="tab"
                   aria-selected={filter === "ALL"}
                   onClick={() => setFilter("ALL")}
-                  className={`rounded-full px-3 py-1 text-xs font-medium transition ${filter === "ALL" ? "bg-black text-white dark:bg-white dark:text-black" : "bg-black/5 text-black/60 hover:bg-black/10 dark:bg-white/10 dark:text-white/60"}`}
+                  className={`glass-control rounded-full px-3 py-1 text-xs font-medium `}
                 >
                   All ({items.length})
                 </button>
@@ -245,7 +245,7 @@ export function AutonomyHomeWorkspace({ view = "overview" }: { view?: "overview"
                   role="tab"
                   aria-selected={filter === "ATTENTION"}
                   onClick={() => setFilter("ATTENTION")}
-                  className={`rounded-full px-3 py-1 text-xs font-medium transition ${filter === "ATTENTION" ? "bg-black text-white dark:bg-white dark:text-black" : "bg-black/5 text-black/60 hover:bg-black/10 dark:bg-white/10 dark:text-white/60"}`}
+                  className={`glass-control rounded-full px-3 py-1 text-xs font-medium `}
                 >
                   Active ({attentionItems.length})
                 </button>
@@ -254,7 +254,7 @@ export function AutonomyHomeWorkspace({ view = "overview" }: { view?: "overview"
                   role="tab"
                   aria-selected={filter === "DECIDED"}
                   onClick={() => setFilter("DECIDED")}
-                  className={`rounded-full px-3 py-1 text-xs font-medium transition ${filter === "DECIDED" ? "bg-black text-white dark:bg-white dark:text-black" : "bg-black/5 text-black/60 hover:bg-black/10 dark:bg-white/10 dark:text-white/60"}`}
+                  className={`glass-control rounded-full px-3 py-1 text-xs font-medium `}
                 >
                   Decided ({decidedItems.length})
                 </button>
@@ -288,7 +288,7 @@ export function AutonomyHomeWorkspace({ view = "overview" }: { view?: "overview"
               <div className="mt-4 px-6 text-center">
                 <button
                   type="button"
-                  className={buttonClass}
+                  className={`glass-button ${buttonClass}`}
                   disabled={loadingMore}
                   onClick={() => void loadMore()}
                 >

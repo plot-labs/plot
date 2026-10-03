@@ -61,7 +61,7 @@ export function WaitlistForm() {
 
   if (state === "success") {
     return (
-      <div className="rounded-2xl border border-foreground/10 bg-background/80 p-6">
+      <div className="glass-card rounded-2xl border border-foreground/10 p-6">
         <div className="mb-3 flex items-center gap-3">
           <span className="flex size-9 items-center justify-center rounded-full bg-foreground text-background">
             <Check className="size-4" />
@@ -162,8 +162,8 @@ export function WaitlistForm() {
       />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <button
-          className="group inline-flex h-14 items-center justify-center gap-2 rounded-full bg-foreground px-8 text-base font-medium text-background transition-colors hover:bg-foreground/90 disabled:pointer-events-none disabled:opacity-50"
+        <button aria-busy={state === "loading"}
+          className="glass-button glass-primary min-w-[132px] group inline-flex items-center justify-center gap-2"
           disabled={state === "loading"}
           type="submit"
         >
@@ -172,7 +172,7 @@ export function WaitlistForm() {
         </button>
 
         <a
-          className="inline-flex h-14 items-center justify-center rounded-lg border border-foreground/20 bg-background px-8 text-base font-medium transition-colors hover:bg-foreground/5"
+          className="glass-button inline-flex items-center justify-center border border-foreground/20"
           href="mailto:hello@useplot.xyz"
         >
           Talk to us

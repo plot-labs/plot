@@ -59,10 +59,7 @@ export function ProductSidebar({ collapsed = false, theme, onThemeChange, onTogg
             type="button"
             onClick={onToggleSidebar}
             aria-label={collapsed ? "Open sidebar" : "Close sidebar"}
-            className={cn(
-              "inline-flex shrink-0 items-center justify-center rounded-[8px] text-black/35 transition hover:bg-black/5 hover:text-black/65 dark:text-white/38 dark:hover:bg-white/10 dark:hover:text-white/70",
-              collapsed ? "size-9" : "size-8",
-            )}
+            className={cn("glass-button glass-icon", "inline-flex shrink-0 items-center justify-center", collapsed ? "size-9" : "size-8")}
           >
             {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
           </button>
@@ -96,10 +93,7 @@ export function ProductSidebar({ collapsed = false, theme, onThemeChange, onTogg
           <div className={cn("pb-4", collapsed ? "px-2" : "px-3")}>
             <Link
               href={appHomeHref}
-              className={cn(
-                "flex h-8 items-center gap-2 rounded-[8px] text-[13px] font-medium text-black/52 transition hover:bg-black/[0.04] hover:text-black/78 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 dark:text-white/52 dark:hover:bg-white/[0.07] dark:hover:text-white/82 dark:focus-visible:ring-white/25",
-                collapsed ? "justify-center px-0" : "px-2",
-              )}
+              className={cn("glass-button", "flex items-center gap-2", collapsed ? "justify-center" : "")}
             >
               <HugeiconsIcon icon={ArrowLeft01Icon} size={16} color="currentColor" strokeWidth={1.5} aria-hidden="true" className="shrink-0" />
               <span className={collapsed ? "sr-only" : undefined}>Back to app</span>
@@ -120,7 +114,7 @@ export function ProductSidebar({ collapsed = false, theme, onThemeChange, onTogg
 
         <nav aria-label="Workspace utilities" className={cn("pb-2", collapsed ? "px-2" : "px-3")}>
           <Link href="/settings/general" title="Settings" aria-current={settingsMode ? "location" : undefined}
-            className={cn("flex h-8 items-center gap-2 rounded-lg text-[13px] font-medium text-black/65 hover:bg-black/5 dark:text-white/65 dark:hover:bg-white/10", collapsed ? "justify-center" : "px-2.5")}>
+            className={cn("glass-control", "flex h-8 items-center gap-2 rounded-lg text-[13px] font-medium", collapsed ? "justify-center" : "px-2.5")}>
             <Settings className="size-4 shrink-0" aria-hidden="true" />
             <span className={collapsed ? "sr-only" : undefined}>Settings</span>
           </Link>

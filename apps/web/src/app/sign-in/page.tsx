@@ -43,17 +43,17 @@ function SignInContent() {
         </div>
 
         {notice ? (
-          <p role="status" className="mt-5 rounded-xl border border-black/10 bg-white px-4 py-3 text-center text-sm leading-6 text-black/65">
+          <p role="status" className="glass-card mt-5 rounded-xl border border-black/10 px-4 py-3 text-center text-sm leading-6 text-black/65">
             {notice}
           </p>
         ) : null}
 
         <div className="mt-8">
-          <button
+          <button aria-busy={Boolean(loading)}
             type="button"
             onClick={signInWithGitHub}
             disabled={loading}
-            className="flex h-11 w-full items-center justify-center gap-2 rounded-full border border-black/12 bg-white text-base font-medium tracking-[-0.015em] shadow-[0_2px_5px_rgba(0,0,0,0.06)] transition-[background-color,border-color,box-shadow,transform] hover:-translate-y-0.5 hover:border-black/20 hover:bg-white hover:shadow-[0_5px_10px_rgba(0,0,0,0.1)] focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[#191919] disabled:pointer-events-none disabled:opacity-50"
+            className="glass-button flex w-full items-center justify-center gap-2 border tracking-[-0.015em]"
           >
             {loading ? (
               <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />

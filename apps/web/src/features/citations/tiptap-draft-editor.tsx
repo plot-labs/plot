@@ -262,7 +262,7 @@ function TiptapArtifactEditor({
   return (
     <section
       aria-label={readOnly ? "Historical artifact preview" : "Artifact editor"}
-      className={embedded ? "min-w-0" : "rounded-xl border border-black/10 bg-white dark:border-white/10 dark:bg-white/[0.04]"}
+      className={`glass-card ${embedded ? "min-w-0" : "rounded-xl border border-black/10 dark:border-white/10"}`}
     >
       {!documentPresentation ? (
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-black/[0.07] px-4 py-4 dark:border-white/10 sm:px-6">
@@ -292,11 +292,11 @@ function TiptapArtifactEditor({
             {readOnly ? "Saved snapshot" : saving ? "Saving…" : message || "Saved"}
           </p>
           {!readOnly ? (
-            <button
+            <button aria-busy={Boolean(saving)}
               type="button"
               disabled={saving}
               onClick={() => void save()}
-              className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-black px-3 text-sm font-semibold text-white transition hover:bg-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-white/85"
+              className="glass-button glass-primary inline-flex items-center gap-2"
             >
               <Save aria-hidden="true" className="size-4" />
               {saving ? "Saving…" : "Save draft"}
@@ -459,7 +459,7 @@ function ContextualFormattingToolbar({
       }
       role="group"
       aria-label="Document formatting"
-      className="z-30 max-w-[calc(100vw-16px)] rounded-lg border border-black/10 bg-white p-1 shadow-sm dark:border-white/15 dark:bg-[#202023]"
+      className="glass-card z-30 max-w-[calc(100vw-16px)] rounded-lg border border-black/10 p-1 dark:border-white/15"
     >
       <div className="flex items-center gap-0.5">
         {!state.empty || expanded ? (
@@ -489,7 +489,7 @@ function ContextualFormattingToolbar({
           title="Block actions (Alt+F10)"
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => setExpanded((value) => !value)}
-          className="inline-flex size-8 items-center justify-center rounded-md text-black/60 hover:bg-black/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 dark:text-white/70 dark:hover:bg-white/10"
+          className="glass-button glass-icon inline-flex size-8 items-center justify-center"
         >
           <MoreHorizontal aria-hidden="true" className="size-4" />
         </button>
@@ -538,7 +538,7 @@ function ToolbarButton({
       disabled={disabled}
       onMouseDown={(event) => event.preventDefault()}
       onClick={onClick}
-      className={`inline-flex min-h-8 items-center gap-2 rounded-md text-xs font-medium text-black/65 transition hover:bg-black/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:opacity-35 aria-pressed:bg-black/[0.08] dark:text-white/75 dark:hover:bg-white/10 dark:aria-pressed:bg-white/10 ${showLabel ? "px-2 text-left" : "size-8 justify-center"}`}
+      className={`glass-control inline-flex min-h-8 items-center gap-2 rounded-md text-xs font-medium ${showLabel ? "px-2 text-left" : "size-8 justify-center"}`}
     >
       {Icon ? <Icon aria-hidden="true" className="size-4 shrink-0" /> : null}
       {showLabel ? label : null}

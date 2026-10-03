@@ -128,22 +128,22 @@ export function PublishDialog({
     return (
       <div role="none" className="relative border-t border-black/[0.06] pt-1 dark:border-white/10">
         {showUnpublish ? (
-          <button
+          <button aria-busy={Boolean(pending)}
             type="button"
             role="menuitem"
             disabled={pending}
             onClick={() => setUnpublishConfirm(true)}
-            className="flex h-8 w-full items-center gap-2 rounded-[4px] px-2.5 text-left transition hover:bg-black/[0.04] focus-visible:bg-black/[0.04] focus-visible:outline-none disabled:opacity-40 dark:hover:bg-white/10 dark:focus-visible:bg-white/10"
+            className="glass-control glass-danger flex h-8 w-full items-center gap-2 rounded-[4px] px-2.5 text-left"
           >
             <Undo2 aria-hidden="true" className="size-4" /> Unpublish changelog
           </button>
         ) : showPublish ? (
-          <button
+          <button aria-busy={Boolean(pending)}
             type="button"
             role="menuitem"
             disabled={pending}
             onClick={() => void requestPublish(false)}
-            className="flex h-8 w-full items-center gap-2 rounded-[4px] px-2.5 text-left transition hover:bg-black/[0.04] focus-visible:bg-black/[0.04] focus-visible:outline-none disabled:opacity-40 dark:hover:bg-white/10 dark:focus-visible:bg-white/10"
+            className="glass-control flex h-8 w-full items-center gap-2 rounded-[4px] px-2.5 text-left"
           >
             <Globe aria-hidden="true" className="size-4" /> Publish changelog
           </button>
@@ -181,31 +181,28 @@ export function PublishDialog({
     );
   }
 
-  const buttonClassName = presentation === "inline"
-    ? "inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-black/15 bg-white px-3 text-xs font-medium text-black/70 transition hover:bg-black/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:pointer-events-none disabled:opacity-40 dark:border-white/15 dark:bg-white/[0.04] dark:text-white/70 dark:hover:bg-white/[0.08] dark:focus-visible:ring-offset-[#18181b]"
-    : "inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-black/15 bg-white px-3 text-xs font-medium text-black/70 transition hover:bg-black/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15 disabled:pointer-events-none disabled:opacity-40 dark:border-white/15 dark:bg-white/[0.04] dark:text-white/70 dark:hover:bg-white/[0.08] dark:focus-visible:ring-white/25";
 
   return (
     <div className={presentation === "inline" ? "relative inline-flex flex-col items-end gap-2" : "relative inline-flex items-center"}>
       {showUnpublish ? (
-        <button
+        <button aria-busy={Boolean(pending)}
           type="button"
           disabled={pending}
           onClick={() => setUnpublishConfirm(true)}
           aria-label="Unpublish changelog"
-          className={buttonClassName}
+          className="glass-button glass-danger min-w-[132px]"
         >
-          <Undo2 aria-hidden="true" className="size-3.5 text-black/60 dark:text-white/60" />
+          <Undo2 aria-hidden="true" className="size-3.5" />
           {pending ? "Unpublishing…" : "Unpublish"}
         </button>
       ) : showPublish ? (
-        <button
+        <button aria-busy={Boolean(pending)}
           type="button"
           disabled={pending}
           onClick={() => void requestPublish(false)}
           aria-label="Publish changelog"
           title="Hosted publish includes the body and public citations only. Private source labels stay private. Plot does not remove secrets from the body."
-          className={buttonClassName}
+          className="glass-button glass-primary min-w-[120px]"
         >
           <Globe aria-hidden="true" className="size-3.5 text-black/60 dark:text-white/60" />
           {pending ? "Publishing…" : "Publish"}
@@ -328,28 +325,28 @@ function UnpublishConfirmation({
       role="alertdialog"
       aria-labelledby="unpublish-warning-title"
       aria-describedby="unpublish-warning-description"
-      className={anchored
-        ? "absolute right-0 top-[calc(100%+12px)] z-50 w-[min(360px,calc(100vw-32px))] rounded-lg border border-black/10 bg-white p-3 dark:border-white/10 dark:bg-[#202024]"
-        : "w-full rounded-lg border border-black/10 bg-white p-3 dark:border-white/10 dark:bg-white/[0.04]"}
+      className={`glass-layer ${anchored
+        ? "absolute right-0 top-[calc(100%+12px)] z-50 w-[min(360px,calc(100vw-32px))] rounded-lg border border-black/10 p-3 dark:border-white/10"
+        : "w-full rounded-lg border border-black/10 p-3 dark:border-white/10"}`}
     >
       <h3 id="unpublish-warning-title" className="text-sm font-semibold">Withdraw this public changelog?</h3>
       <p id="unpublish-warning-description" className="mt-1 text-xs leading-5 text-black/62 dark:text-white/62">
         The public page, list entry, and citations will stop resolving. The internal snapshot stays.
       </p>
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <button
+        <button aria-busy={Boolean(pending)}
           type="button"
           disabled={pending}
           onClick={onConfirm}
           aria-label="Confirm unpublish"
-          className="inline-flex min-h-8 items-center rounded-lg bg-black px-3 text-xs font-medium text-white disabled:opacity-40 dark:bg-white dark:text-black"
+          className="glass-button glass-danger inline-flex items-center"
         >
           Unpublish
         </button>
         <button
           type="button"
           onClick={onCancel}
-          className="inline-flex min-h-8 items-center rounded-lg border border-black/10 px-3 text-xs font-medium text-black/70 dark:border-white/12 dark:text-white/70"
+          className="glass-button inline-flex items-center border"
         >
           Cancel
         </button>
@@ -396,7 +393,7 @@ function PublishConfirmation({
                     <button
                       type="button"
                       onClick={() => focusStatement(pack, warning.sentenceNumber)}
-                      className="block max-w-full truncate rounded-sm text-left font-medium underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1"
+                      className="glass-button block max-w-full truncate text-left underline underline-offset-2"
                     >
                       Statement {warning.sentenceNumber} — “{warning.excerpt}”
                     </button>
@@ -411,19 +408,19 @@ function PublishConfirmation({
         <button
           type="button"
           onClick={onCancel}
-          className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-black/55 transition hover:bg-black/5 hover:text-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1 dark:text-white/55 dark:hover:bg-white/10 dark:hover:text-white/85"
+          className="glass-button glass-icon inline-flex size-9 shrink-0 items-center justify-center"
           aria-label="Cancel publish warning"
           title="Cancel publish warning"
         >
           <X aria-hidden="true" className="size-4" />
         </button>
       </div>
-      <button
+      <button aria-busy={Boolean(pending)}
         autoFocus
         type="button"
         disabled={pending}
         onClick={onConfirm}
-        className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg bg-amber-950 px-3 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-40 dark:bg-amber-200 dark:text-amber-950"
+        className="glass-button glass-primary mt-3 inline-flex items-center gap-2"
       >
         <Check aria-hidden="true" className="size-4" /> Confirm and publish
       </button>
@@ -454,9 +451,9 @@ function PublishSuccessPanel({
     <div
       role="status"
       aria-live="polite"
-      className={anchored
-        ? "absolute right-0 top-[calc(100%+12px)] z-50 w-[min(360px,calc(100vw-32px))] rounded-lg border border-black/10 bg-white p-3 shadow-[0_12px_32px_rgba(0,0,0,0.14)] dark:border-white/10 dark:bg-[#202024]"
-        : "w-full rounded-lg border border-black/10 bg-white p-3 dark:border-white/10 dark:bg-white/[0.04]"}
+      className={`glass-layer ${anchored
+        ? "absolute right-0 top-[calc(100%+12px)] z-50 w-[min(360px,calc(100vw-32px))] rounded-lg border border-black/10 p-3 dark:border-white/10"
+        : "w-full rounded-lg border border-black/10 p-3 dark:border-white/10"}`}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
@@ -466,7 +463,7 @@ function PublishSuccessPanel({
         <button
           type="button"
           onClick={onDismiss}
-          className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-black/45 transition hover:bg-black/5 dark:text-white/45 dark:hover:bg-white/10"
+          className="glass-button glass-icon inline-flex size-8 shrink-0 items-center justify-center"
           aria-label="Dismiss publish success"
         >
           <X aria-hidden="true" className="size-4" />
@@ -476,7 +473,7 @@ function PublishSuccessPanel({
         <button
           type="button"
           onClick={onCopy}
-          className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-black/10 px-3 text-xs font-medium text-black/70 transition hover:bg-black/[0.04] dark:border-white/12 dark:text-white/70 dark:hover:bg-white/[0.08]"
+          className="glass-button glass-primary inline-flex items-center gap-1.5 border"
         >
           <Copy aria-hidden="true" className="size-3.5" />
           {copyState === "copied" ? "Copied" : "Copy link"}
@@ -485,7 +482,7 @@ function PublishSuccessPanel({
           href={publicUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-black px-3 text-xs font-medium text-white transition hover:bg-black/80 dark:bg-white dark:text-black dark:hover:bg-white/85"
+          className="glass-button glass-primary inline-flex items-center gap-1.5"
         >
           <ExternalLink aria-hidden="true" className="size-3.5" />
           View live
@@ -494,7 +491,7 @@ function PublishSuccessPanel({
           type="button"
           onClick={onConfirmExternal}
           disabled={externalConfirmed}
-          className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-black/10 px-3 text-xs font-medium text-black/70 transition hover:bg-black/[0.04] disabled:opacity-50 dark:border-white/12 dark:text-white/70 dark:hover:bg-white/[0.08]"
+          className="glass-button inline-flex items-center gap-1.5 border"
         >
           {externalConfirmed ? "Marked as shared" : "I shared this outside Plot"}
         </button>

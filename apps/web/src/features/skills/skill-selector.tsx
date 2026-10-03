@@ -67,10 +67,10 @@ export function SkillSelector({ value, onChange, disabled = false }: {
       <summary className="cursor-pointer rounded-lg px-2 py-1.5 text-black/65 hover:bg-black/5 dark:text-white/65 dark:hover:bg-white/5">
         Skills{value.length ? ` · ${value.length} selected` : " · Optional"}
       </summary>
-      <div className="my-2 max-h-64 min-w-64 overflow-auto rounded-xl border border-black/10 bg-white p-3 dark:border-white/10 dark:bg-[#1e1f23]">
+      <div className="glass-card my-2 max-h-64 min-w-64 overflow-auto rounded-xl border border-black/10 p-3 dark:border-white/10">
         <p className="mb-2 text-xs text-black/50 dark:text-white/50">Choose up to 4 writing guides.</p>
         {loading ? <p role="status">Loading skills…</p> : null}
-        {error ? <p role="alert">{error} <button type="button" disabled={saving} onClick={() => setReload((n) => n + 1)} className="underline">Retry</button></p> : null}
+        {error ? <p role="alert">{error} <button type="button" disabled={saving} onClick={() => setReload((n) => n + 1)} className="glass-button underline">Retry</button></p> : null}
         {!loading && !error && !skills.length ? <p>No skills available.</p> : null}
         {skills.map((skill) => (
           <label key={skill.id} className="flex cursor-pointer items-start gap-2 rounded-lg p-2 hover:bg-black/5 dark:hover:bg-white/5">
@@ -81,7 +81,7 @@ export function SkillSelector({ value, onChange, disabled = false }: {
           </label>
         ))}
         <button type="button" disabled={disabled || loading || saving} onClick={() => setCreating(!creating)}
-          className="mt-2 rounded-lg px-2 py-1 text-sm underline disabled:opacity-50">{creating ? "Cancel" : "Create skill"}</button>
+          className="glass-button mt-2 underline">{creating ? "Cancel" : "Create skill"}</button>
         {creating ? (
           <fieldset disabled={disabled || saving} className="mt-3 space-y-2 border-t border-black/10 pt-3 dark:border-white/10">
             <label className="block text-xs">Name
@@ -102,9 +102,9 @@ export function SkillSelector({ value, onChange, disabled = false }: {
                 className="mt-1 block w-full rounded border border-black/15 bg-transparent p-2 dark:border-white/20" />
             </label>
             <p className="text-xs text-black/50 dark:text-white/50">Use lowercase letters, numbers, and hyphens for the name.</p>
-            <button type="button" onClick={() => void createSkill()}
+            <button aria-busy={Boolean(saving)} type="button" onClick={() => void createSkill()}
               disabled={saving || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(draft.name) || !draft.description.trim() || !draft.content.trim()}
-              className="rounded-lg bg-primary px-3 py-2 text-xs text-primary-foreground disabled:opacity-40">{saving ? "Saving…" : "Save skill"}</button>
+              className="glass-button glass-primary">{saving ? "Saving…" : "Save skill"}</button>
           </fieldset>
         ) : null}
       </div>

@@ -102,7 +102,7 @@ export function ArtifactDocumentSurface({
   }
 
   return (
-    <article aria-label="Artifact document surface" className="overflow-hidden rounded-xl border border-black/10 bg-white dark:border-white/10 dark:bg-white/[0.04]">
+    <article aria-label="Artifact document surface" className="glass-card overflow-hidden rounded-xl border border-black/10 dark:border-white/10">
       <header className="flex flex-wrap items-start justify-between gap-4 border-b border-black/[0.07] px-4 py-4 dark:border-white/10 sm:px-6">
         <div className="min-w-0">
           <div className="text-xs font-semibold uppercase tracking-[0.08em] text-black/42 dark:text-white/45">Artifact</div>

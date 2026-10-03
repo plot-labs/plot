@@ -110,19 +110,9 @@ export function WorkspaceSwitcher({
           aria-busy={workspaceLoading}
           aria-expanded={workspaceMenuOpen}
           aria-haspopup="menu"
-          className={cn(
-            collapsed
-              ? "mx-auto flex size-10 items-center justify-center rounded-[12px] border-0 px-0 text-left transition"
-              : "flex h-9 w-full items-center gap-2 rounded-[8px] border px-2 text-left text-[13px] font-semibold transition",
-            collapsed
-              ? workspaceMenuOpen
-                ? "bg-white text-black/82 shadow-sm dark:bg-white/10 dark:text-white"
-                : "hover:bg-white/65 dark:hover:bg-white/10"
-              : workspaceMenuOpen
-                ? "border-black/20 bg-white text-black/82 shadow-sm dark:border-white/16 dark:bg-white/10 dark:text-white"
-                : "border-black/[0.12] bg-white/40 text-black/76 hover:bg-white/65 dark:border-white/12 dark:bg-white/5 dark:text-white/78 dark:hover:bg-white/10",
-            workspaceLoading && "cursor-wait opacity-80",
-          )}
+          className={cn("glass-button glass-icon", collapsed
+              ? "mx-auto flex size-10 items-center justify-center border-0 text-left"
+              : "flex h-9 w-full items-center gap-2 border text-left text-[13px] font-semibold", "", workspaceLoading && "cursor-wait opacity-80")}
         >
           {workspaceLoading ? (
             <span aria-hidden="true" className="size-6 rounded-[7px] bg-black/[0.06] dark:bg-white/[0.08]" />
@@ -145,10 +135,7 @@ export function WorkspaceSwitcher({
           <div
             role="menu"
             aria-label="Workspace menu"
-            className={cn(
-              "absolute z-50 w-[228px] overflow-hidden rounded-[12px] border border-black/[0.08] bg-white text-[13px] text-black/76 shadow-[0_12px_30px_rgb(15_23_42_/_0.1)] dark:border-white/10 dark:bg-[#292a2f] dark:text-white/80",
-              collapsed ? "left-2 top-[48px]" : "left-3 top-[76px]",
-            )}
+            className={cn("glass-layer", "absolute z-50 w-[228px] overflow-hidden rounded-[12px] border border-black/[0.08] text-[13px] text-black/76 dark:border-white/10 dark:text-white/80", collapsed ? "left-2 top-[48px]" : "left-3 top-[76px]")}
           >
             <div className="border-b border-black/[0.08] px-3 pb-1.5 pt-2.5 text-[12px] font-medium text-black/45 dark:border-white/10 dark:text-white/45">
               Workspaces
@@ -170,10 +157,7 @@ export function WorkspaceSwitcher({
                   }}
                   disabled={switchingWorkspaceId !== null}
                   aria-busy={switchingWorkspaceId === workspace.id}
-                  className={cn(
-                    "flex h-9 w-full items-center gap-2 rounded-[8px] px-2 text-left font-medium transition hover:bg-black/[0.04] focus-visible:bg-black/[0.04] focus-visible:outline-none dark:hover:bg-white/10 dark:focus-visible:bg-white/10",
-                    workspace.selected && "bg-black/[0.035] text-black/82 dark:bg-white/[0.07] dark:text-white/88",
-                  )}
+                  className={cn("glass-control", "flex h-9 w-full items-center gap-2 rounded-[8px] px-2 text-left font-medium", workspace.selected && "")}
                 >
                   <WorkspaceAvatar logoUrl={workspace.logoUrl} mark={workspace.mark} variant="menu" />
                   <span className="min-w-0 flex-1 truncate text-[13px]">{workspace.name}</span>
@@ -198,7 +182,7 @@ export function WorkspaceSwitcher({
                   setWorkspaceName("");
                   setWorkspaceCreateError(null);
                 }}
-                className="flex h-9 w-full items-center gap-2.5 rounded-[8px] px-2 text-left text-[13px] font-medium text-black/65 transition hover:bg-black/[0.04] dark:text-white/65 dark:hover:bg-white/10"
+                className="glass-button flex w-full items-center gap-2.5 text-left"
               >
                 <Plus className="size-5 shrink-0" />
                 Create workspace
@@ -210,7 +194,7 @@ export function WorkspaceSwitcher({
 
       {creatingWorkspace && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/20 p-4 backdrop-blur-[2px] dark:bg-black/45"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/25 p-4 backdrop-blur-[2px] dark:bg-black/55"
           onMouseDown={() => {
             setCreatingWorkspace(false);
             setWorkspaceCreateError(null);
@@ -220,7 +204,7 @@ export function WorkspaceSwitcher({
             role="dialog"
             aria-modal="true"
             aria-labelledby="create-workspace-title"
-            className="w-full max-w-[380px] rounded-[16px] border border-black/[0.1] bg-white p-6 text-black/85 shadow-[0_18px_50px_rgb(15_23_42_/_0.16)] dark:border-white/12 dark:bg-[#292a2f] dark:text-white/88"
+            className="glass-layer w-full max-w-[380px] rounded-[16px] border border-black/[0.1] p-6 text-black/85 dark:border-white/12 dark:text-white/88"
             onMouseDown={(event) => event.stopPropagation()}
           >
             <h2 id="create-workspace-title" className="font-display text-[24px] leading-none tracking-normal">Create workspace</h2>
@@ -246,14 +230,14 @@ export function WorkspaceSwitcher({
                     setCreatingWorkspace(false);
                     setWorkspaceCreateError(null);
                   }}
-                  className="h-9 rounded-[9px] px-3 text-[13px] font-medium text-black/55 transition hover:bg-black/[0.05] dark:text-white/58 dark:hover:bg-white/10"
+                  className="glass-button"
                 >
                   Cancel
                 </button>
-                <button
+                <button aria-busy={Boolean(isCreatingWorkspace)}
                   type="submit"
                   disabled={!workspaceName.trim() || isCreatingWorkspace}
-                  className="h-9 rounded-[9px] bg-[#ef3f2c] px-3.5 text-[13px] font-medium text-white transition hover:bg-[#dc3424] disabled:cursor-not-allowed disabled:opacity-45"
+                  className="glass-button glass-primary disabled:cursor-not-allowed"
                 >
                   {isCreatingWorkspace ? "Creating…" : "Create workspace"}
                 </button>

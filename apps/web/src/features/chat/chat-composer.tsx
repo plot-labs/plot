@@ -161,9 +161,6 @@ export function ChatComposer({
     return true;
   }
 
-  const sendBtnClass =
-    "bg-primary text-primary-foreground dark:bg-[#f4f4f5] dark:text-[#18181b] dark:hover:bg-white dark:active:bg-white disabled:opacity-30 dark:disabled:opacity-20";
-
   if (isCenter) {
     return (
       <div id={id} className="w-full">
@@ -177,7 +174,7 @@ export function ChatComposer({
             ariaLabel="Chat message"
             sendLabel="Send message"
             disabled={isSendDisabled}
-            sendButtonClassName={sendBtnClass}
+            busy={busy}
             skills={skills}
             selectedSkillIds={skillIds}
             onSelectedSkillIdsChange={setSkillIds}
@@ -214,7 +211,7 @@ export function ChatComposer({
           ariaLabel="Chat message"
           sendLabel="Send message"
           disabled={isSendDisabled}
-          sendButtonClassName={sendBtnClass}
+          busy={busy}
           skills={skills}
           selectedSkillIds={skillIds}
           onSelectedSkillIdsChange={setSkillIds}

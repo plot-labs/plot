@@ -170,10 +170,10 @@ export function MagicAuthForm({ mode }: MagicAuthFormProps) {
             {message ? <p className="text-sm text-emerald-700">{message}</p> : null}
           </div>
 
-          <button
+          <button aria-busy={Boolean(loading)}
             type="submit"
             disabled={loading}
-            className="flex h-11 w-full items-center justify-center gap-2 rounded-full bg-[#191919] px-6 text-base font-medium tracking-[-0.015em] text-white shadow-[0_2px_5px_rgba(0,0,0,0.1)] transition-[background-color,box-shadow,transform] hover:-translate-y-0.5 hover:bg-black hover:shadow-[0_5px_10px_rgba(0,0,0,0.16)] focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[#191919] disabled:pointer-events-none disabled:opacity-50"
+            className="glass-button glass-primary flex w-full items-center justify-center gap-2 tracking-[-0.015em]"
           >
             {loading ? <LoaderCircle className="size-4 animate-spin" aria-hidden="true" /> : null}
             {loading ? "Checking…" : "Continue to Plot"}
@@ -181,11 +181,11 @@ export function MagicAuthForm({ mode }: MagicAuthFormProps) {
         </form>
 
         <div className="mt-4 grid gap-2">
-          <button
+          <button aria-busy={Boolean(loading)}
             type="button"
             onClick={() => void resendCode()}
             disabled={loading}
-            className="flex h-10 w-full items-center justify-center rounded-full border border-black/12 bg-white px-4 text-sm font-medium text-black/65 transition-colors hover:border-black/20 hover:text-black focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[#191919] disabled:pointer-events-none disabled:opacity-50"
+            className="glass-button flex w-full items-center justify-center border"
           >
             {loading ? "Sending…" : "Resend code"}
           </button>
@@ -198,7 +198,7 @@ export function MagicAuthForm({ mode }: MagicAuthFormProps) {
               setMessage(null);
             }}
             disabled={loading}
-            className="text-sm text-black/45 underline underline-offset-4 hover:text-black/70 disabled:pointer-events-none disabled:opacity-50"
+            className="glass-button underline underline-offset-4"
           >
             Use a different email
           </button>
@@ -241,10 +241,10 @@ export function MagicAuthForm({ mode }: MagicAuthFormProps) {
         </div>
       </div>
 
-      <button
+      <button aria-busy={Boolean(loading)}
         type="submit"
         disabled={loading}
-        className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-[#191919] px-6 text-base font-medium tracking-[-0.015em] text-white shadow-[0_2px_5px_rgba(0,0,0,0.1)] transition-[background-color,box-shadow,transform] hover:-translate-y-0.5 hover:bg-black hover:shadow-[0_5px_10px_rgba(0,0,0,0.16)] focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[#191919] disabled:pointer-events-none disabled:opacity-50"
+        className="glass-button glass-primary mt-4 flex w-full items-center justify-center gap-2 tracking-[-0.015em]"
       >
         {loading ? <LoaderCircle className="size-4 animate-spin" aria-hidden="true" /> : null}
         {loading ? "Sending…" : "Email me a sign-in code"}

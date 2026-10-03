@@ -64,14 +64,11 @@ export function ProfileMenu({
 
   return (
     <div ref={profileMenuRef} className={cn(
-      "relative border-t border-black/[0.06] py-3 dark:border-white/10",
+      "relative z-50 border-t border-black/[0.06] py-3 dark:border-white/10",
       collapsed ? "px-2" : "px-3",
     )}>
       {profileMenuOpen && (
-        <div className={cn(
-          "absolute bottom-[58px] z-50 rounded-[10px] border border-black/[0.08] bg-white p-2 text-[13px] text-black/80 shadow-[0_12px_34px_rgb(15_23_42_/_0.14)] dark:border-white/10 dark:bg-[#2a2b30] dark:text-white/85",
-          collapsed ? "left-2 w-[228px]" : "left-3 right-3",
-        )}>
+        <div className={cn("glass-layer", "absolute bottom-[58px] z-50 rounded-[10px] border border-black/[0.08] p-2 text-[13px] text-black/80 dark:border-white/10 dark:text-white/85", collapsed ? "left-2 w-[228px]" : "left-3 right-3")}>
           <div className="flex items-center justify-between gap-3 px-2 py-2">
             <div className="font-medium">Theme</div>
             <div
@@ -91,12 +88,7 @@ export function ProfileMenu({
                     aria-checked={active}
                     aria-label={option.label}
                     onClick={() => onThemeChange(option.value)}
-                    className={cn(
-                      "inline-flex size-8 items-center justify-center rounded-[6px] transition",
-                      active
-                        ? "bg-white text-black shadow-sm dark:bg-[#3a3b40] dark:text-white"
-                        : "text-black/35 hover:text-black/65 dark:text-white/35 dark:hover:text-white/70",
-                    )}
+                    className="glass-control inline-flex size-8 items-center justify-center rounded-[6px]"
                   >
                     <Icon className="size-4" />
                   </button>
@@ -108,7 +100,7 @@ export function ProfileMenu({
           <Link
             href="/settings/account"
             onClick={() => setProfileMenuOpen(false)}
-            className="flex w-full items-center gap-2 rounded-[8px] px-2 py-2 text-left transition hover:bg-black/[0.04] dark:hover:bg-white/10"
+            className="glass-control flex w-full items-center justify-start gap-2 rounded-[8px] px-2 py-2 text-left"
           >
             <SettingsIcon />
             Account settings
@@ -127,7 +119,7 @@ export function ProfileMenu({
                 window.location.assign("/sign-in");
               }
             }}
-            className="flex w-full items-center gap-2 rounded-[8px] px-2 py-2 text-left transition hover:bg-black/[0.04] dark:hover:bg-white/10"
+            className="glass-control flex w-full items-center justify-start gap-2 rounded-[8px] px-2 py-2 text-left"
           >
             <LogOut className="size-4 text-black/45 dark:text-white/45" />
             Sign out
@@ -143,10 +135,7 @@ export function ProfileMenu({
         }}
         aria-expanded={profileMenuOpen}
         aria-haspopup="menu"
-        className={cn(
-          "flex w-full items-center gap-2 rounded-[16px] py-1 text-left transition hover:bg-black/[0.04] dark:hover:bg-white/10",
-          collapsed ? "justify-center px-0" : "px-1",
-        )}
+        className={cn("glass-control", "flex w-full items-center gap-2 rounded-[16px] py-1 text-left", collapsed ? "justify-center px-0" : "justify-start px-1")}
       >
         {account?.user.id ? (
           <UserAvatar userId={account.user.id} size={collapsed ? 36 : 32} />

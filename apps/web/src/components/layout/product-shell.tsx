@@ -84,7 +84,7 @@ function MobileProductNavigation({ pathname }: { pathname: string }) {
       className="flex h-[49px] shrink-0 items-center gap-1 border-b border-black/[0.08] bg-white px-2 py-2 text-xs dark:border-white/10 dark:bg-[#111113] lg:hidden"
     >
       <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
-      {settingsActive && <Link href="/home" className="shrink-0 rounded-lg px-2 py-1.5 font-medium">Back to Home</Link>}
+      {settingsActive && <Link href="/home" className="glass-button shrink-0">Back to Home</Link>}
       {(settingsActive ? settingsNavigationItems : productNavigationItems).map(({ href, label }) => {
         const active = navigationPath(pathname) === href || pathname.startsWith(`${href}/`);
         return (
@@ -92,12 +92,7 @@ function MobileProductNavigation({ pathname }: { pathname: string }) {
             key={href}
             href={href}
             aria-current={active ? "page" : undefined}
-            className={cn(
-              "shrink-0 rounded-[8px] px-2 py-1.5 font-medium transition",
-              active
-                ? "bg-[#eef0f3] text-black dark:bg-white/12 dark:text-white"
-                : "text-black/55 hover:bg-black/[0.04] dark:text-white/55 dark:hover:bg-white/10",
-            )}
+            className={cn("glass-control", "shrink-0 rounded-[8px] px-2 py-1.5 font-medium", "")}
           >
             {label}
           </Link>
@@ -110,12 +105,7 @@ function MobileProductNavigation({ pathname }: { pathname: string }) {
         aria-label="Workspace settings"
         title="Workspace settings"
         aria-current={settingsActive ? "page" : undefined}
-        className={cn(
-          "ml-auto inline-flex size-8 shrink-0 items-center justify-center rounded-[8px] transition",
-          settingsActive
-            ? "bg-[#eef0f3] text-black dark:bg-white/12 dark:text-white"
-            : "text-black/55 hover:bg-black/[0.04] dark:text-white/55 dark:hover:bg-white/10",
-        )}
+        className={cn("glass-control", "ml-auto inline-flex size-8 shrink-0 items-center justify-center rounded-[8px]", "")}
       >
         <HugeiconsIcon
           icon={Settings02Icon}

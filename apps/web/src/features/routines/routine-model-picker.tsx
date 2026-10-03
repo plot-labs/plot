@@ -219,7 +219,7 @@ export function RoutineModelPicker({
         ) return;
         setOpenPicker(null);
       }}
-      className="relative divide-y divide-black/[0.06] rounded-[12px] border border-black/10 bg-white dark:divide-white/[0.06] dark:border-white/12 dark:bg-white/[0.04]"
+      className="glass-card relative divide-y divide-black/[0.06] rounded-[12px] border border-black/10 dark:divide-white/[0.06] dark:border-white/12"
     >
       <div ref={modelRowRef} className="relative flex min-h-[44px] items-center justify-between px-3.5 py-2 text-[13px]">
         <span className="font-normal text-black/75 dark:text-white/80">Model</span>
@@ -237,7 +237,7 @@ export function RoutineModelPicker({
             event.preventDefault();
             openModelList();
           }}
-          className="inline-flex max-w-[75%] items-center gap-1.5 rounded-[6px] px-2 py-1 font-normal text-black/75 outline-none transition hover:bg-black/[0.04] hover:text-black focus-visible:ring-2 focus-visible:ring-black/15 disabled:cursor-not-allowed disabled:opacity-50 dark:text-white/80 dark:hover:bg-white/[0.08] dark:hover:text-white dark:focus-visible:ring-white/15"
+          className="glass-control inline-flex max-w-[75%] items-center gap-1.5 rounded-[6px] px-2 py-1 font-normal outline-none disabled:cursor-not-allowed"
         >
           <span className="truncate">{selectedModel.label}</span>
           <HugeiconsIcon icon={ArrowDown01Icon} size={14} color="currentColor" strokeWidth={1.5} aria-hidden="true" className={`shrink-0 text-black/40 transition dark:text-white/42 ${openPicker === "model" ? "rotate-180" : ""}`} />
@@ -253,7 +253,7 @@ export function RoutineModelPicker({
             aria-activedescendant={`${modelListId}-option-${activeModelIndex}`}
             onKeyDown={(event) => handleListKeyDown(event, "model")}
             style={{ top: 8, left: 8 }}
-            className="fixed z-[100] w-[230px] max-w-[calc(100vw-16px)] max-h-[min(360px,70vh)] overflow-y-auto rounded-[12px] border border-black/10 bg-white p-1.5 shadow-[0_14px_40px_rgb(15_23_42_/_0.14)] dark:border-white/12 dark:bg-[#202125] dark:shadow-black/40"
+            className="glass-layer fixed z-[100] w-[230px] max-w-[calc(100vw-16px)] max-h-[min(360px,70vh)] overflow-y-auto rounded-[12px] border border-black/10 p-1.5 dark:border-white/12"
           >
             {models.map((model, index) => {
               const isSelected = model.id === value;
@@ -268,7 +268,7 @@ export function RoutineModelPicker({
                   aria-selected={isSelected}
                   onClick={() => selectModel(model)}
                   onPointerMove={() => setActiveModelIndex(index)}
-                  className={`flex w-full items-center justify-between gap-2 rounded-[9px] px-2.5 py-2 text-left text-[13px] outline-none transition ${isSelected ? "bg-[#eef1f4] text-black/88 dark:bg-white/[0.08] dark:text-white/92" : "text-black/72 hover:bg-black/[0.04] dark:text-white/75 dark:hover:bg-white/[0.07]"} ${isActive ? "ring-2 ring-inset ring-black/15 dark:ring-white/15" : ""}`}
+                  className={`glass-control flex w-full items-center justify-between gap-2 rounded-[9px] px-2.5 py-2 text-left text-[13px] outline-none  ${isActive ? "ring-2 ring-inset ring-black/15 dark:ring-white/15" : ""}`}
                 >
                   <span className="min-w-0 truncate font-medium">{model.label}</span>
                   {isSelected ? <HugeiconsIcon icon={Tick02Icon} size={16} color="currentColor" strokeWidth={1.5} className="shrink-0 text-black/65 dark:text-white/75" aria-hidden="true" /> : null}
@@ -297,7 +297,7 @@ export function RoutineModelPicker({
               event.preventDefault();
               openEffortList();
             }}
-            className="inline-flex items-center gap-1.5 rounded-[6px] px-2 py-1 font-normal text-black/75 outline-none transition hover:bg-black/[0.04] hover:text-black focus-visible:ring-2 focus-visible:ring-black/15 disabled:cursor-not-allowed disabled:opacity-50 dark:text-white/80 dark:hover:bg-white/[0.08] dark:hover:text-white dark:focus-visible:ring-white/15"
+            className="glass-control inline-flex items-center gap-1.5 rounded-[6px] px-2 py-1 font-normal outline-none disabled:cursor-not-allowed"
           >
             <span>{selectedEffort.label}</span>
             <HugeiconsIcon icon={ArrowDown01Icon} size={14} color="currentColor" strokeWidth={1.5} aria-hidden="true" className={`shrink-0 text-black/40 transition dark:text-white/42 ${openPicker === "effort" ? "rotate-180" : ""}`} />
@@ -313,7 +313,7 @@ export function RoutineModelPicker({
               aria-activedescendant={`${effortListId}-option-${activeEffortIndex}`}
               onKeyDown={(event) => handleListKeyDown(event, "effort")}
               style={{ top: 8, left: 8 }}
-              className="fixed z-[100] w-[190px] max-w-[calc(100vw-16px)] max-h-[min(300px,60vh)] overflow-y-auto rounded-[12px] border border-black/10 bg-white p-1.5 shadow-[0_14px_40px_rgb(15_23_42_/_0.14)] dark:border-white/12 dark:bg-[#202125] dark:shadow-black/40"
+              className="glass-layer fixed z-[100] w-[190px] max-w-[calc(100vw-16px)] max-h-[min(300px,60vh)] overflow-y-auto rounded-[12px] border border-black/10 p-1.5 dark:border-white/12"
             >
               {effortOptions.map((option, index) => {
                 const isSelected = option.value === selectedEffort.value;
@@ -328,7 +328,7 @@ export function RoutineModelPicker({
                     aria-selected={isSelected}
                     onClick={() => selectEffort(option.value)}
                     onPointerMove={() => setActiveEffortIndex(index)}
-                    className={`flex w-full items-center justify-between gap-2 rounded-[9px] px-2.5 py-2 text-left text-[13px] outline-none transition ${isSelected ? "bg-[#eef1f4] text-black/88 dark:bg-white/[0.08] dark:text-white/92" : "text-black/72 hover:bg-black/[0.04] dark:text-white/75 dark:hover:bg-white/[0.07]"} ${isActive ? "ring-2 ring-inset ring-black/15 dark:ring-white/15" : ""}`}
+                    className={`glass-control flex w-full items-center justify-between gap-2 rounded-[9px] px-2.5 py-2 text-left text-[13px] outline-none  ${isActive ? "ring-2 ring-inset ring-black/15 dark:ring-white/15" : ""}`}
                   >
                     <span className="font-medium">{option.label}</span>
                     {isSelected ? <HugeiconsIcon icon={Tick02Icon} size={16} color="currentColor" strokeWidth={1.5} className="shrink-0 text-black/65 dark:text-white/75" aria-hidden="true" /> : null}

@@ -204,7 +204,7 @@ export function WorkspaceGeneral() {
         </header>
 
         {workspace && !isLoading && workspace.plan ? (
-          <section className="mt-8 overflow-hidden rounded-[14px] border border-black/[0.09] bg-white shadow-[0_1px_2px_rgb(15_23_42_/_0.025)] dark:border-white/10 dark:bg-white/[0.045]" aria-labelledby="workspace-plan-heading">
+          <section className="glass-card mt-8 overflow-hidden rounded-[14px] border border-black/[0.09] dark:border-white/10" aria-labelledby="workspace-plan-heading">
             <div className="border-b border-black/[0.07] px-5 py-5 dark:border-white/[0.08] sm:px-6">
               <h2 id="workspace-plan-heading" className="text-[15px] font-semibold text-black/82 dark:text-white/86">Plan and access</h2>
               <p className="mt-1 text-[13px] leading-5 text-black/48 dark:text-white/48">
@@ -236,11 +236,11 @@ export function WorkspaceGeneral() {
 				{canManageSubscription ? (
 					<div className="border-t border-black/[0.07] pt-4 dark:border-white/[0.08]">
 						<p>Manage payment details, invoices, or cancellation in Polar.</p>
-						<button
+						<button aria-busy={Boolean(isSubscriptionPortalLoading)}
 							type="button"
 							onClick={openSubscriptionPortal}
 							disabled={isSubscriptionPortalLoading}
-							className="mt-3 inline-flex h-9 items-center gap-2 rounded-[9px] bg-black px-3.5 text-[13px] font-medium text-white transition hover:bg-black/82 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:cursor-wait disabled:opacity-60 dark:bg-white dark:text-black dark:hover:bg-white/88 dark:focus-visible:ring-white/30"
+							className="glass-button glass-primary mt-3 inline-flex items-center gap-2 disabled:cursor-wait"
 						>
 							{isSubscriptionPortalLoading ? <LoaderCircle className="size-4 animate-spin" aria-hidden="true" /> : <ExternalLink className="size-4" aria-hidden="true" />}
 							Manage subscription
@@ -251,11 +251,11 @@ export function WorkspaceGeneral() {
 				{canStartSubscription ? (
                 <div className="border-t border-black/[0.07] pt-4 dark:border-white/[0.08]">
 								<p>{workspace.entitlementStatus === "revoked" ? "Subscribe again to receive recurring AI credits." : "Start a Founding subscription to receive recurring AI credits. New workspaces do not receive free signup credits."}</p>
-                  <button
+                  <button aria-busy={Boolean(isSubscriptionCheckoutLoading)}
                     type="button"
                     onClick={startSubscriptionCheckout}
                     disabled={isSubscriptionCheckoutLoading}
-                    className="mt-3 inline-flex h-9 items-center gap-2 rounded-[9px] bg-black px-3.5 text-[13px] font-medium text-white transition hover:bg-black/82 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:cursor-wait disabled:opacity-60 dark:bg-white dark:text-black dark:hover:bg-white/88 dark:focus-visible:ring-white/30"
+                    className="glass-button glass-primary mt-3 inline-flex items-center gap-2 disabled:cursor-wait"
                   >
                     {isSubscriptionCheckoutLoading ? <LoaderCircle className="size-4 animate-spin" aria-hidden="true" /> : <ExternalLink className="size-4" aria-hidden="true" />}
                     {workspace.entitlementStatus === "revoked" ? "Subscribe again" : "Subscribe to Founding"}
@@ -267,7 +267,7 @@ export function WorkspaceGeneral() {
           </section>
         ) : null}
 
-        <section className="mt-8 overflow-hidden rounded-[14px] border border-black/[0.09] bg-white shadow-[0_1px_2px_rgb(15_23_42_/_0.025)] dark:border-white/10 dark:bg-white/[0.045]" aria-labelledby="workspace-profile-heading">
+        <section className="glass-card mt-8 overflow-hidden rounded-[14px] border border-black/[0.09] dark:border-white/10" aria-labelledby="workspace-profile-heading">
           <div className="border-b border-black/[0.07] px-5 py-5 dark:border-white/[0.08] sm:px-6">
             <h2 id="workspace-profile-heading" className="text-[15px] font-semibold text-black/82 dark:text-white/86">Workspace profile</h2>
             <p className="mt-1 text-[13px] leading-5 text-black/48 dark:text-white/48">This is how your workspace appears across Plot.</p>
@@ -300,7 +300,7 @@ export function WorkspaceGeneral() {
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
                         disabled={!canEdit}
-                        className="inline-flex h-8 items-center gap-2 rounded-[8px] border border-black/10 px-3 text-[13px] font-medium text-black/65 transition hover:bg-black/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 dark:border-white/12 dark:text-white/65 dark:hover:bg-white/10 dark:focus-visible:ring-white/25"
+                        className="glass-button inline-flex items-center gap-2 border"
                       >
                         <HugeiconsIcon icon={ImageAdd01Icon} size={15} color="currentColor" strokeWidth={1.5} aria-hidden="true" />
                         Upload image
@@ -312,7 +312,7 @@ export function WorkspaceGeneral() {
                           disabled={!canEdit}
                           aria-label="Remove workspace logo"
                           title="Remove workspace logo"
-                          className="inline-flex size-8 items-center justify-center rounded-[8px] text-black/42 transition hover:bg-black/[0.04] hover:text-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white/80 dark:focus-visible:ring-white/25"
+                          className="glass-button glass-icon inline-flex size-8 items-center justify-center"
                         >
                           <Trash2 className="size-4" aria-hidden="true" />
                         </button>
@@ -339,11 +339,11 @@ export function WorkspaceGeneral() {
             {message && <p role="status" className="text-sm text-black/55 dark:text-white/55">{message}</p>}
 
             <div className="flex justify-end border-t border-black/[0.07] pt-5 dark:border-white/[0.08]">
-              <button
+              <button aria-busy={Boolean(isSaving)}
                 type="button"
                 onClick={() => { void save(); }}
                 disabled={isLoading || isSaving || !canEdit || !dirty || !name.trim()}
-                className="inline-flex h-9 items-center gap-2 rounded-[9px] bg-[#ef3f2c] px-4 text-sm font-semibold text-white shadow-[0_3px_10px_rgb(239_63_44_/_0.18)] transition hover:bg-[#dc3828] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ef3f2c]/35 disabled:cursor-not-allowed disabled:opacity-45"
+                className="glass-button glass-primary min-w-[132px] inline-flex items-center gap-2 disabled:cursor-not-allowed"
               >
                 {isSaving && <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />}
                 Save changes
@@ -353,7 +353,7 @@ export function WorkspaceGeneral() {
         </section>
 
         {workspace && !isLoading ? (
-          <section className="mt-6 overflow-hidden rounded-[14px] border border-black/[0.09] bg-white shadow-[0_1px_2px_rgb(15_23_42_/_0.025)] dark:border-white/10 dark:bg-white/[0.045]" aria-labelledby="public-changelog-heading">
+          <section className="glass-card mt-6 overflow-hidden rounded-[14px] border border-black/[0.09] dark:border-white/10" aria-labelledby="public-changelog-heading">
             <div className="border-b border-black/[0.07] px-5 py-5 dark:border-white/[0.08] sm:px-6">
               <h2 id="public-changelog-heading" className="text-[15px] font-semibold text-black/82 dark:text-white/86">Public changelog</h2>
               <p className="mt-1 text-[13px] leading-5 text-black/48 dark:text-white/48">Share this URL after you publish changelog entries from an artifact.</p>
@@ -361,7 +361,7 @@ export function WorkspaceGeneral() {
             <div className="space-y-4 px-5 py-6 sm:px-6">
               <div>
                 <p className="text-[13px] font-medium text-black/72 dark:text-white/76">Public changelog URL</p>
-                <p className="mt-2 truncate rounded-[9px] border border-black/10 bg-[#f8fafc] px-3 py-2.5 text-sm text-black/68 dark:border-white/12 dark:bg-white/[0.04] dark:text-white/72" title={changelogUrl}>
+                <p className="glass-card mt-2 truncate rounded-[9px] border border-black/10 px-3 py-2.5 text-sm text-black/68 dark:border-white/12 dark:text-white/72" title={changelogUrl}>
                   {changelogUrl}
                 </p>
                 <p className="mt-2 text-[12px] leading-5 text-black/45 dark:text-white/45">
@@ -372,7 +372,7 @@ export function WorkspaceGeneral() {
                 <button
                   type="button"
                   onClick={() => { void copyChangelogUrl(); }}
-                  className="inline-flex h-8 items-center gap-2 rounded-[8px] border border-black/10 px-3 text-[13px] font-medium text-black/65 transition hover:bg-black/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 dark:border-white/12 dark:text-white/65 dark:hover:bg-white/10 dark:focus-visible:ring-white/25"
+                  className="glass-button glass-primary inline-flex items-center gap-2 border"
                 >
                   <Copy className="size-3.5" aria-hidden="true" />
                   {copyState === "copied" ? "Copied" : "Copy link"}
@@ -381,7 +381,7 @@ export function WorkspaceGeneral() {
                   href={changelogUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex h-8 items-center gap-2 rounded-[8px] bg-[#ef3f2c] px-3 text-[13px] font-semibold text-white shadow-[0_3px_10px_rgb(239_63_44_/_0.18)] transition hover:bg-[#dc3828] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ef3f2c]/35"
+                  className="glass-button glass-primary inline-flex items-center gap-2"
                 >
                   <ExternalLink className="size-3.5" aria-hidden="true" />
                   View live

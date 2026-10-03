@@ -60,7 +60,7 @@ export function PublicCitationChip({ references }: PublicCitationChipProps) {
           id={popoverId}
           role="dialog"
           aria-label="Citation sources"
-          className="absolute bottom-[calc(100%+8px)] left-0 z-20 w-[min(320px,calc(100vw-48px))] rounded-xl border border-black/10 bg-white p-3 text-left shadow-[0_14px_40px_rgba(0,0,0,0.16)]"
+          className="glass-layer absolute bottom-[calc(100%+8px)] left-0 z-20 w-[min(320px,calc(100vw-48px))] rounded-xl border border-black/10 p-3 text-left"
         >
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-black/42">Sources</p>
           <ol className="mt-2 space-y-1.5">
@@ -70,7 +70,7 @@ export function PublicCitationChip({ references }: PublicCitationChipProps) {
                   href={citation.originalUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-start gap-2 rounded-lg px-2 py-1.5 text-sm text-black/72 transition hover:bg-black/[0.04] hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ef3f2c]/30"
+                  className="glass-button flex items-start gap-2"
                 >
                   <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-black/[0.05] font-sans text-[10px] font-semibold text-black/55">
                     {number}

@@ -78,7 +78,7 @@ export function ArtifactCanvasWorkspace({ artifact, client, onSaveArtifact }: Ar
         <nav aria-label="Breadcrumb" className="flex min-w-0 flex-1 items-center gap-1.5 font-sans text-[13px] leading-none">
           <Link
             href="/contents"
-            className="shrink-0 rounded-sm font-medium text-black/50 transition hover:text-black/72 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15 focus-visible:ring-offset-2 dark:text-white/50 dark:hover:text-white/75"
+            className="glass-button shrink-0"
           >
             Contents
           </Link>
@@ -96,12 +96,12 @@ export function ArtifactCanvasWorkspace({ artifact, client, onSaveArtifact }: Ar
             aria-haspopup="menu"
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen((open) => !open)}
-            className="inline-flex size-9 items-center justify-center rounded-[8px] text-[#18181b] transition hover:bg-black/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15 dark:text-white dark:hover:bg-white/10"
+            className="glass-button glass-icon inline-flex size-9 items-center justify-center"
           >
             <Ellipsis aria-hidden="true" className="size-4" />
           </button>
           {menuOpen ? (
-            <div role="menu" aria-label="Artifact actions" className="absolute right-0 top-full z-40 mt-2 w-[204px] rounded-[8px] border border-black/10 bg-white p-2 text-[13px] text-[#18181b] shadow-[0_8px_20px_rgba(0,0,0,0.1)] dark:border-white/10 dark:bg-[#242529] dark:text-white">
+            <div role="menu" aria-label="Artifact actions" className="glass-layer absolute right-0 top-full z-40 mt-2 w-[204px] rounded-[8px] border border-black/10 p-2 text-[13px] text-[#18181b] dark:border-white/10 dark:text-white">
               <MenuButton icon={Library} onClick={openSources}>Sources</MenuButton>
             </div>
           ) : null}
@@ -171,7 +171,7 @@ export function ArtifactCanvasWorkspace({ artifact, client, onSaveArtifact }: Ar
 
 function MenuButton({ icon: Icon, children, onClick }: { icon: typeof Copy; children: string; onClick: () => void }) {
   return (
-    <button type="button" role="menuitem" onClick={onClick} className="flex h-8 w-full items-center gap-2 rounded-[4px] px-2.5 text-left transition hover:bg-black/[0.04] focus-visible:bg-black/[0.04] focus-visible:outline-none dark:hover:bg-white/10 dark:focus-visible:bg-white/10">
+    <button type="button" role="menuitem" onClick={onClick} className="glass-control flex h-8 w-full items-center gap-2 rounded-[4px] px-2.5 text-left">
       <Icon aria-hidden="true" className="size-4" />
       {children}
     </button>
@@ -222,10 +222,10 @@ function ArtifactDrawer({ open, title, subtitle, triggerRef, onClose, children }
   return (
     <div className="fixed inset-y-0 left-0 right-0 z-50 lg:left-[252px]">
       <button type="button" aria-label={`Close ${title.toLowerCase()}`} onClick={onClose} className="absolute inset-0 bg-black/[0.06]" />
-      <aside ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={`artifact-${title.toLowerCase()}-title`} tabIndex={-1} className="absolute inset-y-0 right-0 flex w-full max-w-[420px] flex-col overflow-y-auto rounded-l-[12px] border border-black/10 bg-white px-6 py-6 shadow-[-8px_0_24px_rgba(0,0,0,0.06)] outline-none dark:border-white/10 dark:bg-[#202024]">
+      <aside ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={`artifact-${title.toLowerCase()}-title`} tabIndex={-1} className="glass-layer absolute inset-y-0 right-0 flex w-full max-w-[420px] flex-col overflow-y-auto rounded-l-[12px] border border-black/10 px-6 py-6 outline-none dark:border-white/10">
         <header className="flex h-10 shrink-0 items-center justify-between">
           <h2 id={`artifact-${title.toLowerCase()}-title`} className="font-display text-[24px] leading-8 text-black/88 dark:text-white/90">{title}</h2>
-          <button type="button" aria-label="Close" onClick={onClose} className="inline-flex size-8 items-center justify-center rounded-md text-black/50 transition hover:bg-black/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/15 dark:text-white/55 dark:hover:bg-white/10">
+          <button type="button" aria-label="Close" onClick={onClose} className="glass-button glass-icon inline-flex size-8 items-center justify-center">
             <X aria-hidden="true" className="size-4" />
           </button>
         </header>
