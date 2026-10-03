@@ -37,17 +37,16 @@ export function ProductShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [theme, setTheme] = useState<ProductTheme>("system");
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [systemDark, setSystemDark] = useState(() => {
-    if (typeof window === "undefined") {
-      return false;
-    }
-
-    return window.matchMedia("(prefers-color-scheme: dark)").matches;
-  });
+  const [systemDark, setSystemDark] = useState(false);
 
   useEffect(() => {
-    // Read after mount so the server render and the first client render match.
-    queueMicrotask(() => setTheme(readStoredTheme()));
+    // Read the stored choice and the OS preference after mount so the server render and the
+    // first client render match (both start as light).
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    queueMicrotask(() => {
+      setTheme(readStoredTheme());
+      setSystemDark(mediaQuery.matches);
+    });
   }, []);
 
   function changeTheme(next: ProductTheme) {
