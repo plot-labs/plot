@@ -232,6 +232,17 @@ describe("ChatWorkspace", () => {
 		expect(screen.getByText("Plot")).toBeVisible();
 	});
 
+	it("links a repository connection failure to Connections", async () => {
+		mocks.search = "chat=chat-1&agent=agent-1";
+		mocks.listSessions.mockResolvedValue([chat]);
+		const failed = agentRun({ status: "FAILED", failureCode: "GITHUB_ACCESS_DENIED" });
+		mocks.listSessionAgentRuns.mockResolvedValue([failed]);
+		mocks.getChatAgentRun.mockResolvedValue(failed);
+
+		render(<ChatWorkspace />);
+		expect(await screen.findByRole("link", { name: "Open Connections" })).toHaveAttribute("href", "/settings/integrations");
+	});
+
 	it("renders a completed assistant text response without an artifact", async () => {
 		mocks.search = "chat=chat-1";
 		mocks.listSessions.mockResolvedValue([chat]);

@@ -3,6 +3,7 @@
 import {Message, MessageContent, MessageActions} from "@/components/ai-elements/message";
 import {Tool, ToolHeader, type ToolState} from "@/components/ai-elements/tool";
 import { ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
+import Link from "next/link";
 import type { ReactNode } from "react";
 
 import type { ChatAgentRun, ChatCitation, ChatResponseVersion, RetryEligibility } from "@plot/api-client";
@@ -150,12 +151,20 @@ export function AgentActivityDetail({
       </Message>
       {error ? <ErrorNotice message={error} /> : null}
       {(isFailed || isNeedsConnection) && !error ? (
-        <ErrorNotice message={isNeedsConnection ? `Repository connection required. Reconnect repository access to proceed.` : "Plot could not complete this response. It remains available in chat history."} />
+        <ErrorNotice
+          message={isNeedsConnection ? "Repository connection required. Reconnect repository access to proceed." : "Plot could not complete this response. It remains available in chat history."}
+          action={isNeedsConnection ? <Link href="/settings/integrations" className="font-medium underline underline-offset-4">Open Connections</Link> : null}
+        />
       ) : null}
     </section>
   );
 }
 
-export function ErrorNotice({ message }: { message: string }) {
-  return <div role="alert" className="mt-3 rounded-xl border border-rose-300/60 bg-rose-50 px-4 py-3 text-sm text-rose-900 dark:border-rose-400/25 dark:bg-rose-400/[0.08] dark:text-rose-200">{message}</div>;
+export function ErrorNotice({ message, action }: { message: string; action?: ReactNode }) {
+  return (
+    <div role="alert" className="mt-3 rounded-xl border border-rose-300/60 bg-rose-50 px-4 py-3 text-sm text-rose-900 dark:border-rose-400/25 dark:bg-rose-400/[0.08] dark:text-rose-200">
+      {message}
+      {action ? <span className="ml-2">{action}</span> : null}
+    </div>
+  );
 }
