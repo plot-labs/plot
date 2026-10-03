@@ -71,6 +71,12 @@ export function Navigation() {
 
           {/* Desktop CTA */}
           <div className="hidden md:flex items-center gap-4">
+            <Link
+              href="/sign-in"
+              className="text-sm text-foreground/70 hover:text-foreground transition-colors duration-300"
+            >
+              Sign in
+            </Link>
             <a
               className="glass-button glass-primary inline-flex items-center justify-center"
               href="#waitlist"
@@ -136,6 +142,13 @@ export function Navigation() {
           }`}
           style={{ transitionDelay: isMobileMenuOpen ? "300ms" : "0ms" }}
           >
+            <Link
+              href="/sign-in"
+              className="glass-button inline-flex w-full items-center justify-center"
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              Sign in
+            </Link>
             <a
               className="glass-button glass-primary inline-flex w-full items-center justify-center"
               href="#waitlist"
