@@ -45,6 +45,7 @@ function ChatWorkspaceContent() {
   if (activeChat) {
     return (
       <ChatActiveWorkspace
+        key={activeChat.id}
         activeChat={activeChat}
         requestedAgentId={requestedAgentId}
         requestedArtifactId={requestedArtifactId}

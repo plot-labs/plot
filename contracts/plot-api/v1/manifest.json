@@ -783,5 +783,33 @@
       "errorFixture": null,
       "enumDomains": {}
     }
+  ],
+  "streams": [
+    {
+      "id": "chat.run.stream",
+      "surface": "chat",
+      "clientMethod": "streamChatAgentRun",
+      "method": "GET",
+      "routeTemplate": "/agent-runs/{id}/stream",
+      "requiredHeaders": [
+        "accept",
+        "x-plot-workspace-id"
+      ],
+      "contentType": "text/event-stream",
+      "event": "snapshot",
+      "successFixture": "fixtures/chat-run-snapshot.json",
+      "heartbeatSeconds": 15,
+      "rotationSeconds": 45,
+      "terminalStatuses": [
+        "SUCCEEDED",
+        "FAILED"
+      ],
+      "errorEventCodes": [
+        "ACCESS_DENIED",
+        "NOT_FOUND",
+        "STREAM_UNAVAILABLE"
+      ],
+      "initialErrorContentType": "application/json"
+    }
   ]
 }

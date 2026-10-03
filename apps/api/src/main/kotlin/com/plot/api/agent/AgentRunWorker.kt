@@ -39,6 +39,7 @@ class AgentRunWorker(
 	private val snapshots: AgentExecutionSnapshotPersistence,
 	private val executionPersistence: AgentRunExecutionPersistence,
 	private val runtime: AgentRuntime,
+	private val chatProgress: com.plot.api.chat.ChatRunProgressPersistence,
 	private val tools: ReadOnlyAgentTools,
 	private val artifactWorkflowRunService: ArtifactWorkflowRunService,
 	private val artifactRunPersistence: ArtifactRunPersistence,
@@ -183,15 +184,38 @@ class AgentRunWorker(
 		val reasoningEffort = settings.path("reasoningEffort").takeIf { it.isTextual }?.stringValue()
 		val host = object : AgentRuntimeHost {
 			var activeInvocationId: UUID? = null
+			var progressEpoch: Long? = null
+			val progressText = StringBuilder()
+			var lastProgressWrite = 0L
 			override val finished: Boolean get() = finished
 			override val modelTimeoutMillis: Long get() = minOf(
 				properties.claimTimeout.toMillis() / 2,
 				budget.maxRunDurationMillis - Duration.between(run.startedAt ?: clock.instant(), clock.instant()).toMillis(),
 			).coerceAtLeast(1)
+			override fun onText(delta: String) {
+				val epoch = progressEpoch ?: return
+				require(progressText.length + delta.length <= 40_000)
+				progressText.append(delta)
+				val now = System.nanoTime()
+				if (lastProgressWrite == 0L || now - lastProgressWrite >= 250_000_000) {
+					chatProgress.updateAgent(claim, epoch, "RESPONDING", progressText.toString())
+					lastProgressWrite = now
+				}
+			}
+			private fun startProgress() {
+				if (run.origin != AgentRunOrigin.CHAT) return
+				progressEpoch = chatProgress.beginAgent(claim)
+				progressText.setLength(0)
+				lastProgressWrite = 0
+			}
+			private fun flushProgress(phase: String = "RESPONDING", text: String = progressText.toString()) {
+				progressEpoch?.let { chatProgress.updateAgent(claim, it, phase, text) }
+			}
 			override fun beforeModel() {
 				checkAccess()
 				if (!creditService.enabled) {
 					executionPersistence.beginModelDecision(claim, budget.maxModelCalls)
+					startProgress()
 					return
 				}
 				recoverSettlementBeforeModel()
@@ -201,8 +225,10 @@ class AgentRunWorker(
 				} catch (failure: AgentModelInvocationBlockedException) {
 					throw AiCreditControlException("AI_CREDIT_SETTLEMENT_PENDING", true, "Workspace AI usage is pending", failure)
 				}
+				startProgress()
 			}
 			override fun afterModel(usage: ProviderUsage) {
+				flushProgress()
 				if (!creditService.enabled) return
 				val invocationId = activeInvocationId
 					?: throw AiCreditControlException("AI_USAGE_UNKNOWN", false, "AI invocation identity is unavailable")
@@ -219,6 +245,7 @@ class AgentRunWorker(
 				activeInvocationId = null
 			}
 			override fun modelFailed(failure: AgentDecisionException) {
+				flushProgress()
 				activeInvocationId?.let(executionPersistence::markModelInvocationAborted)
 				activeInvocationId = null
 			}
@@ -343,6 +370,7 @@ class AgentRunWorker(
 					return objectMapper.writeValueAsString(mapOf("error" to failure.message))
 				}
 				val creationAction = decision.action == AgentDecisionAction.CREATE_ARTIFACT
+				flushProgress(if (creationAction) "WRITING" else "RESEARCHING", "")
 				val step = executionPersistence.reserveStep(claim, AgentStepRequest(
 					agentRunId = run.id, sequence = current.currentStep,
 					kind = if (creationAction) AgentStepKind.ARTIFACT_HANDOFF else AgentStepKind.READ_TOOL,

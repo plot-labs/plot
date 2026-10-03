@@ -83,6 +83,7 @@ data class AgentRuntimeResult(
 
 interface AgentRuntimeHost {
 	fun context(): AgentDecisionRequest
+	fun onText(delta: String) = Unit
 	fun beforeModel()
 	fun afterModel(usage: ProviderUsage) = Unit
 	fun modelFailed(failure: AgentDecisionException) = Unit

@@ -137,7 +137,7 @@ export function AgentActivityDetail({
   const responseText = run?.responseText?.trim() || "";
   const isFailed = run?.status === "FAILED";
   const isNeedsConnection = Boolean(run?.failureCode && CONNECTION_ERROR_CODES.has(run.failureCode));
-  const isComplete = Boolean(linkedArtifact || run?.status === "SUCCEEDED");
+  const isComplete = Boolean(run?.status === "SUCCEEDED");
   const citationCount = citations?.length ?? 0;
   const citationSources = (citations ?? []).slice(0, 2).map((citation) => ({
     id: citation.id,
@@ -161,7 +161,7 @@ export function AgentActivityDetail({
           className="w-full min-w-0 max-w-full"
         >
           <p className="whitespace-pre-wrap text-sm leading-6 text-black/75 dark:text-white/78">
-            {responseText || (linkedArtifact ? "The artifact is ready below." : instruction ? agentProgressLabel(status) : "Plot is preparing the request…")}
+            {responseText || (linkedArtifact && isComplete ? "The artifact is ready below." : instruction ? agentProgressLabel(status) : "Plot is preparing the request…")}
           </p>
 
 

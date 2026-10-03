@@ -148,8 +148,17 @@ class OpenRouterWireContractTest {
         server.createContext("/api/v1/chat/completions") { exchange ->
             calls.incrementAndGet()
             bodies.add(exchange.requestBody.readAllBytes().decodeToString())
-            val bytes = (if (status == 200) response else """{"error":{"message":"private-source","code":$status}}""").toByteArray()
-            exchange.responseHeaders.add("Content-Type", "application/json")
+            val streaming = mapper.readTree(bodies.last()).path("stream").booleanValue()
+            val payload = if (streaming && status == 200) {
+                val parsed = mapper.readTree(response)
+                val choice = parsed.path("choices")[0]
+                val message = choice.path("message")
+                val delta: Any = if (message.has("tool_calls")) mapOf("tool_calls" to message.path("tool_calls").mapIndexed { index, call -> mapOf("index" to index, "id" to call.path("id").stringValue(), "type" to "function", "function" to call.path("function")) }) else message
+                val chunk = mapper.writeValueAsString(mapOf("id" to parsed.path("id").stringValue(), "created" to 1, "model" to parsed.path("model").stringValue(), "choices" to listOf(mapOf("index" to 0, "delta" to delta, "finish_reason" to choice.path("finish_reason").stringValue())), "usage" to parsed.path("usage")))
+                "data: $chunk\n\ndata: [DONE]\n\n"
+            } else response
+            val bytes = (if (status == 200) payload else """{"error":{"message":"private-source","code":$status}}""").toByteArray()
+            exchange.responseHeaders.add("Content-Type", if (streaming && status == 200) "text/event-stream" else "application/json")
             exchange.sendResponseHeaders(status, bytes.size.toLong())
             exchange.responseBody.use { it.write(bytes) }
         }

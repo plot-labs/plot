@@ -430,6 +430,22 @@ export interface RoutineAgentRunDetail {
   steps: RoutineAgentStep[];
 }
 
+export interface ChatRunSnapshot {
+  runId: string;
+  epoch: number;
+  revision: number;
+  phase: "QUEUED" | "RESPONDING" | "RESEARCHING" | "WRITING" | "REVIEWING" | "REWRITING" | "COMPLETE" | "FAILED";
+  responseText: string;
+  draftParagraphs: string[];
+  status: RoutineAgentRunStatus;
+  artifactId: string | null;
+  failureCode: string | null;
+}
+
+export interface ChatRunStreamOptions extends RequestOptions {
+  onSnapshot: (snapshot: ChatRunSnapshot) => void;
+}
+
 export interface ChatAgentRun {
   skills?: SkillSnapshot[];
   id: string;
@@ -716,6 +732,7 @@ export interface PlotApiClient {
   listChatModelCapabilities(options?: RequestOptions): Promise<ChatModelCapability[]>;
   createChatAgentRun(input: CreateChatAgentRunInput, idempotencyKey: string, options?: RequestOptions): Promise<ChatAgentRun>;
   getChatAgentRun(id: string, options?: RequestOptions): Promise<ChatAgentRun>;
+  streamChatAgentRun(id: string, options: ChatRunStreamOptions): Promise<void>;
   listSessionAgentRuns(id: string, options?: RequestOptions): Promise<ChatAgentRun[]>;
   listChatTurns(sessionId: string, options?: { selectedVersionId?: string } & RequestOptions): Promise<ChatTurn[]>;
   getChatResponseVersion(versionId: string, options?: RequestOptions): Promise<ChatResponseVersion>;
@@ -741,9 +758,9 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
   const fetcher = options.fetch ?? globalThis.fetch;
   const workspaceId = () => typeof options.workspaceId === "function" ? options.workspaceId() : options.workspaceId;
 
-  async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  async function fetchResponse(path: string, init: RequestInit = {}): Promise<Response> {
     const resolvedWorkspaceId = workspaceId();
-    const response = await fetcher(`${baseUrl}${path}`, {
+    return fetcher(`${baseUrl}${path}`, {
       ...init,
       cache: "no-store",
       headers: {
@@ -753,6 +770,10 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
         ...init.headers,
       },
     });
+  }
+
+  async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+    const response = await fetchResponse(path, init);
     const payload = await parsePayload(response);
     if (!response.ok) {
       const error = isRecord(payload) ? payload : {};
@@ -907,6 +928,20 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
     getChatAgentRun: (id, requestOptions) => request(`/agent-runs/${encodeURIComponent(id)}`, {
       signal: requestOptions?.signal,
     }),
+    streamChatAgentRun: async (id, streamOptions) => {
+      const response = await fetchResponse(`/agent-runs/${encodeURIComponent(id)}/stream`, {
+        signal: streamOptions.signal,
+        headers: { Accept: "text/event-stream" },
+      });
+      if (!response.ok) {
+        const payload = await parsePayload(response);
+        const error = isRecord(payload) ? payload : {};
+        throw new PlotApiError(response.status, typeof error.error === "string" ? error.error : "API_ERROR",
+          typeof error.message === "string" ? error.message : "Chat stream request failed",
+          isRecord(error.details) ? error.details : null, typeof error.resourceId === "string" ? error.resourceId : null);
+      }
+      await consumeChatStream(response, id, streamOptions);
+    },
     listSessionAgentRuns: (id, requestOptions) => request(`/sessions/${encodeURIComponent(id)}/agent-runs`, {
       signal: requestOptions?.signal,
     }),
@@ -1059,4 +1094,95 @@ async function parsePayload(response: Response): Promise<unknown> {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+async function consumeChatStream(response: Response, runId: string, options: ChatRunStreamOptions): Promise<void> {
+  const invalid = () => new PlotApiError(503, "STREAM_UNAVAILABLE", "Chat stream was interrupted");
+  if (response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() !== "text/event-stream" || !response.body) {
+    await response.body?.cancel();
+    throw invalid();
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  let buffer = "";
+  let event = "";
+  let data: string[] = [];
+  let recordSize = 0;
+  let terminal = false;
+  const abort = () => { void reader.cancel().catch(() => undefined); };
+  options.signal?.addEventListener("abort", abort, { once: true });
+  function checkAbort() { if (options.signal?.aborted) throw new DOMException("Chat stream aborted", "AbortError"); }
+  function line(value: string) {
+    recordSize += value.length;
+    if (recordSize > 1_000_000) throw invalid();
+    if (value === "") {
+      if (data.length && (event === "snapshot" || event === "error")) {
+        let parsed: unknown;
+        try { parsed = JSON.parse(data.join("\n")); } catch { throw invalid(); }
+        if (event === "error") {
+          const code = isRecord(parsed) ? parsed.code : null;
+          throw new PlotApiError(code === "ACCESS_DENIED" ? 403 : code === "NOT_FOUND" ? 404 : 503,
+            typeof code === "string" ? code : "STREAM_UNAVAILABLE", "Chat stream unavailable");
+        }
+        const snapshot = readChatSnapshot(parsed, runId);
+        if (!snapshot) throw invalid();
+        options.onSnapshot(snapshot);
+        terminal = snapshot.status === "SUCCEEDED" || snapshot.status === "FAILED";
+      }
+      event = ""; data = []; recordSize = 0;
+    } else if (!value.startsWith(":")) {
+      const colon = value.indexOf(":");
+      const field = colon < 0 ? value : value.slice(0, colon);
+      const content = colon < 0 ? "" : value.slice(colon + 1).replace(/^ /, "");
+      if (field === "event") event = content;
+      else if (field === "data") data.push(content);
+    }
+  }
+  function drain(final = false) {
+    if (final && buffer.endsWith("\r")) buffer += "\n";
+    let match: RegExpExecArray | null;
+    while (!terminal && (match = /\r\n|\n|\r(?!$)/.exec(buffer))) {
+      line(buffer.slice(0, match.index));
+      buffer = buffer.slice(match.index + match[0].length);
+    }
+    if (buffer.length + recordSize > 1_000_000) throw invalid();
+  }
+  try {
+    checkAbort();
+    while (!terminal) {
+      const chunk = await reader.read();
+      checkAbort();
+      if (chunk.done) {
+        try { buffer += decoder.decode(); } catch { throw invalid(); }
+        drain(true);
+        if (!terminal && (buffer.length || data.length || event)) throw invalid();
+        return;
+      }
+      try { buffer += decoder.decode(chunk.value, { stream: true }); } catch { throw invalid(); }
+      drain();
+    }
+  } finally {
+    options.signal?.removeEventListener("abort", abort);
+    await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
+  }
+}
+
+function readChatSnapshot(value: unknown, runId: string): ChatRunSnapshot | null {
+  if (!isRecord(value) || value.runId !== runId ||
+    !Number.isSafeInteger(value.epoch) || (value.epoch as number) < 0 ||
+    !Number.isSafeInteger(value.revision) || (value.revision as number) < 0 ||
+    !["QUEUED", "RESPONDING", "RESEARCHING", "WRITING", "REVIEWING", "REWRITING", "COMPLETE", "FAILED"].includes(String(value.phase)) ||
+    !["QUEUED", "RUNNING", "SUCCEEDED", "FAILED"].includes(String(value.status)) ||
+    typeof value.responseText !== "string" || value.responseText.length > 40_000 ||
+    !Array.isArray(value.draftParagraphs) || !value.draftParagraphs.every((p) => typeof p === "string") ||
+    JSON.stringify(value.draftParagraphs).length > 800_000 ||
+    !(value.artifactId === null || typeof value.artifactId === "string") ||
+    !(value.failureCode === null || typeof value.failureCode === "string")) return null;
+  return {
+    runId, epoch: value.epoch as number, revision: value.revision as number,
+    phase: value.phase as ChatRunSnapshot["phase"], responseText: value.responseText,
+    draftParagraphs: [...value.draftParagraphs] as string[], status: value.status as ChatRunSnapshot["status"],
+    artifactId: value.artifactId as string | null, failureCode: value.failureCode as string | null,
+  };
 }

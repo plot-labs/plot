@@ -567,9 +567,11 @@ class ArtifactWorkflowExecutionPersistence(
 		lease: ModelInvocationLease,
 		state: ArtifactWorkflowState,
 		metadata: ModelCallMetadata?,
+		onCheckpoint: () -> Unit = {},
 	) {
 		transactionExecutor.execute {
 			requireClaim(claim)
+			onCheckpoint()
 			val now = clock.instant()
 			requireExactlyOne(sqlExecutor.update(
 				"""
@@ -705,14 +707,15 @@ class ArtifactWorkflowExecutionPersistence(
 		objectMapper.writeValueAsString(mapOf("chain" to chain))
 	}
 
-	private fun requireClaim(claim: ClaimedArtifactWorkflowRun) {
+	// Exclude lifecycle/reclaim writes while allowing handoff FK checks of immutable generation keys.
+	internal fun requireClaim(claim: ClaimedArtifactWorkflowRun) {
 		val ownedRun = sqlExecutor.query(
 			"""
 			select id
 			from generation_runs
 			where workspace_id = ? and id = ? and claimed_by = ? and transition_version = ?
 			  and status in ('QUEUED', 'WRITING', 'REVIEWING', 'REWRITING')
-			for update
+			for no key update
 			""".trimIndent(),
 			{ rs, _ -> rs.getObject("id", UUID::class.java) },
 			claim.workspaceId,

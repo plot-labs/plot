@@ -49,6 +49,7 @@ export function ChatActiveWorkspace({
   const canEdit = entitlement?.capabilities.edit ?? true;
   const [mobilePanel, setMobilePanel] = useState<"assistant" | "history" | null>(null);
   const [artifactPanelOpen, setArtifactPanelOpen] = useState(false);
+  const [generationOpenedRunId, setGenerationOpenedRunId] = useState<string | null>(null);
   const [artifactHistoryOpen, setArtifactHistoryOpen] = useState(false);
   const [artifactSaveRequestToken, setArtifactSaveRequestToken] = useState(0);
   const artifactPanelRef = usePanelRef();
@@ -79,11 +80,29 @@ export function ChatActiveWorkspace({
         onAgentArtifact,
     onAdmitted,
   });
+  const selectedProgress = agent.progress?.runId === agent.selectedActivity?.id ? agent.progress : null;
+  const hasDocumentProgress = Boolean(selectedProgress && (selectedProgress.draftParagraphs.length ||
+    ["WRITING", "REVIEWING", "REWRITING"].includes(selectedProgress.phase) || (selectedProgress.status === "SUCCEEDED" && selectedProgress.artifactId)));
   const document = useChatArtifactDocument({
     requestedArtifactId,
-    selectedActivityArtifactId: agent.selectedActivity?.artifactId ?? null,
+    selectedActivityArtifactId: agent.selectedActivity?.status === "SUCCEEDED" ? agent.selectedActivity.artifactId : null,
+    retryFinalRead: selectedProgress?.status === "SUCCEEDED" && Boolean(selectedProgress.artifactId),
+    retainCurrentArtifact: Boolean((selectedProgress || agent.isPendingRun) && generationOpenedRunId !== agent.agentRun?.id),
   });
-  const desktopArtifactVisible = desktop && artifactPanelOpen && Boolean(document.currentArtifact);
+  const showPreview = hasDocumentProgress && document.currentArtifact?.id !== selectedProgress?.artifactId &&
+    (!document.currentArtifact || generationOpenedRunId === selectedProgress?.runId);
+  const hasPanelContent = Boolean(document.currentArtifact || hasDocumentProgress);
+  const desktopArtifactVisible = desktop && artifactPanelOpen && hasPanelContent;
+  const openGeneratedDocument = () => {
+    if (selectedProgress) setGenerationOpenedRunId(selectedProgress.runId);
+    setArtifactPanelOpen(true);
+  };
+  const previewAction = hasDocumentProgress ? (
+    <button ref={artifactTriggerRef} type="button" aria-controls="artifact-editor-panel" aria-expanded={artifactPanelOpen && showPreview}
+      onClick={openGeneratedDocument} className="rounded-xl border border-black/10 px-4 py-3 text-left text-sm dark:border-white/10">
+      <Eye aria-hidden="true" className="mr-2 inline size-3.5" />Open generated document
+    </button>
+  ) : undefined;
   const shownArtifact = document.historicalArtifact?.artifact ?? document.currentArtifact;
   const artifactMetrics = useMemo(() => {
     if (!shownArtifact) return null;
@@ -106,11 +125,25 @@ export function ChatActiveWorkspace({
 
   useEffect(() => {
     if (!requestedArtifactId || document.artifactLoading || !document.currentArtifact) return;
-    if (artifactAutoOpenedRef.current === requestedArtifactId) return;
+    if (artifactAutoOpenedRef.current === requestedArtifactId || (selectedProgress && artifactAutoOpenedRef.current === selectedProgress.runId)) return;
     artifactAutoOpenedRef.current = requestedArtifactId;
     setArtifactPanelOpen(true);
-  }, [document.artifactLoading, document.currentArtifact, requestedArtifactId]);
+  }, [document.artifactLoading, document.currentArtifact, requestedArtifactId, selectedProgress]);
 
+
+  useEffect(() => {
+    if (!hasDocumentProgress || !selectedProgress || artifactAutoOpenedRef.current === selectedProgress.runId) return;
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      artifactAutoOpenedRef.current = selectedProgress.runId;
+      if (!document.currentArtifact) {
+        setGenerationOpenedRunId(selectedProgress.runId);
+        setArtifactPanelOpen(true);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [document.currentArtifact, hasDocumentProgress, selectedProgress]);
   useEffect(() => {
     const media = window.matchMedia("(min-width: 1024px)");
     const update = () => setDesktop(media.matches);
@@ -211,25 +244,29 @@ export function ChatActiveWorkspace({
                           onRetry={isLatestTurn ? () => void agent.retryResponse(selectedVersion.id) : undefined}
                           retrying={agent.retrying}
                           retryEligibility={isLatestTurn ? selectedVersion.retryEligibility : { eligible: false, reason: "NOT_LATEST_TURN" }}
-                          artifactAction={document.currentArtifact && selectedVersion.artifactId === document.currentArtifact.id ? (
+                          artifactAction={selectedVersion.agentRunId === selectedProgress?.runId && showPreview ? previewAction : selectedVersion.status === "SUCCEEDED" && selectedVersion.artifactId ? (
                             <button
-                              ref={artifactTriggerRef}
-                              id="artifact-preview"
+                              ref={selectedVersion.agentRunId === agent.selectedActivity?.id ? artifactTriggerRef : undefined}
+                              id={`artifact-preview-${selectedVersion.id}`}
                               type="button"
                               aria-controls="artifact-editor-panel"
-                              aria-expanded={artifactPanelOpen}
-                              onClick={() => setArtifactPanelOpen(true)}
+                              aria-expanded={artifactPanelOpen && selectedVersion.artifactId === document.currentArtifact?.id}
+                              onClick={() => {
+                                setGenerationOpenedRunId(agent.agentRun?.id ?? null);
+                                agent.selectVersion(turn.id, selectedVersion.id);
+                                setArtifactPanelOpen(true);
+                              }}
                               className="flex w-full items-center justify-between gap-4 rounded-xl border border-black/[0.08] bg-white/70 px-4 py-3 text-left transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/[0.07] dark:focus-visible:ring-white/25"
                             >
                               <span className="min-w-0 truncate text-sm font-medium text-black/82 dark:text-white/85">
-                                {document.currentArtifact.title || "Generated artifact"}
+                                {selectedVersion.artifact?.title || (selectedVersion.artifactId === document.currentArtifact?.id ? document.currentArtifact.title : "Generated artifact")}
                               </span>
                               <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-black/[0.035] px-3 py-1.5 text-xs font-medium text-black/50 dark:bg-white/[0.06] dark:text-white/55">
                                 <Eye aria-hidden="true" className="size-3.5" />
                                 Open artifact
                               </span>
                             </button>
-                          ) : undefined}
+                          ) : selectedVersion.agentRunId === selectedProgress?.runId ? previewAction : undefined}
                         />
                       )}
                     </div>
@@ -249,7 +286,7 @@ export function ChatActiveWorkspace({
                     busy={agent.agentBusy}
                     error={agent.agentError}
                     instruction={agent.agentInstruction}
-                    artifactAction={document.currentArtifact ? (
+                    artifactAction={showPreview ? previewAction : document.currentArtifact ? (
                       <button
                         ref={artifactTriggerRef}
                         id="artifact-preview"
@@ -267,7 +304,7 @@ export function ChatActiveWorkspace({
                           Open artifact
                         </span>
                       </button>
-                    ) : undefined}
+                    ) : previewAction}
                   />
                 </>
               )}
@@ -333,8 +370,7 @@ export function ChatActiveWorkspace({
           variant="dock"
           placeholder={agent.isPendingRun ? "Response in progress. Wait for it to finish..." : "Ask a follow-up..."}
           onSubmit={(message, skills, model, reasoningEffort) => {
-            setArtifactPanelOpen(false);
-            void agent.submitMessage(message, document.clearArtifactSelection, skills, model, reasoningEffort);
+            void agent.submitMessage(message, undefined, skills, model, reasoningEffort);
           }}
           busy={document.artifactLoading || agent.agentBusy || agent.activitiesLoading || agent.isPendingRun}
           canGenerate={canGenerate && !agent.isPendingRun}
@@ -347,18 +383,19 @@ export function ChatActiveWorkspace({
       </ResizablePanel>
       <ResizableHandle aria-label="Resize artifact document" disabled={!desktopArtifactVisible} className={`w-px bg-black/[0.08] dark:bg-white/10 ${desktopArtifactVisible ? "flex" : "hidden"}`}/>
         <ResizablePanel id="artifact-pane" panelRef={artifactPanelRef} defaultSize="0%" minSize={desktopArtifactVisible ? `${panelMinimum}px` : "0%"} maxSize={desktop ? "1200px" : "100%"} groupResizeBehavior="preserve-pixel-size" style={{overflow:"visible",height:"100%"}} onResize={(size, _id, previousSize) => {if (desktopArtifactVisible && size.inPixels > 0 && (previousSize?.inPixels ?? 0) > 0) artifactSizeRef.current = size.inPixels;}}>
-      {artifactPanelOpen && document.currentArtifact ? (
+      {artifactPanelOpen && hasPanelContent ? (
         <aside
           id="artifact-editor-panel"
           aria-label="Artifact document panel"
+          aria-busy={showPreview && selectedProgress?.status !== "FAILED"}
           className="absolute inset-0 z-30 flex h-full min-w-0 flex-col border-l border-black/[0.08] bg-[#fbfbf8] dark:border-white/10 dark:bg-[#16171a] lg:relative"
         >
           <header className="relative z-20 flex min-h-16 shrink-0 items-center justify-between gap-3 bg-[#fbfbf8]/85 px-4 backdrop-blur-xl dark:bg-[#16171a]/85">
             <div className="flex items-center gap-1">
-              {!document.historicalArtifact && shownArtifact ? (
+              {!showPreview && !document.historicalArtifact && shownArtifact ? (
                 <ExportDialog pack={shownArtifact} client={plotApiClient} presentation="copy" />
               ) : null}
-              <button
+              {!showPreview && document.currentArtifact ? <button
                 ref={artifactHistoryTriggerRef}
                 type="button"
                 aria-label="Artifact history"
@@ -369,15 +406,16 @@ export function ChatActiveWorkspace({
               >
                 <History aria-hidden="true" className="size-3.5" />
                 History
-              </button>
+              </button> : null}
+              {showPreview ? <span role="status" className="text-sm text-black/60 dark:text-white/60">{selectedProgress?.status === "FAILED" ? "생성 실패 · 마지막 초안" : selectedProgress?.status === "SUCCEEDED" ? "최종 문서 불러오는 중" : "생성 중"}</span> : null}
             </div>
             <div className="flex items-center gap-2">
               <span className="hidden sm:inline">
                 <ArtifactEditorStatus>
-                  {artifactSaveStateLabel(document.saveState, Boolean(document.historicalArtifact))}
+                  {showPreview ? "읽기 전용 초안" : artifactSaveStateLabel(document.saveState, Boolean(document.historicalArtifact))}
                 </ArtifactEditorStatus>
               </span>
-              {!document.historicalArtifact && canEdit ? (
+              {!showPreview && document.currentArtifact && !document.historicalArtifact && canEdit ? (
                 <ArtifactSaveDraftButton
                   saving={document.saveState === "saving"}
                   onClick={() => setArtifactSaveRequestToken((value) => value + 1)}
@@ -397,7 +435,7 @@ export function ChatActiveWorkspace({
               </button>
             </div>
           </header>
-          {shownArtifact ? (
+          {!showPreview && shownArtifact ? (
             <div className="relative z-[9] shrink-0 bg-[#fbfbf8] px-6 pb-3 pt-1 dark:bg-[#18181b]">
               <div className="truncate text-[16px] font-medium leading-[22px] text-black/72 dark:text-white/76">{shownArtifact.title || "Generated artifact"}</div>
               {artifactMetrics ? (
@@ -408,7 +446,12 @@ export function ChatActiveWorkspace({
           <div role="region" aria-label="Artifact document body" className="relative min-h-0 flex-1 overflow-y-auto bg-[#fbfbf8] dark:bg-[#18181b]">
             <div aria-hidden="true" className="pointer-events-none sticky top-0 z-10 -mb-1.5 h-1.5 w-full bg-gradient-to-b from-[#fbfbf8] to-transparent dark:from-[#18181b]" />
             <div className="flex items-start justify-center">
-              <ArtifactDocumentSurface
+              {showPreview ? (
+                <div className="w-full max-w-[760px] space-y-5 px-6 py-8 text-sm leading-7 text-black/75 dark:text-white/78">
+                  {selectedProgress?.draftParagraphs.map((body, index) => <p key={index} className="whitespace-pre-wrap">{body}</p>)}
+                  {!selectedProgress?.draftParagraphs.length ? <p>문서 초안을 준비하고 있습니다…</p> : null}
+                </div>
+              ) : document.currentArtifact ? <ArtifactDocumentSurface
                 presentation="workspace"
                 pack={document.currentArtifact}
                 historical={document.historicalArtifact}
@@ -421,10 +464,10 @@ export function ChatActiveWorkspace({
                 onDraftChange={document.onDraftChange}
                 onSaveArtifact={document.onSaveArtifact}
                 onPackChange={document.onPackChange}
-              />
+              /> : null}
             </div>
           </div>
-          {artifactHistoryOpen ? (
+          {!showPreview && artifactHistoryOpen && document.currentArtifact ? (
             <aside
               id="artifact-history-drawer"
               aria-label="Artifact history drawer"

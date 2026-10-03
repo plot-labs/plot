@@ -530,3 +530,36 @@ it("allows only the exact autonomy activity route and rejects legacy autonomy ro
   }
   expect(fetcher).toHaveBeenCalledTimes(1);
 });
+
+
+describe("Chat stream proxy", () => {
+  it("forwards the exact stream route without buffering and cancels upstream on close", async () => {
+    const cancelled = vi.fn();
+    let upstream!: ReadableStreamDefaultController<Uint8Array>;
+    const body = new ReadableStream<Uint8Array>({ start(c) { upstream = c; c.enqueue(new TextEncoder().encode(": initial\n\n")); }, cancel: cancelled });
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(body, { headers: { "Content-Type": "text/event-stream", "Cache-Control": "public, max-age=3600" } }));
+    const id = "00000000-0000-0000-0000-000000000001";
+    const request = new Request(`http://web.test/api/plot/agent-runs/${id}/stream`, { headers: { Accept: "text/event-stream", Authorization: "Bearer forged", "X-Plot-Workspace-Id": id } });
+    const response = await proxyPlotRequest(request, ["agent-runs", id, "stream"], { fetch: fetcher, getSession: async () => authenticatedSession });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store, no-transform");
+    expect(response.headers.get("content-type")).toBe("text/event-stream");
+    const reader = response.body!.getReader();
+    expect(new TextDecoder().decode((await reader.read()).value)).toBe(": initial\n\n");
+    upstream.enqueue(new TextEncoder().encode("event: snapshot\n\n"));
+    expect(new TextDecoder().decode((await reader.read()).value)).toBe("event: snapshot\n\n");
+    await reader.cancel();
+    expect(cancelled).toHaveBeenCalledOnce();
+    const headers = new Headers(fetcher.mock.calls[0]?.[1]?.headers);
+    expect(headers.get("Authorization")).toBe("Bearer workos-access-token");
+    expect(headers.get("Accept")).toBe("text/event-stream");
+    expect(fetcher.mock.calls[0]?.[1]?.signal).toBe(request.signal);
+  });
+
+  it.each([["POST", "stream"], ["GET", "stream/extra"], ["GET", "streams"]])("denies undeclared stream path %s %s", async (method, suffix) => {
+    const fetcher = vi.fn();
+    const response = await proxyPlotRequest(new Request(`http://web.test/api/plot/agent-runs/00000000-0000-0000-0000-000000000001/${suffix}`, { method, headers: { Origin: "http://web.test" } }), ["agent-runs", "00000000-0000-0000-0000-000000000001", ...suffix.split("/")], { fetch: fetcher, getSession: async () => authenticatedSession });
+    expect(response.status).toBe(404);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+});

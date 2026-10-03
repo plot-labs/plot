@@ -96,6 +96,27 @@ class ArtifactWorkflowPhysicalAttemptIntegrationTest {
 	}
 
 	@Test
+	fun unavailableStreamWithKnownUsageSettlesBeforeRetry() {
+		val state = reserve("stream-error-billed")
+		val gateway = RetryGateway(state.evidence.single().id, transientWriterFailures = 1, failedStreamMetadata = true)
+		assertEquals(true, billedWorker(gateway, "stream-error-billed").processOne())
+		assertEquals(1, gateway.writeCalls)
+		assertEquals(1, polarCredits.events.size)
+		assertEquals(1, count("model_invocations", state.runId, "billing_status = 'SETTLED'"))
+	}
+
+	@Test
+	fun unavailableStreamWithUnknownUsageCannotRepeatUnsettledProviderWork() {
+		val state = reserve("stream-error-unknown")
+		val gateway = RetryGateway(state.evidence.single().id, transientWriterFailures = 1, reportedCostUsd = null, failedStreamMetadata = true)
+		assertEquals(true, billedWorker(gateway, "stream-error-unknown").processOne())
+		assertEquals("FAILED", runStatus(state.runId))
+		assertEquals("AI_USAGE_UNKNOWN", runFailure(state.runId))
+		assertEquals(1, count("model_invocations", state.runId, "billing_status = 'USAGE_UNKNOWN'"))
+		assertEquals(0, polarCredits.events.size)
+	}
+
+	@Test
 	fun writerAndReviewerEachSettleOneActualUsageEvent() {
 		val state = reserve("billed-writer-reviewer")
 		val gateway = RetryGateway(state.evidence.single().id, transientWriterFailures = 0)
@@ -627,6 +648,7 @@ private class RetryGateway(
 	private val beforeWriteResult: () -> Unit = {},
 	private val reportedCostUsd: BigDecimal? = BigDecimal("0.000001"),
 	private val malformedWriter: Boolean = false,
+	private val failedStreamMetadata: Boolean = false,
 ) : ArtifactWorkflowModelGateway {
 	var writeCalls: Int = 0
 		private set
@@ -640,6 +662,7 @@ private class RetryGateway(
 			throw ArtifactWorkflowModelException(
 				ModelFailureCode.PROVIDER_UNAVAILABLE,
 				"temporary provider failure",
+				metadata = if (failedStreamMetadata) metadata() else null,
 			)
 		}
 		beforeWriteResult()
