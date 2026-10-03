@@ -233,6 +233,20 @@ describe("ChatWorkspace", () => {
 		expect(screen.getByText("Plot")).toBeVisible();
 	});
 
+	it("offers publishing from the chat document panel for changelogs", async () => {
+		mocks.search = "chat=chat-1&agent=agent-1";
+		mocks.listSessions.mockResolvedValue([chat]);
+		mocks.getArtifact.mockResolvedValue({ ...artifact, contentType: "CHANGELOG" });
+		const succeeded = agentRun({ status: "SUCCEEDED", artifactId: "artifact-1", artifact: artifactSummary });
+		mocks.listSessionAgentRuns.mockResolvedValue([succeeded]);
+		mocks.getChatAgentRun.mockResolvedValue(succeeded);
+
+		render(<ChatWorkspace />);
+		fireEvent.click(await screen.findByText("Open artifact"));
+		const artifactPanel = screen.getByRole("complementary", { name: "Artifact document panel" });
+		expect(await within(artifactPanel).findByRole("button", { name: /Publish changelog/ })).toBeVisible();
+	});
+
 	it("links a repository connection failure to Connections", async () => {
 		mocks.search = "chat=chat-1&agent=agent-1";
 		mocks.listSessions.mockResolvedValue([chat]);

@@ -13,6 +13,7 @@ import { ArtifactDocumentSurface } from "@/features/artifacts/artifact-document-
 import { ArtifactEditorStatus, ArtifactSaveDraftButton, artifactSaveStateLabel } from "@/features/artifacts/artifact-editor-chrome";
 import { ArtifactActionsMenu } from "@/features/artifacts/artifact-actions-menu";
 import { ExportDialog } from "@/features/citations/export-dialog";
+import { PublishDialog } from "@/features/citations/publish-dialog";
 import { ChatComposer } from "@/features/chat/chat-composer";
 import { AgentActivityDetail, ErrorNotice } from "@/features/chat/chat-activity";
 import { chatHref } from "@/features/chat/chat-workspace-utils";
@@ -47,6 +48,8 @@ export function ChatActiveWorkspace({
   const entitlement = useWorkspaceEntitlement();
   const canGenerate = entitlement?.capabilities.generate ?? true;
   const canEdit = entitlement?.capabilities.edit ?? true;
+  const canPublish = entitlement?.capabilities.publish ?? true;
+  const canUnpublish = entitlement?.capabilities.unpublish ?? true;
   const [artifactPanelOpen, setArtifactPanelOpen] = useState(false);
   const [generationOpenedRunId, setGenerationOpenedRunId] = useState<string | null>(null);
   const [artifactSaveRequestToken, setArtifactSaveRequestToken] = useState(0);
@@ -339,6 +342,9 @@ export function ChatActiveWorkspace({
                   saving={document.saveState === "saving"}
                   onClick={() => setArtifactSaveRequestToken((value) => value + 1)}
                 />
+              ) : null}
+              {!showPreview && shownArtifact && (canPublish || (shownArtifact.publication && canUnpublish)) ? (
+                <PublishDialog pack={shownArtifact} client={plotApiClient} onPackChange={document.onPackChange} />
               ) : null}
               <button
                 type="button"
