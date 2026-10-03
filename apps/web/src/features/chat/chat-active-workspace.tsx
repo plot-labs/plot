@@ -361,15 +361,15 @@ export function ChatActiveWorkspace({
             </div>
           </header>
           {!showPreview && shownArtifact ? (
-            <div className="relative z-[9] shrink-0 bg-[#fbfbf8] px-6 pb-3 pt-1 dark:bg-[#18181b]">
+            <div className="relative z-[9] shrink-0 bg-shell-paper px-6 pb-3 pt-1">
               <div className="truncate text-[16px] font-medium leading-[22px] text-black/72 dark:text-white/76">{shownArtifact.title || "Generated content"}</div>
               {artifactMetrics ? (
                 <div className="mt-1 text-[12px] leading-4 text-black/50 dark:text-white/52">{artifactMetrics.characters} characters · {artifactMetrics.words} words</div>
               ) : null}
             </div>
           ) : null}
-          <div role="region" aria-label="Content body" className="relative min-h-0 flex-1 overflow-y-auto bg-[#fbfbf8] dark:bg-[#18181b]">
-            <div aria-hidden="true" className="pointer-events-none sticky top-0 z-10 -mb-1.5 h-1.5 w-full bg-gradient-to-b from-[#fbfbf8] to-transparent dark:from-[#18181b]" />
+          <div role="region" aria-label="Content body" className="relative min-h-0 flex-1 overflow-y-auto bg-shell-paper">
+            <div aria-hidden="true" className="pointer-events-none sticky top-0 z-10 -mb-1.5 h-1.5 w-full bg-gradient-to-b from-shell-paper to-transparent" />
             <div className="flex items-start justify-center">
               {showPreview ? (
                 <div className="w-full max-w-[760px] space-y-5 px-6 py-8 text-sm leading-7 text-black/75 dark:text-white/78">

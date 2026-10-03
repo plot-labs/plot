@@ -64,9 +64,9 @@ function ArtifactsWorkspaceContent() {
     return (
       <div className="h-full min-h-[calc(100dvh-49px)] lg:min-h-0">
         {remoteArtifact ? <GeneratedArtifactDetail key={remoteArtifact.id} artifact={remoteArtifact} /> : remoteArtifactError ? (
-          <div className="flex h-full min-h-[inherit] items-center justify-center bg-[#eef0f3] px-6"><div role="alert" className="max-w-sm rounded-xl border border-rose-300/60 bg-rose-50 p-4 text-sm text-rose-900 dark:border-rose-400/25 dark:bg-rose-400/[0.08] dark:text-rose-200">{remoteArtifactError}</div></div>
+          <div className="flex h-full min-h-[inherit] items-center justify-center bg-shell-canvas px-6"><div role="alert" className="max-w-sm rounded-xl border border-rose-300/60 bg-rose-50 p-4 text-sm text-rose-900 dark:border-rose-400/25 dark:bg-rose-400/[0.08] dark:text-rose-200">{remoteArtifactError}</div></div>
         ) : (
-          <div className="flex h-full min-h-[inherit] items-center justify-center bg-[#eef0f3] text-sm text-black/45 dark:bg-[#18181b] dark:text-white/45">Loading the selected content…</div>
+          <div className="flex h-full min-h-[inherit] items-center justify-center bg-shell-canvas text-sm text-black/45 dark:text-white/45">Loading the selected content…</div>
         )}
       </div>
     );

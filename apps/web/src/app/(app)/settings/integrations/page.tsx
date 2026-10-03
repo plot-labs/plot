@@ -4,7 +4,7 @@ import { IntegrationsWorkspace } from "@/features/integrations/integrations-work
 
 export default function SettingsIntegrationsPage() {
   return (
-    <Suspense fallback={<div className="h-full bg-[#f7f8fa] dark:bg-[#111113]" />}>
+    <Suspense fallback={<div className="h-full bg-shell-workspace" />}>
       <IntegrationsWorkspace />
     </Suspense>
   );

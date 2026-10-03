@@ -425,9 +425,9 @@ export function RoutinesWorkspace() {
   }
 
   return (
-    <div className="h-full overflow-y-auto bg-[#f7f8fa] dark:bg-[#18191d] lg:overflow-hidden">
+    <div className="h-full overflow-y-auto bg-shell-workspace lg:overflow-hidden">
       <div className={createOpen ? "grid min-h-full lg:h-full lg:grid-cols-[minmax(340px,0.88fr)_minmax(0,1.12fr)]" : "min-h-full"}>
-        <section className={createOpen ? "min-w-0 border-b border-black/[0.08] bg-[#f7f8fa] dark:border-white/10 dark:bg-[#18191d] lg:h-full lg:overflow-y-auto lg:border-b-0 lg:border-r" : "mx-auto min-h-full w-full max-w-[760px] bg-[#f7f8fa] dark:bg-[#18191d] lg:h-full lg:overflow-y-auto"} aria-labelledby="routines-heading">
+        <section className={createOpen ? "min-w-0 border-b border-black/[0.08] bg-shell-workspace dark:border-white/10 lg:h-full lg:overflow-y-auto lg:border-b-0 lg:border-r" : "mx-auto min-h-full w-full max-w-[760px] bg-shell-workspace lg:h-full lg:overflow-y-auto"} aria-labelledby="routines-heading">
           <WorkspaceHeader
             id="routines-heading"
             title="Automation"
@@ -518,7 +518,7 @@ export function RoutinesWorkspace() {
           )}
         </section>
 
-        {createOpen && <section ref={createPanelRef} className="min-w-0 bg-[#f7f8fa] dark:bg-[#18191d] lg:h-full lg:overflow-y-auto" aria-labelledby="create-routine-heading">
+        {createOpen && <section ref={createPanelRef} className="min-w-0 bg-shell-workspace lg:h-full lg:overflow-y-auto" aria-labelledby="create-routine-heading">
           <div className="flex min-h-full flex-col">
             <header className="border-b border-black/[0.08] px-6 pb-5 pt-8 dark:border-white/10 sm:px-8">
               <div className="flex items-start justify-between gap-4">

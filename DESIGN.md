@@ -229,9 +229,18 @@ Do not replace workspace serif headings with sans-serif solely to match an older
 
 Global semantic colors are defined in `app/globals.css`. The UI also uses component-specific colors and a second set of surface/ink/line tokens used by the Beautiful UI components.
 
-- Workspace lists: `#f7f8fa` in light mode, `#18191d` in dark mode.
-- Content editor canvas: `#eef0f3`, with a white document surface; dark canvas `#18181b`, document `#202024`.
+- Product surfaces use role tokens from `app/globals.css` (`bg-shell-*` utilities). Do not hard-code these hex values in product pages:
+
+  | Token | Role | Light | Dark |
+  | --- | --- | --- | --- |
+  | `shell-frame` | Product shell and sidebar | `#f6f7f9` | `#202126` |
+  | `shell-workspace` | Workspace lists, settings, onboarding, connections | `#f7f8fa` | `#18191d` |
+  | `shell-canvas` | Content editor canvas and the main panel behind pages | `#eef0f3` | `#18181b` |
+  | `shell-paper` | Chat document panel | `#fbfbf8` | `#18181b` |
+
+- Content editor document surface: white; dark `#202024`.
 - Chat header: `#fbfbf8` at 85% opacity; dark `#16171a` at 85% opacity.
+- Landing, auth and public changelog pages keep their own palettes.
 - Adopted button colors: transparent surfaces with dark text in light mode and light text in dark mode. Primary action emphasis comes from borders and weight.
 - Adopted destructive actions: a light translucent surface with red text and icons; use a faint white surface with lighter red text in dark mode.
 - Public citation accent: `#ef3f2c` on `#fff4f1`. Workspace citations have their own rendering and popover treatment.

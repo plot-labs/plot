@@ -85,7 +85,7 @@ export function WorkspaceCredits() {
     : 0;
 
   return (
-    <div className="h-full overflow-y-auto bg-[#f4f6f8] px-5 py-8 dark:bg-[#101112] sm:px-8 sm:py-10 lg:px-10">
+    <div className="h-full overflow-y-auto bg-shell-workspace px-5 py-8 sm:px-8 sm:py-10 lg:px-10">
       <div className="mx-auto max-w-[760px] pb-16">
         <header className="flex max-w-[760px] items-start justify-between gap-6">
           <div className="max-w-[620px]">

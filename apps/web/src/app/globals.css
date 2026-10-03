@@ -19,6 +19,11 @@
 }
 
 :root {
+  /* Product surfaces by role (see DESIGN.md "Colors and themes"). */
+  --shell-frame: #f6f7f9;
+  --shell-workspace: #f7f8fa;
+  --shell-canvas: #eef0f3;
+  --shell-paper: #fbfbf8;
   --background: oklch(0.985 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -88,6 +93,10 @@
 }
 
 .dark {
+  --shell-frame: #202126;
+  --shell-workspace: #18191d;
+  --shell-canvas: #18181b;
+  --shell-paper: #18181b;
   --page: oklch(0.209 0.004 264.477);
   --canvas: oklch(0.231 0.004 264.487);
   --surface: oklch(0.26 0.006 271.191);
@@ -182,6 +191,11 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  --color-shell-frame: var(--shell-frame);
+  --color-shell-workspace: var(--shell-workspace);
+  --color-shell-canvas: var(--shell-canvas);
+  --color-shell-paper: var(--shell-paper);
 
   /* Beautiful UI @theme inline mappings */
   --color-page: var(--page);

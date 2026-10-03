@@ -4,7 +4,7 @@ import { WorkspaceContentProfile } from "@/features/workspace-settings/workspace
 
 export default function SettingsContentPage() {
   return (
-    <Suspense fallback={<div className="h-full bg-[#f4f6f8] dark:bg-[#101112]" />}>
+    <Suspense fallback={<div className="h-full bg-shell-workspace" />}>
       <WorkspaceContentProfile />
     </Suspense>
   );

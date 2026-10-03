@@ -40,8 +40,8 @@ export function ArtifactCanvasWorkspace({ artifact, client, onSaveArtifact }: Ar
   const closeSources = useCallback(() => setSourcesOpen(false), []);
 
   return (
-    <div className="relative flex h-full min-h-[calc(100dvh-49px)] min-w-0 flex-col overflow-hidden bg-[#eef0f3] dark:bg-[#18181b] lg:min-h-0">
-      <header className="flex h-14 shrink-0 items-center gap-4 border-b border-black/[0.08] bg-[#f8fafc] px-5 dark:border-white/10 dark:bg-[#111113]">
+    <div className="relative flex h-full min-h-[calc(100dvh-49px)] min-w-0 flex-col overflow-hidden bg-shell-canvas lg:min-h-0">
+      <header className="flex h-14 shrink-0 items-center gap-4 border-b border-black/[0.08] bg-shell-workspace px-5 dark:border-white/10">
         <nav aria-label="Breadcrumb" className="flex min-w-0 flex-1 items-center gap-1.5 font-sans text-[13px] leading-none">
           <Link
             href="/contents"
@@ -64,7 +64,7 @@ export function ArtifactCanvasWorkspace({ artifact, client, onSaveArtifact }: Ar
         </ArtifactActionsMenu>
       </header>
 
-      <main className="flex min-h-0 flex-1 items-stretch justify-center overflow-y-auto bg-[#eef0f3] px-4 dark:bg-[#18181b] sm:px-8">
+      <main className="flex min-h-0 flex-1 items-stretch justify-center overflow-y-auto bg-shell-canvas px-4 sm:px-8">
         <ArtifactDocumentSurface
           pack={currentArtifact}
           client={client}

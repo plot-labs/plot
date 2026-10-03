@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import { RefreshCw } from "lucide-react";
 
-export const workspacePageClass = "h-full overflow-y-auto bg-[#f7f8fa] dark:bg-[#18191d]";
-export const workspaceSectionClass = "mx-auto min-h-full w-full max-w-[760px] bg-[#f7f8fa] dark:bg-[#18191d] lg:h-full lg:overflow-y-auto";
+export const workspacePageClass = "h-full overflow-y-auto bg-shell-workspace";
+export const workspaceSectionClass = "mx-auto min-h-full w-full max-w-[760px] bg-shell-workspace lg:h-full lg:overflow-y-auto";
 export const workspaceSearchClass = "mt-5 flex h-10 items-center gap-2.5 rounded-[9px] border border-black/10 bg-white px-3 text-[12px] text-black/40 transition focus-within:border-black/20 focus-within:ring-2 focus-within:ring-black/[0.04] dark:border-white/12 dark:bg-white/[0.04] dark:text-white/42";
 export const workspaceSearchInputClass = "min-w-0 flex-1 bg-transparent text-[13px] text-black/75 outline-none placeholder:text-black/35 dark:text-white/80 dark:placeholder:text-white/35";
 export const workspaceIconButtonClass = "glass-button glass-icon size-9";

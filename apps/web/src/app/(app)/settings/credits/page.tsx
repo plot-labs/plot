@@ -4,7 +4,7 @@ import { WorkspaceCredits } from "@/features/workspace-settings/workspace-credit
 
 export default function SettingsCreditsPage() {
   return (
-    <Suspense fallback={<div className="h-full bg-[#f4f6f8] dark:bg-[#101112]" />}>
+    <Suspense fallback={<div className="h-full bg-shell-workspace" />}>
       <WorkspaceCredits />
     </Suspense>
   );
