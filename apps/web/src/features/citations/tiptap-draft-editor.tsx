@@ -459,7 +459,7 @@ function ContextualFormattingToolbar({
       }
       role="group"
       aria-label="Document formatting"
-      className="glass-card z-30 max-w-[calc(100vw-16px)] rounded-lg border border-black/10 p-1 dark:border-white/15"
+      className="glass-layer z-30 max-w-[calc(100vw-16px)] rounded-lg border border-black/10 p-1 dark:border-white/15"
     >
       <div className="flex items-center gap-0.5">
         {!state.empty || expanded ? (
