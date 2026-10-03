@@ -44,4 +44,13 @@ describe("legacy route pages", () => {
     await LegacyAutomationActivityPage({ searchParams: Promise.resolve({ chat: "chat-2" }) });
     expect(mocks.redirect).toHaveBeenCalledWith("/chat?chat=chat-2");
   });
+
+  it("redirects bare activity aliases to Home", async () => {
+    await LegacyActivityPage({ searchParams: Promise.resolve({}) });
+    expect(mocks.redirect).toHaveBeenCalledWith("/home");
+
+    mocks.redirect.mockReset();
+    await LegacyAutomationActivityPage({ searchParams: Promise.resolve({}) });
+    expect(mocks.redirect).toHaveBeenCalledWith("/home");
+  });
 });
