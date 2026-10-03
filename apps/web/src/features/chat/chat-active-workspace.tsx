@@ -329,12 +329,12 @@ export function ChatActiveWorkspace({
                   {() => <ExportDialog pack={shownArtifact} client={plotApiClient} presentation="menu" />}
                 </ArtifactActionsMenu>
               ) : null}
-              {showPreview ? <span role="status" className="text-sm text-black/60 dark:text-white/60">{selectedProgress?.status === "FAILED" ? "생성 실패 · 마지막 초안" : selectedProgress?.status === "SUCCEEDED" ? "최종 문서 불러오는 중" : "생성 중"}</span> : null}
+              {showPreview ? <span role="status" className="text-sm text-black/60 dark:text-white/60">{selectedProgress?.status === "FAILED" ? "Generation failed · last draft" : selectedProgress?.status === "SUCCEEDED" ? "Loading final draft" : "Generating"}</span> : null}
             </div>
             <div className="flex items-center gap-2">
               <span className="hidden sm:inline">
                 <ArtifactEditorStatus>
-                  {showPreview ? "읽기 전용 초안" : artifactSaveStateLabel(document.saveState, false)}
+                  {showPreview ? "Read-only draft" : artifactSaveStateLabel(document.saveState, false)}
                 </ArtifactEditorStatus>
               </span>
               {!showPreview && document.currentArtifact && canEdit ? (
@@ -373,7 +373,7 @@ export function ChatActiveWorkspace({
               {showPreview ? (
                 <div className="w-full max-w-[760px] space-y-5 px-6 py-8 text-sm leading-7 text-black/75 dark:text-white/78">
                   {selectedProgress?.draftParagraphs.map((body, index) => <p key={index} className="whitespace-pre-wrap">{body}</p>)}
-                  {!selectedProgress?.draftParagraphs.length ? <p>문서 초안을 준비하고 있습니다…</p> : null}
+                  {!selectedProgress?.draftParagraphs.length ? <p>Preparing the draft…</p> : null}
                 </div>
               ) : document.currentArtifact ? <ArtifactDocumentSurface
                 presentation="workspace"

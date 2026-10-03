@@ -588,7 +588,7 @@ describe("Chat streaming document panel", () => {
     expect(await screen.findByText("Streaming answer")).toBeVisible();
     const panel = await screen.findByRole("complementary", { name: "Artifact document panel" });
     expect(within(panel).getByText("Visible draft paragraph")).toBeVisible();
-    expect(within(panel).getByText("생성 중")).toBeVisible();
+    expect(within(panel).getByText("Generating")).toBeVisible();
     expect(within(panel).queryByRole("button", { name: "Save draft" })).not.toBeInTheDocument();
     expect(within(panel).queryByRole("button", { name: "Artifact actions" })).not.toBeInTheDocument();
     expect(screen.queryByText("Reviewed artifact")).not.toBeInTheDocument();
