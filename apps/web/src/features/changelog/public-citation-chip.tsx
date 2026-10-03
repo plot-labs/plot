@@ -50,7 +50,7 @@ export function PublicCitationChip({ references }: PublicCitationChipProps) {
         aria-label={`Show citation${safeReferences.length === 1 ? "" : "s"} ${numbers}`}
         onClick={() => setOpen((current) => !current)}
         onFocus={() => setOpen(true)}
-        className="inline-flex min-h-6 items-center rounded-full border border-[#ef3f2c]/25 bg-[#fff4f1] px-1.5 align-middle font-sans text-[11px] font-semibold leading-none text-[#c73728] transition hover:border-[#ef3f2c]/45 hover:bg-[#ffeae5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ef3f2c]/35 focus-visible:ring-offset-2"
+        className="inline-flex min-h-6 items-center rounded-full border border-[#ef3f2c]/25 bg-[#fff4f1] dark:bg-[#ef3f2c]/15 px-1.5 align-middle font-sans text-[11px] font-semibold leading-none text-[#c73728] dark:text-[#ff8f80] transition hover:border-[#ef3f2c]/45 hover:bg-[#ffeae5] dark:hover:bg-[#ef3f2c]/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ef3f2c]/35 focus-visible:ring-offset-2"
       >
         [{numbers}]
       </button>
@@ -60,9 +60,9 @@ export function PublicCitationChip({ references }: PublicCitationChipProps) {
           id={popoverId}
           role="dialog"
           aria-label="Citation sources"
-          className="glass-layer absolute bottom-[calc(100%+8px)] left-0 z-20 w-[min(320px,calc(100vw-48px))] rounded-xl border border-black/10 p-3 text-left"
+          className="glass-layer absolute bottom-[calc(100%+8px)] left-0 z-20 w-[min(320px,calc(100vw-48px))] rounded-xl border border-black/10 dark:border-white/10 p-3 text-left"
         >
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-black/42">Sources</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-black/42 dark:text-white/42">Sources</p>
           <ol className="mt-2 space-y-1.5">
             {safeReferences.map(({ citation, number }) => (
               <li key={`${number}-${citation.originalUrl}`}>
@@ -72,24 +72,24 @@ export function PublicCitationChip({ references }: PublicCitationChipProps) {
                   rel="noopener noreferrer"
                   className="glass-button flex items-start gap-2"
                 >
-                  <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-black/[0.05] font-sans text-[10px] font-semibold text-black/55">
+                  <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-black/[0.05] dark:bg-white/[0.08] font-sans text-[10px] font-semibold text-black/55 dark:text-white/55">
                     {number}
                   </span>
                   {citation.provider === "GITHUB" ? (
                     <HugeiconsIcon
                       icon={GithubIcon}
                       size={14}
-                      className="mt-0.5 shrink-0 text-black/48"
+                      className="mt-0.5 shrink-0 text-black/48 dark:text-white/48"
                       aria-hidden="true"
                     />
                   ) : (
-                    <ExternalLink className="mt-0.5 size-3.5 shrink-0 text-black/48" aria-hidden="true" />
+                    <ExternalLink className="mt-0.5 size-3.5 shrink-0 text-black/48 dark:text-white/48" aria-hidden="true" />
                   )}
                   <span className="min-w-0">
                     <span className="block truncate font-medium">{citation.sourceLabel}</span>
-                    <span className="block truncate text-xs text-black/42">{citation.provider}</span>
+                    <span className="block truncate text-xs text-black/42 dark:text-white/42">{citation.provider}</span>
                   </span>
-                  <ExternalLink className="mt-0.5 ml-auto size-3.5 shrink-0 text-black/35" aria-hidden="true" />
+                  <ExternalLink className="mt-0.5 ml-auto size-3.5 shrink-0 text-black/35 dark:text-white/35" aria-hidden="true" />
                 </a>
               </li>
             ))}

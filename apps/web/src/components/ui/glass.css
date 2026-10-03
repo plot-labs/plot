@@ -17,6 +17,20 @@
     --glass-danger-surface: rgb(255 255 255 / 0.08);
     --glass-danger-ink: #fca5a5;
   }
+  @media (prefers-color-scheme: dark) {
+    /* Public reader pages have no theme toggle; mirror the .dark tokens they use. */
+    .reader-theme {
+      color-scheme: dark;
+      --ink: oklch(0.964 0.002 247.839);
+      --glass-hover: rgb(255 255 255 / 0.06);
+      --glass-pressed: rgb(255 255 255 / 0.1);
+      --glass-edge: rgb(255 255 255 / 0.18);
+      --glass-highlight: rgb(255 255 255 / 0.12);
+      --glass-layer: rgb(28 29 33 / 0.96);
+      --glass-danger-surface: rgb(255 255 255 / 0.08);
+      --glass-danger-ink: #fca5a5;
+    }
+  }
   .glass-button,
   .glass-control {
     background: transparent;

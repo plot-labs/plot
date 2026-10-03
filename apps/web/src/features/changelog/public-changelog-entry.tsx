@@ -45,21 +45,21 @@ function MarkdownBody({ markdown }: { markdown: string }) {
         ol: ({ children }) => <ol className="mt-4 list-decimal space-y-2 pl-5">{children}</ol>,
         li: ({ children }) => <li>{children}</li>,
         code: ({ children }) => (
-          <code className="rounded bg-black/[0.05] px-1.5 py-0.5 font-sans text-[0.92em]">{children}</code>
+          <code className="rounded bg-black/[0.05] dark:bg-white/[0.08] px-1.5 py-0.5 font-sans text-[0.92em]">{children}</code>
         ),
         pre: ({ children }) => (
-          <pre className="mt-4 overflow-x-auto rounded-lg border border-black/10 bg-white/70 p-4 font-sans text-sm leading-6">
+          <pre className="mt-4 overflow-x-auto rounded-lg border border-black/10 dark:border-white/10 bg-white/70 dark:bg-white/[0.04] p-4 font-sans text-sm leading-6">
             {children}
           </pre>
         ),
         blockquote: ({ children }) => (
-          <blockquote className="mt-4 border-l-2 border-black/15 pl-4 text-black/60">{children}</blockquote>
+          <blockquote className="mt-4 border-l-2 border-black/15 dark:border-white/15 pl-4 text-black/60 dark:text-white/60">{children}</blockquote>
         ),
         img: ({ src, alt }) => {
           if (typeof src !== "string" || !isSafeHttpUrl(src)) return null;
           return (
             // eslint-disable-next-line @next/next/no-img-element -- public markdown URLs are validated at render time
-            <img src={src} alt={alt ?? ""} className="mt-6 max-w-full rounded-lg border border-black/10" />
+            <img src={src} alt={alt ?? ""} className="mt-6 max-w-full rounded-lg border border-black/10 dark:border-white/10" />
           );
         },
       }}
@@ -94,16 +94,16 @@ export function PublicChangelogEntryView({ workspaceSlug, entry }: PublicChangel
     <article aria-labelledby="changelog-entry-heading">
       <Link
         href={publicChangelogPath(workspaceSlug)}
-        className="text-sm text-black/55 transition-colors hover:text-black"
+        className="text-sm text-black/55 dark:text-white/55 transition-colors hover:text-black dark:hover:text-white"
       >
         ← All updates
       </Link>
 
-      <header className="mt-8 border-b border-black/10 pb-10">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-black/45">
+      <header className="mt-8 border-b border-black/10 dark:border-white/10 pb-10">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-black/45 dark:text-white/45">
           <time dateTime={entry.publishedAt}>{formatPublishedAt(entry.publishedAt)}</time>
           {entry.tagName ? (
-            <span className="rounded-full border border-black/10 px-2 py-0.5 font-sans text-xs uppercase tracking-[0.12em] text-black/55">
+            <span className="rounded-full border border-black/10 dark:border-white/10 px-2 py-0.5 font-sans text-xs uppercase tracking-[0.12em] text-black/55 dark:text-white/55">
               {entry.tagName}
             </span>
           ) : null}
@@ -113,7 +113,7 @@ export function PublicChangelogEntryView({ workspaceSlug, entry }: PublicChangel
         </h1>
       </header>
 
-      <div className="prose-changelog py-10 text-[17px] leading-8 text-black/75">
+      <div className="prose-changelog py-10 text-[17px] leading-8 text-black/75 dark:text-white/75">
         {hasStructuredDocument ? (
           <MarkdownBody markdown={entry.bodyMarkdown} />
         ) : hasSentenceSnapshot ? (
@@ -140,7 +140,7 @@ export function PublicChangelogEntryView({ workspaceSlug, entry }: PublicChangel
       </div>
 
       {sources.length ? (
-        <section className="border-t border-black/10 pb-4 pt-8" aria-labelledby="changelog-sources-heading">
+        <section className="border-t border-black/10 dark:border-white/10 pb-4 pt-8" aria-labelledby="changelog-sources-heading">
           <h2 id="changelog-sources-heading" className="font-display text-2xl tracking-[-0.02em]">
             Sources
           </h2>
@@ -153,11 +153,11 @@ export function PublicChangelogEntryView({ workspaceSlug, entry }: PublicChangel
                   rel="noopener noreferrer"
                   className="glass-button flex min-w-0 items-center gap-3 border"
                 >
-                  <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-black/[0.05] font-sans text-[11px] font-semibold text-black/55">
+                  <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-black/[0.05] dark:bg-white/[0.08] font-sans text-[11px] font-semibold text-black/55 dark:text-white/55">
                     {number}
                   </span>
-                  <span className="min-w-0 flex-1 truncate text-black/72">{citation.sourceLabel}</span>
-                  <span className="shrink-0 text-xs uppercase tracking-[0.08em] text-black/35">{citation.provider}</span>
+                  <span className="min-w-0 flex-1 truncate text-black/72 dark:text-white/72">{citation.sourceLabel}</span>
+                  <span className="shrink-0 text-xs uppercase tracking-[0.08em] text-black/35 dark:text-white/35">{citation.provider}</span>
                 </a>
               </li>
             ))}
