@@ -75,6 +75,14 @@ class RecoveryCoordinatorTest {
 	}
 
 	@Test
+	fun `first sweep waits only until every queue claim timeout has passed`() {
+		val (coordinator, _) = createCoordinator(properties = RecoveryProperties(enabled = true))
+
+		// PlotAiProperties defaults to the longest claim timeout (10m) plus a 30s margin.
+		assertEquals(java.time.Duration.ofSeconds(630), coordinator.startupSweepDelay())
+	}
+
+	@Test
 	fun `observeOnly records metrics without dispatching`() {
 		val (coordinator, counts) = createCoordinator(
 			properties = RecoveryProperties(enabled = true, observeOnly = true, batchSize = 10),

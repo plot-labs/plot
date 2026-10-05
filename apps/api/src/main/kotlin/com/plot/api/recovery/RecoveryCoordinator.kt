@@ -80,8 +80,8 @@ class RecoveryCoordinator @org.springframework.beans.factory.annotation.Autowire
 	override fun start() {
 		if (!properties.enabled) return
 		running = true
-		val initialDelayMillis = properties.interval.toMillis().coerceAtLeast(100)
 		val intervalMillis = properties.interval.toMillis().coerceAtLeast(100)
+		val initialDelayMillis = minOf(intervalMillis, startupSweepDelay().toMillis()).coerceAtLeast(100)
 		val exec = scheduler ?: Executors.newSingleThreadScheduledExecutor { r ->
 			Thread(r, "plot-recovery-coordinator").apply { isDaemon = true }
 		}.also { scheduler = it }
@@ -110,6 +110,16 @@ class RecoveryCoordinator @org.springframework.beans.factory.annotation.Autowire
 	}
 
 	override fun isRunning(): Boolean = running
+
+	/**
+	 * Claims held by the previous process still look fresh at boot, so startup recovery skips them and
+	 * no retry wakeup covers them. The first sweep runs once every queue's claim timeout has passed.
+	 */
+	internal fun startupSweepDelay(): Duration = listOf(
+		gitHubProperties.releaseWorkerLeaseTimeout,
+		routineAgentProperties.claimTimeout,
+		plotAiProperties.claimTimeout,
+	).max().plus(STARTUP_SWEEP_MARGIN)
 
 	override fun destroy() {
 		stop()
@@ -232,5 +242,9 @@ class RecoveryCoordinator @org.springframework.beans.factory.annotation.Autowire
 			oldestCreatedAt = stats.oldestCreatedAt,
 			dispatched = dispatched,
 		)
+	}
+
+	private companion object {
+		val STARTUP_SWEEP_MARGIN: Duration = Duration.ofSeconds(30)
 	}
 }
