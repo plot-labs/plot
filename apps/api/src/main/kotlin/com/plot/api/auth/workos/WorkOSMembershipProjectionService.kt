@@ -44,6 +44,13 @@ class WorkOSMembershipProjectionService(
 	): WorkOSMembershipProjectionResult? {
 		val identity = identityRepository.findByWorkOSUserId(workOSUserId) ?: return null
 		val organization = organizationRepository.findByOrganizationId(organizationId) ?: return null
+		// Every authenticated request reconciles its token. Skip the write, and the separate transaction
+		// it needs, when the row already matches so a request holds a single pooled connection.
+		val role = normalizeWorkOSRole(roleSlug, properties.ownerRoleSlug)
+		val existing = memberRepository.findByWorkspaceIdAndUserId(organization.workspaceId, identity.plotUserId)
+		if (role != null && existing != null && existing.status == "ACTIVE" && existing.role == role) {
+			return WorkOSMembershipProjectionResult(existing.workspaceId, existing.userId, existing.role, active = true)
+		}
 		return apply(
 			workspaceId = organization.workspaceId,
 			userId = identity.plotUserId,

@@ -8,6 +8,8 @@ import java.util.UUID
 import org.springframework.core.env.Environment
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Component
+import org.springframework.web.context.request.RequestAttributes
+import org.springframework.web.context.request.RequestContextHolder
 
 /**
  * One request-scoped authorization boundary for Plot data.
@@ -29,10 +31,16 @@ class AuthorizedWorkspaceContext(
 	private val environment: Environment,
 ) {
 	fun current(): ResolvedWorkspaceContext? {
+		val request = RequestContextHolder.getRequestAttributes()
+		(request?.getAttribute(RESOLVED_ATTRIBUTE, RequestAttributes.SCOPE_REQUEST) as? ResolvedWorkspaceContext)
+			?.let { return it }
 		val actor = actorResolver.current()
 		if (actor != null) {
 			val workspace = actorResolver.requireWorkspace()
-			return ResolvedWorkspaceContext(actor, workspace, developmentFallback = false)
+			// Services read this context many times per request; resolve the actor and membership once.
+			return ResolvedWorkspaceContext(actor, workspace, developmentFallback = false).also {
+				request?.setAttribute(RESOLVED_ATTRIBUTE, it, RequestAttributes.SCOPE_REQUEST)
+			}
 		}
 		return if (environment.allowsDevelopmentAuthBypass()) fallback() else null
 	}
@@ -68,6 +76,7 @@ class AuthorizedWorkspaceContext(
 	}
 
 	companion object {
+		private val RESOLVED_ATTRIBUTE = AuthorizedWorkspaceContext::class.java.name + ".resolved"
 		val DEV_USER_ID: UUID = UUID.fromString("018fd000-0000-7000-8000-000000000001")
 		val DEV_WORKSPACE_ID: UUID = UUID.fromString("018fd000-0000-7000-8000-000000000002")
 		val DEV_WORKSPACE_MEMBER_ID: UUID = UUID.fromString("018fd000-0000-7000-8000-000000000003")

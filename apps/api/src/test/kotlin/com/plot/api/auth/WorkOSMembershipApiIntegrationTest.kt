@@ -208,6 +208,35 @@ class WorkOSMembershipApiIntegrationTest {
 	}
 
 	@Test
+	fun matchingTokenMembershipIsNotRewrittenButARoleChangeIs() {
+		val pinnedUpdatedAt = java.sql.Timestamp.from(java.time.Instant.parse("2026-01-01T00:00:00Z"))
+		jdbcTemplate.update("update workspace_members set updated_at = ? where id = ?", pinnedUpdatedAt, MEMBER_ID)
+
+		mockMvc.get("/api/workspaces/$WORKSPACE_ID") {
+			with(jwt().jwt { token ->
+				token.issuer("https://issuer.workos.test").subject(WORKOS_USER_ID).audience(listOf("plot-api"))
+					.claim("org_id", ORGANIZATION_ID).claim("role", "member")
+			})
+		}.andExpect { status { isOk() } }
+		assertEquals(
+			pinnedUpdatedAt.toInstant(),
+			jdbcTemplate.queryForObject("select updated_at from workspace_members where id = ?", java.sql.Timestamp::class.java, MEMBER_ID)
+				?.toInstant(),
+		)
+
+		mockMvc.get("/api/workspaces/$WORKSPACE_ID") {
+			with(jwt().jwt { token ->
+				token.issuer("https://issuer.workos.test").subject(WORKOS_USER_ID).audience(listOf("plot-api"))
+					.claim("org_id", ORGANIZATION_ID).claim("role", "owner")
+			})
+		}.andExpect { status { isOk() } }
+		assertEquals(
+			"OWNER",
+			jdbcTemplate.queryForObject("select role from workspace_members where id = ?", String::class.java, MEMBER_ID),
+		)
+	}
+
+	@Test
 	fun accountDiscoveryRemainsContextFree() {
 		mockMvc.get("/api/me") {
 			with(jwt().jwt { token -> token.issuer("https://issuer.workos.test").subject(WORKOS_USER_ID).audience(listOf("plot-api")) })
