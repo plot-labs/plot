@@ -248,6 +248,7 @@ class AgentRunExecutionPersistence(
 		require(maxModelCalls > 0) { "Agent model-call budget must be positive" }
 		queryPersistence.requireAgentClaim(claim)
 		sqlExecutor.query("select id from workspaces where id = ? for update", { row, _ -> row.getObject("id", UUID::class.java) }, claim.workspaceId)
+		resolveOrphanedModelInvocations(claim.workspaceId)
 		findUnresolvedModelInvocation(claim.workspaceId)?.let { throw AgentModelInvocationBlockedException(it) }
 		val unresolvedArtifact = sqlExecutor.queryForObject(
 			"""select count(*) from model_invocations
@@ -338,6 +339,14 @@ class AgentRunExecutionPersistence(
 	fun markModelInvocationUsageUnknown(invocationId: UUID) {
 		sqlExecutor.update("update agent_model_invocations set status = 'USAGE_UNKNOWN' where id = ? and status = 'STARTED'", invocationId)
 	}
+
+	/**
+	 * A STARTED invocation whose run already finished can never be settled by that run, and it would
+	 * otherwise hold the workspace-wide unresolved slot forever. PENDING rows keep their recorded usage
+	 * and stay for the next run to settle.
+	 */
+	fun resolveOrphanedModelInvocations(workspaceId: UUID): Int =
+		sqlExecutor.update(RESOLVE_ORPHANED_AGENT_MODEL_INVOCATIONS_SQL, workspaceId)
 	fun reserveStep(
 		claim: ClaimedAgentRun,
 		request: AgentStepRequest,
@@ -538,6 +547,7 @@ class AgentRunExecutionPersistence(
 			if (terminal) Timestamp.from(now) else null, Timestamp.from(now),
 			claim.workspaceId, claim.agentRunId, claim.workerId, claim.transitionVersion,
 		)
+		if (terminal) resolveOrphanedModelInvocations(claim.workspaceId)
 		requireNotNull(queryPersistence.findAgentRun(claim.workspaceId, claim.agentRunId))
 	}
 	fun failAgentRun(claim: ClaimedAgentRun, errorCode: String, now: Instant = currentInstant()): AgentRunRecord =
@@ -757,6 +767,7 @@ class AgentRunExecutionPersistence(
 			claim.workspaceId, claim.agentRunId, claim.workerId, claim.transitionVersion,
 		)
 		if (updated != 1) throw AgentRunClaimLostException()
+		resolveOrphanedModelInvocations(claim.workspaceId)
 		completionProjection.deactivateResponse(claim.workspaceId, claim.agentRunId)
 		completionProjection.projectTerminal(run, status, errorCode, now)
 		val terminal = requireNotNull(queryPersistence.findAgentRun(claim.workspaceId, claim.agentRunId))
@@ -814,6 +825,7 @@ class AgentRunExecutionPersistence(
 				""".trimIndent(),
 				Timestamp.from(now), Timestamp.from(now), workspaceId, agentRunId,
 			)
+			resolveOrphanedModelInvocations(requireNotNull(workspaceId))
 			completionProjection.deactivateResponse(requireNotNull(workspaceId), requireNotNull(agentRunId))
 			queryPersistence.findAgentRun(requireNotNull(workspaceId), requireNotNull(agentRunId))?.let { run ->
 				completionProjection.projectTerminal(run, AgentRunStatus.FAILED, "AGENT_RETRY_EXHAUSTED", now)
@@ -821,6 +833,18 @@ class AgentRunExecutionPersistence(
 		}
 	}
 }
+
+/** Marks STARTED agent model calls of already finished runs as USAGE_UNKNOWN for one workspace. */
+internal val RESOLVE_ORPHANED_AGENT_MODEL_INVOCATIONS_SQL = """
+	update agent_model_invocations invocation
+	set status = 'USAGE_UNKNOWN'
+	where invocation.workspace_id = ? and invocation.status = 'STARTED'
+	  and exists (
+	    select 1 from agent_runs run
+	    where run.workspace_id = invocation.workspace_id and run.id = invocation.agent_run_id
+	      and run.status in ('SUCCEEDED', 'FAILED')
+	  )
+""".trimIndent()
 
 private fun SqlRow.toAgentModelInvocation(): AgentModelInvocationSettlement {
 	val status = AgentModelInvocationStatus.valueOf(requireNotNull(getString("status")))

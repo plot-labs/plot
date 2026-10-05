@@ -563,6 +563,39 @@ class AgentRunWorkerIntegrationTest {
 	}
 
 	@Test
+	fun `started call left by a run that already finished does not block the workspace`() {
+		val crashed = chatAdmission.admit(
+			CreateChatAgentRunRequest("Crashed mid-call"),
+			"chat-orphaned-call-${UUID.randomUUID()}",
+		)
+		val orphanedInvocationId = UUID.randomUUID()
+		jdbcTemplate.update(
+			"""insert into agent_model_invocations
+			(id, workspace_id, agent_run_id, sequence_no, status, created_at)
+			values (?, ?, ?, 1, 'STARTED', now())""",
+			orphanedInvocationId,
+			devContext.devWorkspaceId,
+			crashed.id,
+		)
+		jdbcTemplate.update(
+			"""update agent_runs
+			set status = 'FAILED', failure_code = 'AGENT_RETRY_EXHAUSTED', finished_at = now(), next_attempt_at = null
+			where id = ?""",
+			crashed.id,
+		)
+
+		agentModel.responseText = "Next request succeeds"
+		val next = chatAdmission.admit(
+			CreateChatAgentRunRequest("After the crash"),
+			"chat-after-orphaned-call-${UUID.randomUUID()}",
+		)
+		assertTrue(agentWorker.processOne())
+
+		assertEquals("SUCCEEDED", agentStatus(next.id))
+		assertEquals(1, count("select count(*) from agent_model_invocations where id = ? and status = 'USAGE_UNKNOWN'", orphanedInvocationId))
+	}
+
+	@Test
 	fun `Chat Agent freezes the selected model and routing provider`() {
 		agentModel.responseText = "Selected model response."
 		val admitted = chatAdmission.admit(

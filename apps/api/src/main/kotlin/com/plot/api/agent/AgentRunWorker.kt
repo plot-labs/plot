@@ -257,6 +257,7 @@ class AgentRunWorker(
 						"Previous model usage was settled without repeating provider work",
 					)
 				}
+				executionPersistence.resolveOrphanedModelInvocations(run.workspaceId)
 				val unresolved = executionPersistence.findUnresolvedModelInvocation(run.workspaceId) ?: return
 				when (unresolved.status) {
 					AgentModelInvocationStatus.PENDING -> {

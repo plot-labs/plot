@@ -1,5 +1,6 @@
 package com.plot.api.artifact.workflow
 
+import com.plot.api.agent.RESOLVE_ORPHANED_AGENT_MODEL_INVOCATIONS_SQL
 import com.plot.api.ai.provider.ModelCallMetadata
 import com.plot.api.ai.provider.ModelRole
 import com.plot.api.ai.provider.ProviderUsage
@@ -174,6 +175,8 @@ class ArtifactWorkflowExecutionPersistence(
 				{ row, _ -> row.getObject("id", UUID::class.java) },
 				claim.workspaceId,
 			)
+			// A finished agent run can no longer settle its STARTED call, so it must not block artifact work.
+			sqlExecutor.update(RESOLVE_ORPHANED_AGENT_MODEL_INVOCATIONS_SQL, claim.workspaceId)
 			val unresolvedAgent = sqlExecutor.queryForObject(
 				"select count(*) from agent_model_invocations where workspace_id = ? and status in ('STARTED', 'PENDING')",
 				Int::class.java,
