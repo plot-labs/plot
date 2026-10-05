@@ -9,6 +9,9 @@ kill_timeout = "45s"
 [env]
   SERVER_PORT = "8080"
   # Set API key, client ID, issuer, audience, JWKS URI, and webhook secret with fly secrets.
+  # AI also needs PLOT_AI_API_KEY (OpenRouter key). Polar credits need PLOT_POLAR_ACCESS_TOKEN,
+  # PLOT_POLAR_AI_METER_ID, PLOT_POLAR_SUBSCRIPTION_PRODUCT_ID, and the checkout/portal return URLs.
+  # The API refuses to boot when AI is enabled without credits or without the AI key.
   PLOT_WORKOS_ENABLED = "true"
   PLOT_WORKOS_OWNER_ROLE_SLUG = "owner"
   PLOT_WORKOS_BOOTSTRAP_ENABLED = "true"
@@ -16,6 +19,7 @@ kill_timeout = "45s"
   PLOT_GITHUB_DEVONLY = "false"
   PLOT_GITHUB_LOOPBACKONLY = "false"
   PLOT_POLAR_ENABLED = "true"
+  PLOT_POLAR_CREDITS_ENABLED = "true"
   PLOT_AI_ENABLED = "true"
   PLOT_AI_MODEL = "openai/gpt-5.6-luna-pro"
   PLOT_AI_MAXOUTPUTTOKENS = "1400"
