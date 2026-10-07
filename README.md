@@ -13,7 +13,7 @@ Agent-era shipping got faster. Making sure customers understand what shipped is 
 
 Plot watches connected sources and makes that judgment before drafting. It can exclude changes with no customer value, hold changes that need more substance, or wait for missing evidence. When a change warrants communication, Plot prepares a draft with inspectable sources. You review, edit, and decide when to publish.
 
-**GitHub is the first source. Release changelogs are the first automatic output.** They are the starting point for a broader content workflow covering blog posts, B2B emails, and other ways to communicate product progress.
+**GitHub is the first source. Release changelogs are the first automatic output.** Content Skills let the same workflow produce other kinds of product updates from the same evidence.
 
 ## How it works today
 
@@ -30,10 +30,11 @@ flowchart LR
 
 - **Follow connected work.** Verified GitHub webhooks feed a durable signal inbox. Release automation is enabled by default, with no separate Autonomy mode to configure.
 - **Draft when it matters.** Release changelogs require a published release and source evidence. Explicit GitHub change and merged PR Automations can prepare a separate product update draft from eligible changes before a release; maintenance-only changes are excluded and unclear changes are held for manual review.
+- **Shape content with Skills.** Skills are reusable writing instructions. Plot includes `changelog`, `launch-announcement`, and `humanizer`, and workspaces can add their own. Automations and chat requests can select Skills; the agent loads every selected Skill before drafting and may load other available Skills when useful.
 - **Keep the work inspectable.** Drafts retain their source evidence and revisions. Executions appear as conversations in **History**, alongside manual requests.
 - **Keep publication deliberate.** Prepare and revise content in Plot, then publish to the hosted changelog or export Markdown. Automatic drafting does not grant publication approval.
 
-The current runtime does not yet combine held changes across releases. Daily and weekly Automations run on their schedule; GitHub change and merged PR Automations use a conservative change-title gate (`feat`, `fix`, `perf`, `security`, or `revert`). Explicit manual runs remain available.
+Automations run on a schedule (daily or weekly) or on a GitHub event: a push to the default branch, a PR merged into the default branch, a published release, or a pushed Git tag. Release and tag Automations draft from the release's pinned range. Push and merged PR Automations use a conservative change-title gate (`feat`, `fix`, `perf`, `security`, or `revert`). Published releases are drafted even when no release Automation is configured. Scheduled, push, and merged PR Automations can also be run manually. The current runtime does not yet combine held changes across releases.
 
 ## Workspace
 
@@ -49,13 +50,12 @@ The current runtime does not yet combine held changes across releases. Daily and
 
 ## Where we are headed
 
-The next step is to make **Automation the single place to define automatic work**, with reusable **content Skills** describing how to produce each kind of content.
+Content Skills and Skill selection in Automations are already in place. The next steps build on them.
 
-- **Skills** define writing instructions, required evidence, output structure, and quality criteria for a changelog, blog post, or B2B email.
-- **Automations** select sources, event or schedule triggers, and the content Skills to use. The agent decides whether the available material warrants a draft.
-- **Automatic content selection** can later choose among allowed Skills and prepare several outputs from the same customer communication goal.
-
-Skill-based automation, automatic selection of multiple content types, and Linear/Slack adapters are planned extensions. They are not part of the current GitHub release runtime.
+- **More content Skills** for formats such as blog posts and B2B emails, each defining writing instructions, required evidence, output structure, and quality criteria.
+- **Several outputs from one goal.** Each run currently produces one draft. Plot should be able to prepare several pieces of content from the same customer communication goal.
+- **Held changes across releases.** Changes held for more substance should be combined with later work instead of being considered one release at a time.
+- **More sources.** Linear and Slack adapters are planned. They do not feed the current runtime.
 
 ## Repository
 
@@ -106,7 +106,3 @@ API integration tests use PostgreSQL through Testcontainers. Automated assessmen
 ## Documentation
 
 - [Visual identity](DESIGN.md)
-- [GitHub App development smoke test](docs/operations/github-app-development-smoke-test.md)
-- [GitHub release automation](docs/operations/github-release-automation.md)
-- [Private repository production certification](docs/operations/private-repository-production-certification.md)
-- [Polar subscription webhook](docs/operations/polar-subscription-webhook.md)

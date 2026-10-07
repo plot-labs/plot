@@ -13,7 +13,7 @@
 
 Plot은 연결된 소스를 살펴보고 초안을 쓰기 전에 이 판단부터 합니다. 고객에게 무의미한 변경은 제외하고, 내용이 더 필요한 변경은 보류하며, 근거가 부족하면 기다립니다. 전달할 가치가 충분해지면 출처를 확인할 수 있는 초안을 준비합니다. 사용자는 검토하고 수정한 뒤 발행 시점을 결정합니다.
 
-**첫 번째 소스는 GitHub이고, 첫 번째 자동 결과물은 릴리스 Changelog입니다.** 이를 시작으로 Blog, B2B Email 등 제품의 진전을 전달하는 다양한 콘텐츠로 확장합니다.
+**첫 번째 소스는 GitHub이고, 첫 번째 자동 결과물은 릴리스 Changelog입니다.** 콘텐츠 Skill을 사용하면 같은 근거에서 다른 형태의 제품 업데이트도 만들 수 있습니다.
 
 ## 현재 동작
 
@@ -30,10 +30,11 @@ flowchart LR
 
 - **연결된 작업을 관찰합니다.** 검증된 GitHub webhook을 영속적인 시그널 수집함에 저장합니다. 릴리스 자동화는 기본 활성화되며 별도의 Autonomy 모드를 설정하지 않습니다.
 - **의미 있을 때 초안을 만듭니다.** 릴리스 변경 기록에는 발행된 릴리스와 출처 근거가 필요합니다. 사용자가 설정한 GitHub 변경·PR 병합 Automation은 릴리스 전에 별도의 product update 검토용 초안을 만들 수 있습니다. 유지보수 변경만 있으면 제외하고 판단이 어려우면 수동 검토를 기다립니다.
+- **Skill로 콘텐츠의 형태를 정합니다.** Skill은 재사용 가능한 작성 지침입니다. Plot은 `changelog`, `launch-announcement`, `humanizer`를 기본 제공하며 워크스페이스에서 직접 Skill을 추가할 수 있습니다. Automation과 Chat 요청에서 Skill을 선택하면 에이전트는 초안 작성 전에 선택된 Skill을 모두 불러오고, 필요하면 사용 가능한 다른 Skill도 불러옵니다.
 - **작업 과정을 확인할 수 있습니다.** 초안의 출처와 리비전을 보존합니다. 실행 기록은 수동 요청과 함께 **History**의 대화로 표시됩니다.
 - **발행은 사용자가 결정합니다.** Plot에서 콘텐츠를 준비하고 수정한 뒤 호스팅된 Changelog에 발행하거나 Markdown으로 내보냅니다. 자동 초안 생성이 발행 승인을 대신하지 않습니다.
 
-현재는 여러 릴리스에 걸쳐 보류된 변경을 자동으로 묶지 않습니다. 매일·매주 Automation은 설정한 일정에 실행됩니다. GitHub 변경·PR 병합 Automation은 변경 제목의 `feat`, `fix`, `perf`, `security`, `revert` 유형을 1차 기준으로 사용하며, 명시적인 수동 실행도 사용할 수 있습니다.
+Automation은 일정(매일·매주) 또는 GitHub 이벤트(기본 브랜치 push, 기본 브랜치로의 PR 병합, 릴리스 발행, Git tag push)에 따라 실행됩니다. 릴리스·태그 Automation은 해당 릴리스의 고정된 범위로 초안을 만듭니다. Push·PR 병합 Automation은 변경 제목의 `feat`, `fix`, `perf`, `security`, `revert` 유형을 1차 기준으로 사용합니다. 릴리스 Automation을 설정하지 않아도 발행된 릴리스는 초안으로 만들어집니다. 일정·push·PR 병합 Automation은 수동으로도 실행할 수 있습니다. 현재는 여러 릴리스에 걸쳐 보류된 변경을 자동으로 묶지 않습니다.
 
 ## 워크스페이스
 
@@ -49,13 +50,12 @@ flowchart LR
 
 ## 앞으로의 방향
 
-다음 단계는 **Automation을 자동 작업의 단일 설정으로 통합**하고, 콘텐츠별 작성 방법을 재사용 가능한 **콘텐츠 Skill**로 정의하는 것입니다.
+콘텐츠 Skill과 Automation의 Skill 선택은 이미 동작합니다. 다음 단계는 이를 바탕으로 확장합니다.
 
-- **Skill**은 Changelog, Blog, B2B Email 각각의 작성 지침, 필요한 근거, 결과물 구조, 품질 기준을 정의합니다.
-- **Automation**에서는 소스, 이벤트 또는 일정, 사용할 콘텐츠 Skill을 선택합니다. 에이전트는 확보된 자료로 초안을 만들 가치가 있는지 판단합니다.
-- 이후 **콘텐츠 자동 선택**을 추가해 허용된 Skill 중 적합한 것을 고르고, 하나의 고객 커뮤니케이션 목표에서 여러 결과물을 준비하도록 확장합니다.
-
-Skill 기반 자동화, 여러 콘텐츠 종류의 자동 선택, Linear·Slack 어댑터는 계획된 확장입니다. 현재 GitHub 릴리스 런타임에는 아직 포함되지 않습니다.
+- **콘텐츠 Skill 확대.** Blog, B2B Email 등 형식별로 작성 지침, 필요한 근거, 결과물 구조, 품질 기준을 정의한 Skill을 추가합니다.
+- **하나의 목표에서 여러 결과물.** 지금은 실행 한 번에 초안 하나를 만듭니다. 같은 고객 커뮤니케이션 목표에서 여러 콘텐츠를 준비하도록 확장합니다.
+- **릴리스를 넘는 보류 변경 결합.** 내용이 부족해 보류된 변경을 릴리스 단위로만 보지 않고 이후 작업과 묶습니다.
+- **소스 확대.** Linear·Slack 어댑터를 계획하고 있으며, 현재 런타임에는 연결되어 있지 않습니다.
 
 ## 저장소
 
@@ -106,7 +106,3 @@ API 통합 테스트는 Testcontainers로 PostgreSQL을 실행합니다. 자동 
 ## 문서
 
 - [비주얼 아이덴티티](DESIGN.md)
-- [GitHub App 개발 smoke test](docs/operations/github-app-development-smoke-test.md)
-- [GitHub 릴리스 자동화](docs/operations/github-release-automation.md)
-- [비공개 저장소 운영 검증](docs/operations/private-repository-production-certification.md)
-- [Polar 구독 webhook](docs/operations/polar-subscription-webhook.md)
