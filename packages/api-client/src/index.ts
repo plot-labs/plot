@@ -56,7 +56,7 @@ export interface ArtifactPublication {
   revisionNumber?: number;
 }
 
-export type ContentType = "ARTIFACT" | "CHANGELOG" | "LAUNCH_ANNOUNCEMENT";
+export type ContentType = "ARTIFACT" | "CHANGELOG";
 
 export interface RelatedArtifactSummary {
   id: string;

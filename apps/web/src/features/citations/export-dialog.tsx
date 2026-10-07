@@ -29,11 +29,7 @@ export function ExportDialog({
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const dropdownTriggerRef = useRef<HTMLButtonElement>(null);
-  const contentNoun = pack.contentType === "LAUNCH_ANNOUNCEMENT"
-    ? "launch announcement"
-    : pack.contentType === "CHANGELOG"
-      ? "changelog"
-      : "content";
+  const contentNoun = pack.contentType === "CHANGELOG" ? "changelog" : "content";
   const copyLabel = `Copy ${contentNoun}`;
   const downloadLabel = `Download ${contentNoun}`;
 

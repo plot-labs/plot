@@ -129,17 +129,6 @@ describe("ExportDialog", () => {
     expect(exportArtifactVariant).not.toHaveBeenCalled();
   });
 
-  it("labels launch announcement copy and download actions", () => {
-    render(
-      <ExportDialog
-        pack={{ ...pack, contentType: "LAUNCH_ANNOUNCEMENT", title: "Waitlist" }}
-        client={{} as PlotApiClient}
-      />,
-    );
-    expect(screen.getByRole("button", { name: "Copy launch announcement" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Download launch announcement" })).toBeInTheDocument();
-  });
-
   it("uses neutral labels for prompt-driven documents", () => {
     render(<ExportDialog pack={{ ...pack, contentType: "ARTIFACT" }} client={{} as PlotApiClient} />);
 

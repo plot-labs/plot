@@ -123,8 +123,8 @@ describe("ArtifactCanvasWorkspace", () => {
       relatedArtifacts: [
         {
           id: "related-artifact-99",
-          title: "Related Launch Announcement",
-          contentType: "LAUNCH_ANNOUNCEMENT",
+          title: "Related Product Update",
+          contentType: "ARTIFACT",
           status: "READY",
           updatedAt: "2026-09-08T00:00:00Z",
         },
@@ -138,8 +138,8 @@ describe("ArtifactCanvasWorkspace", () => {
 
     expect(await screen.findByRole("dialog", { name: "Sources" })).toBeVisible();
     expect(screen.getByRole("list", { name: "Related content" })).toBeVisible();
-    expect(screen.getByText("Related Launch Announcement")).toBeVisible();
-    expect(screen.getByRole("link", { name: /Related Launch Announcement/i })).toHaveAttribute(
+    expect(screen.getByText("Related Product Update")).toBeVisible();
+    expect(screen.getByRole("link", { name: /Related Product Update/i })).toHaveAttribute(
       "href",
       "/contents?artifact=related-artifact-99",
     );

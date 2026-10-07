@@ -535,7 +535,7 @@ class ArtifactPublishIntegrationTest {
 			"""
 			insert into work_sessions (
 			  id, workspace_id, title, status, created_by_user_id, last_activity_at, created_at, updated_at
-			) values (?, ?, 'Launch chat', 'OPEN', ?, now(), now(), now())
+			) values (?, ?, 'Product update chat', 'OPEN', ?, now(), now(), now())
 			""".trimIndent(),
 			chatId,
 			devContext.devWorkspaceId,
@@ -547,15 +547,15 @@ class ArtifactPublishIntegrationTest {
 			  id, workspace_id, work_session_id, created_by_user_id, origin, idempotency_key, request_fingerprint,
 			  instruction_snapshot, prompt_version, tool_policy_version, budget_snapshot, content_type,
 			  status, max_attempts, created_at, updated_at
-			) values (?, ?, ?, ?, 'CHAT', ?, ?, 'Launch announcement', 'chat-agent-v1', 'read-only-v1', '{}'::jsonb,
-			  'LAUNCH_ANNOUNCEMENT', 'SUCCEEDED', 3, now(), now())
+			) values (?, ?, ?, ?, 'CHAT', ?, ?, 'Product update', 'chat-agent-v1', 'read-only-v1', '{}'::jsonb,
+			  'ARTIFACT', 'SUCCEEDED', 3, now(), now())
 			""".trimIndent(),
 			agentRunId,
 			devContext.devWorkspaceId,
 			chatId,
 			devContext.devUserId,
-			"launch-${agentRunId}",
-			"launch-${agentRunId}",
+			"update-${agentRunId}",
+			"update-${agentRunId}",
 		)
 		jdbcTemplate.update(
 			"update generation_runs set agent_run_id = ? where id = ?",
@@ -573,14 +573,14 @@ class ArtifactPublishIntegrationTest {
 
 		mockMvc.get("/api/artifacts/${fixture.packId}").andExpect {
 			status { isOk() }
-			jsonPath("$.contentType") { value("LAUNCH_ANNOUNCEMENT") }
+			jsonPath("$.contentType") { value("ARTIFACT") }
 		}
 
 		val export = mockMvc.post("/api/artifact-variants/${fixture.variantId}/exports") {
 			contentType = MediaType.APPLICATION_JSON
 			content = """{"expectedRevisionNumber":1,"includeSources":false,"acknowledgeUnresolved":false,"disposition":"COPY"}"""
 		}.andExpect { status { isOk() } }.andReturn().response.contentAsString
-		assertTrue(objectMapper.readTree(export).path("filename").textValue().startsWith("plot-launch-announcement-"))
+		assertTrue(objectMapper.readTree(export).path("filename").textValue().startsWith("plot-artifact-"))
 	}
 
 	private fun publish(variantId: UUID, expectedRevisionNumber: Int) {

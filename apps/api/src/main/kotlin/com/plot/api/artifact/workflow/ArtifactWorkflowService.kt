@@ -9,8 +9,6 @@ import com.plot.api.artifact.workflow.model.ArtifactLayoutNode
 import com.plot.api.artifact.workflow.model.ReviewVerdict
 import com.plot.api.artifact.workflow.model.SentenceArtifact
 import com.plot.api.artifact.workflow.model.ValidatedSentenceReview
-import com.plot.api.content.ContentTypeRegistry
-import com.plot.api.content.FrozenPromptVersionLookup
 import java.util.UUID
 
 enum class ArtifactWorkflowRunStatus {
@@ -52,7 +50,6 @@ class ArtifactWorkflowService(
 	private val validator: ModelOutputValidator,
 	private val idGenerator: () -> UUID,
 	private val maxSemanticRewrites: Int = 3,
-	private val frozenPromptVersionLookup: FrozenPromptVersionLookup? = null,
 ) {
 	init {
 		require(maxSemanticRewrites > 0)
@@ -98,13 +95,10 @@ class ArtifactWorkflowService(
 				documentVersion = state.documentVersion,
 			),
 		).value
-		val promptVersion = frozenPromptVersionLookup?.promptVersionFor(state.runId)
-			?: ContentTypeRegistry.CHANGELOG_PROMPT_VERSION
 		val sentences = validator.assignSentenceIds(
 			runId = state.runId,
 			output = output,
 			availableEvidenceIds = state.evidence.map { it.id }.toSet(),
-			maxSentences = ContentTypeRegistry.maxWriterSentences(promptVersion),
 			idGenerator = idGenerator,
 		)
 		val layout = validator.assignLayout(output.layout, output.sentences, sentences)

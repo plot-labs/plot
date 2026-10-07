@@ -6,7 +6,6 @@ import com.plot.api.content.ContentTypeRegistry
 import com.plot.api.content.FrozenContentContext
 import com.plot.api.content.FrozenContentContextLookup
 import com.plot.api.content.FrozenPromptVersionLookup
-import com.plot.api.content.LaunchAnnouncementPromptFactory
 import com.plot.api.artifact.workflow.model.EvidenceSnapshot
 import com.plot.api.artifact.workflow.model.ReviewVerdict
 import com.plot.api.artifact.workflow.model.SentenceArtifact
@@ -39,7 +38,6 @@ class KoogArtifactWorkflowGatewayTest {
 	private val promptFactory = ArtifactPromptFactory(mapper)
 	private val contentTypeRegistry = ContentTypeRegistry(
 		promptFactory,
-		LaunchAnnouncementPromptFactory(mapper),
 	)
 	private val frozenPromptVersionLookup = FrozenPromptVersionLookup {
 		ContentTypeRegistry.CHANGELOG_PROMPT_VERSION
@@ -227,32 +225,11 @@ class KoogArtifactWorkflowGatewayTest {
 	}
 
 	@Test
-	fun `launch prompt version routes writer and reviewer through launch-announcement-v3 factory`() {
-		val launchLookup = FrozenPromptVersionLookup { ContentTypeRegistry.LAUNCH_PROMPT_VERSION }
-		val launchGateway = KoogArtifactWorkflowGateway(
-			transport = FixtureTransport(),
-			properties = properties,
-			contentTypeRegistry = contentTypeRegistry,
-			frozenPromptVersionLookup = launchLookup,
-			frozenContentContextLookup = frozenContentContextLookup,
-		)
-		val launchFactory = contentTypeRegistry.promptFactoryFor(ContentTypeRegistry.LAUNCH_PROMPT_VERSION)
-		val writerPrompt = launchFactory.writer("Ship the beta", listOf(evidence()), null)
-		assertTrue(writerPrompt.system.contains("Write no more than four sentences"))
-		assertTrue(writerPrompt.system.contains("Call-to-action copy must be plain prose only"))
-		assertTrue(writerPrompt.system.contains("Never invent or paste URLs"))
-		assertTrue(writerPrompt.user.contains("<requested_launch_announcement_instruction>"))
-		assertFalse(writerPrompt.system.contains("Write no more than six sentences"))
-
-		val reviewPrompt = launchFactory.reviewer(
-			ReviewerModelRequest(UUID.randomUUID(), listOf(sentence()), listOf(evidence())),
-		)
-		assertTrue(reviewPrompt.system.contains("verify every launch-announcement sentence"))
-		assertTrue(reviewPrompt.system.contains("exaggerated impact or unconfirmed public availability"))
-		assertFalse(reviewPrompt.system.contains("A sentence that neutrally describes a material disagreement is CONFLICT, not SUPPORTED."))
-
-		val result = launchGateway.write(WriterModelRequest(UUID.randomUUID(), "Ship the beta", listOf(evidence())))
-		assertEquals("Shipped citations.", result.value.sentences.single().body)
+	fun `retired launch prompt version falls back to artifact prompts`() {
+		val factory = contentTypeRegistry.promptFactoryFor("launch-announcement-v3")
+		val writerPrompt = factory.writer("Ship the beta", listOf(evidence()), null)
+		assertFalse(writerPrompt.user.contains("<requested_launch_announcement_instruction>"))
+		assertEquals(promptFactory.writer("Ship the beta", listOf(evidence()), null).system, writerPrompt.system)
 	}
 
 	@Test
@@ -334,13 +311,9 @@ class KoogArtifactWorkflowGatewayTest {
 		fun artifactPromptFactory(objectMapper: ObjectMapper) = ArtifactPromptFactory(objectMapper)
 
 		@Bean
-		fun launchAnnouncementPromptFactory(objectMapper: ObjectMapper) = LaunchAnnouncementPromptFactory(objectMapper)
-
-		@Bean
 		fun contentTypeRegistry(
 			artifactPromptFactory: ArtifactPromptFactory,
-			launchAnnouncementPromptFactory: LaunchAnnouncementPromptFactory,
-		) = ContentTypeRegistry(artifactPromptFactory, launchAnnouncementPromptFactory)
+		) = ContentTypeRegistry(artifactPromptFactory)
 
 		@Bean
 		fun frozenPromptVersionLookup() = FrozenPromptVersionLookup {
