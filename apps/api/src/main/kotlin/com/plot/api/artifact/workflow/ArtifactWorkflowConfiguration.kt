@@ -3,7 +3,6 @@ package com.plot.api.artifact.workflow
 import com.plot.api.ai.provider.ArtifactWorkflowModelGateway
 import com.plot.api.common.UuidGenerator
 import com.plot.api.config.PlotAiProperties
-import com.plot.api.content.FrozenPromptVersionLookup
 import com.plot.api.entitlement.WorkspaceAccessService
 import com.plot.api.agent.AgentRunExecutionPersistence
 import com.plot.api.agent.ArtifactWorkflowAgentRunCompletionHandler
@@ -30,11 +29,9 @@ class ArtifactWorkflowConfiguration {
 	fun artifactWorkflowService(
 		validator: ModelOutputValidator,
 		uuidGenerator: UuidGenerator,
-		frozenPromptVersionLookup: FrozenPromptVersionLookup,
 	): ArtifactWorkflowService = ArtifactWorkflowService(
 		validator = validator,
 		idGenerator = uuidGenerator::next,
-		frozenPromptVersionLookup = frozenPromptVersionLookup,
 	)
 
 	@Bean

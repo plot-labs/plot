@@ -417,8 +417,7 @@
         ],
         "contentType": [
           "ARTIFACT",
-          "CHANGELOG",
-          "LAUNCH_ANNOUNCEMENT"
+          "CHANGELOG"
         ],
         "provider": [
           "GITHUB",

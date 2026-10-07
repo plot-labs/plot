@@ -142,7 +142,6 @@ function saveStateLabel(state: "saved" | "saving" | "dirty" | "error", readOnly:
 }
 
 function contentTypeLabel(contentType: Artifact["contentType"]) {
-  if (contentType === "LAUNCH_ANNOUNCEMENT") return "Launch announcement";
   if (contentType === "CHANGELOG") return "Changelog";
   return "Content";
 }

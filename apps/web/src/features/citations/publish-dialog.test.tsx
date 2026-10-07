@@ -89,7 +89,7 @@ describe("PublishDialog", () => {
   it("hides hosted publish for non-changelog content types", () => {
     render(
       <PublishDialog
-        pack={{ ...pack, contentType: "LAUNCH_ANNOUNCEMENT" }}
+        pack={{ ...pack, contentType: "ARTIFACT" }}
         client={{} as PlotApiClient}
         presentation="inline"
       />,

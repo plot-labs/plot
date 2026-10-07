@@ -234,11 +234,7 @@ function ArtifactSources({
                       {related.title || "Untitled content"}
                     </p>
                     <span className="mt-0.5 inline-block text-[11px] text-black/50 dark:text-white/50">
-                      {related.contentType === "LAUNCH_ANNOUNCEMENT"
-                        ? "Launch announcement"
-                        : related.contentType === "CHANGELOG"
-                          ? "Changelog"
-                          : "Content"}
+                      {related.contentType === "CHANGELOG" ? "Changelog" : "Content"}
                     </span>
                   </div>
                   <ArrowUpRight aria-hidden="true" className="size-4 shrink-0 text-black/35 dark:text-white/40" />

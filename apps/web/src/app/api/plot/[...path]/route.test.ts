@@ -38,7 +38,7 @@ describe("Plot same-origin proxy", () => {
     const request = new Request("http://web.test/api/plot/artifacts/artifact-1/replicate", {
       method: "POST",
       headers: { Origin: "http://web.test" },
-      body: JSON.stringify({ contentType: "LAUNCH_ANNOUNCEMENT" }),
+      body: JSON.stringify({ contentType: "ARTIFACT" }),
     });
     const response = await proxyPlotRequest(request, ["artifacts", "artifact-1", "replicate"], {
       fetch: fetcher,
