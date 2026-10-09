@@ -249,12 +249,21 @@ export interface GitHubRepository {
   accessCheckStatus?: GitHubAccessCheckStatus | null;
 }
 
+export interface GitHubAvailableInstallation {
+  installationId: number;
+  accountLogin: string;
+  accountType: "User" | "Organization" | string;
+  connected: boolean;
+  connectable: boolean;
+}
+
 export interface GitHubConnection {
   id: string;
   installationId: number;
   status: string;
   repositories: GitHubRepository[];
   statusReason?: GitHubConnectionStatusReason | string | null;
+  accountLogin?: string | null;
 }
 
 export interface GitHubAccessCheck {
@@ -692,6 +701,9 @@ export interface PlotApiClient {
   listGitHubRepositories(connectionId: string, options?: RequestOptions): Promise<GitHubRepository[]>;
   connectGitHubRepository(connectionId: string, externalRepositoryId: number, options?: RequestOptions): Promise<GitHubRepository>;
   disconnectGitHubRepository(sourceScopeId: string, options?: RequestOptions): Promise<void>;
+  removeGitHubConnection(connectionId: string, options?: RequestOptions): Promise<void>;
+  listGitHubAvailableInstallations(options?: RequestOptions): Promise<GitHubAvailableInstallation[]>;
+  connectGitHubInstallation(installationId: number, options?: RequestOptions): Promise<GitHubInstallationCallback>;
   getGitHubRepositoryMonitoring(sourceScopeId: string, options?: RequestOptions): Promise<GitHubRepositoryMonitoring>;
   retryGitHubRepositoryMonitoring(sourceScopeId: string, options?: RequestOptions): Promise<GitHubRepositoryMonitoring>;
   recheckGitHubRepositoryAccess(sourceScopeId: string, trigger: GitHubAccessCheckTrigger, options?: RequestOptions): Promise<GitHubAccessCheck>;
@@ -809,6 +821,18 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
     disconnectGitHubRepository: (sourceScopeId, requestOptions) => request(
       `/github/repositories/${encodeURIComponent(sourceScopeId)}`,
       { method: "DELETE", signal: requestOptions?.signal },
+    ),
+    removeGitHubConnection: (connectionId, requestOptions) => request(
+      `/github/connections/${encodeURIComponent(connectionId)}`,
+      { method: "DELETE", signal: requestOptions?.signal },
+    ),
+    listGitHubAvailableInstallations: (requestOptions) => request(
+      "/github/installations/available",
+      { signal: requestOptions?.signal },
+    ),
+    connectGitHubInstallation: (installationId, requestOptions) => request(
+      `/github/installations/${encodeURIComponent(String(installationId))}/connect`,
+      { method: "POST", signal: requestOptions?.signal },
     ),
     getGitHubRepositoryMonitoring: (sourceScopeId, requestOptions) => request(
       `/github/repositories/${encodeURIComponent(sourceScopeId)}/monitoring`,

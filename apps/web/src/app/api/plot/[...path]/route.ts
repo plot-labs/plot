@@ -208,6 +208,9 @@ function isAllowed(method: string, path: string[]): boolean {
   if (method === "GET" && route === "github/oauth/callback") return true;
   if (method === "PUT" && /^github\/repositories\/[^/]+$/.test(route)) return true;
   if (method === "DELETE" && /^github\/repositories\/[^/]+$/.test(route)) return true;
+  if (method === "DELETE" && /^github\/connections\/[^/]+$/.test(route)) return true;
+  if (method === "GET" && route === "github/installations/available") return true;
+  if (method === "POST" && /^github\/installations\/\d+\/connect$/.test(route)) return true;
   if (method === "GET" && /^github\/repositories\/[^/]+\/monitoring$/.test(route)) return true;
   if (method === "POST" && /^github\/repositories\/[^/]+\/monitoring\/retry$/.test(route)) return true;
   if (method === "POST" && /^github\/repositories\/[^/]+\/imports$/.test(route)) return true;

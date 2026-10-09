@@ -64,6 +64,18 @@ class GitHubInstallationController(
 		.cacheControl(CacheControl.noStore())
 		.body(connectionService.syncExistingInstallation())
 
+	@GetMapping("/installations/available")
+	fun listAvailableInstallations(): ResponseEntity<List<GitHubAvailableInstallationResponse>> = ResponseEntity
+		.ok()
+		.cacheControl(CacheControl.noStore())
+		.body(connectionService.listAvailableInstallations())
+
+	@PostMapping("/installations/{installationId}/connect")
+	fun connectInstallation(@PathVariable @Min(1) installationId: Long): ResponseEntity<GitHubCallbackResponse> = ResponseEntity
+		.ok()
+		.cacheControl(CacheControl.noStore())
+		.body(connectionService.connectInstallation(installationId))
+
 	@PostMapping("/installations/callback")
 	fun completeInstallation(@Valid @RequestBody request: GitHubCallbackRequest): ResponseEntity<GitHubCallbackResponse> = ResponseEntity
 		.ok()
@@ -91,6 +103,12 @@ class GitHubInstallationController(
 		@PathVariable @Min(1) externalRepositoryId: Long,
 		@Valid @RequestBody request: GitHubConnectRepositoryRequest,
 	): GitHubRepositoryResponse = connectionService.connectRepository(externalRepositoryId, request)
+
+	@DeleteMapping("/connections/{connectionId}")
+	fun removeConnection(@PathVariable connectionId: UUID): ResponseEntity<Void> {
+		connectionService.removeConnection(connectionId)
+		return ResponseEntity.noContent().build()
+	}
 
 	@DeleteMapping("/repositories/{id}")
 	fun disconnectRepository(@PathVariable id: UUID): ResponseEntity<Void> {

@@ -299,6 +299,72 @@ class GitHubConnectionApiIntegrationTest {
 	}
 
 	@Test
+	fun listsEveryReachableInstallationAndWhichOnesCanBeConnected() {
+		fakeClient.userInstallations = listOf(
+			GitHubUserInstallation(installationId = 102, appId = "1", accountId = 555, accountLogin = "acme-org", accountType = "Organization"),
+			GitHubUserInstallation(installationId = 101, appId = "1", accountId = 9001, accountLogin = "acme", accountType = "User"),
+			GitHubUserInstallation(installationId = 103, appId = "1", accountId = 7777, accountLogin = "someone-else", accountType = "User"),
+			GitHubUserInstallation(installationId = 104, appId = "2", accountId = 555, accountLogin = "acme-org", accountType = "Organization"),
+		)
+		fakeClient.installationAccount = GitHubInstallationAccount(555, "acme-org", "Organization")
+		mockMvc.post("/api/github/installations/102/connect").andExpect { status { isOk() } }
+
+		mockMvc.get("/api/github/installations/available")
+			.andExpect {
+				status { isOk() }
+				jsonPath("$.length()") { value(3) }
+				jsonPath("$[0].accountLogin") { value("acme") }
+				jsonPath("$[0].connectable") { value(true) }
+				jsonPath("$[0].connected") { value(false) }
+				jsonPath("$[1].accountLogin") { value("someone-else") }
+				jsonPath("$[1].connectable") { value(false) }
+				jsonPath("$[2].accountLogin") { value("acme-org") }
+				jsonPath("$[2].connected") { value(true) }
+			}
+	}
+
+	@Test
+	fun connectsTheChosenInstallationAlongsideExistingOnes() {
+		completeInstallation()
+		fakeClient.userInstallations = listOf(
+			GitHubUserInstallation(installationId = 101, appId = "1", accountId = 9001, accountLogin = "acme", accountType = "User"),
+			GitHubUserInstallation(installationId = 102, appId = "1", accountId = 555, accountLogin = "acme-org", accountType = "Organization"),
+		)
+		fakeClient.installationAccount = GitHubInstallationAccount(555, "acme-org", "Organization")
+		fakeClient.membershipRole = "admin"
+
+		mockMvc.post("/api/github/installations/102/connect")
+			.andExpect {
+				status { isOk() }
+				jsonPath("$.installationId") { value(102) }
+			}
+
+		mockMvc.get("/api/github/connections")
+			.andExpect { jsonPath("$.length()") { value(2) } }
+	}
+
+	@Test
+	fun refusesAnInstallationTheLinkedAccountCannotReach() {
+		fakeClient.userInstallations = listOf(
+			GitHubUserInstallation(installationId = 101, appId = "1", accountId = 9001, accountLogin = "acme", accountType = "User"),
+		)
+
+		mockMvc.post("/api/github/installations/999/connect")
+			.andExpect { status { isNotFound() }; jsonPath("$.error") { value("GITHUB_INSTALLATION_NOT_FOUND") } }
+	}
+
+	@Test
+	fun refusesAnotherUsersPersonalInstallation() {
+		fakeClient.userInstallations = listOf(
+			GitHubUserInstallation(installationId = 103, appId = "1", accountId = 7777, accountLogin = "someone-else", accountType = "User"),
+		)
+		fakeClient.installationAccount = GitHubInstallationAccount(7777, "someone-else", "User")
+
+		mockMvc.post("/api/github/installations/103/connect")
+			.andExpect { status { isForbidden() } }
+	}
+
+	@Test
 	fun syncSelectsSingleInstallationWhenOnlyOneExists() {
 		fakeClient.userInstallations = listOf(
 			GitHubUserInstallation(installationId = 88, appId = "1", accountId = 9001, accountLogin = "acme", accountType = "User"),
@@ -492,6 +558,99 @@ class GitHubConnectionApiIntegrationTest {
 
 		mockMvc.post("/api/github/repositories/$scopeId/access-check?trigger=CHECK_AGAIN")
 			.andExpect { status { isConflict() }; jsonPath("$.error") { value("REPOSITORY_DISCONNECTED") } }
+	}
+
+	@Test
+	fun listsTheInstallationAccountBeforeAnyRepositoryIsConnected() {
+		completeInstallation()
+
+		mockMvc.get("/api/github/connections")
+			.andExpect {
+				status { isOk() }
+				jsonPath("$[0].accountLogin") { value("acme") }
+				jsonPath("$[0].repositories.length()") { value(0) }
+			}
+	}
+
+	@Test
+	fun removesAnInactiveConnectionAndStopsItsRepositories() {
+		val connectionId = completeInstallation()
+		val scopeId = connect(connectionId, 1001)
+		jdbcTemplate.update(
+			"update connections set status = 'NEEDS_REAUTH', status_reason = 'AUTH_EXPIRED' where id = ?",
+			connectionId,
+		)
+
+		mockMvc.delete("/api/github/connections/$connectionId")
+			.andExpect { status { isNoContent() } }
+
+		mockMvc.get("/api/github/connections")
+			.andExpect {
+				status { isOk() }
+				jsonPath("$[0].status") { value("DISABLED") }
+				jsonPath("$[0].repositories[0].status") { value("DISABLED") }
+				jsonPath("$[0].repositories[0].statusReason") { value("USER_DISCONNECTED") }
+			}
+		assertEquals("DISABLED", jdbcTemplate.queryForObject(
+			"select monitoring_status from github_repository_monitoring where workspace_id = ? and source_scope_id = ?",
+			String::class.java,
+			devContext.devWorkspaceId,
+			scopeId,
+		))
+	}
+
+	@Test
+	fun removingAReplacedConnectionKeepsRepositoriesOwnedByTheCurrentOne() {
+		val connectionId = completeInstallation()
+		val scopeId = connect(connectionId, 1001)
+		val replacedId = UUID.randomUUID()
+		jdbcTemplate.update(
+			"""
+			insert into connections (id, workspace_id, provider, connection_kind, external_connection_key, external_account_login,
+			  permissions, status, status_reason, created_by_user_id, created_at, updated_at)
+			select ?, workspace_id, provider, connection_kind, '66', external_account_login,
+			  permissions, 'NEEDS_REAUTH', 'AUTH_EXPIRED', created_by_user_id, now(), now()
+			from connections where id = ?
+			""".trimIndent(),
+			replacedId,
+			connectionId,
+		)
+		jdbcTemplate.update(
+			"""
+			insert into connection_namespace_bindings (id, workspace_id, provider, connection_id, source_namespace_id, status, valid_from, created_at, updated_at)
+			select ?, workspace_id, provider, ?, source_namespace_id, 'REVOKED', now(), now(), now()
+			from connection_namespace_bindings where connection_id = ?
+			""".trimIndent(),
+			UUID.randomUUID(),
+			replacedId,
+			connectionId,
+		)
+
+		mockMvc.delete("/api/github/connections/$replacedId")
+			.andExpect { status { isNoContent() } }
+
+		assertEquals("ACTIVE", jdbcTemplate.queryForObject(
+			"select status from source_scopes where id = ?",
+			String::class.java,
+			scopeId,
+		))
+	}
+
+	@Test
+	fun keepsAnActiveConnectionWhenRemovalIsRequested() {
+		val connectionId = completeInstallation()
+
+		mockMvc.delete("/api/github/connections/$connectionId")
+			.andExpect { status { isConflict() }; jsonPath("$.error") { value("CONNECTION_ACTIVE") } }
+
+		mockMvc.get("/api/github/connections")
+			.andExpect { jsonPath("$[0].status") { value("ACTIVE") } }
+	}
+
+	@Test
+	fun doesNotRemoveAnotherWorkspaceConnection() {
+		mockMvc.delete("/api/github/connections/${UUID.randomUUID()}")
+			.andExpect { status { isNotFound() } }
 	}
 
 	@Test
