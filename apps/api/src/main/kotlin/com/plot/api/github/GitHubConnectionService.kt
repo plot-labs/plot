@@ -48,12 +48,21 @@ data class GitHubCallbackResponse(
 	val repositories: List<GitHubRepositoryResponse>,
 )
 
+data class GitHubAvailableInstallationResponse(
+	val installationId: Long,
+	val accountLogin: String,
+	val accountType: String,
+	val connected: Boolean,
+	val connectable: Boolean,
+)
+
 data class GitHubConnectionResponse(
 	val id: UUID,
 	val installationId: Long,
 	val status: String,
 	val repositories: List<GitHubRepositoryResponse>,
 	val statusReason: String? = null,
+	val accountLogin: String? = null,
 )
 
 data class GitHubAccessCheckResponse(
@@ -130,21 +139,77 @@ class GitHubConnectionService(
 	): GitHubCallbackResponse {
 		guard.requireEnabled()
 		if (requireOwner) requireOwnerMembership(userId, workspaceId)
-		val link = findLinkedGitHubAccount(userId)
+		val link = requireLinkedGitHubAccount(userId)
+		val installations = accessibleInstallations(link)
+		if (installations.isEmpty()) throw installationNotFound()
+		val installationId = selectAccessibleInstallation(installations, link)
+		verifyInstallationOwnership(userId, installationId)
+		return activateInstallation(userId, workspaceId, installationId)
+	}
+
+	/**
+	 * Lists this app's installations the linked GitHub account can reach, so an owner can
+	 * attach more than the one installation sync picks. Personal installations of other
+	 * users are listed but not connectable, matching [verifyInstallationOwnership].
+	 */
+	fun listAvailableInstallations(): List<GitHubAvailableInstallationResponse> {
+		guard.requireEnabled()
+		requireOwner()
+		val (userId, workspaceId) = currentOwner()
+		val link = requireLinkedGitHubAccount(userId)
+		val connected = sqlExecutor.query(
+			"""
+			select external_connection_key
+			from connections
+			where workspace_id = ? and provider = 'GITHUB' and status = 'ACTIVE'
+			""".trimIndent(),
+			{ rs, _ -> rs.getString(1).orEmpty() },
+			workspaceId,
+		).mapNotNull { parseGitHubInstallationId(it) }.toSet()
+		return accessibleInstallations(link)
+			.sortedWith(compareBy({ !it.accountType.equals("USER", ignoreCase = true) }, { it.accountLogin.lowercase() }))
+			.map {
+				GitHubAvailableInstallationResponse(
+					installationId = it.installationId,
+					accountLogin = it.accountLogin,
+					accountType = it.accountType,
+					connected = it.installationId in connected,
+					connectable = !it.accountType.equals("USER", ignoreCase = true) || it.accountId == link.githubAccountId,
+				)
+			}
+	}
+
+	/** Attaches one installation chosen by the owner; ownership is verified exactly as in sync. */
+	fun connectInstallation(installationId: Long): GitHubCallbackResponse {
+		guard.requireEnabled()
+		requireOwner()
+		val (userId, workspaceId) = currentOwner()
+		val link = requireLinkedGitHubAccount(userId)
+		if (accessibleInstallations(link).none { it.installationId == installationId }) throw installationNotFound()
+		verifyInstallationOwnership(userId, installationId)
+		return activateInstallation(userId, workspaceId, installationId)
+	}
+
+	private fun currentOwner(): Pair<UUID, UUID> {
+		val actor = actorResolver?.current()
+		val userId = actor?.userId ?: devContext.devUserId
+		val workspaceId = actor?.let { actorResolver.requireWorkspace().workspaceId } ?: devContext.devWorkspaceId
+		if (actor != null) requireOwnerMembership(userId, workspaceId)
+		return userId to workspaceId
+	}
+
+	private fun requireLinkedGitHubAccount(userId: UUID): LinkedGitHubAccount =
+		findLinkedGitHubAccount(userId)?.takeIf { !it.accessToken.isNullOrBlank() }
 			?: throw ApiException(
 				HttpStatus.BAD_REQUEST,
 				"GITHUB_ACCOUNT_NOT_LINKED",
 				"No linked GitHub account was found; connect a GitHub account and retry",
 			)
-		val accessToken = link.accessToken?.takeIf { it.isNotBlank() }
-			?: throw ApiException(
-				HttpStatus.BAD_REQUEST,
-				"GITHUB_ACCOUNT_NOT_LINKED",
-				"No linked GitHub account was found; connect a GitHub account and retry",
-			)
+
+	private fun accessibleInstallations(link: LinkedGitHubAccount): List<GitHubUserInstallation> {
 		val appId = properties.appId?.takeIf { it.isNotBlank() } ?: throw notConfigured()
-		val installations = try {
-			githubClient.listUserInstallations(accessToken).filter { it.appId == appId }
+		return try {
+			githubClient.listUserInstallations(requireNotNull(link.accessToken)).filter { it.appId == appId }
 		} catch (exception: ApiException) {
 			if (exception.error != "GITHUB_ACCESS_DENIED") throw exception
 			// A separately issued OAuth token can identify the user but GitHub may
@@ -156,17 +221,13 @@ class GitHubConnectionService(
 					it.accountId == link.githubAccountId
 			}.ifEmpty { throw exception }
 		}
-		if (installations.isEmpty()) {
-			throw ApiException(
-				HttpStatus.NOT_FOUND,
-				"GITHUB_INSTALLATION_NOT_FOUND",
-				"No Plot GitHub App installation was found for your account",
-			)
-		}
-		val installationId = selectAccessibleInstallation(installations, link)
-		verifyInstallationOwnership(userId, installationId)
-		return activateInstallation(userId, workspaceId, installationId)
 	}
+
+	private fun installationNotFound() = ApiException(
+		HttpStatus.NOT_FOUND,
+		"GITHUB_INSTALLATION_NOT_FOUND",
+		"No Plot GitHub App installation was found for your account",
+	)
 
 	private fun activateInstallation(userId: UUID, workspaceId: UUID, installationId: Long): GitHubCallbackResponse {
 		val repositories = githubClient.listInstallationRepositories(installationId)
@@ -248,7 +309,7 @@ class GitHubConnectionService(
 		guard.requireReadAccess()
 		val connections = sqlExecutor.query(
 			"""
-			select id, external_connection_key, status, status_reason
+			select id, external_connection_key, status, status_reason, external_account_login
 			from connections
 			where workspace_id = ? and provider = 'GITHUB'
 			order by created_at desc, id desc
@@ -259,13 +320,14 @@ class GitHubConnectionService(
 					requireNotNull(rs.getString(2)),
 					requireNotNull(rs.getString(3)),
 					rs.getString(4),
+					rs.getString(5)?.takeIf { it.isNotBlank() },
 				)
 			},
 			devContext.devWorkspaceId,
 		)
-		return connections.mapNotNull { (id, installationKey, status, statusReason) ->
+		return connections.mapNotNull { (id, installationKey, status, statusReason, accountLogin) ->
 			val installationId = parseGitHubInstallationId(installationKey) ?: return@mapNotNull null
-			GitHubConnectionResponse(id, installationId, status, listScopesForConnection(id), statusReason)
+			GitHubConnectionResponse(id, installationId, status, listScopesForConnection(id), statusReason, accountLogin)
 		}
 	}
 
@@ -357,6 +419,61 @@ class GitHubConnectionService(
 			scopeId to monitoring
 		}
 		return repository.toResponse(id, "ACTIVE", monitoring.toResponse())
+	}
+
+	/**
+	 * Removes a connection GitHub no longer honors, such as an installation that was
+	 * replaced or deleted. Active connections are kept so a working installation is
+	 * never dropped by accident; reinstalling the same installation reactivates it.
+	 */
+	@Transactional
+	fun removeConnection(connectionId: UUID) {
+		guard.requireEnabled()
+		requireOwner()
+		val connection = findConnection(connectionId)
+		if (connection.status == "ACTIVE") {
+			throw ApiException(HttpStatus.CONFLICT, "CONNECTION_ACTIVE", "An active GitHub connection cannot be removed")
+		}
+		val now = Instant.now()
+		sqlExecutor.update(
+			"""
+			update connections
+			set status = 'DISABLED', status_changed_at = ?, updated_at = ?
+			where workspace_id = ? and id = ? and provider = 'GITHUB'
+			""".trimIndent(),
+			Timestamp.from(now), Timestamp.from(now),
+			devContext.devWorkspaceId,
+			connection.id,
+		)
+		// A replaced installation can share its account namespace with the current one; only stop
+		// repositories this connection still owns through an active binding.
+		sqlExecutor.query(
+			"""
+			select sc.id
+			from source_scopes sc
+			join connection_namespace_bindings b on b.workspace_id = sc.workspace_id
+			 and b.source_namespace_id = sc.source_namespace_id and b.provider = 'GITHUB'
+			where sc.workspace_id = ? and b.connection_id = ? and b.status = 'ACTIVE'
+			  and sc.provider = 'GITHUB' and sc.scope_kind = 'REPOSITORY' and sc.status = 'ACTIVE'
+			""".trimIndent(),
+			{ rs, _ -> requireNotNull(rs.getObject(1, UUID::class.java)) },
+			devContext.devWorkspaceId,
+			connection.id,
+		)
+			.forEach { scopeId ->
+				sqlExecutor.update(
+					"""
+					update source_scopes
+					set status = 'DISABLED', status_reason = 'USER_DISCONNECTED', status_changed_at = ?, updated_at = ?
+					where workspace_id = ? and id = ? and provider = 'GITHUB' and scope_kind = 'REPOSITORY'
+					""".trimIndent(),
+					Timestamp.from(now), Timestamp.from(now),
+					devContext.devWorkspaceId,
+					scopeId,
+				)
+				monitoringPersistence.disable(devContext.devWorkspaceId, scopeId, now)
+				accessChecks.fence(devContext.devWorkspaceId, scopeId, now)
+			}
 	}
 
 	@Transactional
@@ -767,6 +884,7 @@ private data class GitHubConnectionListRow(
 	val installationKey: String,
 	val status: String,
 	val statusReason: String?,
+	val accountLogin: String?,
 )
 
 data class GitHubScopeRecord(

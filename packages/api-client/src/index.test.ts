@@ -293,6 +293,32 @@ it("reads the workspace credit overview with workspace scoping", async () => {
     expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
   });
 
+  it("lists and connects available GitHub installations", async () => {
+    const fetcher = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json([]))
+      .mockResolvedValueOnce(Response.json({ connectionId: "connection-2", installationId: 102, repositories: [] }));
+    const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
+
+    await client.listGitHubAvailableInstallations();
+    await client.connectGitHubInstallation(102);
+
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+      "/api/plot/github/installations/available",
+      "/api/plot/github/installations/102/connect",
+    ]);
+    expect(fetcher.mock.calls[1]?.[1]).toMatchObject({ method: "POST" });
+  });
+
+  it("removes a GitHub connection", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }));
+    const client = createPlotApiClient({ fetch: fetcher, workspaceId: "workspace-1" });
+
+    await client.removeGitHubConnection("connection-1");
+
+    expect(fetcher).toHaveBeenCalledWith("/api/plot/github/connections/connection-1", expect.objectContaining({ method: "DELETE" }));
+    expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).get("X-Plot-Workspace-Id")).toBe("workspace-1");
+  });
+
   it("loads nullable release activity and retries an exact failed request", async () => {
     const activity = {
       id: "request-1",

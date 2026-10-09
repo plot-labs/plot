@@ -13,6 +13,7 @@ export type {
   CreditUsageEvent,
   SourceReference,
   GitHubAccessCheckTrigger,
+  GitHubAvailableInstallation,
   GitHubConnection,
   GitHubImport,
   GitHubReleaseActivity,
