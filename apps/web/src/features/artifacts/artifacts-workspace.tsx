@@ -81,7 +81,7 @@ function ArtifactsWorkspaceContent() {
           description="Your customer updates, from first draft to published post."
           variant="standalone"
           actions={
-            <WorkspaceCreateAction href="/chat" aria-label="Create content" />
+            <WorkspaceCreateAction href="/contents/new" aria-label="Create content" />
           }
         />
 
@@ -99,7 +99,7 @@ function ArtifactsWorkspaceContent() {
               />
             </div>
           ) : artifacts.length === 0 ? (
-            <WorkspaceEmptyState title="No contents yet" description="Start in Chat to create your first draft." />
+            <WorkspaceEmptyState title="No contents yet" description="Choose Create to write your first draft from your shipped changes." />
           ) : (
             <div className="divide-y divide-black/[0.07] dark:divide-white/[0.08]" aria-label="Contents">
               {artifacts.map((artifact) => {

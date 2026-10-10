@@ -167,6 +167,16 @@ components:
     backgroundColor: transparent
     rounded: 14px
     rowMinHeight: 76px
+  source-picker-list:
+    backgroundColor: transparent
+    borderLight: "1px solid rgba(0, 0, 0, 0.09)"
+    borderDark: "1px solid rgba(255, 255, 255, 0.1)"
+    rounded: 14px
+    maxHeight: 320px
+    rowPadding: 10px 20px
+    rowGap: 12px
+    checkboxSize: 16px
+    groupLabelPadding: 8px 20px
   content-status:
     fontSize: 12px
     rounded: 5px
@@ -221,6 +231,9 @@ Inter supplies body copy, navigation, metadata, button labels, and form controls
 | Sidebar navigation | Inter, 13px, medium | `components/layout/sidebar-navigation.tsx` |
 | Workspace search input | Inter, 13px | `components/layout/workspace-page.tsx` |
 | Contents row title | Inter, 14px, medium, up to two lines | `features/artifacts/artifacts-workspace.tsx` |
+| Create content prompt heading and Changes card title | Inter, 13px, medium | `features/content-sources/create-content-workspace.tsx` |
+| Create content change title | Inter, 13px, medium, one line with ellipsis | `features/content-sources/content-source-picker.tsx` |
+| Create content change metadata, repository label, selection count, and Changes status line | Inter, 12px | `features/content-sources/content-source-picker.tsx` |
 | Onboarding headings | Playfair Display; size varies by step and viewport | `features/onboarding/onboarding-flow.tsx` |
 
 Do not replace workspace serif headings with sans-serif solely to match an older documentation rule.
@@ -255,11 +268,43 @@ Dark variants are component-specific. Do not infer dark colors by simply inverti
 | Sidebar | 252px expanded, 72px collapsed |
 | Shared workspace list section | Maximum width 760px |
 | Contents list | Shared workspace maximum width 760px, 24px horizontal padding, matching Automation and Connections |
+| Create content | Shared workspace maximum width 760px, 24px horizontal padding; change list up to 320px tall with its own scroll inside the Changes card |
 | Content document canvas | Maximum width 1080px, side borders, open vertical layout |
 | Sources drawer | Maximum width 420px |
 | Onboarding modal | Maximum width 600px, viewport-constrained scrolling |
 
-Contents shares the workspace width and horizontal padding used by Automation and Connections. Its list has Name, Status, and Updated columns, no All/Draft/Published tabs, and no Type column. The header Create action links to Chat. At smaller widths, rows stack the title above status and update time.
+Contents shares the workspace width and horizontal padding used by Automation and Connections. Its list has Name, Status, and Updated columns, no All/Draft/Published tabs, and no Type column. The header Create action links to Create content (`/contents/new`). At smaller widths, rows stack the title above status and update time.
+
+### Create content
+
+Create content asks for the request first and treats choosing changes as optional. The header keeps the 32px serif heading and 13px description, and its action slot holds a secondary "Contents" back link with a leading arrow rather than a primary action.
+
+| Part | Current treatment |
+| --- | --- |
+| Prompt heading | "What should Plot write?"; 13px medium, 36px below the header |
+| Composer | The shared center composer, 12px below the heading, at full section width. It is visible without scrolling. |
+| Changes card | 16px below the composer; transparent card with a thin border and 14px radius. Its header row has 14px by 20px padding: a 13px medium "Changes" title, a 12px status line 2px below it, and a primary button on the right. |
+| Changes status line | "Automatic. Plot finds the relevant pull requests and commits itself." until something is chosen, then "Plot will write from the N changes you chose." |
+| Changes button | "Choose changes" when closed with nothing chosen, "Edit changes" when closed with a selection, "Hide list" when open |
+| Search | Inside the card under a thin divider, 12px below it, 20px side padding; the shared workspace search field |
+| Selection row | 8px below the search; 12px count on the left ("1 of 20 selected"). On the right, a secondary Clear selection button when something is selected and an "Include commits" checkbox. The row always reserves 34px. |
+| Change list | Under a thin divider, at most 320px tall, scrolling inside the card |
+| Repository group | 12px medium label, 8px by 20px padding, pinned to the top of the list while its rows scroll, on the workspace surface color. Groups are separated by a thin divider and ordered by name. |
+| Change row | 10px by 20px padding and 12px gaps: a 16px native checkbox, the title with a metadata line 2px below it, and a 28px circular icon link (14px arrow) that opens the change on GitHub. Newest first within a repository. |
+| Change metadata | "Pull request" or "Commit", a middle dot, and a medium-format date |
+
+Behavior:
+
+- The card is closed on arrival. The change list is fetched the first time it is opened, not when the page loads.
+- Hiding the list keeps the selection; the status line and button label carry it while the list is closed.
+- Only pull requests are listed at first, and the search placeholder reads "Search pull requests". "Include commits" adds commits and changes the placeholder to "Search pull requests and commits". The checkbox is absent when the workspace has only pull requests or only commits; in the second case the commits are listed directly.
+- The whole title and metadata block is the checkbox label, so clicking it toggles the row. Rows show the shared faint hover surface.
+- The checkbox uses a black accent in light mode and a white accent in dark mode. Selection is shown by the checkbox alone; rows do not tint when selected.
+- At 20 selected, the count reads "20 of 20 selected. Remove one to choose another." Unselected rows are disabled and their label drops to 55% opacity; selected rows stay enabled.
+- Long titles stay on one line and end with an ellipsis at every width. The list never scrolls sideways.
+- A search with no results replaces the rows with one centered 13px line.
+
+Choosing nothing is the default path, so the composer never waits on the change list. At narrow widths the header stacks the back link under the description, and the card's button wraps under its status line.
 
 The content editor uses side borders and content-driven height. Do not add a surrounding rectangle that visually suggests a fixed editing height.
 
@@ -278,7 +323,7 @@ The current CSS token mapping uses a 4px base radius:
 | `rounded-2xl` | 16px |
 | `rounded-full` | Pill/circle |
 
-Components also use explicit radii. Search and workspace icon controls use 9px, sidebar rows use 8px, the Contents table uses 14px, and the onboarding modal uses 22px. These are implemented variants, not violations of the base token scale.
+Components also use explicit radii. Search and workspace icon controls use 9px, sidebar rows use 8px, the Contents table and the Create content Changes card use 14px, and the onboarding modal uses 22px. These are implemented variants, not violations of the base token scale.
 
 ## Buttons
 
@@ -359,7 +404,7 @@ Sources drawer rows use the shared filled GitHub mark for GitHub sources without
 
 ## Loading, empty, and error states
 
-The Contents list currently uses three animated skeleton rows while fetching. Automation uses a spinner with loading text. Both patterns describe pending data and should resolve to the actual data, an explicit empty state, or an error message.
+The Contents list currently uses three animated skeleton rows while fetching. Automation uses a spinner with loading text. Inside its opened Changes card, Create content shows a 13px "Loading your changes…" status line in place of the change list, the shared error notice with retry when the changes cannot be loaded, and a 12px line linking to Connections when nothing has been imported. A draft that fails to start shows a rose alert under the composer and keeps the selection. These patterns describe pending data and should resolve to the actual data, an explicit empty state, or an error message.
 
 Do not describe skeleton loading as forbidden. Preserve retry and disabled states where the UI depends on unavailable sources or configuration.
 
@@ -369,7 +414,7 @@ Do not describe skeleton loading as forbidden. Preserve retry and disabled state
 - Record deliberate variants with their scope; do not turn one screen's style into a universal rule.
 - Update this document when approved UI changes alter dimensions, typography, surfaces, or interaction states.
 - If a new request is to synchronize documentation, change the documentation rather than restyling the implementation to fit older prose.
-- Shared references: `app/globals.css`, `components/layout/workspace-page.tsx`, `components/layout/sidebar-onboarding.tsx`, `features/artifacts/artifacts-workspace.tsx`, `features/routines/routines-workspace.tsx`, and `features/citations/tiptap-citation-extension.tsx`.
+- Shared references: `app/globals.css`, `components/layout/workspace-page.tsx`, `components/layout/sidebar-onboarding.tsx`, `features/artifacts/artifacts-workspace.tsx`, `features/content-sources/create-content-workspace.tsx`, `features/content-sources/content-source-picker.tsx`, `features/routines/routines-workspace.tsx`, and `features/citations/tiptap-citation-extension.tsx`.
 
 ### Shared workspace list controls
 
