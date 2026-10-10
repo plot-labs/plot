@@ -8,6 +8,7 @@ import { LoaderCircle, Trash2, Copy, ExternalLink } from "lucide-react";
 
 import { getSelectedWorkspaceId, plotApiClient, type WorkspaceSummary } from "@/lib/api-client";
 import { publicChangelogUrl } from "@/lib/public-changelog-url";
+import { useWorkspaceChanged } from "@/lib/workspace-changed";
 
 const maxLogoBytes = 400_000;
 
@@ -31,24 +32,19 @@ export function WorkspaceGeneral() {
 	const [subscriptionPortalError, setSubscriptionPortalError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    function handleWorkspaceChanged() {
-      setWorkspace(null);
-      setName("");
-      setSavedName("");
-      setLogoUrl(null);
-      setSavedLogoUrl(null);
-      setPublicCitationsEnabled(true);
-      setSavedPublicCitationsEnabled(true);
-      setMessage(null);
-      setError(null);
-      setIsLoading(true);
-      setReloadNonce((value) => value + 1);
-    }
-
-    window.addEventListener("plot:workspace-changed", handleWorkspaceChanged);
-    return () => window.removeEventListener("plot:workspace-changed", handleWorkspaceChanged);
-  }, []);
+  useWorkspaceChanged(() => {
+    setWorkspace(null);
+    setName("");
+    setSavedName("");
+    setLogoUrl(null);
+    setSavedLogoUrl(null);
+    setPublicCitationsEnabled(true);
+    setSavedPublicCitationsEnabled(true);
+    setMessage(null);
+    setError(null);
+    setIsLoading(true);
+    setReloadNonce((value) => value + 1);
+  });
 
   useEffect(() => {
     let cancelled = false;

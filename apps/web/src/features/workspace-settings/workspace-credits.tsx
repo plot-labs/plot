@@ -9,6 +9,7 @@ import {
   type CreditUsageEvent,
   type WorkspaceCreditOverview,
 } from "@/lib/api-client";
+import { useWorkspaceChanged } from "@/lib/workspace-changed";
 
 const numberFormat = new Intl.NumberFormat("en-US");
 const dateFormat = new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" });
@@ -20,14 +21,14 @@ export function WorkspaceCredits() {
   const [reloadNonce, setReloadNonce] = useState(0);
   const lastFocusRefreshAt = useRef(0);
 
-  useEffect(() => {
-    const handleWorkspaceChanged = () => {
-      setOverview(null);
-      setError(null);
-      setIsLoading(true);
-      setReloadNonce((value) => value + 1);
-    };
+  useWorkspaceChanged(() => {
+    setOverview(null);
+    setError(null);
+    setIsLoading(true);
+    setReloadNonce((value) => value + 1);
+  });
 
+  useEffect(() => {
     const refreshWhenVisible = () => {
       if (document.visibilityState !== "visible") return;
 
@@ -37,11 +38,9 @@ export function WorkspaceCredits() {
       setReloadNonce((value) => value + 1);
     };
 
-    window.addEventListener("plot:workspace-changed", handleWorkspaceChanged);
     window.addEventListener("focus", refreshWhenVisible);
     document.addEventListener("visibilitychange", refreshWhenVisible);
     return () => {
-      window.removeEventListener("plot:workspace-changed", handleWorkspaceChanged);
       window.removeEventListener("focus", refreshWhenVisible);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };

@@ -15,6 +15,7 @@ import {
   workspaceSectionClass,
 } from "@/components/layout/workspace-page";
 import { getSelectedWorkspaceId, plotApiClient, type GitHubConnection } from "@/lib/api-client";
+import { useWorkspaceChanged } from "@/lib/workspace-changed";
 
 import { followedRepositoryCount, githubConnectionStatus } from "./github-connection-status";
 import { BrandIcon, type IntegrationBrand } from "./integration-brand-icon";
@@ -85,15 +86,10 @@ export function IntegrationsWorkspace() {
     router.replace(`${githubPagePath}?${forwarded.toString()}`);
   }, [hasGitHubCallback, router, searchParams]);
 
-  useEffect(() => {
-    function handleWorkspaceChanged() {
-      setConnections(null);
-      setReloadNonce((value) => value + 1);
-    }
-
-    window.addEventListener("plot:workspace-changed", handleWorkspaceChanged);
-    return () => window.removeEventListener("plot:workspace-changed", handleWorkspaceChanged);
-  }, []);
+  useWorkspaceChanged(() => {
+    setConnections(null);
+    setReloadNonce((value) => value + 1);
+  });
 
   useEffect(() => {
     if (hasGitHubCallback) return;

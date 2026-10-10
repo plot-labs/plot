@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { LoaderCircle } from "lucide-react";
 
 import { plotApiClient, type ContentProfile } from "@/lib/api-client";
+import { useWorkspaceChanged } from "@/lib/workspace-changed";
 
 export function WorkspaceContentProfile() {
   const [profile, setProfile] = useState<ContentProfile | null>(null);
@@ -19,17 +20,13 @@ export function WorkspaceContentProfile() {
   const [error, setError] = useState<string | null>(null);
   const [reloadNonce, setReloadNonce] = useState(0);
 
-  useEffect(() => {
-    function handleWorkspaceChanged() {
-      setProfile(null);
-      setMessage(null);
-      setError(null);
-      setIsLoading(true);
-      setReloadNonce((value) => value + 1);
-    }
-    window.addEventListener("plot:workspace-changed", handleWorkspaceChanged);
-    return () => window.removeEventListener("plot:workspace-changed", handleWorkspaceChanged);
-  }, []);
+  useWorkspaceChanged(() => {
+    setProfile(null);
+    setMessage(null);
+    setError(null);
+    setIsLoading(true);
+    setReloadNonce((value) => value + 1);
+  });
 
   useEffect(() => {
     let cancelled = false;

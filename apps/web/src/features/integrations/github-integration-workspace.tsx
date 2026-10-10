@@ -27,6 +27,7 @@ import {
   type GitHubConnection,
   type GitHubRepository,
 } from "@/lib/api-client";
+import { useWorkspaceChanged } from "@/lib/workspace-changed";
 
 import {
   AddGitHubAccountDialog,
@@ -113,33 +114,28 @@ export function GitHubIntegrationWorkspace() {
     setReloadNonce((value) => value + 1);
   };
 
-  useEffect(() => {
-    function handleWorkspaceChanged() {
-      setConnections([]);
-      setIsOwner(null);
-      setConnectionNeedsReconnect(false);
-      setMessage(null);
-      setMessageRequestId(null);
-      setNotice(null);
-      setConnectDialogOpen(false);
-      setRepositoryDialogConnectionId(null);
-      setAddAccountOpen(false);
-      setAddAccountError(null);
-      setConnectingInstallationId(null);
-      pendingRepositoriesConnectionRef.current = null;
-      actionAbortRef.current?.abort();
-      actionAbortRef.current = null;
-      actionRef.current = null;
-      setAction(null);
-      setDisconnectingRepositoryId(null);
-      setRemovingConnectionId(null);
-      setIsLoading(true);
-      setReloadNonce((value) => value + 1);
-    }
-
-    window.addEventListener("plot:workspace-changed", handleWorkspaceChanged);
-    return () => window.removeEventListener("plot:workspace-changed", handleWorkspaceChanged);
-  }, []);
+  useWorkspaceChanged(() => {
+    setConnections([]);
+    setIsOwner(null);
+    setConnectionNeedsReconnect(false);
+    setMessage(null);
+    setMessageRequestId(null);
+    setNotice(null);
+    setConnectDialogOpen(false);
+    setRepositoryDialogConnectionId(null);
+    setAddAccountOpen(false);
+    setAddAccountError(null);
+    setConnectingInstallationId(null);
+    pendingRepositoriesConnectionRef.current = null;
+    actionAbortRef.current?.abort();
+    actionAbortRef.current = null;
+    actionRef.current = null;
+    setAction(null);
+    setDisconnectingRepositoryId(null);
+    setRemovingConnectionId(null);
+    setIsLoading(true);
+    setReloadNonce((value) => value + 1);
+  });
 
   useEffect(() => {
     const controller = new AbortController();
