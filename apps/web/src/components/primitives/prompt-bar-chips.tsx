@@ -1,42 +1,5 @@
 import type { PromptSkill } from "@/components/primitives/prompt-bar";
-import { Icon } from "@/components/primitives/prompt-bar-demo";
-
-/** Attached files shown above the input, each with a remove button. */
-export function PromptAttachmentChips({
-  attachments,
-  pill,
-  onRemove,
-}: {
-  attachments: string[];
-  pill: boolean;
-  onRemove: (index: number) => void;
-}) {
-  if (attachments.length === 0) return null;
-  return (
-    <div className={`flex flex-wrap gap-1.5 pt-0.5 ${pill ? "px-1" : "px-0.5"}`}>
-      {attachments.map((file, i) => (
-        <span
-          key={`${file}-${i}`}
-          className={`flex h-6.5 items-center gap-1.5 bg-field py-1 pr-1 pl-1.5 text-[11.5px] text-ink-2 shadow-hairline ${
-            pill ? "rounded-full" : "rounded-chip"
-          }`}
-          style={{ animation: "pop-in 200ms cubic-bezier(0.23,1,0.32,1) both" }}
-        >
-          <Icon size={12}><g><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /></g></Icon>
-          <span className="max-w-36 truncate">{file}</span>
-          <button
-            type="button"
-            aria-label={`Remove ${file}`}
-            onClick={() => onRemove(i)}
-            className="glass-button glass-icon -my-1 flex size-6 items-center justify-center"
-          >
-            <Icon size={10} strokeWidth={2.5}><path d="M18 6L6 18M6 6l12 12" /></Icon>
-          </button>
-        </span>
-      ))}
-    </div>
-  );
-}
+import { Icon } from "@/components/primitives/prompt-bar-icon";
 
 /** Skills selected for the next message, each with a remove button. */
 export function PromptSkillChips({
