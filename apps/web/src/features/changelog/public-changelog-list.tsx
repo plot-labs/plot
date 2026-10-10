@@ -1,22 +1,13 @@
 import Link from "next/link";
 
 import type { PublicChangelogEntrySummary } from "@plot/api-client";
+import { formatPublishedAt } from "@/features/changelog/format-published-at";
 import { publicChangelogEntryPath } from "@/lib/public-changelog-url";
 
 type PublicChangelogListProps = {
   workspaceSlug: string;
   entries: PublicChangelogEntrySummary[];
 };
-
-const publishedAtFormatter = new Intl.DateTimeFormat(undefined, {
-  dateStyle: "medium",
-  timeStyle: "short",
-});
-
-function formatPublishedAt(value: string) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : publishedAtFormatter.format(date);
-}
 
 export function PublicChangelogList({ workspaceSlug, entries }: PublicChangelogListProps) {
   if (entries.length === 0) {

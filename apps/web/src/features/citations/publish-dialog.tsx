@@ -4,10 +4,11 @@ import { Check, Copy, ExternalLink, Globe, ShieldAlert, Undo2, X } from "lucide-
 import { useState, type ReactNode } from "react";
 
 import { PlotApiError, type Artifact, type ArtifactPublication, type PlotApiClient } from "@plot/api-client";
+import { focusStatement, isStatementWarning, type StatementWarning } from "@/features/citations/statement-warnings";
 import { publicChangelogEntryUrl } from "@/lib/public-changelog-url";
 import { useWorkspaceEntitlement } from "@/lib/use-workspace-entitlement";
 
-type PublishWarning = { key: string; sentenceNumber: number; excerpt: string };
+type PublishWarning = StatementWarning;
 
 type PublishSuccess = {
   entryId: string;
@@ -69,7 +70,7 @@ export function PublishDialog({
     } catch (error) {
       if (error instanceof PlotApiError && error.code === "PUBLISH_CONFIRMATION_REQUIRED") {
         const warnings = Array.isArray(error.details?.warnings)
-          ? error.details.warnings.filter(isPublishWarning)
+          ? error.details.warnings.filter(isStatementWarning)
           : [];
         setConfirmation({ warnings });
         setMessage("Explicit confirmation is required before publish.");
@@ -576,25 +577,4 @@ function PublishSuccessPanel({
       </div>
     </div>
   );
-}
-
-function focusStatement(pack: Artifact, sentenceNumber: number) {
-  const sentenceId = [...pack.variant.sentences].sort((a, b) => a.orderIndex - b.orderIndex)[sentenceNumber - 1]?.id;
-  const sentence = sentenceId
-    ? document.querySelector<HTMLElement>(`[data-statement-id="${sentenceId}"]`)
-    : null;
-  sentence?.scrollIntoView?.({ block: "center", behavior: "smooth" });
-  sentence?.focus();
-  if (sentence) {
-    sentence.dataset.statementHighlight = "true";
-    window.setTimeout(() => {
-      if (sentence.isConnected) delete sentence.dataset.statementHighlight;
-    }, 2_000);
-  }
-}
-
-function isPublishWarning(value: unknown): value is PublishWarning {
-  if (!value || typeof value !== "object") return false;
-  const warning = value as Record<string, unknown>;
-  return typeof warning.key === "string" && typeof warning.sentenceNumber === "number" && typeof warning.excerpt === "string";
 }

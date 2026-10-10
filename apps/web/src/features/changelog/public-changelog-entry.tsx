@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import type { PublicChangelogCitation, PublicChangelogEntry } from "@plot/api-client";
+import { formatPublishedAt } from "@/features/changelog/format-published-at";
 import { PublicCitationChip } from "@/features/changelog/public-citation-chip";
 import { publicChangelogPath } from "@/lib/public-changelog-url";
 import { isSafeHttpUrl } from "@/lib/safe-url";
@@ -11,16 +12,6 @@ type PublicChangelogEntryViewProps = {
   workspaceSlug: string;
   entry: PublicChangelogEntry;
 };
-
-const publishedAtFormatter = new Intl.DateTimeFormat(undefined, {
-  dateStyle: "medium",
-  timeStyle: "short",
-});
-
-function formatPublishedAt(value: string) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : publishedAtFormatter.format(date);
-}
 
 function MarkdownBody({ markdown }: { markdown: string }) {
   return (

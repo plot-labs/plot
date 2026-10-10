@@ -775,16 +775,7 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
   async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const response = await fetchResponse(path, init);
     const payload = await parsePayload(response);
-    if (!response.ok) {
-      const error = isRecord(payload) ? payload : {};
-      throw new PlotApiError(
-        response.status,
-        typeof error.error === "string" ? error.error : "API_ERROR",
-        typeof error.message === "string" ? error.message : `Plot API request failed (${response.status})`,
-        isRecord(error.details) ? error.details : null,
-        typeof error.resourceId === "string" ? error.resourceId : null,
-      );
-    }
+    if (!response.ok) throw toApiError(response, payload);
     return payload as T;
   }
 
@@ -946,11 +937,7 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
         headers: { Accept: "text/event-stream" },
       });
       if (!response.ok) {
-        const payload = await parsePayload(response);
-        const error = isRecord(payload) ? payload : {};
-        throw new PlotApiError(response.status, typeof error.error === "string" ? error.error : "API_ERROR",
-          typeof error.message === "string" ? error.message : "Chat stream request failed",
-          isRecord(error.details) ? error.details : null, typeof error.resourceId === "string" ? error.resourceId : null);
+        throw toApiError(response, await parsePayload(response), "Chat stream request failed");
       }
       await consumeChatStream(response, id, streamOptions);
     },
@@ -1031,58 +1018,54 @@ export function createPlotApiClient(options: { baseUrl?: string; fetch?: typeof 
   };
 }
 
-export async function fetchPublicChangelog(
+export interface PublicChangelogRequestOptions { baseUrl: string; fetch?: typeof fetch; signal?: AbortSignal }
+
+export function fetchPublicChangelog(
   workspaceSlug: string,
-  options: { baseUrl: string; fetch?: typeof fetch; signal?: AbortSignal } ,
+  options: PublicChangelogRequestOptions,
 ): Promise<PublicChangelog> {
+  return fetchPublicJson(`/api/public/changelog/${encodeURIComponent(workspaceSlug)}`, options);
+}
+
+export function fetchPublicChangelogEntry(
+  workspaceSlug: string,
+  entrySlug: string,
+  options: PublicChangelogRequestOptions,
+): Promise<PublicChangelogEntry> {
+  return fetchPublicJson(
+    `/api/public/changelog/${encodeURIComponent(workspaceSlug)}/${encodeURIComponent(entrySlug)}`,
+    options,
+  );
+}
+
+/** Unauthenticated GET against the API origin; public pages call it without the BFF. */
+async function fetchPublicJson<T>(path: string, options: PublicChangelogRequestOptions): Promise<T> {
   const baseUrl = options.baseUrl.replace(/\/$/, "");
   const fetcher = options.fetch ?? globalThis.fetch;
-  const response = await fetcher(`${baseUrl}/api/public/changelog/${encodeURIComponent(workspaceSlug)}`, {
+  const response = await fetcher(`${baseUrl}${path}`, {
     cache: "no-store",
     headers: { Accept: "application/json" },
     signal: options.signal,
   });
   const payload = await parsePayload(response);
-  if (!response.ok) {
-    const error = isRecord(payload) ? payload : {};
-    throw new PlotApiError(
-      response.status,
-      typeof error.error === "string" ? error.error : "API_ERROR",
-      typeof error.message === "string" ? error.message : `Plot API request failed (${response.status})`,
-      isRecord(error.details) ? error.details : null,
-      typeof error.resourceId === "string" ? error.resourceId : null,
-    );
-  }
-  return payload as PublicChangelog;
+  if (!response.ok) throw toApiError(response, payload);
+  return payload as T;
 }
 
-export async function fetchPublicChangelogEntry(
-  workspaceSlug: string,
-  entrySlug: string,
-  options: { baseUrl: string; fetch?: typeof fetch; signal?: AbortSignal },
-): Promise<PublicChangelogEntry> {
-  const baseUrl = options.baseUrl.replace(/\/$/, "");
-  const fetcher = options.fetch ?? globalThis.fetch;
-  const response = await fetcher(
-    `${baseUrl}/api/public/changelog/${encodeURIComponent(workspaceSlug)}/${encodeURIComponent(entrySlug)}`,
-    {
-      cache: "no-store",
-      headers: { Accept: "application/json" },
-      signal: options.signal,
-    },
+/** Maps the API error envelope to PlotApiError, tolerating bodies that are not an envelope. */
+function toApiError(
+  response: Response,
+  payload: unknown,
+  fallbackMessage = `Plot API request failed (${response.status})`,
+): PlotApiError {
+  const error = isRecord(payload) ? payload : {};
+  return new PlotApiError(
+    response.status,
+    typeof error.error === "string" ? error.error : "API_ERROR",
+    typeof error.message === "string" ? error.message : fallbackMessage,
+    isRecord(error.details) ? error.details : null,
+    typeof error.resourceId === "string" ? error.resourceId : null,
   );
-  const payload = await parsePayload(response);
-  if (!response.ok) {
-    const error = isRecord(payload) ? payload : {};
-    throw new PlotApiError(
-      response.status,
-      typeof error.error === "string" ? error.error : "API_ERROR",
-      typeof error.message === "string" ? error.message : `Plot API request failed (${response.status})`,
-      isRecord(error.details) ? error.details : null,
-      typeof error.resourceId === "string" ? error.resourceId : null,
-    );
-  }
-  return payload as PublicChangelogEntry;
 }
 
 async function parsePayload(response: Response): Promise<unknown> {

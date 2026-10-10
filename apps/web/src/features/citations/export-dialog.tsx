@@ -4,11 +4,12 @@ import { Check, ChevronDown, Copy, Download, ShieldAlert, X } from "lucide-react
 import { useEffect, useRef, useState } from "react";
 
 import { PlotApiError, type Artifact, type PlotApiClient } from "@plot/api-client";
+import { focusStatement, isStatementWarning, type StatementWarning } from "@/features/citations/statement-warnings";
 
 type Disposition = "COPY" | "DOWNLOAD";
 
 const UNSAVED_EXPORT_MESSAGE = "Save your changes before exporting. Export uses the last saved draft.";
-type ExportWarning = { key: string; sentenceNumber: number; excerpt: string };
+type ExportWarning = StatementWarning;
 
 export function ExportDialog({
   pack,
@@ -96,7 +97,7 @@ export function ExportDialog({
     } catch (error) {
       if (error instanceof PlotApiError && error.code === "EXPORT_CONFIRMATION_REQUIRED") {
         const warnings = Array.isArray(error.details?.warnings)
-          ? error.details.warnings.filter(isExportWarning)
+          ? error.details.warnings.filter(isStatementWarning)
           : [];
         setConfirmation({ disposition, warnings });
         setMessage("Explicit confirmation is required before export.");
@@ -334,27 +335,6 @@ function ExportConfirmation({ confirmation, pending, pack, onCancel, onConfirm }
       <button aria-busy={Boolean(pending)} autoFocus type="button" disabled={Boolean(pending)} onClick={onConfirm} className="glass-button glass-primary mt-3 inline-flex items-center gap-2"><Check aria-hidden="true" className="size-4" /> Confirm and {confirmation.disposition === "COPY" ? "copy" : "download"}</button>
     </div>
   );
-}
-
-function focusStatement(pack: Artifact, sentenceNumber: number) {
-  const sentenceId = [...pack.variant.sentences].sort((a, b) => a.orderIndex - b.orderIndex)[sentenceNumber - 1]?.id;
-  const sentence = sentenceId
-    ? document.querySelector<HTMLElement>(`[data-statement-id="${sentenceId}"]`)
-    : null;
-  sentence?.scrollIntoView?.({ block: "center", behavior: "smooth" });
-  sentence?.focus();
-  if (sentence) {
-    sentence.dataset.statementHighlight = "true";
-    window.setTimeout(() => {
-      if (sentence.isConnected) delete sentence.dataset.statementHighlight;
-    }, 2_000);
-  }
-}
-
-function isExportWarning(value: unknown): value is ExportWarning {
-  if (!value || typeof value !== "object") return false;
-  const warning = value as Record<string, unknown>;
-  return typeof warning.key === "string" && typeof warning.sentenceNumber === "number" && typeof warning.excerpt === "string";
 }
 
 function downloadText(text: string, filename: string, mediaType: string) {
