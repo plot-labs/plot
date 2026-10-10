@@ -10,6 +10,19 @@ import { PromptInput, PromptInputTextarea, PromptInputSubmit } from "@/component
 import { createShader, playSweep, accentChain, ACCENTS } from "glimm";
 import type { ChatReasoningEffort } from "@plot/api-client";
 import { ChatModelIcon, type ChatModelProvider } from "@/features/chat/chat-model-icon";
+import { PromptAttachmentChips, PromptSkillChips } from "@/components/primitives/prompt-bar-chips";
+import {
+  AUTO_STEPS,
+  BRANDS,
+  COMMANDS,
+  DEMO_MODELS,
+  DICTATION,
+  FILES,
+  GLYPHS,
+  Icon,
+  SOURCES,
+} from "@/components/primitives/prompt-bar-demo";
+import { REASONING_EFFORT_OPTIONS, preferredReasoningEffort, reasoningEffortsFor } from "@/lib/reasoning-effort";
 
 /* The built-in "prism" palette is only cyan→indigo→magenta, so a sweep
  * reads as blue/purple. Build a true full-spectrum rainbow instead. */
@@ -31,21 +44,6 @@ const RAINBOW = accentChain([
  * Variants: Rounded (card radius) · Pill (full radius).
  * ───────────────────────────────────────────────────────── */
 
-function Icon({ children, size = 15, strokeWidth = 1.8 }: { children: React.ReactNode; size?: number; strokeWidth?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      {children}
-    </svg>
-  );
-}
-
-const GLYPHS: Record<string, React.ReactNode> = {
-  clip: <path d="m21.4 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />,
-  chart: <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />,
-  layers: <g><path d="M12 2 2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5M2 12l10 5 10-5" /></g>,
-  globe: <g><circle cx="12" cy="12" r="10" /><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></g>,
-};
-
 export type PromptModelOption = {
   id: string;
   label: string;
@@ -55,135 +53,6 @@ export type PromptModelOption = {
   reasoningEfforts?: readonly ChatReasoningEffort[];
   reasoningDefault?: ChatReasoningEffort;
 };
-
-/* real product marks, inline so the file stays self-contained */
-const BRANDS: Record<string, React.ReactNode> = {
-  figma: (
-    <svg width="11" height="16" viewBox="0 0 38 57" aria-hidden="true">
-      <path d="M9.5 57A9.5 9.5 0 0 0 19 47.5V38H9.5a9.5 9.5 0 0 0 0 19z" fill="#0ACF83" />
-      <path d="M0 28.5A9.5 9.5 0 0 1 9.5 19H19v19H9.5A9.5 9.5 0 0 1 0 28.5z" fill="#A259FF" />
-      <path d="M0 9.5A9.5 9.5 0 0 1 9.5 0H19v19H9.5A9.5 9.5 0 0 1 0 9.5z" fill="#F24E1E" />
-      <path d="M19 0h9.5a9.5 9.5 0 1 1 0 19H19V0z" fill="#FF7262" />
-      <path d="M38 28.5a9.5 9.5 0 1 1-19 0 9.5 9.5 0 0 1 19 0z" fill="#1ABCFE" />
-    </svg>
-  ),
-  slack: (
-    <svg width="15" height="15" viewBox="0 0 127 127" aria-hidden="true">
-      <path d="M27.2 80c0 7.3-5.9 13.2-13.2 13.2C6.7 93.2.8 87.3.8 80c0-7.3 5.9-13.2 13.2-13.2h13.2V80zm6.6 0c0-7.3 5.9-13.2 13.2-13.2 7.3 0 13.2 5.9 13.2 13.2v33c0 7.3-5.9 13.2-13.2 13.2-7.3 0-13.2-5.9-13.2-13.2V80z" fill="#E01E5A" />
-      <path d="M47 27.2c-7.3 0-13.2-5.9-13.2-13.2C33.8 6.7 39.7.8 47 .8c7.3 0 13.2 5.9 13.2 13.2v13.2H47zm0 6.7c7.3 0 13.2 5.9 13.2 13.2 0 7.3-5.9 13.2-13.2 13.2H13.9C6.6 60.3.7 54.4.7 47.1c0-7.3 5.9-13.2 13.2-13.2H47z" fill="#36C5F0" />
-      <path d="M99.9 47.1c0-7.3 5.9-13.2 13.2-13.2 7.3 0 13.2 5.9 13.2 13.2 0 7.3-5.9 13.2-13.2 13.2H99.9V47.1zm-6.6 0c0 7.3-5.9 13.2-13.2 13.2-7.3 0-13.2-5.9-13.2-13.2V13.9C66.9 6.6 72.8.7 80.1.7c7.3 0 13.2 5.9 13.2 13.2v33.2z" fill="#2EB67D" />
-      <path d="M80.1 99.8c7.3 0 13.2 5.9 13.2 13.2 0 7.3-5.9 13.2-13.2 13.2-7.3 0-13.2-5.9-13.2-13.2V99.8h13.2zm0-6.6c-7.3 0-13.2-5.9-13.2-13.2 0-7.3 5.9-13.2 13.2-13.2h33.1c7.3 0 13.2 5.9 13.2 13.2 0 7.3-5.9 13.2-13.2 13.2H80.1z" fill="#ECB22E" />
-    </svg>
-  ),
-  gmail: (
-    <svg width="15" height="12" viewBox="0 0 256 193" aria-hidden="true">
-      <path d="M58.182 192.05V93.14L27.507 65.077 0 49.504v125.091c0 9.658 7.825 17.455 17.455 17.455h40.727Z" fill="#4285F4" />
-      <path d="M197.818 192.05h40.727c9.659 0 17.455-7.826 17.455-17.455V49.505l-31.156 17.837-27.026 25.798v98.91Z" fill="#34A853" />
-      <path d="m58.182 93.14-4.174-38.647 4.174-36.989L128 69.868l69.818-52.364 4.669 34.992-4.669 40.644L128 145.504 58.182 93.14Z" fill="#EA4335" />
-      <path d="M197.818 17.504V93.14L256 49.504V26.231c0-21.585-24.64-33.89-41.89-20.945l-16.292 12.218Z" fill="#FBBC04" />
-      <path d="m0 49.504 26.759 20.07L58.182 93.14V17.504L41.89 5.286C24.61-7.66 0 4.646 0 26.23v23.273Z" fill="#C5221F" />
-    </svg>
-  ),
-};
-
-type Source = {
-  key: string;
-  name: string;
-  desc: string;
-  glyph?: string;
-  brand?: string;
-  attach?: boolean;
-  connect?: boolean;
-};
-
-const SOURCES: Source[] = [
-  { key: "attach", name: "Add photos & files", desc: "Upload from your computer", glyph: "clip", attach: true },
-  { key: "scoop", name: "Scoop Data", desc: "Sales & churn metrics", glyph: "chart" },
-  { key: "flavors", name: "Flavor records", desc: "26 makers, tags, links", glyph: "layers" },
-  { key: "web", name: "Web search", desc: "Real-time news and info", glyph: "globe" },
-  { key: "figma", name: "Figma", desc: "Design-to-code workflows", brand: "figma" },
-  { key: "slack", name: "Slack", desc: "Read and manage Slack", brand: "slack" },
-  { key: "gmail", name: "Gmail", desc: "Read and manage Gmail", brand: "gmail", connect: true },
-];
-
-const COMMANDS = [
-  { key: "compare", name: "/compare", desc: "Flavor vs. last summer" },
-  { key: "churn-plan", name: "/churn-plan", desc: "Draft a churn schedule" },
-  { key: "restock", name: "/restock", desc: "Build a reorder list" },
-  { key: "draft-email", name: "/draft-email", desc: "Write a supplier email" },
-  { key: "summarize", name: "/summarize", desc: "Digest the thread so far" },
-];
-
-const DEMO_MODELS: readonly PromptModelOption[] = [
-  { id: "sprinkles-5", label: "Sprinkles 5", description: "Flagship demo model", pricing: "Demo", provider: "auto" },
-  { id: "vanilla-1", label: "Vanilla 1", description: "Fast demo model", pricing: "Demo", provider: "auto" },
-  { id: "freezer-burn", label: "Freezer Burn 0.4", description: "Legacy demo model", pricing: "Demo", provider: "auto" },
-];
-
-export const REASONING_EFFORT_OPTIONS: readonly {
-  value: ChatReasoningEffort;
-  label: string;
-}[] = [
-  { value: "none", label: "None" },
-  { value: "minimal", label: "Minimal" },
-  { value: "low", label: "Low" },
-  { value: "medium", label: "Medium" },
-  { value: "high", label: "High" },
-  { value: "xhigh", label: "Extra high" },
-  { value: "max", label: "Max" },
-];
-
-const DEFAULT_REASONING_EFFORTS = REASONING_EFFORT_OPTIONS.map((option) => option.value);
-
-function reasoningEffortsFor(model: PromptModelOption): readonly ChatReasoningEffort[] {
-  return model.reasoningEfforts ?? DEFAULT_REASONING_EFFORTS;
-}
-
-function preferredReasoningEffort(model: PromptModelOption, supported: readonly ChatReasoningEffort[]): ChatReasoningEffort {
-  const preferred: (ChatReasoningEffort | undefined)[] = [
-    model.reasoningDefault,
-    "medium",
-    "high",
-    "low",
-    "minimal",
-    "none",
-    "xhigh",
-    "max",
-  ];
-  return (preferred.find((effort): effort is ChatReasoningEffort => effort !== undefined && supported.includes(effort))
-    ?? supported[0]
-    ?? "medium");
-}
-
-const FILES = ["flavor-chart.png", "summer-menu.pdf", "pos-export.csv"];
-const DICTATION = "Compare pistachio weekends to last summer";
-
-/* self-running demo: walk the @ menu, then the / menu, and repeat.
- * Any pointer or key interaction hands control to the user. */
-const AUTO_STEPS: {
-  draft: string;
-  active?: number;
-  connect?: boolean;
-  modelOpen?: boolean;
-  model?: string;
-  hold: number;
-}[] = [
-  { draft: "", connect: false, model: "vanilla-1", hold: 1100 },
-  { draft: "@", active: 0, hold: 900 },
-  { draft: "@", active: 1, hold: 620 },
-  { draft: "@", active: 4, hold: 620 },
-  { draft: "@", active: 6, hold: 700 },
-  { draft: "@", active: 6, connect: true, hold: 1000 },
-  { draft: "", hold: 700 },
-  { draft: "/", active: 0, hold: 900 },
-  { draft: "/", active: 1, hold: 620 },
-  { draft: "/", active: 3, hold: 1000 },
-  { draft: "", hold: 800 },
-  // open the model picker and upgrade to the flagship → rainbow sweep
-  { draft: "", modelOpen: true, hold: 1200 },
-  { draft: "", model: "sprinkles-5", hold: 2400 },
-  { draft: "", hold: 900 },
-];
 
 /* the last @word or /word being typed, if any */
 function parseToken(draft: string): { kind: "at" | "slash"; query: string; start: number } | null {
@@ -460,7 +329,7 @@ export default function PromptBar({
     const currentReasoningEffort = reasoningEffort ?? internalReasoningEffort;
     const nextReasoningEfforts = reasoningEffortsFor(next);
     if (reasoningEnabled && nextReasoningEfforts.length > 0 && !nextReasoningEfforts.includes(currentReasoningEffort)) {
-      const fallback = preferredReasoningEffort(next, nextReasoningEfforts);
+      const fallback = preferredReasoningEffort(next, nextReasoningEfforts) ?? "medium";
       setInternalReasoningEffort(fallback);
       onReasoningEffortChange?.(fallback);
     }
@@ -869,65 +738,20 @@ export default function PromptBar({
           {draft}
         </span>
 
-        {attachments.length > 0 && (
-          <div className={`flex flex-wrap gap-1.5 pt-0.5 ${pill ? "px-1" : "px-0.5"}`}>
-            {attachments.map((file, i) => (
-              <span
-                key={`${file}-${i}`}
-                className={`flex h-6.5 items-center gap-1.5 bg-field py-1 pr-1 pl-1.5 text-[11.5px] text-ink-2 shadow-hairline ${
-                  pill ? "rounded-full" : "rounded-chip"
-                }`}
-                style={{ animation: "pop-in 200ms cubic-bezier(0.23,1,0.32,1) both" }}
-              >
-                <Icon size={12}><g><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /></g></Icon>
-                <span className="max-w-36 truncate">{file}</span>
-                <button
-                  type="button"
-                  aria-label={`Remove ${file}`}
-                  onClick={() => setAttachments((current) => current.filter((_, j) => j !== i))}
-                  className="glass-button glass-icon -my-1 flex size-6 items-center justify-center"
-                >
-                  <Icon size={10} strokeWidth={2.5}><path d="M18 6L6 18M6 6l12 12" /></Icon>
-                </button>
-              </span>
-            ))}
-          </div>
-        )}
+        <PromptAttachmentChips
+          attachments={attachments}
+          pill={pill}
+          onRemove={(index) => setAttachments((current) => current.filter((_, j) => j !== index))}
+        />
 
-        {selectedSkills.length > 0 && (
-          <div className={`flex flex-wrap items-center gap-1.5 pt-0.5 ${pill ? "px-1" : "px-0.5"}`}>
-            {selectedSkills.map((skill) => (
-              <span
-                key={skill.id}
-                className="group inline-flex max-w-[460px] items-center gap-1.5 rounded-lg border border-line bg-surface/90 px-2.5 py-1 text-xs text-ink shadow-sm backdrop-blur-sm transition-colors hover:border-line-strong hover:bg-surface"
-                style={{ animation: "pop-in 180ms cubic-bezier(0.23,1,0.32,1) both" }}
-              >
-                <span className="font-mono text-[11px] font-bold text-accent-ink">/</span>
-                <span className="font-medium text-ink">{skill.name}</span>
-                <span className="hidden max-w-[200px] truncate text-[11px] text-ink-3 sm:inline">
-                  {skill.description}
-                </span>
-                {skill.content ? (
-                  <span className="rounded bg-line/60 px-1 py-0.5 font-mono text-[10px] text-ink-3">
-                    +{skill.content.length}
-                  </span>
-                ) : null}
-                <button
-                  type="button"
-                  aria-label={`Remove skill ${skill.name}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSelectedSkillIdsChange?.(selectedSkillIds.filter((id) => id !== skill.id));
-                    inputRef.current?.focus();
-                  }}
-                  className="glass-button glass-icon -mr-1 flex size-5 items-center justify-center"
-                >
-                  <Icon size={10} strokeWidth={2.5}><path d="M18 6L6 18M6 6l12 12" /></Icon>
-                </button>
-              </span>
-            ))}
-          </div>
-        )}
+        <PromptSkillChips
+          skills={selectedSkills}
+          pill={pill}
+          onRemove={(skillId) => {
+            onSelectedSkillIdsChange?.(selectedSkillIds.filter((id) => id !== skillId));
+            inputRef.current?.focus();
+          }}
+        />
 
         <div
           ref={controlsRef}

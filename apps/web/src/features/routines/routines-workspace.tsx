@@ -29,14 +29,11 @@ import {
   workspaceSearchInputClass,
 } from "@/components/layout/workspace-page";
 
+import { preferredReasoningEffort, reasoningEffortsFor } from "@/lib/reasoning-effort";
+
 import { isReleaseCadence } from "./release-activity-utils";
 import { RoutineReleaseActivity } from "./routine-release-activity";
-import {
-  preferredReasoningEffortForRoutineModel,
-  reasoningEffortsForRoutineModel,
-  RoutineModelPicker,
-  type RoutineModelOption,
-} from "./routine-model-picker";
+import { RoutineModelPicker, type RoutineModelOption } from "./routine-model-picker";
 import { RoutineTriggerPicker } from "./routine-trigger-picker";
 import { SourceRepositoryPicker, type SourceOption } from "./source-repository-picker";
 
@@ -614,11 +611,11 @@ function normalizeRoutineReasoningEffort(
 ) {
   const model = models.find((option) => option.id === modelId);
   if (!model) return current;
-  const supported = reasoningEffortsForRoutineModel(model);
+  const supported = reasoningEffortsFor(model);
   if (!supported.length) return null;
   return current && supported.includes(current)
     ? current
-    : preferredReasoningEffortForRoutineModel(model, supported);
+    : preferredReasoningEffort(model, supported);
 }
 
 function formatRoutineModel(model: ChatModel) {

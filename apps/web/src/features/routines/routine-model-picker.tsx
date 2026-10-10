@@ -7,51 +7,9 @@ import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent
 
 import type { ChatModel, ChatReasoningEffort } from "@/lib/api-client";
 import type { PromptModelOption } from "@/components/primitives/prompt-bar";
+import { REASONING_EFFORT_OPTIONS, reasoningEffortsFor } from "@/lib/reasoning-effort";
 
 export type RoutineModelOption = Omit<PromptModelOption, "id"> & { id: ChatModel };
-
-const ALL_REASONING_EFFORTS: readonly ChatReasoningEffort[] = [
-  "none",
-  "minimal",
-  "low",
-  "medium",
-  "high",
-  "xhigh",
-  "max",
-];
-
-const EFFORT_OPTIONS: readonly { value: ChatReasoningEffort; label: string }[] = [
-  { value: "none", label: "None" },
-  { value: "minimal", label: "Minimal" },
-  { value: "low", label: "Low" },
-  { value: "medium", label: "Medium" },
-  { value: "high", label: "High" },
-  { value: "xhigh", label: "Extra high" },
-  { value: "max", label: "Max" },
-];
-
-export function reasoningEffortsForRoutineModel(model: RoutineModelOption): readonly ChatReasoningEffort[] {
-  return model.reasoningEfforts ?? ALL_REASONING_EFFORTS;
-}
-
-export function preferredReasoningEffortForRoutineModel(
-  model: RoutineModelOption,
-  supported: readonly ChatReasoningEffort[],
-): ChatReasoningEffort | null {
-  const preferred: (ChatReasoningEffort | undefined)[] = [
-    model.reasoningDefault,
-    "medium",
-    "high",
-    "low",
-    "minimal",
-    "none",
-    "xhigh",
-    "max",
-  ];
-  return preferred.find((effort): effort is ChatReasoningEffort => effort !== undefined && supported.includes(effort))
-    ?? supported[0]
-    ?? null;
-}
 
 type RoutineModelPickerProps = {
   models: readonly RoutineModelOption[];
@@ -84,8 +42,8 @@ export function RoutineModelPicker({
   const modelListId = useId();
   const effortListId = useId();
 
-  const reasoningEfforts = reasoningEffortsForRoutineModel(selectedModel);
-  const effortOptions = EFFORT_OPTIONS.filter((option) => reasoningEfforts.includes(option.value));
+  const reasoningEfforts = reasoningEffortsFor(selectedModel);
+  const effortOptions = REASONING_EFFORT_OPTIONS.filter((option) => reasoningEfforts.includes(option.value));
   const selectedEffort = effortOptions.find((option) => option.value === reasoningEffort)
     ?? effortOptions.find((option) => option.value === selectedModel.reasoningDefault)
     ?? effortOptions[0];
