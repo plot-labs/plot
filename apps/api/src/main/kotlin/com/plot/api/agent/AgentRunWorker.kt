@@ -12,7 +12,6 @@ import com.plot.api.ai.provider.AgentInputView
 import com.plot.api.ai.provider.AgentStepView
 import com.plot.api.ai.provider.ProviderUsage
 import com.plot.api.billing.AiCreditControlException
-import com.plot.api.billing.AiCreditCharge
 import com.plot.api.billing.PolarCreditService
 import com.plot.api.artifact.run.ArtifactRunPersistence
 import com.plot.api.common.ApiException
@@ -39,6 +38,8 @@ class AgentRunWorker(
 	private val executionPolicy: AgentRunExecutionPolicy,
 	private val snapshots: AgentExecutionSnapshotPersistence,
 	private val executionPersistence: AgentRunExecutionPersistence,
+	private val recoveryPersistence: AgentRunRecoveryPersistence,
+	private val modelInvocations: AgentModelInvocationLedger,
 	private val runtime: AgentRuntime,
 	private val chatProgress: com.plot.api.chat.ChatRunProgressPersistence,
 	private val tools: ReadOnlyAgentTools,
@@ -56,8 +57,8 @@ class AgentRunWorker(
 	fun recover(): Int {
 		if (!properties.workersEnabled) return 0
 		val now = clock.instant()
-		return executionPersistence.recoverStaleAgentRuns(now.minus(properties.claimTimeout), now) +
-			executionPersistence.reconcileWaitingArtifactHandoffs(now)
+		return recoveryPersistence.recoverStaleAgentRuns(now.minus(properties.claimTimeout), now) +
+			recoveryPersistence.reconcileWaitingArtifactHandoffs(now)
 	}
 
 	fun earliestNextAttemptAt(): Instant? {
@@ -183,116 +184,27 @@ class AgentRunWorker(
 		val selectedModel = settings.path("model").takeIf { it.isTextual }?.stringValue()
 		val routingProvider = settings.path("routingProvider").takeIf { it.isTextual }?.stringValue()
 		val reasoningEffort = settings.path("reasoningEffort").takeIf { it.isTextual }?.stringValue()
+		val billing = AgentRunModelBilling(claim, run, budget.maxModelCalls, executionPersistence, modelInvocations, creditService)
+		val progress = AgentChatProgressStream(claim, enabled = run.origin == AgentRunOrigin.CHAT, chatProgress = chatProgress)
 		val host = object : AgentRuntimeHost {
-			var activeInvocationId: UUID? = null
-			var progressEpoch: Long? = null
-			val progressText = StringBuilder()
-			var lastProgressWrite = 0L
 			override val finished: Boolean get() = finished
 			override val modelTimeoutMillis: Long get() = minOf(
 				properties.claimTimeout.toMillis() / 2,
 				budget.maxRunDurationMillis - Duration.between(run.startedAt ?: clock.instant(), clock.instant()).toMillis(),
 			).coerceAtLeast(1)
-			override fun onText(delta: String) {
-				val epoch = progressEpoch ?: return
-				require(progressText.length + delta.length <= 40_000)
-				progressText.append(delta)
-				val now = System.nanoTime()
-				if (lastProgressWrite == 0L || now - lastProgressWrite >= 250_000_000) {
-					chatProgress.updateAgent(claim, epoch, "RESPONDING", progressText.toString())
-					lastProgressWrite = now
-				}
-			}
-			private fun startProgress() {
-				if (run.origin != AgentRunOrigin.CHAT) return
-				progressEpoch = chatProgress.beginAgent(claim)
-				progressText.setLength(0)
-				lastProgressWrite = 0
-			}
-			private fun flushProgress(phase: String = "RESPONDING", text: String = progressText.toString()) {
-				progressEpoch?.let { chatProgress.updateAgent(claim, it, phase, text) }
-			}
+			override fun onText(delta: String) = progress.append(delta)
 			override fun beforeModel() {
 				checkAccess()
-				if (!creditService.enabled) {
-					executionPersistence.beginModelDecision(claim, budget.maxModelCalls)
-					startProgress()
-					return
-				}
-				recoverSettlementBeforeModel()
-				creditService.preflight(run.workspaceId)
-				try {
-					activeInvocationId = executionPersistence.beginBilledModelInvocation(claim, budget.maxModelCalls)
-				} catch (failure: AgentModelInvocationBlockedException) {
-					throw AiCreditControlException("AI_CREDIT_SETTLEMENT_PENDING", true, "Workspace AI usage is pending", failure)
-				}
-				startProgress()
+				billing.beginModelCall()
+				progress.start()
 			}
 			override fun afterModel(usage: ProviderUsage) {
-				flushProgress()
-				if (!creditService.enabled) return
-				val invocationId = activeInvocationId
-					?: throw AiCreditControlException("AI_USAGE_UNKNOWN", false, "AI invocation identity is unavailable")
-				val charge: AiCreditCharge = try {
-					creditService.calculate(usage)
-				} catch (failure: AiCreditControlException) {
-					executionPersistence.markModelInvocationUsageUnknown(invocationId)
-					activeInvocationId = null
-					throw failure
-				}
-				executionPersistence.recordModelInvocationUsage(claim, invocationId, usage, charge)
-				creditService.publish(run.workspaceId, invocationId, usage, charge)
-				executionPersistence.markModelInvocationSettled(invocationId)
-				activeInvocationId = null
+				progress.flush()
+				billing.settleModelCall(usage)
 			}
 			override fun modelFailed(failure: AgentDecisionException) {
-				flushProgress()
-				activeInvocationId?.let(executionPersistence::markModelInvocationAborted)
-				activeInvocationId = null
-			}
-			private fun recoverSettlementBeforeModel() {
-				if (executionPersistence.hasSettledUnappliedModelInvocation(run.workspaceId, run.id)) {
-					throw AiCreditControlException(
-						"AI_SETTLEMENT_RECOVERED",
-						false,
-						"Previous model usage was settled without repeating provider work",
-					)
-				}
-				executionPersistence.resolveOrphanedModelInvocations(run.workspaceId)
-				val unresolved = executionPersistence.findUnresolvedModelInvocation(run.workspaceId) ?: return
-				when (unresolved.status) {
-					AgentModelInvocationStatus.PENDING -> {
-						val usage = requireNotNull(unresolved.usage)
-						val charge = AiCreditCharge(
-							providerCostUsd = requireNotNull(unresolved.providerCostUsd),
-							credits = requireNotNull(unresolved.credits),
-							basis = requireNotNull(unresolved.billingBasis),
-							policyVersion = requireNotNull(unresolved.pricePolicyVersion),
-						)
-						creditService.publish(run.workspaceId, unresolved.id, usage, charge)
-						executionPersistence.markModelInvocationSettled(unresolved.id)
-						if (unresolved.agentRunId == run.id) {
-							throw AiCreditControlException(
-								"AI_SETTLEMENT_RECOVERED",
-								false,
-								"Previous model usage was settled without repeating provider work",
-							)
-						}
-						throw AiCreditControlException(
-							"AI_CREDIT_SETTLEMENT_PENDING",
-							true,
-							"Previous workspace usage was settled; retry before new provider work",
-						)
-					}
-					AgentModelInvocationStatus.STARTED -> {
-						if (unresolved.agentRunId == run.id) {
-							executionPersistence.markModelInvocationUsageUnknown(unresolved.id)
-							throw AiCreditControlException("AI_USAGE_UNKNOWN", false, "Previous provider usage is unavailable")
-						}
-						throw AiCreditControlException("AI_CREDIT_SETTLEMENT_PENDING", true, "Workspace AI usage is in progress")
-					}
-					else -> Unit
-				}
+				progress.flush()
+				billing.abortModelCall()
 			}
 			private fun checkAccess() {
 				queryPersistence.requireAgentClaim(claim)
@@ -372,7 +284,7 @@ class AgentRunWorker(
 					return objectMapper.writeValueAsString(mapOf("error" to failure.message))
 				}
 				val creationAction = decision.action == AgentDecisionAction.CREATE_ARTIFACT
-				flushProgress(if (creationAction) "WRITING" else "RESEARCHING", "")
+				progress.flush(if (creationAction) "WRITING" else "RESEARCHING", "")
 				val step = executionPersistence.reserveStep(claim, AgentStepRequest(
 					agentRunId = run.id, sequence = current.currentStep,
 					kind = if (creationAction) AgentStepKind.ARTIFACT_HANDOFF else AgentStepKind.READ_TOOL,
@@ -540,7 +452,7 @@ class AgentRunWorker(
 				)
 				// The workflow may already be terminal, in which case its completion callback
 				// ran before the handoff was linked and could not claim this run.
-				executionPersistence.completeWaitingArtifactHandoff(
+				recoveryPersistence.completeWaitingArtifactHandoff(
 					workspaceId = run.workspaceId,
 					artifactWorkflowRunId = workflow.runId,
 					now = clock.instant(),
