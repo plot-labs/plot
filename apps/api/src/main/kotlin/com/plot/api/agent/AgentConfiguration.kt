@@ -1,6 +1,6 @@
 package com.plot.api.agent
 
-import java.util.concurrent.Executors
+import com.plot.api.common.WorkerExecutors
 import java.util.concurrent.ScheduledExecutorService
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -9,19 +9,10 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
 @Configuration(proxyBeanMethods = false)
 class AgentConfiguration {
 	@Bean
-	fun agentRunTaskExecutor(): ThreadPoolTaskExecutor = ThreadPoolTaskExecutor().apply {
-		corePoolSize = 1
-		maxPoolSize = 1
-		queueCapacity = 1
-		setThreadNamePrefix("plot-agent-run-")
-		setStrictEarlyShutdown(true)
-		setWaitForTasksToCompleteOnShutdown(true)
-		setAwaitTerminationSeconds(10)
-	}
+	fun agentRunTaskExecutor(): ThreadPoolTaskExecutor =
+		WorkerExecutors.singleSlotTaskExecutor("plot-agent-run-")
 
 	@Bean(destroyMethod = "shutdown")
 	fun agentRunRetryExecutor(): ScheduledExecutorService =
-		Executors.newSingleThreadScheduledExecutor { runnable ->
-			Thread(runnable, "plot-agent-run-retry").apply { isDaemon = true }
-		}
+		WorkerExecutors.daemonScheduler("plot-agent-run-retry")
 }

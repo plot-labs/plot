@@ -14,8 +14,7 @@ import java.time.Instant
 import java.util.HexFormat
 import java.util.UUID
 import org.springframework.stereotype.Service
-import org.springframework.transaction.support.TransactionSynchronization
-import org.springframework.transaction.support.TransactionSynchronizationManager
+import com.plot.api.common.AfterCommit
 import tools.jackson.databind.ObjectMapper
 
 @Service
@@ -118,18 +117,7 @@ class ArtifactWorkflowRunService(
 	}
 
 	private fun dispatchAfterCommit() {
-		if (
-			TransactionSynchronizationManager.isActualTransactionActive() &&
-			TransactionSynchronizationManager.isSynchronizationActive()
-		) {
-			TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
-				override fun afterCommit() {
-					dispatcher.dispatch()
-				}
-			})
-		} else {
-			dispatcher.dispatch()
-		}
+		AfterCommit.runOrNow { dispatcher.dispatch() }
 	}
 
 	private fun fingerprint(agentRun: AgentRunRecord, inputs: List<AgentRunInputRecord>): String {

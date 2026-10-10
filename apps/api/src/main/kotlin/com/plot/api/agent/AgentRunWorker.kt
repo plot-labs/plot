@@ -25,6 +25,7 @@ import com.plot.api.skill.FrozenSkills
 import io.micrometer.observation.Observation
 import io.micrometer.observation.ObservationRegistry
 import java.time.Clock
+import com.plot.api.common.WorkerBackoff
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
@@ -655,10 +656,8 @@ class AgentRunWorker(
 		throw AgentRunBudgetExceededException("AGENT_BUDGET_INVALID")
 	}
 
-	private fun retryDelay(attemptCount: Int): Duration = minOf(
-		MAX_RETRY_DELAY,
-		properties.retryInitialDelay.multipliedBy(1L shl attemptCount.coerceIn(0, MAX_RETRY_SHIFT)),
-	)
+	private fun retryDelay(attemptCount: Int): Duration =
+		WorkerBackoff.delay(properties.retryInitialDelay, attemptCount)
 
 	private fun String.safeCode(fallback: String): String =
 		trim().takeIf { SAFE_ERROR_CODE.matches(it) } ?: fallback
@@ -680,8 +679,6 @@ class AgentRunWorker(
 	private companion object {
 		const val MAX_MODEL_EXCERPT = 1_200
 		const val MAX_MODEL_STEP_RESULT = 2_000
-		const val MAX_RETRY_SHIFT = 8
-		val MAX_RETRY_DELAY: Duration = Duration.ofMinutes(15)
 		val SAFE_ERROR_CODE = Regex("[A-Z][A-Z0-9_]{0,99}")
 		val ARTIFACT_HANDOFF_WAIT_UNTIL: Instant = Instant.parse("9999-12-31T23:59:59Z")
 	}

@@ -1,6 +1,6 @@
 package com.plot.api.github
 
-import java.util.concurrent.Executors
+import com.plot.api.common.WorkerExecutors
 import java.util.concurrent.ScheduledExecutorService
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -9,19 +9,10 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
 @Configuration(proxyBeanMethods = false)
 class GitHubWorkerConfiguration {
 	@Bean
-	fun githubSignalTaskExecutor(): ThreadPoolTaskExecutor = ThreadPoolTaskExecutor().apply {
-		corePoolSize = 1
-		maxPoolSize = 1
-		queueCapacity = 1
-		setThreadNamePrefix("plot-github-signal-")
-		setStrictEarlyShutdown(true)
-		setWaitForTasksToCompleteOnShutdown(true)
-		setAwaitTerminationSeconds(10)
-	}
+	fun githubSignalTaskExecutor(): ThreadPoolTaskExecutor =
+		WorkerExecutors.singleSlotTaskExecutor("plot-github-signal-")
 
 	@Bean(destroyMethod = "shutdown")
 	fun githubWorkerRetryExecutor(): ScheduledExecutorService =
-		Executors.newSingleThreadScheduledExecutor { runnable ->
-			Thread(runnable, "plot-github-worker-retry").apply { isDaemon = true }
-		}
+		WorkerExecutors.daemonScheduler("plot-github-worker-retry")
 }

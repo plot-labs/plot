@@ -17,8 +17,7 @@ import java.time.Instant
 import java.util.UUID
 import org.springframework.context.annotation.Lazy
 import org.springframework.stereotype.Component
-import org.springframework.transaction.support.TransactionSynchronization
-import org.springframework.transaction.support.TransactionSynchronizationManager
+import com.plot.api.common.AfterCommit
 
 @Component
 class AgentRunExecutionPersistence(
@@ -776,18 +775,7 @@ class AgentRunExecutionPersistence(
 	}
 
 	private fun notifyReleaseReconciliationAfterCommit(workspaceId: UUID, agentRunId: UUID) {
-		if (
-			TransactionSynchronizationManager.isSynchronizationActive() &&
-				TransactionSynchronizationManager.isActualTransactionActive()
-		) {
-			TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
-				override fun afterCommit() {
-					releaseReconciliation?.afterAgentRunTerminal(workspaceId, agentRunId)
-				}
-			})
-		} else {
-			releaseReconciliation?.afterAgentRunTerminal(workspaceId, agentRunId)
-		}
+		AfterCommit.runOrNow { releaseReconciliation?.afterAgentRunTerminal(workspaceId, agentRunId) }
 	}
 
 	private fun failExhaustedStaleAgentRuns(staleBefore: Instant, now: Instant) {

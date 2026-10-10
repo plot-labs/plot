@@ -10,8 +10,7 @@ import java.util.UUID
 import org.springframework.stereotype.Component
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import org.springframework.transaction.support.TransactionSynchronization
-import org.springframework.transaction.support.TransactionSynchronizationManager
+import com.plot.api.common.AfterCommit
 
 @Component
 class GitHubWebhookTransactionService {
@@ -176,36 +175,23 @@ class GitHubWebhookService(
 	}
 
 	private fun scheduleReleaseDispatchAfterCommit() {
-		check(
-			TransactionSynchronizationManager.isSynchronizationActive() &&
-				TransactionSynchronizationManager.isActualTransactionActive(),
-		) { "GitHub release dispatch requires an active transaction" }
-		TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
-			override fun afterCommit() {
-				releaseDispatcher.dispatch()
-			}
-		})
+		AfterCommit.require("GitHub release dispatch requires an active transaction") {
+			releaseDispatcher.dispatch()
+		}
 	}
 
 	private fun scheduleRoutineDispatchAfterCommit() {
-		check(TransactionSynchronizationManager.isActualTransactionActive()) { "Routine dispatch requires an active transaction" }
-		TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
-			override fun afterCommit() { routineDispatcher.dispatch() }
-		})
+		AfterCommit.require("Routine dispatch requires an active transaction") {
+			routineDispatcher.dispatch()
+		}
 	}
 
 	private fun String?.isCommitSha(): Boolean = this != null && matches(Regex("[0-9a-fA-F]{40}")) && any { it != '0' }
 
 	private fun scheduleAccessCheckDispatchAfterCommit() {
-		check(
-			TransactionSynchronizationManager.isSynchronizationActive() &&
-				TransactionSynchronizationManager.isActualTransactionActive(),
-		) { "GitHub access-check dispatch requires an active transaction" }
-		TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
-			override fun afterCommit() {
-				accessCheckDispatcher.dispatch()
-			}
-		})
+		AfterCommit.require("GitHub access-check dispatch requires an active transaction") {
+			accessCheckDispatcher.dispatch()
+		}
 	}
 
 	private fun mark(delivery: GitHubWebhookDelivery, disposition: GitHubWebhookDisposition): GitHubWebhookDelivery {

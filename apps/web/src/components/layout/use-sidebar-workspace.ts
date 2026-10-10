@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 
 import { plotApiClient } from "@/lib/api-client";
+import { dispatchWorkspaceChanged } from "@/lib/workspace-changed";
 
 export type SidebarWorkspace = {
   id: string;
@@ -49,7 +50,7 @@ export function useSidebarWorkspace() {
         else window.localStorage.removeItem("plot.workspaceId");
         setSelectedWorkspaceId(resolvedWorkspaceId);
         if (resolvedWorkspaceId !== savedId) {
-          window.dispatchEvent(new CustomEvent("plot:workspace-changed", { detail: { id: resolvedWorkspaceId } }));
+          dispatchWorkspaceChanged(resolvedWorkspaceId);
         }
       })
       .catch(() => undefined);
@@ -111,7 +112,7 @@ export function useSidebarWorkspace() {
       window.localStorage.setItem("plot.workspaceId", id);
       setSelectedWorkspaceId(id);
       setWorkspaceMenuOpen(false);
-      window.dispatchEvent(new CustomEvent("plot:workspace-changed", { detail: { id } }));
+      dispatchWorkspaceChanged(id);
     } catch {
       setWorkspaceSwitchError("Workspace could not be switched. Your current workspace is still active.");
     } finally {
@@ -139,7 +140,7 @@ export function useSidebarWorkspace() {
       setWorkspaceMenuOpen(false);
       setCreatingWorkspace(false);
       setWorkspaceName("");
-      window.dispatchEvent(new CustomEvent("plot:workspace-changed", { detail: { id: workspace.id } }));
+      dispatchWorkspaceChanged(workspace.id);
     } catch {
       setWorkspaceCreateError("Workspace could not be created.");
     } finally {

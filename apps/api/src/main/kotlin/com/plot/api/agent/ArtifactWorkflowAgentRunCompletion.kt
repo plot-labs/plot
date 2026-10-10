@@ -1,12 +1,11 @@
 package com.plot.api.agent
 
+import com.plot.api.common.AfterCommit
 import com.plot.api.github.GitHubReleaseReconciliationTrigger
 import java.time.Clock
 import java.util.UUID
 import org.springframework.context.annotation.Lazy
 import org.springframework.stereotype.Component
-import org.springframework.transaction.support.TransactionSynchronization
-import org.springframework.transaction.support.TransactionSynchronizationManager
 
 fun interface ArtifactWorkflowAgentRunCompletionHandler {
 	fun onTerminal(workspaceId: UUID, workflowRunId: UUID)
@@ -29,21 +28,6 @@ class DefaultArtifactWorkflowAgentRunCompletion(
 		} catch (_: RuntimeException) {
 			agentRunDispatcher.dispatch()
 		}
-		notifyReleaseReconciliationAfterCommit(workspaceId, workflowRunId)
-	}
-
-	private fun notifyReleaseReconciliationAfterCommit(workspaceId: UUID, workflowRunId: UUID) {
-		if (
-			TransactionSynchronizationManager.isSynchronizationActive() &&
-				TransactionSynchronizationManager.isActualTransactionActive()
-		) {
-			TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
-				override fun afterCommit() {
-					releaseReconciliation.afterArtifactWorkflowTerminal(workspaceId, workflowRunId)
-				}
-			})
-		} else {
-			releaseReconciliation.afterArtifactWorkflowTerminal(workspaceId, workflowRunId)
-		}
+		AfterCommit.runOrNow { releaseReconciliation.afterArtifactWorkflowTerminal(workspaceId, workflowRunId) }
 	}
 }

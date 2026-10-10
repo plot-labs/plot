@@ -37,8 +37,7 @@ import java.time.Instant
 import java.util.UUID
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
-import org.springframework.transaction.support.TransactionSynchronization
-import org.springframework.transaction.support.TransactionSynchronizationManager
+import com.plot.api.common.AfterCommit
 import tools.jackson.databind.ObjectMapper
 
 @Service
@@ -63,6 +62,7 @@ class ChatRunService(
 	private val compatibilityWriter: ChatCompatibilityWriter,
 	private val queries: ChatQueryService,
 	private val skills: com.plot.api.skill.SkillService,
+	private val sourceAdmission: com.plot.api.agent.AgentRunSourceAdmission,
 ) {
 	fun admit(request: CreateChatAgentRunRequest, idempotencyKey: String): ChatAgentRunResponse {
 		sourceManagedAccessGuard.requireReadable()
@@ -127,7 +127,7 @@ class ChatRunService(
 			}
 
 			val skillsJson = skills.freeze(workspaceId, skillIds)
-			val sources = lockActiveSources(workspaceId)
+			val sources = sourceAdmission.lockActiveSources(workspaceId)
 			val chatId = resolveChat(workSessionId, workspaceId, userId, chatTitle ?: normalizedInstruction)
 			val conversation = chatPersistence.listConversation(workspaceId, chatId, properties.maxInputCharacters)
 			val runId = uuidGenerator.next()
@@ -159,15 +159,10 @@ class ChatRunService(
 				return@execute raced
 			}
 
-			sources.forEachIndexed { index, source ->
-				registration.insertSource(
-					workspaceId, runId, source.id, source.displayName, AgentRunSourceRole.CONTEXT,
-					index, "ACTIVE", source.lifecycleVersionAt, now,
-				)
-			}
+			sourceAdmission.registerContextSources(workspaceId, runId, sources, now)
 
 			writingBlockIds.forEachIndexed { index, blockId ->
-				val sourceScopeId = findReadableBlockSource(workspaceId, blockId, sources.map { it.id })
+				val sourceScopeId = sourceAdmission.findReadableBlockSource(workspaceId, blockId, sources)
 					?: throw ApiException(HttpStatus.BAD_REQUEST, "SOURCE_ITEM_NOT_READY", "A selected source item is unavailable")
 				val input = try {
 					tools.readWritingBlock(workspaceId, runId, sourceScopeId, blockId).adoptedInput
@@ -221,18 +216,7 @@ class ChatRunService(
 
 	private fun scheduleAgentRunDispatchAfterCommit() {
 		if (!properties.autoDispatchEnabled) return
-		if (
-			TransactionSynchronizationManager.isSynchronizationActive() &&
-				TransactionSynchronizationManager.isActualTransactionActive()
-		) {
-			TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
-				override fun afterCommit() {
-					agentRunDispatcher.dispatch()
-				}
-			})
-		} else {
-			agentRunDispatcher.dispatch()
-		}
+		AfterCommit.runOrNow { agentRunDispatcher.dispatch() }
 	}
 
 	fun retry(targetVersionId: UUID, idempotencyKey: String): ChatResponseVersionDto {
@@ -441,51 +425,6 @@ class ChatRunService(
 		return workSessionId
 	}
 
-	private fun lockActiveSources(workspaceId: UUID): List<FrozenSource> = sqlExecutor.query(
-		"""
-		select scope.id, scope.display_name,
-		       greatest(scope.status_changed_at, namespace.updated_at, binding.updated_at, connection.updated_at)
-		         as lifecycle_version_at
-		from source_scopes scope
-		join source_namespaces namespace
-		  on namespace.workspace_id = scope.workspace_id and namespace.id = scope.source_namespace_id
-		 and namespace.provider = scope.provider and namespace.status = 'ACTIVE'
-		join connection_namespace_bindings binding
-		  on binding.workspace_id = namespace.workspace_id and binding.source_namespace_id = namespace.id
-		 and binding.provider = namespace.provider and binding.status = 'ACTIVE'
-		join connections connection
-		  on connection.workspace_id = binding.workspace_id and connection.id = binding.connection_id
-		 and connection.provider = binding.provider and connection.status = 'ACTIVE'
-		where scope.workspace_id = ? and scope.provider = 'GITHUB' and scope.status = 'ACTIVE'
-		order by scope.id
-		for update of scope, namespace, binding, connection
-		""".trimIndent(),
-			{ rs, _ -> FrozenSource(requireNotNull(rs.getObject("id", UUID::class.java)), requireNotNull(rs.getString("display_name")), requireNotNull(rs.getTimestamp("lifecycle_version_at")).toInstant()) },
-		workspaceId,
-	)
-
-	private fun findReadableBlockSource(workspaceId: UUID, blockId: UUID, sourceScopeIds: List<UUID>): UUID? {
-		if (sourceScopeIds.isEmpty()) return null
-		val placeholders = sourceScopeIds.joinToString(",") { "?" }
-		return sqlExecutor.query(
-			"""
-			select membership.source_scope_id
-			from writing_block_scopes membership
-			join writing_blocks block
-			  on block.workspace_id = membership.workspace_id and block.id = membership.writing_block_id
-			where membership.workspace_id = ? and membership.writing_block_id = ?
-			  and membership.source_scope_id in ($placeholders)
-			  and membership.status = 'ACTIVE' and block.status = 'ACTIVE'
-			order by membership.source_scope_id
-			""".trimIndent(),
-			{ rs, _ -> requireNotNull(rs.getObject("source_scope_id", UUID::class.java)) },
-			workspaceId,
-			blockId,
-			*sourceScopeIds.toTypedArray(),
-		).firstOrNull()
-	}
-
-
 	private fun findExisting(workspaceId: UUID, key: String): AgentRunRecord? =
 		chatPersistence.findChatAgentRunByIdempotencyKey(workspaceId, key, forUpdate = true)
 
@@ -504,6 +443,5 @@ class ChatRunService(
 			.joinToString("") { byte -> "%02x".format(byte) }
 	}
 
-	private data class FrozenSource(val id: UUID, val displayName: String, val lifecycleVersionAt: Instant)
 	private data class ChatSessionRow(val routineExecutionId: UUID?)
 }

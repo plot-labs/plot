@@ -23,8 +23,7 @@ import java.time.Instant
 import org.springframework.context.annotation.Lazy
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import org.springframework.transaction.support.TransactionSynchronization
-import org.springframework.transaction.support.TransactionSynchronizationManager
+import com.plot.api.common.AfterCommit
 import tools.jackson.databind.ObjectMapper
 
 /** Release executions use a pinned range, never the Routine's repository activity cursor. */
@@ -139,11 +138,7 @@ class GitHubReleaseRoutineService(
 			workspaceId = request.workspaceId, routineId = routine.id, executionId = execution.id,
 			now = now, nextRunAt = routine.nextRunAt, status = "QUEUED", projectionAt = execution.createdAt,
 		)
-		if (properties.autoDispatchEnabled) {
-			TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
-				override fun afterCommit() = dispatcher.dispatch()
-			})
-		}
+		if (properties.autoDispatchEnabled) AfterCommit.register { dispatcher.dispatch() }
 		return run
 	}
 

@@ -1,5 +1,6 @@
 package com.plot.api.github
 
+import com.plot.api.common.WorkerExecutors
 import java.util.concurrent.ScheduledExecutorService
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.context.annotation.Bean
@@ -33,14 +34,6 @@ class GitHubRepositoryMonitoringConfiguration {
 	fun githubRepositoryMonitoringAnalyzer() = GitHubReleaseConventionAnalyzer()
 
 	@Bean
-	fun githubRepositoryMonitoringTaskExecutor(): ThreadPoolTaskExecutor = ThreadPoolTaskExecutor().apply {
-		corePoolSize = 1
-		maxPoolSize = 1
-		queueCapacity = 1
-		setThreadNamePrefix("plot-github-monitoring-")
-		setStrictEarlyShutdown(true)
-		setWaitForTasksToCompleteOnShutdown(true)
-		setAwaitTerminationSeconds(10)
-	}
-
+	fun githubRepositoryMonitoringTaskExecutor(): ThreadPoolTaskExecutor =
+		WorkerExecutors.singleSlotTaskExecutor("plot-github-monitoring-")
 }

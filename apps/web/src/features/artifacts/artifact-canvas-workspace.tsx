@@ -12,6 +12,7 @@ import { ArtifactEditorStatus, ArtifactSaveDraftButton, artifactSaveStateLabel }
 import { ExportDialog } from "@/features/citations/export-dialog";
 import { PublishDialog } from "@/features/citations/publish-dialog";
 import type { SaveArtifactInput } from "@/features/citations/tiptap-draft-editor";
+import { trapTabKey } from "@/lib/focus-trap";
 import { isSafeHttpUrl } from "@/lib/safe-url";
 import { useUnsavedChangesWarning } from "@/lib/use-unsaved-changes-warning";
 import { useWorkspaceEntitlement } from "@/lib/use-workspace-entitlement";
@@ -144,21 +145,7 @@ function ArtifactDrawer({ open, title, subtitle, triggerRef, onClose, children }
         onClose();
         return;
       }
-      if (event.key !== "Tab" || !dialog) return;
-      const elements = focusableElements(dialog);
-      if (!elements.length) {
-        event.preventDefault();
-        dialog.focus();
-        return;
-      }
-      const current = elements.indexOf(document.activeElement as HTMLElement);
-      if (event.shiftKey && current <= 0) {
-        event.preventDefault();
-        elements[elements.length - 1]?.focus();
-      } else if (!event.shiftKey && (current === -1 || current === elements.length - 1)) {
-        event.preventDefault();
-        elements[0]?.focus();
-      }
+      if (dialog) trapTabKey(event, dialog);
     }
 
     document.addEventListener("keydown", onKeyDown);
@@ -291,8 +278,4 @@ function sourceDisplayUrl(value: string) {
 
 function saveStateLabel(state: "saved" | "saving" | "dirty" | "error", readOnly: boolean) {
   return artifactSaveStateLabel(state, readOnly);
-}
-
-function focusableElements(container: HTMLElement): HTMLElement[] {
-  return Array.from(container.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])')).filter((element) => element.getAttribute("aria-hidden") !== "true");
 }

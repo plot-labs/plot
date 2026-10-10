@@ -1,10 +1,9 @@
 package com.plot.api.github
 
+import com.plot.api.common.AfterCommit
 import java.util.UUID
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import org.springframework.transaction.support.TransactionSynchronization
-import org.springframework.transaction.support.TransactionSynchronizationManager
 
 @Service
 class GitHubReleaseRetryService(
@@ -18,11 +17,7 @@ class GitHubReleaseRetryService(
 		transitionVersion: Long,
 	): GitHubReleaseRetryResult {
 		val result = leasePersistence.retry(requestId, workspaceId, transitionVersion)
-		TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
-			override fun afterCommit() {
-				dispatcher.dispatch()
-			}
-		})
+		AfterCommit.register { dispatcher.dispatch() }
 		return result
 	}
 
@@ -31,9 +26,7 @@ class GitHubReleaseRetryService(
 		requestId: UUID, workspaceId: UUID, transitionVersion: Long, baseSha: String, headSha: String,
 	): GitHubReleaseRetryResult {
 		val result = leasePersistence.selectRange(requestId, workspaceId, transitionVersion, baseSha, headSha)
-		TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
-			override fun afterCommit() = dispatcher.dispatch()
-		})
+		AfterCommit.register { dispatcher.dispatch() }
 		return result
 	}
 }

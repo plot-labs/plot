@@ -166,7 +166,6 @@ export function ChatComposer({
       <div id={id} className="w-full">
         <div className="w-full">
           <PromptBar
-            demo={false}
             tall
             variant="Rounded"
             modelPlacement="bottom"
@@ -203,7 +202,6 @@ export function ChatComposer({
     >
       <div className="mx-auto max-w-[720px]">
         <PromptBar
-          demo={false}
           tall={false}
           variant="Pill"
           modelPlacement="top"

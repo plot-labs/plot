@@ -2,6 +2,7 @@ package com.plot.api.artifact.workflow
 
 import com.plot.api.ai.provider.ArtifactWorkflowModelGateway
 import com.plot.api.common.UuidGenerator
+import com.plot.api.common.WorkerExecutors
 import com.plot.api.config.PlotAiProperties
 import com.plot.api.entitlement.WorkspaceAccessService
 import com.plot.api.agent.AgentRunExecutionPersistence
@@ -11,7 +12,6 @@ import com.plot.api.billing.PolarCreditService
 import io.micrometer.observation.ObservationRegistry
 import java.time.Clock
 import java.time.Duration
-import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.context.annotation.Bean
@@ -66,9 +66,7 @@ class ArtifactWorkflowConfiguration {
 
 	@Bean(destroyMethod = "shutdown")
 	fun artifactWorkflowHeartbeatExecutor(): ScheduledExecutorService =
-		Executors.newSingleThreadScheduledExecutor { task ->
-			Thread(task, "plot-artifact-workflow-heartbeat").apply { isDaemon = true }
-		}
+		WorkerExecutors.daemonScheduler("plot-artifact-workflow-heartbeat")
 
 	@Bean
 	fun artifactWorkflowRunLeaseFactory(
@@ -83,21 +81,12 @@ class ArtifactWorkflowConfiguration {
 	)
 
 	@Bean
-	fun artifactWorkflowTaskExecutor(): ThreadPoolTaskExecutor = ThreadPoolTaskExecutor().apply {
-		corePoolSize = 1
-		maxPoolSize = 1
-		queueCapacity = 1
-		setThreadNamePrefix("plot-artifact-workflow-")
-		setStrictEarlyShutdown(true)
-		setWaitForTasksToCompleteOnShutdown(true)
-		setAwaitTerminationSeconds(10)
-	}
+	fun artifactWorkflowTaskExecutor(): ThreadPoolTaskExecutor =
+		WorkerExecutors.singleSlotTaskExecutor("plot-artifact-workflow-")
 
 	@Bean(destroyMethod = "shutdown")
 	fun artifactWorkflowRetryExecutor(): ScheduledExecutorService =
-		Executors.newSingleThreadScheduledExecutor { task ->
-			Thread(task, "plot-artifact-workflow-retry").apply { isDaemon = true }
-		}
+		WorkerExecutors.daemonScheduler("plot-artifact-workflow-retry")
 
 	@Bean
 	fun artifactWorkflowRunDispatcher(

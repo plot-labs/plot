@@ -7,6 +7,7 @@ import Image from "next/image";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 import type { GitHubAvailableInstallation, GitHubRepository } from "@/lib/api-client";
+import { trapTabKey } from "@/lib/focus-trap";
 
 export function GitHubAccountAvatar({ login, label, size = 36 }: { login: string | null; label: string; size?: number }) {
   const [failedLogin, setFailedLogin] = useState<string | null>(null);
@@ -39,11 +40,6 @@ export const githubAppPermissions = [
   "Pull requests",
   "Releases and tags",
 ] as const;
-
-function focusableElements(container: HTMLElement): HTMLElement[] {
-  return Array.from(container.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])'))
-    .filter((element) => element.getAttribute("aria-hidden") !== "true");
-}
 
 function IntegrationDialog({
   open,
@@ -85,21 +81,7 @@ function IntegrationDialog({
         if (!busyRef.current) closeRef.current();
         return;
       }
-      if (event.key !== "Tab" || !dialog) return;
-      const elements = focusableElements(dialog);
-      if (!elements.length) {
-        event.preventDefault();
-        dialog.focus();
-        return;
-      }
-      const current = elements.indexOf(document.activeElement as HTMLElement);
-      if (event.shiftKey && current <= 0) {
-        event.preventDefault();
-        elements[elements.length - 1]?.focus();
-      } else if (!event.shiftKey && (current === -1 || current === elements.length - 1)) {
-        event.preventDefault();
-        elements[0]?.focus();
-      }
+      if (dialog) trapTabKey(event, dialog);
     }
 
     document.addEventListener("keydown", onKeyDown);
