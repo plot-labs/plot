@@ -25,6 +25,7 @@ class AgentRunExecutionPersistence(
 	private val snapshots: AgentExecutionSnapshotPersistence,
 	private val completionProjection: AgentRunCompletionProjection,
 	private val modelInvocations: AgentModelInvocationLedger,
+	private val artifactModelInvocations: com.plot.api.artifact.workflow.ArtifactModelInvocationLedger,
 ) {
 	private val safeErrorCode = Regex("[A-Z][A-Z0-9_]{0,99}")
 	private fun currentInstant(): Instant = clock?.instant() ?: Instant.now()
@@ -188,13 +189,7 @@ class AgentRunExecutionPersistence(
 		sqlExecutor.query("select id from workspaces where id = ? for update", { row, _ -> row.getObject("id", UUID::class.java) }, claim.workspaceId)
 		modelInvocations.resolveOrphaned(claim.workspaceId)
 		modelInvocations.findUnresolved(claim.workspaceId)?.let { throw AgentModelInvocationBlockedException(it) }
-		val unresolvedArtifact = sqlExecutor.queryForObject(
-			"""select count(*) from model_invocations
-				where workspace_id = ? and status = 'RUNNING' and (billing_status is null or billing_status = 'PENDING')""",
-			Int::class.java,
-			claim.workspaceId,
-		) ?: 0
-		if (unresolvedArtifact > 0) throw AgentModelInvocationBlockedException()
+		if (artifactModelInvocations.hasUnresolved(claim.workspaceId)) throw AgentModelInvocationBlockedException()
 		val run = queryPersistence.requireAgentClaim(claim)
 		queryPersistence.requireAllAgentSourcesActiveForUpdate(
 			claim.workspaceId,

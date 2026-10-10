@@ -48,6 +48,8 @@ class ArtifactWorkflowRunWorker(
 	private val creditService: PolarCreditService? = null,
 	private val chatProgress: com.plot.api.chat.ChatRunProgressPersistence? = null,
 ) {
+	private val modelInvocations: ArtifactModelInvocationLedger = executionPersistence.modelInvocations
+
 	internal var lastFailure: RuntimeException? = null
 		private set
 
@@ -104,7 +106,7 @@ class ArtifactWorkflowRunWorker(
 			notifyAgentRunIfTerminal(claim)
 			return "FAILED" to true
 		}
-		executionPersistence.findUnknownUsageInvocation(claim.workspaceId, claim.runId)?.let { unknown ->
+		modelInvocations.findUnknownUsage(claim.workspaceId, claim.runId)?.let { unknown ->
 			runLease.commit {
 				executionPersistence.failCheckpoint(claim, unknown, state, "AI_USAGE_UNKNOWN")
 			}
@@ -271,16 +273,16 @@ class ArtifactWorkflowRunWorker(
 	): String? {
 		val service = creditService?.takeIf { it.enabled } ?: return null
 		return try {
-			executionPersistence.findPendingModelInvocation(claim.workspaceId)?.let { pending ->
+			modelInvocations.findPending(claim.workspaceId)?.let { pending ->
 				service.publish(
 					pending.workspaceId,
 					pending.id,
 					pending.usage,
 					pending.charge,
 				)
-				executionPersistence.markModelInvocationSettled(pending.id)
+				modelInvocations.markSettled(pending.id)
 			}
-			executionPersistence.findSettledUnfinishedInvocation(claim.workspaceId, claim.runId)?.let { recovered ->
+			modelInvocations.findSettledUnfinished(claim.workspaceId, claim.runId)?.let { recovered ->
 				val code = recovered.failureCode ?: "AI_SETTLEMENT_RECOVERED"
 				executionPersistence.failCheckpoint(
 					claim = claim,
@@ -333,7 +335,7 @@ class ArtifactWorkflowRunWorker(
 			failureCode = failureCode,
 		)
 		service.publish(claim.workspaceId, invocation.id, usage, charge)
-		executionPersistence.markModelInvocationSettled(invocation.id)
+		modelInvocations.markSettled(invocation.id)
 	}
 
 	private fun handlePostProviderBillingFailure(
