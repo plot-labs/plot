@@ -1,15 +1,10 @@
 package com.plot.api.agent
 
-
-import com.plot.api.artifact.run.ArtifactRunPersistence
-import com.plot.api.artifact.run.ArtifactRunStatus
 import com.plot.api.common.UuidGenerator
 import com.plot.api.ai.provider.ProviderUsage
 import com.plot.api.billing.AiCreditCharge
-import com.plot.api.billing.AiBillingBasis
 import com.plot.api.github.GitHubReleaseReconciliationTrigger
 import com.plot.api.persistence.SqlExecutor
-import com.plot.api.persistence.SqlRow
 import com.plot.api.persistence.TransactionExecutor
 import java.sql.Timestamp
 import java.time.Clock
@@ -25,94 +20,14 @@ class AgentRunExecutionPersistence(
 	private val transactionExecutor: TransactionExecutor,
 	private val uuidGenerator: UuidGenerator,
 	private val queryPersistence: AgentRunQueryPersistence,
-	private val artifactRunPersistence: ArtifactRunPersistence,
 	@Lazy private val releaseReconciliation: GitHubReleaseReconciliationTrigger? = null,
 	private val clock: Clock? = null,
 	private val snapshots: AgentExecutionSnapshotPersistence,
 	private val completionProjection: AgentRunCompletionProjection,
+	private val modelInvocations: AgentModelInvocationLedger,
 ) {
 	private val safeErrorCode = Regex("[A-Z][A-Z0-9_]{0,99}")
 	private fun currentInstant(): Instant = clock?.instant() ?: Instant.now()
-
-	fun recoverStaleAgentRuns(staleBefore: Instant, now: Instant = currentInstant()): Int {
-		failExhaustedStaleAgentRuns(staleBefore, now)
-		return sqlExecutor.update(
-			"""
-			update agent_runs
-			set claimed_by = null, claimed_at = null,
-			    transition_version = transition_version + 1, updated_at = ?
-			where status = 'RUNNING' and claimed_by is not null and claimed_at < ?
-			  and attempt_count < max_attempts
-			""".trimIndent(),
-			Timestamp.from(now),
-			Timestamp.from(staleBefore),
-		)
-	}
-
-	fun completeWaitingArtifactHandoff(
-		workspaceId: UUID,
-		artifactWorkflowRunId: UUID,
-		now: Instant = currentInstant(),
-	): Boolean = transactionExecutor.execute {
-		val agentRunId = sqlExecutor.query(
-			"""
-			select agent_run_id
-			from generation_runs
-			where workspace_id = ? and id = ? and agent_run_id is not null
-			""".trimIndent(),
-			{ rs, _ -> requireNotNull(rs.getObject("agent_run_id", UUID::class.java)) },
-			workspaceId,
-			artifactWorkflowRunId,
-		).firstOrNull() ?: return@execute false
-		val run = queryPersistence.findAgentRun(workspaceId, agentRunId) ?: return@execute false
-		if (run.status != AgentRunStatus.RUNNING) return@execute false
-		val claim = claimRunningAgentRun(run, "artifact-completion-${UUID.randomUUID()}", now)
-			?: return@execute false
-		val state = artifactRunPersistence.findWorkflowStateByWorkflowRun(workspaceId, artifactWorkflowRunId)
-			?: throw IllegalArgumentException("Linked artifact run is unavailable")
-		when {
-			state.materialized && state.status in setOf(ArtifactRunStatus.READY, ArtifactRunStatus.NEEDS_REVIEW) -> {
-				succeedAgentRun(claim, now)
-				true
-			}
-			state.status == ArtifactRunStatus.FAILED -> {
-				failAgentRun(claim, "AGENT_ARTIFACT_WORKFLOW_FAILED", now)
-				true
-			}
-			else -> {
-				releaseArtifactHandoffClaim(claim, now)
-				false
-			}
-		}
-	}
-
-	/**
-	 * Resumes every agent run parked on an artifact workflow that already reached a
-	 * terminal state, so a completion that raced with the handoff or was lost to a
-	 * restart still finishes the run.
-	 */
-	fun reconcileWaitingArtifactHandoffs(now: Instant = currentInstant()): Int {
-		val waiting = sqlExecutor.query(
-			"""
-			select workflow.workspace_id, workflow.id
-			from generation_runs workflow
-			join artifact_runs artifact
-			  on artifact.workspace_id = workflow.workspace_id and artifact.id = workflow.artifact_run_id
-			join agent_runs run
-			  on run.workspace_id = workflow.workspace_id and run.id = workflow.agent_run_id
-			where workflow.agent_run_id is not null
-			  and artifact.status in ('READY', 'NEEDS_REVIEW', 'FAILED')
-			  and run.status = 'RUNNING' and run.claimed_by is null
-			""".trimIndent(),
-			{ rs, _ ->
-				requireNotNull(rs.getObject("workspace_id", UUID::class.java)) to
-					requireNotNull(rs.getObject("id", UUID::class.java))
-			},
-		)
-		return waiting.count { (workspaceId, workflowRunId) ->
-			completeWaitingArtifactHandoff(workspaceId, workflowRunId, now)
-		}
-	}
 
 	fun appendStep(
 		workspaceId: UUID,
@@ -135,6 +50,53 @@ class AgentRunExecutionPersistence(
 		)
 		queryPersistence.findStep(workspaceId, request.agentRunId, id)
 	} ?: error("Agent step transaction returned no record")
+	/**
+	 * Fails RUNNING runs whose claim went stale with no attempts left. Claiming calls this first so
+	 * an exhausted run is never handed out again; stale-claim recovery calls it before releasing claims.
+	 */
+	fun failExhaustedStaleAgentRuns(staleBefore: Instant, now: Instant) {
+		val exhausted = sqlExecutor.query(
+			"""
+			select workspace_id, id
+			from agent_runs
+			where status = 'RUNNING' and claimed_by is not null and claimed_at < ?
+			  and attempt_count >= max_attempts
+			order by created_at, id
+			for update skip locked
+			""".trimIndent(),
+			{ rs, _ ->
+				rs.getObject("workspace_id", UUID::class.java) to
+					rs.getObject("id", UUID::class.java)
+			},
+			Timestamp.from(staleBefore),
+		)
+		exhausted.forEach { (workspaceId, agentRunId) ->
+			sqlExecutor.update(
+				"""
+				update agent_steps
+				set status = 'FAILED', failure_code = 'AGENT_RETRY_EXHAUSTED', finished_at = coalesce(finished_at, ?)
+				where workspace_id = ? and agent_run_id = ? and status = 'RUNNING'
+				""".trimIndent(),
+				Timestamp.from(now), workspaceId, agentRunId,
+			)
+			sqlExecutor.update(
+				"""
+				update agent_runs
+				set status = 'FAILED', failure_code = 'AGENT_RETRY_EXHAUSTED', claimed_by = null,
+				    claimed_at = null, next_attempt_at = null, finished_at = ?,
+				    transition_version = transition_version + 1, updated_at = ?
+				where workspace_id = ? and id = ? and status = 'RUNNING'
+				""".trimIndent(),
+				Timestamp.from(now), Timestamp.from(now), workspaceId, agentRunId,
+			)
+			modelInvocations.resolveOrphaned(requireNotNull(workspaceId))
+			completionProjection.deactivateResponse(requireNotNull(workspaceId), requireNotNull(agentRunId))
+			queryPersistence.findAgentRun(requireNotNull(workspaceId), requireNotNull(agentRunId))?.let { run ->
+				completionProjection.projectTerminal(run, AgentRunStatus.FAILED, "AGENT_RETRY_EXHAUSTED", now)
+			}
+		}
+	}
+
 	fun claimNextAgentRun(
 		workerId: String,
 		now: Instant = currentInstant(),
@@ -215,30 +177,7 @@ class AgentRunExecutionPersistence(
 		requireNotNull(queryPersistence.findAgentRun(claim.workspaceId, claim.agentRunId))
 	}
 
-	fun findUnresolvedModelInvocation(workspaceId: UUID): AgentModelInvocationSettlement? = sqlExecutor.query(
-		"""
-		select id, workspace_id, agent_run_id, sequence_no, status, provider, requested_model, actual_model,
-		       provider_response_id, input_token_count, output_token_count, cache_read_token_count,
-		       cache_write_token_count, reasoning_token_count, total_token_count, provider_cost_usd,
-		       credits, billing_basis, price_policy_version
-		from agent_model_invocations
-		where workspace_id = ? and status in ('STARTED', 'PENDING')
-		order by created_at, id
-		limit 1
-		""".trimIndent(),
-		{ row, _ -> row.toAgentModelInvocation() },
-		workspaceId,
-	).firstOrNull()
-
-	fun hasSettledUnappliedModelInvocation(workspaceId: UUID, agentRunId: UUID): Boolean =
-		(sqlExecutor.queryForObject(
-			"""select count(*) from agent_model_invocations
-			where workspace_id = ? and agent_run_id = ? and status = 'SETTLED' and output_applied_at is null""",
-			Int::class.java,
-			workspaceId,
-			agentRunId,
-		) ?: 0) > 0
-
+	/** Reserves one model call against the run budget and opens its ledger row, fenced by the claim. */
 	fun beginBilledModelInvocation(
 		claim: ClaimedAgentRun,
 		maxModelCalls: Int,
@@ -247,8 +186,8 @@ class AgentRunExecutionPersistence(
 		require(maxModelCalls > 0) { "Agent model-call budget must be positive" }
 		queryPersistence.requireAgentClaim(claim)
 		sqlExecutor.query("select id from workspaces where id = ? for update", { row, _ -> row.getObject("id", UUID::class.java) }, claim.workspaceId)
-		resolveOrphanedModelInvocations(claim.workspaceId)
-		findUnresolvedModelInvocation(claim.workspaceId)?.let { throw AgentModelInvocationBlockedException(it) }
+		modelInvocations.resolveOrphaned(claim.workspaceId)
+		modelInvocations.findUnresolved(claim.workspaceId)?.let { throw AgentModelInvocationBlockedException(it) }
 		val unresolvedArtifact = sqlExecutor.queryForObject(
 			"""select count(*) from model_invocations
 				where workspace_id = ? and status = 'RUNNING' and (billing_status is null or billing_status = 'PENDING')""",
@@ -271,12 +210,7 @@ class AgentRunExecutionPersistence(
 			Timestamp.from(now), Timestamp.from(now), claim.workspaceId, claim.agentRunId, claim.workerId, claim.transitionVersion,
 		)
 		if (updated != 1) throw AgentRunClaimLostException()
-		sqlExecutor.update(
-			"""insert into agent_model_invocations
-			(id, workspace_id, agent_run_id, sequence_no, status, created_at)
-			values (?, ?, ?, ?, 'STARTED', ?)""",
-			invocationId, claim.workspaceId, claim.agentRunId, sequence, Timestamp.from(now),
-		)
+		modelInvocations.insertStarted(invocationId, claim.workspaceId, claim.agentRunId, sequence, now)
 		invocationId
 	}
 
@@ -288,64 +222,10 @@ class AgentRunExecutionPersistence(
 		now: Instant = currentInstant(),
 	) = transactionExecutor.execute {
 		queryPersistence.requireAgentClaim(claim)
-		val updated = sqlExecutor.update(
-			"""
-			update agent_model_invocations
-			set status = 'PENDING', provider = ?, requested_model = ?, actual_model = ?, provider_response_id = ?,
-			    input_token_count = ?, output_token_count = ?, cache_read_token_count = ?, cache_write_token_count = ?,
-			    reasoning_token_count = ?, total_token_count = ?, provider_cost_usd = ?, credits = ?,
-			    billing_basis = ?, price_policy_version = ?, usage_recorded_at = ?
-			where workspace_id = ? and agent_run_id = ? and id = ? and status = 'STARTED'
-			""".trimIndent(),
-			usage.provider, usage.requestedModel, usage.actualModel, usage.responseId,
-			usage.inputTokens, usage.outputTokens, usage.cacheReadTokens ?: 0, usage.cacheWriteTokens ?: 0,
-			usage.reasoningTokens ?: 0, usage.totalTokens, charge.providerCostUsd, charge.credits,
-			charge.basis.name, charge.policyVersion, Timestamp.from(now),
-			claim.workspaceId, claim.agentRunId, invocationId,
-		)
+		val updated = modelInvocations.recordUsage(claim.workspaceId, claim.agentRunId, invocationId, usage, charge, now)
 		if (updated != 1) throw AgentRunClaimLostException()
 	}
 
-	fun markModelInvocationSettled(invocationId: UUID, now: Instant = currentInstant()) {
-		val updated = sqlExecutor.update(
-			"update agent_model_invocations set status = 'SETTLED', settled_at = ? where id = ? and status = 'PENDING'",
-			Timestamp.from(now), invocationId,
-		)
-		if (updated != 1) {
-			val status = sqlExecutor.queryForObject("select status from agent_model_invocations where id = ?", String::class.java, invocationId)
-			if (status != "SETTLED") throw AgentRunStateException("Agent usage settlement state is stale")
-		}
-	}
-
-	fun markSettledModelInvocationsApplied(
-		workspaceId: UUID,
-		agentRunId: UUID,
-		now: Instant = currentInstant(),
-	) {
-		sqlExecutor.update(
-			"""update agent_model_invocations set output_applied_at = ?
-			where workspace_id = ? and agent_run_id = ? and status = 'SETTLED' and output_applied_at is null""",
-			Timestamp.from(now),
-			workspaceId,
-			agentRunId,
-		)
-	}
-
-	fun markModelInvocationAborted(invocationId: UUID) {
-		sqlExecutor.update("update agent_model_invocations set status = 'ABORTED' where id = ? and status = 'STARTED'", invocationId)
-	}
-
-	fun markModelInvocationUsageUnknown(invocationId: UUID) {
-		sqlExecutor.update("update agent_model_invocations set status = 'USAGE_UNKNOWN' where id = ? and status = 'STARTED'", invocationId)
-	}
-
-	/**
-	 * A STARTED invocation whose run already finished can never be settled by that run, and it would
-	 * otherwise hold the workspace-wide unresolved slot forever. PENDING rows keep their recorded usage
-	 * and stay for the next run to settle.
-	 */
-	fun resolveOrphanedModelInvocations(workspaceId: UUID): Int =
-		sqlExecutor.update(RESOLVE_ORPHANED_AGENT_MODEL_INVOCATIONS_SQL, workspaceId)
 	fun reserveStep(
 		claim: ClaimedAgentRun,
 		request: AgentStepRequest,
@@ -447,7 +327,7 @@ class AgentRunExecutionPersistence(
 			adoptedInputHash = adopted?.contentHash,
 			now = now,
 		)
-		markSettledModelInvocationsApplied(claim.workspaceId, claim.agentRunId, now)
+		modelInvocations.markSettledApplied(claim.workspaceId, claim.agentRunId, now)
 		if (retainClaim) advanceRuntime(claim, run.currentStep + 1, now)
 		else advanceAndRelease(claim, run.currentStep + 1, now)
 		requireNotNull(queryPersistence.findStep(claim.workspaceId, claim.agentRunId, stepId))
@@ -483,7 +363,7 @@ class AgentRunExecutionPersistence(
 			adoptedInputHash = null,
 			now = now,
 		)
-		markSettledModelInvocationsApplied(claim.workspaceId, claim.agentRunId, now)
+		modelInvocations.markSettledApplied(claim.workspaceId, claim.agentRunId, now)
 		if (retainClaim) advanceRuntime(claim, run.currentStep + 1, now)
 		else advanceAndRelease(claim, run.currentStep + 1, now)
 		requireNotNull(queryPersistence.findStep(claim.workspaceId, claim.agentRunId, stepId))
@@ -519,7 +399,7 @@ class AgentRunExecutionPersistence(
 			artifactWorkflowRunId, resultJson, Timestamp.from(now), claim.workspaceId, stepId, claim.agentRunId,
 		)
 		if (stepUpdated != 1) throw AgentRunClaimLostException()
-		markSettledModelInvocationsApplied(claim.workspaceId, claim.agentRunId, now)
+		modelInvocations.markSettledApplied(claim.workspaceId, claim.agentRunId, now)
 		advanceAndRelease(claim, run.currentStep + 1, now, nextAttemptAt)
 		requireNotNull(queryPersistence.findStep(claim.workspaceId, claim.agentRunId, stepId))
 	}
@@ -546,7 +426,7 @@ class AgentRunExecutionPersistence(
 			if (terminal) Timestamp.from(now) else null, Timestamp.from(now),
 			claim.workspaceId, claim.agentRunId, claim.workerId, claim.transitionVersion,
 		)
-		if (terminal) resolveOrphanedModelInvocations(claim.workspaceId)
+		if (terminal) modelInvocations.resolveOrphaned(claim.workspaceId)
 		requireNotNull(queryPersistence.findAgentRun(claim.workspaceId, claim.agentRunId))
 	}
 	fun failAgentRun(claim: ClaimedAgentRun, errorCode: String, now: Instant = currentInstant()): AgentRunRecord =
@@ -585,7 +465,7 @@ class AgentRunExecutionPersistence(
 		require(normalized.isNotBlank() && normalized.length <= 40_000) { "Chat response is invalid" }
 		completionProjection.commitChatResponse(run, normalized, now)
 		val completed = terminalizeAgentRun(claim, AgentRunStatus.SUCCEEDED, null, now)
-		markSettledModelInvocationsApplied(claim.workspaceId, claim.agentRunId, now)
+		modelInvocations.markSettledApplied(claim.workspaceId, claim.agentRunId, now)
 		completed
 	}
 
@@ -673,36 +553,6 @@ class AgentRunExecutionPersistence(
 		return queryPersistence.findMatchingInput(workspaceId, agentRunId, input)
 			?: throw AgentRunStateException("Agent read result could not be adopted")
 	}
-	private fun claimRunningAgentRun(run: AgentRunRecord, workerId: String, now: Instant): ClaimedAgentRun? {
-		val updated = sqlExecutor.update(
-			"""
-			update agent_runs
-			set claimed_by = ?, claimed_at = ?, transition_version = transition_version + 1, updated_at = ?
-			where workspace_id = ? and id = ? and status = 'RUNNING'
-			  and claimed_by is null and transition_version = ?
-			""".trimIndent(),
-			workerId, Timestamp.from(now), Timestamp.from(now), run.workspaceId, run.id, run.transitionVersion,
-		)
-		if (updated != 1) return null
-		return ClaimedAgentRun(
-			workspaceId = run.workspaceId,
-			agentRunId = run.id,
-			transitionVersion = run.transitionVersion + 1,
-			workerId = workerId,
-		)
-	}
-
-	private fun releaseArtifactHandoffClaim(claim: ClaimedAgentRun, now: Instant) {
-		sqlExecutor.update(
-			"""
-			update agent_runs
-			set claimed_by = null, claimed_at = null, transition_version = transition_version + 1, updated_at = ?
-			where workspace_id = ? and id = ? and claimed_by = ? and transition_version = ? and status = 'RUNNING'
-			""".trimIndent(),
-			Timestamp.from(now), claim.workspaceId, claim.agentRunId, claim.workerId, claim.transitionVersion,
-		)
-	}
-
 	fun releaseRuntime(claim: ClaimedAgentRun) = transactionExecutor.execute {
 		queryPersistence.requireAgentClaim(claim)
 		advanceAndRelease(claim, null, currentInstant())
@@ -766,7 +616,7 @@ class AgentRunExecutionPersistence(
 			claim.workspaceId, claim.agentRunId, claim.workerId, claim.transitionVersion,
 		)
 		if (updated != 1) throw AgentRunClaimLostException()
-		resolveOrphanedModelInvocations(claim.workspaceId)
+		modelInvocations.resolveOrphaned(claim.workspaceId)
 		completionProjection.deactivateResponse(claim.workspaceId, claim.agentRunId)
 		completionProjection.projectTerminal(run, status, errorCode, now)
 		val terminal = requireNotNull(queryPersistence.findAgentRun(claim.workspaceId, claim.agentRunId))
@@ -777,88 +627,4 @@ class AgentRunExecutionPersistence(
 	private fun notifyReleaseReconciliationAfterCommit(workspaceId: UUID, agentRunId: UUID) {
 		AfterCommit.runOrNow { releaseReconciliation?.afterAgentRunTerminal(workspaceId, agentRunId) }
 	}
-
-	private fun failExhaustedStaleAgentRuns(staleBefore: Instant, now: Instant) {
-		val exhausted = sqlExecutor.query(
-			"""
-			select workspace_id, id
-			from agent_runs
-			where status = 'RUNNING' and claimed_by is not null and claimed_at < ?
-			  and attempt_count >= max_attempts
-			order by created_at, id
-			for update skip locked
-			""".trimIndent(),
-			{ rs, _ ->
-				rs.getObject("workspace_id", UUID::class.java) to
-					rs.getObject("id", UUID::class.java)
-			},
-			Timestamp.from(staleBefore),
-		)
-		exhausted.forEach { (workspaceId, agentRunId) ->
-			sqlExecutor.update(
-				"""
-				update agent_steps
-				set status = 'FAILED', failure_code = 'AGENT_RETRY_EXHAUSTED', finished_at = coalesce(finished_at, ?)
-				where workspace_id = ? and agent_run_id = ? and status = 'RUNNING'
-				""".trimIndent(),
-				Timestamp.from(now), workspaceId, agentRunId,
-			)
-			sqlExecutor.update(
-				"""
-				update agent_runs
-				set status = 'FAILED', failure_code = 'AGENT_RETRY_EXHAUSTED', claimed_by = null,
-				    claimed_at = null, next_attempt_at = null, finished_at = ?,
-				    transition_version = transition_version + 1, updated_at = ?
-				where workspace_id = ? and id = ? and status = 'RUNNING'
-				""".trimIndent(),
-				Timestamp.from(now), Timestamp.from(now), workspaceId, agentRunId,
-			)
-			resolveOrphanedModelInvocations(requireNotNull(workspaceId))
-			completionProjection.deactivateResponse(requireNotNull(workspaceId), requireNotNull(agentRunId))
-			queryPersistence.findAgentRun(requireNotNull(workspaceId), requireNotNull(agentRunId))?.let { run ->
-				completionProjection.projectTerminal(run, AgentRunStatus.FAILED, "AGENT_RETRY_EXHAUSTED", now)
-			}
-		}
-	}
-}
-
-/** Marks STARTED agent model calls of already finished runs as USAGE_UNKNOWN for one workspace. */
-internal val RESOLVE_ORPHANED_AGENT_MODEL_INVOCATIONS_SQL = """
-	update agent_model_invocations invocation
-	set status = 'USAGE_UNKNOWN'
-	where invocation.workspace_id = ? and invocation.status = 'STARTED'
-	  and exists (
-	    select 1 from agent_runs run
-	    where run.workspace_id = invocation.workspace_id and run.id = invocation.agent_run_id
-	      and run.status in ('SUCCEEDED', 'FAILED')
-	  )
-""".trimIndent()
-
-private fun SqlRow.toAgentModelInvocation(): AgentModelInvocationSettlement {
-	val status = AgentModelInvocationStatus.valueOf(requireNotNull(getString("status")))
-	val usage = if (status == AgentModelInvocationStatus.PENDING) ProviderUsage(
-		provider = getString("provider"),
-		requestedModel = getString("requested_model"),
-		actualModel = getString("actual_model"),
-		responseId = getString("provider_response_id"),
-		inputTokens = getObject("input_token_count", Long::class.javaObjectType),
-		outputTokens = getObject("output_token_count", Long::class.javaObjectType),
-		cacheReadTokens = getObject("cache_read_token_count", Long::class.javaObjectType),
-		cacheWriteTokens = getObject("cache_write_token_count", Long::class.javaObjectType),
-		reasoningTokens = getObject("reasoning_token_count", Long::class.javaObjectType),
-		totalTokens = getObject("total_token_count", Long::class.javaObjectType),
-		reportedCostUsd = getObject("provider_cost_usd", java.math.BigDecimal::class.java),
-	) else null
-	return AgentModelInvocationSettlement(
-		id = requireNotNull(getObject("id", UUID::class.java)),
-		workspaceId = requireNotNull(getObject("workspace_id", UUID::class.java)),
-		agentRunId = requireNotNull(getObject("agent_run_id", UUID::class.java)),
-		sequence = getInt("sequence_no"),
-		status = status,
-		usage = usage,
-		providerCostUsd = getObject("provider_cost_usd", java.math.BigDecimal::class.java),
-		credits = getObject("credits", Long::class.javaObjectType),
-		billingBasis = getString("billing_basis")?.let(AiBillingBasis::valueOf),
-		pricePolicyVersion = getString("price_policy_version"),
-	)
 }

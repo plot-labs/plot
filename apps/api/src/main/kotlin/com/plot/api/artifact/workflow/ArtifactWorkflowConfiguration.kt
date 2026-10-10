@@ -5,7 +5,7 @@ import com.plot.api.common.UuidGenerator
 import com.plot.api.common.WorkerExecutors
 import com.plot.api.config.PlotAiProperties
 import com.plot.api.entitlement.WorkspaceAccessService
-import com.plot.api.agent.AgentRunExecutionPersistence
+import com.plot.api.agent.AgentRunRecoveryPersistence
 import com.plot.api.agent.ArtifactWorkflowAgentRunCompletionHandler
 import com.plot.api.agent.AgentProperties
 import com.plot.api.billing.PolarCreditService
@@ -94,7 +94,7 @@ class ArtifactWorkflowConfiguration {
 		@Qualifier("artifactWorkflowRetryExecutor") retryExecutor: ScheduledExecutorService,
 		worker: ArtifactWorkflowRunWorker,
 		recoveryPersistence: ArtifactWorkflowRecoveryPersistence,
-		executionPersistence: AgentRunExecutionPersistence,
+		agentRunRecovery: AgentRunRecoveryPersistence,
 		properties: PlotAiProperties,
 	): ArtifactWorkflowRunDispatcher = ArtifactWorkflowRunDispatcher(
 		taskExecutor = artifactWorkflowTaskExecutor,
@@ -102,7 +102,7 @@ class ArtifactWorkflowConfiguration {
 		retryExecutor = retryExecutor,
 		failureRecoveryDelay = properties.claimTimeout,
 		earliestRetryAt = recoveryPersistence::earliestNextAttemptAt,
-		afterTurn = { executionPersistence.reconcileWaitingArtifactHandoffs() },
+		afterTurn = { agentRunRecovery.reconcileWaitingArtifactHandoffs() },
 	) { worker.drain() > 0 }
 
 	@Bean

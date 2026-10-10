@@ -13,7 +13,7 @@ fun interface ArtifactWorkflowAgentRunCompletionHandler {
 
 @Component
 class DefaultArtifactWorkflowAgentRunCompletion(
-	private val executionPersistence: AgentRunExecutionPersistence,
+	private val recoveryPersistence: AgentRunRecoveryPersistence,
 	private val agentRunDispatcher: AgentRunDispatcher,
 	@Lazy private val releaseReconciliation: GitHubReleaseReconciliationTrigger,
 	private val properties: AgentProperties,
@@ -22,7 +22,7 @@ class DefaultArtifactWorkflowAgentRunCompletion(
 	override fun onTerminal(workspaceId: UUID, workflowRunId: UUID) {
 		if (!properties.workersEnabled) return
 		try {
-			if (executionPersistence.completeWaitingArtifactHandoff(workspaceId, workflowRunId, clock.instant())) {
+			if (recoveryPersistence.completeWaitingArtifactHandoff(workspaceId, workflowRunId, clock.instant())) {
 				agentRunDispatcher.dispatch()
 			}
 		} catch (_: RuntimeException) {
