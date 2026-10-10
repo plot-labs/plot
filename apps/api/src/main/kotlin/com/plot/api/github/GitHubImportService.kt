@@ -119,10 +119,7 @@ class GitHubImportService(
 	// Imports consume external quota and can flip a connection into
 	// NEEDS_REAUTH, so they stay an owner-level action like connections.
 	private fun requireOwner() {
-		val actor = actorResolver?.current()
-		if (actor != null && actorResolver.requireWorkspace().role != "OWNER") {
-			throw ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Workspace owner access is required")
-		}
+		actorResolver?.requireOwner()
 	}
 
 	private fun validateWindow(request: GitHubImportRequest) {

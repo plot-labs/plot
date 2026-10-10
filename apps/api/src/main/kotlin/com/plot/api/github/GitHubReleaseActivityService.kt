@@ -83,10 +83,7 @@ class GitHubReleaseActivityService(
 	}
 
 	private fun requireOwner() {
-		val actor = actorResolver?.current()
-		if (actor != null && actorResolver.requireWorkspace().role != "OWNER") {
-			throw ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Workspace owner access is required")
-		}
+		actorResolver?.requireOwner()
 	}
 
 	private fun requireScope(sourceScopeId: UUID, workspaceId: UUID) {
