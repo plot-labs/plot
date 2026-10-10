@@ -41,7 +41,7 @@ class GitHubImportService(
 	private val properties: GitHubProperties,
 	private val guard: GitHubGuard,
 	private val devContext: DevContext,
-	private val connectionService: GitHubConnectionService,
+	private val scopes: GitHubSourceScopeRepository,
 	private val githubClient: GitHubClient,
 	private val sqlExecutor: SqlExecutor,
 	private val reservationService: GitHubImportReservationService,
@@ -53,7 +53,7 @@ class GitHubImportService(
 		guard.requireEnabled()
 		requireOwner()
 		validateWindow(request)
-		val scope = connectionService.findScope(scopeId)
+		val scope = scopes.findScope(devContext.devWorkspaceId, scopeId)
 		if (scope.status != "ACTIVE" || scope.connectionStatus != "ACTIVE") {
 			throw ApiException(HttpStatus.CONFLICT, "REPOSITORY_INACTIVE", "GitHub repository is inactive")
 		}
@@ -205,7 +205,7 @@ data class ReservedImport(val id: UUID, val observationId: UUID, val startedAt: 
 class GitHubImportPersistenceService(
 	private val devContext: DevContext,
 	private val sqlExecutor: SqlExecutor,
-	private val connectionService: GitHubConnectionService,
+	private val scopes: GitHubSourceScopeRepository,
 	private val transformer: GitHubWritingBlockTransformer,
 	private val writingBlockImportService: WritingBlockImportService,
 ) {
@@ -217,7 +217,7 @@ class GitHubImportPersistenceService(
 		request: GitHubImportRequest,
 		pullRequests: List<GitHubPullRequest>,
 	): GitHubImportResponse {
-		connectionService.requireScopeActive(scope)
+		scopes.requireScopeActive(devContext.devWorkspaceId, scope)
 		var created = 0
 		var updated = 0
 		var unchanged = 0

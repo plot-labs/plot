@@ -4,10 +4,10 @@ import com.plot.api.common.ApiException
 import com.plot.api.common.UuidGenerator
 import com.plot.api.common.WorkspacePrincipal
 import com.plot.api.github.GitHubClient
-import com.plot.api.github.GitHubConnectionService
 import com.plot.api.github.GitHubGuard
 import com.plot.api.github.GitHubImportEligibility
 import com.plot.api.github.GitHubProperties
+import com.plot.api.github.GitHubSourceScopeRepository
 import com.plot.api.github.GitHubWritingBlockTransformer
 import com.plot.api.writingblock.WritingBlockImportService
 import java.sql.Timestamp
@@ -30,7 +30,7 @@ data class RoutineRefreshResult(
 class GitHubRoutineRefreshService(
 	private val guard: GitHubGuard,
 	private val properties: GitHubProperties,
-	private val connectionService: GitHubConnectionService,
+	private val scopes: GitHubSourceScopeRepository,
 	private val githubClient: GitHubClient,
 	private val transformer: GitHubWritingBlockTransformer,
 	private val writingBlockImportService: WritingBlockImportService,
@@ -70,8 +70,8 @@ class GitHubRoutineRefreshService(
 			?: throw RoutineExecutionStateException("Scheduled Routine refresh window is missing")
 		if (!from.isBefore(to)) throw RoutineExecutionStateException("Scheduled Routine refresh window is invalid")
 
-		val scope = connectionService.findScope(execution.workspaceId, execution.triggerSourceScopeId)
-		connectionService.requireScopeActive(execution.workspaceId, scope)
+		val scope = scopes.findScope(execution.workspaceId, execution.triggerSourceScopeId)
+		scopes.requireScopeActive(execution.workspaceId, scope)
 		val cursor = execution.refreshContinuationJson?.let(::parseCursor)
 			?: initializeCursor(execution, workerId, scope.bindingId)
 		if (cursor.pagesFetched >= properties.importPageCap.coerceAtLeast(1)) {
@@ -85,7 +85,7 @@ class GitHubRoutineRefreshService(
 			repository = scope.externalKey.substringAfter('/', scope.displayName),
 			continuation = cursor.nextPage,
 		)
-		connectionService.requireScopeActive(execution.workspaceId, scope)
+		scopes.requireScopeActive(execution.workspaceId, scope)
 		val principal = WorkspacePrincipal(execution.workspaceId, execution.createdByUserId)
 		val eligible = GitHubImportEligibility.select(page.pullRequests, from, to)
 		eligible.forEach { pullRequest ->

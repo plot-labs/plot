@@ -85,6 +85,7 @@ class GitHubConnectionService(
 	private val stateService: GitHubInstallationStateService,
 	private val githubClient: GitHubClient,
 	private val installationOwnership: GitHubInstallationOwnership,
+	private val scopes: GitHubSourceScopeRepository,
 	private val sqlExecutor: SqlExecutor,
 	private val transactionExecutor: TransactionExecutor,
 	private val objectMapper: ObjectMapper,
@@ -501,88 +502,11 @@ class GitHubConnectionService(
 		return check.toResponse()
 	}
 
-	fun findScope(id: UUID): GitHubScopeRecord = findScope(devContext.devWorkspaceId, id)
+	private fun findScope(id: UUID): GitHubScopeRecord = scopes.findScope(devContext.devWorkspaceId, id)
 
-	fun findScope(workspaceId: UUID, id: UUID): GitHubScopeRecord {
-		return sqlExecutor.query(
-			"""
-			select sc.id, sc.source_namespace_id, b.id, c.id, c.external_connection_key, sc.external_scope_key,
-			       sc.external_key, sc.display_name, sc.url, sc.status, c.status
-			from source_scopes sc
-			join source_namespaces sn on sn.workspace_id = sc.workspace_id
-			 and sn.id = sc.source_namespace_id and sn.provider = sc.provider and sn.status = 'ACTIVE'
-			join connection_namespace_bindings b on b.workspace_id = sc.workspace_id
-			 and b.source_namespace_id = sc.source_namespace_id and b.status = 'ACTIVE'
-			join connections c on c.workspace_id = b.workspace_id and c.id = b.connection_id
-			where sc.workspace_id = ? and sc.id = ? and sc.provider = 'GITHUB'
-			""".trimIndent(),
-			{ rs, _ ->
-				GitHubScopeRecord(
-					id = requireNotNull(rs.getObject(1, UUID::class.java)),
-					sourceNamespaceId = requireNotNull(rs.getObject(2, UUID::class.java)),
-					bindingId = requireNotNull(rs.getObject(3, UUID::class.java)),
-					connectionId = requireNotNull(rs.getObject(4, UUID::class.java)),
-					installationId = parseGitHubInstallationId(requireNotNull(rs.getString(5)))
-						?: throw ApiException(
-							HttpStatus.CONFLICT,
-							"CONNECTION_CORRUPT",
-							"GitHub connection installation id is invalid",
-						),
-					externalRepositoryId = rs.getString(6)?.toLongOrNull() ?: 0L,
-					externalKey = rs.getString(7).orEmpty(),
-					displayName = requireNotNull(rs.getString(8)),
-					url = rs.getString(9).orEmpty(),
-					status = requireNotNull(rs.getString(10)),
-					connectionStatus = requireNotNull(rs.getString(11)),
-				)
-			},
-			workspaceId,
-			id,
-		).firstOrNull() ?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "GitHub repository not found")
-	}
+	private fun requireScopeActive(scope: GitHubScopeRecord) = scopes.requireScopeActive(devContext.devWorkspaceId, scope)
 
-	fun requireScopeActive(scope: GitHubScopeRecord) = requireScopeActive(devContext.devWorkspaceId, scope)
-
-	fun requireScopeActive(workspaceId: UUID, scope: GitHubScopeRecord) {
-		val active = sqlExecutor.queryForObject(
-			"""
-			select count(*) from source_scopes sc
-			join source_namespaces sn on sn.workspace_id = sc.workspace_id
-			 and sn.id = sc.source_namespace_id and sn.provider = sc.provider and sn.status = 'ACTIVE'
-			join connection_namespace_bindings b on b.workspace_id = sc.workspace_id
-			 and b.id = ? and b.source_namespace_id = sc.source_namespace_id and b.status = 'ACTIVE'
-			join connections c on c.workspace_id = b.workspace_id and c.id = b.connection_id and c.status = 'ACTIVE'
-			where sc.workspace_id = ? and sc.id = ? and sc.source_namespace_id = ? and sc.status = 'ACTIVE'
-			""".trimIndent(),
-			Int::class.java, scope.bindingId, workspaceId, scope.id, scope.sourceNamespaceId,
-		) ?: 0
-		if (active != 1) throw ApiException(HttpStatus.CONFLICT, "REPOSITORY_INACTIVE", "GitHub repository is inactive")
-	}
-
-	private fun findConnection(id: UUID): GitHubConnectionRecord {
-		return sqlExecutor.query(
-			"""
-			select id, external_connection_key, status
-			from connections
-			where workspace_id = ? and id = ? and provider = 'GITHUB'
-			""".trimIndent(),
-			{ rs, _ ->
-				val installationId = parseGitHubInstallationId(requireNotNull(rs.getString(2)))
-					?: throw ApiException(
-						HttpStatus.CONFLICT,
-						"CONNECTION_CORRUPT",
-						"GitHub connection installation id is invalid",
-					)
-				GitHubConnectionRecord(
-					requireNotNull(rs.getObject(1, UUID::class.java)),
-					installationId,
-					requireNotNull(rs.getString(3)),
-				)
-			},
-			devContext.devWorkspaceId,
-			id,
-		).firstOrNull() ?: throw ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "GitHub connection not found")
-	}
+	private fun findConnection(id: UUID): GitHubConnectionRecord = scopes.findConnection(devContext.devWorkspaceId, id)
 
 	private fun requireOwner() {
 		val actor = actorResolver?.current()
@@ -656,9 +580,6 @@ class GitHubConnectionService(
 			connectionId,
 		)
 	}
-
-	private fun parseGitHubInstallationId(raw: String): Long? =
-		raw.trim().toLongOrNull()?.takeIf { it > 0L }
 
 	private fun bindRepositoryNamespace(connectionId: UUID, repository: GitHubRepository, now: Instant): UUID {
 		val namespaceKey = "repository:${repository.id}"
@@ -744,28 +665,12 @@ class GitHubConnectionStatusRecorder(
 	}
 }
 
-data class GitHubConnectionRecord(val id: UUID, val installationId: Long, val status: String)
-
 private data class GitHubConnectionListRow(
 	val id: UUID,
 	val installationKey: String,
 	val status: String,
 	val statusReason: String?,
 	val accountLogin: String?,
-)
-
-data class GitHubScopeRecord(
-	val id: UUID,
-	val sourceNamespaceId: UUID,
-	val bindingId: UUID,
-	val connectionId: UUID,
-	val installationId: Long,
-	val externalRepositoryId: Long,
-	val externalKey: String,
-	val displayName: String,
-	val url: String,
-	val status: String,
-	val connectionStatus: String,
 )
 
 private fun GitHubRepository.toResponse(
