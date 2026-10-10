@@ -100,6 +100,7 @@ class RoutineAgentMigrationIntegrationTest {
 				completionProjection = AgentRunCompletionProjectionAdapter(ChatPersistence(schemaSqlExecutor), RoutineAgentRunProjection(schemaSqlExecutor)),
 				releaseReconciliation = null,
 				modelInvocations = com.plot.api.agent.AgentModelInvocationLedger(schemaSqlExecutor),
+				artifactModelInvocations = com.plot.api.artifact.workflow.ArtifactModelInvocationLedger(schemaSqlExecutor, ObjectMapper()),
 			),
 		)
 	}

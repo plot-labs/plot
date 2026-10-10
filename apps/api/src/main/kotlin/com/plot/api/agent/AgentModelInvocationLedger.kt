@@ -44,6 +44,14 @@ class AgentModelInvocationLedger(
 		workspaceId,
 	).firstOrNull()
 
+	/** True while the workspace has any STARTED or PENDING call. */
+	fun hasUnresolved(workspaceId: UUID): Boolean =
+		(sqlExecutor.queryForObject(
+			"select count(*) from agent_model_invocations where workspace_id = ? and status in ('STARTED', 'PENDING')",
+			Int::class.java,
+			workspaceId,
+		) ?: 0) > 0
+
 	/** True when the run was billed for a call whose output was never applied to a step. */
 	fun hasSettledUnapplied(workspaceId: UUID, agentRunId: UUID): Boolean =
 		(sqlExecutor.queryForObject(
@@ -127,7 +135,7 @@ class AgentModelInvocationLedger(
 }
 
 /** Marks STARTED agent model calls of already finished runs as USAGE_UNKNOWN for one workspace. */
-internal val RESOLVE_ORPHANED_AGENT_MODEL_INVOCATIONS_SQL = """
+private val RESOLVE_ORPHANED_AGENT_MODEL_INVOCATIONS_SQL = """
 	update agent_model_invocations invocation
 	set status = 'USAGE_UNKNOWN'
 	where invocation.workspace_id = ? and invocation.status = 'STARTED'
