@@ -5,6 +5,7 @@ import com.plot.api.observability.stopSafely
 import io.micrometer.observation.Observation
 import io.micrometer.observation.ObservationRegistry
 import java.time.Clock
+import com.plot.api.common.WorkerBackoff
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
@@ -103,14 +104,11 @@ class GitHubReleaseDraftWorker(
 		return "FAILED"
 	}
 
-	private fun retryDelay(attempt: Int): Duration {
-		val boundedShift = attempt.coerceIn(0, MAX_RETRY_SHIFT)
-		val seconds = 5L shl boundedShift
-		return minOf(MAX_RETRY_DELAY, Duration.ofSeconds(seconds))
-	}
+	private fun retryDelay(attempt: Int): Duration =
+		WorkerBackoff.delay(RETRY_INITIAL_DELAY, attempt)
 
 	private fun isRetryable(exception: RuntimeException): Boolean = when (exception) {
-		is ApiException -> exception.error in RETRYABLE_API_ERRORS
+		is ApiException -> GitHubTransientErrors.isTransient(exception)
 		is TransientDataAccessException, is TaskRejectedException -> true
 		else -> false
 	}
@@ -128,12 +126,6 @@ class GitHubReleaseDraftWorker(
 
 	private companion object {
 		const val RECONCILE_BATCH_SIZE = 100
-		const val MAX_RETRY_SHIFT = 8
-		val MAX_RETRY_DELAY: Duration = Duration.ofMinutes(15)
-		val RETRYABLE_API_ERRORS = setOf(
-			"GITHUB_RATE_LIMITED",
-			"GITHUB_NETWORK_ERROR",
-			"GITHUB_PROVIDER_UNAVAILABLE",
-		)
+		val RETRY_INITIAL_DELAY: Duration = Duration.ofSeconds(5)
 	}
 }

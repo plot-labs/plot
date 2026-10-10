@@ -22,6 +22,7 @@ import com.plot.api.observability.stopSafely
 import io.micrometer.observation.Observation
 import io.micrometer.observation.ObservationRegistry
 import java.time.Clock
+import com.plot.api.common.WorkerBackoff
 import java.time.Duration
 import java.util.UUID
 import com.plot.api.agent.ArtifactWorkflowAgentRunCompletionHandler
@@ -377,15 +378,10 @@ class ArtifactWorkflowRunWorker(
 	}
 
 	private fun retryDelay(attemptNo: Int): Duration =
-		minOf(
-			MAX_RETRY_DELAY,
-			retryInitialDelay.multipliedBy(1L shl (attemptNo - 1).coerceIn(0, MAX_RETRY_SHIFT)),
-		)
+		WorkerBackoff.delay(retryInitialDelay, attemptNo - 1)
 
 	private companion object {
 		const val MAX_PHYSICAL_ATTEMPTS_PER_LOGICAL_CALL = 3
-		const val MAX_RETRY_SHIFT = 8
-		val MAX_RETRY_DELAY: Duration = Duration.ofMinutes(15)
 		val TERMINAL_STATUSES = setOf(
 			ArtifactWorkflowRunStatus.READY,
 			ArtifactWorkflowRunStatus.NEEDS_REVIEW,

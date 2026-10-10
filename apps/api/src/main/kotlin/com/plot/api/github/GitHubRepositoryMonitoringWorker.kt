@@ -2,6 +2,7 @@ package com.plot.api.github
 
 import com.plot.api.common.ApiException
 import java.time.Clock
+import com.plot.api.common.WorkerBackoff
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
@@ -100,7 +101,7 @@ class GitHubRepositoryMonitoringWorker(
 	}
 
 	private fun isRetryable(exception: RuntimeException): Boolean = when (exception) {
-		is ApiException -> exception.error in RETRYABLE_API_ERRORS
+		is ApiException -> GitHubTransientErrors.isTransient(exception)
 		is TransientDataAccessException, is TaskRejectedException -> true
 		else -> false
 	}
@@ -113,19 +114,13 @@ class GitHubRepositoryMonitoringWorker(
 	}
 
 	private fun retryDelay(attempt: Int): Duration =
-		minOf(MAX_RETRY_DELAY, Duration.ofSeconds(5L shl attempt.coerceIn(0, MAX_RETRY_SHIFT)))
+		WorkerBackoff.delay(RETRY_INITIAL_DELAY, attempt)
 
 	private fun isSafeErrorCode(value: String): Boolean =
 		value.length in 1..100 && value.all { it.isUpperCase() || it.isDigit() || it == '_' }
 
 	private companion object {
-		const val MAX_RETRY_SHIFT = 8
-		val MAX_RETRY_DELAY: Duration = Duration.ofMinutes(15)
+		val RETRY_INITIAL_DELAY: Duration = Duration.ofSeconds(5)
 		val AUTHENTICATION_ERRORS = setOf("GITHUB_ACCESS_DENIED", "GITHUB_NOT_FOUND")
-		val RETRYABLE_API_ERRORS = setOf(
-			"GITHUB_RATE_LIMITED",
-			"GITHUB_NETWORK_ERROR",
-			"GITHUB_PROVIDER_UNAVAILABLE",
-		)
 	}
 }

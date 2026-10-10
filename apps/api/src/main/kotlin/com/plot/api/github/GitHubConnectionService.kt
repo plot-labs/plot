@@ -13,8 +13,7 @@ import java.util.UUID
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import org.springframework.transaction.support.TransactionSynchronization
-import org.springframework.transaction.support.TransactionSynchronizationManager
+import com.plot.api.common.AfterCommit
 import tools.jackson.databind.ObjectMapper
 
 data class GitHubInstallationRequestResponse(
@@ -553,11 +552,7 @@ class GitHubConnectionService(
 		accessChecks.queue(devContext.devWorkspaceId, scope.first, sourceScopeId, trigger, Instant.now())
 		val check = accessChecks.find(devContext.devWorkspaceId, sourceScopeId)
 			?: throw ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "GitHub access check could not be queued")
-		TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
-			override fun afterCommit() {
-				accessCheckDispatcher.dispatch()
-			}
-		})
+		AfterCommit.register { accessCheckDispatcher.dispatch() }
 		return check.toResponse()
 	}
 
@@ -834,15 +829,7 @@ class GitHubConnectionService(
 	}
 
 	private fun dispatchMonitoringAfterCommit() {
-		if (TransactionSynchronizationManager.isSynchronizationActive()) {
-			TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
-				override fun afterCommit() {
-					monitoringDispatcher.dispatch()
-				}
-			})
-		} else {
-			monitoringDispatcher.dispatch()
-		}
+		AfterCommit.runOrNow { monitoringDispatcher.dispatch() }
 	}
 
 	private fun notConfigured() = ApiException(HttpStatus.SERVICE_UNAVAILABLE, "GITHUB_NOT_CONFIGURED", "GitHub is not configured")

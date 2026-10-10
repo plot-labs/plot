@@ -2,6 +2,7 @@ package com.plot.api.github
 
 import com.plot.api.common.ApiException
 import java.time.Clock
+import com.plot.api.common.WorkerBackoff
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
@@ -78,13 +79,11 @@ class GitHubRepositoryAccessCheckWorker(
 		}
 	}
 
-	private fun retryDelay(attempt: Int): Duration {
-		val shift = (attempt - 1).coerceIn(0, MAX_RETRY_SHIFT)
-		return minOf(MAX_RETRY_DELAY, Duration.ofSeconds(5L shl shift))
-	}
+	private fun retryDelay(attempt: Int): Duration =
+		WorkerBackoff.delay(RETRY_INITIAL_DELAY, attempt - 1)
 
 	private fun isRetryable(exception: RuntimeException): Boolean = when (exception) {
-		is ApiException -> exception.error in RETRYABLE_API_ERRORS
+		is ApiException -> GitHubTransientErrors.isTransient(exception)
 		is TransientDataAccessException -> true
 		else -> false
 	}
@@ -96,14 +95,8 @@ class GitHubRepositoryAccessCheckWorker(
 	}
 
 	private companion object {
-		const val MAX_RETRY_SHIFT = 8
-		val MAX_RETRY_DELAY: Duration = Duration.ofMinutes(15)
-		val RETRYABLE_API_ERRORS = setOf(
-			"GITHUB_RATE_LIMITED",
-			"GITHUB_NETWORK_ERROR",
-			"GITHUB_PROVIDER_UNAVAILABLE",
-		)
-		val SAFE_ERROR_CODES = RETRYABLE_API_ERRORS + setOf(
+		val RETRY_INITIAL_DELAY: Duration = Duration.ofSeconds(5)
+		val SAFE_ERROR_CODES = GitHubTransientErrors.CODES + setOf(
 			"GITHUB_ACCESS_DENIED",
 			"GITHUB_NOT_FOUND",
 			"GITHUB_INVALID_RESPONSE",

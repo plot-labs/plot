@@ -37,8 +37,7 @@ import java.time.Instant
 import java.util.UUID
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
-import org.springframework.transaction.support.TransactionSynchronization
-import org.springframework.transaction.support.TransactionSynchronizationManager
+import com.plot.api.common.AfterCommit
 import tools.jackson.databind.ObjectMapper
 
 @Service
@@ -221,18 +220,7 @@ class ChatRunService(
 
 	private fun scheduleAgentRunDispatchAfterCommit() {
 		if (!properties.autoDispatchEnabled) return
-		if (
-			TransactionSynchronizationManager.isSynchronizationActive() &&
-				TransactionSynchronizationManager.isActualTransactionActive()
-		) {
-			TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
-				override fun afterCommit() {
-					agentRunDispatcher.dispatch()
-				}
-			})
-		} else {
-			agentRunDispatcher.dispatch()
-		}
+		AfterCommit.runOrNow { agentRunDispatcher.dispatch() }
 	}
 
 	fun retry(targetVersionId: UUID, idempotencyKey: String): ChatResponseVersionDto {

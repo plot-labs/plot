@@ -14,8 +14,7 @@ import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
 import org.springframework.stereotype.Service
-import org.springframework.transaction.support.TransactionSynchronization
-import org.springframework.transaction.support.TransactionSynchronizationManager
+import com.plot.api.common.AfterCommit
 import tools.jackson.databind.ObjectMapper
 
 /** Admits background content automation without projecting it into user Chat history. */
@@ -169,16 +168,7 @@ class ArtifactAutomationAdmissionService(
 
 	private fun scheduleDispatchAfterCommit() {
 		if (!properties.autoDispatchEnabled) return
-		if (
-			TransactionSynchronizationManager.isSynchronizationActive() &&
-			TransactionSynchronizationManager.isActualTransactionActive()
-		) {
-			TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
-				override fun afterCommit() = dispatcher.dispatch()
-			})
-		} else {
-			dispatcher.dispatch()
-		}
+		AfterCommit.runOrNow { dispatcher.dispatch() }
 	}
 
 	private fun lockActiveSources(workspaceId: UUID): List<AutomationSource> = sqlExecutor.query(

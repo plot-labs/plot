@@ -19,8 +19,8 @@ import java.time.Instant
 import java.util.UUID
 import org.springframework.context.annotation.Lazy
 import org.springframework.stereotype.Component
-import org.springframework.transaction.support.TransactionSynchronization
-import org.springframework.transaction.support.TransactionSynchronizationManager
+import com.plot.api.common.AfterCommit
+import com.plot.api.github.GitHubTransientErrors
 import com.plot.api.persistence.TransactionExecutor
 import tools.jackson.databind.ObjectMapper
 
@@ -477,7 +477,7 @@ class RoutineWorker(
 			.any { it is RoutineExecutionStateException || it is IllegalArgumentException }
 
 	private fun isRecoverableRefreshFailure(failure: ApiException): Boolean =
-		failure.error in setOf("GITHUB_NETWORK_ERROR", "GITHUB_RATE_LIMITED", "GITHUB_PROVIDER_UNAVAILABLE")
+		GitHubTransientErrors.isTransient(failure)
 
 	private fun releaseRoutineClaimIfHeld(claimedRoutine: RoutineRecord?) {
 		if (claimedRoutine == null) return
@@ -508,18 +508,7 @@ class RoutineWorker(
 
 	private fun scheduleAgentRunDispatchAfterCommit() {
 		if (!agentProperties.autoDispatchEnabled) return
-		if (
-			TransactionSynchronizationManager.isSynchronizationActive() &&
-				TransactionSynchronizationManager.isActualTransactionActive()
-		) {
-			TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
-				override fun afterCommit() {
-					agentRunDispatcher.dispatch()
-				}
-			})
-		} else {
-			agentRunDispatcher.dispatch()
-		}
+		AfterCommit.runOrNow { agentRunDispatcher.dispatch() }
 	}
 
 	private fun failClaimedExecution(
@@ -557,7 +546,7 @@ class RoutineWorker(
 		"ACCESS_DENIED", "WORKSPACE_READ_ONLY" -> failure.error
 		"REPOSITORY_INACTIVE", "NOT_FOUND", "GITHUB_ACCESS_DENIED", "GITHUB_NOT_FOUND" -> "SOURCE_NOT_READY"
 		"IMPORT_TOO_LARGE" -> "ROUTINE_REFRESH_TOO_LARGE"
-		"GITHUB_NETWORK_ERROR", "GITHUB_RATE_LIMITED", "GITHUB_PROVIDER_UNAVAILABLE" -> "ROUTINE_REFRESH_RETRY"
+		in GitHubTransientErrors.CODES -> "ROUTINE_REFRESH_RETRY"
 		else -> "ROUTINE_REFRESH_FAILED"
 	}
 

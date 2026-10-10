@@ -112,6 +112,3 @@ class DefaultGitHubReleaseLease(
 }
 
 class GitHubReleaseLeaseLostException : IllegalStateException("GitHub release claim ownership was lost")
-
-private fun Duration.coerceAtLeast(minimum: Duration): Duration =
-	if (this < minimum) minimum else this
