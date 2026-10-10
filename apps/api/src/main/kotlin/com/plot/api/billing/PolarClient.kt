@@ -1,6 +1,6 @@
 package com.plot.api.billing
 
-import java.io.ByteArrayOutputStream
+import com.plot.api.common.readUtf8Capped
 import java.net.URI
 import java.net.URLEncoder
 import java.net.http.HttpClient
@@ -109,23 +109,10 @@ class JavaPolarHttpTransport(private val properties: PolarProperties) : PolarHtt
 			Thread.currentThread().interrupt()
 			throw exception
 		}
-		return PolarHttpResponse(response.statusCode(), readCapped(response.body()))
-	}
-
-	private fun readCapped(stream: java.io.InputStream): String {
-		val buffer = ByteArrayOutputStream(minOf(properties.maxResponseBytes, 64 * 1024))
-		val chunk = ByteArray(8_192)
-		stream.use { input ->
-			while (true) {
-				val read = input.read(chunk)
-				if (read < 0) break
-				if (buffer.size() + read > properties.maxResponseBytes) {
-					throw PolarApiException("POLAR_RESPONSE_TOO_LARGE", "Polar response exceeds the allowed size")
-				}
-				buffer.write(chunk, 0, read)
-			}
+		val responseBody = response.body().readUtf8Capped(properties.maxResponseBytes) {
+			PolarApiException("POLAR_RESPONSE_TOO_LARGE", "Polar response exceeds the allowed size")
 		}
-		return buffer.toString(StandardCharsets.UTF_8)
+		return PolarHttpResponse(response.statusCode(), responseBody)
 	}
 }
 

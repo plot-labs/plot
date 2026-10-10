@@ -1,13 +1,11 @@
 package com.plot.api.contentprofile
 
 import com.plot.api.auth.RequestActorResolver
-import com.plot.api.common.ApiException
 import com.plot.api.content.ContentProfileRevision
 import com.plot.api.contentprofile.dto.ContentProfileResponse
 import com.plot.api.contentprofile.dto.UpdateContentProfileRequest
 import com.plot.api.dev.DevContext
 import java.util.UUID
-import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 
 @Service
@@ -44,10 +42,7 @@ class ContentProfileService(
 		persistence.findCurrentRevision(workspaceId)?.id
 
 	private fun requireOwner() {
-		val actor = actorResolver?.current()
-		if (actor != null && actorResolver.requireWorkspace().role != "OWNER") {
-			throw ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Only workspace owners can update content profile")
-		}
+		actorResolver?.requireOwner("Only workspace owners can update content profile")
 	}
 
 	private fun ContentProfileRevision?.toResponse(): ContentProfileResponse = ContentProfileResponse(

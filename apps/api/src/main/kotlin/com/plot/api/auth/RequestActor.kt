@@ -64,6 +64,17 @@ class RequestActorResolver(
 
 	fun requireWorkspace(): WorkspaceActor = currentWorkspace() ?: throw unauthorized()
 
+	/**
+	 * Rejects an authenticated caller who is not an OWNER of the Workspace in the token.
+	 * Passes when the request carries no authenticated actor, which only happens where
+	 * authentication is not enforced (local and test profiles).
+	 */
+	fun requireOwner(message: String = "Workspace owner access is required") {
+		if (current() != null && requireWorkspace().role != "OWNER") {
+			throw ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", message)
+		}
+	}
+
 	private fun resolveWorkOSWorkspace(actor: RequestActor, jwt: org.springframework.security.oauth2.jwt.Jwt): WorkspaceActor {
 		val organizationId = jwt.getClaimAsString("org_id")?.trim()?.takeIf { it.isNotBlank() }
 			?: throw ApiException(
